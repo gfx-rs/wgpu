@@ -5513,6 +5513,403 @@ template <typename A>
         }
     }
 
+    fn write_wrapped_unary_op(
+        &mut self,
+        module: &crate::Module,
+        func_ctx: &back::FunctionCtx,
+        op: crate::UnaryOperator,
+        operand: Handle<crate::Expression>,
+    ) -> BackendResult {
+        let operand_ty = func_ctx.resolve_type(operand, &module.types);
+        match op {
+            // Negating the TYPE_MIN of a two's complement signed integer
+            // type causes overflow, which is undefined behaviour in MSL. To
+            // avoid this we bitcast the value to unsigned and negate it,
+            // then bitcast back to signed.
+            // This adheres to the WGSL spec in that the negative of the
+            // type's minimum value should equal to the minimum value.
+            crate::UnaryOperator::Negate
+                if operand_ty.scalar_kind() == Some(crate::ScalarKind::Sint) =>
+            {
+                let Some((vector_size, scalar)) = operand_ty.vector_size_and_scalar() else {
+                    return Ok(());
+                };
+                let wrapped = WrappedFunction::UnaryOp {
+                    op,
+                    ty: (vector_size, scalar),
+                };
+                if !self.wrapped_functions.insert(wrapped) {
+                    return Ok(());
+                }
+
+                let unsigned_scalar = crate::Scalar {
+                    kind: crate::ScalarKind::Uint,
+                    ..scalar
+                };
+                let mut type_name = String::new();
+                let mut unsigned_type_name = String::new();
+                match vector_size {
+                    None => {
+                        put_numeric_type(&mut type_name, scalar, &[])?;
+                        put_numeric_type(&mut unsigned_type_name, unsigned_scalar, &[])?
+                    }
+                    Some(size) => {
+                        put_numeric_type(&mut type_name, scalar, &[size])?;
+                        put_numeric_type(&mut unsigned_type_name, unsigned_scalar, &[size])?;
+                    }
+                };
+
+                writeln!(self.out, "{type_name} {NEG_FUNCTION}({type_name} val) {{")?;
+                let level = back::Level(1);
+                writeln!(
+                    self.out,
+                    "{level}return as_type<{type_name}>(-as_type<{unsigned_type_name}>(val));"
+                )?;
+                writeln!(self.out, "}}")?;
+                writeln!(self.out)?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn write_wrapped_binary_op(
+        &mut self,
+        module: &crate::Module,
+        func_ctx: &back::FunctionCtx,
+        expr: Handle<crate::Expression>,
+        op: crate::BinaryOperator,
+        left: Handle<crate::Expression>,
+        right: Handle<crate::Expression>,
+    ) -> BackendResult {
+        let expr_ty = func_ctx.resolve_type(expr, &module.types);
+        let left_ty = func_ctx.resolve_type(left, &module.types);
+        let right_ty = func_ctx.resolve_type(right, &module.types);
+        match (op, expr_ty.scalar_kind()) {
+            // Signed integer division of TYPE_MIN / -1, or signed or
+            // unsigned division by zero, gives an unspecified value in MSL.
+            // We override the divisor to 1 in these cases.
+            // This adheres to the WGSL spec in that:
+            // * TYPE_MIN / -1 == TYPE_MIN
+            // * x / 0 == x
+            (
+                crate::BinaryOperator::Divide,
+                Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint),
+            ) => {
+                let Some(left_wrapped_ty) = left_ty.vector_size_and_scalar() else {
+                    return Ok(());
+                };
+                let Some(right_wrapped_ty) = right_ty.vector_size_and_scalar() else {
+                    return Ok(());
+                };
+                let wrapped = WrappedFunction::BinaryOp {
+                    op,
+                    left_ty: left_wrapped_ty,
+                    right_ty: right_wrapped_ty,
+                };
+                if !self.wrapped_functions.insert(wrapped) {
+                    return Ok(());
+                }
+
+                let Some((vector_size, scalar)) = expr_ty.vector_size_and_scalar() else {
+                    return Ok(());
+                };
+                let mut type_name = String::new();
+                match vector_size {
+                    None => put_numeric_type(&mut type_name, scalar, &[])?,
+                    Some(size) => put_numeric_type(&mut type_name, scalar, &[size])?,
+                };
+                writeln!(
+                    self.out,
+                    "{type_name} {DIV_FUNCTION}({type_name} lhs, {type_name} rhs) {{"
+                )?;
+                let level = back::Level(1);
+                match scalar.kind {
+                    crate::ScalarKind::Sint => {
+                        let min_val = match scalar.width {
+                            4 => crate::Literal::I32(i32::MIN),
+                            8 => crate::Literal::I64(i64::MIN),
+                            _ => {
+                                return Err(Error::GenericValidation(format!(
+                                    "Unexpected width for scalar {scalar:?}"
+                                )));
+                            }
+                        };
+                        write!(
+                            self.out,
+                            "{level}return lhs / metal::select(rhs, 1, (lhs == "
+                        )?;
+                        self.put_literal(min_val)?;
+                        writeln!(self.out, " & rhs == -1) | (rhs == 0));")?
+                    }
+                    crate::ScalarKind::Uint => writeln!(
+                        self.out,
+                        "{level}return lhs / metal::select(rhs, 1u, rhs == 0u);"
+                    )?,
+                    _ => unreachable!(),
+                }
+                writeln!(self.out, "}}")?;
+                writeln!(self.out)?;
+            }
+            // Integer modulo where one or both operands are negative, or the
+            // divisor is zero, is undefined behaviour in MSL. To avoid this
+            // we use the following equation:
+            //
+            // dividend - (dividend / divisor) * divisor
+            //
+            // overriding the divisor to 1 if either it is 0, or it is -1
+            // and the dividend is TYPE_MIN.
+            //
+            // This adheres to the WGSL spec in that:
+            // * TYPE_MIN % -1 == 0
+            // * x % 0 == 0
+            (
+                crate::BinaryOperator::Modulo,
+                Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint),
+            ) => {
+                let Some(left_wrapped_ty) = left_ty.vector_size_and_scalar() else {
+                    return Ok(());
+                };
+                let Some((right_vector_size, right_scalar)) = right_ty.vector_size_and_scalar()
+                else {
+                    return Ok(());
+                };
+                let wrapped = WrappedFunction::BinaryOp {
+                    op,
+                    left_ty: left_wrapped_ty,
+                    right_ty: (right_vector_size, right_scalar),
+                };
+                if !self.wrapped_functions.insert(wrapped) {
+                    return Ok(());
+                }
+
+                let Some((vector_size, scalar)) = expr_ty.vector_size_and_scalar() else {
+                    return Ok(());
+                };
+                let mut type_name = String::new();
+                match vector_size {
+                    None => put_numeric_type(&mut type_name, scalar, &[])?,
+                    Some(size) => put_numeric_type(&mut type_name, scalar, &[size])?,
+                };
+                let mut rhs_type_name = String::new();
+                match right_vector_size {
+                    None => put_numeric_type(&mut rhs_type_name, right_scalar, &[])?,
+                    Some(size) => put_numeric_type(&mut rhs_type_name, right_scalar, &[size])?,
+                };
+
+                writeln!(
+                    self.out,
+                    "{type_name} {MOD_FUNCTION}({type_name} lhs, {type_name} rhs) {{"
+                )?;
+                let level = back::Level(1);
+                match scalar.kind {
+                    crate::ScalarKind::Sint => {
+                        let min_val = match scalar.width {
+                            4 => crate::Literal::I32(i32::MIN),
+                            8 => crate::Literal::I64(i64::MIN),
+                            _ => {
+                                return Err(Error::GenericValidation(format!(
+                                    "Unexpected width for scalar {scalar:?}"
+                                )));
+                            }
+                        };
+                        write!(
+                            self.out,
+                            "{level}{rhs_type_name} divisor = metal::select(rhs, 1, (lhs == "
+                        )?;
+                        self.put_literal(min_val)?;
+                        writeln!(self.out, " & rhs == -1) | (rhs == 0));")?;
+                        writeln!(self.out, "{level}return lhs - (lhs / divisor) * divisor;")?
+                    }
+                    crate::ScalarKind::Uint => writeln!(
+                        self.out,
+                        "{level}return lhs % metal::select(rhs, 1u, rhs == 0u);"
+                    )?,
+                    _ => unreachable!(),
+                }
+                writeln!(self.out, "}}")?;
+                writeln!(self.out)?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn write_wrapped_math_function(
+        &mut self,
+        module: &crate::Module,
+        func_ctx: &back::FunctionCtx,
+        fun: crate::MathFunction,
+        arg: Handle<crate::Expression>,
+        _arg1: Option<Handle<crate::Expression>>,
+        _arg2: Option<Handle<crate::Expression>>,
+        _arg3: Option<Handle<crate::Expression>>,
+    ) -> BackendResult {
+        let arg_ty = func_ctx.resolve_type(arg, &module.types);
+        match fun {
+            // Taking the absolute value of the TYPE_MIN of a two's
+            // complement signed integer type causes overflow, which is
+            // undefined behaviour in MSL. To avoid this, when the value is
+            // negative we bitcast the value to unsigned and negate it, then
+            // bitcast back to signed.
+            // This adheres to the WGSL spec in that the absolute of the
+            // type's minimum value should equal to the minimum value.
+            crate::MathFunction::Abs if arg_ty.scalar_kind() == Some(crate::ScalarKind::Sint) => {
+                let Some((vector_size, scalar)) = arg_ty.vector_size_and_scalar() else {
+                    return Ok(());
+                };
+                let wrapped = WrappedFunction::Math {
+                    fun,
+                    arg_ty: (vector_size, scalar),
+                };
+                if !self.wrapped_functions.insert(wrapped) {
+                    return Ok(());
+                }
+
+                let unsigned_scalar = crate::Scalar {
+                    kind: crate::ScalarKind::Uint,
+                    ..scalar
+                };
+                let mut type_name = String::new();
+                let mut unsigned_type_name = String::new();
+                match vector_size {
+                    None => {
+                        put_numeric_type(&mut type_name, scalar, &[])?;
+                        put_numeric_type(&mut unsigned_type_name, unsigned_scalar, &[])?
+                    }
+                    Some(size) => {
+                        put_numeric_type(&mut type_name, scalar, &[size])?;
+                        put_numeric_type(&mut unsigned_type_name, unsigned_scalar, &[size])?;
+                    }
+                };
+
+                writeln!(self.out, "{type_name} {ABS_FUNCTION}({type_name} val) {{")?;
+                let level = back::Level(1);
+                writeln!(self.out, "{level}return metal::select(as_type<{type_name}>(-as_type<{unsigned_type_name}>(val)), val, val >= 0);")?;
+                writeln!(self.out, "}}")?;
+                writeln!(self.out)?;
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn write_wrapped_cast(
+        &mut self,
+        module: &crate::Module,
+        func_ctx: &back::FunctionCtx,
+        expr: Handle<crate::Expression>,
+        kind: crate::ScalarKind,
+        convert: Option<crate::Bytes>,
+    ) -> BackendResult {
+        // Avoid undefined behaviour when casting from a float to integer
+        // when the value is out of range for the target type. Additionally
+        // ensure we clamp to the correct value as per the WGSL spec.
+        //
+        // https://www.w3.org/TR/WGSL/#floating-point-conversion:
+        // * If X is exactly representable in the target type T, then the
+        //   result is that value.
+        // * Otherwise, the result is the value in T closest to
+        //   truncate(X) and also exactly representable in the original
+        //   floating point type.
+        let src_ty = func_ctx.resolve_type(expr, &module.types);
+        let Some(width) = convert else {
+            return Ok(());
+        };
+        let Some((vector_size, src_scalar)) = src_ty.vector_size_and_scalar() else {
+            return Ok(());
+        };
+        let dst_scalar = crate::Scalar { kind, width };
+        if src_scalar.kind != crate::ScalarKind::Float
+            || (dst_scalar.kind != crate::ScalarKind::Sint
+                && dst_scalar.kind != crate::ScalarKind::Uint)
+        {
+            return Ok(());
+        }
+        let wrapped = WrappedFunction::Cast {
+            src_scalar,
+            vector_size,
+            dst_scalar,
+        };
+        if !self.wrapped_functions.insert(wrapped) {
+            return Ok(());
+        }
+        let (min, max) = proc::min_max_float_representable_by(src_scalar, dst_scalar);
+
+        let mut src_type_name = String::new();
+        match vector_size {
+            None => put_numeric_type(&mut src_type_name, src_scalar, &[])?,
+            Some(size) => put_numeric_type(&mut src_type_name, src_scalar, &[size])?,
+        };
+        let mut dst_type_name = String::new();
+        match vector_size {
+            None => put_numeric_type(&mut dst_type_name, dst_scalar, &[])?,
+            Some(size) => put_numeric_type(&mut dst_type_name, dst_scalar, &[size])?,
+        };
+        let fun_name = match dst_scalar {
+            crate::Scalar::I32 => F2I32_FUNCTION,
+            crate::Scalar::U32 => F2U32_FUNCTION,
+            crate::Scalar::I64 => F2I64_FUNCTION,
+            crate::Scalar::U64 => F2U64_FUNCTION,
+            _ => unreachable!(),
+        };
+
+        writeln!(
+            self.out,
+            "{dst_type_name} {fun_name}({src_type_name} value) {{"
+        )?;
+        let level = back::Level(1);
+        write!(
+            self.out,
+            "{level}return static_cast<{dst_type_name}>({NAMESPACE}::clamp(value, "
+        )?;
+        self.put_literal(min)?;
+        write!(self.out, ", ")?;
+        self.put_literal(max)?;
+        writeln!(self.out, "));")?;
+        writeln!(self.out, "}}")?;
+        writeln!(self.out)?;
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn write_wrapped_image_sample(
+        &mut self,
+        _module: &crate::Module,
+        _func_ctx: &back::FunctionCtx,
+        _image: Handle<crate::Expression>,
+        _sampler: Handle<crate::Expression>,
+        _gather: Option<crate::SwizzleComponent>,
+        _coordinate: Handle<crate::Expression>,
+        _array_index: Option<Handle<crate::Expression>>,
+        _offset: Option<Handle<crate::Expression>>,
+        _level: crate::SampleLevel,
+        _depth_ref: Option<Handle<crate::Expression>>,
+        clamp_to_edge: bool,
+    ) -> BackendResult {
+        if !clamp_to_edge {
+            return Ok(());
+        }
+        let wrapped = WrappedFunction::ImageSample {
+            clamp_to_edge: true,
+        };
+        if !self.wrapped_functions.insert(wrapped) {
+            return Ok(());
+        }
+
+        writeln!(self.out, "{NAMESPACE}::float4 {IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION}({NAMESPACE}::texture2d<float, {NAMESPACE}::access::sample> tex, {NAMESPACE}::sampler samp, {NAMESPACE}::float2 coords) {{")?;
+        let l1 = back::Level(1);
+        writeln!(self.out, "{l1}{NAMESPACE}::float2 half_texel = 0.5 / {NAMESPACE}::float2(tex.get_width(0u), tex.get_height(0u));")?;
+        writeln!(
+            self.out,
+            "{l1}return tex.sample(samp, {NAMESPACE}::clamp(coords, half_texel, 1.0 - half_texel), {NAMESPACE}::level(0.0));"
+        )?;
+        writeln!(self.out, "}}")?;
+        writeln!(self.out)?;
+        Ok(())
+    }
+
     pub(super) fn write_wrapped_functions(
         &mut self,
         module: &crate::Module,
@@ -5521,367 +5918,51 @@ template <typename A>
         for (expr_handle, expr) in func_ctx.expressions.iter() {
             match *expr {
                 crate::Expression::Unary { op, expr: operand } => {
-                    let operand_ty = func_ctx.resolve_type(operand, &module.types);
-                    match op {
-                        // Negating the TYPE_MIN of a two's complement signed integer
-                        // type causes overflow, which is undefined behaviour in MSL. To
-                        // avoid this we bitcast the value to unsigned and negate it,
-                        // then bitcast back to signed.
-                        // This adheres to the WGSL spec in that the negative of the
-                        // type's minimum value should equal to the minimum value.
-                        crate::UnaryOperator::Negate
-                            if operand_ty.scalar_kind() == Some(crate::ScalarKind::Sint) =>
-                        {
-                            let Some((vector_size, scalar)) = operand_ty.vector_size_and_scalar()
-                            else {
-                                continue;
-                            };
-                            let wrapped = WrappedFunction::UnaryOp {
-                                op,
-                                ty: (vector_size, scalar),
-                            };
-                            if !self.wrapped_functions.insert(wrapped) {
-                                continue;
-                            }
-
-                            let unsigned_scalar = crate::Scalar {
-                                kind: crate::ScalarKind::Uint,
-                                ..scalar
-                            };
-                            let mut type_name = String::new();
-                            let mut unsigned_type_name = String::new();
-                            match vector_size {
-                                None => {
-                                    put_numeric_type(&mut type_name, scalar, &[])?;
-                                    put_numeric_type(&mut unsigned_type_name, unsigned_scalar, &[])?
-                                }
-                                Some(size) => {
-                                    put_numeric_type(&mut type_name, scalar, &[size])?;
-                                    put_numeric_type(
-                                        &mut unsigned_type_name,
-                                        unsigned_scalar,
-                                        &[size],
-                                    )?;
-                                }
-                            };
-
-                            writeln!(self.out, "{type_name} {NEG_FUNCTION}({type_name} val) {{")?;
-                            let level = back::Level(1);
-                            writeln!(self.out, "{level}return as_type<{type_name}>(-as_type<{unsigned_type_name}>(val));")?;
-                            writeln!(self.out, "}}")?;
-                            writeln!(self.out)?;
-                        }
-                        _ => {}
-                    }
+                    self.write_wrapped_unary_op(module, func_ctx, op, operand)?;
                 }
                 crate::Expression::Binary { op, left, right } => {
-                    let expr_ty = func_ctx.resolve_type(expr_handle, &module.types);
-                    let left_ty = func_ctx.resolve_type(left, &module.types);
-                    let right_ty = func_ctx.resolve_type(right, &module.types);
-                    match (op, expr_ty.scalar_kind()) {
-                        // Signed integer division of TYPE_MIN / -1, or signed or
-                        // unsigned division by zero, gives an unspecified value in MSL.
-                        // We override the divisor to 1 in these cases.
-                        // This adheres to the WGSL spec in that:
-                        // * TYPE_MIN / -1 == TYPE_MIN
-                        // * x / 0 == x
-                        (
-                            crate::BinaryOperator::Divide,
-                            Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint),
-                        ) => {
-                            let Some(left_wrapped_ty) = left_ty.vector_size_and_scalar() else {
-                                continue;
-                            };
-                            let Some(right_wrapped_ty) = right_ty.vector_size_and_scalar() else {
-                                continue;
-                            };
-                            let wrapped = WrappedFunction::BinaryOp {
-                                op,
-                                left_ty: left_wrapped_ty,
-                                right_ty: right_wrapped_ty,
-                            };
-                            if !self.wrapped_functions.insert(wrapped) {
-                                continue;
-                            }
-
-                            let Some((vector_size, scalar)) = expr_ty.vector_size_and_scalar()
-                            else {
-                                continue;
-                            };
-                            let mut type_name = String::new();
-                            match vector_size {
-                                None => put_numeric_type(&mut type_name, scalar, &[])?,
-                                Some(size) => put_numeric_type(&mut type_name, scalar, &[size])?,
-                            };
-                            writeln!(
-                                self.out,
-                                "{type_name} {DIV_FUNCTION}({type_name} lhs, {type_name} rhs) {{"
-                            )?;
-                            let level = back::Level(1);
-                            match scalar.kind {
-                                crate::ScalarKind::Sint => {
-                                    let min_val = match scalar.width {
-                                        4 => crate::Literal::I32(i32::MIN),
-                                        8 => crate::Literal::I64(i64::MIN),
-                                        _ => {
-                                            return Err(Error::GenericValidation(format!(
-                                                "Unexpected width for scalar {scalar:?}"
-                                            )));
-                                        }
-                                    };
-                                    write!(
-                                        self.out,
-                                        "{level}return lhs / metal::select(rhs, 1, (lhs == "
-                                    )?;
-                                    self.put_literal(min_val)?;
-                                    writeln!(self.out, " & rhs == -1) | (rhs == 0));")?
-                                }
-                                crate::ScalarKind::Uint => writeln!(
-                                    self.out,
-                                    "{level}return lhs / metal::select(rhs, 1u, rhs == 0u);"
-                                )?,
-                                _ => unreachable!(),
-                            }
-                            writeln!(self.out, "}}")?;
-                            writeln!(self.out)?;
-                        }
-                        // Integer modulo where one or both operands are negative, or the
-                        // divisor is zero, is undefined behaviour in MSL. To avoid this
-                        // we use the following equation:
-                        //
-                        // dividend - (dividend / divisor) * divisor
-                        //
-                        // overriding the divisor to 1 if either it is 0, or it is -1
-                        // and the dividend is TYPE_MIN.
-                        //
-                        // This adheres to the WGSL spec in that:
-                        // * TYPE_MIN % -1 == 0
-                        // * x % 0 == 0
-                        (
-                            crate::BinaryOperator::Modulo,
-                            Some(crate::ScalarKind::Sint | crate::ScalarKind::Uint),
-                        ) => {
-                            let Some(left_wrapped_ty) = left_ty.vector_size_and_scalar() else {
-                                continue;
-                            };
-                            let Some((right_vector_size, right_scalar)) =
-                                right_ty.vector_size_and_scalar()
-                            else {
-                                continue;
-                            };
-                            let wrapped = WrappedFunction::BinaryOp {
-                                op,
-                                left_ty: left_wrapped_ty,
-                                right_ty: (right_vector_size, right_scalar),
-                            };
-                            if !self.wrapped_functions.insert(wrapped) {
-                                continue;
-                            }
-
-                            let Some((vector_size, scalar)) = expr_ty.vector_size_and_scalar()
-                            else {
-                                continue;
-                            };
-                            let mut type_name = String::new();
-                            match vector_size {
-                                None => put_numeric_type(&mut type_name, scalar, &[])?,
-                                Some(size) => put_numeric_type(&mut type_name, scalar, &[size])?,
-                            };
-                            let mut rhs_type_name = String::new();
-                            match right_vector_size {
-                                None => put_numeric_type(&mut rhs_type_name, right_scalar, &[])?,
-                                Some(size) => {
-                                    put_numeric_type(&mut rhs_type_name, right_scalar, &[size])?
-                                }
-                            };
-
-                            writeln!(
-                                self.out,
-                                "{type_name} {MOD_FUNCTION}({type_name} lhs, {type_name} rhs) {{"
-                            )?;
-                            let level = back::Level(1);
-                            match scalar.kind {
-                                crate::ScalarKind::Sint => {
-                                    let min_val = match scalar.width {
-                                        4 => crate::Literal::I32(i32::MIN),
-                                        8 => crate::Literal::I64(i64::MIN),
-                                        _ => {
-                                            return Err(Error::GenericValidation(format!(
-                                                "Unexpected width for scalar {scalar:?}"
-                                            )));
-                                        }
-                                    };
-                                    write!(self.out, "{level}{rhs_type_name} divisor = metal::select(rhs, 1, (lhs == ")?;
-                                    self.put_literal(min_val)?;
-                                    writeln!(self.out, " & rhs == -1) | (rhs == 0));")?;
-                                    writeln!(
-                                        self.out,
-                                        "{level}return lhs - (lhs / divisor) * divisor;"
-                                    )?
-                                }
-                                crate::ScalarKind::Uint => writeln!(
-                                    self.out,
-                                    "{level}return lhs % metal::select(rhs, 1u, rhs == 0u);"
-                                )?,
-                                _ => unreachable!(),
-                            }
-                            writeln!(self.out, "}}")?;
-                            writeln!(self.out)?;
-                        }
-                        _ => {}
-                    }
+                    self.write_wrapped_binary_op(module, func_ctx, expr_handle, op, left, right)?;
                 }
                 crate::Expression::Math {
                     fun,
                     arg,
-                    arg1: _,
-                    arg2: _,
-                    arg3: _,
+                    arg1,
+                    arg2,
+                    arg3,
                 } => {
-                    let arg_ty = func_ctx.resolve_type(arg, &module.types);
-                    match fun {
-                        // Taking the absolute value of the TYPE_MIN of a two's
-                        // complement signed integer type causes overflow, which is
-                        // undefined behaviour in MSL. To avoid this, when the value is
-                        // negative we bitcast the value to unsigned and negate it, then
-                        // bitcast back to signed.
-                        // This adheres to the WGSL spec in that the absolute of the
-                        // type's minimum value should equal to the minimum value.
-                        crate::MathFunction::Abs
-                            if arg_ty.scalar_kind() == Some(crate::ScalarKind::Sint) =>
-                        {
-                            let Some((vector_size, scalar)) = arg_ty.vector_size_and_scalar()
-                            else {
-                                continue;
-                            };
-                            let wrapped = WrappedFunction::Math {
-                                fun,
-                                arg_ty: (vector_size, scalar),
-                            };
-                            if !self.wrapped_functions.insert(wrapped) {
-                                continue;
-                            }
-
-                            let unsigned_scalar = crate::Scalar {
-                                kind: crate::ScalarKind::Uint,
-                                ..scalar
-                            };
-                            let mut type_name = String::new();
-                            let mut unsigned_type_name = String::new();
-                            match vector_size {
-                                None => {
-                                    put_numeric_type(&mut type_name, scalar, &[])?;
-                                    put_numeric_type(&mut unsigned_type_name, unsigned_scalar, &[])?
-                                }
-                                Some(size) => {
-                                    put_numeric_type(&mut type_name, scalar, &[size])?;
-                                    put_numeric_type(
-                                        &mut unsigned_type_name,
-                                        unsigned_scalar,
-                                        &[size],
-                                    )?;
-                                }
-                            };
-
-                            writeln!(self.out, "{type_name} {ABS_FUNCTION}({type_name} val) {{")?;
-                            let level = back::Level(1);
-                            writeln!(self.out, "{level}return metal::select(as_type<{type_name}>(-as_type<{unsigned_type_name}>(val)), val, val >= 0);")?;
-                            writeln!(self.out, "}}")?;
-                            writeln!(self.out)?;
-                        }
-                        _ => {}
-                    }
+                    self.write_wrapped_math_function(module, func_ctx, fun, arg, arg1, arg2, arg3)?;
                 }
                 crate::Expression::As {
                     expr,
                     kind,
-                    convert: Some(width),
+                    convert,
                 } => {
-                    // Avoid undefined behaviour when casting from a float to integer
-                    // when the value is out of range for the target type. Additionally
-                    // ensure we clamp to the correct value as per the WGSL spec.
-                    //
-                    // https://www.w3.org/TR/WGSL/#floating-point-conversion:
-                    // * If X is exactly representable in the target type T, then the
-                    //   result is that value.
-                    // * Otherwise, the result is the value in T closest to
-                    //   truncate(X) and also exactly representable in the original
-                    //   floating point type.
-                    let src_ty = func_ctx.resolve_type(expr, &module.types);
-                    let Some((vector_size, src_scalar)) = src_ty.vector_size_and_scalar() else {
-                        continue;
-                    };
-                    let dst_scalar = crate::Scalar { kind, width };
-                    if src_scalar.kind != crate::ScalarKind::Float
-                        || (dst_scalar.kind != crate::ScalarKind::Sint
-                            && dst_scalar.kind != crate::ScalarKind::Uint)
-                    {
-                        continue;
-                    }
-                    let wrapped = WrappedFunction::Cast {
-                        src_scalar,
-                        vector_size,
-                        dst_scalar,
-                    };
-                    if !self.wrapped_functions.insert(wrapped) {
-                        continue;
-                    }
-                    let (min, max) = proc::min_max_float_representable_by(src_scalar, dst_scalar);
-
-                    let mut src_type_name = String::new();
-                    match vector_size {
-                        None => put_numeric_type(&mut src_type_name, src_scalar, &[])?,
-                        Some(size) => put_numeric_type(&mut src_type_name, src_scalar, &[size])?,
-                    };
-                    let mut dst_type_name = String::new();
-                    match vector_size {
-                        None => put_numeric_type(&mut dst_type_name, dst_scalar, &[])?,
-                        Some(size) => put_numeric_type(&mut dst_type_name, dst_scalar, &[size])?,
-                    };
-                    let fun_name = match dst_scalar {
-                        crate::Scalar::I32 => F2I32_FUNCTION,
-                        crate::Scalar::U32 => F2U32_FUNCTION,
-                        crate::Scalar::I64 => F2I64_FUNCTION,
-                        crate::Scalar::U64 => F2U64_FUNCTION,
-                        _ => unreachable!(),
-                    };
-
-                    writeln!(
-                        self.out,
-                        "{dst_type_name} {fun_name}({src_type_name} value) {{"
-                    )?;
-                    let level = back::Level(1);
-                    write!(
-                        self.out,
-                        "{level}return static_cast<{dst_type_name}>({NAMESPACE}::clamp(value, "
-                    )?;
-                    self.put_literal(min)?;
-                    write!(self.out, ", ")?;
-                    self.put_literal(max)?;
-                    writeln!(self.out, "));")?;
-                    writeln!(self.out, "}}")?;
-                    writeln!(self.out)?;
+                    self.write_wrapped_cast(module, func_ctx, expr, kind, convert)?;
                 }
                 crate::Expression::ImageSample {
-                    clamp_to_edge: true,
-                    ..
+                    image,
+                    sampler,
+                    gather,
+                    coordinate,
+                    array_index,
+                    offset,
+                    level,
+                    depth_ref,
+                    clamp_to_edge,
                 } => {
-                    let wrapped = WrappedFunction::ImageSample {
-                        clamp_to_edge: true,
-                    };
-                    if !self.wrapped_functions.insert(wrapped) {
-                        continue;
-                    }
-
-                    writeln!(self.out, "{NAMESPACE}::float4 {IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION}({NAMESPACE}::texture2d<float, {NAMESPACE}::access::sample> tex, {NAMESPACE}::sampler samp, {NAMESPACE}::float2 coords) {{")?;
-                    let l1 = back::Level(1);
-                    writeln!(self.out, "{l1}{NAMESPACE}::float2 half_texel = 0.5 / {NAMESPACE}::float2(tex.get_width(0u), tex.get_height(0u));")?;
-                    writeln!(
-                        self.out,
-                        "{l1}return tex.sample(samp, {NAMESPACE}::clamp(coords, half_texel, 1.0 - half_texel), {NAMESPACE}::level(0.0));"
+                    self.write_wrapped_image_sample(
+                        module,
+                        func_ctx,
+                        image,
+                        sampler,
+                        gather,
+                        coordinate,
+                        array_index,
+                        offset,
+                        level,
+                        depth_ref,
+                        clamp_to_edge,
                     )?;
-                    writeln!(self.out, "}}")?;
-                    writeln!(self.out)?;
                 }
                 _ => {}
             }
