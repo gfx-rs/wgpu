@@ -361,8 +361,10 @@ impl Input {
     }
 
     /// Return the contents of the input file as a string.
-    pub fn read_source(&self, dir_in: &str) -> String {
-        println!("Processing '{}'", self.file_name.display());
+    pub fn read_source(&self, dir_in: &str, print: bool) -> String {
+        if print {
+            println!("Processing '{}'", self.file_name.display());
+        }
         let input_path = self.input_path(dir_in);
         match fs::read_to_string(&input_path) {
             Ok(source) => source,
@@ -377,8 +379,10 @@ impl Input {
     }
 
     /// Return the contents of the input file as a vector of bytes.
-    pub fn read_bytes(&self, dir_in: &str) -> Vec<u8> {
-        println!("Processing '{}'", self.file_name.display());
+    pub fn read_bytes(&self, dir_in: &str, print: bool) -> Vec<u8> {
+        if print {
+            println!("Processing '{}'", self.file_name.display());
+        }
         let input_path = self.input_path(dir_in);
         match fs::read(&input_path) {
             Ok(bytes) => bytes,

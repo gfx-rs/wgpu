@@ -422,7 +422,7 @@ fn convert_snapshots_wgsl() {
     let _ = env_logger::try_init();
 
     for input in Input::files_in_dir("wgsl", &["wgsl"], DIR_IN) {
-        let source = input.read_source(DIR_IN);
+        let source = input.read_source(DIR_IN, true);
         // crlf will make the large split output different on different platform
         let source = source.replace('\r', "");
 
@@ -510,7 +510,7 @@ fn convert_snapshots_glsl() {
                     stage,
                     defines: Default::default(),
                 },
-                &input.read_source(DIR_IN),
+                &input.read_source(DIR_IN, true),
             )
             .unwrap();
 

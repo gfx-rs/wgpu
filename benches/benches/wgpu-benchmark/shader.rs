@@ -57,7 +57,7 @@ impl Inputs {
                 continue;
             }
 
-            input.data = fs::read(&input.inner.file_name).unwrap_or_default();
+            input.data = fs::read(input.inner.input_path(DIR_IN)).unwrap_or_default();
         }
     }
 
@@ -121,7 +121,7 @@ fn parse_glsl(stage: naga::ShaderStage, inputs: &Inputs) {
     };
     for input in &inputs.inner {
         parser
-            .parse(&options, &input.inner.read_source(DIR_IN))
+            .parse(&options, &input.inner.read_source(DIR_IN, false))
             .unwrap();
     }
 }
@@ -418,11 +418,12 @@ fn backends(c: &mut Criterion) {
                 let pipeline_options = Default::default();
                 let mut writer =
                     naga::back::hlsl::Writer::new(&mut string, &options, &pipeline_options);
-                let _ = writer.write(
+                let err = writer.write(
                     input.module.as_ref().unwrap(),
                     input.module_info.as_ref().unwrap(),
                     None,
                 ); // may fail on unimplemented things
+                err.unwrap();
                 string.clear();
             }
         });
