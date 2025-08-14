@@ -118,6 +118,7 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
   - Copies within the same texture must not overlap.
   - Copies of multisampled or depth/stencil formats must span an entire subresource (layer).
   - Copies of depth/stencil formats must be 4B aligned.
+  - For texture-buffer copies, `bytes_per_row` on the buffer side must be 256B-aligned, even if the transfer is a single row.
 - The offset for `set_vertex_buffer` and `set_index_buffer` must be 4B aligned. By @andyleiserson in [#7929](https://github.com/gfx-rs/wgpu/pull/7929).
 - The offset and size of bindings are validated as fitting within the underlying buffer in more cases. By @andyleiserson in [#7911](https://github.com/gfx-rs/wgpu/pull/7911).
 - The function you pass to `Device::on_uncaptured_error()` must now implement `Sync` in addition to `Send`, and be wrapped in `Arc` instead of `Box`.

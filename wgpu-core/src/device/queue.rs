@@ -763,8 +763,8 @@ impl Queue {
             &destination,
             dst_base.aspect,
             &dst.desc,
-            data_layout.offset,
-            false, // alignment not required for buffer offset
+            &data_layout,
+            false, // alignment not required for buffer offset or bytes per row
         )?;
 
         // Note: `_source_bytes_per_array_layer` is ignored since we
@@ -776,7 +776,6 @@ impl Queue {
             data.len() as wgt::BufferAddress,
             CopySide::Source,
             size,
-            false,
         )?;
 
         if dst.desc.format.is_depth_stencil_format() {

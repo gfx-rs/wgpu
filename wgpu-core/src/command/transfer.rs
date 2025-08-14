@@ -288,7 +288,6 @@ pub(crate) fn validate_linear_texture_data(
     buffer_size: BufferAddress,
     buffer_side: CopySide,
     copy_size: &Extent3d,
-    need_copy_aligned_rows: bool,
 ) -> Result<(BufferAddress, BufferAddress), TransferError> {
     let wgt::BufferTextureCopyInfo {
         copy_width,
@@ -297,7 +296,7 @@ pub(crate) fn validate_linear_texture_data(
 
         offset,
 
-        block_size_bytes,
+        block_size_bytes: _,
         block_width_texels,
         block_height_texels,
 
@@ -337,24 +336,6 @@ pub(crate) fn validate_linear_texture_data(
     if layout.rows_per_image.is_none() && requires_multiple_images {
         return Err(TransferError::UnspecifiedRowsPerImage);
     };
-
-    if need_copy_aligned_rows {
-        let bytes_per_row_alignment = wgt::COPY_BYTES_PER_ROW_ALIGNMENT as BufferAddress;
-
-        let mut offset_alignment = block_size_bytes;
-        if format.is_depth_stencil_format() {
-            offset_alignment = 4
-        }
-        if offset % offset_alignment != 0 {
-            return Err(TransferError::UnalignedBufferOffset(offset));
-        }
-
-        // The alignment of row_stride_bytes is only required if there are
-        // multiple rows
-        if requires_multiple_rows && row_stride_bytes % bytes_per_row_alignment != 0 {
-            return Err(TransferError::UnalignedBytesPerRow);
-        }
-    }
 
     // Avoid underflow in the subtraction by checking bytes_in_copy against buffer_size first.
     if bytes_in_copy > buffer_size || offset > buffer_size - bytes_in_copy {
@@ -425,7 +406,15 @@ pub(crate) fn validate_texture_copy_dst_format(
 ///  * The copy must be from/to a single aspect of the texture.
 ///  * If `aligned` is true, the buffer offset must be aligned appropriately.
 ///
-/// The following steps in the algorithm are implemented elsewhere:
+/// And implements the following check from WebGPU's [validating GPUTexelCopyBufferInfo][vtcbi]
+/// algorithm:
+///  * If `aligned` is true, `bytesPerRow` must be a multiple of 256.
+///
+/// Note that the `bytesPerRow` alignment check is enforced whenever
+/// `bytesPerRow` is specified, even if the transfer is not multiple rows and
+/// `bytesPerRow` could have been omitted.
+///
+/// The following steps in [validating texture buffer copy][vtbc] are implemented elsewhere:
 ///  * Invocation of other validation algorithms.
 ///  * The texture usage (COPY_DST / COPY_SRC) check.
 ///  * The check for non-copyable depth/stencil formats. The caller must perform
@@ -435,11 +424,12 @@ pub(crate) fn validate_texture_copy_dst_format(
 ///    non-copyable format.
 ///
 /// [vtbc]: https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-texture-buffer-copy
+/// [vtcbi]: https://www.w3.org/TR/webgpu/#abstract-opdef-validating-gputexelcopybufferinfo
 pub(crate) fn validate_texture_buffer_copy<T>(
     texture_copy_view: &wgt::TexelCopyTextureInfo<T>,
     aspect: hal::FormatAspects,
     desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
-    offset: BufferAddress,
+    layout: &wgt::TexelCopyBufferLayout,
     aligned: bool,
 ) -> Result<(), TransferError> {
     if desc.sample_count != 1 {
@@ -464,8 +454,14 @@ pub(crate) fn validate_texture_buffer_copy<T>(
             .expect("non-copyable formats should have been rejected previously")
     };
 
-    if aligned && offset % u64::from(offset_alignment) != 0 {
-        return Err(TransferError::UnalignedBufferOffset(offset));
+    if aligned && layout.offset % u64::from(offset_alignment) != 0 {
+        return Err(TransferError::UnalignedBufferOffset(layout.offset));
+    }
+
+    if let Some(bytes_per_row) = layout.bytes_per_row {
+        if aligned && bytes_per_row % wgt::COPY_BYTES_PER_ROW_ALIGNMENT != 0 {
+            return Err(TransferError::UnalignedBytesPerRow);
+        }
     }
 
     Ok(())
@@ -1004,7 +1000,7 @@ impl Global {
                 destination,
                 dst_base.aspect,
                 &dst_texture.desc,
-                source.layout.offset,
+                &source.layout,
                 true, // alignment required for buffer offset
             )?;
 
@@ -1016,7 +1012,6 @@ impl Global {
                     src_buffer.size,
                     CopySide::Source,
                     copy_size,
-                    true,
                 )?;
 
             if dst_texture.desc.format.is_depth_stencil_format() {
@@ -1125,7 +1120,7 @@ impl Global {
                 source,
                 src_base.aspect,
                 &src_texture.desc,
-                destination.layout.offset,
+                &destination.layout,
                 true, // alignment required for buffer offset
             )?;
 
@@ -1137,7 +1132,6 @@ impl Global {
                     dst_buffer.size,
                     CopySide::Destination,
                     copy_size,
-                    true,
                 )?;
 
             if src_texture.desc.format.is_depth_stencil_format() {

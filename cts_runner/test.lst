@@ -82,6 +82,8 @@ fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:depth_sten
 webgpu:api,validation,image_copy,buffer_texture_copies:sample_count:*
 webgpu:api,validation,image_copy,buffer_texture_copies:texture_buffer_usages:*
 webgpu:api,validation,image_copy,buffer_texture_copies:device_mismatch:*
+fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:offset_and_bytesPerRow:format="rgba32float";copyType="CopyB2T";dimension="1d"
+fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:offset_and_bytesPerRow:format="rgba32float";copyType="CopyT2B";dimension="1d"
 fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:offset_and_bytesPerRow:format="rgba8unorm";copyType="CopyB2T";dimension="2d"
 fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:offset_and_bytesPerRow:format="rgba8unorm";copyType="CopyT2B";dimension="2d"
 fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:offset_and_bytesPerRow:format="rgba8unorm";copyType="CopyB2T";dimension="3d"
