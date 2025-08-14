@@ -183,14 +183,14 @@ fn frontends(c: &mut Criterion) {
         });
     });
 
-    let inputs_spirv = Inputs::from_dir("../naga/tests/in/spv", "spvasm");
+    let inputs_spirv = Inputs::from_dir("spv", "spvasm");
     assert!(!inputs_spirv.is_empty());
 
     // Assemble all the SPIR-V assembly.
     let mut assembled_spirv = Vec::<Vec<u32>>::new();
     'spirv: for input in &inputs_spirv.inner {
         let output = match Command::new("spirv-as")
-            .arg(input.filename())
+            .arg(input.inner.input_path(DIR_IN))
             .arg("-o")
             .arg("-")
             .output()
@@ -244,8 +244,8 @@ fn frontends(c: &mut Criterion) {
         });
     });
 
-    let mut inputs_vertex = Inputs::from_dir("../naga/tests/in/glsl", "vert");
-    let mut inputs_fragment = Inputs::from_dir("../naga/tests/in/glsl", "frag");
+    let mut inputs_vertex = Inputs::from_dir("glsl", "vert");
+    let mut inputs_fragment = Inputs::from_dir("glsl", "frag");
     assert!(!inputs_vertex.is_empty());
     assert!(!inputs_fragment.is_empty());
     // let mut inputs_compute = Inputs::from_dir("../naga/tests/in/glsl", "comp");
