@@ -438,8 +438,8 @@ impl NoopBackendOptions {
 }
 
 #[derive(Clone, Debug, Default, Copy, PartialEq, Eq)]
-/// Selects which presentation system to use on DX12.
-pub enum Dx12PresentationSystem {
+/// Selects which kind of swapchain to use on DX12.
+pub enum Dx12SwapchainKind {
     /// Use the DXGI presentation system.
     #[default]
     Dxgi,
