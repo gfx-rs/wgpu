@@ -215,29 +215,7 @@ fn write_output_spv(
 ) {
     use naga::back::spv;
 
-    let mut flags = spv::WriterFlags::LABEL_VARYINGS;
-    flags.set(spv::WriterFlags::DEBUG, params.debug);
-    flags.set(
-        spv::WriterFlags::ADJUST_COORDINATE_SPACE,
-        params.adjust_coordinate_space,
-    );
-    flags.set(spv::WriterFlags::FORCE_POINT_SIZE, params.force_point_size);
-    flags.set(spv::WriterFlags::CLAMP_FRAG_DEPTH, params.clamp_frag_depth);
-
-    let options = spv::Options {
-        lang_version: (params.version.0, params.version.1),
-        flags,
-        capabilities: if params.capabilities.is_empty() {
-            None
-        } else {
-            Some(params.capabilities.clone())
-        },
-        bounds_check_policies,
-        binding_map: params.binding_map.clone(),
-        zero_initialize_workgroup_memory: spv::ZeroInitializeWorkgroupMemoryMode::Polyfill,
-        force_loop_bounding: true,
-        debug_info,
-    };
+    let options = params.to_options(bounds_check_policies, debug_info);
 
     let (module, info) =
         naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
@@ -430,10 +408,7 @@ fn write_output_wgsl(
 
     println!("generating WGSL");
 
-    let mut flags = wgsl::WriterFlags::empty();
-    flags.set(wgsl::WriterFlags::EXPLICIT_TYPES, params.explicit_types);
-
-    let string = wgsl::write_string(module, info, flags).expect("WGSL write failed");
+    let string = wgsl::write_string(module, info, params.into()).expect("WGSL write failed");
 
     input.write_output_file("wgsl", "wgsl", string, DIR_OUT);
 }
@@ -452,10 +427,8 @@ fn convert_snapshots_wgsl() {
         let source = source.replace('\r', "");
 
         let params = input.read_parameters(DIR_IN);
-        let WgslInParameters { parse_doc_comments } = params.wgsl_in;
 
-        let options = naga::front::wgsl::Options { parse_doc_comments };
-        let mut frontend = naga::front::wgsl::Frontend::new_with_options(options);
+        let mut frontend = naga::front::wgsl::Frontend::new_with_options((&params.wgsl_in).into());
         match frontend.parse(&source) {
             Ok(mut module) => check_targets(&input, &mut module, Some(&source)),
             Err(e) => panic!(
@@ -499,19 +472,9 @@ fn convert_snapshots_spv() {
         }
 
         let params = input.read_parameters(DIR_IN);
-        let SpirvInParameters {
-            adjust_coordinate_space,
-        } = params.spv_in;
 
-        let mut module = naga::front::spv::parse_u8_slice(
-            &command.stdout,
-            &naga::front::spv::Options {
-                adjust_coordinate_space,
-                strict_capabilities: true,
-                ..Default::default()
-            },
-        )
-        .unwrap();
+        let mut module =
+            naga::front::spv::parse_u8_slice(&command.stdout, &(&params.spv_in).into()).unwrap();
 
         check_targets(&input, &mut module, None);
     }

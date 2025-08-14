@@ -83,9 +83,7 @@ impl Inputs {
                 continue;
             }
 
-            let WgslInParameters { parse_doc_comments } = input.options.wgsl_in;
-            let options = naga::front::wgsl::Options { parse_doc_comments };
-            parser.set_options(options);
+            parser.set_options((&input.options.wgsl_in).into());
 
             input.module = Some(parser.parse(input.string.as_ref().unwrap()).unwrap());
         }
@@ -180,9 +178,7 @@ fn frontends(c: &mut Criterion) {
         let mut frontend = naga::front::wgsl::Frontend::new();
         b.iter(|| {
             for input in &inputs_wgsl.inner {
-                let WgslInParameters { parse_doc_comments } = input.options.wgsl_in;
-                let options = naga::front::wgsl::Options { parse_doc_comments };
-                frontend.set_options(options);
+                frontend.set_options((&input.options.wgsl_in).into());
                 frontend.parse(input.string.as_ref().unwrap()).unwrap();
             }
         });
@@ -351,7 +347,11 @@ fn backends(c: &mut Criterion) {
                     // These fail due to https://github.com/gfx-rs/wgpu/issues/7315
                     continue;
                 }
-                let opt = input.options.spv.to_options(bounds_check_policies, debug_info)
+                let opt = input
+                    .options
+                    .spv
+                    .to_options(input.options.bounds_check_policies, None);
+                writer.set_options(&opt);
                 let _ = writer.write(
                     input.module.as_ref().unwrap(),
                     input.module_info.as_ref().unwrap(),
