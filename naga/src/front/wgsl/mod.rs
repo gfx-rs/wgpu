@@ -48,7 +48,7 @@ impl Frontend {
             options,
         }
     }
-    pub const fn set_options(&mut self, options: Options) {
+    pub fn set_options(&mut self, options: Options) {
         self.options = options;
     }
 
