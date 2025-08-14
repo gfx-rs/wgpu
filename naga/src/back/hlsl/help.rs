@@ -264,6 +264,61 @@ impl<W: Write> super::Writer<'_, W> {
         Ok(())
     }
 
+    /// Helper function used by [`Self::write_wrapped_image_load_function`] and
+    /// [`Self::write_wrapped_image_sample_function`] to write the shared YUV
+    /// to RGB conversion code for external textures. Expects the preceding
+    /// code to declare the Y component as a `float` variable of name `y`, the
+    /// UV components as a `float2` variable of name `uv`, and the external
+    /// texture params as a variable of name `params`. The emitted code will
+    /// return the result.
+    fn write_convert_yuv_to_rgb_and_return(
+        &mut self,
+        level: crate::back::Level,
+        y: &str,
+        uv: &str,
+        params: &str,
+    ) -> BackendResult {
+        let l1 = level;
+        let l2 = l1.next();
+
+        // Convert from YUV to non-linear RGB in the source color space. We
+        // declare our matrices as row_major in HLSL, therefore we must reverse
+        // the order of this multiplication
+        writeln!(
+            self.out,
+            "{l1}float3 srcGammaRgb = mul(float4({y}, {uv}, 1.0), {params}.yuv_conversion_matrix).rgb;"
+        )?;
+
+        // Apply the inverse of the source transfer function to convert to
+        // linear RGB in the source color space.
+        writeln!(
+            self.out,
+            "{l1}float3 srcLinearRgb = srcGammaRgb < {params}.src_tf.k * {params}.src_tf.b ?"
+        )?;
+        writeln!(self.out, "{l2}srcGammaRgb / {params}.src_tf.k :")?;
+        writeln!(self.out, "{l2}pow((srcGammaRgb + {params}.src_tf.a - 1.0) / {params}.src_tf.a, {params}.src_tf.g);")?;
+
+        // Multiply by the gamut conversion matrix to convert to linear RGB in
+        // the destination color space. We declare our matrices as row_major in
+        // HLSL, therefore we must reverse the order of this multiplication.
+        writeln!(
+            self.out,
+            "{l1}float3 dstLinearRgb = mul(srcLinearRgb, {params}.gamut_conversion_matrix);"
+        )?;
+
+        // Finally, apply the dest transfer function to convert to non-linear
+        // RGB in the destination color space, and return the result.
+        writeln!(
+            self.out,
+            "{l1}float3 dstGammaRgb = dstLinearRgb < {params}.dst_tf.b ?"
+        )?;
+        writeln!(self.out, "{l2}{params}.dst_tf.k * dstLinearRgb :")?;
+        writeln!(self.out, "{l2}{params}.dst_tf.a * pow(dstLinearRgb, 1.0 / {params}.dst_tf.g) - ({params}.dst_tf.a - 1);")?;
+
+        writeln!(self.out, "{l1}return float4(dstGammaRgb, 1.0);")?;
+        Ok(())
+    }
+
     pub(super) fn write_wrapped_image_load_function(
         &mut self,
         module: &crate::Module,
@@ -346,12 +401,7 @@ impl<W: Write> super::Writer<'_, W> {
                 writeln!(self.out, "{l3}uv = float2(plane1.Load(uint3(plane1_coords, 0u)).x, plane2.Load(uint3(plane2_coords, 0u)).x);")?;
                 writeln!(self.out, "{l2}}}")?;
 
-                // Convert from YUV to RGB. We declare our matrices as row_major in HLSL,
-                // therefore we must reverse the order of this multiplication
-                writeln!(
-                    self.out,
-                    "{l2}return mul(float4(y, uv, 1.0), params.yuv_conversion_matrix);"
-                )?;
+                self.write_convert_yuv_to_rgb_and_return(l2, "y", "uv", "params")?;
 
                 writeln!(self.out, "{l1}}}")?;
                 writeln!(self.out, "}}")?;
@@ -478,12 +528,8 @@ impl<W: Write> super::Writer<'_, W> {
                 writeln!(self.out, "{l3}uv = float2(plane1.SampleLevel(samp, plane1_coords, 0.0f).x, plane2.SampleLevel(samp, plane2_coords, 0.0f).x);")?;
                 writeln!(self.out, "{l2}}}")?;
 
-                // Convert from YUV to RGB. We declare our matrices as row_major in HLSL,
-                // therefore we must reverse the order of this multiplication
-                writeln!(
-                    self.out,
-                    "{l2}return mul(float4(y, uv, 1.0), params.yuv_conversion_matrix);"
-                )?;
+                self.write_convert_yuv_to_rgb_and_return(l2, "y", "uv", "params")?;
+
                 writeln!(self.out, "{l1}}}")?;
                 writeln!(self.out, "}}")?;
                 writeln!(self.out)?;

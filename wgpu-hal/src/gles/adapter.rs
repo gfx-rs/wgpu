@@ -1165,6 +1165,7 @@ impl crate::Adapter for super::Adapter {
             | Tf::Depth24Plus
             | Tf::Depth24PlusStencil8 => depth,
             Tf::NV12 => empty,
+            Tf::P010 => empty,
             Tf::Rgb9e5Ufloat => filterable,
             Tf::Bc1RgbaUnorm
             | Tf::Bc1RgbaUnormSrgb

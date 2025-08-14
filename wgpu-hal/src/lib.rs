@@ -1053,9 +1053,9 @@ pub trait Queue: WasmNotSendSync {
     /// Update `fence` to `value` when the operation is complete. See
     /// [`Fence`] for details.
     ///
-    /// A `wgpu_hal` queue is "single threaded": all command buffers are
-    /// executed in the order they're submitted, with each buffer able to see
-    /// previous buffers' results. Specifically:
+    /// All command buffers submitted to a `wgpu_hal` queue are executed in the
+    /// order they're submitted, with each buffer able to observe the effects of
+    /// previous buffers' execution. Specifically:
     ///
     /// - If two calls to `submit` on a single `Queue` occur in a particular
     ///   order (that is, they happen on the same thread, or on two threads that
@@ -1734,7 +1734,7 @@ impl From<wgt::TextureFormat> for FormatAspects {
             wgt::TextureFormat::Depth32FloatStencil8 | wgt::TextureFormat::Depth24PlusStencil8 => {
                 Self::DEPTH_STENCIL
             }
-            wgt::TextureFormat::NV12 => Self::PLANE_0 | Self::PLANE_1,
+            wgt::TextureFormat::NV12 | wgt::TextureFormat::P010 => Self::PLANE_0 | Self::PLANE_1,
             _ => Self::COLOR,
         }
     }

@@ -13,6 +13,7 @@
         ray_intersection: None,
         ray_vertex_return: None,
         external_texture_params: None,
+        external_texture_transfer_function: None,
         predeclared_types: {},
     ),
     constants: [],

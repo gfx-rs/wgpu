@@ -2230,6 +2230,23 @@ pub enum TextureFormat {
     /// [`Features::TEXTURE_FORMAT_NV12`] must be enabled to use this texture format.
     NV12,
 
+    /// YUV 4:2:0 chroma subsampled format.
+    ///
+    /// Contains two planes:
+    /// - 0: Single 16 bit channel luminance, of which only the high 10 bits
+    ///   are used.
+    /// - 1: Dual 16 bit channel chrominance at half width and half height, of
+    ///   which only the high 10 bits are used.
+    ///
+    /// Valid view formats for luminance are [`TextureFormat::R16Unorm`].
+    ///
+    /// Valid view formats for chrominance are [`TextureFormat::Rg16Unorm`].
+    ///
+    /// Width and height must be even.
+    ///
+    /// [`Features::TEXTURE_FORMAT_P010`] must be enabled to use this texture format.
+    P010,
+
     // Compressed textures usable with `TEXTURE_COMPRESSION_BC` feature. `TEXTURE_COMPRESSION_SLICED_3D` is required to use with 3D textures.
     /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 4 color + alpha pallet. 5 bit R + 6 bit G + 5 bit B + 1 bit alpha.
     /// [0, 63] ([0, 1] for alpha) converted to/from float [0, 1] in shader.
@@ -2475,6 +2492,7 @@ impl<'de> Deserialize<'de> for TextureFormat {
                     "depth24plus" => TextureFormat::Depth24Plus,
                     "depth24plus-stencil8" => TextureFormat::Depth24PlusStencil8,
                     "nv12" => TextureFormat::NV12,
+                    "p010" => TextureFormat::P010,
                     "rgb9e5ufloat" => TextureFormat::Rgb9e5Ufloat,
                     "bc1-rgba-unorm" => TextureFormat::Bc1RgbaUnorm,
                     "bc1-rgba-unorm-srgb" => TextureFormat::Bc1RgbaUnormSrgb,
@@ -2604,6 +2622,7 @@ impl Serialize for TextureFormat {
             TextureFormat::Depth24Plus => "depth24plus",
             TextureFormat::Depth24PlusStencil8 => "depth24plus-stencil8",
             TextureFormat::NV12 => "nv12",
+            TextureFormat::P010 => "p010",
             TextureFormat::Rgb9e5Ufloat => "rgb9e5ufloat",
             TextureFormat::Bc1RgbaUnorm => "bc1-rgba-unorm",
             TextureFormat::Bc1RgbaUnormSrgb => "bc1-rgba-unorm-srgb",
@@ -2696,6 +2715,8 @@ impl TextureFormat {
             (Self::Depth32FloatStencil8, TextureAspect::DepthOnly) => Some(Self::Depth32Float),
             (Self::NV12, TextureAspect::Plane0) => Some(Self::R8Unorm),
             (Self::NV12, TextureAspect::Plane1) => Some(Self::Rg8Unorm),
+            (Self::P010, TextureAspect::Plane0) => Some(Self::R16Unorm),
+            (Self::P010, TextureAspect::Plane1) => Some(Self::Rg16Unorm),
             // views to multi-planar formats must specify the plane
             (format, TextureAspect::All) if !format.is_multi_planar_format() => Some(format),
             _ => None,
@@ -2751,6 +2772,7 @@ impl TextureFormat {
     pub fn planes(&self) -> Option<u32> {
         match *self {
             Self::NV12 => Some(2),
+            Self::P010 => Some(2),
             _ => None,
         }
     }
@@ -2788,6 +2810,7 @@ impl TextureFormat {
     pub fn size_multiple_requirement(&self) -> (u32, u32) {
         match *self {
             Self::NV12 => (2, 2),
+            Self::P010 => (2, 2),
             _ => self.block_dimensions(),
         }
     }
@@ -2848,7 +2871,8 @@ impl TextureFormat {
             | Self::Depth24PlusStencil8
             | Self::Depth32Float
             | Self::Depth32FloatStencil8
-            | Self::NV12 => (1, 1),
+            | Self::NV12
+            | Self::P010 => (1, 1),
 
             Self::Bc1RgbaUnorm
             | Self::Bc1RgbaUnormSrgb
@@ -2966,6 +2990,7 @@ impl TextureFormat {
             Self::Depth32FloatStencil8 => Features::DEPTH32FLOAT_STENCIL8,
 
             Self::NV12 => Features::TEXTURE_FORMAT_NV12,
+            Self::P010 => Features::TEXTURE_FORMAT_P010,
 
             Self::R16Unorm
             | Self::R16Snorm
@@ -3099,8 +3124,10 @@ impl TextureFormat {
             Self::Depth32Float =>         (        msaa, attachment),
             Self::Depth32FloatStencil8 => (        msaa, attachment),
 
-            // We only support sampling nv12 textures until we implement transfer plane data.
+            // We only support sampling nv12 and p010 textures until we
+            // implement transfer plane data.
             Self::NV12 =>                 (        none,    binding),
+            Self::P010 =>                 (        none,    binding),
 
             Self::R16Unorm =>             (        msaa | s_ro_wo,    storage),
             Self::R16Snorm =>             (        msaa | s_ro_wo,    storage),
@@ -3230,7 +3257,7 @@ impl TextureFormat {
                 _ => None,
             },
 
-            Self::NV12 => match aspect {
+            Self::NV12 | Self::P010 => match aspect {
                 Some(TextureAspect::Plane0) | Some(TextureAspect::Plane1) => {
                     Some(unfilterable_float)
                 }
@@ -3363,6 +3390,12 @@ impl TextureFormat {
                 _ => None,
             },
 
+            Self::P010 => match aspect {
+                Some(TextureAspect::Plane0) => Some(2),
+                Some(TextureAspect::Plane1) => Some(4),
+                _ => None,
+            },
+
             Self::Bc1RgbaUnorm | Self::Bc1RgbaUnormSrgb | Self::Bc4RUnorm | Self::Bc4RSnorm => {
                 Some(8)
             }
@@ -3448,6 +3481,7 @@ impl TextureFormat {
             | Self::Depth32Float
             | Self::Depth32FloatStencil8
             | Self::NV12
+            | Self::P010
             | Self::Rgb9e5Ufloat
             | Self::Bc1RgbaUnorm
             | Self::Bc1RgbaUnormSrgb
@@ -3531,6 +3565,7 @@ impl TextureFormat {
             | Self::Depth32Float
             | Self::Depth32FloatStencil8
             | Self::NV12
+            | Self::P010
             | Self::Rgb9e5Ufloat
             | Self::Bc1RgbaUnorm
             | Self::Bc1RgbaUnormSrgb
@@ -3625,7 +3660,7 @@ impl TextureFormat {
                 _ => 2,
             },
 
-            Self::NV12 => match aspect {
+            Self::NV12 | Self::P010 => match aspect {
                 TextureAspect::Plane0 => 1,
                 TextureAspect::Plane1 => 2,
                 _ => 3,
@@ -3735,6 +3770,8 @@ impl TextureFormat {
                 Self::Stencil8 => 1,
                 // Two chroma bytes per block, one luma byte per block
                 Self::NV12 => 3,
+                // Two chroma u16s and one luma u16 per block
+                Self::P010 => 6,
                 f => {
                     log::warn!("Memory footprint for format {f:?} is not implemented");
                     0
@@ -6285,6 +6322,31 @@ pub enum ExternalTextureFormat {
     Yu12,
 }
 
+/// Parameters describing a gamma encoding transfer function in the form
+/// tf = { k * linear                   | linear < b
+///      { a * pow(linear, 1/g) - (a-1) | linear >= b
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, bytemuck::Zeroable, bytemuck::Pod)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[allow(missing_docs)]
+pub struct ExternalTextureTransferFunction {
+    pub a: f32,
+    pub b: f32,
+    pub g: f32,
+    pub k: f32,
+}
+
+impl Default for ExternalTextureTransferFunction {
+    fn default() -> Self {
+        Self {
+            a: 1.0,
+            b: 1.0,
+            g: 1.0,
+            k: 1.0,
+        }
+    }
+}
+
 /// Describes an [`ExternalTexture`](../wgpu/struct.ExternalTexture.html).
 ///
 /// Note that [`width`] and [`height`] are the values that should be returned by
@@ -6324,6 +6386,27 @@ pub struct ExternalTextureDescriptor<L> {
     /// to RGBA.
     /// This is ignored when `format` is [`ExternalTextureFormat::Rgba`].
     pub yuv_conversion_matrix: [f32; 16],
+
+    /// 3x3 column-major matrix to transform linear RGB values in the source
+    /// color space to linear RGB values in the destination color space. In
+    /// combination with [`Self::src_transfer_function`] and
+    /// [`Self::dst_transfer_function`] this can be used to ensure that
+    /// [`ImageSample`] and [`ImageLoad`] operations return values in the
+    /// desired destination color space rather than the source color space of
+    /// the underlying planes.
+    ///
+    /// [`ImageSample`]: https://docs.rs/naga/latest/naga/ir/enum.Expression.html#variant.ImageSample
+    /// [`ImageLoad`]: https://docs.rs/naga/latest/naga/ir/enum.Expression.html#variant.ImageLoad
+    pub gamut_conversion_matrix: [f32; 9],
+
+    /// Transfer function for the source color space. The *inverse* of this
+    /// will be applied to decode non-linear RGB to linear RGB in the source
+    /// color space.
+    pub src_transfer_function: ExternalTextureTransferFunction,
+
+    /// Transfer function for the destination color space. This will be applied
+    /// to encode linear RGB to non-linear RGB in the destination color space.
+    pub dst_transfer_function: ExternalTextureTransferFunction,
 
     /// Transform to apply to [`ImageSample`] coordinates.
     ///
@@ -6370,6 +6453,9 @@ impl<L> ExternalTextureDescriptor<L> {
             yuv_conversion_matrix: self.yuv_conversion_matrix,
             sample_transform: self.sample_transform,
             load_transform: self.load_transform,
+            gamut_conversion_matrix: self.gamut_conversion_matrix,
+            src_transfer_function: self.src_transfer_function,
+            dst_transfer_function: self.dst_transfer_function,
         }
     }
 

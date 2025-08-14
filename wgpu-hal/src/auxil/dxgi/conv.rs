@@ -68,6 +68,7 @@ pub fn map_texture_format_failable(
         Tf::Depth32Float => DXGI_FORMAT_D32_FLOAT,
         Tf::Depth32FloatStencil8 => DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
         Tf::NV12 => DXGI_FORMAT_NV12,
+        Tf::P010 => DXGI_FORMAT_P010,
         Tf::Bc1RgbaUnorm => DXGI_FORMAT_BC1_UNORM,
         Tf::Bc1RgbaUnormSrgb => DXGI_FORMAT_BC1_UNORM_SRGB,
         Tf::Bc2RgbaUnorm => DXGI_FORMAT_BC2_UNORM,

@@ -110,6 +110,7 @@ impl crate::Instance for super::Instance {
             flags: desc.flags,
             memory_budget_thresholds: desc.memory_budget_thresholds,
             compiler_container: Arc::new(compiler_container),
+            options: desc.backend_options.dx12.clone(),
         })
     }
 
@@ -123,8 +124,8 @@ impl crate::Instance for super::Instance {
                 // https://github.com/rust-windowing/raw-window-handle/issues/171
                 let handle = Foundation::HWND(handle.hwnd.get() as *mut _);
                 let target = match self.presentation_system {
-                    wgt::Dx12PresentationSystem::Dxgi => SurfaceTarget::WndHandle(handle),
-                    wgt::Dx12PresentationSystem::Dcomp => SurfaceTarget::VisualFromWndHandle {
+                    wgt::Dx12SwapchainKind::Dxgi => SurfaceTarget::WndHandle(handle),
+                    wgt::Dx12SwapchainKind::DirectComposition => SurfaceTarget::VisualFromWndHandle {
                         handle,
                         dcomp_state: Default::default(),
                     },
@@ -136,6 +137,7 @@ impl crate::Instance for super::Instance {
                     target,
                     supports_allow_tearing: self.supports_allow_tearing,
                     swap_chain: RwLock::new(None),
+                    options: self.options.clone(),
                 })
             }
             _ => Err(crate::InstanceError::new(format!(
@@ -159,6 +161,7 @@ impl crate::Instance for super::Instance {
                     self.flags,
                     self.memory_budget_thresholds,
                     self.compiler_container.clone(),
+                    self.options.clone(),
                 )
             })
             .collect()

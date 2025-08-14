@@ -1404,18 +1404,20 @@ impl crate::Device for super::Device {
             create_info = create_info.border_color(conv::map_border_color(color));
         }
 
-        let raw = self
-            .shared
-            .sampler_cache
-            .lock()
-            .create_sampler(&self.shared.raw, create_info)?;
+        let mut sampler_cache_guard = self.shared.sampler_cache.lock();
+
+        let raw = sampler_cache_guard.create_sampler(&self.shared.raw, create_info)?;
 
         // Note: Cached samplers will just continually overwrite the label
         //
         // https://github.com/gfx-rs/wgpu/issues/6867
         if let Some(label) = desc.label {
+            // SAFETY: we are holding a lock on the sampler cache,
+            // so we can only be setting the name from one thread.
             unsafe { self.shared.set_object_name(raw, label) };
         }
+
+        drop(sampler_cache_guard);
 
         self.counters.samplers.add(1);
 

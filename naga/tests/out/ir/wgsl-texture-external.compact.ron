@@ -3,6 +3,13 @@
         (
             name: None,
             inner: Scalar((
+                kind: Float,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Scalar((
                 kind: Uint,
                 width: 4,
             )),
@@ -31,6 +38,17 @@
         (
             name: None,
             inner: Matrix(
+                columns: Tri,
+                rows: Tri,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Matrix(
                 columns: Quad,
                 rows: Quad,
                 scalar: (
@@ -40,41 +58,91 @@
             ),
         ),
         (
+            name: Some("NagaExternalTextureTransferFn"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("a"),
+                        ty: 0,
+                        binding: None,
+                        offset: 0,
+                    ),
+                    (
+                        name: Some("b"),
+                        ty: 0,
+                        binding: None,
+                        offset: 4,
+                    ),
+                    (
+                        name: Some("g"),
+                        ty: 0,
+                        binding: None,
+                        offset: 8,
+                    ),
+                    (
+                        name: Some("k"),
+                        ty: 0,
+                        binding: None,
+                        offset: 12,
+                    ),
+                ],
+                span: 16,
+            ),
+        ),
+        (
             name: Some("NagaExternalTextureParams"),
             inner: Struct(
                 members: [
                     (
                         name: Some("yuv_conversion_matrix"),
-                        ty: 3,
+                        ty: 5,
                         binding: None,
                         offset: 0,
                     ),
                     (
-                        name: Some("sample_transform"),
-                        ty: 2,
+                        name: Some("gamut_conversion_matrix"),
+                        ty: 4,
                         binding: None,
                         offset: 64,
                     ),
                     (
-                        name: Some("load_transform"),
-                        ty: 2,
-                        binding: None,
-                        offset: 88,
-                    ),
-                    (
-                        name: Some("size"),
-                        ty: 1,
+                        name: Some("src_tf"),
+                        ty: 6,
                         binding: None,
                         offset: 112,
                     ),
                     (
-                        name: Some("num_planes"),
-                        ty: 0,
+                        name: Some("dst_tf"),
+                        ty: 6,
                         binding: None,
-                        offset: 120,
+                        offset: 128,
+                    ),
+                    (
+                        name: Some("sample_transform"),
+                        ty: 3,
+                        binding: None,
+                        offset: 144,
+                    ),
+                    (
+                        name: Some("load_transform"),
+                        ty: 3,
+                        binding: None,
+                        offset: 168,
+                    ),
+                    (
+                        name: Some("size"),
+                        ty: 2,
+                        binding: None,
+                        offset: 192,
+                    ),
+                    (
+                        name: Some("num_planes"),
+                        ty: 1,
+                        binding: None,
+                        offset: 200,
                     ),
                 ],
-                span: 128,
+                span: 208,
             ),
         ),
         (
@@ -106,7 +174,8 @@
         ray_desc: None,
         ray_intersection: None,
         ray_vertex_return: None,
-        external_texture_params: Some(4),
+        external_texture_params: Some(7),
+        external_texture_transfer_function: Some(6),
         predeclared_types: {},
     ),
     constants: [],
@@ -119,7 +188,7 @@
                 group: 0,
                 binding: 0,
             )),
-            ty: 5,
+            ty: 8,
             init: None,
         ),
         (
@@ -129,7 +198,7 @@
                 group: 0,
                 binding: 1,
             )),
-            ty: 6,
+            ty: 9,
             init: None,
         ),
     ],
@@ -140,28 +209,28 @@
             arguments: [
                 (
                     name: Some("t"),
-                    ty: 5,
+                    ty: 8,
                     binding: None,
                 ),
             ],
             result: Some((
-                ty: 7,
+                ty: 10,
                 binding: None,
             )),
             local_variables: [
                 (
                     name: Some("a"),
-                    ty: 7,
+                    ty: 10,
                     init: None,
                 ),
                 (
                     name: Some("b"),
-                    ty: 7,
+                    ty: 10,
                     init: None,
                 ),
                 (
                     name: Some("c"),
-                    ty: 1,
+                    ty: 2,
                     init: None,
                 ),
             ],
@@ -285,7 +354,7 @@
                 name: Some("fragment_main"),
                 arguments: [],
                 result: Some((
-                    ty: 7,
+                    ty: 10,
                     binding: Some(Location(
                         location: 0,
                         interpolation: Some(Perspective),
@@ -324,7 +393,7 @@
                 name: Some("vertex_main"),
                 arguments: [],
                 result: Some((
-                    ty: 7,
+                    ty: 10,
                     binding: Some(BuiltIn(Position(
                         invariant: false,
                     ))),

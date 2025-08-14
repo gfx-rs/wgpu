@@ -12,7 +12,7 @@ use pp_rs::token::PreprocessorError;
 use thiserror::Error;
 
 use super::token::TokenValue;
-use crate::SourceLocation;
+use crate::{error::replace_control_chars, SourceLocation};
 use crate::{error::ErrorWrite, proc::ConstantEvaluatorError, Span};
 
 fn join_with_comma(list: &[ExpectedToken]) -> String {
@@ -171,7 +171,7 @@ impl ParseErrors {
 
     pub fn emit_to_writer_with_path(&self, writer: &mut impl ErrorWrite, source: &str, path: &str) {
         let path = path.to_string();
-        let files = SimpleFile::new(path, source);
+        let files = SimpleFile::new(path, replace_control_chars(source));
         let config = term::Config::default();
 
         for err in &self.errors {
