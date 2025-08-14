@@ -54,6 +54,7 @@ pub(super) const fn map_storage_class(space: crate::AddressSpace) -> spirv::Stor
         crate::AddressSpace::Uniform => spirv::StorageClass::Uniform,
         crate::AddressSpace::WorkGroup => spirv::StorageClass::Workgroup,
         crate::AddressSpace::PushConstant => spirv::StorageClass::PushConstant,
+        crate::AddressSpace::TaskPayload => unreachable!(),
     }
 }
 

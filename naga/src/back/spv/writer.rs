@@ -1927,6 +1927,7 @@ impl Writer {
                 interpolation,
                 sampling,
                 blend_src,
+                per_primitive: _,
             } => {
                 self.decorate(id, Decoration::Location, &[location]);
 
@@ -2076,6 +2077,11 @@ impl Writer {
                         )?;
                         BuiltIn::SubgroupLocalInvocationId
                     }
+                    Bi::MeshTaskSize
+                    | Bi::CullPrimitive
+                    | Bi::PointIndex
+                    | Bi::LineIndices
+                    | Bi::TriangleIndices => unreachable!(),
                 };
 
                 self.decorate(id, Decoration::BuiltIn, &[built_in as u32]);
