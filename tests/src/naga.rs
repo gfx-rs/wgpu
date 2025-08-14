@@ -273,11 +273,11 @@ impl Input {
     }
 
     /// Return an iterator that produces an `Input` for each entry in `subdirectory`.
-    pub fn files_in_dir(
-        subdirectory: &'static str,
-        file_extensions: &'static [&'static str],
+    pub fn files_in_dir<'a>(
+        subdirectory: &'a str,
+        file_extensions: &'a [&'a str],
         dir_in: &str,
-    ) -> impl Iterator<Item = Input> + 'static {
+    ) -> impl Iterator<Item = Input> + 'a {
         let input_directory = Path::new(dir_in).join(subdirectory);
 
         let entries = match std::fs::read_dir(&input_directory) {

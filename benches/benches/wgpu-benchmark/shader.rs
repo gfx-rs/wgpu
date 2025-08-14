@@ -2,7 +2,6 @@ use criterion::*;
 use std::{fs, process::Command};
 
 const DIR_IN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../naga/tests/in");
-const DIR_OUT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../naga/tests/in");
 
 use wgpu_test::naga::*;
 
@@ -351,15 +350,16 @@ fn backends(c: &mut Criterion) {
                     .options
                     .spv
                     .to_options(input.options.bounds_check_policies, None);
-                writer.set_options(&opt);
-                let _ = writer.write(
-                    input.module.as_ref().unwrap(),
-                    input.module_info.as_ref().unwrap(),
-                    None,
-                    &None,
-                    &mut data,
-                );
-                data.clear();
+                if writer.set_options(&opt).is_ok() {
+                    let _ = writer.write(
+                        input.module.as_ref().unwrap(),
+                        input.module_info.as_ref().unwrap(),
+                        None,
+                        &None,
+                        &mut data,
+                    );
+                    data.clear();
+                }
             }
         });
     });
