@@ -1265,6 +1265,9 @@ impl Writer {
                             let binding = member.binding.as_ref().unwrap();
                             has_point_size |=
                                 *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize);
+                            // This isn't an actual builtin in SPIR-V. It can only appear as the
+                            // output of a task shader and the output is used when writing the
+                            // entry point return, in which case the id is ignored anyway.
                             let varying_id = if *binding
                                 == crate::Binding::BuiltIn(crate::BuiltIn::MeshTaskSize)
                             {
