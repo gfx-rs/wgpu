@@ -42,13 +42,16 @@ Bottom level categories:
 
 ### Major Changes
 
-#### DX12
+#### Builtin Support for DirectComposition/DXGI swapchains in DX12
 
-- Add Dcomp support to DX12 backend. By @n1ght-hunter in [#7550](https://github.com/gfx-rs/wgpu/pull/7550).
+By selecting DirectComposition, the compositor cannot optimize your Swapchain as much, but you can support transparent windows.
+
 ```diff
 -pub struct Dx12BackendOptions { pub shader_compiler: Dx12Compiler }
 +pub struct Dx12BackendOptions { pub shader_compiler: Dx12Compiler, pub presentation_system: Dx12PresentationSystem }
 ```
+
+By @n1ght-hunter in [#7550](https://github.com/gfx-rs/wgpu/pull/7550).
 
 #### General
 
