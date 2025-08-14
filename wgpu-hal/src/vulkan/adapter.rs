@@ -850,6 +850,24 @@ impl PhysicalDeviceFeatures {
             );
         }
 
+        if let Some(ref _sampler_ycbcr_conversion) = self.sampler_ycbcr_conversion {
+            features.set(
+                F::TEXTURE_FORMAT_P010,
+                supports_format(
+                    instance,
+                    phd,
+                    vk::Format::G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16,
+                    vk::ImageTiling::OPTIMAL,
+                    vk::FormatFeatureFlags::SAMPLED_IMAGE
+                        | vk::FormatFeatureFlags::TRANSFER_SRC
+                        | vk::FormatFeatureFlags::TRANSFER_DST,
+                ) && !caps
+                    .driver
+                    .map(|driver| driver.driver_id == vk::DriverId::MOLTENVK)
+                    .unwrap_or_default(),
+            );
+        }
+
         features.set(
             F::VULKAN_GOOGLE_DISPLAY_TIMING,
             caps.supports_extension(google::display_timing::NAME),

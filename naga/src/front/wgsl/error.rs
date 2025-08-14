@@ -2,6 +2,7 @@
 
 use crate::common::wgsl::TryToWgsl;
 use crate::diagnostic_filter::ConflictingDiagnosticRuleError;
+use crate::error::replace_control_chars;
 use crate::proc::{Alignment, ConstantEvaluatorError, ResolveError};
 use crate::{Scalar, SourceLocation, Span};
 
@@ -79,7 +80,7 @@ impl ParseError {
         P: AsRef<std::path::Path>,
     {
         let path = path.as_ref().display().to_string();
-        let files = SimpleFile::new(path, source);
+        let files = SimpleFile::new(path, replace_control_chars(source));
         let config = term::Config::default();
 
         cfg_if::cfg_if! {
@@ -105,7 +106,7 @@ impl ParseError {
         P: AsRef<std::path::Path>,
     {
         let path = path.as_ref().display().to_string();
-        let files = SimpleFile::new(path, source);
+        let files = SimpleFile::new(path, replace_control_chars(source));
         let config = term::Config::default();
 
         let mut writer = crate::error::DiagnosticBuffer::new();

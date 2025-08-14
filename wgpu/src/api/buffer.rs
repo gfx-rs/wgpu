@@ -354,7 +354,7 @@ impl Buffer {
     /// - If you try to create overlapping views of a buffer, mutable or otherwise.
     ///
     /// [mapped]: Buffer#mapping-buffers
-    pub fn get_mapped_range<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferView<'_> {
+    pub fn get_mapped_range<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferView {
         self.slice(bounds).get_mapped_range()
     }
 
@@ -377,10 +377,7 @@ impl Buffer {
     /// - If you try to create overlapping views of a buffer, mutable or otherwise.
     ///
     /// [mapped]: Buffer#mapping-buffers
-    pub fn get_mapped_range_mut<S: RangeBounds<BufferAddress>>(
-        &self,
-        bounds: S,
-    ) -> BufferViewMut<'_> {
+    pub fn get_mapped_range_mut<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferViewMut {
         self.slice(bounds).get_mapped_range_mut()
     }
 
@@ -518,11 +515,13 @@ impl<'a> BufferSlice<'a> {
     /// - If you try to create overlapping views of a buffer, mutable or otherwise.
     ///
     /// [mapped]: Buffer#mapping-buffers
-    pub fn get_mapped_range(&self) -> BufferView<'a> {
+    pub fn get_mapped_range(&self) -> BufferView {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
         let range = self.buffer.inner.get_mapped_range(self.offset..end);
         BufferView {
-            slice: *self,
+            buffer: self.buffer.clone(),
+            size: self.size,
+            offset: self.offset,
             inner: range,
         }
     }
@@ -544,11 +543,13 @@ impl<'a> BufferSlice<'a> {
     /// - If you try to create overlapping views of a buffer, mutable or otherwise.
     ///
     /// [mapped]: Buffer#mapping-buffers
-    pub fn get_mapped_range_mut(&self) -> BufferViewMut<'a> {
+    pub fn get_mapped_range_mut(&self) -> BufferViewMut {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
         let range = self.buffer.inner.get_mapped_range(self.offset..end);
         BufferViewMut {
-            slice: *self,
+            buffer: self.buffer.clone(),
+            size: self.size,
+            offset: self.offset,
             inner: range,
             readable: self.buffer.usage.contains(BufferUsages::MAP_READ),
         }
@@ -725,13 +726,16 @@ static_assertions::assert_impl_all!(MapMode: Send, Sync);
 /// [map]: Buffer#mapping-buffers
 /// [`map_async`]: BufferSlice::map_async
 #[derive(Debug)]
-pub struct BufferView<'a> {
-    slice: BufferSlice<'a>,
+pub struct BufferView {
+    // `buffer, offset, size` are similar to `BufferSlice`, except that they own the buffer.
+    buffer: Buffer,
+    offset: BufferAddress,
+    size: BufferSize,
     inner: dispatch::DispatchBufferMappedRange,
 }
 
 #[cfg(webgpu)]
-impl BufferView<'_> {
+impl BufferView {
     /// Provides the same data as dereferencing the view, but as a `Uint8Array` in js.
     /// This can be MUCH faster than dereferencing the view which copies the data into
     /// the Rust / wasm heap.
@@ -740,7 +744,7 @@ impl BufferView<'_> {
     }
 }
 
-impl core::ops::Deref for BufferView<'_> {
+impl core::ops::Deref for BufferView {
     type Target = [u8];
 
     #[inline]
@@ -749,7 +753,7 @@ impl core::ops::Deref for BufferView<'_> {
     }
 }
 
-impl AsRef<[u8]> for BufferView<'_> {
+impl AsRef<[u8]> for BufferView {
     #[inline]
     fn as_ref(&self) -> &[u8] {
         self.inner.slice()
@@ -775,20 +779,23 @@ impl AsRef<[u8]> for BufferView<'_> {
 ///
 /// [map]: Buffer#mapping-buffers
 #[derive(Debug)]
-pub struct BufferViewMut<'a> {
-    slice: BufferSlice<'a>,
+pub struct BufferViewMut {
+    // `buffer, offset, size` are similar to `BufferSlice`, except that they own the buffer.
+    buffer: Buffer,
+    offset: BufferAddress,
+    size: BufferSize,
     inner: dispatch::DispatchBufferMappedRange,
     readable: bool,
 }
 
-impl AsMut<[u8]> for BufferViewMut<'_> {
+impl AsMut<[u8]> for BufferViewMut {
     #[inline]
     fn as_mut(&mut self) -> &mut [u8] {
         self.inner.slice_mut()
     }
 }
 
-impl Deref for BufferViewMut<'_> {
+impl Deref for BufferViewMut {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
@@ -800,29 +807,27 @@ impl Deref for BufferViewMut<'_> {
     }
 }
 
-impl DerefMut for BufferViewMut<'_> {
+impl DerefMut for BufferViewMut {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner.slice_mut()
     }
 }
 
-impl Drop for BufferView<'_> {
+impl Drop for BufferView {
     fn drop(&mut self) {
-        self.slice
-            .buffer
+        self.buffer
             .map_context
             .lock()
-            .remove(self.slice.offset, self.slice.size);
+            .remove(self.offset, self.size);
     }
 }
 
-impl Drop for BufferViewMut<'_> {
+impl Drop for BufferViewMut {
     fn drop(&mut self) {
-        self.slice
-            .buffer
+        self.buffer
             .map_context
             .lock()
-            .remove(self.slice.offset, self.slice.size);
+            .remove(self.offset, self.size);
     }
 }
 

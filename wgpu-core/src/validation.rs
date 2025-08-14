@@ -817,6 +817,7 @@ impl NumericType {
                 panic!("Unexpected depth format")
             }
             Tf::NV12 => panic!("Unexpected nv12 format"),
+            Tf::P010 => panic!("Unexpected p010 format"),
             Tf::Rgb9e5Ufloat => (NumericDimension::Vector(Vs::Tri), Scalar::F32),
             Tf::Bc1RgbaUnorm
             | Tf::Bc1RgbaUnormSrgb
