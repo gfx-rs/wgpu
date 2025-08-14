@@ -444,7 +444,7 @@ pub enum Dx12PresentationSystem {
     #[default]
     Dxgi,
     /// Use the DirectComposition presentation system.
-    Dcomp,
+    DirectComposition,
 }
 
 impl Dx12PresentationSystem {
