@@ -53,8 +53,6 @@ By selecting DirectComposition, the compositor cannot optimize your Swapchain as
 
 By @n1ght-hunter in [#7550](https://github.com/gfx-rs/wgpu/pull/7550).
 
-#### General
-
 #### `EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE` has been merged into `EXPERIMENTAL_RAY_QUERY`
 
 We have merged the acceleration structure feature into the `RayQuery` feature. This is to help work around an AMD driver bug and reduce the feature complexity of ray tracing. In the future when ray tracing pipelines are implemented, if either feature is enabled, acceleration structures will be available.
