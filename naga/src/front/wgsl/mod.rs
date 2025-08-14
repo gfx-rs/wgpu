@@ -48,6 +48,9 @@ impl Frontend {
             options,
         }
     }
+    pub const fn set_options(&mut self, options: Options) {
+        self.options = options;
+    }
 
     pub fn parse(&mut self, source: &str) -> core::result::Result<crate::Module, ParseError> {
         self.inner(source).map_err(|x| x.as_parse_error(source))

@@ -1,57 +1,55 @@
 use criterion::*;
-use std::{fs, path::PathBuf, process::Command};
+use std::{fs, process::Command};
 
-struct Input {
-    filename: String,
-    size: u64,
+const DIR_IN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../naga/tests/in");
+const DIR_OUT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../naga/tests/in");
+
+use wgpu_test::naga::*;
+
+struct InputWithInfo {
+    inner: Input,
     data: Vec<u8>,
     string: Option<String>,
+    options: Parameters,
     module: Option<naga::Module>,
     module_info: Option<naga::valid::ModuleInfo>,
 }
+impl From<Input> for InputWithInfo {
+    fn from(value: Input) -> Self {
+        Self {
+            options: value.read_parameters(DIR_IN),
+            inner: value,
+            data: Vec::new(),
+            string: None,
+            module: None,
+            module_info: None,
+        }
+    }
+}
+impl InputWithInfo {
+    fn filename(&self) -> &str {
+        self.inner.file_name.file_name().unwrap().to_str().unwrap()
+    }
+}
 
 struct Inputs {
-    inner: Vec<Input>,
+    inner: Vec<InputWithInfo>,
 }
 
 impl Inputs {
     #[track_caller]
     fn from_dir(folder: &str, extension: &str) -> Self {
-        let mut inputs = Vec::new();
-        let read_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join(folder)
-            .read_dir()
-            .unwrap();
-
-        for file_entry in read_dir {
-            match file_entry {
-                Ok(entry) => match entry.path().extension() {
-                    Some(ostr) if ostr == extension => {
-                        let path = entry.path();
-
-                        inputs.push(Input {
-                            filename: path.to_string_lossy().into_owned(),
-                            size: entry.metadata().unwrap().len(),
-                            string: None,
-                            data: vec![],
-                            module: None,
-                            module_info: None,
-                        });
-                    }
-                    _ => continue,
-                },
-                Err(e) => {
-                    eprintln!("Skipping file: {e:?}");
-                    continue;
-                }
-            }
-        }
+        let inputs: Vec<InputWithInfo> = Input::files_in_dir(folder, &[extension], DIR_IN)
+            .map(|a| a.into())
+            .collect();
 
         Self { inner: inputs }
     }
-
     fn bytes(&self) -> u64 {
-        self.inner.iter().map(|input| input.size).sum()
+        self.inner
+            .iter()
+            .map(|input| input.inner.bytes(DIR_IN))
+            .sum()
     }
 
     fn load(&mut self) {
@@ -60,7 +58,7 @@ impl Inputs {
                 continue;
             }
 
-            input.data = fs::read(&input.filename).unwrap_or_default();
+            input.data = fs::read(&input.inner.file_name).unwrap_or_default();
         }
     }
 
@@ -84,6 +82,10 @@ impl Inputs {
             if input.module.is_some() {
                 continue;
             }
+
+            let WgslInParameters { parse_doc_comments } = input.options.wgsl_in;
+            let options = naga::front::wgsl::Options { parse_doc_comments };
+            parser.set_options(options);
 
             input.module = Some(parser.parse(input.string.as_ref().unwrap()).unwrap());
         }
@@ -122,22 +124,22 @@ fn parse_glsl(stage: naga::ShaderStage, inputs: &Inputs) {
     };
     for input in &inputs.inner {
         parser
-            .parse(&options, input.string.as_deref().unwrap())
+            .parse(&options, &input.inner.read_source(DIR_IN))
             .unwrap();
     }
 }
 
 fn get_wgsl_inputs() -> Inputs {
-    let mut inputs = Inputs::from_dir("../naga/tests/in/wgsl", "wgsl");
+    let mut inputs: Vec<InputWithInfo> = Input::files_in_dir("wgsl", &["wgsl"], DIR_IN)
+        .map(|a| a.into())
+        .collect();
 
     // remove "large-source" tests, they skew the results
-    inputs
-        .inner
-        .retain(|input| !input.filename.contains("large-source"));
+    inputs.retain(|input| !input.filename().contains("large-source"));
 
     assert!(!inputs.is_empty());
 
-    inputs
+    Inputs { inner: inputs }
 }
 
 fn frontends(c: &mut Criterion) {
@@ -178,6 +180,9 @@ fn frontends(c: &mut Criterion) {
         let mut frontend = naga::front::wgsl::Frontend::new();
         b.iter(|| {
             for input in &inputs_wgsl.inner {
+                let WgslInParameters { parse_doc_comments } = input.options.wgsl_in;
+                let options = naga::front::wgsl::Options { parse_doc_comments };
+                frontend.set_options(options);
                 frontend.parse(input.string.as_ref().unwrap()).unwrap();
             }
         });
@@ -190,7 +195,7 @@ fn frontends(c: &mut Criterion) {
     let mut assembled_spirv = Vec::<Vec<u32>>::new();
     'spirv: for input in &inputs_spirv.inner {
         let output = match Command::new("spirv-as")
-            .arg(&input.filename)
+            .arg(input.filename())
             .arg("-o")
             .arg("-")
             .output()
@@ -220,12 +225,25 @@ fn frontends(c: &mut Criterion) {
 
     let total_bytes = assembled_spirv.iter().map(|spv| spv.len() as u64).sum();
 
+    assert!(assembled_spirv.len() == inputs_spirv.inner.len() || assembled_spirv.is_empty());
+
     group.throughput(Throughput::Bytes(total_bytes));
     group.bench_function("shader: spv-in", |b| {
         b.iter(|| {
-            let options = naga::front::spv::Options::default();
-            for input in &assembled_spirv {
-                let parser = naga::front::spv::Frontend::new(input.iter().cloned(), &options);
+            for (i, input) in assembled_spirv.iter().enumerate() {
+                let params = &inputs_spirv.inner[i].options;
+                let SpirvInParameters {
+                    adjust_coordinate_space,
+                } = params.spv_in;
+
+                let parser = naga::front::spv::Frontend::new(
+                    input.iter().cloned(),
+                    &naga::front::spv::Options {
+                        adjust_coordinate_space,
+                        strict_capabilities: true,
+                        ..Default::default()
+                    },
+                );
                 parser.parse().unwrap();
             }
         });
@@ -312,9 +330,9 @@ fn backends(c: &mut Criterion) {
     group.bench_function("shader: wgsl-out", |b| {
         b.iter(|| {
             let mut string = String::new();
-            let flags = naga::back::wgsl::WriterFlags::empty();
             for input in &inputs.inner {
-                let mut writer = naga::back::wgsl::Writer::new(&mut string, flags);
+                let mut writer =
+                    naga::back::wgsl::Writer::new(&mut string, (&input.options.wgsl).into());
                 let _ = writer.write(
                     input.module.as_ref().unwrap(),
                     input.module_info.as_ref().unwrap(),
@@ -327,13 +345,13 @@ fn backends(c: &mut Criterion) {
     group.bench_function("shader: spv-out", |b| {
         b.iter(|| {
             let mut data = Vec::new();
-            let options = naga::back::spv::Options::default();
+            let mut writer = naga::back::spv::Writer::new(&Default::default()).unwrap();
             for input in &inputs.inner {
-                if input.filename.contains("pointer-function-arg") {
+                if input.filename().contains("pointer-function-arg") {
                     // These fail due to https://github.com/gfx-rs/wgpu/issues/7315
                     continue;
                 }
-                let mut writer = naga::back::spv::Writer::new(&options).unwrap();
+                let opt = input.options.spv.to_options(bounds_check_policies, debug_info)
                 let _ = writer.write(
                     input.module.as_ref().unwrap(),
                     input.module_info.as_ref().unwrap(),
@@ -350,7 +368,7 @@ fn backends(c: &mut Criterion) {
             let mut data = Vec::new();
             let options = naga::back::spv::Options::default();
             for input in &inputs.inner {
-                if input.filename.contains("pointer-function-arg") {
+                if input.filename().contains("pointer-function-arg") {
                     // These fail due to https://github.com/gfx-rs/wgpu/issues/7315
                     continue;
                 }

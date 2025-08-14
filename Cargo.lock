@@ -2522,9 +2522,9 @@ dependencies = [
  "spirv",
  "strum 0.27.2",
  "thiserror 2.0.14",
- "toml 0.9.5",
  "unicode-ident",
  "walkdir",
+ "wgpu-test",
 ]
 
 [[package]]
@@ -4940,6 +4940,7 @@ dependencies = [
  "rayon",
  "tracy-client",
  "wgpu",
+ "wgpu-test",
 ]
 
 [[package]]
@@ -5161,15 +5162,20 @@ dependencies = [
  "js-sys",
  "libtest-mimic",
  "log",
+ "naga",
  "nanorand 0.8.0",
  "nv-flip",
  "parking_lot",
  "png",
  "pollster",
  "profiling",
+ "ron",
+ "rspirv",
  "serde",
  "serde_json",
+ "spirv",
  "strum 0.27.2",
+ "toml 0.9.5",
  "trybuild",
  "wasm-bindgen",
  "wasm-bindgen-futures",

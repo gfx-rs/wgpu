@@ -7,6 +7,7 @@ mod expectations;
 pub mod image;
 mod init;
 mod isolation;
+pub mod naga;
 pub mod native;
 mod params;
 mod poll;
