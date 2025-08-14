@@ -440,7 +440,9 @@ impl NoopBackendOptions {
 #[derive(Clone, Debug, Default, Copy, PartialEq, Eq)]
 /// Selects which kind of swapchain to use on DX12.
 pub enum Dx12SwapchainKind {
-    /// Use the DXGI presentation system.
+    /// Use a DXGI swapchain made directly from the window's HWND.
+    ///
+    /// This supports fullscreen optimization, making borderless windows just as efficient as exclusive fullscreen. It does not support transparent windows.
     #[default]
     Dxgi,
     /// Use the DirectComposition presentation system.
