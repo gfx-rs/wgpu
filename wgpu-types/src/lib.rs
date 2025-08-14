@@ -8033,6 +8033,7 @@ pub enum DeviceLostReason {
 }
 
 /// Descriptor for a shader module given by any of several sources, with optional reflection information.
+/// These shaders are passed through directly to the underlying api.
 /// At least one shader type that may be used by the backend must be `Some` or a panic is raised.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -8058,7 +8059,7 @@ pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
     pub hlsl: Option<Cow<'a, str>>,
     /// Shader GLSL source (currently unused).
     pub glsl: Option<Cow<'a, str>>,
-    /// Shader WGSL source (currently unused).
+    /// Shader WGSL source.
     pub wgsl: Option<Cow<'a, str>>,
 }
 
