@@ -328,12 +328,8 @@ impl GlobalPlay for wgc::global::Global {
                     if a.ends_with(".spv") {
                         let data = fs::read(dir.join(a)).unwrap();
                         assert!(data.len() % 4 == 0);
-                        // Mom: we have bytemuck at home
-                        let vec: Vec<u32> = data
-                            .chunks_exact(4)
-                            .map(|chunk| u32::from_ne_bytes(chunk.try_into().unwrap()))
-                            .collect();
-                        Some(Cow::Owned(vec))
+
+                        Some(Cow::Owned(bytemuck::pod_collect_to_vec(&data)))
                     } else {
                         None
                     }

@@ -1222,7 +1222,7 @@ bitflags_array! {
 
         /// Enables creating shaders from passthrough with reflection info (unsafe)
         ///
-        /// Allows using `Device::create_shader_module_passthrough`.
+        /// Allows using [`Device::create_shader_module_passthrough`].
         /// Shader code isn't parsed or interpreted in any way. It is the user's
         /// responsibility to ensure the code and reflection (if passed) are correct.
         ///
@@ -1233,7 +1233,9 @@ bitflags_array! {
         /// - WebGPU
         ///
         /// Ideally, in the future, all platforms will be supported. For more info, see
-        /// [my comment](https://github.com/gfx-rs/wgpu/issues/3103#issuecomment-2833058367).
+        /// [this comment](https://github.com/gfx-rs/wgpu/issues/3103#issuecomment-2833058367).
+        ///
+        /// [`Device::create_shader_module_passthrough`]: https://docs.rs/wgpu/latest/wgpu/struct.Device.html#method.create_shader_module_passthrough
         const EXPERIMENTAL_PASSTHROUGH_SHADERS = 1 << 52;
     }
 
