@@ -50,7 +50,7 @@ wgpu-hal = { workspace = true, features = ["validation_canary"] }
 wgpu-macros.workspace = true
 
 # Naga stuff that lives here due to sharing logic with benchmarks
-naga = { workspace = true, features = [] }
+naga = { workspace = true, features = ["serialize", "deserialize"] }
 spirv = { workspace = true, features = ["deserialize"] }
 rspirv.workspace = true
 ron.workspace = true
