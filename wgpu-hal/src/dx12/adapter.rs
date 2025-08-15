@@ -528,6 +528,22 @@ impl super::Adapter {
             wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
             atomic_int64_on_typed_resource_supported,
         );
+        let mesh_shader_supported = {
+            let mut features7 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS7::default();
+            unsafe {
+                device.CheckFeatureSupport(
+                    Direct3D12::D3D12_FEATURE_D3D12_OPTIONS7,
+                    <*mut _>::cast(&mut features7),
+                    size_of_val(&features7) as u32,
+                )
+            }
+            .is_ok()
+                && features7.MeshShaderTier != Direct3D12::D3D12_MESH_SHADER_TIER_NOT_SUPPORTED
+        };
+        features.set(
+            wgt::Features::EXPERIMENTAL_MESH_SHADER,
+            mesh_shader_supported,
+        );
 
         // TODO: Determine if IPresentationManager is supported
         let presentation_timer = auxil::dxgi::time::PresentationTimer::new_dxgi();

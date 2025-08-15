@@ -139,6 +139,16 @@ impl super::Device {
                     }],
                     0,
                 )?,
+                draw_mesh: Self::create_command_signature(
+                    &raw,
+                    None,
+                    size_of::<wgt::DispatchIndirectArgs>(),
+                    &[Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                        Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH,
+                        ..Default::default()
+                    }],
+                    0,
+                )?,
                 dispatch: Self::create_command_signature(
                     &raw,
                     None,
@@ -1390,6 +1400,16 @@ impl crate::Device for super::Device {
                                 ..Default::default()
                             },
                         ],
+                        0,
+                    )?,
+                    draw_mesh: Self::create_command_signature(
+                        &self.raw,
+                        Some(&raw),
+                        size_of::<wgt::DispatchIndirectArgs>(),
+                        &[Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                            Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH,
+                            ..Default::default()
+                        }],
                         0,
                     )?,
                     dispatch: Self::create_command_signature(
