@@ -1568,7 +1568,7 @@ struct RenderTargetDesc {
 }
 
 #[repr(C)]
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct MeshShaderPipelineStateStream {
     root_signature: *mut Direct3D12::ID3D12RootSignature,
     task_shader: Direct3D12::D3D12_SHADER_BYTECODE,

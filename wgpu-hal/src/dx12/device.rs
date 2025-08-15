@@ -2038,7 +2038,7 @@ impl crate::Device for super::Device {
                     root_signature: root_signature
                         .as_ref()
                         .map(|a| a.as_raw().cast())
-                        .unwrap_or_default(),
+                        .unwrap_or(ptr::null_mut()),
                     task_shader: blob_ts
                         .map(|a| a.create_native_shader())
                         .unwrap_or_default(),
