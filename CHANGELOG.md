@@ -46,6 +46,8 @@ Bottom level categories:
 
 By selecting DirectComposition, the compositor cannot optimize your Swapchain as much, but you can support transparent windows.
 
+This creates a single `IDCompositionVisual` over the entire window that is used by the `Surface`. If a user wants to manage the composition tree themselves, they should create their own device and composition, and pass the relevant visual down into `wgpu` via `IDCompositionTarget::CompositionVisual` or `IDCompositionTarget::SurfaceHandle`.
+
 ```diff
 -pub struct Dx12BackendOptions { pub shader_compiler: Dx12Compiler }
 +pub struct Dx12BackendOptions { pub shader_compiler: Dx12Compiler, pub presentation_system: Dx12SwapchainKind }
