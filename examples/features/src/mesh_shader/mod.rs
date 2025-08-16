@@ -37,7 +37,7 @@ fn compile_hlsl(
     entry: &str,
     stage_str: &str,
 ) -> wgpu::ShaderModule {
-    // I dont understand why but for some reason the amplification shader specifcally can't be from dxc command line on my system?
+    // I dont understand why but for some reason the amplification shader specifically can't be from dxc command line on my system?
     // Dx12 complains that it is corrupted, even though dxc -dumpbin succeeds and yields what seems to be an identical shader
     // to the one generated from naga's dxc code. I have also verified that the code passed to DXIL passthrough is identical
     // to what is passed to directx down the line. I am very very confused.
