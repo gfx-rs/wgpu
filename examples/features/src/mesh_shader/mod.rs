@@ -32,6 +32,18 @@ fn compile_glsl(
         ))
     }
 }
+fn compile_hlsl(device: &wgpu::Device, data: &str, entry: &str) -> wgpu::ShaderModule {
+    unsafe {
+        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::Hlsl(
+            wgpu::ShaderModuleDescriptorHlsl {
+                entry_point: entry.to_owned(),
+                label: None,
+                source: data,
+                num_workgroups: (0, 0, 0),
+            },
+        ))
+    }
+}
 
 pub struct Example {
     pipeline: wgpu::RenderPipeline,
@@ -43,16 +55,27 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
+        let features = device.features();
+        let (ts, ms, fs) = if features.contains(wgpu::Features::SPIRV_SHADER_PASSTHROUGH) {
+            (
+                compile_glsl(device, include_bytes!("shader.task"), "task"),
+                compile_glsl(device, include_bytes!("shader.mesh"), "mesh"),
+                compile_glsl(device, include_bytes!("shader.frag"), "frag"),
+            )
+        } else if features.contains(wgpu::Features::HLSL_DXIL_SHADER_PASSTHROUGH) {
+            (
+                compile_hlsl(device, include_str!("shader.hlsl"), "Task"),
+                compile_hlsl(device, include_str!("shader.hlsl"), "Mesh"),
+                compile_hlsl(device, include_str!("shader.hlsl"), "Frag"),
+            )
+        } else {
+            panic!("Device must supoprt SPIRV_SHADER_PASSTHROUGH or HLSL_DXIL_SHADER_PASSTHROUGH");
+        };
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
             push_constant_ranges: &[],
         });
-        let (ts, ms, fs) = (
-            compile_glsl(device, include_bytes!("shader.task"), "task"),
-            compile_glsl(device, include_bytes!("shader.mesh"), "mesh"),
-            compile_glsl(device, include_bytes!("shader.frag"), "frag"),
-        );
         let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
@@ -119,10 +142,24 @@ impl crate::framework::Example for Example {
         Default::default()
     }
     fn required_features() -> wgpu::Features {
-        wgpu::Features::EXPERIMENTAL_MESH_SHADER | wgpu::Features::SPIRV_SHADER_PASSTHROUGH
+        wgpu::Features::EXPERIMENTAL_MESH_SHADER
     }
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits::defaults().using_recommended_minimum_mesh_shader_values()
+    }
+    fn optional_features() -> wgpu::Features {
+        wgpu::Features::SPIRV_SHADER_PASSTHROUGH
+            | wgpu::Features::HLSL_DXIL_SHADER_PASSTHROUGH
+            | wgpu::Features::MSL_SHADER_PASSTHROUGH
+    }
+    fn backend_options() -> Option<wgpu::BackendOptions> {
+        Some(wgpu::BackendOptions {
+            dx12: wgpu::Dx12BackendOptions {
+                shader_compiler: wgpu::Dx12Compiler::StaticDxc,
+                ..Default::default()
+            },
+            ..Default::default()
+        })
     }
     fn resize(
         &mut self,
