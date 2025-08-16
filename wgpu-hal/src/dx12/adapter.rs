@@ -663,12 +663,15 @@ impl super::Adapter {
                     max_buffer_size: i32::MAX as u64,
                     max_non_sampler_bindings: 1_000_000,
 
-                    // These are somewhat guessed
-                    max_task_workgroup_total_count: 65_536,
+                    // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#dispatchmesh-api
+                    max_task_workgroup_total_count: 2u32.pow(22),
+                    // Technically it says "64k" but I highly doubt they want 65536 for compute and exactly 64,000 for task workgroups
                     max_task_workgroups_per_dimension:
                         Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                    // Multiview not supported by WGPU yet
                     max_mesh_multiview_count: 0,
-                    max_mesh_output_layers: 2048,
+                    // This seems to be right, and I can't find anything to suggest it would be less than the 2048 provided here
+                    max_mesh_output_layers: Direct3D12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION,
 
                     max_blas_primitive_count: if supports_ray_tracing {
                         1 << 29 // 2^29
