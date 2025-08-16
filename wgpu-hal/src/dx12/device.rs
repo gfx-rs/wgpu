@@ -2030,6 +2030,11 @@ impl crate::Device for super::Device {
                 } else {
                     None
                 };
+                let task_shader = if let Some(ts) = &blob_ts {
+                    ts.create_native_shader()
+                } else {
+                    Default::default()
+                };
                 shader_stages |= wgt::ShaderStages::MESH;
                 let blob_ms = self.load_shader(
                     mesh_stage,
@@ -2037,15 +2042,12 @@ impl crate::Device for super::Device {
                     naga::ShaderStage::Mesh,
                     desc.fragment_stage.as_ref(),
                 )?;
-                // TODO: fix error here
                 let desc = super::MeshShaderPipelineStateStream {
                     root_signature: root_signature
                         .as_ref()
                         .map(|a| a.as_raw().cast())
                         .unwrap_or(ptr::null_mut()),
-                    task_shader: blob_ts
-                        .map(|a| a.create_native_shader())
-                        .unwrap_or_default(),
+                    task_shader,
                     pixel_shader,
                     mesh_shader: blob_ms.create_native_shader(),
                     blend_state,
