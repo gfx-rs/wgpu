@@ -148,9 +148,7 @@ impl crate::framework::Example for Example {
         wgpu::Limits::defaults().using_recommended_minimum_mesh_shader_values()
     }
     fn optional_features() -> wgpu::Features {
-        wgpu::Features::SPIRV_SHADER_PASSTHROUGH
-            | wgpu::Features::HLSL_DXIL_SHADER_PASSTHROUGH
-            | wgpu::Features::MSL_SHADER_PASSTHROUGH
+        wgpu::Features::SPIRV_SHADER_PASSTHROUGH | wgpu::Features::HLSL_DXIL_SHADER_PASSTHROUGH
     }
     fn backend_options() -> Option<wgpu::BackendOptions> {
         Some(wgpu::BackendOptions {
@@ -160,6 +158,9 @@ impl crate::framework::Example for Example {
             },
             ..Default::default()
         })
+    }
+    fn supported_backends() -> wgpu::Backends {
+        wgpu::Backends::VULKAN | wgpu::Backends::DX12
     }
     fn resize(
         &mut self,

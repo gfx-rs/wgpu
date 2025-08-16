@@ -36,6 +36,10 @@ pub trait Example: 'static + Sized {
         None
     }
 
+    fn supported_backends() -> wgpu::Backends {
+        wgpu::Backends::all()
+    }
+
     fn init(
         config: &wgpu::SurfaceConfiguration,
         adapter: &wgpu::Adapter,
@@ -276,6 +280,7 @@ impl ExampleContext {
         if let Some(opt) = E::backend_options() {
             instance_descriptor.backend_options = opt;
         }
+        instance_descriptor.backends &= E::supported_backends();
         let instance = wgpu::Instance::new(&instance_descriptor);
         surface.pre_adapter(&instance, window);
         let adapter = get_adapter_with_capabilities_or_from_env(
