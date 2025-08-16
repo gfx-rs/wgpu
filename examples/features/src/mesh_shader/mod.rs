@@ -31,16 +31,61 @@ fn compile_glsl(
         ))
     }
 }
-fn compile_hlsl(device: &wgpu::Device, data: &str, entry: &str) -> wgpu::ShaderModule {
-    unsafe {
-        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::Hlsl(
-            wgpu::ShaderModuleDescriptorHlsl {
-                entry_point: entry.to_owned(),
-                label: None,
-                source: data,
-                num_workgroups: (0, 0, 0),
-            },
-        ))
+fn compile_hlsl(
+    device: &wgpu::Device,
+    data: &str,
+    entry: &str,
+    stage_str: &str,
+) -> wgpu::ShaderModule {
+    // I dont understand why but for some reason the amplification shader specifcally can't be from dxc command line on my system?
+    // Dx12 complains that it is corrupted, even though dxc -dumpbin succeeds and yields what seems to be an identical shader
+    // to the one generated from naga's dxc code. I have also verified that the code passed to DXIL passthrough is identical
+    // to what is passed to directx down the line. I am very very confused
+    if stage_str != "as" {
+        let out_path = format!(
+            "{}/src/mesh_shader/.{stage_str}.dxil",
+            env!("CARGO_MANIFEST_DIR")
+        );
+        let cmd = std::process::Command::new("dxc")
+            .args([
+                "-T",
+                &format!("{stage_str}_6_5"),
+                "-E",
+                entry,
+                &format!("{}/src/mesh_shader/shader.hlsl", env!("CARGO_MANIFEST_DIR")),
+                "-Fo",
+                &out_path,
+                "-HV",
+                "2018",
+            ])
+            .output()
+            .unwrap();
+        if !cmd.status.success() {
+            panic!("DXC failed:\n{}", String::from_utf8(cmd.stderr).unwrap());
+        }
+        let file = std::fs::read(&out_path).unwrap();
+        std::fs::remove_file(out_path).unwrap();
+        unsafe {
+            device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::Dxil(
+                wgpu::ShaderModuleDescriptorDxil {
+                    entry_point: entry.to_owned(),
+                    label: None,
+                    source: &file,
+                    num_workgroups: (0, 0, 0),
+                },
+            ))
+        }
+    } else {
+        unsafe {
+            device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::Hlsl(
+                wgpu::ShaderModuleDescriptorHlsl {
+                    entry_point: entry.to_owned(),
+                    label: None,
+                    source: data,
+                    num_workgroups: (0, 0, 0),
+                },
+            ))
+        }
     }
 }
 
@@ -63,9 +108,9 @@ impl crate::framework::Example for Example {
             )
         } else if features.contains(wgpu::Features::HLSL_DXIL_SHADER_PASSTHROUGH) {
             (
-                compile_hlsl(device, include_str!("shader.hlsl"), "Task"),
-                compile_hlsl(device, include_str!("shader.hlsl"), "Mesh"),
-                compile_hlsl(device, include_str!("shader.hlsl"), "Frag"),
+                compile_hlsl(device, include_str!("shader.hlsl"), "Task", "as"),
+                compile_hlsl(device, include_str!("shader.hlsl"), "Mesh", "ms"),
+                compile_hlsl(device, include_str!("shader.hlsl"), "Frag", "ps"),
             )
         } else {
             panic!("Device must support SPIRV_SHADER_PASSTHROUGH or HLSL_DXIL_SHADER_PASSTHROUGH");
