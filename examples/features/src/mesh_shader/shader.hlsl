@@ -3,7 +3,7 @@ struct OutputVertex {
     float4 Color: COLOR;
 };
 struct OutputPrimitive {
-    float4 ColorMask : COLOR_MASK;
+    float4 ColorMask : COLOR_MASK : PRIMITIVE;
     bool CullPrimitive: SV_CullPrimitive;
 };
 struct InVertex {

@@ -1585,17 +1585,22 @@ impl MeshShaderPipelineStateStream {
     pub unsafe fn to_bytes(&self) -> Vec<u8> {
         use Direct3D12::*;
         let mut bytes = Vec::new();
+
         macro_rules! push_subobject {
             ($subobject_type:expr, $data:expr) => {{
                 // Ensure 8-byte alignment for the subobject start
                 let alignment = 8;
-                let current_len = bytes.len();
-                let padding = (alignment - (current_len % alignment)) % alignment;
+                let padding = (alignment - (bytes.len() % alignment)) % alignment;
                 bytes.extend(core::iter::repeat(0).take(padding));
 
                 // Append the type tag (u32)
                 let tag: u32 = $subobject_type.0 as u32;
                 bytes.extend_from_slice(&tag.to_ne_bytes());
+
+                // Align the data
+                let obj_align = align_of_val(&$data);
+                let data_padding = (obj_align - (bytes.len() % obj_align)) % obj_align;
+                bytes.extend(core::iter::repeat(0).take(data_padding));
 
                 // Append the data itself
                 #[allow(clippy::ptr_as_ptr, trivial_casts)]
