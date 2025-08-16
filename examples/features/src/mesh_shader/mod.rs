@@ -20,7 +20,6 @@ fn compile_glsl(
         .spawn()
         .expect("Failed to call glslc");
     cmd.stdin.as_ref().unwrap().write_all(data).unwrap();
-    println!("{shader_stage}");
     let output = cmd.wait_with_output().expect("Error waiting for glslc");
     assert!(output.status.success());
     unsafe {
