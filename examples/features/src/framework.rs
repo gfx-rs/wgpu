@@ -32,10 +32,6 @@ pub trait Example: 'static + Sized {
         wgpu::Limits::downlevel_webgl2_defaults() // These downlevel limits will allow the code to run on all possible hardware
     }
 
-    fn backend_options() -> Option<wgpu::BackendOptions> {
-        None
-    }
-
     fn supported_backends() -> wgpu::Backends {
         wgpu::Backends::all()
     }
@@ -277,9 +273,6 @@ impl ExampleContext {
         log::info!("Initializing wgpu...");
 
         let mut instance_descriptor = wgpu::InstanceDescriptor::from_env_or_default();
-        if let Some(opt) = E::backend_options() {
-            instance_descriptor.backend_options = opt;
-        }
         instance_descriptor.backends &= E::supported_backends();
         let instance = wgpu::Instance::new(&instance_descriptor);
         surface.pre_adapter(&instance, window);

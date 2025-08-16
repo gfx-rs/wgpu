@@ -1,3 +1,4 @@
+use nanorand::Rng;
 use std::{io::Write, process::Stdio};
 
 use wgpu::util::DeviceExt;
@@ -63,13 +64,40 @@ fn compile_glsl(
         ))
     }
 }
-fn compile_hlsl(device: &wgpu::Device, data: &str, entry: &str) -> wgpu::ShaderModule {
+
+fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::ShaderModule {
+    // Each test needs its own files
+    let rand: u32 = nanorand::tls_rng().generate();
+    let out_path = format!(
+        "{}/tests/wgpu-gpu/mesh_shader/{rand}.{stage_str}.cso",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let cmd = std::process::Command::new("dxc")
+        .args([
+            "-T",
+            &format!("{stage_str}_6_5"),
+            "-E",
+            entry,
+            &format!(
+                "{}/tests/wgpu-gpu/mesh_shader/basic.hlsl",
+                env!("CARGO_MANIFEST_DIR")
+            ),
+            "-Fo",
+            &out_path,
+        ])
+        .output()
+        .unwrap();
+    if !cmd.status.success() {
+        panic!("DXC failed:\n{}", String::from_utf8(cmd.stderr).unwrap());
+    }
+    let file = std::fs::read(&out_path).unwrap();
+    std::fs::remove_file(out_path).unwrap();
     unsafe {
-        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::Hlsl(
-            wgpu::ShaderModuleDescriptorHlsl {
+        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::Dxil(
+            wgpu::ShaderModuleDescriptorDxil {
                 entry_point: entry.to_owned(),
                 label: None,
-                source: data,
+                source: &file,
                 num_workgroups: (0, 0, 0),
             },
         ))
@@ -93,9 +121,9 @@ fn get_shaders(
         .contains(wgpu::Features::HLSL_DXIL_SHADER_PASSTHROUGH)
     {
         (
-            compile_hlsl(device, include_str!("basic.hlsl"), "Task"),
-            compile_hlsl(device, include_str!("basic.hlsl"), "Mesh"),
-            compile_hlsl(device, include_str!("basic.hlsl"), "Frag"),
+            compile_hlsl(device, "Task", "as"),
+            compile_hlsl(device, "Mesh", "ms"),
+            compile_hlsl(device, "Frag", "ps"),
         )
     } else {
         unreachable!()

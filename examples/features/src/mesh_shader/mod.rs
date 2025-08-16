@@ -170,15 +170,8 @@ impl crate::framework::Example for Example {
     fn optional_features() -> wgpu::Features {
         wgpu::Features::SPIRV_SHADER_PASSTHROUGH | wgpu::Features::HLSL_DXIL_SHADER_PASSTHROUGH
     }
-    fn backend_options() -> Option<wgpu::BackendOptions> {
-        Some(wgpu::BackendOptions {
-            dx12: wgpu::Dx12BackendOptions {
-                shader_compiler: wgpu::Dx12Compiler::StaticDxc,
-                ..Default::default()
-            },
-            ..Default::default()
-        })
-    }
+    // This is because the passthrough features are optional despite at least one
+    // being required
     fn supported_backends() -> wgpu::Backends {
         wgpu::Backends::VULKAN | wgpu::Backends::DX12
     }
