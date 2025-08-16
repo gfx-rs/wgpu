@@ -273,7 +273,6 @@ impl ExampleContext {
         log::info!("Initializing wgpu...");
 
         let mut instance_descriptor = wgpu::InstanceDescriptor::from_env_or_default();
-        instance_descriptor.flags |= wgpu::InstanceFlags::advanced_debugging();
         if let Some(opt) = E::backend_options() {
             instance_descriptor.backend_options = opt;
         }

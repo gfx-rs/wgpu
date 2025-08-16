@@ -84,6 +84,7 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 #### DX12
 
 - Allow disabling waiting for latency waitable object. By @marcpabst in [#7400](https://github.com/gfx-rs/wgpu/pull/7400)
+- Add mesh shader support, including to the example. By @SupaMaggie70Incorporated in [#8110](https://github.com/gfx-rs/wgpu/issues/7219)
 
 ### Bug Fixes
 
