@@ -1561,13 +1561,6 @@ pub enum ShaderModuleSource {
 }
 
 #[repr(C)]
-#[derive(Debug, Default)]
-struct RenderTargetDesc {
-    num_render_targets: u32,
-    rtv_formats: [Dxgi::Common::DXGI_FORMAT; 8],
-}
-
-#[repr(C)]
 #[derive(Debug)]
 struct MeshShaderPipelineStateStream {
     root_signature: *mut Direct3D12::ID3D12RootSignature,
@@ -1579,7 +1572,7 @@ struct MeshShaderPipelineStateStream {
     rasterizer_state: Direct3D12::D3D12_RASTERIZER_DESC,
     depth_stencil_state: Direct3D12::D3D12_DEPTH_STENCIL_DESC,
     primitive_topology_type: Direct3D12::D3D12_PRIMITIVE_TOPOLOGY_TYPE,
-    rtv_formats: RenderTargetDesc,
+    rtv_formats: Direct3D12::D3D12_RT_FORMAT_ARRAY,
     dsv_format: Dxgi::Common::DXGI_FORMAT,
     sample_desc: Dxgi::Common::DXGI_SAMPLE_DESC,
     node_mask: u32,
@@ -1594,6 +1587,12 @@ impl MeshShaderPipelineStateStream {
         let mut bytes = Vec::new();
         macro_rules! push_subobject {
             ($subobject_type:expr, $data:expr) => {{
+                // Ensure 8-byte alignment for the subobject start
+                let alignment = 8;
+                let current_len = bytes.len();
+                let padding = (alignment - (current_len % alignment)) % alignment;
+                bytes.extend(core::iter::repeat(0).take(padding));
+
                 // Append the type tag (u32)
                 let tag: u32 = $subobject_type.0 as u32;
                 bytes.extend_from_slice(&tag.to_ne_bytes());
@@ -1634,7 +1633,7 @@ impl MeshShaderPipelineStateStream {
             D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY,
             self.primitive_topology_type
         );
-        if self.rtv_formats.num_render_targets != 0 {
+        if self.rtv_formats.NumRenderTargets != 0 {
             push_subobject!(
                 D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS,
                 self.rtv_formats
@@ -1650,7 +1649,7 @@ impl MeshShaderPipelineStateStream {
             D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC,
             self.sample_desc
         );
-        if self.node_mask == 0 {
+        if self.node_mask != 0 {
             push_subobject!(
                 D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK,
                 self.node_mask

@@ -2053,9 +2053,9 @@ impl crate::Device for super::Device {
                     rasterizer_state,
                     depth_stencil_state,
                     primitive_topology_type: topology_class,
-                    rtv_formats: super::RenderTargetDesc {
-                        num_render_targets: desc.color_targets.len() as u32,
-                        rtv_formats,
+                    rtv_formats: Direct3D12::D3D12_RT_FORMAT_ARRAY {
+                        RTFormats: rtv_formats,
+                        NumRenderTargets: desc.color_targets.len() as u32,
                     },
                     dsv_format,
                     sample_desc,
