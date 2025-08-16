@@ -1405,11 +1405,14 @@ impl crate::Device for super::Device {
                     draw_mesh: Self::create_command_signature(
                         &self.raw,
                         Some(&raw),
-                        size_of::<wgt::DispatchIndirectArgs>(),
-                        &[Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
-                            Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH,
-                            ..Default::default()
-                        }],
+                        special_constant_buffer_args_len + size_of::<wgt::DispatchIndirectArgs>(),
+                        &[
+                            constant_indirect_argument_desc,
+                            Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                                Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH,
+                                ..Default::default()
+                            },
+                        ],
                         0,
                     )?,
                     dispatch: Self::create_command_signature(
