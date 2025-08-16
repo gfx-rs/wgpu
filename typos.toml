@@ -8,8 +8,9 @@ extend-exclude = [
     'docs/big-picture.xml',
     # This test has weird pattern-derived variable names.
     'naga/tests/in/wgsl/abstract-types-builtins.wgsl',
-    # This example uses "-Fo" as an argument to DXC
+    # These use "-Fo" as an argument to DXC
     'examples/features/src/mesh_shader/mod.rs',
+    'tests/tests/wgpu-gpu/mesh_shader/mod.rs',
 ]
 
 # Corrections take the form of a key/value pair. The key is the incorrect word
