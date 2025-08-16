@@ -69,7 +69,7 @@ impl crate::framework::Example for Example {
                 compile_hlsl(device, include_str!("shader.hlsl"), "Frag"),
             )
         } else {
-            panic!("Device must supoprt SPIRV_SHADER_PASSTHROUGH or HLSL_DXIL_SHADER_PASSTHROUGH");
+            panic!("Device must support SPIRV_SHADER_PASSTHROUGH or HLSL_DXIL_SHADER_PASSTHROUGH");
         };
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
