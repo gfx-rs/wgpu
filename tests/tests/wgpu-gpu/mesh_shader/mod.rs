@@ -164,7 +164,7 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
     let (_depth_image, depth_view, depth_state) = create_depth(device);
     let task = compile_glsl(device, BASIC_TASK, "task");
     let mesh = compile_glsl(device, BASIC_MESH, "mesh");
-    let frag = compile_glsl(device, NO_WRITE_FRAG, "frag");
+    let frag = compile_glsl(device, BASIC_FRAG, "frag");
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
@@ -258,8 +258,7 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
 
 const BASIC_TASK: &[u8] = include_bytes!("basic.task");
 const BASIC_MESH: &[u8] = include_bytes!("basic.mesh");
-//const BASIC_FRAG: &[u8] = include_bytes!("basic.frag.spv");
-const NO_WRITE_FRAG: &[u8] = include_bytes!("no-write.frag");
+const BASIC_FRAG: &[u8] = include_bytes!("basic.frag");
 
 fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
     GpuTestConfiguration::new().parameters(
@@ -292,18 +291,12 @@ static MESH_PIPELINE_BASIC_TASK_MESH: GpuTestConfiguration =
 #[gpu_test]
 static MESH_PIPELINE_BASIC_MESH_FRAG: GpuTestConfiguration =
     default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
-        mesh_pipeline_build(&ctx, None, BASIC_MESH, Some(NO_WRITE_FRAG), true);
+        mesh_pipeline_build(&ctx, None, BASIC_MESH, Some(BASIC_FRAG), true);
     });
 #[gpu_test]
 static MESH_PIPELINE_BASIC_TASK_MESH_FRAG: GpuTestConfiguration =
     default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
-        mesh_pipeline_build(
-            &ctx,
-            Some(BASIC_TASK),
-            BASIC_MESH,
-            Some(NO_WRITE_FRAG),
-            true,
-        );
+        mesh_pipeline_build(&ctx, Some(BASIC_TASK), BASIC_MESH, Some(BASIC_FRAG), true);
     });
 
 // Mesh draw
