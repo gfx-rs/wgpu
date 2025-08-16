@@ -1,8 +1,8 @@
-struct OutputVertex {
+struct OutVertex {
     float4 Position : SV_POSITION;
     float4 Color: COLOR;
 };
-struct OutputPrimitive {
+struct OutPrimitive {
     float4 ColorMask : COLOR_MASK : PRIMITIVE;
     bool CullPrimitive: SV_CullPrimitive;
 };
@@ -32,7 +32,7 @@ void Task() {
 
 [outputtopology("triangle")]
 [numthreads(1, 1, 1)]
-void Mesh(out indices uint3 triangles[1], out vertices OutputVertex vertices[3], out primitives OutputPrimitive primitives[1], in payload PayloadData payload) {
+void Mesh(out indices uint3 triangles[1], out vertices OutVertex vertices[3], out primitives OutPrimitive primitives[1], in payload PayloadData payload) {
     SetMeshOutputCounts(3, 1);
 
     vertices[0].Position = positions[0];

@@ -6,15 +6,30 @@ use wgpu_test::{
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
-    tests.extend([
-        MESH_PIPELINE_BASIC_MESH,
-        MESH_PIPELINE_BASIC_TASK_MESH,
-        MESH_PIPELINE_BASIC_MESH_FRAG,
-        MESH_PIPELINE_BASIC_TASK_MESH_FRAG,
-        MESH_DRAW_INDIRECT,
-        MESH_MULTI_DRAW_INDIRECT,
-        MESH_MULTI_DRAW_INDIRECT_COUNT,
-    ]);
+    {
+        use vulkan::*;
+        tests.extend([
+            MESH_PIPELINE_BASIC_MESH,
+            MESH_PIPELINE_BASIC_TASK_MESH,
+            MESH_PIPELINE_BASIC_MESH_FRAG,
+            MESH_PIPELINE_BASIC_TASK_MESH_FRAG,
+            MESH_DRAW_INDIRECT,
+            MESH_MULTI_DRAW_INDIRECT,
+            MESH_MULTI_DRAW_INDIRECT_COUNT,
+        ]);
+    }
+    {
+        use dx12::*;
+        tests.extend([
+            MESH_PIPELINE_BASIC_MESH,
+            MESH_PIPELINE_BASIC_TASK_MESH,
+            MESH_PIPELINE_BASIC_MESH_FRAG,
+            MESH_PIPELINE_BASIC_TASK_MESH_FRAG,
+            MESH_DRAW_INDIRECT,
+            MESH_MULTI_DRAW_INDIRECT,
+            MESH_MULTI_DRAW_INDIRECT_COUNT,
+        ]);
+    }
 }
 
 // Same as in mesh shader example
@@ -49,6 +64,44 @@ fn compile_glsl(
         ))
     }
 }
+fn compile_hlsl(device: &wgpu::Device, data: &str, entry: &str) -> wgpu::ShaderModule {
+    unsafe {
+        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::Hlsl(
+            wgpu::ShaderModuleDescriptorHlsl {
+                entry_point: entry.to_owned(),
+                label: None,
+                source: data,
+                num_workgroups: (0, 0, 0),
+            },
+        ))
+    }
+}
+
+fn get_shaders(
+    device: &wgpu::Device,
+) -> (wgpu::ShaderModule, wgpu::ShaderModule, wgpu::ShaderModule) {
+    if device
+        .features()
+        .contains(wgpu::Features::SPIRV_SHADER_PASSTHROUGH)
+    {
+        (
+            compile_glsl(device, include_bytes!("basic.task"), "task"),
+            compile_glsl(device, include_bytes!("basic.mesh"), "mesh"),
+            compile_glsl(device, include_bytes!("basic.frag"), "frag"),
+        )
+    } else if device
+        .features()
+        .contains(wgpu::Features::HLSL_DXIL_SHADER_PASSTHROUGH)
+    {
+        (
+            compile_hlsl(device, include_str!("basic.hlsl"), "Task"),
+            compile_hlsl(device, include_str!("basic.hlsl"), "Mesh"),
+            compile_hlsl(device, include_str!("basic.hlsl"), "Frag"),
+        )
+    } else {
+        unreachable!()
+    }
+}
 
 fn create_depth(
     device: &wgpu::Device,
@@ -79,18 +132,12 @@ fn create_depth(
     (depth_texture, depth_view, state)
 }
 
-fn mesh_pipeline_build(
-    ctx: &TestingContext,
-    task: Option<&[u8]>,
-    mesh: &[u8],
-    frag: Option<&[u8]>,
-    draw: bool,
-) {
+fn mesh_pipeline_build(ctx: &TestingContext, use_task: bool, use_frag: bool, draw: bool) {
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
-    let task = task.map(|t| compile_glsl(device, t, "task"));
-    let mesh = compile_glsl(device, mesh, "mesh");
-    let frag = frag.map(|f| compile_glsl(device, f, "frag"));
+    let (task, mesh, frag) = get_shaders(device);
+    let task = if use_task { Some(task) } else { None };
+    let frag = if use_frag { Some(frag) } else { None };
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
@@ -162,9 +209,7 @@ pub enum DrawType {
 fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
-    let task = compile_glsl(device, BASIC_TASK, "task");
-    let mesh = compile_glsl(device, BASIC_MESH, "mesh");
-    let frag = compile_glsl(device, BASIC_FRAG, "frag");
+    let (task, mesh, frag) = get_shaders(device);
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
@@ -256,17 +301,16 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
     ctx.device.poll(wgpu::PollType::Wait).unwrap();
 }
 
-const BASIC_TASK: &[u8] = include_bytes!("basic.task");
-const BASIC_MESH: &[u8] = include_bytes!("basic.mesh");
-const BASIC_FRAG: &[u8] = include_bytes!("basic.frag");
-
-fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
+fn default_gpu_test_config(
+    draw_type: DrawType,
+    passthrough_feature: wgpu::Features,
+) -> GpuTestConfiguration {
     GpuTestConfiguration::new().parameters(
         TestParameters::default()
             .test_features_limits()
             .features(
                 wgpu::Features::EXPERIMENTAL_MESH_SHADER
-                    | wgpu::Features::SPIRV_SHADER_PASSTHROUGH
+                    | passthrough_feature
                     | match draw_type {
                         DrawType::Standard | DrawType::Indirect => wgpu::Features::empty(),
                         DrawType::MultiIndirect => wgpu::Features::MULTI_DRAW_INDIRECT,
@@ -278,40 +322,52 @@ fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
 }
 
 // Mesh pipeline configs
-#[gpu_test]
-static MESH_PIPELINE_BASIC_MESH: GpuTestConfiguration = default_gpu_test_config(DrawType::Standard)
-    .run_sync(|ctx| {
-        mesh_pipeline_build(&ctx, None, BASIC_MESH, None, true);
-    });
-#[gpu_test]
-static MESH_PIPELINE_BASIC_TASK_MESH: GpuTestConfiguration =
-    default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
-        mesh_pipeline_build(&ctx, Some(BASIC_TASK), BASIC_MESH, None, true);
-    });
-#[gpu_test]
-static MESH_PIPELINE_BASIC_MESH_FRAG: GpuTestConfiguration =
-    default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
-        mesh_pipeline_build(&ctx, None, BASIC_MESH, Some(BASIC_FRAG), true);
-    });
-#[gpu_test]
-static MESH_PIPELINE_BASIC_TASK_MESH_FRAG: GpuTestConfiguration =
-    default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
-        mesh_pipeline_build(&ctx, Some(BASIC_TASK), BASIC_MESH, Some(BASIC_FRAG), true);
-    });
+macro_rules! make_tests {
+    ($feature:expr) => {
+        #[gpu_test]
+        pub static MESH_PIPELINE_BASIC_MESH: GpuTestConfiguration =
+            default_gpu_test_config(DrawType::Standard, $feature).run_sync(|ctx| {
+                mesh_pipeline_build(&ctx, false, false, true);
+            });
+        #[gpu_test]
+        pub static MESH_PIPELINE_BASIC_TASK_MESH: GpuTestConfiguration =
+            default_gpu_test_config(DrawType::Standard, $feature).run_sync(|ctx| {
+                mesh_pipeline_build(&ctx, true, false, true);
+            });
+        #[gpu_test]
+        pub static MESH_PIPELINE_BASIC_MESH_FRAG: GpuTestConfiguration =
+            default_gpu_test_config(DrawType::Standard, $feature).run_sync(|ctx| {
+                mesh_pipeline_build(&ctx, false, true, true);
+            });
+        #[gpu_test]
+        pub static MESH_PIPELINE_BASIC_TASK_MESH_FRAG: GpuTestConfiguration =
+            default_gpu_test_config(DrawType::Standard, $feature).run_sync(|ctx| {
+                mesh_pipeline_build(&ctx, true, true, true);
+            });
 
-// Mesh draw
-#[gpu_test]
-static MESH_DRAW_INDIRECT: GpuTestConfiguration = default_gpu_test_config(DrawType::Indirect)
-    .run_sync(|ctx| {
-        mesh_draw(&ctx, DrawType::Indirect);
-    });
-#[gpu_test]
-static MESH_MULTI_DRAW_INDIRECT: GpuTestConfiguration =
-    default_gpu_test_config(DrawType::MultiIndirect).run_sync(|ctx| {
-        mesh_draw(&ctx, DrawType::MultiIndirect);
-    });
-#[gpu_test]
-static MESH_MULTI_DRAW_INDIRECT_COUNT: GpuTestConfiguration =
-    default_gpu_test_config(DrawType::MultiIndirectCount).run_sync(|ctx| {
-        mesh_draw(&ctx, DrawType::MultiIndirectCount);
-    });
+        // Mesh draw
+        #[gpu_test]
+        pub static MESH_DRAW_INDIRECT: GpuTestConfiguration =
+            default_gpu_test_config(DrawType::Indirect, $feature).run_sync(|ctx| {
+                mesh_draw(&ctx, DrawType::Indirect);
+            });
+        #[gpu_test]
+        pub static MESH_MULTI_DRAW_INDIRECT: GpuTestConfiguration =
+            default_gpu_test_config(DrawType::MultiIndirect, $feature).run_sync(|ctx| {
+                mesh_draw(&ctx, DrawType::MultiIndirect);
+            });
+        #[gpu_test]
+        pub static MESH_MULTI_DRAW_INDIRECT_COUNT: GpuTestConfiguration =
+            default_gpu_test_config(DrawType::MultiIndirectCount, $feature).run_sync(|ctx| {
+                mesh_draw(&ctx, DrawType::MultiIndirectCount);
+            });
+    };
+}
+mod vulkan {
+    use super::*;
+    make_tests!(wgpu::Features::SPIRV_SHADER_PASSTHROUGH);
+}
+mod dx12 {
+    use super::*;
+    make_tests!(wgpu::Features::HLSL_DXIL_SHADER_PASSTHROUGH);
+}
