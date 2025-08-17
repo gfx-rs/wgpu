@@ -43,6 +43,8 @@ pub enum GlobalVariableError {
     StorageAddressSpaceWriteOnlyNotSupported,
     #[error("Type is not valid for use as a push constant")]
     InvalidPushConstantType(#[source] PushConstantError),
+    #[error("Task payload must not be zero-sized")]
+    ZeroSizedTaskPayload,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -147,8 +149,6 @@ pub enum EntryPointError {
     InvalidMeshOutputType,
     #[error("Mesh primitive outputs must have exactly one of `@builtin(triangle_indices)`, `@builtin(line_indices)`, or `@builtin(point_index)`")]
     InvalidMeshPrimitiveOutputType,
-    #[error("Task payload must not be zero-sized")]
-    ZeroSizedTaskPayload,
 }
 
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
@@ -704,6 +704,14 @@ impl super::Validator {
             }
         }
 
+        if var.space == crate::AddressSpace::TaskPayload {
+            let ty = &gctx.types[var.ty].inner;
+            // HLSL doesn't allow zero sized payloads.
+            if ty.try_size(gctx) == Some(0) {
+                return Err(GlobalVariableError::ZeroSizedTaskPayload);
+            }
+        }
+
         if let Some(init) = var.init {
             match var.space {
                 crate::AddressSpace::Private | crate::AddressSpace::Function => {}
@@ -881,13 +889,6 @@ impl super::Validator {
         if let Some(task_payload) = ep.task_payload {
             if module.global_variables[task_payload].space != crate::AddressSpace::TaskPayload {
                 return Err(EntryPointError::TaskPayloadWrongAddressSpace
-                    .with_span_handle(task_payload, &module.global_variables));
-            }
-            let var = &module.global_variables[task_payload];
-            let ty = &module.types[var.ty].inner;
-            // HLSL doesn't allow zero sized payloads.
-            if ty.try_size(module.to_ctx()) == Some(0) {
-                return Err(EntryPointError::ZeroSizedTaskPayload
                     .with_span_handle(task_payload, &module.global_variables));
             }
         }
