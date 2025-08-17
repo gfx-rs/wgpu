@@ -92,7 +92,7 @@ wgpu-core-deps-emscripten = { version = "26.0.0", path = "./wgpu-core/platform-d
 
 anyhow = { version = "1.0.87", default-features = false }
 approx = "0.5"
-arbitrary = "1.4"
+arbitrary = "1.4.2"
 argh = "0.1.13"
 arrayvec = { version = "0.7.1", default-features = false }
 bincode = "2"
