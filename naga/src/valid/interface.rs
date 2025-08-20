@@ -149,6 +149,8 @@ pub enum EntryPointError {
     InvalidMeshOutputType,
     #[error("Mesh primitive outputs must have exactly one of `@builtin(triangle_indices)`, `@builtin(line_indices)`, or `@builtin(point_index)`")]
     InvalidMeshPrimitiveOutputType,
+    #[error("Task shaders must declare a task payload output")]
+    ExpectedTaskPayload,
 }
 
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
@@ -891,6 +893,8 @@ impl super::Validator {
                 return Err(EntryPointError::TaskPayloadWrongAddressSpace
                     .with_span_handle(task_payload, &module.global_variables));
             }
+        } else if ep.stage == crate::ShaderStage::Task {
+            return Err(EntryPointError::ExpectedTaskPayload.with_span());
         }
 
         self.ep_resource_bindings.clear();
