@@ -126,8 +126,11 @@ impl GPUAdapter {
         }
 
         // When support for compatibility mode is added, this will need to look
-        // at whether the adapter is "compatibility-defaulting" or "core-defaulting",
-        // and choose the appropriate set of defaults.
+        // at whether the adapter is "compatibility-defaulting" or
+        // "core-defaulting", and choose the appropriate set of defaults.
+        //
+        // Support for compatibility mode is tracked in
+        // https://github.com/gfx-rs/wgpu/issues/8124.
         let required_limits = serde_json::from_value::<wgpu_types::Limits>(serde_json::to_value(
             descriptor.required_limits,
         )?)?

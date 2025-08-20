@@ -1115,8 +1115,10 @@ impl Limits {
     /// be ignored. This function is used to clamp such requests to the default
     /// value.
     ///
-    /// This is not what you want to clamp a request that otherwise might be
-    /// asking for something beyond the supported limits.
+    /// This function is not for clamping requests for values beyond the
+    /// supported limits. For that purpose the desired function would be
+    /// `or_worse_values_from` (which doesn't exist, but could be added if
+    /// needed).
     #[must_use]
     pub fn or_better_values_from(mut self, other: &Self) -> Self {
         macro_rules! or_better_value_from {
