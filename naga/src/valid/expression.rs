@@ -590,6 +590,11 @@ impl super::Validator {
                     }
                 }
 
+                // External textures can only be sampled using clamp_to_edge.
+                if matches!(class, crate::ImageClass::External) && !clamp_to_edge {
+                    return Err(ExpressionError::InvalidImageClass(class));
+                }
+
                 // check level properties
                 match level {
                     crate::SampleLevel::Auto => ShaderStages::FRAGMENT,
