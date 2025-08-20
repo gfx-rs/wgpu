@@ -984,6 +984,13 @@ pub enum Binding {
         /// Optional `blend_src` index used for dual source blending.
         /// See <https://www.w3.org/TR/WGSL/#attribute-blend_src>
         blend_src: Option<u32>,
+        /// Whether the binding is a per-primitive binding for use with mesh shaders.
+        /// This is required to match for mesh and fragment shader stages.
+        /// This is merely an extra attribute on a binding. You still may not have
+        /// a per-vertex and per-primitive input with the same location.
+        ///
+        /// Per primitive values are not interpolated at all and are not dependent on the vertices
+        /// or pixel location. For example, it may be used to store a non-interpolated normal vector.
         per_primitive: bool,
     },
 }
