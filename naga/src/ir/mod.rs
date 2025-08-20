@@ -325,6 +325,7 @@ pub enum ShaderStage {
     Vertex,
     Fragment,
     Compute,
+    // Mesh shader stages
     Task,
     Mesh,
 }
@@ -1961,9 +1962,7 @@ pub enum Statement {
     /// [`Loop`] statement.
     ///
     /// [`Loop`]: Statement::Loop
-    Return {
-        value: Option<Handle<Expression>>,
-    },
+    Return { value: Option<Handle<Expression>> },
 
     /// Aborts the current shader execution.
     ///
@@ -2169,6 +2168,7 @@ pub enum Statement {
         /// The specific operation we're performing on `query`.
         fun: RayQueryFunction,
     },
+    /// A mesh shader intrinsic
     MeshFunction(MeshFunction),
     /// Calculate a bitmask using a boolean from each active thread in the subgroup
     SubgroupBallot {
@@ -2345,6 +2345,7 @@ pub struct EntryPoint {
     pub function: Function,
     /// The information relating to a mesh shader
     pub mesh_info: Option<MeshStageInfo>,
+    /// The unique global variable used as a task payload from task shader to mesh shader
     pub task_payload: Option<Handle<GlobalVariable>>,
 }
 
@@ -2620,6 +2621,7 @@ pub enum MeshOutputTopology {
     Lines,
     Triangles,
 }
+
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
@@ -2635,6 +2637,7 @@ pub struct MeshStageInfo {
     pub primitive_output_type: Handle<Type>,
 }
 
+/// Mesh shader intrinsics
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
