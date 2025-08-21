@@ -194,7 +194,7 @@ impl<'a> BindingParser<'a> {
             "location" => {
                 lexer.expect(Token::Paren('('))?;
                 self.location
-                    .set(parser.general_expression(lexer, ctx)?, name_span)?;
+                    .set(parser.expression(lexer, ctx)?, name_span)?;
                 lexer.expect(Token::Paren(')'))?;
             }
             "builtin" => {
@@ -230,7 +230,7 @@ impl<'a> BindingParser<'a> {
 
                 lexer.expect(Token::Paren('('))?;
                 self.blend_src
-                    .set(parser.general_expression(lexer, ctx)?, name_span)?;
+                    .set(parser.expression(lexer, ctx)?, name_span)?;
                 lexer.skip(Token::Separator(','));
                 lexer.expect(Token::Paren(')'))?;
             }
@@ -363,7 +363,7 @@ impl Parser {
             return Ok(ast::SwitchValue::Default);
         }
 
-        let expr = self.general_expression(lexer, ctx)?;
+        let expr = self.expression(lexer, ctx)?;
         Ok(ast::SwitchValue::Expr(expr))
     }
 
@@ -774,7 +774,7 @@ impl Parser {
             } else if lexer.skip(Token::Paren(')')) {
                 break;
             }
-            let arg = self.general_expression(lexer, ctx)?;
+            let arg = self.expression(lexer, ctx)?;
             arguments.push(arg);
         }
 
@@ -788,7 +788,7 @@ impl Parser {
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<'a, Handle<ast::Expression<'a>>> {
         self.push_rule_span(Rule::EnclosedExpr, lexer);
-        let expr = self.general_expression(lexer, ctx)?;
+        let expr = self.expression(lexer, ctx)?;
         self.pop_rule_span(lexer);
         Ok(expr)
     }
@@ -810,7 +810,7 @@ impl Parser {
                 let (to, span) = self.singular_generic(lexer, ctx)?;
 
                 lexer.open_arguments()?;
-                let expr = self.general_expression(lexer, ctx)?;
+                let expr = self.expression(lexer, ctx)?;
                 lexer.close_arguments()?;
 
                 ast::Expression::Bitcast {
@@ -1042,7 +1042,7 @@ impl Parser {
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<'a, Handle<ast::Expression<'a>>> {
         self.push_rule_span(Rule::GenericExpr, lexer);
-        let expr = self.general_expression(lexer, ctx)?;
+        let expr = self.expression(lexer, ctx)?;
         self.pop_rule_span(lexer);
         Ok(expr)
     }
@@ -1264,20 +1264,11 @@ impl Parser {
         )
     }
 
-    fn general_expression<'a>(
-        &mut self,
-        lexer: &mut Lexer<'a>,
-        ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<'a, Handle<ast::Expression<'a>>> {
-        self.general_expression_with_span(lexer, ctx)
-            .map(|(expr, _)| expr)
-    }
-
-    fn general_expression_with_span<'a>(
+    fn expression<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
         context: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<'a, (Handle<ast::Expression<'a>>, Span)> {
+    ) -> Result<'a, Handle<ast::Expression<'a>>> {
         self.push_rule_span(Rule::GeneralExpr, lexer);
         // logical_or_expression
         let handle = context.parse_binary_op(
@@ -1334,7 +1325,8 @@ impl Parser {
                 )
             },
         )?;
-        Ok((handle, self.pop_rule_span(lexer)))
+        self.pop_rule_span(lexer);
+        Ok(handle)
     }
 
     fn optionally_typed_ident<'a>(
@@ -1381,7 +1373,7 @@ impl Parser {
         let (name, ty) = self.optionally_typed_ident(lexer, ctx)?;
 
         let init = if lexer.skip(Token::Operation('=')) {
-            let handle = self.general_expression(lexer, ctx)?;
+            let handle = self.expression(lexer, ctx)?;
             Some(handle)
         } else {
             None
@@ -1426,13 +1418,13 @@ impl Parser {
                 match lexer.next_ident_with_span()? {
                     ("size", name_span) => {
                         lexer.expect(Token::Paren('('))?;
-                        let expr = self.general_expression(lexer, ctx)?;
+                        let expr = self.expression(lexer, ctx)?;
                         lexer.expect(Token::Paren(')'))?;
                         size.set(expr, name_span)?;
                     }
                     ("align", name_span) => {
                         lexer.expect(Token::Paren('('))?;
-                        let expr = self.general_expression(lexer, ctx)?;
+                        let expr = self.expression(lexer, ctx)?;
                         lexer.expect(Token::Paren(')'))?;
                         align.set(expr, name_span)?;
                     }
@@ -2114,7 +2106,7 @@ impl Parser {
         let op = lexer.next();
         let (op, value) = match op {
             (Token::Operation('='), _) => {
-                let value = self.general_expression(lexer, ctx)?;
+                let value = self.expression(lexer, ctx)?;
                 (None, value)
             }
             (Token::AssignmentOperation(c), _) => {
@@ -2133,7 +2125,7 @@ impl Parser {
                     _ => unreachable!(),
                 };
 
-                let value = self.general_expression(lexer, ctx)?;
+                let value = self.expression(lexer, ctx)?;
                 (Some(op), value)
             }
             token @ (Token::IncrementOperation | Token::DecrementOperation, _) => {
@@ -2250,7 +2242,7 @@ impl Parser {
                         "_" => {
                             let _ = lexer.next();
                             lexer.expect(Token::Operation('='))?;
-                            let expr = this.general_expression(lexer, ctx)?;
+                            let expr = this.expression(lexer, ctx)?;
                             lexer.expect(Token::Separator(';'))?;
 
                             ast::StatementKind::Phony(expr)
@@ -2260,7 +2252,7 @@ impl Parser {
                             let (name, given_ty) = this.optionally_typed_ident(lexer, ctx)?;
 
                             lexer.expect(Token::Operation('='))?;
-                            let expr_id = this.general_expression(lexer, ctx)?;
+                            let expr_id = this.expression(lexer, ctx)?;
                             lexer.expect(Token::Separator(';'))?;
 
                             let handle = ctx.declare_local(name)?;
@@ -2276,7 +2268,7 @@ impl Parser {
                             let (name, given_ty) = this.optionally_typed_ident(lexer, ctx)?;
 
                             lexer.expect(Token::Operation('='))?;
-                            let expr_id = this.general_expression(lexer, ctx)?;
+                            let expr_id = this.expression(lexer, ctx)?;
                             lexer.expect(Token::Separator(';'))?;
 
                             let handle = ctx.declare_local(name)?;
@@ -2303,7 +2295,7 @@ impl Parser {
                             let (name, ty) = this.optionally_typed_ident(lexer, ctx)?;
 
                             let init = if lexer.skip(Token::Operation('=')) {
-                                let init = this.general_expression(lexer, ctx)?;
+                                let init = this.expression(lexer, ctx)?;
                                 Some(init)
                             } else {
                                 None
@@ -2322,7 +2314,7 @@ impl Parser {
                         "return" => {
                             let _ = lexer.next();
                             let value = if lexer.peek().0 != Token::Separator(';') {
-                                let handle = this.general_expression(lexer, ctx)?;
+                                let handle = this.expression(lexer, ctx)?;
                                 Some(handle)
                             } else {
                                 None
@@ -2332,7 +2324,7 @@ impl Parser {
                         }
                         "if" => {
                             let _ = lexer.next();
-                            let condition = this.general_expression(lexer, ctx)?;
+                            let condition = this.expression(lexer, ctx)?;
 
                             let accept = this.block(lexer, ctx, brace_nesting_level)?.0;
 
@@ -2349,7 +2341,7 @@ impl Parser {
                                 }
 
                                 // ... else if (...) { ... }
-                                let other_condition = this.general_expression(lexer, ctx)?;
+                                let other_condition = this.expression(lexer, ctx)?;
                                 let other_block = this.block(lexer, ctx, brace_nesting_level)?;
                                 elsif_stack.push((elseif_span_start, other_condition, other_block));
                                 elseif_span_start = lexer.start_byte_offset();
@@ -2381,7 +2373,7 @@ impl Parser {
                         }
                         "switch" => {
                             let _ = lexer.next();
-                            let selector = this.general_expression(lexer, ctx)?;
+                            let selector = this.expression(lexer, ctx)?;
                             let brace_span = lexer.expect_span(Token::Paren('{'))?;
                             let brace_nesting_level =
                                 Self::increase_brace_nesting(brace_nesting_level, brace_span)?;
@@ -2449,7 +2441,7 @@ impl Parser {
                             let mut body = ast::Block::default();
 
                             let (condition, span) =
-                                lexer.capture_span(|lexer| this.general_expression(lexer, ctx))?;
+                                lexer.capture_span(|lexer| this.expression(lexer, ctx))?;
                             let mut reject = ast::Block::default();
                             reject.stmts.push(ast::Statement {
                                 kind: ast::StatementKind::Break,
@@ -2511,7 +2503,7 @@ impl Parser {
                             if !lexer.skip(Token::Separator(';')) {
                                 let (condition, span) =
                                     lexer.capture_span(|lexer| -> Result<'_, _> {
-                                        let condition = this.general_expression(lexer, ctx)?;
+                                        let condition = this.expression(lexer, ctx)?;
                                         lexer.expect(Token::Separator(';'))?;
                                         Ok(condition)
                                     })?;
@@ -2583,7 +2575,7 @@ impl Parser {
                             // parentheses are optional
                             let paren = lexer.skip(Token::Paren('('));
 
-                            let condition = this.general_expression(lexer, ctx)?;
+                            let condition = this.expression(lexer, ctx)?;
 
                             if paren {
                                 lexer.expect(Token::Paren(')'))?;
@@ -2648,7 +2640,7 @@ impl Parser {
                         // the break if
                         lexer.expect(Token::Word("if"))?;
 
-                        let condition = self.general_expression(lexer, ctx)?;
+                        let condition = self.expression(lexer, ctx)?;
                         // Set the condition of the break if to the newly parsed
                         // expression
                         break_if = Some(condition);
@@ -2943,17 +2935,17 @@ impl Parser {
             match name {
                 "binding" => {
                     lexer.expect(Token::Paren('('))?;
-                    bind_index.set(self.general_expression(lexer, &mut ctx)?, name_span)?;
+                    bind_index.set(self.expression(lexer, &mut ctx)?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;
                 }
                 "group" => {
                     lexer.expect(Token::Paren('('))?;
-                    bind_group.set(self.general_expression(lexer, &mut ctx)?, name_span)?;
+                    bind_group.set(self.expression(lexer, &mut ctx)?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;
                 }
                 "id" => {
                     lexer.expect(Token::Paren('('))?;
-                    id.set(self.general_expression(lexer, &mut ctx)?, name_span)?;
+                    id.set(self.expression(lexer, &mut ctx)?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;
                 }
                 "vertex" => {
@@ -2999,7 +2991,7 @@ impl Parser {
                     lexer.expect(Token::Paren('('))?;
                     let mut new_workgroup_size = [None; 3];
                     for (i, size) in new_workgroup_size.iter_mut().enumerate() {
-                        *size = Some(self.general_expression(lexer, &mut ctx)?);
+                        *size = Some(self.expression(lexer, &mut ctx)?);
                         match lexer.next() {
                             (Token::Paren(')'), _) => break,
                             (Token::Separator(','), _) if i != 2 => (),
@@ -3092,7 +3084,7 @@ impl Parser {
                 let (name, ty) = self.optionally_typed_ident(lexer, &mut ctx)?;
 
                 lexer.expect(Token::Operation('='))?;
-                let init = self.general_expression(lexer, &mut ctx)?;
+                let init = self.expression(lexer, &mut ctx)?;
                 lexer.expect(Token::Separator(';'))?;
 
                 Some(ast::GlobalDeclKind::Const(ast::Const {
@@ -3108,7 +3100,7 @@ impl Parser {
                 let (name, ty) = self.optionally_typed_ident(lexer, &mut ctx)?;
 
                 let init = if lexer.skip(Token::Operation('=')) {
-                    Some(self.general_expression(lexer, &mut ctx)?)
+                    Some(self.expression(lexer, &mut ctx)?)
                 } else {
                     None
                 };
@@ -3170,7 +3162,7 @@ impl Parser {
                 // parentheses are optional
                 let paren = lexer.skip(Token::Paren('('));
 
-                let condition = self.general_expression(lexer, &mut ctx)?;
+                let condition = self.expression(lexer, &mut ctx)?;
 
                 if paren {
                     lexer.expect(Token::Paren(')'))?;
