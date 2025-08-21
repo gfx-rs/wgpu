@@ -3887,3 +3887,18 @@ fn max_type_size_array_of_structs() {
         ))
     }
 }
+
+#[cfg(feature = "wgsl-in")]
+#[test]
+fn source_with_control_char() {
+    check(
+        "\x07",
+        "error: expected global item (`struct`, `const`, `var`, `alias`, `fn`, `diagnostic`, `enable`, `requires`, `;`) or the end of the file, found \"\\u{7}\"
+  ┌─ wgsl:1:1
+  │
+1 │ �
+  │ ^ expected global item (`struct`, `const`, `var`, `alias`, `fn`, `diagnostic`, `enable`, `requires`, `;`) or the end of the file
+
+",
+    );
+}

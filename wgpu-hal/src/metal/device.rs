@@ -1017,7 +1017,7 @@ impl crate::Device for super::Device {
                 // Obtain the locked device from shared
                 let device = self.shared.device.lock();
                 let library = device
-                    .new_library_with_source(&source, &options)
+                    .new_library_with_source(source, &options)
                     .map_err(|e| crate::ShaderError::Compilation(format!("MSL: {e:?}")))?;
                 let function = library.get_function(&entry_point, None).map_err(|_| {
                     crate::ShaderError::Compilation(format!(
@@ -1035,12 +1035,10 @@ impl crate::Device for super::Device {
                     bounds_checks: desc.runtime_checks,
                 })
             }
-            crate::ShaderInput::SpirV(_) => {
-                panic!("SPIRV_SHADER_PASSTHROUGH is not enabled for this backend")
-            }
-            crate::ShaderInput::Dxil { .. } | crate::ShaderInput::Hlsl { .. } => {
-                panic!("`Features::HLSL_DXIL_SHADER_PASSTHROUGH` is not enabled for this backend")
-            }
+            crate::ShaderInput::SpirV(_)
+            | crate::ShaderInput::Dxil { .. }
+            | crate::ShaderInput::Hlsl { .. }
+            | crate::ShaderInput::Glsl { .. } => unreachable!(),
         }
     }
 

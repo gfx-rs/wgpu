@@ -2125,39 +2125,59 @@ impl Device {
         descriptor: &pipeline::ShaderModuleDescriptorPassthrough<'a>,
     ) -> Result<Arc<pipeline::ShaderModule>, pipeline::CreateShaderModuleError> {
         self.check_is_valid()?;
-        let hal_shader = match descriptor {
-            pipeline::ShaderModuleDescriptorPassthrough::SpirV(inner) => {
-                self.require_features(wgt::Features::SPIRV_SHADER_PASSTHROUGH)?;
-                hal::ShaderInput::SpirV(&inner.source)
-            }
-            pipeline::ShaderModuleDescriptorPassthrough::Msl(inner) => {
-                self.require_features(wgt::Features::MSL_SHADER_PASSTHROUGH)?;
-                hal::ShaderInput::Msl {
-                    shader: inner.source.to_string(),
-                    entry_point: inner.entry_point.to_string(),
-                    num_workgroups: inner.num_workgroups,
+        self.require_features(wgt::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS)?;
+
+        // TODO: when we get to use if-let chains, this will be a little nicer!
+
+        log::info!("Backend: {}", self.backend());
+        let hal_shader = match self.backend() {
+            wgt::Backend::Vulkan => hal::ShaderInput::SpirV(
+                descriptor
+                    .spirv
+                    .as_ref()
+                    .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
+            ),
+            wgt::Backend::Dx12 => {
+                if let Some(dxil) = &descriptor.dxil {
+                    hal::ShaderInput::Dxil {
+                        shader: dxil,
+                        entry_point: descriptor.entry_point.clone(),
+                        num_workgroups: descriptor.num_workgroups,
+                    }
+                } else if let Some(hlsl) = &descriptor.hlsl {
+                    hal::ShaderInput::Hlsl {
+                        shader: hlsl,
+                        entry_point: descriptor.entry_point.clone(),
+                        num_workgroups: descriptor.num_workgroups,
+                    }
+                } else {
+                    return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend);
                 }
             }
-            pipeline::ShaderModuleDescriptorPassthrough::Dxil(inner) => {
-                self.require_features(wgt::Features::HLSL_DXIL_SHADER_PASSTHROUGH)?;
-                hal::ShaderInput::Dxil {
-                    shader: inner.source,
-                    entry_point: inner.entry_point.clone(),
-                    num_workgroups: inner.num_workgroups,
-                }
+            wgt::Backend::Metal => hal::ShaderInput::Msl {
+                shader: descriptor
+                    .msl
+                    .as_ref()
+                    .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
+                entry_point: descriptor.entry_point.clone(),
+                num_workgroups: descriptor.num_workgroups,
+            },
+            wgt::Backend::Gl => hal::ShaderInput::Glsl {
+                shader: descriptor
+                    .glsl
+                    .as_ref()
+                    .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
+                entry_point: descriptor.entry_point.clone(),
+                num_workgroups: descriptor.num_workgroups,
+            },
+            wgt::Backend::Noop => {
+                return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend)
             }
-            pipeline::ShaderModuleDescriptorPassthrough::Hlsl(inner) => {
-                self.require_features(wgt::Features::HLSL_DXIL_SHADER_PASSTHROUGH)?;
-                hal::ShaderInput::Hlsl {
-                    shader: inner.source,
-                    entry_point: inner.entry_point.clone(),
-                    num_workgroups: inner.num_workgroups,
-                }
-            }
+            wgt::Backend::BrowserWebGpu => unreachable!(),
         };
 
         let hal_desc = hal::ShaderModuleDescriptor {
-            label: descriptor.label().to_hal(self.instance_flags),
+            label: descriptor.label.to_hal(self.instance_flags),
             runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
         };
 
@@ -2180,7 +2200,7 @@ impl Device {
             raw: ManuallyDrop::new(raw),
             device: self.clone(),
             interface: None,
-            label: descriptor.label().to_string(),
+            label: descriptor.label.to_string(),
         };
 
         Ok(Arc::new(module))
@@ -3697,7 +3717,7 @@ impl Device {
 
                     if attribute.shader_location >= self.limits.max_vertex_attributes {
                         return Err(
-                            pipeline::CreateRenderPipelineError::TooManyVertexAttributes {
+                            pipeline::CreateRenderPipelineError::VertexAttributeLocationTooLarge {
                                 given: attribute.shader_location,
                                 limit: self.limits.max_vertex_attributes,
                             },

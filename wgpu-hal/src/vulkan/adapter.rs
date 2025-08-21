@@ -550,7 +550,6 @@ impl PhysicalDeviceFeatures {
     ) -> (wgt::Features, wgt::DownlevelFlags) {
         use wgt::{DownlevelFlags as Df, Features as F};
         let mut features = F::empty()
-            | F::SPIRV_SHADER_PASSTHROUGH
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::PUSH_CONSTANTS
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
@@ -562,7 +561,8 @@ impl PhysicalDeviceFeatures {
             | F::CLEAR_TEXTURE
             | F::PIPELINE_CACHE
             | F::SHADER_EARLY_DEPTH_TEST
-            | F::TEXTURE_ATOMIC;
+            | F::TEXTURE_ATOMIC
+            | F::EXPERIMENTAL_PASSTHROUGH_SHADERS;
 
         let mut dl_flags = Df::COMPUTE_SHADERS
             | Df::BASE_VERTEX
@@ -847,6 +847,24 @@ impl PhysicalDeviceFeatures {
                     instance,
                     phd,
                     vk::Format::G8_B8R8_2PLANE_420_UNORM,
+                    vk::ImageTiling::OPTIMAL,
+                    vk::FormatFeatureFlags::SAMPLED_IMAGE
+                        | vk::FormatFeatureFlags::TRANSFER_SRC
+                        | vk::FormatFeatureFlags::TRANSFER_DST,
+                ) && !caps
+                    .driver
+                    .map(|driver| driver.driver_id == vk::DriverId::MOLTENVK)
+                    .unwrap_or_default(),
+            );
+        }
+
+        if let Some(ref _sampler_ycbcr_conversion) = self.sampler_ycbcr_conversion {
+            features.set(
+                F::TEXTURE_FORMAT_P010,
+                supports_format(
+                    instance,
+                    phd,
+                    vk::Format::G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16,
                     vk::ImageTiling::OPTIMAL,
                     vk::FormatFeatureFlags::SAMPLED_IMAGE
                         | vk::FormatFeatureFlags::TRANSFER_SRC

@@ -194,7 +194,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install toolchain (repo MSRV - tier 1 or 2)
         if: matrix.tier == 1 || matrix.tier == 2
@@ -260,6 +260,8 @@ jobs:
         shell: bash
         run: |
           set -e
+
+          export RUSTFLAGS="$RUSTFLAGS --cfg getrandom_backend=\"wasm_js\""
 
           # build for WebGPU
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --features glsl,spirv,fragile-send-sync-non-atomic-wasm
@@ -373,7 +375,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install core MSRV toolchain
         run: |
@@ -401,6 +403,8 @@ jobs:
         run: |
           set -e
 
+          # 1.23.2 requires bytemuck_derive 1.10.1
+          cargo update -p bytemuck --precise 1.23.1
           # 1.9.0 requires MSRV 1.84
           cargo update -p bytemuck_derive --precise 1.8.1
 
@@ -428,7 +432,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install toolchain
         run: |
@@ -469,7 +473,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install repo MSRV toolchain
         run: |
@@ -485,6 +489,9 @@ jobs:
       - name: Execute tests
         run: |
           cd wgpu
+
+          export RUSTFLAGS="$RUSTFLAGS --cfg getrandom_backend=\"wasm_js\""
+
           wasm-pack test --headless --chrome --no-default-features --features wgsl,webgl,web --workspace
 
   gpu-test:
@@ -512,7 +519,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install repo MSRV toolchain
         run: |
@@ -676,7 +683,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install repo MSRV toolchain
         run: |
@@ -704,7 +711,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install repo MSRV toolchain
         run: |
@@ -725,7 +732,7 @@ jobs:
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.34.0
+        uses: crate-ci/typos@v1.35.5
 
   check-cts-runner:
     # runtime is normally 2 minutes
@@ -735,7 +742,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install MSRV toolchain
         run: |
@@ -773,7 +780,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v2
@@ -790,7 +797,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v2
