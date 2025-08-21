@@ -42,6 +42,28 @@ Bottom level categories:
 
 ### Major Changes
 
+#### Deferred command buffer actions: `map_buffer_on_submit` and `on_submitted_work_done`
+
+You may schedule buffer mapping and a submission-complete callback to run automatically after you submit, directly from encoders, command buffers, and passes. 
+
+```rust
+// Record some GPU work so the submission isn't empty and touches `buffer`.
+encoder.clear_buffer(&buffer, 0, None);
+
+// Defer mapping until this encoder is submitted.
+encoder.map_buffer_on_submit(&buffer, wgpu::MapMode::Read, 0..size, |result| { .. });
+
+// Fires after the command buffer's work is finished.
+encoder.on_submitted_work_done(|| { .. });
+
+// Automatically calls `map_async` and `on_submitted_work_done` after this submission finishes.
+queue.submit([encoder.finish()]);
+```
+
+Available on `CommandEncoder`, `CommandBuffer`, `RenderPass`, and `ComputePass`.
+
+By @cwfitzgerald in [#8125](https://github.com/gfx-rs/wgpu/pull/8125).
+
 #### `EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE` has been merged into `EXPERIMENTAL_RAY_QUERY`
 
 We have merged the acceleration structure feature into the `RayQuery` feature. This is to help work around an AMD driver bug and reduce the feature complexity of ray tracing. In the future when ray tracing pipelines are implemented, if either feature is enabled, acceleration structures will be available.

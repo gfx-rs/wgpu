@@ -1,7 +1,11 @@
+use alloc::sync::Arc;
 use core::ops::Range;
 
 use crate::{
-    api::{blas::BlasBuildEntry, tlas::Tlas},
+    api::{
+        blas::BlasBuildEntry, impl_deferred_command_buffer_actions, tlas::Tlas,
+        SharedDeferredCommandBufferActions,
+    },
     *,
 };
 
@@ -17,6 +21,7 @@ use crate::{
 #[derive(Debug)]
 pub struct CommandEncoder {
     pub(crate) inner: dispatch::DispatchCommandEncoder,
+    pub(crate) actions: SharedDeferredCommandBufferActions,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(CommandEncoder: Send, Sync);
@@ -52,10 +57,10 @@ static_assertions::assert_impl_all!(TexelCopyTextureInfo<'_>: Send, Sync);
 
 impl CommandEncoder {
     /// Finishes recording and returns a [`CommandBuffer`] that can be submitted for execution.
-    pub fn finish(mut self) -> CommandBuffer {
-        let buffer = self.inner.finish();
-
-        CommandBuffer { buffer }
+    pub fn finish(self) -> CommandBuffer {
+        let Self { mut inner, actions } = self;
+        let buffer = inner.finish();
+        CommandBuffer { buffer, actions }
     }
 
     /// Begins recording of a render pass.
@@ -75,6 +80,7 @@ impl CommandEncoder {
         let rpass = self.inner.begin_render_pass(desc);
         RenderPass {
             inner: rpass,
+            actions: Arc::clone(&self.actions),
             _encoder_guard: api::PhantomDrop::default(),
         }
     }
@@ -96,6 +102,7 @@ impl CommandEncoder {
         let cpass = self.inner.begin_compute_pass(desc);
         ComputePass {
             inner: cpass,
+            actions: Arc::clone(&self.actions),
             _encoder_guard: api::PhantomDrop::default(),
         }
     }
@@ -231,6 +238,8 @@ impl CommandEncoder {
             destination_offset,
         );
     }
+
+    impl_deferred_command_buffer_actions!();
 
     /// Get the [`wgpu_hal`] command encoder from this `CommandEncoder`.
     ///

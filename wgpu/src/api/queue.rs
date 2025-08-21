@@ -1,7 +1,7 @@
 use alloc::boxed::Box;
 use core::ops::{Deref, DerefMut};
 
-use crate::*;
+use crate::{api::DeferredCommandBufferActions, *};
 
 /// Handle to a command queue on a device.
 ///
@@ -248,9 +248,18 @@ impl Queue {
         &self,
         command_buffers: I,
     ) -> SubmissionIndex {
-        let mut command_buffers = command_buffers.into_iter().map(|comb| comb.buffer);
+        // As submit drains the iterator (even on error), collect deferred actions
+        // from each CommandBuffer along the way.
+        let mut actions = DeferredCommandBufferActions::default();
 
+        let mut command_buffers = command_buffers.into_iter().map(|comb| {
+            actions.append(&mut comb.actions.lock());
+            comb.buffer
+        });
         let index = self.inner.submit(&mut command_buffers);
+
+        // Execute all deferred actions after submit.
+        actions.execute(&self.inner);
 
         SubmissionIndex { index }
     }
@@ -265,17 +274,22 @@ impl Queue {
         self.inner.get_timestamp_period()
     }
 
-    /// Registers a callback when the previous call to submit finishes running on the gpu. This callback
-    /// being called implies that all mapped buffer callbacks which were registered before this call will
-    /// have been called.
+    /// Registers a callback that is invoked when the previous [`Queue::submit`] finishes executing
+    /// on the GPU. When this callback runs, all mapped-buffer callbacks registered for the same
+    /// submission are guaranteed to have been called.
     ///
-    /// For the callback to complete, either `queue.submit(..)`, `instance.poll_all(..)`, or `device.poll(..)`
-    /// must be called elsewhere in the runtime, possibly integrated into an event loop or run on a separate thread.
+    /// For the callback to run, either [`queue.submit(..)`][q::s], [`instance.poll_all(..)`][i::p_a],
+    /// or [`device.poll(..)`][d::p] must be called elsewhere in the runtime, possibly integrated into
+    /// an event loop or run on a separate thread.
     ///
-    /// The callback will be called on the thread that first calls the above functions after the gpu work
-    /// has completed. There are no restrictions on the code you can run in the callback, however on native the
-    /// call to the function will not complete until the callback returns, so prefer keeping callbacks short
-    /// and used to set flags, send messages, etc.
+    /// The callback runs on the thread that first calls one of the above functions after the GPU work
+    /// completes. There are no restrictions on the code you can run in the callback; however, on native
+    /// the polling call will not return until the callback finishes, so keep callbacks short (set flags,
+    /// send messages, etc.).
+    ///
+    /// [q::s]: Queue::submit
+    /// [i::p_a]: Instance::poll_all
+    /// [d::p]: Device::poll
     pub fn on_submitted_work_done(&self, callback: impl FnOnce() + Send + 'static) {
         self.inner.on_submitted_work_done(Box::new(callback));
     }
