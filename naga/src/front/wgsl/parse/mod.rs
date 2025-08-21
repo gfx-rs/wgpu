@@ -2099,14 +2099,16 @@ impl Parser {
         })
     }
 
-    fn assignment_op_and_rhs<'a>(
+    /// Parses assignment, increment and decrement statements
+    fn variable_updating_statement<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
         block: &mut ast::Block<'a>,
-        target: Handle<ast::Expression<'a>>,
-        span_start: usize,
     ) -> Result<'a, ()> {
+        let span_start = lexer.start_byte_offset();
+        let target = self.lhs_expression(lexer, ctx)?;
+
         use crate::BinaryOperator as Bo;
 
         let op = lexer.next();
@@ -2157,18 +2159,6 @@ impl Parser {
             span,
         });
         Ok(())
-    }
-
-    /// Parse an assignment statement (will also parse increment and decrement statements)
-    fn assignment_statement<'a>(
-        &mut self,
-        lexer: &mut Lexer<'a>,
-        ctx: &mut ExpressionContext<'a, '_, '_>,
-        block: &mut ast::Block<'a>,
-    ) -> Result<'a, ()> {
-        let span_start = lexer.start_byte_offset();
-        let target = self.lhs_expression(lexer, ctx)?;
-        self.assignment_op_and_rhs(lexer, ctx, block, target, span_start)
     }
 
     /// Parse a function call statement.
@@ -2225,11 +2215,11 @@ impl Parser {
                     }
                     _ => {
                         *lexer = cloned;
-                        self.assignment_statement(lexer, context, block)
+                        self.variable_updating_statement(lexer, context, block)
                     }
                 }
             }
-            _ => self.assignment_statement(lexer, context, block),
+            _ => self.variable_updating_statement(lexer, context, block),
         }
     }
 
@@ -2614,7 +2604,7 @@ impl Parser {
                     block.stmts.push(ast::Statement { kind, span });
                 }
                 _ => {
-                    this.assignment_statement(lexer, ctx, block)?;
+                    this.variable_updating_statement(lexer, ctx, block)?;
                     lexer.expect(Token::Separator(';'))?;
                     this.pop_rule_span(lexer);
                 }
