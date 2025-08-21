@@ -741,7 +741,7 @@ impl Parser {
             }
             (Token::Paren('<'), ast::ConstructorType::PartialArray) => {
                 lexer.expect_generic_paren('<')?;
-                let base = self.type_decl(lexer, ctx)?;
+                let base = self.type_specifier(lexer, ctx)?;
                 let size = if lexer.end_of_generic_arguments() {
                     let expr = self.const_generic_expression(lexer, ctx)?;
                     lexer.skip(Token::Separator(','));
@@ -1345,7 +1345,7 @@ impl Parser {
         let name = lexer.next_ident()?;
 
         let ty = if lexer.skip(Token::Separator(':')) {
-            Some(self.type_decl(lexer, ctx)?)
+            Some(self.type_specifier(lexer, ctx)?)
         } else {
             None
         };
@@ -1445,7 +1445,7 @@ impl Parser {
 
             let name = lexer.next_ident()?;
             lexer.expect(Token::Separator(':'))?;
-            let ty = self.type_decl(lexer, ctx)?;
+            let ty = self.type_specifier(lexer, ctx)?;
             ready = lexer.skip(Token::Separator(','));
 
             members.push(ast::StructMember {
@@ -1480,7 +1480,7 @@ impl Parser {
     ) -> Result<'a, (Handle<ast::Type<'a>>, Span)> {
         lexer.expect_generic_paren('<')?;
         let start = lexer.start_byte_offset();
-        let ty = self.type_decl(lexer, ctx)?;
+        let ty = self.type_specifier(lexer, ctx)?;
         let span = lexer.span_from(start);
         lexer.skip(Token::Separator(','));
         lexer.expect_generic_paren('>')?;
@@ -1495,7 +1495,7 @@ impl Parser {
     ) -> Result<'a, (Handle<ast::Type<'a>>, Span, crate::CooperativeRole)> {
         lexer.expect_generic_paren('<')?;
         let start = lexer.start_byte_offset();
-        let ty = self.type_decl(lexer, ctx)?;
+        let ty = self.type_specifier(lexer, ctx)?;
         let ty_span = lexer.span_from(start);
         lexer.expect(Token::Separator(','))?;
         let role = lexer.next_cooperative_role()?;
@@ -1536,7 +1536,7 @@ impl Parser {
         })
     }
 
-    fn type_decl_impl<'a>(
+    fn type_specifier_impl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
         word: &'a str,
@@ -1800,7 +1800,7 @@ impl Parser {
                 let (ident, span) = lexer.next_ident_with_span()?;
                 let mut space = conv::map_address_space(ident, span, &lexer.enable_extensions)?;
                 lexer.expect(Token::Separator(','))?;
-                let base = self.type_decl(lexer, ctx)?;
+                let base = self.type_specifier(lexer, ctx)?;
                 if let crate::AddressSpace::Storage { ref mut access } = space {
                     *access = if lexer.end_of_generic_arguments() {
                         let result = lexer.next_storage_access()?;
@@ -1815,7 +1815,7 @@ impl Parser {
             }
             "array" => {
                 lexer.expect_generic_paren('<')?;
-                let base = self.type_decl(lexer, ctx)?;
+                let base = self.type_specifier(lexer, ctx)?;
                 let size = if lexer.end_of_generic_arguments() {
                     let size = self.const_generic_expression(lexer, ctx)?;
                     lexer.skip(Token::Separator(','));
@@ -1829,7 +1829,7 @@ impl Parser {
             }
             "binding_array" => {
                 lexer.expect_generic_paren('<')?;
-                let base = self.type_decl(lexer, ctx)?;
+                let base = self.type_specifier(lexer, ctx)?;
                 let size = if lexer.end_of_generic_arguments() {
                     let size = self.unary_expression(lexer, ctx)?;
                     lexer.skip(Token::Separator(','));
@@ -2071,8 +2071,7 @@ impl Parser {
         }
     }
 
-    /// Parse type declaration of a given name.
-    fn type_decl<'a>(
+    fn type_specifier<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
@@ -2082,7 +2081,7 @@ impl Parser {
 
             let (name, span) = lexer.next_ident_with_span()?;
 
-            let ty = match this.type_decl_impl(lexer, name, span, ctx)? {
+            let ty = match this.type_specifier_impl(lexer, name, span, ctx)? {
                 Some(ty) => ty,
                 None => {
                     ctx.unresolved.insert(ast::Dependency {
@@ -2814,7 +2813,7 @@ impl Parser {
             let param_name = lexer.next_ident()?;
 
             lexer.expect(Token::Separator(':'))?;
-            let param_type = self.type_decl(lexer, &mut ctx)?;
+            let param_type = self.type_specifier(lexer, &mut ctx)?;
 
             let handle = ctx.declare_local(param_name)?;
             arguments.push(ast::FunctionArgument {
@@ -2828,7 +2827,7 @@ impl Parser {
         // read return type
         let result = if lexer.skip(Token::Arrow) {
             let binding = self.varying_binding(lexer, &mut ctx)?;
-            let ty = self.type_decl(lexer, &mut ctx)?;
+            let ty = self.type_specifier(lexer, &mut ctx)?;
             let must_use = must_use.is_some();
             Some(ast::FunctionResult {
                 ty,
@@ -3093,7 +3092,7 @@ impl Parser {
                 let name = lexer.next_ident()?;
 
                 lexer.expect(Token::Operation('='))?;
-                let ty = self.type_decl(lexer, &mut ctx)?;
+                let ty = self.type_specifier(lexer, &mut ctx)?;
                 lexer.expect(Token::Separator(';'))?;
                 Some(ast::GlobalDeclKind::Type(ast::TypeAlias { name, ty }))
             }
