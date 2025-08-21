@@ -12,7 +12,11 @@ applications, where the software accessing GPU APIs is proprietary or
 obtained from a trusted developer, WebGPU makes GPU APIs available to
 arbitrary web applications. In the threat model of the web, malicious
 content should not be able to use the GPU APIs to access data or interfaces
-outside the intended scope for interaction with web content.
+outside the intended scope for interaction with web content. Therefore, `wgpu`
+seeks to prevent undefined behavior and data leaks even when its API is
+misused, and failures to do so may be considered vulnerabilities. (This is
+also in accordance with the Rust principle of safe vs. unsafe code, since the
+`wgpu` library exposes a safe API.)
 
 The WGPU maintainers have discretion in assigning a severity to individual
 vulnerabilities. It is generally considered a high-severity vulnerability in
@@ -62,7 +66,7 @@ Mozilla serves as the CVE numbering authority for the WGPU project.
 
 To report a security problem with WGPU, create a bug in Mozilla's Bugzilla
 instance in the
-[Core :: Graphics :: WebGPU](https://bugzilla.mozilla.org/enter_bug.cgi?product=Core&component=Graphics%3A+WebGPU&groups=core-security)
+[Core :: Graphics :: WebGPU](https://bugzilla.mozilla.org/enter_bug.cgi?product=Core&component=Graphics%3A+WebGPU&groups=core-security&groups=gfx-core-security)
 component.
 
 **IMPORTANT: For security issues, please make sure that you check the box
