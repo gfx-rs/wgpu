@@ -1,5 +1,5 @@
 #![allow(
-    // We need to investiagate these.
+    // We need to investigate these.
     clippy::result_large_err
 )]
 

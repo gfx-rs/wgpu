@@ -3,7 +3,7 @@ Tests for the WGSL front end.
 */
 #![cfg(feature = "wgsl-in")]
 #![allow(
-    // We need to investiagate these.
+    // We need to investigate these.
     clippy::result_large_err
 )]
 
