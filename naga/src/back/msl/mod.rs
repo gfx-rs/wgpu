@@ -43,6 +43,29 @@ additional effort and the difference is unlikely to matter.)
 
 [`BoundsCheckPolicy`]: crate::proc::BoundsCheckPolicy
 
+## External textures
+
+Support for [`crate::ImageClass::External`] textures is implemented by lowering
+each external texture global variable to 3 `texture2d<float, sample>`s, and a
+constant buffer of type `NagaExternalTextureParams`. This provides up to 3
+planes of texture data (for example single planar RGBA, or separate Y, Cb, and
+Cr planes), and the parameters buffer containing information describing how to
+handle these correctly. The bind target to use for each of these globals is
+specified via the [`BindTarget::external_texture`] field of the relevant
+entries in [`EntryPointResources::resources`].
+
+External textures are supported by WGSL's `textureDimensions()`,
+`textureLoad()`, and `textureSampleBaseClampToEdge()` built-in functions. These
+are implemented using helper functions. See the following functions for how
+these are generated:
+ * `Writer::write_wrapped_image_query`
+ * `Writer::write_wrapped_image_load`
+ * `Writer::write_wrapped_image_sample`
+
+The lowered global variables for each external texture global are passed to the
+entry point as separate arguments (see "Entry points" above). However, they are
+then wrapped in a struct to allow them to be conveniently passed to user
+defined and helper functions. See `writer::EXTERNAL_TEXTURE_WRAPPER_STRUCT`.
 */
 
 use alloc::{
@@ -71,6 +94,19 @@ pub enum BindSamplerTarget {
     Inline(InlineSamplerIndex),
 }
 
+/// Binding information for a Naga [`External`] image global variable.
+///
+/// See the module documentation's section on external textures for details.
+///
+/// [`External`]: crate::ir::ImageClass::External
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct BindExternalTextureTarget {
+    pub planes: [Slot; 3],
+    pub params: Slot,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
@@ -79,6 +115,7 @@ pub struct BindTarget {
     pub buffer: Option<Slot>,
     pub texture: Option<Slot>,
     pub sampler: Option<BindSamplerTarget>,
+    pub external_texture: Option<BindExternalTextureTarget>,
     pub mutable: bool,
 }
 

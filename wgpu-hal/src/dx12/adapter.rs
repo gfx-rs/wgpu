@@ -363,8 +363,8 @@ impl super::Adapter {
             | wgt::Features::TEXTURE_FORMAT_NV12
             | wgt::Features::FLOAT32_FILTERABLE
             | wgt::Features::TEXTURE_ATOMIC
-            | wgt::Features::EXTERNAL_TEXTURE
-            | wgt::Features::HLSL_DXIL_SHADER_PASSTHROUGH;
+            | wgt::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS
+            | wgt::Features::EXTERNAL_TEXTURE;
 
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.

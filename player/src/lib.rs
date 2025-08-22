@@ -315,6 +315,84 @@ impl GlobalPlay for wgc::global::Global {
                     println!("shader compilation error:\n---{code}\n---\n{e}");
                 }
             }
+            Action::CreateShaderModulePassthrough {
+                id,
+                data,
+                entry_point,
+                label,
+                num_workgroups,
+                runtime_checks,
+            } => {
+                let spirv = data.iter().find_map(|a| {
+                    if a.ends_with(".spv") {
+                        let data = fs::read(dir.join(a)).unwrap();
+                        assert!(data.len() % 4 == 0);
+
+                        Some(Cow::Owned(bytemuck::pod_collect_to_vec(&data)))
+                    } else {
+                        None
+                    }
+                });
+                let dxil = data.iter().find_map(|a| {
+                    if a.ends_with(".dxil") {
+                        let vec = std::fs::read(dir.join(a)).unwrap();
+                        Some(Cow::Owned(vec))
+                    } else {
+                        None
+                    }
+                });
+                let hlsl = data.iter().find_map(|a| {
+                    if a.ends_with(".hlsl") {
+                        let code = fs::read_to_string(dir.join(a)).unwrap();
+                        Some(Cow::Owned(code))
+                    } else {
+                        None
+                    }
+                });
+                let msl = data.iter().find_map(|a| {
+                    if a.ends_with(".msl") {
+                        let code = fs::read_to_string(dir.join(a)).unwrap();
+                        Some(Cow::Owned(code))
+                    } else {
+                        None
+                    }
+                });
+                let glsl = data.iter().find_map(|a| {
+                    if a.ends_with(".glsl") {
+                        let code = fs::read_to_string(dir.join(a)).unwrap();
+                        Some(Cow::Owned(code))
+                    } else {
+                        None
+                    }
+                });
+                let wgsl = data.iter().find_map(|a| {
+                    if a.ends_with(".wgsl") {
+                        let code = fs::read_to_string(dir.join(a)).unwrap();
+                        Some(Cow::Owned(code))
+                    } else {
+                        None
+                    }
+                });
+                let desc = wgt::CreateShaderModuleDescriptorPassthrough {
+                    entry_point,
+                    label,
+                    num_workgroups,
+                    runtime_checks,
+
+                    spirv,
+                    dxil,
+                    hlsl,
+                    msl,
+                    glsl,
+                    wgsl,
+                };
+                let (_, error) = unsafe {
+                    self.device_create_shader_module_passthrough(device, &desc, Some(id))
+                };
+                if let Some(e) = error {
+                    println!("shader compilation error: {e}");
+                }
+            }
             Action::DestroyShaderModule(id) => {
                 self.shader_module_drop(id);
             }

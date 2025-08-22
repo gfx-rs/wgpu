@@ -237,7 +237,7 @@ impl Writer {
                 }
             };
 
-            body.push(Instruction::store(res_member.id, member_value_id, None));
+            self.store_io_with_f16_polyfill(body, res_member.id, member_value_id);
 
             match res_member.built_in {
                 Some(crate::BuiltIn::Position { .. })

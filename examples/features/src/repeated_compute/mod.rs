@@ -13,9 +13,11 @@ async fn run() {
     let mut numbers = [0u32; 256];
     let context = WgpuContext::new(size_of_val(&numbers)).await;
 
+    let mut rand = nanorand::WyRand::new();
+
     for _ in 0..10 {
         for p in numbers.iter_mut() {
-            *p = nanorand::tls_rng().generate::<u16>() as u32;
+            *p = rand.generate::<u16>() as u32;
         }
 
         compute(&mut numbers, &context).await;

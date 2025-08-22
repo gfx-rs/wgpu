@@ -222,8 +222,8 @@ impl super::Device {
         };
 
         let (module, info) = naga::back::pipeline_constants::process_overrides(
-            &stage.module.naga.module,
-            &stage.module.naga.info,
+            &stage.module.source.module,
+            &stage.module.source.info,
             Some((naga_stage, stage.entry_point)),
             stage.constants,
         )
@@ -463,7 +463,7 @@ impl super::Device {
 
         for (stage_idx, stage_items) in push_constant_items.into_iter().enumerate() {
             for item in stage_items {
-                let naga_module = &shaders[stage_idx].1.module.naga.module;
+                let naga_module = &shaders[stage_idx].1.module.source.module;
                 let type_inner = &naga_module.types[item.ty].inner;
 
                 let location = unsafe { gl.get_uniform_location(program, &item.access_path) };
@@ -1334,16 +1334,15 @@ impl crate::Device for super::Device {
         self.counters.shader_modules.add(1);
 
         Ok(super::ShaderModule {
-            naga: match shader {
-                crate::ShaderInput::SpirV(_) => {
-                    panic!("`Features::SPIRV_SHADER_PASSTHROUGH` is not enabled")
-                }
-                crate::ShaderInput::Msl { .. } => {
-                    panic!("`Features::MSL_SHADER_PASSTHROUGH` is not enabled")
-                }
+            source: match shader {
                 crate::ShaderInput::Naga(naga) => naga,
-                crate::ShaderInput::Dxil { .. } | crate::ShaderInput::Hlsl { .. } => {
-                    panic!("`Features::HLSL_DXIL_SHADER_PASSTHROUGH` is not enabled")
+                // The backend doesn't yet expose this feature so it should be fine
+                crate::ShaderInput::Glsl { .. } => unimplemented!(),
+                crate::ShaderInput::SpirV(_)
+                | crate::ShaderInput::Msl { .. }
+                | crate::ShaderInput::Dxil { .. }
+                | crate::ShaderInput::Hlsl { .. } => {
+                    unreachable!()
                 }
             },
             label: desc.label.map(|str| str.to_string()),

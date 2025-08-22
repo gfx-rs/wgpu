@@ -35,10 +35,11 @@ bytemuck.workspace = true
 cfg-if.workspace = true
 encase = { workspace = true, features = ["glam"] }
 flume.workspace = true
+getrandom = { workspace = true, features = ["wasm_js"] }
 glam = { workspace = true, features = ["bytemuck"] }
 ktx2.workspace = true
 log.workspace = true
-nanorand = { workspace = true, features = ["tls"] }
+nanorand = { workspace = true, features = ["getrandom"] }
 noise.workspace = true
 obj.workspace = true
 png.workspace = true

@@ -130,6 +130,8 @@ pub enum CreateShaderModuleError {
         group: u32,
         limit: u32,
     },
+    #[error("Generic shader passthrough does not contain any code compatible with this backend.")]
+    NotCompiledForBackend,
 }
 
 impl WebGpuError for CreateShaderModuleError {
@@ -147,6 +149,7 @@ impl WebGpuError for CreateShaderModuleError {
             Self::ParsingGlsl(..) => return ErrorType::Validation,
             #[cfg(feature = "spirv")]
             Self::ParsingSpirV(..) => return ErrorType::Validation,
+            Self::NotCompiledForBackend => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
