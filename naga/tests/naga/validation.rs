@@ -1,3 +1,7 @@
+//! Tests of the module validator.
+//!
+//! There are also some validation tests in [`wgsl_errors`](super::wgsl_errors).
+
 #![allow(
     // We need to investigate these.
     clippy::result_large_err

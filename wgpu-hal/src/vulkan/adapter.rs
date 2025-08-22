@@ -1680,7 +1680,7 @@ impl super::Instance {
             },
             backend: wgt::Backend::Vulkan,
         };
-        let (available_features, downlevel_flags) =
+        let (available_features, mut downlevel_flags) =
             phd_features.to_wgpu(&self.shared.raw, phd, &phd_capabilities);
         let mut workarounds = super::Workarounds::empty();
         {
@@ -1695,6 +1695,15 @@ impl super::Instance {
                 phd_capabilities.properties.vendor_id == db::nvidia::VENDOR,
             );
         };
+
+        if info.driver_info.contains("Mesa ") {
+            // The `F16_IN_F32` instructions do not normally require native `F16` support, but on
+            // Mesa, they do.
+            downlevel_flags.set(
+                wgt::DownlevelFlags::SHADER_F16_IN_F32,
+                available_features.contains(wgt::Features::SHADER_F16),
+            );
+        }
 
         if let Some(driver) = phd_capabilities.driver {
             if driver.conformance_version.major == 0 {

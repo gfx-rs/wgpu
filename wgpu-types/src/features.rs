@@ -1242,7 +1242,7 @@ bitflags_array! {
 
     /// Features that are not guaranteed to be supported.
     ///
-    /// These are part of the webgpu standard. For all features see [`Features`]
+    /// These are part of the WebGPU standard. For all features, see [`Features`].
     ///
     /// If you want to use a feature, you need to first verify that the adapter supports
     /// the feature. If the adapter does not support the feature, requesting a device with it enabled

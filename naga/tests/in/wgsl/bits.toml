@@ -1,3 +1,5 @@
+god_mode = true # requires F16_IN_F32
+
 [msl]
 fake_missing_bindings = false
 lang_version = [1, 2]
