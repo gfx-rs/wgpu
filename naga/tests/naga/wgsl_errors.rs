@@ -2112,7 +2112,7 @@ error: type mismatch for reject and accept values in `select` call
   │
 5 │             _ = select(true, 1, false);
   │                        ^^^^  ^ accept value of type `{AbstractInt}`
-  │                        │      
+  │                        │\x20\x20\x20\x20\x20\x20
   │                        reject value of type `bool`
 
 ",
@@ -3488,19 +3488,19 @@ fn inconsistent_type() {
         "fn foo() -> f32 {
             return dot(vec4<f32>(), vec3<f32>());
         }",
-        r#"error: inconsistent type passed as argument #2 to `dot`
+        "error: inconsistent type passed as argument #2 to `dot`
   ┌─ wgsl:2:20
   │
 2 │             return dot(vec4<f32>(), vec3<f32>());
   │                    ^^^ ^^^^^^^^^^   ^^^^^^^^^^ argument #2 has type vec3<f32>
-  │                        │             
+  │                        │\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20
   │                        this argument has type vec4<f32>, which constrains subsequent arguments
   │
   = note: Because argument #1 has type vec4<f32>, only the following types
   = note: (or types that automatically convert to them) are accepted for argument #2:
   = note: allowed type: vec4<f32>
 
-"#,
+",
     );
 }
 
