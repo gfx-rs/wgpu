@@ -2557,7 +2557,7 @@ impl crate::Device for super::Device {
                             triangle_data.index_type(conv::map_index_format(indices.format));
                         indices.count / 3
                     } else {
-                        triangles.vertex_count
+                        triangles.vertex_count / 3
                     };
 
                     let geometry = vk::AccelerationStructureGeometryKHR::default()

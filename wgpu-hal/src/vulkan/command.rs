@@ -630,7 +630,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                                 .first_vertex(triangles.first_vertex);
                         } else {
                             range = range
-                                .primitive_count(triangles.vertex_count)
+                                .primitive_count(triangles.vertex_count / 3)
                                 .first_vertex(triangles.first_vertex);
                         }
 

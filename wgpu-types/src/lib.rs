@@ -16,6 +16,7 @@ extern crate alloc;
 
 use alloc::borrow::Cow;
 use alloc::{string::String, vec, vec::Vec};
+use core::cmp::Ordering;
 use core::{
     fmt,
     hash::{Hash, Hasher},
@@ -457,6 +458,71 @@ impl fmt::Display for RequestAdapterError {
         }
         Ok(())
     }
+}
+
+/// Invoke a macro for each of the limits.
+///
+/// The supplied macro should take two arguments. The first is a limit name, as
+/// an identifier, typically used to access a member of `struct Limits`. The
+/// second is `Ordering::Less` if valid values are less than the limit (the
+/// common case), or `Ordering::Greater` if valid values are more than the limit
+/// (for limits like alignments, which are minima instead of maxima).
+macro_rules! with_limits {
+    ($macro_name:ident) => {
+        $macro_name!(max_texture_dimension_1d, Ordering::Less);
+        $macro_name!(max_texture_dimension_1d, Ordering::Less);
+        $macro_name!(max_texture_dimension_2d, Ordering::Less);
+        $macro_name!(max_texture_dimension_3d, Ordering::Less);
+        $macro_name!(max_texture_array_layers, Ordering::Less);
+        $macro_name!(max_bind_groups, Ordering::Less);
+        $macro_name!(max_bindings_per_bind_group, Ordering::Less);
+        $macro_name!(
+            max_dynamic_uniform_buffers_per_pipeline_layout,
+            Ordering::Less
+        );
+        $macro_name!(
+            max_dynamic_storage_buffers_per_pipeline_layout,
+            Ordering::Less
+        );
+        $macro_name!(max_sampled_textures_per_shader_stage, Ordering::Less);
+        $macro_name!(max_samplers_per_shader_stage, Ordering::Less);
+        $macro_name!(max_storage_buffers_per_shader_stage, Ordering::Less);
+        $macro_name!(max_storage_textures_per_shader_stage, Ordering::Less);
+        $macro_name!(max_uniform_buffers_per_shader_stage, Ordering::Less);
+        $macro_name!(max_binding_array_elements_per_shader_stage, Ordering::Less);
+        $macro_name!(max_uniform_buffer_binding_size, Ordering::Less);
+        $macro_name!(max_storage_buffer_binding_size, Ordering::Less);
+        $macro_name!(max_vertex_buffers, Ordering::Less);
+        $macro_name!(max_buffer_size, Ordering::Less);
+        $macro_name!(max_vertex_attributes, Ordering::Less);
+        $macro_name!(max_vertex_buffer_array_stride, Ordering::Less);
+        $macro_name!(min_uniform_buffer_offset_alignment, Ordering::Greater);
+        $macro_name!(min_storage_buffer_offset_alignment, Ordering::Greater);
+        $macro_name!(max_inter_stage_shader_components, Ordering::Less);
+        $macro_name!(max_color_attachments, Ordering::Less);
+        $macro_name!(max_color_attachment_bytes_per_sample, Ordering::Less);
+        $macro_name!(max_compute_workgroup_storage_size, Ordering::Less);
+        $macro_name!(max_compute_invocations_per_workgroup, Ordering::Less);
+        $macro_name!(max_compute_workgroup_size_x, Ordering::Less);
+        $macro_name!(max_compute_workgroup_size_y, Ordering::Less);
+        $macro_name!(max_compute_workgroup_size_z, Ordering::Less);
+        $macro_name!(max_compute_workgroups_per_dimension, Ordering::Less);
+
+        $macro_name!(min_subgroup_size, Ordering::Greater);
+        $macro_name!(max_subgroup_size, Ordering::Less);
+
+        $macro_name!(max_push_constant_size, Ordering::Less);
+        $macro_name!(max_non_sampler_bindings, Ordering::Less);
+
+        $macro_name!(max_task_workgroup_total_count, Ordering::Less);
+        $macro_name!(max_task_workgroups_per_dimension, Ordering::Less);
+        $macro_name!(max_mesh_multiview_count, Ordering::Less);
+        $macro_name!(max_mesh_output_layers, Ordering::Less);
+
+        $macro_name!(max_blas_primitive_count, Ordering::Less);
+        $macro_name!(max_blas_geometry_count, Ordering::Less);
+        $macro_name!(max_tlas_instance_count, Ordering::Less);
+    };
 }
 
 /// Represents the sets of limits an adapter/device supports.
@@ -1015,68 +1081,61 @@ impl Limits {
         fatal: bool,
         mut fail_fn: impl FnMut(&'static str, u64, u64),
     ) {
-        use core::cmp::Ordering;
-
-        macro_rules! compare {
-            ($name:ident, $ordering:ident) => {
-                match self.$name.cmp(&allowed.$name) {
-                    Ordering::$ordering | Ordering::Equal => (),
-                    _ => {
-                        fail_fn(stringify!($name), self.$name as u64, allowed.$name as u64);
-                        if fatal {
-                            return;
-                        }
+        macro_rules! check_with_fail_fn {
+            ($name:ident, $ordering:expr) => {
+                let invalid_ord = $ordering.reverse();
+                // In the case of `min_subgroup_size`, requesting a value of
+                // zero means "I'm not going to use subgroups", so we have to
+                // special case that. If any of our minimum limits could
+                // meaningfully go all the way to zero, that would conflict with
+                // this.
+                if self.$name != 0 && self.$name.cmp(&allowed.$name) == invalid_ord {
+                    fail_fn(stringify!($name), self.$name as u64, allowed.$name as u64);
+                    if fatal {
+                        return;
                     }
                 }
             };
         }
 
-        compare!(max_texture_dimension_1d, Less);
-        compare!(max_texture_dimension_2d, Less);
-        compare!(max_texture_dimension_3d, Less);
-        compare!(max_texture_array_layers, Less);
-        compare!(max_bind_groups, Less);
-        compare!(max_bindings_per_bind_group, Less);
-        compare!(max_dynamic_uniform_buffers_per_pipeline_layout, Less);
-        compare!(max_dynamic_storage_buffers_per_pipeline_layout, Less);
-        compare!(max_sampled_textures_per_shader_stage, Less);
-        compare!(max_samplers_per_shader_stage, Less);
-        compare!(max_storage_buffers_per_shader_stage, Less);
-        compare!(max_storage_textures_per_shader_stage, Less);
-        compare!(max_uniform_buffers_per_shader_stage, Less);
-        compare!(max_binding_array_elements_per_shader_stage, Less);
-        compare!(max_uniform_buffer_binding_size, Less);
-        compare!(max_storage_buffer_binding_size, Less);
-        compare!(max_vertex_buffers, Less);
-        compare!(max_buffer_size, Less);
-        compare!(max_vertex_attributes, Less);
-        compare!(max_vertex_buffer_array_stride, Less);
-        compare!(min_uniform_buffer_offset_alignment, Greater);
-        compare!(min_storage_buffer_offset_alignment, Greater);
-        compare!(max_inter_stage_shader_components, Less);
-        compare!(max_color_attachments, Less);
-        compare!(max_color_attachment_bytes_per_sample, Less);
-        compare!(max_compute_workgroup_storage_size, Less);
-        compare!(max_compute_invocations_per_workgroup, Less);
-        compare!(max_compute_workgroup_size_x, Less);
-        compare!(max_compute_workgroup_size_y, Less);
-        compare!(max_compute_workgroup_size_z, Less);
-        compare!(max_compute_workgroups_per_dimension, Less);
-        if self.min_subgroup_size > 0 && self.max_subgroup_size > 0 {
-            compare!(min_subgroup_size, Greater);
-            compare!(max_subgroup_size, Less);
+        if self.min_subgroup_size > self.max_subgroup_size {
+            fail_fn(
+                "max_subgroup_size",
+                self.min_subgroup_size as u64,
+                allowed.min_subgroup_size as u64,
+            );
         }
-        compare!(max_push_constant_size, Less);
-        compare!(max_non_sampler_bindings, Less);
+        with_limits!(check_with_fail_fn);
+    }
 
-        compare!(max_task_workgroup_total_count, Less);
-        compare!(max_task_workgroups_per_dimension, Less);
-        compare!(max_mesh_multiview_count, Less);
-        compare!(max_mesh_output_layers, Less);
+    /// For each limit in `other` that is better than the value in `self`,
+    /// replace the value in `self` with the value from `other`.
+    ///
+    /// A request for a limit value less than the WebGPU-specified default must
+    /// be ignored. This function is used to clamp such requests to the default
+    /// value.
+    ///
+    /// This function is not for clamping requests for values beyond the
+    /// supported limits. For that purpose the desired function would be
+    /// `or_worse_values_from` (which doesn't exist, but could be added if
+    /// needed).
+    #[must_use]
+    pub fn or_better_values_from(mut self, other: &Self) -> Self {
+        macro_rules! or_better_value_from {
+            ($name:ident, $ordering:expr) => {
+                match $ordering {
+                    // Limits that are maximum values (most of them)
+                    Ordering::Less => self.$name = self.$name.max(other.$name),
+                    // Limits that are minimum values
+                    Ordering::Greater => self.$name = self.$name.min(other.$name),
+                    Ordering::Equal => unreachable!(),
+                }
+            };
+        }
 
-        compare!(max_blas_primitive_count, Less);
-        compare!(max_blas_geometry_count, Less);
-        compare!(max_tlas_instance_count, Less);
+        with_limits!(or_better_value_from);
+
+        self
     }
 }
 

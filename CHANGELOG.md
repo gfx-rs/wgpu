@@ -98,11 +98,13 @@ This allows using precompiled shaders without manually checking which backend's 
 - The function you pass to `Device::on_uncaptured_error()` must now implement `Sync` in addition to `Send`, and be wrapped in `Arc` instead of `Box`.
   In exchange for this, it is no longer possible for calling `wgpu` functions while in that callback to cause a deadlock (not that we encourage you to actually do that).
   By @kpreid in [#8011](https://github.com/gfx-rs/wgpu/pull/8011).
+- The limits requested for a device must now satisfy `min_subgroup_size <= max_subgroup_size`. By @andyleiserson in [#8085](https://github.com/gfx-rs/wgpu/pull/8085).
 
 #### Naga
 
 - Naga now requires that no type be larger than 1 GB. This limit may be lowered in the future; feedback on an appropriate value for the limit is welcome. By @andyleiserson in [#7950](https://github.com/gfx-rs/wgpu/pull/7950).
 - If the shader source contains control characters, Naga now replaces them with U+FFFD ("replacement character") in diagnostic output. By @andyleiserson in [#8049](https://github.com/gfx-rs/wgpu/pull/8049).
+- Add f16 IO polyfill on Vulkan backend to enable SHADER_F16 use without requiring `storageInputOutput16`. By @cryvosh in [#7884](https://github.com/gfx-rs/wgpu/pull/7884).
 
 #### DX12
 
