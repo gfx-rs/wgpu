@@ -606,6 +606,8 @@ impl super::PrivateCapabilities {
         }
 
         let argument_buffers = device.argument_buffers_support();
+        let mesh_shaders = device.supports_family(MTLGPUFamily::Apple7)
+            || device.supports_family(MTLGPUFamily::Mac2);
 
         Self {
             family_check,
@@ -902,6 +904,7 @@ impl super::PrivateCapabilities {
                 && (device.supports_family(MTLGPUFamily::Apple7)
                     || device.supports_family(MTLGPUFamily::Mac2)),
             supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
+            mesh_shaders,
         }
     }
 
@@ -1003,6 +1006,8 @@ impl super::PrivateCapabilities {
             features.insert(F::SUBGROUP | F::SUBGROUP_BARRIER);
         }
 
+        features.set(F::EXPERIMENTAL_MESH_SHADER, self.mesh_shaders);
+
         features
     }
 
@@ -1079,10 +1084,11 @@ impl super::PrivateCapabilities {
                 max_buffer_size: self.max_buffer_size,
                 max_non_sampler_bindings: u32::MAX,
 
-                max_task_workgroup_total_count: 0,
-                max_task_workgroups_per_dimension: 0,
+                // See https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf, Maximum threadgroups per mesh shader grid
+                max_task_workgroup_total_count: 1024,
+                max_task_workgroups_per_dimension: 1024,
                 max_mesh_multiview_count: 0,
-                max_mesh_output_layers: 0,
+                max_mesh_output_layers: self.max_texture_layers as u32,
 
                 max_blas_primitive_count: 0, // When added: 2^28 from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits
                 max_blas_geometry_count: 0,  // When added: 2^24

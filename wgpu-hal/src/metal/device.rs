@@ -1078,7 +1078,7 @@ impl crate::Device for super::Device {
                 conv::map_primitive_topology(desc.primitive.topology);
 
             // Vertex shader
-            let (vs_lib, vs_info) = {
+            let vs_info = {
                 let mut vertex_buffer_mappings = Vec::<naga::back::msl::VertexBufferMapping>::new();
                 for (i, vbl) in desc_vertex_buffers.iter().enumerate() {
                     let mut attributes = Vec::<naga::back::msl::AttributeMapping>::new();
@@ -1124,18 +1124,17 @@ impl crate::Device for super::Device {
                     );
                 }
 
-                let info = super::PipelineStageInfo {
+                super::PipelineStageInfo {
                     push_constants: desc.layout.push_constants_infos.vs,
                     sizes_slot: desc.layout.per_stage_map.vs.sizes_buffer,
                     sized_bindings: vs.sized_bindings,
                     vertex_buffer_mappings,
-                };
-
-                (vs.library, info)
+                    library: Some(vs.library),
+                }
             };
 
             // Fragment shader
-            let (fs_lib, fs_info) = match desc.fragment_stage {
+            let fs_info = match desc.fragment_stage {
                 Some(ref stage) => {
                     let fs = self.load_shader(
                         stage,
@@ -1153,14 +1152,13 @@ impl crate::Device for super::Device {
                         );
                     }
 
-                    let info = super::PipelineStageInfo {
+                    Some(super::PipelineStageInfo {
                         push_constants: desc.layout.push_constants_infos.fs,
                         sizes_slot: desc.layout.per_stage_map.fs.sizes_buffer,
                         sized_bindings: fs.sized_bindings,
                         vertex_buffer_mappings: vec![],
-                    };
-
-                    (Some(fs.library), Some(info))
+                        library: Some(fs.library),
+                    })
                 }
                 None => {
                     // TODO: This is a workaround for what appears to be a Metal validation bug
@@ -1168,7 +1166,7 @@ impl crate::Device for super::Device {
                     if desc.color_targets.is_empty() && desc.depth_stencil.is_none() {
                         descriptor.set_depth_attachment_pixel_format(MTLPixelFormat::Depth32Float);
                     }
-                    (None, None)
+                    None
                 }
             };
 
@@ -1302,10 +1300,10 @@ impl crate::Device for super::Device {
 
             Ok(super::RenderPipeline {
                 raw,
-                vs_lib,
-                fs_lib,
-                vs_info,
+                vs_info: Some(vs_info),
                 fs_info,
+                ts_info: None,
+                ms_info: None,
                 raw_primitive_type,
                 raw_triangle_fill_mode,
                 raw_front_winding: conv::map_winding(desc.primitive.front_face),
@@ -1373,6 +1371,7 @@ impl crate::Device for super::Device {
             }
 
             let cs_info = super::PipelineStageInfo {
+                library: Some(cs.library),
                 push_constants: desc.layout.push_constants_infos.cs,
                 sizes_slot: desc.layout.per_stage_map.cs.sizes_buffer,
                 sized_bindings: cs.sized_bindings,
@@ -1400,7 +1399,6 @@ impl crate::Device for super::Device {
             Ok(super::ComputePipeline {
                 raw,
                 cs_info,
-                cs_lib: cs.library,
                 work_group_size: cs.wg_size,
                 work_group_memory_sizes: cs.wg_memory_sizes,
             })

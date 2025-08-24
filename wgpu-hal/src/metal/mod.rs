@@ -300,6 +300,7 @@ struct PrivateCapabilities {
     int64_atomics: bool,
     float_atomics: bool,
     supports_shared_event: bool,
+    mesh_shaders: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -604,12 +605,16 @@ struct MultiStageData<T> {
     vs: T,
     fs: T,
     cs: T,
+    ts: T,
+    ms: T,
 }
 
 const NAGA_STAGES: MultiStageData<naga::ShaderStage> = MultiStageData {
     vs: naga::ShaderStage::Vertex,
     fs: naga::ShaderStage::Fragment,
     cs: naga::ShaderStage::Compute,
+    ts: naga::ShaderStage::Task,
+    ms: naga::ShaderStage::Mesh,
 };
 
 impl<T> ops::Index<naga::ShaderStage> for MultiStageData<T> {
@@ -630,6 +635,8 @@ impl<T> MultiStageData<T> {
             vs: fun(&self.vs),
             fs: fun(&self.fs),
             cs: fun(&self.cs),
+            ts: fun(&self.ts),
+            ms: fun(&self.ms),
         }
     }
     fn map<Y>(self, fun: impl Fn(T) -> Y) -> MultiStageData<Y> {
@@ -637,6 +644,8 @@ impl<T> MultiStageData<T> {
             vs: fun(self.vs),
             fs: fun(self.fs),
             cs: fun(self.cs),
+            ts: fun(self.ts),
+            ms: fun(self.ms),
         }
     }
     fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T> {
@@ -811,6 +820,8 @@ impl crate::DynShaderModule for ShaderModule {}
 
 #[derive(Debug, Default)]
 struct PipelineStageInfo {
+    #[allow(dead_code)]
+    library: Option<metal::Library>,
     push_constants: Option<PushConstantsInfo>,
 
     /// The buffer argument table index at which we pass runtime-sized arrays' buffer sizes.
@@ -849,12 +860,10 @@ impl PipelineStageInfo {
 #[derive(Debug)]
 pub struct RenderPipeline {
     raw: metal::RenderPipelineState,
-    #[allow(dead_code)]
-    vs_lib: metal::Library,
-    #[allow(dead_code)]
-    fs_lib: Option<metal::Library>,
-    vs_info: PipelineStageInfo,
+    vs_info: Option<PipelineStageInfo>,
     fs_info: Option<PipelineStageInfo>,
+    ts_info: Option<PipelineStageInfo>,
+    ms_info: Option<PipelineStageInfo>,
     raw_primitive_type: MTLPrimitiveType,
     raw_triangle_fill_mode: MTLTriangleFillMode,
     raw_front_winding: MTLWinding,
@@ -871,8 +880,6 @@ impl crate::DynRenderPipeline for RenderPipeline {}
 #[derive(Debug)]
 pub struct ComputePipeline {
     raw: metal::ComputePipelineState,
-    #[allow(dead_code)]
-    cs_lib: metal::Library,
     cs_info: PipelineStageInfo,
     work_group_size: MTLSize,
     work_group_memory_sizes: Vec<u32>,

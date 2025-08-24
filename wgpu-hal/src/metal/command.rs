@@ -906,9 +906,20 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         self.state.raw_primitive_type = pipeline.raw_primitive_type;
-        self.state.stage_infos.vs.assign_from(&pipeline.vs_info);
+        match pipeline.vs_info {
+            Some(ref info) => self.state.stage_infos.vs.assign_from(info),
+            None => self.state.stage_infos.vs.clear(),
+        }
         match pipeline.fs_info {
             Some(ref info) => self.state.stage_infos.fs.assign_from(info),
+            None => self.state.stage_infos.fs.clear(),
+        }
+        match pipeline.ts_info {
+            Some(ref info) => self.state.stage_infos.ts.assign_from(info),
+            None => self.state.stage_infos.vs.clear(),
+        }
+        match pipeline.ms_info {
+            Some(ref info) => self.state.stage_infos.ms.assign_from(info),
             None => self.state.stage_infos.fs.clear(),
         }
 
@@ -937,7 +948,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 );
             }
         }
-        if pipeline.fs_lib.is_some() {
+        if pipeline.fs_info.is_some() {
             if let Some((index, sizes)) = self
                 .state
                 .make_sizes_buffer_update(naga::ShaderStage::Fragment, &mut self.temp.binding_sizes)
@@ -1111,11 +1122,20 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn draw_mesh_tasks(
         &mut self,
-        _group_count_x: u32,
-        _group_count_y: u32,
-        _group_count_z: u32,
+        group_count_x: u32,
+        group_count_y: u32,
+        group_count_z: u32,
     ) {
-        unreachable!()
+        let encoder = self.state.render.as_ref().unwrap();
+        encoder.draw_mesh_threadgroups(
+            MTLSize {
+                width: group_count_x as u64,
+                height: group_count_y as u64,
+                depth: group_count_z as u64,
+            },
+            todo!(),
+            todo!(),
+        );
     }
 
     unsafe fn draw_indirect(
