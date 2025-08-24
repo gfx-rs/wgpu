@@ -6,7 +6,6 @@ OpCapability Shader
 OpCapability Float16
 OpCapability StorageBuffer16BitAccess
 OpCapability UniformAndStorageBuffer16BitAccess
-OpCapability StorageInputOutput16
 OpCapability Float64
 OpCapability Int64
 OpExtension "SPV_KHR_16bit_storage"
