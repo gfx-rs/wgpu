@@ -148,6 +148,8 @@ impl super::CommandState {
         self.stage_infos.vs.clear();
         self.stage_infos.fs.clear();
         self.stage_infos.cs.clear();
+        self.stage_infos.ts.clear();
+        self.stage_infos.ms.clear();
         self.push_constants.clear();
     }
 

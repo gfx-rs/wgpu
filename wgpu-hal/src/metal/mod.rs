@@ -863,6 +863,11 @@ impl PipelineStageInfo {
         self.vertex_buffer_mappings.clear();
         self.vertex_buffer_mappings
             .extend_from_slice(&other.vertex_buffer_mappings);
+        self.library = Some(other.library.as_ref().unwrap().clone());
+        self.raw_wg_size = other.raw_wg_size;
+        self.work_group_memory_sizes.clear();
+        self.work_group_memory_sizes
+            .extend_from_slice(&other.work_group_memory_sizes);
     }
 }
 
