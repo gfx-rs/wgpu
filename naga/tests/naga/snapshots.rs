@@ -215,7 +215,30 @@ fn write_output_spv(
 ) {
     use naga::back::spv;
 
-    let options = params.to_options(bounds_check_policies, debug_info);
+    let mut flags = spv::WriterFlags::LABEL_VARYINGS;
+    flags.set(spv::WriterFlags::DEBUG, params.debug);
+    flags.set(
+        spv::WriterFlags::ADJUST_COORDINATE_SPACE,
+        params.adjust_coordinate_space,
+    );
+    flags.set(spv::WriterFlags::FORCE_POINT_SIZE, params.force_point_size);
+    flags.set(spv::WriterFlags::CLAMP_FRAG_DEPTH, params.clamp_frag_depth);
+
+    let options = spv::Options {
+        lang_version: (params.version.0, params.version.1),
+        flags,
+        capabilities: if params.capabilities.is_empty() {
+            None
+        } else {
+            Some(params.capabilities.clone())
+        },
+        bounds_check_policies,
+        binding_map: params.binding_map.clone(),
+        zero_initialize_workgroup_memory: spv::ZeroInitializeWorkgroupMemoryMode::Polyfill,
+        force_loop_bounding: true,
+        use_storage_input_output_16: params.use_storage_input_output_16,
+        debug_info,
+    };
 
     let (module, info) =
         naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)

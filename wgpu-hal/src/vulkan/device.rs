@@ -27,7 +27,17 @@ impl super::DeviceShared {
     ///
     /// # Safety
     ///
-    /// It must be valid to set `object`'s debug name
+    /// This method inherits the safety contract from [`vkSetDebugUtilsObjectName`]. In particular:
+    ///
+    /// - `object` must be a valid handle for one of the following:
+    ///   - An instance-level object from the same instance as this device.
+    ///   - A physical-device-level object that descends from the same physical device as this
+    ///     device.
+    ///   - A device-level object that descends from this device.
+    /// - `object` must be externally synchronized—only the calling thread should access it during
+    ///   this call.
+    ///
+    /// [`vkSetDebugUtilsObjectName`]: https://registry.khronos.org/vulkan/specs/latest/man/html/vkSetDebugUtilsObjectNameEXT.html
     pub(super) unsafe fn set_object_name(&self, object: impl vk::Handle, name: &str) {
         let Some(extension) = self.extension_fns.debug_utils.as_ref() else {
             return;
@@ -1930,13 +1940,11 @@ impl crate::Device for super::Device {
                     .map_err(|e| crate::ShaderError::Compilation(format!("{e}")))?,
                 )
             }
-            crate::ShaderInput::Msl { .. } => {
-                panic!("MSL_SHADER_PASSTHROUGH is not enabled for this backend")
-            }
-            crate::ShaderInput::Dxil { .. } | crate::ShaderInput::Hlsl { .. } => {
-                panic!("`Features::HLSL_DXIL_SHADER_PASSTHROUGH` is not enabled")
-            }
-            crate::ShaderInput::SpirV(spv) => Cow::Borrowed(spv),
+            crate::ShaderInput::SpirV(data) => Cow::Borrowed(data),
+            crate::ShaderInput::Msl { .. }
+            | crate::ShaderInput::Dxil { .. }
+            | crate::ShaderInput::Hlsl { .. }
+            | crate::ShaderInput::Glsl { .. } => unreachable!(),
         };
 
         let raw = self.create_shader_module_impl(&spv)?;
@@ -2549,7 +2557,7 @@ impl crate::Device for super::Device {
                             triangle_data.index_type(conv::map_index_format(indices.format));
                         indices.count / 3
                     } else {
-                        triangles.vertex_count
+                        triangles.vertex_count / 3
                     };
 
                     let geometry = vk::AccelerationStructureGeometryKHR::default()

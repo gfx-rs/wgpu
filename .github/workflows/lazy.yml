@@ -24,7 +24,7 @@ jobs:
     name: "Validate Shaders: Dota2"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - run: mkdir naga/data
 
@@ -50,7 +50,7 @@ jobs:
     name: "Validate Shaders: Sascha Willems Vulkan Tutorial"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download shaders
         run: cd naga && git clone https://github.com/SaschaWillems/Vulkan.git
@@ -85,7 +85,7 @@ jobs:
     name: "Validate Shaders: dneto0 spirv-samples"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download shaders
         run: |

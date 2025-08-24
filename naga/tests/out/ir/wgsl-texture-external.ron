@@ -230,6 +230,11 @@
                 ),
                 (
                     name: Some("c"),
+                    ty: 10,
+                    init: None,
+                ),
+                (
+                    name: Some("d"),
                     ty: 2,
                     init: None,
                 ),
@@ -254,7 +259,7 @@
                     clamp_to_edge: true,
                 ),
                 LocalVariable(0),
-                Literal(U32(0)),
+                Literal(I32(0)),
                 Splat(
                     size: Bi,
                     value: 6,
@@ -267,13 +272,26 @@
                     level: None,
                 ),
                 LocalVariable(1),
+                Literal(U32(0)),
+                Splat(
+                    size: Bi,
+                    value: 10,
+                ),
+                ImageLoad(
+                    image: 0,
+                    coordinate: 11,
+                    array_index: None,
+                    sample: None,
+                    level: None,
+                ),
+                LocalVariable(2),
                 ImageQuery(
                     image: 0,
                     query: Size(
                         level: None,
                     ),
                 ),
-                LocalVariable(2),
+                LocalVariable(3),
                 Load(
                     pointer: 5,
                 ),
@@ -282,26 +300,34 @@
                 ),
                 Binary(
                     op: Add,
-                    left: 12,
-                    right: 13,
+                    left: 16,
+                    right: 17,
                 ),
                 Load(
-                    pointer: 11,
+                    pointer: 13,
+                ),
+                Binary(
+                    op: Add,
+                    left: 18,
+                    right: 19,
+                ),
+                Load(
+                    pointer: 15,
                 ),
                 As(
-                    expr: 15,
+                    expr: 21,
                     kind: Float,
                     convert: Some(4),
                 ),
                 Swizzle(
                     size: Quad,
-                    vector: 16,
+                    vector: 22,
                     pattern: (X, Y, X, Y),
                 ),
                 Binary(
                     op: Add,
-                    left: 14,
-                    right: 17,
+                    left: 20,
+                    right: 23,
                 ),
             ],
             named_expressions: {
@@ -325,19 +351,27 @@
                     value: 8,
                 ),
                 Emit((
-                    start: 10,
-                    end: 11,
+                    start: 11,
+                    end: 13,
                 )),
                 Store(
-                    pointer: 11,
-                    value: 10,
+                    pointer: 13,
+                    value: 12,
                 ),
                 Emit((
-                    start: 12,
-                    end: 19,
+                    start: 14,
+                    end: 15,
+                )),
+                Store(
+                    pointer: 15,
+                    value: 14,
+                ),
+                Emit((
+                    start: 16,
+                    end: 25,
                 )),
                 Return(
-                    value: Some(18),
+                    value: Some(24),
                 ),
             ],
             diagnostic_filter_leaf: None,

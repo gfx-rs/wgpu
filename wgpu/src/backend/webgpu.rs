@@ -1862,9 +1862,43 @@ impl dispatch::DeviceInterface for WebDevice {
 
     unsafe fn create_shader_module_passthrough(
         &self,
-        _desc: &crate::ShaderModuleDescriptorPassthrough<'_>,
+        desc: &crate::ShaderModuleDescriptorPassthrough<'_>,
     ) -> dispatch::DispatchShaderModule {
-        unreachable!("No XXX_SHADER_PASSTHROUGH feature enabled for this backend")
+        let shader_module_result = if let Some(ref code) = desc.wgsl {
+            let shader_module = webgpu_sys::GpuShaderModuleDescriptor::new(code);
+            Ok((
+                shader_module,
+                WebShaderCompilationInfo::Wgsl {
+                    source: code.to_string(),
+                },
+            ))
+        } else {
+            Err(crate::CompilationInfo {
+                messages: vec![crate::CompilationMessage {
+                    message:
+                        "Passthrough shader not compiled for WGSL on WebGPU backend (WGPU error)"
+                            .to_string(),
+                    location: None,
+                    message_type: crate::CompilationMessageType::Error,
+                }],
+            })
+        };
+        let (descriptor, compilation_info) = match shader_module_result {
+            Ok(v) => v,
+            Err(compilation_info) => (
+                webgpu_sys::GpuShaderModuleDescriptor::new(""),
+                WebShaderCompilationInfo::Transformed { compilation_info },
+            ),
+        };
+        if let Some(label) = desc.label {
+            descriptor.set_label(label);
+        }
+        WebShaderModule {
+            module: self.inner.create_shader_module(&descriptor),
+            compilation_info,
+            ident: crate::cmp::Identifier::create(),
+        }
+        .into()
     }
 
     fn create_bind_group_layout(

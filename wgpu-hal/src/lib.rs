@@ -2219,7 +2219,7 @@ impl fmt::Debug for NagaShader {
 pub enum ShaderInput<'a> {
     Naga(NagaShader),
     Msl {
-        shader: String,
+        shader: &'a str,
         entry_point: String,
         num_workgroups: (u32, u32, u32),
     },
@@ -2230,6 +2230,11 @@ pub enum ShaderInput<'a> {
         num_workgroups: (u32, u32, u32),
     },
     Hlsl {
+        shader: &'a str,
+        entry_point: String,
+        num_workgroups: (u32, u32, u32),
+    },
+    Glsl {
         shader: &'a str,
         entry_point: String,
         num_workgroups: (u32, u32, u32),

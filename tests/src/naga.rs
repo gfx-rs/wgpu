@@ -119,6 +119,7 @@ pub struct SpirvOutParameters {
     #[cfg(feature = "spv-out")]
     #[serde(deserialize_with = "deserialize_binding_map")]
     pub binding_map: naga::back::spv::BindingMap,
+    pub use_storage_input_output_16: bool,
 }
 #[cfg(feature = "spv-out")]
 impl SpirvOutParameters {
@@ -149,6 +150,7 @@ impl SpirvOutParameters {
             zero_initialize_workgroup_memory: spv::ZeroInitializeWorkgroupMemoryMode::Polyfill,
             force_loop_bounding: true,
             debug_info,
+            use_storage_input_output_16: self.use_storage_input_output_16,
         }
     }
 }

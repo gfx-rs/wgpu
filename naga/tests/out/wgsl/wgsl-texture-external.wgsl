@@ -6,18 +6,22 @@ var samp: sampler;
 fn test(t: texture_external) -> vec4<f32> {
     var a: vec4<f32>;
     var b: vec4<f32>;
-    var c: vec2<u32>;
+    var c: vec4<f32>;
+    var d: vec2<u32>;
 
     let _e4 = textureSampleBaseClampToEdge(t, samp, vec2(0f));
     a = _e4;
-    let _e8 = textureLoad(t, vec2(0u));
+    let _e8 = textureLoad(t, vec2(0i));
     b = _e8;
-    let _e10 = textureDimensions(t);
-    c = _e10;
-    let _e12 = a;
-    let _e13 = b;
-    let _e15 = c;
-    return ((_e12 + _e13) + vec2<f32>(_e15).xyxy);
+    let _e12 = textureLoad(t, vec2(0u));
+    c = _e12;
+    let _e14 = textureDimensions(t);
+    d = _e14;
+    let _e16 = a;
+    let _e17 = b;
+    let _e19 = c;
+    let _e21 = d;
+    return (((_e16 + _e17) + _e19) + vec2<f32>(_e21).xyxy);
 }
 
 @fragment 

@@ -1,5 +1,35 @@
 god_mode = true
-targets = "HLSL | IR | WGSL"
+targets = "HLSL | IR | METAL | WGSL"
+
+[msl.per_entry_point_map.compute_main]
+resources = [
+    { bind_target = { external_texture = { planes = [
+        0,
+        1,
+        2,
+    ], params = 0 } }, resource_binding = { group = 0, binding = 0 } },
+    { bind_target = { sampler.Resource = 0 }, resource_binding = { group = 0, binding = 1 } },
+]
+
+[msl.per_entry_point_map.fragment_main]
+resources = [
+    { bind_target = { external_texture = { planes = [
+        0,
+        1,
+        2,
+    ], params = 0 } }, resource_binding = { group = 0, binding = 0 } },
+    { bind_target = { sampler.Resource = 0 }, resource_binding = { group = 0, binding = 1 } },
+]
+
+[msl.per_entry_point_map.vertex_main]
+resources = [
+    { bind_target = { external_texture = { planes = [
+        0,
+        1,
+        2,
+    ], params = 0 } }, resource_binding = { group = 0, binding = 0 } },
+    { bind_target = { sampler.Resource = 0 }, resource_binding = { group = 0, binding = 1 } },
+]
 
 [[hlsl.binding_map]]
 resource_binding = { group = 0, binding = 1 }
