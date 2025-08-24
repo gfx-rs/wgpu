@@ -979,8 +979,8 @@ impl Limits {
             // Literally just made this up as 256^2 or 2^16.
             // My GPU supports 2^22, and compute shaders don't have this kind of limit.
             // This very likely is never a real limiter
-            max_task_workgroup_total_count: 65536,
-            max_task_workgroups_per_dimension: 256,
+            max_task_workgroup_total_count: 1024,
+            max_task_workgroups_per_dimension: 1024,
             // llvmpipe reports 0 multiview count, which just means no multiview is allowed
             max_mesh_multiview_count: 0,
             // llvmpipe once again requires this to be 8. An RTX 3060 supports well over 1024.

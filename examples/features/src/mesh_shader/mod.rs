@@ -33,13 +33,25 @@ fn compile_glsl(
     }
 }
 
+fn compile_msl(device: &wgpu::Device, entry: &str) -> wgpu::ShaderModule {
+    unsafe {
+        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
+            entry_point: entry.to_owned(),
+            label: None,
+            msl: Some(std::borrow::Cow::Borrowed(include_str!("shader.metal"))),
+            num_workgroups: (1, 1, 1),
+            ..Default::default()
+        })
+    }
+}
+
 pub struct Example {
     pipeline: wgpu::RenderPipeline,
 }
 impl crate::framework::Example for Example {
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        _adapter: &wgpu::Adapter,
+        adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
@@ -48,11 +60,19 @@ impl crate::framework::Example for Example {
             bind_group_layouts: &[],
             push_constant_ranges: &[],
         });
-        let (ts, ms, fs) = (
-            compile_glsl(device, include_bytes!("shader.task"), "task"),
-            compile_glsl(device, include_bytes!("shader.mesh"), "mesh"),
-            compile_glsl(device, include_bytes!("shader.frag"), "frag"),
-        );
+        let (ts, ms, fs) = if adapter.get_info().backend == wgpu::Backend::Metal {
+            (
+                compile_msl(device, "taskShader"),
+                compile_msl(device, "meshShader"),
+                compile_msl(device, "fragShader"),
+            )
+        } else {
+            (
+                compile_glsl(device, include_bytes!("shader.task"), "task"),
+                compile_glsl(device, include_bytes!("shader.mesh"), "mesh"),
+                compile_glsl(device, include_bytes!("shader.frag"), "frag"),
+            )
+        };
         let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
