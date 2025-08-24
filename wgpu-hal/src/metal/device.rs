@@ -1264,7 +1264,7 @@ impl crate::Device for super::Device {
                             sized_bindings: ts.sized_bindings,
                             vertex_buffer_mappings: vec![],
                             library: Some(ts.library),
-                            raw_wg_size: Default::default(),
+                            raw_wg_size: ts.wg_size,
                             work_group_memory_sizes: vec![],
                         });
                     } else {
@@ -1291,7 +1291,7 @@ impl crate::Device for super::Device {
                             sized_bindings: ms.sized_bindings,
                             vertex_buffer_mappings: vec![],
                             library: Some(ms.library),
-                            raw_wg_size: Default::default(),
+                            raw_wg_size: ms.wg_size,
                             work_group_memory_sizes: vec![],
                         });
                     }

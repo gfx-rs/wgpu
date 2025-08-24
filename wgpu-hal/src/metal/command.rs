@@ -1146,12 +1146,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
         group_count_z: u32,
     ) {
         let encoder = self.state.render.as_ref().unwrap();
+        let size = MTLSize {
+            width: group_count_x as u64,
+            height: group_count_y as u64,
+            depth: group_count_z as u64,
+        };
         encoder.draw_mesh_threadgroups(
-            MTLSize {
-                width: group_count_x as u64,
-                height: group_count_y as u64,
-                depth: group_count_z as u64,
-            },
+            size,
             self.state.stage_infos.ts.raw_wg_size,
             self.state.stage_infos.ms.raw_wg_size,
         );
