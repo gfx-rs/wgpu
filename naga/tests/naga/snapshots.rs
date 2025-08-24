@@ -91,7 +91,7 @@ struct SpirvInParameters {
     adjust_coordinate_space: bool,
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 #[serde(default)]
 struct SpirvOutParameters {
     version: SpvOutVersion,
@@ -101,9 +101,27 @@ struct SpirvOutParameters {
     force_point_size: bool,
     clamp_frag_depth: bool,
     separate_entry_points: bool,
+    use_storage_input_output_16: bool,
     #[cfg(all(feature = "deserialize", spv_out))]
     #[serde(deserialize_with = "deserialize_binding_map")]
     binding_map: naga::back::spv::BindingMap,
+}
+
+impl Default for SpirvOutParameters {
+    fn default() -> Self {
+        Self {
+            version: SpvOutVersion::default(),
+            capabilities: naga::FastHashSet::default(),
+            debug: false,
+            adjust_coordinate_space: false,
+            force_point_size: false,
+            clamp_frag_depth: false,
+            separate_entry_points: false,
+            use_storage_input_output_16: true,
+            #[cfg(all(feature = "deserialize", spv_out))]
+            binding_map: naga::back::spv::BindingMap::default(),
+        }
+    }
 }
 
 #[derive(Default, serde::Deserialize)]
@@ -617,6 +635,7 @@ fn write_output_spv(
         binding_map: params.binding_map.clone(),
         zero_initialize_workgroup_memory: spv::ZeroInitializeWorkgroupMemoryMode::Polyfill,
         force_loop_bounding: true,
+        use_storage_input_output_16: params.use_storage_input_output_16,
         debug_info,
     };
 
