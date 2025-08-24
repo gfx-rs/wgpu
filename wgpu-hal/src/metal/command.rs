@@ -21,7 +21,6 @@ impl Default for super::CommandState {
             compute: None,
             raw_primitive_type: MTLPrimitiveType::Point,
             index: None,
-            raw_wg_size: MTLSize::new(0, 0, 0),
             stage_infos: Default::default(),
             storage_buffer_length_map: Default::default(),
             vertex_buffer_size_map: Default::default(),
@@ -936,7 +935,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             encoder.set_depth_bias(bias.constant as f32, bias.slope_scale, bias.clamp);
         }
 
-        {
+        if pipeline.vs_info.is_some() {
             if let Some((index, sizes)) = self
                 .state
                 .make_sizes_buffer_update(naga::ShaderStage::Vertex, &mut self.temp.binding_sizes)
@@ -954,6 +953,30 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 .make_sizes_buffer_update(naga::ShaderStage::Fragment, &mut self.temp.binding_sizes)
             {
                 encoder.set_fragment_bytes(
+                    index as _,
+                    (sizes.len() * WORD_SIZE) as u64,
+                    sizes.as_ptr().cast(),
+                );
+            }
+        }
+        if pipeline.ts_info.is_some() {
+            if let Some((index, sizes)) = self
+                .state
+                .make_sizes_buffer_update(naga::ShaderStage::Task, &mut self.temp.binding_sizes)
+            {
+                encoder.set_object_bytes(
+                    index as _,
+                    (sizes.len() * WORD_SIZE) as u64,
+                    sizes.as_ptr().cast(),
+                );
+            }
+        }
+        if pipeline.ms_info.is_some() {
+            if let Some((index, sizes)) = self
+                .state
+                .make_sizes_buffer_update(naga::ShaderStage::Mesh, &mut self.temp.binding_sizes)
+            {
+                encoder.set_mesh_bytes(
                     index as _,
                     (sizes.len() * WORD_SIZE) as u64,
                     sizes.as_ptr().cast(),
@@ -1133,8 +1156,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 height: group_count_y as u64,
                 depth: group_count_z as u64,
             },
-            todo!(),
-            todo!(),
+            self.state.stage_infos.ts.raw_wg_size,
+            self.state.stage_infos.ms.raw_wg_size,
         );
     }
 
@@ -1174,11 +1197,20 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn draw_mesh_tasks_indirect(
         &mut self,
-        _buffer: &<Self::A as crate::Api>::Buffer,
-        _offset: wgt::BufferAddress,
-        _draw_count: u32,
+        buffer: &<Self::A as crate::Api>::Buffer,
+        mut offset: wgt::BufferAddress,
+        draw_count: u32,
     ) {
-        unreachable!()
+        let encoder = self.state.render.as_ref().unwrap();
+        for _ in 0..draw_count {
+            encoder.draw_mesh_threadgroups_with_indirect_buffer(
+                &buffer.raw,
+                offset,
+                self.state.stage_infos.ts.raw_wg_size,
+                self.state.stage_infos.ms.raw_wg_size,
+            );
+            offset += size_of::<wgt::DispatchIndirectArgs>() as wgt::BufferAddress;
+        }
     }
 
     unsafe fn draw_indirect_count(
@@ -1210,7 +1242,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         _count_offset: wgt::BufferAddress,
         _max_count: u32,
     ) {
-        unreachable!()
+        //TODO
     }
 
     // compute
@@ -1286,7 +1318,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {
-        self.state.raw_wg_size = pipeline.work_group_size;
         self.state.stage_infos.cs.assign_from(&pipeline.cs_info);
 
         let encoder = self.state.compute.as_ref().unwrap();
@@ -1330,13 +1361,17 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 height: count[1] as u64,
                 depth: count[2] as u64,
             };
-            encoder.dispatch_thread_groups(raw_count, self.state.raw_wg_size);
+            encoder.dispatch_thread_groups(raw_count, self.state.stage_infos.cs.raw_wg_size);
         }
     }
 
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
         let encoder = self.state.compute.as_ref().unwrap();
-        encoder.dispatch_thread_groups_indirect(&buffer.raw, offset, self.state.raw_wg_size);
+        encoder.dispatch_thread_groups_indirect(
+            &buffer.raw,
+            offset,
+            self.state.stage_infos.cs.raw_wg_size,
+        );
     }
 
     unsafe fn build_acceleration_structures<'a, T>(

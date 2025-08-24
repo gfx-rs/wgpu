@@ -836,6 +836,9 @@ struct PipelineStageInfo {
 
     /// Info on all bound vertex buffers.
     vertex_buffer_mappings: Vec<naga::back::msl::VertexBufferMapping>,
+
+    /// The workgroup size for compute, task or mesh stages
+    raw_wg_size: MTLSize,
 }
 
 impl PipelineStageInfo {
@@ -881,7 +884,6 @@ impl crate::DynRenderPipeline for RenderPipeline {}
 pub struct ComputePipeline {
     raw: metal::ComputePipelineState,
     cs_info: PipelineStageInfo,
-    work_group_size: MTLSize,
     work_group_memory_sizes: Vec<u32>,
 }
 
@@ -956,7 +958,6 @@ struct CommandState {
     compute: Option<metal::ComputeCommandEncoder>,
     raw_primitive_type: MTLPrimitiveType,
     index: Option<IndexState>,
-    raw_wg_size: MTLSize,
     stage_infos: MultiStageData<PipelineStageInfo>,
 
     /// Sizes of currently bound [`wgt::BufferBindingType::Storage`] buffers.
