@@ -18,6 +18,11 @@ struct InPrimitive {
     float4 ColorMask [[flat]];
 };
 
+struct FragmentIn {
+    InVertex vert;
+    InPrimitive prim;
+};
+
 struct PayloadData {
     float4 ColorMask;
     bool Visible;
@@ -40,16 +45,16 @@ constant float4 colors[3] = {
 
 
 [[object]]
-void taskShader(uint3 tid [[thread_position_in_grid]], object_data PayloadData &outPayload [[payload]], grid_properties grid) {
+void taskShader(uint3 tid [[thread_position_in_grid]], object_data PayloadData &outPayload [[payload]], mesh_grid_properties grid) {
     outPayload.ColorMask = float4(1.0, 1.0, 0.0, 1.0);
     outPayload.Visible = true;
     grid.set_threadgroups_per_grid(uint3(3, 1, 1));
 }
 
-[[mesh, topology(triangle)]]
+[[mesh]]
 void meshShader(
     object_data PayloadData const& payload [[payload]],
-    Meshlet out,
+    Meshlet out
 )
 {
     out.set_primitive_count(1);
@@ -58,17 +63,16 @@ void meshShader(
         OutVertex vert;
         vert.Position = positions[i];
         vert.Color = colors[i] * payload.ColorMask;
-        mesh.set_vertex(i, vert);
+        out.set_vertex(i, vert);
         out.set_index(i, i);
     }
 
-    triangles[0] = uint3(0, 1, 2);
     OutPrimitive prim;
     prim.ColorMask = float4(1.0, 0.0, 0.0, 1.0);
     prim.CullPrimitive = !payload.Visible;
     out.set_primitive(0, prim);
 }
 
-fragment float4 fragShader(OutVertex inVertex [[stage_in]], OutPrimitive inPrimitive [[stage_in]]) {
-    return inVertex.Color * inPrimitive.ColorMask;
+fragment float4 fragShader(FragmentIn data [[stage_in]]) {
+    return data.vert.Color * data.prim.ColorMask;
 }
