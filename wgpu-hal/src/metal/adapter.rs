@@ -606,8 +606,6 @@ impl super::PrivateCapabilities {
         }
 
         let argument_buffers = device.argument_buffers_support();
-        let mesh_shaders = device.supports_family(MTLGPUFamily::Apple7)
-            || device.supports_family(MTLGPUFamily::Mac2);
 
         Self {
             family_check,
@@ -904,7 +902,8 @@ impl super::PrivateCapabilities {
                 && (device.supports_family(MTLGPUFamily::Apple7)
                     || device.supports_family(MTLGPUFamily::Mac2)),
             supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
-            mesh_shaders,
+            mesh_shaders: device.supports_family(MTLGPUFamily::Apple7)
+                || device.supports_family(MTLGPUFamily::Mac2),
         }
     }
 

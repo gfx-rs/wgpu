@@ -839,6 +839,9 @@ struct PipelineStageInfo {
 
     /// The workgroup size for compute, task or mesh stages
     raw_wg_size: MTLSize,
+
+    /// The workgroup memory sizes for compute task or mesh stages
+    work_group_memory_sizes: Vec<u32>,
 }
 
 impl PipelineStageInfo {
@@ -884,7 +887,6 @@ impl crate::DynRenderPipeline for RenderPipeline {}
 pub struct ComputePipeline {
     raw: metal::ComputePipelineState,
     cs_info: PipelineStageInfo,
-    work_group_memory_sizes: Vec<u32>,
 }
 
 unsafe impl Send for ComputePipeline {}

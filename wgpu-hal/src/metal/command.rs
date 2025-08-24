@@ -1335,14 +1335,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
 
         // update the threadgroup memory sizes
-        while self.state.work_group_memory_sizes.len() < pipeline.work_group_memory_sizes.len() {
+        while self.state.work_group_memory_sizes.len()
+            < pipeline.cs_info.work_group_memory_sizes.len()
+        {
             self.state.work_group_memory_sizes.push(0);
         }
         for (index, (cur_size, pipeline_size)) in self
             .state
             .work_group_memory_sizes
             .iter_mut()
-            .zip(pipeline.work_group_memory_sizes.iter())
+            .zip(pipeline.cs_info.work_group_memory_sizes.iter())
             .enumerate()
         {
             let size = pipeline_size.next_multiple_of(16);

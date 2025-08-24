@@ -1129,6 +1129,7 @@ impl crate::Device for super::Device {
                             vertex_buffer_mappings,
                             library: Some(vs.library),
                             raw_wg_size: Default::default(),
+                            work_group_memory_sizes: vec![],
                         }
                     });
                     if desc.layout.total_counters.vs.buffers + (vertex_buffers.len() as u32)
@@ -1213,6 +1214,7 @@ impl crate::Device for super::Device {
                             vertex_buffer_mappings: vec![],
                             library: Some(ts.library),
                             raw_wg_size: Default::default(),
+                            work_group_memory_sizes: vec![],
                         });
                     } else {
                         ts_info = None;
@@ -1239,6 +1241,7 @@ impl crate::Device for super::Device {
                             vertex_buffer_mappings: vec![],
                             library: Some(ms.library),
                             raw_wg_size: Default::default(),
+                            work_group_memory_sizes: vec![],
                         });
                     }
                     MetalGenericRenderPipelineDescriptor::Mesh(descriptor)
@@ -1288,6 +1291,7 @@ impl crate::Device for super::Device {
                         vertex_buffer_mappings: vec![],
                         library: Some(fs.library),
                         raw_wg_size: Default::default(),
+                        work_group_memory_sizes: vec![],
                     })
                 }
                 None => {
@@ -1482,6 +1486,7 @@ impl crate::Device for super::Device {
                 sized_bindings: cs.sized_bindings,
                 vertex_buffer_mappings: vec![],
                 raw_wg_size: cs.wg_size,
+                work_group_memory_sizes: cs.wg_memory_sizes,
             };
 
             if let Some(name) = desc.label {
@@ -1502,11 +1507,7 @@ impl crate::Device for super::Device {
 
             self.counters.compute_pipelines.add(1);
 
-            Ok(super::ComputePipeline {
-                raw,
-                cs_info,
-                work_group_memory_sizes: cs.wg_memory_sizes,
-            })
+            Ok(super::ComputePipeline { raw, cs_info })
         })
     }
 
