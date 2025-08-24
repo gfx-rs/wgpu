@@ -24,7 +24,6 @@ impl Default for super::CommandState {
             stage_infos: Default::default(),
             storage_buffer_length_map: Default::default(),
             vertex_buffer_size_map: Default::default(),
-            work_group_memory_sizes: Vec::new(),
             push_constants: Vec::new(),
             pending_timer_queries: Vec::new(),
         }
@@ -149,7 +148,6 @@ impl super::CommandState {
         self.stage_infos.vs.clear();
         self.stage_infos.fs.clear();
         self.stage_infos.cs.clear();
-        self.work_group_memory_sizes.clear();
         self.push_constants.clear();
     }
 
@@ -1335,13 +1333,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
 
         // update the threadgroup memory sizes
-        while self.state.work_group_memory_sizes.len()
+        while self.state.stage_infos.cs.work_group_memory_sizes.len()
             < pipeline.cs_info.work_group_memory_sizes.len()
         {
-            self.state.work_group_memory_sizes.push(0);
+            self.state.stage_infos.cs.work_group_memory_sizes.push(0);
         }
         for (index, (cur_size, pipeline_size)) in self
             .state
+            .stage_infos
+            .cs
             .work_group_memory_sizes
             .iter_mut()
             .zip(pipeline.cs_info.work_group_memory_sizes.iter())

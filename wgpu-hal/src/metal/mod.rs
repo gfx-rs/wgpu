@@ -850,6 +850,9 @@ impl PipelineStageInfo {
         self.sizes_slot = None;
         self.sized_bindings.clear();
         self.vertex_buffer_mappings.clear();
+        self.library = None;
+        self.work_group_memory_sizes.clear();
+        self.raw_wg_size = Default::default();
     }
 
     fn assign_from(&mut self, other: &Self) {
@@ -985,7 +988,6 @@ struct CommandState {
 
     vertex_buffer_size_map: FastHashMap<u64, wgt::BufferSize>,
 
-    work_group_memory_sizes: Vec<u32>,
     push_constants: Vec<u32>,
 
     /// Timer query that should be executed when the next pass starts.
