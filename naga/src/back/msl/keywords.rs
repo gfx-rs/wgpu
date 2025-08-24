@@ -1,6 +1,5 @@
+use crate::proc::KeywordSet;
 use crate::racy_lock::RacyLock;
-
-use hashbrown::HashSet;
 
 // MSLS - Metal Shading Language Specification:
 // https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
@@ -364,11 +363,4 @@ pub const RESERVED: &[&str] = &[
 /// significant time during [`Namer::reset`](crate::proc::Namer::reset).
 ///
 /// See <https://github.com/gfx-rs/wgpu/pull/7338> for benchmarks.
-pub static RESERVED_SET: RacyLock<HashSet<&'static str>> = RacyLock::new(|| {
-    let mut set = HashSet::default();
-    set.reserve(RESERVED.len());
-    for &word in RESERVED {
-        set.insert(word);
-    }
-    set
-});
+pub static RESERVED_SET: RacyLock<KeywordSet> = RacyLock::new(|| KeywordSet::from_iter(RESERVED));

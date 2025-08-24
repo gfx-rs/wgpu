@@ -106,6 +106,7 @@ This allows using precompiled shaders without manually checking which backend's 
 - Naga now requires that no type be larger than 1 GB. This limit may be lowered in the future; feedback on an appropriate value for the limit is welcome. By @andyleiserson in [#7950](https://github.com/gfx-rs/wgpu/pull/7950).
 - If the shader source contains control characters, Naga now replaces them with U+FFFD ("replacement character") in diagnostic output. By @andyleiserson in [#8049](https://github.com/gfx-rs/wgpu/pull/8049).
 - Add f16 IO polyfill on Vulkan backend to enable SHADER_F16 use without requiring `storageInputOutput16`. By @cryvosh in [#7884](https://github.com/gfx-rs/wgpu/pull/7884).
+- For custom Naga backend authors: `naga::proc::Namer` now accepts reserved keywords using two new dedicated types, `proc::{KeywordSet, CaseInsensitiveKeywordSet}`. By @kpreid in [#8136](https://github.com/gfx-rs/wgpu/pull/8136).
 
 #### DX12
 
