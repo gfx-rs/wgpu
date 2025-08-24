@@ -1088,7 +1088,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                 self.context.handle_error(
                     &self.error_sink,
                     cause.clone(),
-                    desc.label().as_deref(),
+                    desc.label.as_deref(),
                     "Device::create_shader_module_passthrough",
                 );
                 CompilationInfo::from(cause)

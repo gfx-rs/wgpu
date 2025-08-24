@@ -24,12 +24,12 @@ fn compile_glsl(
     let output = cmd.wait_with_output().expect("Error waiting for glslc");
     assert!(output.status.success());
     unsafe {
-        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::SpirV(
-            wgpu::ShaderModuleDescriptorSpirV {
-                label: None,
-                source: wgpu::util::make_spirv_raw(&output.stdout),
-            },
-        ))
+        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
+            entry_point: "main".into(),
+            label: None,
+            spirv: Some(wgpu::util::make_spirv_raw(&output.stdout)),
+            ..Default::default()
+        })
     }
 }
 
@@ -119,7 +119,7 @@ impl crate::framework::Example for Example {
         Default::default()
     }
     fn required_features() -> wgpu::Features {
-        wgpu::Features::EXPERIMENTAL_MESH_SHADER | wgpu::Features::SPIRV_SHADER_PASSTHROUGH
+        wgpu::Features::EXPERIMENTAL_MESH_SHADER | wgpu::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS
     }
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits::defaults().using_recommended_minimum_mesh_shader_values()

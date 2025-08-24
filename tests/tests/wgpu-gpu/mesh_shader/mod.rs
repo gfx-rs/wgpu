@@ -41,12 +41,12 @@ fn compile_glsl(
     let output = cmd.wait_with_output().expect("Error waiting for glslc");
     assert!(output.status.success());
     unsafe {
-        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::SpirV(
-            wgpu::ShaderModuleDescriptorSpirV {
-                label: None,
-                source: wgpu::util::make_spirv_raw(&output.stdout),
-            },
-        ))
+        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
+            entry_point: "main".into(),
+            label: None,
+            spirv: Some(wgpu::util::make_spirv_raw(&output.stdout)),
+            ..Default::default()
+        })
     }
 }
 
@@ -267,7 +267,7 @@ fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
             .test_features_limits()
             .features(
                 wgpu::Features::EXPERIMENTAL_MESH_SHADER
-                    | wgpu::Features::SPIRV_SHADER_PASSTHROUGH
+                    | wgpu::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS
                     | match draw_type {
                         DrawType::Standard | DrawType::Indirect => wgpu::Features::empty(),
                         DrawType::MultiIndirect => wgpu::Features::MULTI_DRAW_INDIRECT,

@@ -53,6 +53,27 @@ We have merged the acceleration structure feature into the `RayQuery` feature. T
 
 By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
+#### New `EXPERIMENTAL_PRECOMPILED_SHADERS` API
+We have added `Features::EXPERIMENTAL_PRECOMPILED_SHADERS`, replacing existing passthrough types with a unified `CreateShaderModuleDescriptorPassthrough` which allows passing multiple shader codes for different backends. By @SupaMaggie70Incorporated in [#7834](https://github.com/gfx-rs/wgpu/pull/7834)
+
+Difference for SPIR-V passthrough:
+```diff
+- device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::SpirV(
+-     wgpu::ShaderModuleDescriptorSpirV {
+-         label: None,
+-         source: spirv_code,
+-     },
+- ))
++ device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
++     entry_point: "main".into(),
++     label: None,
++     spirv: Some(spirv_code),
++     ..Default::default()
+})
+```
+This allows using precompiled shaders without manually checking which backend's code to pass, for example if you have shaders precompiled for both DXIL and SPIR-V.
+
+
 ### New Features
 
 #### General
@@ -77,11 +98,13 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 - The function you pass to `Device::on_uncaptured_error()` must now implement `Sync` in addition to `Send`, and be wrapped in `Arc` instead of `Box`.
   In exchange for this, it is no longer possible for calling `wgpu` functions while in that callback to cause a deadlock (not that we encourage you to actually do that).
   By @kpreid in [#8011](https://github.com/gfx-rs/wgpu/pull/8011).
+- The limits requested for a device must now satisfy `min_subgroup_size <= max_subgroup_size`. By @andyleiserson in [#8085](https://github.com/gfx-rs/wgpu/pull/8085).
 
 #### Naga
 
 - Naga now requires that no type be larger than 1 GB. This limit may be lowered in the future; feedback on an appropriate value for the limit is welcome. By @andyleiserson in [#7950](https://github.com/gfx-rs/wgpu/pull/7950).
 - If the shader source contains control characters, Naga now replaces them with U+FFFD ("replacement character") in diagnostic output. By @andyleiserson in [#8049](https://github.com/gfx-rs/wgpu/pull/8049).
+- Add f16 IO polyfill on Vulkan backend to enable SHADER_F16 use without requiring `storageInputOutput16`. By @cryvosh in [#7884](https://github.com/gfx-rs/wgpu/pull/7884).
 
 #### DX12
 

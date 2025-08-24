@@ -125,8 +125,16 @@ impl GPUAdapter {
             return Err(CreateDeviceError::RequiredFeaturesNotASubset);
         }
 
-        let required_limits =
-            serde_json::from_value(serde_json::to_value(descriptor.required_limits)?)?;
+        // When support for compatibility mode is added, this will need to look
+        // at whether the adapter is "compatibility-defaulting" or
+        // "core-defaulting", and choose the appropriate set of defaults.
+        //
+        // Support for compatibility mode is tracked in
+        // https://github.com/gfx-rs/wgpu/issues/8124.
+        let required_limits = serde_json::from_value::<wgpu_types::Limits>(serde_json::to_value(
+            descriptor.required_limits,
+        )?)?
+        .or_better_values_from(&wgpu_types::Limits::default());
 
         let trace = std::env::var_os("DENO_WEBGPU_TRACE")
             .map(|path| wgpu_types::Trace::Directory(std::path::PathBuf::from(path)))
@@ -196,7 +204,7 @@ pub enum CreateDeviceError {
     #[class(inherit)]
     #[error(transparent)]
     Serde(#[from] serde_json::Error),
-    #[class(type)]
+    #[class("DOMExceptionOperationError")]
     #[error(transparent)]
     Device(#[from] wgpu_core::instance::RequestDeviceError),
 }

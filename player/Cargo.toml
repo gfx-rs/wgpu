@@ -26,6 +26,7 @@ log.workspace = true
 raw-window-handle.workspace = true
 ron.workspace = true
 winit = { workspace = true, optional = true }
+bytemuck.workspace = true
 
 # Non-Webassembly
 #

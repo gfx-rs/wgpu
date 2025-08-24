@@ -5,10 +5,11 @@ var samp: sampler;
 
 fn test(t: texture_external) -> vec4<f32> {
   var a = textureSampleBaseClampToEdge(t, samp, vec2(0.0f));
-  var b = textureLoad(t, vec2(0u));
-  var c = textureDimensions(t);
+  var b = textureLoad(t, vec2(0i));
+  var c = textureLoad(t, vec2(0u));
+  var d = textureDimensions(t);
 
-  return a + b + vec2f(c).xyxy;
+  return a + b + c + vec2f(d).xyxy;
 }
 
 @fragment

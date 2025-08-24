@@ -926,29 +926,6 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const CLEAR_TEXTURE = 1 << 23;
-        /// Enables creating shader modules from Metal MSL computer shaders (unsafe).
-        ///
-        /// Metal data is not parsed or interpreted in any way
-        ///
-        /// Supported platforms:
-        /// - Metal
-        ///
-        /// This is a native only feature.
-        const MSL_SHADER_PASSTHROUGH = 1 << 24;
-        /// Enables creating shader modules from SPIR-V binary data (unsafe).
-        ///
-        /// SPIR-V data is not parsed or interpreted in any way; you can use
-        /// [`wgpu::make_spirv_raw!`] to check for alignment and magic number when converting from
-        /// raw bytes.
-        ///
-        /// Supported platforms:
-        /// - Vulkan, in case shader's requested capabilities and extensions agree with
-        /// Vulkan implementation.
-        ///
-        /// This is a native only feature.
-        ///
-        /// [`wgpu::make_spirv_raw!`]: https://docs.rs/wgpu/latest/wgpu/macro.include_spirv_raw.html
-        const SPIRV_SHADER_PASSTHROUGH = 1 << 25;
         /// Enables multiview render passes and `builtin(view_index)` in vertex shaders.
         ///
         /// Supported platforms:
@@ -1008,6 +985,7 @@ bitflags_array! {
         ///
         /// Supported platforms:
         /// - DX12
+        /// - Metal
         const EXTERNAL_TEXTURE = 1 << 31;
 
         // Shader:
@@ -1243,15 +1221,23 @@ bitflags_array! {
         /// [BlasTriangleGeometrySizeDescriptor::vertex_format]: super::BlasTriangleGeometrySizeDescriptor
         const EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS = 1 << 51;
 
-        /// Enables creating shader modules from DirectX HLSL or DXIL shaders (unsafe)
+        /// Enables creating shaders from passthrough with reflection info (unsafe)
         ///
-        /// HLSL/DXIL data is not parsed or interpreted in any way
+        /// Allows using [`Device::create_shader_module_passthrough`].
+        /// Shader code isn't parsed or interpreted in any way. It is the user's
+        /// responsibility to ensure the code and reflection (if passed) are correct.
         ///
-        /// Supported platforms:
+        /// Supported platforms
+        /// - Vulkan
         /// - DX12
+        /// - Metal
+        /// - WebGPU
         ///
-        /// This is a native only feature.
-        const HLSL_DXIL_SHADER_PASSTHROUGH = 1 << 52;
+        /// Ideally, in the future, all platforms will be supported. For more info, see
+        /// [this comment](https://github.com/gfx-rs/wgpu/issues/3103#issuecomment-2833058367).
+        ///
+        /// [`Device::create_shader_module_passthrough`]: https://docs.rs/wgpu/latest/wgpu/struct.Device.html#method.create_shader_module_passthrough
+        const EXPERIMENTAL_PASSTHROUGH_SHADERS = 1 << 52;
     }
 
     /// Features that are not guaranteed to be supported.
