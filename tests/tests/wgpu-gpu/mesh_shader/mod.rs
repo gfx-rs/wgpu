@@ -7,30 +7,15 @@ use wgpu_test::{
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
-    {
-        use vulkan::*;
-        tests.extend([
-            MESH_PIPELINE_BASIC_MESH,
-            MESH_PIPELINE_BASIC_TASK_MESH,
-            MESH_PIPELINE_BASIC_MESH_FRAG,
-            MESH_PIPELINE_BASIC_TASK_MESH_FRAG,
-            MESH_DRAW_INDIRECT,
-            MESH_MULTI_DRAW_INDIRECT,
-            MESH_MULTI_DRAW_INDIRECT_COUNT,
-        ]);
-    }
-    {
-        use dx12::*;
-        tests.extend([
-            MESH_PIPELINE_BASIC_MESH,
-            MESH_PIPELINE_BASIC_TASK_MESH,
-            MESH_PIPELINE_BASIC_MESH_FRAG,
-            MESH_PIPELINE_BASIC_TASK_MESH_FRAG,
-            MESH_DRAW_INDIRECT,
-            MESH_MULTI_DRAW_INDIRECT,
-            MESH_MULTI_DRAW_INDIRECT_COUNT,
-        ]);
-    }
+    tests.extend([
+        MESH_PIPELINE_BASIC_MESH,
+        MESH_PIPELINE_BASIC_TASK_MESH,
+        MESH_PIPELINE_BASIC_MESH_FRAG,
+        MESH_PIPELINE_BASIC_TASK_MESH_FRAG,
+        MESH_DRAW_INDIRECT,
+        MESH_MULTI_DRAW_INDIRECT,
+        MESH_MULTI_DRAW_INDIRECT_COUNT,
+    ]);
 }
 
 // Same as in mesh shader example
@@ -56,18 +41,19 @@ fn compile_glsl(
     let output = cmd.wait_with_output().expect("Error waiting for glslc");
     assert!(output.status.success());
     unsafe {
-        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::SpirV(
-            wgpu::ShaderModuleDescriptorSpirV {
-                label: None,
-                source: wgpu::util::make_spirv_raw(&output.stdout),
-            },
-        ))
+        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
+            entry_point: "main".into(),
+            label: None,
+            spirv: Some(wgpu::util::make_spirv_raw(&output.stdout)),
+            ..Default::default()
+        })
     }
 }
 
 fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::ShaderModule {
     // Each test needs its own files
-    let rand: u32 = nanorand::tls_rng().generate();
+    let mut rng = nanorand::WyRand::new();
+    let rand: u32 = rng.generate();
     let out_path = format!(
         "{}/tests/wgpu-gpu/mesh_shader/{rand}.{stage_str}.cso",
         env!("CARGO_MANIFEST_DIR")
@@ -93,33 +79,27 @@ fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::Sh
     let file = std::fs::read(&out_path).unwrap();
     std::fs::remove_file(out_path).unwrap();
     unsafe {
-        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::Dxil(
-            wgpu::ShaderModuleDescriptorDxil {
-                entry_point: entry.to_owned(),
-                label: None,
-                source: &file,
-                num_workgroups: (0, 0, 0),
-            },
-        ))
+        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
+            entry_point: entry.to_owned(),
+            label: None,
+            num_workgroups: (1, 1, 1),
+            dxil: Some(std::borrow::Cow::Owned(file)),
+            ..Default::default()
+        })
     }
 }
 
 fn get_shaders(
     device: &wgpu::Device,
+    backend: wgpu::Backend,
 ) -> (wgpu::ShaderModule, wgpu::ShaderModule, wgpu::ShaderModule) {
-    if device
-        .features()
-        .contains(wgpu::Features::SPIRV_SHADER_PASSTHROUGH)
-    {
+    if backend == wgpu::Backend::Vulkan {
         (
             compile_glsl(device, include_bytes!("basic.task"), "task"),
             compile_glsl(device, include_bytes!("basic.mesh"), "mesh"),
             compile_glsl(device, include_bytes!("basic.frag"), "frag"),
         )
-    } else if device
-        .features()
-        .contains(wgpu::Features::HLSL_DXIL_SHADER_PASSTHROUGH)
-    {
+    } else if backend == wgpu::Backend::Dx12 {
         (
             compile_hlsl(device, "Task", "as"),
             compile_hlsl(device, "Mesh", "ms"),
@@ -160,9 +140,13 @@ fn create_depth(
 }
 
 fn mesh_pipeline_build(ctx: &TestingContext, use_task: bool, use_frag: bool, draw: bool) {
+    let backend = ctx.adapter.get_info().backend;
+    if backend != wgpu::Backend::Vulkan && backend != wgpu::Backend::Dx12 {
+        return;
+    }
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
-    let (task, mesh, frag) = get_shaders(device);
+    let (task, mesh, frag) = get_shaders(device, backend);
     let task = if use_task { Some(task) } else { None };
     let frag = if use_frag { Some(frag) } else { None };
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -234,9 +218,13 @@ pub enum DrawType {
 }
 
 fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
+    let backend = ctx.adapter.get_info().backend;
+    if backend != wgpu::Backend::Vulkan && backend != wgpu::Backend::Dx12 {
+        return;
+    }
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
-    let (task, mesh, frag) = get_shaders(device);
+    let (task, mesh, frag) = get_shaders(device, backend);
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
@@ -328,16 +316,13 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
     ctx.device.poll(wgpu::PollType::Wait).unwrap();
 }
 
-fn default_gpu_test_config(
-    draw_type: DrawType,
-    passthrough_feature: wgpu::Features,
-) -> GpuTestConfiguration {
+fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
     GpuTestConfiguration::new().parameters(
         TestParameters::default()
             .test_features_limits()
             .features(
                 wgpu::Features::EXPERIMENTAL_MESH_SHADER
-                    | passthrough_feature
+                    | wgpu::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS
                     | match draw_type {
                         DrawType::Standard | DrawType::Indirect => wgpu::Features::empty(),
                         DrawType::MultiIndirect => wgpu::Features::MULTI_DRAW_INDIRECT,
@@ -348,53 +333,40 @@ fn default_gpu_test_config(
     )
 }
 
-// Mesh pipeline configs
-macro_rules! make_tests {
-    ($feature:expr) => {
-        #[gpu_test]
-        pub static MESH_PIPELINE_BASIC_MESH: GpuTestConfiguration =
-            default_gpu_test_config(DrawType::Standard, $feature).run_sync(|ctx| {
-                mesh_pipeline_build(&ctx, false, false, true);
-            });
-        #[gpu_test]
-        pub static MESH_PIPELINE_BASIC_TASK_MESH: GpuTestConfiguration =
-            default_gpu_test_config(DrawType::Standard, $feature).run_sync(|ctx| {
-                mesh_pipeline_build(&ctx, true, false, true);
-            });
-        #[gpu_test]
-        pub static MESH_PIPELINE_BASIC_MESH_FRAG: GpuTestConfiguration =
-            default_gpu_test_config(DrawType::Standard, $feature).run_sync(|ctx| {
-                mesh_pipeline_build(&ctx, false, true, true);
-            });
-        #[gpu_test]
-        pub static MESH_PIPELINE_BASIC_TASK_MESH_FRAG: GpuTestConfiguration =
-            default_gpu_test_config(DrawType::Standard, $feature).run_sync(|ctx| {
-                mesh_pipeline_build(&ctx, true, true, true);
-            });
+#[gpu_test]
+pub static MESH_PIPELINE_BASIC_MESH: GpuTestConfiguration =
+    default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
+        mesh_pipeline_build(&ctx, false, false, true);
+    });
+#[gpu_test]
+pub static MESH_PIPELINE_BASIC_TASK_MESH: GpuTestConfiguration =
+    default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
+        mesh_pipeline_build(&ctx, true, false, true);
+    });
+#[gpu_test]
+pub static MESH_PIPELINE_BASIC_MESH_FRAG: GpuTestConfiguration =
+    default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
+        mesh_pipeline_build(&ctx, false, true, true);
+    });
+#[gpu_test]
+pub static MESH_PIPELINE_BASIC_TASK_MESH_FRAG: GpuTestConfiguration =
+    default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
+        mesh_pipeline_build(&ctx, true, true, true);
+    });
 
-        // Mesh draw
-        #[gpu_test]
-        pub static MESH_DRAW_INDIRECT: GpuTestConfiguration =
-            default_gpu_test_config(DrawType::Indirect, $feature).run_sync(|ctx| {
-                mesh_draw(&ctx, DrawType::Indirect);
-            });
-        #[gpu_test]
-        pub static MESH_MULTI_DRAW_INDIRECT: GpuTestConfiguration =
-            default_gpu_test_config(DrawType::MultiIndirect, $feature).run_sync(|ctx| {
-                mesh_draw(&ctx, DrawType::MultiIndirect);
-            });
-        #[gpu_test]
-        pub static MESH_MULTI_DRAW_INDIRECT_COUNT: GpuTestConfiguration =
-            default_gpu_test_config(DrawType::MultiIndirectCount, $feature).run_sync(|ctx| {
-                mesh_draw(&ctx, DrawType::MultiIndirectCount);
-            });
-    };
-}
-mod vulkan {
-    use super::*;
-    make_tests!(wgpu::Features::SPIRV_SHADER_PASSTHROUGH);
-}
-mod dx12 {
-    use super::*;
-    make_tests!(wgpu::Features::HLSL_DXIL_SHADER_PASSTHROUGH);
-}
+// Mesh draw
+#[gpu_test]
+pub static MESH_DRAW_INDIRECT: GpuTestConfiguration = default_gpu_test_config(DrawType::Indirect)
+    .run_sync(|ctx| {
+        mesh_draw(&ctx, DrawType::Indirect);
+    });
+#[gpu_test]
+pub static MESH_MULTI_DRAW_INDIRECT: GpuTestConfiguration =
+    default_gpu_test_config(DrawType::MultiIndirect).run_sync(|ctx| {
+        mesh_draw(&ctx, DrawType::MultiIndirect);
+    });
+#[gpu_test]
+pub static MESH_MULTI_DRAW_INDIRECT_COUNT: GpuTestConfiguration =
+    default_gpu_test_config(DrawType::MultiIndirectCount).run_sync(|ctx| {
+        mesh_draw(&ctx, DrawType::MultiIndirectCount);
+    });

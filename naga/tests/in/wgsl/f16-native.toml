@@ -1,0 +1,13 @@
+targets = "SPIRV"
+god_mode = true
+
+[spv]
+debug = true
+version = [1, 1]
+use_storage_input_output_16 = true
+capabilities = ["Float16"]
+
+[bounds_check_policies]
+index = "ReadZeroSkipWrite"
+buffer = "ReadZeroSkipWrite"
+image = "ReadZeroSkipWrite"

@@ -198,6 +198,13 @@ impl PhysicalDeviceFeatures {
         info
     }
 
+    fn supports_storage_input_output_16(&self) -> bool {
+        self._16bit_storage
+            .as_ref()
+            .map(|features| features.storage_input_output16 != 0)
+            .unwrap_or(false)
+    }
+
     /// Create a `PhysicalDeviceFeatures` that can be used to create a logical
     /// device.
     ///
@@ -226,7 +233,7 @@ impl PhysicalDeviceFeatures {
     /// [`Adapter::required_device_extensions`]: super::Adapter::required_device_extensions
     fn from_extensions_and_requested_features(
         phd_capabilities: &PhysicalDeviceProperties,
-        _phd_features: &PhysicalDeviceFeatures,
+        phd_features: &PhysicalDeviceFeatures,
         enabled_extensions: &[&'static CStr],
         requested_features: wgt::Features,
         downlevel_flags: wgt::DownlevelFlags,
@@ -399,7 +406,7 @@ impl PhysicalDeviceFeatures {
                 Some(
                     vk::PhysicalDevice16BitStorageFeatures::default()
                         .storage_buffer16_bit_access(true)
-                        .storage_input_output16(true)
+                        .storage_input_output16(phd_features.supports_storage_input_output_16())
                         .uniform_and_storage_buffer16_bit_access(true),
                 )
             } else {
@@ -543,7 +550,6 @@ impl PhysicalDeviceFeatures {
     ) -> (wgt::Features, wgt::DownlevelFlags) {
         use wgt::{DownlevelFlags as Df, Features as F};
         let mut features = F::empty()
-            | F::SPIRV_SHADER_PASSTHROUGH
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::PUSH_CONSTANTS
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
@@ -555,7 +561,8 @@ impl PhysicalDeviceFeatures {
             | F::CLEAR_TEXTURE
             | F::PIPELINE_CACHE
             | F::SHADER_EARLY_DEPTH_TEST
-            | F::TEXTURE_ATOMIC;
+            | F::TEXTURE_ATOMIC
+            | F::EXPERIMENTAL_PASSTHROUGH_SHADERS;
 
         let mut dl_flags = Df::COMPUTE_SHADERS
             | Df::BASE_VERTEX
@@ -736,12 +743,13 @@ impl PhysicalDeviceFeatures {
 
         if let (Some(ref f16_i8), Some(ref bit16)) = (self.shader_float16_int8, self._16bit_storage)
         {
+            // Note `storage_input_output16` is not required, we polyfill `f16` I/O using `f32`
+            // types when this capability is not available
             features.set(
                 F::SHADER_F16,
                 f16_i8.shader_float16 != 0
                     && bit16.storage_buffer16_bit_access != 0
-                    && bit16.uniform_and_storage_buffer16_bit_access != 0
-                    && bit16.storage_input_output16 != 0,
+                    && bit16.uniform_and_storage_buffer16_bit_access != 0,
             );
         }
 
@@ -2148,6 +2156,8 @@ impl super::Adapter {
                     spv::ZeroInitializeWorkgroupMemoryMode::Polyfill
                 },
                 force_loop_bounding: true,
+                use_storage_input_output_16: features.contains(wgt::Features::SHADER_F16)
+                    && self.phd_features.supports_storage_input_output_16(),
                 // We need to build this separately for each invocation, so just default it out here
                 binding_map: BTreeMap::default(),
                 debug_info: None,

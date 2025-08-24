@@ -23,12 +23,12 @@ fn compile_glsl(
     let output = cmd.wait_with_output().expect("Error waiting for glslc");
     assert!(output.status.success());
     unsafe {
-        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::SpirV(
-            wgpu::ShaderModuleDescriptorSpirV {
-                label: None,
-                source: wgpu::util::make_spirv_raw(&output.stdout),
-            },
-        ))
+        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
+            entry_point: "main".into(),
+            label: None,
+            spirv: Some(wgpu::util::make_spirv_raw(&output.stdout)),
+            ..Default::default()
+        })
     }
 }
 fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::ShaderModule {
@@ -54,14 +54,13 @@ fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::Sh
     let file = std::fs::read(&out_path).unwrap();
     std::fs::remove_file(out_path).unwrap();
     unsafe {
-        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::Dxil(
-            wgpu::ShaderModuleDescriptorDxil {
-                entry_point: entry.to_owned(),
-                label: None,
-                source: &file,
-                num_workgroups: (0, 0, 0),
-            },
-        ))
+        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
+            entry_point: entry.to_owned(),
+            label: None,
+            num_workgroups: (1, 1, 1),
+            dxil: Some(std::borrow::Cow::Owned(file)),
+            ..Default::default()
+        })
     }
 }
 
@@ -71,25 +70,24 @@ pub struct Example {
 impl crate::framework::Example for Example {
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        _adapter: &wgpu::Adapter,
+        adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
-        let features = device.features();
-        let (ts, ms, fs) = if features.contains(wgpu::Features::SPIRV_SHADER_PASSTHROUGH) {
+        let (ts, ms, fs) = if adapter.get_info().backend == wgpu::Backend::Vulkan {
             (
                 compile_glsl(device, include_bytes!("shader.task"), "task"),
                 compile_glsl(device, include_bytes!("shader.mesh"), "mesh"),
                 compile_glsl(device, include_bytes!("shader.frag"), "frag"),
             )
-        } else if features.contains(wgpu::Features::HLSL_DXIL_SHADER_PASSTHROUGH) {
+        } else if adapter.get_info().backend == wgpu::Backend::Dx12 {
             (
                 compile_hlsl(device, "Task", "as"),
                 compile_hlsl(device, "Mesh", "ms"),
                 compile_hlsl(device, "Frag", "ps"),
             )
         } else {
-            panic!("Device must support SPIRV_SHADER_PASSTHROUGH or HLSL_DXIL_SHADER_PASSTHROUGH");
+            panic!("Example can only run on vulkan or dx12");
         };
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
@@ -162,13 +160,10 @@ impl crate::framework::Example for Example {
         Default::default()
     }
     fn required_features() -> wgpu::Features {
-        wgpu::Features::EXPERIMENTAL_MESH_SHADER
+        wgpu::Features::EXPERIMENTAL_MESH_SHADER | wgpu::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS
     }
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits::defaults().using_recommended_minimum_mesh_shader_values()
-    }
-    fn optional_features() -> wgpu::Features {
-        wgpu::Features::SPIRV_SHADER_PASSTHROUGH | wgpu::Features::HLSL_DXIL_SHADER_PASSTHROUGH
     }
     // This is because the passthrough features are optional despite at least one
     // being required

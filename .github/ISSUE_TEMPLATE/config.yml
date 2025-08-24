@@ -1,5 +1,10 @@
 blank_issues_enabled: false
 contact_links:
   - name: Question about wgpu
-    url: https://github.com/gfx-rs/wgpu/discussions/new
+    url: https://github.com/gfx-rs/wgpu/discussions/new/choose
     about: Any questions about how to use wgpu should go here.
+  - name: Security concerns
+    url: https://github.com/gfx-rs/wgpu/security
+    about: >
+      If you have found a possible vulnerability in wgpu, please read this
+      security policy for information about reporting it confidentially.
