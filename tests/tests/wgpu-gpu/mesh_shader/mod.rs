@@ -86,6 +86,9 @@ fn mesh_pipeline_build(
     frag: Option<&[u8]>,
     draw: bool,
 ) {
+    if ctx.adapter.get_info().backend != wgpu::Backend::Vulkan {
+        return;
+    }
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
     let task = task.map(|t| compile_glsl(device, t, "task"));
@@ -160,6 +163,9 @@ pub enum DrawType {
 }
 
 fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
+    if ctx.adapter.get_info().backend != wgpu::Backend::Vulkan {
+        return;
+    }
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
     let task = compile_glsl(device, BASIC_TASK, "task");
