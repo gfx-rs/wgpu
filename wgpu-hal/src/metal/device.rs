@@ -1183,7 +1183,7 @@ impl crate::Device for super::Device {
                         }
                         descriptor.set_vertex_descriptor(Some(vertex_descriptor));
                     }
-                    todo!()
+                    MetalGenericRenderPipelineDescriptor::Standard(descriptor)
                 }
                 crate::VertexProcessor::Mesh {
                     ref task_stage,
