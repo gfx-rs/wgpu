@@ -137,17 +137,21 @@ float4 test(Texture2D<float4> t_plane0_, Texture2D<float4> t_plane1_, Texture2D<
 {
     float4 a = (float4)0;
     float4 b = (float4)0;
-    uint2 c = (uint2)0;
+    float4 c = (float4)0;
+    uint2 d = (uint2)0;
 
     float4 _e4 = nagaTextureSampleBaseClampToEdge(t_plane0_, t_plane1_, t_plane2_, t_params, samp, (0.0).xx);
     a = _e4;
-    float4 _e8 = nagaTextureLoadExternal(t_plane0_, t_plane1_, t_plane2_, t_params, (0u).xx);
+    float4 _e8 = nagaTextureLoadExternal(t_plane0_, t_plane1_, t_plane2_, t_params, (int(0)).xx);
     b = _e8;
-    c = NagaExternalDimensions2D(t_plane0_, t_plane1_, t_plane2_, t_params);
-    float4 _e12 = a;
-    float4 _e13 = b;
-    uint2 _e15 = c;
-    return ((_e12 + _e13) + float2(_e15).xyxy);
+    float4 _e12 = nagaTextureLoadExternal(t_plane0_, t_plane1_, t_plane2_, t_params, (0u).xx);
+    c = _e12;
+    d = NagaExternalDimensions2D(t_plane0_, t_plane1_, t_plane2_, t_params);
+    float4 _e16 = a;
+    float4 _e17 = b;
+    float4 _e19 = c;
+    uint2 _e21 = d;
+    return (((_e16 + _e17) + _e19) + float2(_e21).xyxy);
 }
 
 float4 fragment_main() : SV_Target0

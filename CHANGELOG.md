@@ -53,11 +53,34 @@ We have merged the acceleration structure feature into the `RayQuery` feature. T
 
 By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
+#### New `EXPERIMENTAL_PRECOMPILED_SHADERS` API
+We have added `Features::EXPERIMENTAL_PRECOMPILED_SHADERS`, replacing existing passthrough types with a unified `CreateShaderModuleDescriptorPassthrough` which allows passing multiple shader codes for different backends. By @SupaMaggie70Incorporated in [#7834](https://github.com/gfx-rs/wgpu/pull/7834)
+
+Difference for SPIR-V passthrough:
+```diff
+- device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough::SpirV(
+-     wgpu::ShaderModuleDescriptorSpirV {
+-         label: None,
+-         source: spirv_code,
+-     },
+- ))
++ device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
++     entry_point: "main".into(),
++     label: None,
++     spirv: Some(spirv_code),
++     ..Default::default()
+})
+```
+This allows using precompiled shaders without manually checking which backend's code to pass, for example if you have shaders precompiled for both DXIL and SPIR-V.
+
+
 ### New Features
 
 #### General
 
 - Added mesh shader support to `wgpu`, with examples. Requires passthrough. By @SupaMaggie70Incorporated in [#7345](https://github.com/gfx-rs/wgpu/pull/7345).
+
+- Added support for external textures based on WebGPU's [`GPUExternalTexture`](https://www.w3.org/TR/webgpu/#gpuexternaltexture). These allow shaders to transparently operate on potentially multiplanar source texture data in either RGB or YCbCr formats via WGSL's `texture_external` type. This is gated behind the `Features::EXTERNAL_TEXTURE` feature, which is currently only supported on DX12. By @jamienicol in [#4386](https://github.com/gfx-rs/wgpu/issues/4386).
 
 ### Changes
 
@@ -76,11 +99,13 @@ By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
   In exchange for this, it is no longer possible for calling `wgpu` functions while in that callback to cause a deadlock (not that we encourage you to actually do that).
   By @kpreid in [#8011](https://github.com/gfx-rs/wgpu/pull/8011).
 - Make a compacted hal acceleration structure inherit a label from the base BLAS. By @Vecvec in [#8103](https://github.com/gfx-rs/wgpu/pull/8103).
+- The limits requested for a device must now satisfy `min_subgroup_size <= max_subgroup_size`. By @andyleiserson in [#8085](https://github.com/gfx-rs/wgpu/pull/8085).
 
 #### Naga
 
 - Naga now requires that no type be larger than 1 GB. This limit may be lowered in the future; feedback on an appropriate value for the limit is welcome. By @andyleiserson in [#7950](https://github.com/gfx-rs/wgpu/pull/7950).
 - If the shader source contains control characters, Naga now replaces them with U+FFFD ("replacement character") in diagnostic output. By @andyleiserson in [#8049](https://github.com/gfx-rs/wgpu/pull/8049).
+- Add f16 IO polyfill on Vulkan backend to enable SHADER_F16 use without requiring `storageInputOutput16`. By @cryvosh in [#7884](https://github.com/gfx-rs/wgpu/pull/7884).
 
 #### DX12
 

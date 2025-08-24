@@ -1094,36 +1094,27 @@ impl Global {
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
-                let data = trace.make_binary(desc.trace_binary_ext(), desc.trace_data());
-                trace.add(trace::Action::CreateShaderModule {
+                let mut file_names = Vec::new();
+                for (data, ext) in [
+                    (desc.spirv.as_ref().map(|a| bytemuck::cast_slice(a)), "spv"),
+                    (desc.dxil.as_deref(), "dxil"),
+                    (desc.hlsl.as_ref().map(|a| a.as_bytes()), "hlsl"),
+                    (desc.msl.as_ref().map(|a| a.as_bytes()), "msl"),
+                    (desc.glsl.as_ref().map(|a| a.as_bytes()), "glsl"),
+                    (desc.wgsl.as_ref().map(|a| a.as_bytes()), "wgsl"),
+                ] {
+                    if let Some(data) = data {
+                        file_names.push(trace.make_binary(ext, data));
+                    }
+                }
+                trace.add(trace::Action::CreateShaderModulePassthrough {
                     id: fid.id(),
-                    desc: match desc {
-                        pipeline::ShaderModuleDescriptorPassthrough::SpirV(inner) => {
-                            pipeline::ShaderModuleDescriptor {
-                                label: inner.label.clone(),
-                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
-                            }
-                        }
-                        pipeline::ShaderModuleDescriptorPassthrough::Msl(inner) => {
-                            pipeline::ShaderModuleDescriptor {
-                                label: inner.label.clone(),
-                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
-                            }
-                        }
-                        pipeline::ShaderModuleDescriptorPassthrough::Dxil(inner) => {
-                            pipeline::ShaderModuleDescriptor {
-                                label: inner.label.clone(),
-                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
-                            }
-                        }
-                        pipeline::ShaderModuleDescriptorPassthrough::Hlsl(inner) => {
-                            pipeline::ShaderModuleDescriptor {
-                                label: inner.label.clone(),
-                                runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),
-                            }
-                        }
-                    },
-                    data,
+                    data: file_names,
+
+                    entry_point: desc.entry_point.clone(),
+                    label: desc.label.clone(),
+                    num_workgroups: desc.num_workgroups,
+                    runtime_checks: desc.runtime_checks,
                 });
             };
 
@@ -1138,7 +1129,7 @@ impl Global {
             return (id, None);
         };
 
-        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label().to_string())));
+        let id = fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
         (id, Some(error))
     }
 
