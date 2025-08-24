@@ -11,7 +11,6 @@ struct OutPrimitive {
 };
 
 struct InVertex {
-    float4 Color [[user(locn0)]];
 };
 
 struct InPrimitive {
@@ -19,8 +18,8 @@ struct InPrimitive {
 };
 
 struct FragmentIn {
-    InVertex vert;
-    InPrimitive prim;
+    float4 Color [[user(locn0)]];
+    float4 ColorMask [[flat]] [[user(locn1)]];
 };
 
 struct PayloadData {
@@ -74,5 +73,5 @@ void meshShader(
 }
 
 fragment float4 fragShader(FragmentIn data [[stage_in]]) {
-    return data.vert.Color * data.prim.ColorMask;
+    return data.Color * data.ColorMask;
 }
