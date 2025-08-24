@@ -26,7 +26,19 @@ webgpu:api,validation,encoding,beginRenderPass:*
 webgpu:api,validation,encoding,cmds,clearBuffer:*
 webgpu:api,validation,encoding,cmds,compute_pass:set_pipeline:*
 webgpu:api,validation,encoding,cmds,compute_pass:dispatch_sizes:*
-webgpu:api,validation,encoding,cmds,copyTextureToTexture:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_with_invalid_or_destroyed_texture:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:texture,device_mismatch:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:mipmap_level:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:texture_usage:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:sample_count:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:multisampled_copy_restrictions:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:texture_format_compatibility:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:depth_stencil_copy_restrictions:*
+// Intermittently fails on dx12, https://github.com/gfx-rs/wgpu/issues/8118
+fails-if(dx12) webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_ranges:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_within_same_texture:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_aspects:*
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_ranges_with_compressed_texture_formats:*
 webgpu:api,validation,encoding,cmds,debug:debug_group_balanced:encoderType="non-pass"
 webgpu:api,validation,encoding,cmds,debug:debug_group_balanced:encoderType="compute%20pass"
 webgpu:api,validation,encoding,cmds,debug:debug_group_balanced:encoderType="render%20pass"
