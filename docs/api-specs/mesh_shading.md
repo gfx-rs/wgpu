@@ -2,8 +2,8 @@
 
 🧪Experimental🧪
 
-`wgpu` supports an experimental version of mesh shading. The extensions allow for acceleration structures to be created and built (with
-`Features::EXPERIMENTAL_MESH_SHADER` enabled) and interacted with in shaders. Currently `naga` has no support for mesh shaders beyond recognizing the additional shader stages.
+`wgpu` supports an experimental version of mesh shading when `Features::EXPERIMENTAL_MESH_SHADER` is enabled.
+Currently `naga` has no support for parsing or writing mesh shaders.
 For this reason, all shaders must be created with `Device::create_shader_module_passthrough`.
 
 **Note**: The features documented here may have major bugs in them and are expected to be subject
