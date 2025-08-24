@@ -624,7 +624,8 @@ impl<T> ops::Index<naga::ShaderStage> for MultiStageData<T> {
             naga::ShaderStage::Vertex => &self.vs,
             naga::ShaderStage::Fragment => &self.fs,
             naga::ShaderStage::Compute => &self.cs,
-            naga::ShaderStage::Task | naga::ShaderStage::Mesh => unreachable!(),
+            naga::ShaderStage::Task => &self.ts,
+            naga::ShaderStage::Mesh => &self.ms,
         }
     }
 }
