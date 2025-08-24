@@ -110,6 +110,9 @@ This allows using precompiled shaders without manually checking which backend's 
 
 - Allow disabling waiting for latency waitable object. By @marcpabst in [#7400](https://github.com/gfx-rs/wgpu/pull/7400)
 
+#### Metal
+- Add support for mesh shaders. By @SupaMaggie70Incorporated in [#8139](https://github.com/gfx-rs/wgpu/pull/8139)
+
 ### Bug Fixes
 
 #### General
