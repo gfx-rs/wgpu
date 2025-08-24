@@ -2,20 +2,20 @@ using namespace metal;
 
 struct OutVertex {
     float4 Position [[position]];
-    float4 Color;
+    float4 Color [[user(locn0)]];
 };
 
 struct OutPrimitive {
-    float4 ColorMask [[flat]];
-    bool CullPrimitive;
+    float4 ColorMask [[flat]] [[user(locn1)]];
+    bool CullPrimitive [[primitive_culled]];
 };
 
 struct InVertex {
-    float4 Color;
+    float4 Color [[user(locn0)]];
 };
 
 struct InPrimitive {
-    float4 ColorMask [[flat]];
+    float4 ColorMask [[flat]] [[user(locn1)]];
 };
 
 struct FragmentIn {
