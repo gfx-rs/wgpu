@@ -915,11 +915,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
         match pipeline.ts_info {
             Some(ref info) => self.state.stage_infos.ts.assign_from(info),
-            None => self.state.stage_infos.vs.clear(),
+            None => self.state.stage_infos.ts.clear(),
         }
         match pipeline.ms_info {
             Some(ref info) => self.state.stage_infos.ms.assign_from(info),
-            None => self.state.stage_infos.fs.clear(),
+            None => self.state.stage_infos.ms.clear(),
         }
 
         let encoder = self.state.render.as_ref().unwrap();
