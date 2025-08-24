@@ -535,7 +535,11 @@ bitflags_array! {
 
     /// Features that are not guaranteed to be supported.
     ///
-    /// These are extension features supported by wgpu when targeting native. For all features see [`Features`]
+    /// Most of these are native-only extension features supported by wgpu only when targeting
+    /// native. A few are intended to align with a proposed WebGPU extension, and one
+    /// (`EXTERNAL_TEXTURE`) controls WebGPU-specified behavior that is not optional in the
+    /// standard, but that we don't want to make a [`crate::DownlevelFlags`] until the
+    /// implementation is more complete. For all features see [`Features`].
     ///
     /// If you want to use a feature, you need to first verify that the adapter supports
     /// the feature. If the adapter does not support the feature, requesting a device with it enabled
