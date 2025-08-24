@@ -235,6 +235,7 @@ impl<'a> BindingParser<'a> {
                 lexer.expect(Token::Paren('('))?;
                 self.blend_src
                     .set(parser.general_expression(lexer, ctx)?, name_span)?;
+                lexer.skip(Token::Separator(','));
                 lexer.expect(Token::Paren(')'))?;
             }
             _ => return Err(Box::new(Error::UnknownAttribute(name_span))),
