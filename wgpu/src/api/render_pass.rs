@@ -249,7 +249,7 @@ impl RenderPass<'_> {
     /// there is no global vertex buffer. These primitives are passed to the rasterizer and
     /// essentially treated like a vertex shader output, except that the mesh shader may
     /// choose to cull specific primitives or pass per-primitive non-interpolated values
-    /// to the mesh shader. As such, each primitive is then rendered with the current
+    /// to the fragment shader. As such, each primitive is then rendered with the current
     /// pipeline's fragment shader, if present. Otherwise, [No Color Output mode] is used.
     ///
     /// [No Color Output mode]: https://www.w3.org/TR/webgpu/#no-color-output
