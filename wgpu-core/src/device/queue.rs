@@ -542,19 +542,19 @@ impl Queue {
             return Ok(());
         };
 
-        let snatch_guard = self.device.snatchable_lock.read();
-
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
         let mut staging_buffer = StagingBuffer::new(&self.device, data_size)?;
-        let mut pending_writes = self.pending_writes.lock();
 
         let staging_buffer = {
             profiling::scope!("copy");
             staging_buffer.write(data);
             staging_buffer.flush()
         };
+
+        let snatch_guard = self.device.snatchable_lock.read();
+        let mut pending_writes = self.pending_writes.lock();
 
         let result = self.write_staging_buffer_impl(
             &snatch_guard,
@@ -564,7 +564,12 @@ impl Queue {
             buffer_offset,
         );
 
+        drop(snatch_guard);
+
         pending_writes.consume(staging_buffer);
+
+        drop(pending_writes);
+
         result
     }
 
@@ -595,14 +600,14 @@ impl Queue {
 
         let buffer = buffer.get()?;
 
-        let snatch_guard = self.device.snatchable_lock.read();
-        let mut pending_writes = self.pending_writes.lock();
-
         // At this point, we have taken ownership of the staging_buffer from the
         // user. Platform validation requires that the staging buffer always
         // be freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
         let staging_buffer = staging_buffer.flush();
+
+        let snatch_guard = self.device.snatchable_lock.read();
+        let mut pending_writes = self.pending_writes.lock();
 
         let result = self.write_staging_buffer_impl(
             &snatch_guard,
@@ -612,7 +617,12 @@ impl Queue {
             buffer_offset,
         );
 
+        drop(snatch_guard);
+
         pending_writes.consume(staging_buffer);
+
+        drop(pending_writes);
+
         result
     }
 
