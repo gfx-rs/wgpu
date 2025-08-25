@@ -228,23 +228,29 @@ impl RenderPass<'_> {
 
     /// Draws using a mesh shader pipeline.
     ///
-    /// The current pipeline must be a mesh shader pipeline. 
+    /// The current pipeline must be a mesh shader pipeline.
     ///
-    /// If the current pipeline has a task shader, run it with an invocation for
+    /// If the current pipeline has a task shader, run it with an workgroup for
     /// every `vec3<u32>(i, j, k)` where `i`, `j`, and `k` are between `0` and
-    /// `group_count_x`, `group_count_y`, and `group_count_z`. Each invocation's
-    /// return value indicates a set of mesh shaders to invoke, and passes
-    /// payload values for them to consume. TODO: provide specifics on return value
+    /// `group_count_x`, `group_count_y`, and `group_count_z`. The invocation with
+    /// index zero in each group is responsible for determining the mesh shader dispatch.
+    /// Its return value indicates the number of workgroups of mesh shaders to invoke. It also
+    /// passes a payload value for them to consume. Because each task workgroup is essentially
+    /// a mesh shader draw call, mesh workgroups dispatched by different task workgroups
+    /// cannot interact in any way, and `workgroup_id` corresponds to its location in the
+    /// calling specific task shader's dispatch group.
     ///
-    /// If the current pipeline lacks a task shader, run its mesh shader with an
-    /// invocation for every `vec3<u32>(i, j, k)` where `i`, `j`, and `k` are
+    /// If the current pipeline lacks a task shader, run its mesh shader with a
+    /// workgroup for every `vec3<u32>(i, j, k)` where `i`, `j`, and `k` are
     /// between `0` and `group_count_x`, `group_count_y`, and `group_count_z`.
     ///
-    /// Each mesh shader invocation's return value produces a list of primitives
-    /// to draw. TODO: provide specifics on return value
-    ///
-    /// Each primitive is then rendered with the current pipeline's fragment
-    /// shader, if present. Otherwise, [No Color Output mode] is used.
+    /// Each mesh shader workgroup outputs a set of vertices and indices for primitives.
+    /// The indices outputted correspond to the vertices outputted by that same workgroup;
+    /// there is no global vertex buffer. These primitives are passed to the rasterizer and
+    /// essentially treated like a vertex shader output, except that the mesh shader may
+    /// choose to cull specific primitives or pass per-primitive non-interpolated values
+    /// to the mesh shader. As such, each primitive is then rendered with the current
+    /// pipeline's fragment shader, if present. Otherwise, [No Color Output mode] is used.
     ///
     /// [No Color Output mode]: https://www.w3.org/TR/webgpu/#no-color-output
     pub fn draw_mesh_tasks(&mut self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {

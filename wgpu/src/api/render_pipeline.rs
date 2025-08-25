@@ -243,31 +243,33 @@ static_assertions::assert_impl_all!(RenderPipelineDescriptor<'_>: Send, Sync);
 /// invoked with [`RenderPass::draw_mesh_tasks`], and instead of a vertex shader
 /// and a fragment shader:
 ///
-/// - [`task`] specifies an optional task shader entry point, which generates
-///   groups of mesh shaders to dispatch.
+/// - [`task`] specifies an optional task shader entry point, which determines how
+///   many groups of mesh shaders to dispatch.
 ///
 /// - [`mesh`] specifies a mesh shader entry point, which generates groups of
 ///   primitives to draw
 ///
-/// - [`fragment`] specifies as fragment shader for drawing those primitive,
+/// - [`fragment`] specifies as fragment shader for drawing those primitives,
 ///   just like in an ordinary render pipeline.
 ///
 /// The key difference is that, whereas a vertex shader is invoked on the
 /// elements of vertex buffers, the task shader gets to decide how many mesh
-/// shader invocations to make, and then each mesh shader invocation gets to
+/// shader workgroups to make, and then each mesh shader workgroup gets to
 /// decide which primitives it wants to generate, and what their vertex
 /// attributes are. Task and mesh shaders can use whatever they please as
-/// inputs, like a compute shader. (Fancy [vertex formats] are up to the mesh
-/// shader to implement itself.)
+/// inputs, like a compute shader. However, they cannot use specialized vertex
+/// or index buffers.
 ///
 /// A mesh pipeline is invoked by [`RenderPass::draw_mesh_tasks`], which looks
 /// like a compute shader dispatch with [`ComputePass::dispatch_workgroups`]:
 /// you pass `x`, `y`, and `z` values indicating the number of task shaders to
-/// invoke in parallel. TODO: what is the output of a task shader?
+/// invoke in parallel. The output value of the first thread in a task shader
+/// workgroup determines how many mesh workgroups should be dispatched from there.
+/// Those mesh workgroups also get a special payload passed from the task shader.
 ///
 /// If the task shader is omitted, then the (`x`, `y`, `z`) parameters to
 /// `draw_mesh_tasks` are used to decide how many invocations of the mesh shader
-/// to invoke directly.
+/// to invoke directly, without a task payload.
 ///
 /// [vertex formats]: wgpu_types::VertexFormat
 /// [`task`]: Self::task
