@@ -103,7 +103,7 @@ bytemuck = { version = "1.22", features = [
     "extern_crate_alloc",
     "min_const_generics",
 ] }
-cargo_metadata = "0.21"
+cargo_metadata = "0.22"
 cfg_aliases = "0.2.1"
 cfg-if = "1"
 criterion = "0.7"
@@ -176,7 +176,7 @@ ron = "0.10"
 # see discussion here (including with some other alternatives): https://github.com/gfx-rs/wgpu/issues/6999
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
 rustc-hash = { version = "1.1", default-features = false }
-serde_json = "1.0.118"
+serde_json = "1.0.143"
 serde = { version = "1.0.219", default-features = false }
 shell-words = "1"
 smallvec = "1.13.1"
