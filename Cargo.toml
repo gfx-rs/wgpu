@@ -187,7 +187,7 @@ syn = "2.0.98"
 toml = "0.9.0"
 trybuild = "1"
 tracy-client = "0.18"
-thiserror = { version = "2.0.11", default-features = false }
+thiserror = { version = "2.0.12", default-features = false }
 unicode-ident = "1.0.5"
 walkdir = "2.3"
 winit = { version = "0.29", features = ["android-native-activity"] }
