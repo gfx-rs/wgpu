@@ -11,6 +11,31 @@ to breaking changes, suggestions for the API exposed by this should be posted on
 
 ***This is not*** a thorough explanation of mesh shading and how it works. Those wishing to understand mesh shading more broadly should look elsewhere first.
 
+## Mesh shaders overview
+
+### What are mesh shaders
+Mesh shaders are a new kind of rasterization pipeline intended to address some of the shortfalls with the vertex shader pipeline. The core idea of mesh shaders is that the GPU decides how to render the many small parts of a scene instead of the CPU issuing a draw call for every small part or issuing an inefficient monolithic draw call for a large part of the scene.
+
+Mesh shaders are specifically designed to be used with **meshlet rendering**, a technique where every object is split into many subobjects called meshlets that are each rendered with their own parameters. With the standard vertex pipeline, each draw call specifies an exact number of primitives to render and the same parameters for all vertex shaders on an entire object (or even multiple objects). This doesn't leave room for different LODs for different parts of an object, for example a closer part having more detail, nor does it allow culling smaller sections (or primitives) of objects. With mesh shaders, each task workgroup might get assigned to a single object. It can then analyze the different meshlets(sections) of that object, determine which are visible and should actually be rendered, and for those meshlets determine what LOD to use based on the distance from the camera. It can then dispatch a mesh workgroup for each meshlet, with each mesh workgroup then reading the data for that specific LOD of its meshlet, determining which and how many vertices and primitives to output, determining which remaining primitives need to be culled, and passing the resulting primitives to the rasterizer.
+
+Mesh shaders are most effective in scenes with many polygons. They can allow skipping processing of entire groups of primitives that are facing away from the camera or otherwise occluded, which reduces the number of primitives that need to be processed by more than half in most cases, and they can reduce the number of primitives that need to be processed for more distant objects. Scenes that are not bottlenecked by geometry (perhaps instead by fragment processing or post processing) will not see much benefit from using them.
+
+Mesh shaders were first shown off in [NVIDIA's asteroids demo](https://www.youtube.com/watch?v=CRfZYJ_sk5E). Now, they form the basis for [Unreal Engine's Nanite](https://www.unrealengine.com/en-US/blog/unreal-engine-5-is-now-available-in-preview#Nanite).
+
+### Mesh shader pipeline
+A mesh shader pipeline is just like a standard render pipeline, except that the vertex shader stage is replaced by a mesh shader stage (and optionally a task shader stage). This functions as follows:
+
+* If there is a task shader stage, task shader workgroups are invoked first, with the number of workgroups determined by the draw call. Each task shader workgroup outputs a workgroup size and a task payload. A dispatch group of mesh shaders with the given workgroup size is then invoked with the task payload as a parameter.
+* Otherwise, a single dispatch group of mesh shaders with workgroup size given by the draw call is invoked.
+* Each mesh shader dispatch group functions exactly as a compute dispatch group, except that it has special outputs and may take a task payload as input. Mesh dispatch groups invoked by different task shader workgroups cannot interact.
+* Each workgroup within the mesh shader dispatch group can output vertices and primitives
+  * It determines how many vertices and primitives to write and then sets those vertices and primitives.
+  * Primitives have an indices field which determines the indices of the vertices of that primitive. The indices are based on the output of that mesh shader workgroup only; there is no sharing of vertices across workgroups (no vertex or index buffer equivalents).
+  * Primitives can then be culled by setting the appropriate builtin
+  * Each vertex output functions exactly as the output from a vertex shader would
+  * There can also be per-primitive outputs passed to fragment shaders; these are not interpolated or based on the vertices of the primitive in any way.
+* Once all of the primitives are written, those that weren't culled are are rasterized. From this point forward, the only difference from a standard render pipeline is that there may be some per-primitive inputs passed to fragment shaders.
+
 ## `wgpu` API
 
 ### New `wgpu` functions
@@ -101,7 +126,7 @@ Mesh shader primitive outputs must also specify exactly one of `@builtin(triangl
 
 Additionally, the `@location` attributes from the vertex and primitive outputs can't overlap.
 
-Before setting any vertices or indices, or exiting, the mesh shader must call `setMeshOutputs(numVertices: u32, numIndices: u32)`, which declares the number of vertices and indices that will be written to. These must be less than the corresponding maximums set in `@vertex_output` and `@primitive_output`. The mesh shader must then write to exactly these numbers of vertices and primitives. A varying member with `@per_primitive` cannot be used in function interfaces except as the primitive output for mesh shaders or as input for fragment shaders.
+Before exiting, the mesh shader must call `setMeshOutputs(numVertices: u32, numIndices: u32)`, which declares the number of vertices and indices that will be written to. These must be less than the corresponding maximums set in `@vertex_output` and `@primitive_output`. The mesh shader must then write to exactly this range of vertices and primitives. A varying member with `@per_primitive` cannot be used in function interfaces except as a primitive output for mesh shaders or as input for fragment shaders.
 
 The mesh shader can write to vertices using the `setVertex(idx: u32, vertex: VertexOutput)` where `VertexOutput` is replaced with the vertex type declared in `@vertex_output`, and `idx` is the index of the vertex to write. Similarly, the mesh shader can write to vertices using `setPrimitive(idx: u32, primitive: PrimitiveOutput)`. These can be written to multiple times, however unsynchronized writes are undefined behavior. The primitives and indices are shared across the entire mesh shader workgroup.
 
