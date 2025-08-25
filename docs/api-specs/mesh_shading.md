@@ -9,8 +9,6 @@ For this reason, all shaders must be created with `Device::create_shader_module_
 **Note**: The features documented here may have major bugs in them and are expected to be subject
 to breaking changes, suggestions for the API exposed by this should be posted on [the mesh-shading issue](https://github.com/gfx-rs/wgpu/issues/7197).
 
-***This is not*** a thorough explanation of mesh shading and how it works. Those wishing to understand mesh shading more broadly should look elsewhere first.
-
 ## Mesh shaders overview
 
 ### What are mesh shaders
