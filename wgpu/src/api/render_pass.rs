@@ -226,7 +226,27 @@ impl RenderPass<'_> {
         self.inner.draw_indexed(indices, base_vertex, instances);
     }
 
-    /// Draws using a mesh shader pipeline
+    /// Draws using a mesh shader pipeline.
+    ///
+    /// The current pipeline must be a mesh shader pipeline. 
+    ///
+    /// If the current pipeline has a task shader, run it with an invocation for
+    /// every `vec3<u32>(i, j, k)` where `i`, `j`, and `k` are between `0` and
+    /// `group_count_x`, `group_count_y`, and `group_count_z`. Each invocation's
+    /// return value indicates a set of mesh shaders to invoke, and passes
+    /// payload values for them to consume. TODO: provide specifics on return value
+    ///
+    /// If the current pipeline lacks a task shader, run its mesh shader with an
+    /// invocation for every `vec3<u32>(i, j, k)` where `i`, `j`, and `k` are
+    /// between `0` and `group_count_x`, `group_count_y`, and `group_count_z`.
+    ///
+    /// Each mesh shader invocation's return value produces a list of primitives
+    /// to draw. TODO: provide specifics on return value
+    ///
+    /// Each primitive is then rendered with the current pipeline's fragment
+    /// shader, if present. Otherwise, [No Color Output mode] is used.
+    ///
+    /// [No Color Output mode]: https://www.w3.org/TR/webgpu/#no-color-output
     pub fn draw_mesh_tasks(&mut self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {
         self.inner
             .draw_mesh_tasks(group_count_x, group_count_y, group_count_z);

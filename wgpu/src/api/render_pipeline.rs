@@ -238,7 +238,41 @@ static_assertions::assert_impl_all!(RenderPipelineDescriptor<'_>: Send, Sync);
 
 /// Describes a mesh shader (graphics) pipeline.
 ///
-/// For use with [`Device::create_mesh_pipeline`].
+/// For use with [`Device::create_mesh_pipeline`]. A mesh pipeline is very much
+/// like a render pipeline, except that instead of [`RenderPass::draw`] it is
+/// invoked with [`RenderPass::draw_mesh_tasks`], and instead of a vertex shader
+/// and a fragment shader:
+///
+/// - [`task`] specifies an optional task shader entry point, which generates
+///   groups of mesh shaders to dispatch.
+///
+/// - [`mesh`] specifies a mesh shader entry point, which generates groups of
+///   primitives to draw
+///
+/// - [`fragment`] specifies as fragment shader for drawing those primitive,
+///   just like in an ordinary render pipeline.
+///
+/// The key difference is that, whereas a vertex shader is invoked on the
+/// elements of vertex buffers, the task shader gets to decide how many mesh
+/// shader invocations to make, and then each mesh shader invocation gets to
+/// decide which primitives it wants to generate, and what their vertex
+/// attributes are. Task and mesh shaders can use whatever they please as
+/// inputs, like a compute shader. (Fancy [vertex formats] are up to the mesh
+/// shader to implement itself.)
+///
+/// A mesh pipeline is invoked by [`RenderPass::draw_mesh_tasks`], which looks
+/// like a compute shader dispatch with [`ComputePass::dispatch_workgroups`]:
+/// you pass `x`, `y`, and `z` values indicating the number of task shaders to
+/// invoke in parallel. TODO: what is the output of a task shader?
+///
+/// If the task shader is omitted, then the (`x`, `y`, `z`) parameters to
+/// `draw_mesh_tasks` are used to decide how many invocations of the mesh shader
+/// to invoke directly.
+///
+/// [vertex formats]: wgpu_types::VertexFormat
+/// [`task`]: Self::task
+/// [`mesh`]: Self::mesh
+/// [`fragment`]: Self::fragment
 #[derive(Clone, Debug)]
 pub struct MeshPipelineDescriptor<'a> {
     /// Debug label of the pipeline. This will show up in graphics debuggers for easy identification.
@@ -263,7 +297,7 @@ pub struct MeshPipelineDescriptor<'a> {
     ///
     /// [default layout]: https://www.w3.org/TR/webgpu/#default-pipeline-layout
     pub layout: Option<&'a PipelineLayout>,
-    /// The compiled task stage, its entry point, and the color targets.
+    /// The compiled task stage and its entry point.
     pub task: Option<TaskState<'a>>,
     /// The compiled mesh stage and its entry point
     pub mesh: MeshState<'a>,
