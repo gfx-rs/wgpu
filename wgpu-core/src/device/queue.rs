@@ -20,10 +20,10 @@ use crate::{
     api_log,
     command::{
         extract_texture_selector, validate_linear_texture_data, validate_texture_buffer_copy,
-        validate_texture_copy_range, ClearError, CommandAllocator, CommandBuffer, CommandEncoder,
-        CommandEncoderError, CopySide, TexelCopyTextureInfo, TransferError,
+        validate_texture_copy_dst_format, validate_texture_copy_range, ClearError,
+        CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopySide,
+        TexelCopyTextureInfo, TransferError,
     },
-    conv,
     device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
     global::Global,
@@ -757,13 +757,7 @@ impl Queue {
 
         let (selector, dst_base) = extract_texture_selector(&destination, size, &dst)?;
 
-        if !conv::is_valid_copy_dst_texture_format(dst.desc.format, destination.aspect) {
-            return Err(TransferError::CopyToForbiddenTextureFormat {
-                format: dst.desc.format,
-                aspect: destination.aspect,
-            }
-            .into());
-        }
+        validate_texture_copy_dst_format(dst.desc.format, destination.aspect)?;
 
         validate_texture_buffer_copy(
             &destination,
@@ -961,6 +955,8 @@ impl Queue {
         destination: wgt::CopyExternalImageDestInfo<Fallible<Texture>>,
         size: wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
+        use crate::conv;
+
         profiling::scope!("Queue::copy_external_image_to_texture");
 
         self.device.check_is_valid()?;
