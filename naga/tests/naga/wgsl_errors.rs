@@ -1083,7 +1083,7 @@ macro_rules! check_extension_validation {
         // Second check, for the expected validation error when the capability is not present
         let error = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), !caps)
             .validate(&module)
-            .map_err(|e| e.into_inner()); // TODO: Add tests for spans, too?
+            .map_err(|e| e.into_inner()); // TODO(https://github.com/gfx-rs/wgpu/issues/8153): Add tests for spans
         #[allow(clippy::redundant_pattern_matching)]
         if !matches!(&error, $val_err_pat) {
             eprintln!(
@@ -1163,7 +1163,7 @@ fn validation_error(
     };
     naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
         .validate(&module)
-        .map_err(|e| e.into_inner()) // TODO: Add tests for spans, too?
+        .map_err(|e| e.into_inner()) // TODO(https://github.com/gfx-rs/wgpu/issues/8153): Add tests for spans
 }
 
 #[test]
