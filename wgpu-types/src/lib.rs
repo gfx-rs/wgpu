@@ -4555,6 +4555,12 @@ pub enum PollError {
         error("The requested Wait timed out before the submission was completed.")
     )]
     Timeout,
+    /// The requested Wait was given a wrong submission index.
+    #[cfg_attr(
+        feature = "std",
+        error("Tried to wait using a submission index ({0}) that has not been returned by a successful submission (last successful submission: {1})")
+    )]
+    WrongSubmissionIndex(u64, u64),
 }
 
 /// Status of device poll operation.
