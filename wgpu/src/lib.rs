@@ -45,7 +45,10 @@
 )]
 #![allow(
     // We need to investiagate these.
-    clippy::large_enum_variant
+    clippy::large_enum_variant,
+    // These degrade readability significantly.
+    clippy::bool_assert_comparison,
+    clippy::bool_comparison,
 )]
 // NOTE: Keep this in sync with `wgpu-core`.
 #![cfg_attr(not(send_sync), allow(clippy::arc_with_non_send_sync))]

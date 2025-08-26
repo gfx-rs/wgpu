@@ -100,6 +100,7 @@ This allows using precompiled shaders without manually checking which backend's 
   By @kpreid in [#8011](https://github.com/gfx-rs/wgpu/pull/8011).
 - Make a compacted hal acceleration structure inherit a label from the base BLAS. By @Vecvec in [#8103](https://github.com/gfx-rs/wgpu/pull/8103).
 - The limits requested for a device must now satisfy `min_subgroup_size <= max_subgroup_size`. By @andyleiserson in [#8085](https://github.com/gfx-rs/wgpu/pull/8085).
+- Improve errors when buffer mapping is done incorrectly. Allow aliasing immutable [`BufferViews`]. By @cwfitzgerald in [#8150](https://github.com/gfx-rs/wgpu/pull/8150).
 
 #### Naga
 
