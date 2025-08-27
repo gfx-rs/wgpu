@@ -384,7 +384,8 @@ impl super::Adapter {
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES
-            | wgt::DownlevelFlags::COMPARISON_SAMPLERS;
+            | wgt::DownlevelFlags::COMPARISON_SAMPLERS
+            | wgt::DownlevelFlags::SHADER_F16_IN_F32;
         downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, supports_compute);
         downlevel_flags.set(
             wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,

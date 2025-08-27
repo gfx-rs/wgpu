@@ -577,7 +577,8 @@ impl PhysicalDeviceFeatures {
             | Df::INDIRECT_EXECUTION
             | Df::VIEW_FORMATS
             | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
-            | Df::NONBLOCKING_QUERY_RESOLVE;
+            | Df::NONBLOCKING_QUERY_RESOLVE
+            | Df::SHADER_F16_IN_F32;
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,
@@ -1696,9 +1697,9 @@ impl super::Instance {
             );
         };
 
-        if info.driver_info.contains("Mesa ") {
+        if info.driver == "llvmpipe" {
             // The `F16_IN_F32` instructions do not normally require native `F16` support, but on
-            // Mesa, they do.
+            // llvmpipe, they do.
             downlevel_flags.set(
                 wgt::DownlevelFlags::SHADER_F16_IN_F32,
                 available_features.contains(wgt::Features::SHADER_F16),
