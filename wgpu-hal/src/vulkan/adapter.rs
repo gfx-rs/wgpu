@@ -266,9 +266,7 @@ impl PhysicalDeviceFeatures {
                     requested_features.contains(wgt::Features::INDIRECT_FIRST_INSTANCE),
                 )
                 //.dual_src_blend(requested_features.contains(wgt::Features::DUAL_SRC_BLENDING))
-                .multi_draw_indirect(
-                    requested_features.contains(wgt::Features::MULTI_DRAW_INDIRECT),
-                )
+                .multi_draw_indirect(phd_features.core.multi_draw_indirect != 0)
                 .fill_mode_non_solid(requested_features.intersects(
                     wgt::Features::POLYGON_MODE_LINE | wgt::Features::POLYGON_MODE_POINT,
                 ))
@@ -602,7 +600,6 @@ impl PhysicalDeviceFeatures {
             self.core.draw_indirect_first_instance != 0,
         );
         //if self.core.dual_src_blend != 0
-        features.set(F::MULTI_DRAW_INDIRECT, self.core.multi_draw_indirect != 0);
         features.set(F::POLYGON_MODE_LINE, self.core.fill_mode_non_solid != 0);
         features.set(F::POLYGON_MODE_POINT, self.core.fill_mode_non_solid != 0);
         //if self.core.depth_bounds != 0 {
@@ -1775,6 +1772,7 @@ impl super::Instance {
                 vk::ImageTiling::OPTIMAL,
                 depth_stencil_required_flags(),
             ),
+            multi_draw_indirect: phd_features.core.multi_draw_indirect != 0,
             non_coherent_map_mask: phd_capabilities.properties.limits.non_coherent_atom_size - 1,
             can_present: true,
             //TODO: make configurable

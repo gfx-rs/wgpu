@@ -74,6 +74,16 @@ Difference for SPIR-V passthrough:
 This allows using precompiled shaders without manually checking which backend's code to pass, for example if you have shaders precompiled for both DXIL and SPIR-V.
 
 
+#### Multi-draw indirect is now unconditionally supported when indirect draws are supported
+
+We have removed `Features::MULTI_DRAW_INDIRECT` as it was unconditionally available on all platforms. 
+`RenderPass::multi_draw_indirect` is now available if the device supports downlevel flag `DownlevelFlags::INDIRECT_EXECUTION`.
+
+If you are using spirv-passthrough with multi-draw indirect and `gl_DrawID`, you can know if `MULTI_DRAW_INDIRECT` is being emulated
+by if the `Feature::MULTI_DRAW_INDIRECT_COUNT` feature is available on the device, this feature cannot be emulated efficicently.
+
+By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
+
 ### New Features
 
 #### General

@@ -784,28 +784,11 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const PARTIALLY_BOUND_BINDING_ARRAY = 1 << 13;
-        /// Allows the user to call [`RenderPass::multi_draw_indirect`] and [`RenderPass::multi_draw_indexed_indirect`].
-        ///
-        /// Allows multiple indirect calls to be dispatched from a single buffer.
-        ///
-        /// Natively Supported Platforms:
-        /// - DX12
-        /// - Vulkan
-        ///
-        /// Emulated Platforms:
-        /// - Metal
-        /// - OpenGL
-        /// - WebGPU
-        ///
-        /// Emulation is preformed by looping over the individual indirect draw calls in the backend. This is still significantly
-        /// faster than enulating it yourself, as wgpu only does draw call validation once.
-        ///
-        /// [`RenderPass::multi_draw_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indirect
-        /// [`RenderPass::multi_draw_indexed_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indexed_indirect
-        const MULTI_DRAW_INDIRECT = 1 << 14;
         /// Allows the user to call [`RenderPass::multi_draw_indirect_count`] and [`RenderPass::multi_draw_indexed_indirect_count`].
         ///
-        /// This allows the use of a buffer containing the actual number of draw calls.
+        /// This allows the use of a buffer containing the actual number of draw calls. This feature being present also implies
+        /// that all calls to [`RenderPass::multi_draw_indirect`] and [`RenderPass::multi_draw_indexed_indirect`] are not being emulated
+        /// with a series of `draw_indirect` calls.
         ///
         /// Supported platforms:
         /// - DX12
@@ -813,6 +796,8 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         ///
+        /// [`RenderPass::multi_draw_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indirect
+        /// [`RenderPass::multi_draw_indexed_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indexed_indirect
         /// [`RenderPass::multi_draw_indirect_count`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indirect_count
         /// [`RenderPass::multi_draw_indexed_indirect_count`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indexed_indirect_count
         const MULTI_DRAW_INDIRECT_COUNT = 1 << 15;
