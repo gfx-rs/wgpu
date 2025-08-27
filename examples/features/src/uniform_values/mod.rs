@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 // We won't bring StorageBuffer into scope as that might be too easy to confuse
-// with actual GPU-allocated WGPU storage buffers.
+// with actual GPU-allocated wgpu storage buffers.
 use encase::ShaderType;
 use winit::{
     event::{Event, KeyEvent, WindowEvent},

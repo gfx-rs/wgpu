@@ -1190,7 +1190,7 @@ impl DownlevelCapabilities {
 bitflags::bitflags! {
     /// Binary flags listing features that may or may not be present on downlevel adapters.
     ///
-    /// A downlevel adapter is a GPU adapter that WGPU supports, but with potentially limited
+    /// A downlevel adapter is a GPU adapter that wgpu supports, but with potentially limited
     /// features, due to the lack of hardware feature support.
     ///
     /// Flags that are **not** present for a downlevel adapter or device usually indicates

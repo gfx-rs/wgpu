@@ -1876,7 +1876,7 @@ impl dispatch::DeviceInterface for WebDevice {
             Err(crate::CompilationInfo {
                 messages: vec![crate::CompilationMessage {
                     message:
-                        "Passthrough shader not compiled for WGSL on WebGPU backend (WGPU error)"
+                        "Passthrough shader not compiled for WGSL on WebGPU backend (wgpu error)"
                             .to_string(),
                     location: None,
                     message_type: crate::CompilationMessageType::Error,
