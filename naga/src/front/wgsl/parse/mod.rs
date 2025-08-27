@@ -2248,357 +2248,339 @@ impl Parser {
                 _ => {}
             }
 
-            match lexer.next() {
+            let kind = match lexer.next() {
                 (Token::Separator(';'), _) => {
                     this.pop_rule_span(lexer);
+                    return Ok(());
                 }
-                token @ (Token::Word(word), span) => {
-                    let kind = match word {
-                        "let" => {
-                            let (name, given_ty) = this.optionally_typed_ident(lexer, ctx)?;
+                (Token::Word("let"), _) => {
+                    let (name, given_ty) = this.optionally_typed_ident(lexer, ctx)?;
 
-                            lexer.expect(Token::Operation('='))?;
-                            let expr_id = this.expression(lexer, ctx)?;
-                            lexer.expect(Token::Separator(';'))?;
+                    lexer.expect(Token::Operation('='))?;
+                    let expr_id = this.expression(lexer, ctx)?;
+                    lexer.expect(Token::Separator(';'))?;
 
-                            let handle = ctx.declare_local(name)?;
-                            ast::StatementKind::LocalDecl(ast::LocalDecl::Let(ast::Let {
-                                name,
-                                ty: given_ty,
-                                init: expr_id,
-                                handle,
-                            }))
+                    let handle = ctx.declare_local(name)?;
+                    ast::StatementKind::LocalDecl(ast::LocalDecl::Let(ast::Let {
+                        name,
+                        ty: given_ty,
+                        init: expr_id,
+                        handle,
+                    }))
+                }
+                (Token::Word("const"), _) => {
+                    let (name, given_ty) = this.optionally_typed_ident(lexer, ctx)?;
+
+                    lexer.expect(Token::Operation('='))?;
+                    let expr_id = this.expression(lexer, ctx)?;
+                    lexer.expect(Token::Separator(';'))?;
+
+                    let handle = ctx.declare_local(name)?;
+                    ast::StatementKind::LocalDecl(ast::LocalDecl::Const(ast::LocalConst {
+                        name,
+                        ty: given_ty,
+                        init: expr_id,
+                        handle,
+                    }))
+                }
+                (Token::Word("var"), _) => {
+                    if lexer.skip(Token::Paren('<')) {
+                        let (class_str, span) = lexer.next_ident_with_span()?;
+                        if class_str != "function" {
+                            return Err(Box::new(Error::InvalidLocalVariableAddressSpace(span)));
                         }
-                        "const" => {
-                            let (name, given_ty) = this.optionally_typed_ident(lexer, ctx)?;
+                        lexer.expect(Token::Paren('>'))?;
+                    }
 
-                            lexer.expect(Token::Operation('='))?;
-                            let expr_id = this.expression(lexer, ctx)?;
-                            lexer.expect(Token::Separator(';'))?;
+                    let (name, ty) = this.optionally_typed_ident(lexer, ctx)?;
 
-                            let handle = ctx.declare_local(name)?;
-                            ast::StatementKind::LocalDecl(ast::LocalDecl::Const(ast::LocalConst {
-                                name,
-                                ty: given_ty,
-                                init: expr_id,
-                                handle,
-                            }))
+                    let init = if lexer.skip(Token::Operation('=')) {
+                        let init = this.expression(lexer, ctx)?;
+                        Some(init)
+                    } else {
+                        None
+                    };
+
+                    lexer.expect(Token::Separator(';'))?;
+
+                    let handle = ctx.declare_local(name)?;
+                    ast::StatementKind::LocalDecl(ast::LocalDecl::Var(ast::LocalVariable {
+                        name,
+                        ty,
+                        init,
+                        handle,
+                    }))
+                }
+                (Token::Word("return"), _) => {
+                    let value = if lexer.peek().0 != Token::Separator(';') {
+                        let handle = this.expression(lexer, ctx)?;
+                        Some(handle)
+                    } else {
+                        None
+                    };
+                    lexer.expect(Token::Separator(';'))?;
+                    ast::StatementKind::Return { value }
+                }
+                (Token::Word("if"), _) => {
+                    let condition = this.expression(lexer, ctx)?;
+
+                    let accept = this.block(lexer, ctx, brace_nesting_level)?.0;
+
+                    let mut elsif_stack = Vec::new();
+                    let mut elseif_span_start = lexer.start_byte_offset();
+                    let mut reject = loop {
+                        if !lexer.skip(Token::Word("else")) {
+                            break ast::Block::default();
                         }
-                        "var" => {
-                            if lexer.skip(Token::Paren('<')) {
-                                let (class_str, span) = lexer.next_ident_with_span()?;
-                                if class_str != "function" {
-                                    return Err(Box::new(Error::InvalidLocalVariableAddressSpace(
-                                        span,
-                                    )));
-                                }
-                                lexer.expect(Token::Paren('>'))?;
-                            }
 
-                            let (name, ty) = this.optionally_typed_ident(lexer, ctx)?;
-
-                            let init = if lexer.skip(Token::Operation('=')) {
-                                let init = this.expression(lexer, ctx)?;
-                                Some(init)
-                            } else {
-                                None
-                            };
-
-                            lexer.expect(Token::Separator(';'))?;
-
-                            let handle = ctx.declare_local(name)?;
-                            ast::StatementKind::LocalDecl(ast::LocalDecl::Var(ast::LocalVariable {
-                                name,
-                                ty,
-                                init,
-                                handle,
-                            }))
+                        if !lexer.skip(Token::Word("if")) {
+                            // ... else { ... }
+                            break this.block(lexer, ctx, brace_nesting_level)?.0;
                         }
-                        "return" => {
-                            let value = if lexer.peek().0 != Token::Separator(';') {
-                                let handle = this.expression(lexer, ctx)?;
-                                Some(handle)
-                            } else {
-                                None
-                            };
-                            lexer.expect(Token::Separator(';'))?;
-                            ast::StatementKind::Return { value }
-                        }
-                        "if" => {
-                            let condition = this.expression(lexer, ctx)?;
 
-                            let accept = this.block(lexer, ctx, brace_nesting_level)?.0;
+                        // ... else if (...) { ... }
+                        let other_condition = this.expression(lexer, ctx)?;
+                        let other_block = this.block(lexer, ctx, brace_nesting_level)?;
+                        elsif_stack.push((elseif_span_start, other_condition, other_block));
+                        elseif_span_start = lexer.start_byte_offset();
+                    };
 
-                            let mut elsif_stack = Vec::new();
-                            let mut elseif_span_start = lexer.start_byte_offset();
-                            let mut reject = loop {
-                                if !lexer.skip(Token::Word("else")) {
-                                    break ast::Block::default();
-                                }
+                    // reverse-fold the else-if blocks
+                    //Note: we may consider uplifting this to the IR
+                    for (other_span_start, other_cond, other_block) in elsif_stack.into_iter().rev()
+                    {
+                        let sub_stmt = ast::StatementKind::If {
+                            condition: other_cond,
+                            accept: other_block.0,
+                            reject,
+                        };
+                        reject = ast::Block::default();
+                        let span = lexer.span_from(other_span_start);
+                        reject.stmts.push(ast::Statement {
+                            kind: sub_stmt,
+                            span,
+                        })
+                    }
 
-                                if !lexer.skip(Token::Word("if")) {
-                                    // ... else { ... }
-                                    break this.block(lexer, ctx, brace_nesting_level)?.0;
-                                }
+                    ast::StatementKind::If {
+                        condition,
+                        accept,
+                        reject,
+                    }
+                }
+                (Token::Word("switch"), _) => {
+                    let selector = this.expression(lexer, ctx)?;
+                    let brace_span = lexer.expect_span(Token::Paren('{'))?;
+                    let brace_nesting_level =
+                        Self::increase_brace_nesting(brace_nesting_level, brace_span)?;
+                    let mut cases = Vec::new();
 
-                                // ... else if (...) { ... }
-                                let other_condition = this.expression(lexer, ctx)?;
-                                let other_block = this.block(lexer, ctx, brace_nesting_level)?;
-                                elsif_stack.push((elseif_span_start, other_condition, other_block));
-                                elseif_span_start = lexer.start_byte_offset();
-                            };
-
-                            // reverse-fold the else-if blocks
-                            //Note: we may consider uplifting this to the IR
-                            for (other_span_start, other_cond, other_block) in
-                                elsif_stack.into_iter().rev()
-                            {
-                                let sub_stmt = ast::StatementKind::If {
-                                    condition: other_cond,
-                                    accept: other_block.0,
-                                    reject,
-                                };
-                                reject = ast::Block::default();
-                                let span = lexer.span_from(other_span_start);
-                                reject.stmts.push(ast::Statement {
-                                    kind: sub_stmt,
-                                    span,
-                                })
-                            }
-
-                            ast::StatementKind::If {
-                                condition,
-                                accept,
-                                reject,
-                            }
-                        }
-                        "switch" => {
-                            let selector = this.expression(lexer, ctx)?;
-                            let brace_span = lexer.expect_span(Token::Paren('{'))?;
-                            let brace_nesting_level =
-                                Self::increase_brace_nesting(brace_nesting_level, brace_span)?;
-                            let mut cases = Vec::new();
-
-                            loop {
-                                // cases + default
-                                match lexer.next() {
-                                    (Token::Word("case"), _) => {
-                                        // parse a list of values
-                                        let value = loop {
-                                            let value = this.switch_value(lexer, ctx)?;
-                                            if lexer.skip(Token::Separator(',')) {
-                                                // list of values ends with ':' or a compound statement
-                                                let next_token = lexer.peek().0;
-                                                if next_token == Token::Separator(':')
-                                                    || is_start_of_compound_statement(next_token)
-                                                {
-                                                    break value;
-                                                }
-                                            } else {
-                                                break value;
-                                            }
-                                            cases.push(ast::SwitchCase {
-                                                value,
-                                                body: ast::Block::default(),
-                                                fall_through: true,
-                                            });
-                                        };
-
-                                        lexer.skip(Token::Separator(':'));
-
-                                        let body = this.block(lexer, ctx, brace_nesting_level)?.0;
-
-                                        cases.push(ast::SwitchCase {
-                                            value,
-                                            body,
-                                            fall_through: false,
-                                        });
-                                    }
-                                    (Token::Word("default"), _) => {
-                                        lexer.skip(Token::Separator(':'));
-                                        let body = this.block(lexer, ctx, brace_nesting_level)?.0;
-                                        cases.push(ast::SwitchCase {
-                                            value: ast::SwitchValue::Default,
-                                            body,
-                                            fall_through: false,
-                                        });
-                                    }
-                                    (Token::Paren('}'), _) => break,
-                                    (_, span) => {
-                                        return Err(Box::new(Error::Unexpected(
-                                            span,
-                                            ExpectedToken::SwitchItem,
-                                        )))
-                                    }
-                                }
-                            }
-
-                            ast::StatementKind::Switch { selector, cases }
-                        }
-                        "loop" => this.r#loop(lexer, ctx, brace_nesting_level)?,
-                        "while" => {
-                            let mut body = ast::Block::default();
-
-                            let (condition, span) =
-                                lexer.capture_span(|lexer| this.expression(lexer, ctx))?;
-                            let mut reject = ast::Block::default();
-                            reject.stmts.push(ast::Statement {
-                                kind: ast::StatementKind::Break,
-                                span,
-                            });
-
-                            body.stmts.push(ast::Statement {
-                                kind: ast::StatementKind::If {
-                                    condition,
-                                    accept: ast::Block::default(),
-                                    reject,
-                                },
-                                span,
-                            });
-
-                            let (block, span) = this.block(lexer, ctx, brace_nesting_level)?;
-                            body.stmts.push(ast::Statement {
-                                kind: ast::StatementKind::Block(block),
-                                span,
-                            });
-
-                            ast::StatementKind::Loop {
-                                body,
-                                continuing: ast::Block::default(),
-                                break_if: None,
-                            }
-                        }
-                        "for" => {
-                            lexer.expect(Token::Paren('('))?;
-
-                            ctx.local_table.push_scope();
-
-                            if !lexer.skip(Token::Separator(';')) {
-                                let num_statements = block.stmts.len();
-                                let (_, span) = {
-                                    let ctx = &mut *ctx;
-                                    let block = &mut *block;
-                                    lexer.capture_span(|lexer| {
-                                        this.statement(lexer, ctx, block, brace_nesting_level)
-                                    })?
-                                };
-
-                                if block.stmts.len() != num_statements {
-                                    match block.stmts.last().unwrap().kind {
-                                        ast::StatementKind::Call { .. }
-                                        | ast::StatementKind::Assign { .. }
-                                        | ast::StatementKind::LocalDecl(_) => {}
-                                        _ => {
-                                            return Err(Box::new(Error::InvalidForInitializer(
-                                                span,
-                                            )))
+                    loop {
+                        // cases + default
+                        match lexer.next() {
+                            (Token::Word("case"), _) => {
+                                // parse a list of values
+                                let value = loop {
+                                    let value = this.switch_value(lexer, ctx)?;
+                                    if lexer.skip(Token::Separator(',')) {
+                                        // list of values ends with ':' or a compound statement
+                                        let next_token = lexer.peek().0;
+                                        if next_token == Token::Separator(':')
+                                            || is_start_of_compound_statement(next_token)
+                                        {
+                                            break value;
                                         }
+                                    } else {
+                                        break value;
                                     }
-                                }
-                            };
+                                    cases.push(ast::SwitchCase {
+                                        value,
+                                        body: ast::Block::default(),
+                                        fall_through: true,
+                                    });
+                                };
 
-                            let mut body = ast::Block::default();
-                            if !lexer.skip(Token::Separator(';')) {
-                                let (condition, span) =
-                                    lexer.capture_span(|lexer| -> Result<'_, _> {
-                                        let condition = this.expression(lexer, ctx)?;
-                                        lexer.expect(Token::Separator(';'))?;
-                                        Ok(condition)
-                                    })?;
-                                let mut reject = ast::Block::default();
-                                reject.stmts.push(ast::Statement {
-                                    kind: ast::StatementKind::Break,
-                                    span,
+                                lexer.skip(Token::Separator(':'));
+
+                                let body = this.block(lexer, ctx, brace_nesting_level)?.0;
+
+                                cases.push(ast::SwitchCase {
+                                    value,
+                                    body,
+                                    fall_through: false,
                                 });
-                                body.stmts.push(ast::Statement {
-                                    kind: ast::StatementKind::If {
-                                        condition,
-                                        accept: ast::Block::default(),
-                                        reject,
-                                    },
-                                    span,
+                            }
+                            (Token::Word("default"), _) => {
+                                lexer.skip(Token::Separator(':'));
+                                let body = this.block(lexer, ctx, brace_nesting_level)?.0;
+                                cases.push(ast::SwitchCase {
+                                    value: ast::SwitchValue::Default,
+                                    body,
+                                    fall_through: false,
                                 });
-                            };
-
-                            let mut continuing = ast::Block::default();
-                            if !lexer.skip(Token::Paren(')')) {
-                                let token = lexer.next();
-                                this.func_call_or_variable_updating_statement(
-                                    lexer,
-                                    ctx,
-                                    &mut continuing,
-                                    token,
-                                )?;
-                                lexer.expect(Token::Paren(')'))?;
                             }
-
-                            let (block, span) = this.block(lexer, ctx, brace_nesting_level)?;
-                            body.stmts.push(ast::Statement {
-                                kind: ast::StatementKind::Block(block),
-                                span,
-                            });
-
-                            ctx.local_table.pop_scope();
-
-                            ast::StatementKind::Loop {
-                                body,
-                                continuing,
-                                break_if: None,
+                            (Token::Paren('}'), _) => break,
+                            (_, span) => {
+                                return Err(Box::new(Error::Unexpected(
+                                    span,
+                                    ExpectedToken::SwitchItem,
+                                )))
                             }
                         }
-                        "break" => {
-                            // Check if the next token is an `if`, this indicates
-                            // that the user tried to type out a `break if` which
-                            // is illegal in this position.
-                            let (peeked_token, peeked_span) = lexer.peek();
-                            if let Token::Word("if") = peeked_token {
-                                let span = span.until(&peeked_span);
-                                return Err(Box::new(Error::InvalidBreakIf(span)));
-                            }
-                            lexer.expect(Token::Separator(';'))?;
-                            ast::StatementKind::Break
-                        }
-                        "continue" => {
-                            lexer.expect(Token::Separator(';'))?;
-                            ast::StatementKind::Continue
-                        }
-                        "discard" => {
-                            lexer.expect(Token::Separator(';'))?;
-                            ast::StatementKind::Kill
-                        }
-                        // https://www.w3.org/TR/WGSL/#const-assert-statement
-                        "const_assert" => {
-                            // parentheses are optional
-                            let paren = lexer.skip(Token::Paren('('));
+                    }
 
-                            let condition = this.expression(lexer, ctx)?;
+                    ast::StatementKind::Switch { selector, cases }
+                }
+                (Token::Word("loop"), _) => this.r#loop(lexer, ctx, brace_nesting_level)?,
+                (Token::Word("while"), _) => {
+                    let mut body = ast::Block::default();
 
-                            if paren {
-                                lexer.expect(Token::Paren(')'))?;
+                    let (condition, span) =
+                        lexer.capture_span(|lexer| this.expression(lexer, ctx))?;
+                    let mut reject = ast::Block::default();
+                    reject.stmts.push(ast::Statement {
+                        kind: ast::StatementKind::Break,
+                        span,
+                    });
+
+                    body.stmts.push(ast::Statement {
+                        kind: ast::StatementKind::If {
+                            condition,
+                            accept: ast::Block::default(),
+                            reject,
+                        },
+                        span,
+                    });
+
+                    let (block, span) = this.block(lexer, ctx, brace_nesting_level)?;
+                    body.stmts.push(ast::Statement {
+                        kind: ast::StatementKind::Block(block),
+                        span,
+                    });
+
+                    ast::StatementKind::Loop {
+                        body,
+                        continuing: ast::Block::default(),
+                        break_if: None,
+                    }
+                }
+                (Token::Word("for"), _) => {
+                    lexer.expect(Token::Paren('('))?;
+
+                    ctx.local_table.push_scope();
+
+                    if !lexer.skip(Token::Separator(';')) {
+                        let num_statements = block.stmts.len();
+                        let (_, span) = {
+                            let ctx = &mut *ctx;
+                            let block = &mut *block;
+                            lexer.capture_span(|lexer| {
+                                this.statement(lexer, ctx, block, brace_nesting_level)
+                            })?
+                        };
+
+                        if block.stmts.len() != num_statements {
+                            match block.stmts.last().unwrap().kind {
+                                ast::StatementKind::Call { .. }
+                                | ast::StatementKind::Assign { .. }
+                                | ast::StatementKind::LocalDecl(_) => {}
+                                _ => return Err(Box::new(Error::InvalidForInitializer(span))),
                             }
-                            lexer.expect(Token::Separator(';'))?;
-                            ast::StatementKind::ConstAssert(condition)
-                        }
-                        // assignment or a function call
-                        _ => {
-                            this.func_call_or_variable_updating_statement(
-                                lexer, ctx, block, token,
-                            )?;
-                            lexer.expect(Token::Separator(';'))?;
-                            this.pop_rule_span(lexer);
-                            return Ok(());
                         }
                     };
 
-                    let span = this.pop_rule_span(lexer);
-                    block.stmts.push(ast::Statement { kind, span });
+                    let mut body = ast::Block::default();
+                    if !lexer.skip(Token::Separator(';')) {
+                        let (condition, span) = lexer.capture_span(|lexer| -> Result<'_, _> {
+                            let condition = this.expression(lexer, ctx)?;
+                            lexer.expect(Token::Separator(';'))?;
+                            Ok(condition)
+                        })?;
+                        let mut reject = ast::Block::default();
+                        reject.stmts.push(ast::Statement {
+                            kind: ast::StatementKind::Break,
+                            span,
+                        });
+                        body.stmts.push(ast::Statement {
+                            kind: ast::StatementKind::If {
+                                condition,
+                                accept: ast::Block::default(),
+                                reject,
+                            },
+                            span,
+                        });
+                    };
+
+                    let mut continuing = ast::Block::default();
+                    if !lexer.skip(Token::Paren(')')) {
+                        let token = lexer.next();
+                        this.func_call_or_variable_updating_statement(
+                            lexer,
+                            ctx,
+                            &mut continuing,
+                            token,
+                        )?;
+                        lexer.expect(Token::Paren(')'))?;
+                    }
+
+                    let (block, span) = this.block(lexer, ctx, brace_nesting_level)?;
+                    body.stmts.push(ast::Statement {
+                        kind: ast::StatementKind::Block(block),
+                        span,
+                    });
+
+                    ctx.local_table.pop_scope();
+
+                    ast::StatementKind::Loop {
+                        body,
+                        continuing,
+                        break_if: None,
+                    }
+                }
+                (Token::Word("break"), span) => {
+                    // Check if the next token is an `if`, this indicates
+                    // that the user tried to type out a `break if` which
+                    // is illegal in this position.
+                    let (peeked_token, peeked_span) = lexer.peek();
+                    if let Token::Word("if") = peeked_token {
+                        let span = span.until(&peeked_span);
+                        return Err(Box::new(Error::InvalidBreakIf(span)));
+                    }
+                    lexer.expect(Token::Separator(';'))?;
+                    ast::StatementKind::Break
+                }
+                (Token::Word("continue"), _) => {
+                    lexer.expect(Token::Separator(';'))?;
+                    ast::StatementKind::Continue
+                }
+                (Token::Word("discard"), _) => {
+                    lexer.expect(Token::Separator(';'))?;
+                    ast::StatementKind::Kill
+                }
+                // https://www.w3.org/TR/WGSL/#const-assert-statement
+                (Token::Word("const_assert"), _) => {
+                    // parentheses are optional
+                    let paren = lexer.skip(Token::Paren('('));
+
+                    let condition = this.expression(lexer, ctx)?;
+
+                    if paren {
+                        lexer.expect(Token::Paren(')'))?;
+                    }
+                    lexer.expect(Token::Separator(';'))?;
+                    ast::StatementKind::ConstAssert(condition)
                 }
                 token => {
-                    this.variable_updating_statement(lexer, ctx, block, token)?;
+                    this.func_call_or_variable_updating_statement(lexer, ctx, block, token)?;
                     lexer.expect(Token::Separator(';'))?;
                     this.pop_rule_span(lexer);
+                    return Ok(());
                 }
-            }
+            };
+
+            let span = this.pop_rule_span(lexer);
+            block.stmts.push(ast::Statement { kind, span });
+
             Ok(())
         })
     }
