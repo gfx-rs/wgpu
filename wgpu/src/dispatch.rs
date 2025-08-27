@@ -596,7 +596,7 @@ macro_rules! dispatch_types {
             #[cfg(wgpu_core)]
             Core(Arc<$core_type>),
             #[cfg(webgpu)]
-            WebGPU(Arc<$webgpu_type>),
+            WebGPU($webgpu_type),
             #[allow(clippy::allow_attributes, private_interfaces)]
             #[cfg(custom)]
             Custom($custom_type),
@@ -672,7 +672,7 @@ macro_rules! dispatch_types {
         impl From<$webgpu_type> for $name {
             #[inline]
             fn from(value: $webgpu_type) -> Self {
-                Self::WebGPU(Arc::new(value))
+                Self::WebGPU(value)
             }
         }
 
@@ -685,7 +685,7 @@ macro_rules! dispatch_types {
                     #[cfg(wgpu_core)]
                     Self::Core(value) => value.as_ref(),
                     #[cfg(webgpu)]
-                    Self::WebGPU(value) => value.as_ref(),
+                    Self::WebGPU(value) => value,
                     #[cfg(custom)]
                     Self::Custom(value) => value.deref(),
                     #[cfg(not(any(wgpu_core, webgpu)))]
