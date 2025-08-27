@@ -2204,7 +2204,7 @@ impl Parser {
         Ok(())
     }
 
-    fn function_call_or_assignment_statement<'a>(
+    fn func_call_or_variable_updating_statement<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
         context: &mut ExpressionContext<'a, '_, '_>,
@@ -2523,7 +2523,7 @@ impl Parser {
 
                             let mut continuing = ast::Block::default();
                             if !lexer.skip(Token::Paren(')')) {
-                                this.function_call_or_assignment_statement(
+                                this.func_call_or_variable_updating_statement(
                                     lexer,
                                     ctx,
                                     &mut continuing,
@@ -2584,7 +2584,7 @@ impl Parser {
                         }
                         // assignment or a function call
                         _ => {
-                            this.function_call_or_assignment_statement(lexer, ctx, block)?;
+                            this.func_call_or_variable_updating_statement(lexer, ctx, block)?;
                             lexer.expect(Token::Separator(';'))?;
                             this.pop_rule_span(lexer);
                             return Ok(());
