@@ -1002,7 +1002,7 @@ impl Parser {
         Ok(expr)
     }
 
-    fn postfix<'a>(
+    fn component_or_swizzle_specifier<'a>(
         &mut self,
         span_start: usize,
         lexer: &mut Lexer<'a>,
@@ -1137,12 +1137,12 @@ impl Parser {
                 (Token::Paren('('), _) => {
                     let expr = this.lhs_expression(lexer, ctx)?;
                     lexer.expect(Token::Paren(')'))?;
-                    this.postfix(start, lexer, ctx, expr)?
+                    this.component_or_swizzle_specifier(start, lexer, ctx, expr)?
                 }
                 (Token::Word(word), span) => {
                     let ident = this.ident_expr(word, span, ctx);
                     let ident = ctx.expressions.append(ast::Expression::Ident(ident), span);
-                    this.postfix(start, lexer, ctx, ident)?
+                    this.component_or_swizzle_specifier(start, lexer, ctx, ident)?
                 }
                 (_, span) => {
                     return Err(Box::new(Error::Unexpected(
@@ -1166,7 +1166,7 @@ impl Parser {
         let start = lexer.start_byte_offset();
         self.push_rule_span(Rule::SingularExpr, lexer);
         let primary_expr = self.primary_expression(lexer, ctx)?;
-        let singular_expr = self.postfix(start, lexer, ctx, primary_expr)?;
+        let singular_expr = self.component_or_swizzle_specifier(start, lexer, ctx, primary_expr)?;
         self.pop_rule_span(lexer);
 
         Ok(singular_expr)
