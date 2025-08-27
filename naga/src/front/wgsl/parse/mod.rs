@@ -2204,6 +2204,7 @@ impl Parser {
         Ok(())
     }
 
+    /// Parses func_call_statement and variable_updating_statement
     fn func_call_or_variable_updating_statement<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -2218,6 +2219,89 @@ impl Parser {
             }
             token => self.variable_updating_statement(lexer, context, block, token),
         }
+    }
+
+    /// Parses variable_or_value_statement, func_call_statement and variable_updating_statement.
+    ///
+    /// This is equivalent to the `for_init` production in the WGSL spec,
+    /// but it's also used for parsing these forms when they appear within a block,
+    /// hence the longer name.
+    fn variable_or_value_or_func_call_or_variable_updating_statement<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        ctx: &mut ExpressionContext<'a, '_, '_>,
+        block: &mut ast::Block<'a>,
+        token: TokenSpan<'a>,
+    ) -> Result<'a, ()> {
+        let span_start = token.1.to_range().unwrap().start;
+
+        let local_decl = match token {
+            (Token::Word("let"), _) => {
+                let (name, given_ty) = self.optionally_typed_ident(lexer, ctx)?;
+
+                lexer.expect(Token::Operation('='))?;
+                let expr_id = self.expression(lexer, ctx)?;
+
+                let handle = ctx.declare_local(name)?;
+                ast::LocalDecl::Let(ast::Let {
+                    name,
+                    ty: given_ty,
+                    init: expr_id,
+                    handle,
+                })
+            }
+            (Token::Word("const"), _) => {
+                let (name, given_ty) = self.optionally_typed_ident(lexer, ctx)?;
+
+                lexer.expect(Token::Operation('='))?;
+                let expr_id = self.expression(lexer, ctx)?;
+
+                let handle = ctx.declare_local(name)?;
+                ast::LocalDecl::Const(ast::LocalConst {
+                    name,
+                    ty: given_ty,
+                    init: expr_id,
+                    handle,
+                })
+            }
+            (Token::Word("var"), _) => {
+                if lexer.skip(Token::Paren('<')) {
+                    let (class_str, span) = lexer.next_ident_with_span()?;
+                    if class_str != "function" {
+                        return Err(Box::new(Error::InvalidLocalVariableAddressSpace(span)));
+                    }
+                    lexer.expect(Token::Paren('>'))?;
+                }
+
+                let (name, ty) = self.optionally_typed_ident(lexer, ctx)?;
+
+                let init = if lexer.skip(Token::Operation('=')) {
+                    let init = self.expression(lexer, ctx)?;
+                    Some(init)
+                } else {
+                    None
+                };
+
+                let handle = ctx.declare_local(name)?;
+                ast::LocalDecl::Var(ast::LocalVariable {
+                    name,
+                    ty,
+                    init,
+                    handle,
+                })
+            }
+            token => {
+                return self.func_call_or_variable_updating_statement(lexer, ctx, block, token);
+            }
+        };
+
+        let span = lexer.span_from(span_start);
+        block.stmts.push(ast::Statement {
+            kind: ast::StatementKind::LocalDecl(local_decl),
+            span,
+        });
+
+        Ok(())
     }
 
     fn statement<'a>(
@@ -2252,64 +2336,6 @@ impl Parser {
                 (Token::Separator(';'), _) => {
                     this.pop_rule_span(lexer);
                     return Ok(());
-                }
-                (Token::Word("let"), _) => {
-                    let (name, given_ty) = this.optionally_typed_ident(lexer, ctx)?;
-
-                    lexer.expect(Token::Operation('='))?;
-                    let expr_id = this.expression(lexer, ctx)?;
-                    lexer.expect(Token::Separator(';'))?;
-
-                    let handle = ctx.declare_local(name)?;
-                    ast::StatementKind::LocalDecl(ast::LocalDecl::Let(ast::Let {
-                        name,
-                        ty: given_ty,
-                        init: expr_id,
-                        handle,
-                    }))
-                }
-                (Token::Word("const"), _) => {
-                    let (name, given_ty) = this.optionally_typed_ident(lexer, ctx)?;
-
-                    lexer.expect(Token::Operation('='))?;
-                    let expr_id = this.expression(lexer, ctx)?;
-                    lexer.expect(Token::Separator(';'))?;
-
-                    let handle = ctx.declare_local(name)?;
-                    ast::StatementKind::LocalDecl(ast::LocalDecl::Const(ast::LocalConst {
-                        name,
-                        ty: given_ty,
-                        init: expr_id,
-                        handle,
-                    }))
-                }
-                (Token::Word("var"), _) => {
-                    if lexer.skip(Token::Paren('<')) {
-                        let (class_str, span) = lexer.next_ident_with_span()?;
-                        if class_str != "function" {
-                            return Err(Box::new(Error::InvalidLocalVariableAddressSpace(span)));
-                        }
-                        lexer.expect(Token::Paren('>'))?;
-                    }
-
-                    let (name, ty) = this.optionally_typed_ident(lexer, ctx)?;
-
-                    let init = if lexer.skip(Token::Operation('=')) {
-                        let init = this.expression(lexer, ctx)?;
-                        Some(init)
-                    } else {
-                        None
-                    };
-
-                    lexer.expect(Token::Separator(';'))?;
-
-                    let handle = ctx.declare_local(name)?;
-                    ast::StatementKind::LocalDecl(ast::LocalDecl::Var(ast::LocalVariable {
-                        name,
-                        ty,
-                        init,
-                        handle,
-                    }))
                 }
                 (Token::Word("return"), _) => {
                     let value = if lexer.peek().0 != Token::Separator(';') {
@@ -2470,23 +2496,11 @@ impl Parser {
                     ctx.local_table.push_scope();
 
                     if !lexer.skip(Token::Separator(';')) {
-                        let num_statements = block.stmts.len();
-                        let (_, span) = {
-                            let ctx = &mut *ctx;
-                            let block = &mut *block;
-                            lexer.capture_span(|lexer| {
-                                this.statement(lexer, ctx, block, brace_nesting_level)
-                            })?
-                        };
-
-                        if block.stmts.len() != num_statements {
-                            match block.stmts.last().unwrap().kind {
-                                ast::StatementKind::Call { .. }
-                                | ast::StatementKind::Assign { .. }
-                                | ast::StatementKind::LocalDecl(_) => {}
-                                _ => return Err(Box::new(Error::InvalidForInitializer(span))),
-                            }
-                        }
+                        let token = lexer.next();
+                        this.variable_or_value_or_func_call_or_variable_updating_statement(
+                            lexer, ctx, block, token,
+                        )?;
+                        lexer.expect(Token::Separator(';'))?;
                     };
 
                     let mut body = ast::Block::default();
@@ -2571,7 +2585,9 @@ impl Parser {
                     ast::StatementKind::ConstAssert(condition)
                 }
                 token => {
-                    this.func_call_or_variable_updating_statement(lexer, ctx, block, token)?;
+                    this.variable_or_value_or_func_call_or_variable_updating_statement(
+                        lexer, ctx, block, token,
+                    )?;
                     lexer.expect(Token::Separator(';'))?;
                     this.pop_rule_span(lexer);
                     return Ok(());

@@ -192,7 +192,6 @@ pub(crate) enum Error<'a> {
     },
     BadIncrDecrReferenceType(Span),
     InvalidResolve(ResolveError),
-    InvalidForInitializer(Span),
     /// A break if appeared outside of a continuing block
     InvalidBreakIf(Span),
     InvalidGatherComponent(Span),
@@ -617,14 +616,6 @@ impl<'a> Error<'a> {
             Error::InvalidResolve(ref resolve_error) => ParseError {
                 message: resolve_error.to_string(),
                 labels: vec![],
-                notes: vec![],
-            },
-            Error::InvalidForInitializer(bad_span) => ParseError {
-                message: format!(
-                    "for(;;) initializer is not an assignment or a function call: `{}`",
-                    &source[bad_span]
-                ),
-                labels: vec![(bad_span, "not an assignment or function call".into())],
                 notes: vec![],
             },
             Error::InvalidBreakIf(bad_span) => ParseError {

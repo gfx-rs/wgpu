@@ -417,11 +417,11 @@ fn bad_for_initializer() {
                 for ({};;) {}
             }
         "#,
-        r#"error: for(;;) initializer is not an assignment or a function call: `{}`
+        r#"error: expected assignment destination, found "{"
   ┌─ wgsl:3:22
   │
 3 │                 for ({};;) {}
-  │                      ^^ not an assignment or function call
+  │                      ^ expected assignment destination
 
 "#,
     );
