@@ -58,16 +58,16 @@ static_assertions::assert_impl_all!(PollType: Send, Sync);
 /// Reading into this buffer won't yield the contents of the buffer from the
 /// GPU and is likely to be slow. Because of this, although [`AsMut`] is
 /// implemented for this type, [`AsRef`] is not.
-pub struct QueueWriteBufferView<'a> {
-    queue: &'a Queue,
-    buffer: &'a Buffer,
+pub struct QueueWriteBufferView {
+    queue: Queue,
+    buffer: Buffer,
     offset: BufferAddress,
     inner: dispatch::DispatchQueueWriteBuffer,
 }
 #[cfg(send_sync)]
-static_assertions::assert_impl_all!(QueueWriteBufferView<'_>: Send, Sync);
+static_assertions::assert_impl_all!(QueueWriteBufferView: Send, Sync);
 
-impl QueueWriteBufferView<'_> {
+impl QueueWriteBufferView {
     #[cfg(custom)]
     /// Returns custom implementation of QueueWriteBufferView (if custom backend and is internally T)
     pub fn as_custom<T: custom::QueueWriteBufferInterface>(&self) -> Option<&T> {
@@ -75,7 +75,7 @@ impl QueueWriteBufferView<'_> {
     }
 }
 
-impl Deref for QueueWriteBufferView<'_> {
+impl Deref for QueueWriteBufferView {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
@@ -84,19 +84,19 @@ impl Deref for QueueWriteBufferView<'_> {
     }
 }
 
-impl DerefMut for QueueWriteBufferView<'_> {
+impl DerefMut for QueueWriteBufferView {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner.slice_mut()
     }
 }
 
-impl AsMut<[u8]> for QueueWriteBufferView<'_> {
+impl AsMut<[u8]> for QueueWriteBufferView {
     fn as_mut(&mut self) -> &mut [u8] {
         self.inner.slice_mut()
     }
 }
 
-impl Drop for QueueWriteBufferView<'_> {
+impl Drop for QueueWriteBufferView {
     fn drop(&mut self) {
         self.queue
             .inner
@@ -182,19 +182,19 @@ impl Queue {
     ///   allocations, you might be able to use [`StagingBelt`](crate::util::StagingBelt),
     ///   or buffers you explicitly create, map, and unmap yourself.
     #[must_use]
-    pub fn write_buffer_with<'a>(
-        &'a self,
-        buffer: &'a Buffer,
+    pub fn write_buffer_with(
+        &self,
+        buffer: &Buffer,
         offset: BufferAddress,
         size: BufferSize,
-    ) -> Option<QueueWriteBufferView<'a>> {
+    ) -> Option<QueueWriteBufferView> {
         profiling::scope!("Queue::write_buffer_with");
         self.inner
             .validate_write_buffer(&buffer.inner, offset, size)?;
         let staging_buffer = self.inner.create_staging_buffer(size)?;
         Some(QueueWriteBufferView {
-            queue: self,
-            buffer,
+            queue: self.clone(),
+            buffer: buffer.clone(),
             offset,
             inner: staging_buffer,
         })

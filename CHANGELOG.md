@@ -54,6 +54,7 @@ We have merged the acceleration structure feature into the `RayQuery` feature. T
 By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
 #### New `EXPERIMENTAL_PRECOMPILED_SHADERS` API
+
 We have added `Features::EXPERIMENTAL_PRECOMPILED_SHADERS`, replacing existing passthrough types with a unified `CreateShaderModuleDescriptorPassthrough` which allows passing multiple shader codes for different backends. By @SupaMaggie70Incorporated in [#7834](https://github.com/gfx-rs/wgpu/pull/7834)
 
 Difference for SPIR-V passthrough:
@@ -73,6 +74,21 @@ Difference for SPIR-V passthrough:
 ```
 This allows using precompiled shaders without manually checking which backend's code to pass, for example if you have shaders precompiled for both DXIL and SPIR-V.
 
+#### Buffer mapping apis no longer have lifetimes
+
+`Buffer::get_mapped_range()`, `Buffer::get_mapped_range_mut()`, and `Queue::write_buffer_with()` now return guard objects without any lifetimes. This
+makes it significantly easier to store these types in structs, which is useful for building utilities that build the contents of a buffer over time.
+
+```diff
+- let buffer_mapping_ref: wgpu::BufferView<'_>           = buffer.get_mapped_range(..);
+- let buffer_mapping_mut: wgpu::BufferViewMut<'_>        = buffer.get_mapped_range_mut(..);
+- let queue_write_with:   wgpu::QueueWriteBufferView<'_> = queue.write_buffer_with(..);
++ let buffer_mapping_ref: wgpu::BufferView               = buffer.get_mapped_range(..);
++ let buffer_mapping_mut: wgpu::BufferViewMut            = buffer.get_mapped_range_mut(..);
++ let queue_write_with:   wgpu::QueueWriteBufferView     = queue.write_buffer_with(..);
+```
+
+By @sagudev in [#8046](https://github.com/gfx-rs/wgpu/pull/8046) and @cwfitzgerald in [#8070](https://github.com/gfx-rs/wgpu/pull/8161).
 
 ### New Features
 
