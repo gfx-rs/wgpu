@@ -7,7 +7,7 @@ use crate::Span;
 
 use alloc::{boxed::Box, vec::Vec};
 
-type TokenSpan<'a> = (Token<'a>, Span);
+pub type TokenSpan<'a> = (Token<'a>, Span);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Token<'a> {

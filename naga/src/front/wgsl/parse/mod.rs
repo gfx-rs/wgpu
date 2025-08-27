@@ -9,7 +9,7 @@ use crate::front::wgsl::error::{DiagnosticAttributeNotSupportedPosition, Error, 
 use crate::front::wgsl::parse::directive::enable_extension::{EnableExtension, EnableExtensions};
 use crate::front::wgsl::parse::directive::language_extension::LanguageExtension;
 use crate::front::wgsl::parse::directive::DirectiveKind;
-use crate::front::wgsl::parse::lexer::{Lexer, Token};
+use crate::front::wgsl::parse::lexer::{Lexer, Token, TokenSpan};
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::{Result, Scalar};
 use crate::front::SymbolTable;
@@ -1117,25 +1117,27 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
+        token: Option<TokenSpan<'a>>,
     ) -> Result<'a, Handle<ast::Expression<'a>>> {
         self.track_recursion(|this| {
             this.push_rule_span(Rule::LhsExpr, lexer);
-            let start = lexer.start_byte_offset();
-            let expr = match lexer.next() {
+            let token = token.unwrap_or_else(|| lexer.next());
+            let start = token.1.to_range().unwrap().start;
+            let expr = match token {
                 (Token::Operation('*'), _) => {
-                    let expr = this.lhs_expression(lexer, ctx)?;
+                    let expr = this.lhs_expression(lexer, ctx, None)?;
                     let expr = ast::Expression::Deref(expr);
                     let span = this.peek_rule_span(lexer);
                     ctx.expressions.append(expr, span)
                 }
                 (Token::Operation('&'), _) => {
-                    let expr = this.lhs_expression(lexer, ctx)?;
+                    let expr = this.lhs_expression(lexer, ctx, None)?;
                     let expr = ast::Expression::AddrOf(expr);
                     let span = this.peek_rule_span(lexer);
                     ctx.expressions.append(expr, span)
                 }
                 (Token::Paren('('), _) => {
-                    let expr = this.lhs_expression(lexer, ctx)?;
+                    let expr = this.lhs_expression(lexer, ctx, None)?;
                     lexer.expect(Token::Paren(')'))?;
                     this.component_or_swizzle_specifier(start, lexer, ctx, expr)?
                 }
@@ -2098,11 +2100,11 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
         block: &mut ast::Block<'a>,
+        token: TokenSpan<'a>,
     ) -> Result<'a, ()> {
-        let span_start = lexer.start_byte_offset();
-        match lexer.peek().0 {
+        let span_start = token.1.to_range().unwrap().start;
+        match token.0 {
             Token::Word("_") => {
-                let _ = lexer.next();
                 lexer.expect(Token::Operation('='))?;
                 let expr = self.expression(lexer, ctx)?;
                 let span = lexer.span_from(span_start);
@@ -2114,7 +2116,7 @@ impl Parser {
             }
             _ => {}
         }
-        let target = self.lhs_expression(lexer, ctx)?;
+        let target = self.lhs_expression(lexer, ctx, Some(token))?;
 
         let (op, value) = match lexer.next() {
             (Token::Operation('='), _) => {
@@ -2209,22 +2211,14 @@ impl Parser {
         block: &mut ast::Block<'a>,
     ) -> Result<'a, ()> {
         let span_start = lexer.start_byte_offset();
-        match lexer.peek() {
-            (Token::Word(name), span) => {
-                // A little hack for 2 token lookahead.
-                let cloned = lexer.clone();
-                let _ = lexer.next();
-                match lexer.peek() {
-                    (Token::Paren('('), _) => {
-                        self.function_statement(lexer, name, span, span_start, context, block)
-                    }
-                    _ => {
-                        *lexer = cloned;
-                        self.variable_updating_statement(lexer, context, block)
-                    }
+        match lexer.next() {
+            token @ (Token::Word(name), span) => match lexer.peek() {
+                (Token::Paren('('), _) => {
+                    self.function_statement(lexer, name, span, span_start, context, block)
                 }
-            }
-            _ => self.variable_updating_statement(lexer, context, block),
+                _ => self.variable_updating_statement(lexer, context, block, token),
+            },
+            token => self.variable_updating_statement(lexer, context, block, token),
         }
     }
 
@@ -2601,7 +2595,8 @@ impl Parser {
                     block.stmts.push(ast::Statement { kind, span });
                 }
                 _ => {
-                    this.variable_updating_statement(lexer, ctx, block)?;
+                    let token = lexer.next();
+                    this.variable_updating_statement(lexer, ctx, block, token)?;
                     lexer.expect(Token::Separator(';'))?;
                     this.pop_rule_span(lexer);
                 }
