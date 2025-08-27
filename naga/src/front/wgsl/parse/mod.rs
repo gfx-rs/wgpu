@@ -358,8 +358,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<'a, ast::SwitchValue<'a>> {
-        if let Token::Word("default") = lexer.peek().0 {
-            let _ = lexer.next();
+        if lexer.skip(Token::Word("default")) {
             return Ok(ast::SwitchValue::Default);
         }
 
