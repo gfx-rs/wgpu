@@ -3216,8 +3216,8 @@ impl Parser {
         tu.doc_comments = lexer.accumulate_module_doc_comments();
 
         // Parse directives.
-        while let Ok((ident, _directive_ident_span)) = lexer.peek_ident_with_span() {
-            if let Some(kind) = DirectiveKind::from_ident(ident) {
+        while let (Token::Word(word), _) = lexer.peek() {
+            if let Some(kind) = DirectiveKind::from_ident(word) {
                 self.push_rule_span(Rule::Directive, &mut lexer);
                 let _ = lexer.next_ident_with_span().unwrap();
                 match kind {

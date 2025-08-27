@@ -479,29 +479,15 @@ impl<'a> Lexer<'a> {
 
     pub(in crate::front::wgsl) fn next_ident_with_span(&mut self) -> Result<'a, (&'a str, Span)> {
         match self.next() {
-            (Token::Word(word), span) => Self::word_as_ident_with_span(word, span),
-            other => Err(Box::new(Error::Unexpected(
-                other.1,
-                ExpectedToken::Identifier,
-            ))),
-        }
-    }
-
-    pub(in crate::front::wgsl) fn peek_ident_with_span(&mut self) -> Result<'a, (&'a str, Span)> {
-        match self.peek() {
-            (Token::Word(word), span) => Self::word_as_ident_with_span(word, span),
-            other => Err(Box::new(Error::Unexpected(
-                other.1,
-                ExpectedToken::Identifier,
-            ))),
-        }
-    }
-
-    fn word_as_ident_with_span(word: &'a str, span: Span) -> Result<'a, (&'a str, Span)> {
-        match word {
-            "_" => Err(Box::new(Error::InvalidIdentifierUnderscore(span))),
-            word if word.starts_with("__") => Err(Box::new(Error::ReservedIdentifierPrefix(span))),
-            word => Ok((word, span)),
+            (Token::Word("_"), span) => Err(Box::new(Error::InvalidIdentifierUnderscore(span))),
+            (Token::Word(word), span) => {
+                if word.starts_with("__") {
+                    Err(Box::new(Error::ReservedIdentifierPrefix(span)))
+                } else {
+                    Ok((word, span))
+                }
+            }
+            (_, span) => Err(Box::new(Error::Unexpected(span, ExpectedToken::Identifier))),
         }
     }
 
