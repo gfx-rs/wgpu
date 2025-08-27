@@ -1121,34 +1121,35 @@ impl Parser {
         self.track_recursion(|this| {
             this.push_rule_span(Rule::LhsExpr, lexer);
             let start = lexer.start_byte_offset();
-            let expr = match lexer.peek() {
+            let expr = match lexer.next() {
                 (Token::Operation('*'), _) => {
-                    let _ = lexer.next();
                     let expr = this.lhs_expression(lexer, ctx)?;
                     let expr = ast::Expression::Deref(expr);
                     let span = this.peek_rule_span(lexer);
                     ctx.expressions.append(expr, span)
                 }
                 (Token::Operation('&'), _) => {
-                    let _ = lexer.next();
                     let expr = this.lhs_expression(lexer, ctx)?;
                     let expr = ast::Expression::AddrOf(expr);
                     let span = this.peek_rule_span(lexer);
                     ctx.expressions.append(expr, span)
                 }
-                (Token::Operation('('), _) => {
-                    let _ = lexer.next();
-                    let primary_expr = this.lhs_expression(lexer, ctx)?;
+                (Token::Paren('('), _) => {
+                    let expr = this.lhs_expression(lexer, ctx)?;
                     lexer.expect(Token::Paren(')'))?;
-                    this.postfix(start, lexer, ctx, primary_expr)?
+                    this.postfix(start, lexer, ctx, expr)?
                 }
                 (Token::Word(word), span) => {
-                    let _ = lexer.next();
                     let ident = this.ident_expr(word, span, ctx);
-                    let primary_expr = ctx.expressions.append(ast::Expression::Ident(ident), span);
-                    this.postfix(start, lexer, ctx, primary_expr)?
+                    let ident = ctx.expressions.append(ast::Expression::Ident(ident), span);
+                    this.postfix(start, lexer, ctx, ident)?
                 }
-                _ => this.singular_expression(lexer, ctx)?,
+                (_, span) => {
+                    return Err(Box::new(Error::Unexpected(
+                        span,
+                        ExpectedToken::LhsExpression,
+                    )));
+                }
             };
 
             this.pop_rule_span(lexer);
@@ -2099,17 +2100,29 @@ impl Parser {
         block: &mut ast::Block<'a>,
     ) -> Result<'a, ()> {
         let span_start = lexer.start_byte_offset();
+        match lexer.peek().0 {
+            Token::Word("_") => {
+                let _ = lexer.next();
+                lexer.expect(Token::Operation('='))?;
+                let expr = self.expression(lexer, ctx)?;
+                let span = lexer.span_from(span_start);
+                block.stmts.push(ast::Statement {
+                    kind: ast::StatementKind::Phony(expr),
+                    span,
+                });
+                return Ok(());
+            }
+            _ => {}
+        }
         let target = self.lhs_expression(lexer, ctx)?;
 
-        use crate::BinaryOperator as Bo;
-
-        let op = lexer.next();
-        let (op, value) = match op {
+        let (op, value) = match lexer.next() {
             (Token::Operation('='), _) => {
                 let value = self.expression(lexer, ctx)?;
                 (None, value)
             }
             (Token::AssignmentOperation(c), _) => {
+                use crate::BinaryOperator as Bo;
                 let op = match c {
                     '<' => Bo::ShiftLeft,
                     '>' => Bo::ShiftRight,
@@ -2142,7 +2155,7 @@ impl Parser {
                 });
                 return Ok(());
             }
-            _ => return Err(Box::new(Error::Unexpected(op.1, ExpectedToken::Assignment))),
+            (_, span) => return Err(Box::new(Error::Unexpected(span, ExpectedToken::Assignment))),
         };
 
         let span = lexer.span_from(span_start);
@@ -2239,14 +2252,6 @@ impl Parser {
                 }
                 (Token::Word(word), _) => {
                     let kind = match word {
-                        "_" => {
-                            let _ = lexer.next();
-                            lexer.expect(Token::Operation('='))?;
-                            let expr = this.expression(lexer, ctx)?;
-                            lexer.expect(Token::Separator(';'))?;
-
-                            ast::StatementKind::Phony(expr)
-                        }
                         "let" => {
                             let _ = lexer.next();
                             let (name, given_ty) = this.optionally_typed_ident(lexer, ctx)?;

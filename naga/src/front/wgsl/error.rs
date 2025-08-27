@@ -135,6 +135,7 @@ pub enum ExpectedToken<'a> {
     Identifier,
     AfterIdentListComma,
     AfterIdentListArg,
+    LhsExpression,
     /// Expected: constant, parenthesized expression, identifier
     PrimaryExpression,
     /// Expected: assignment, increment/decrement expression
@@ -494,6 +495,7 @@ impl<'a> Error<'a> {
                         Token::End => "end".to_string(),
                     },
                     ExpectedToken::Identifier => "identifier".to_string(),
+                    ExpectedToken::LhsExpression => "assignment destination".to_string(),
                     ExpectedToken::PrimaryExpression => "expression".to_string(),
                     ExpectedToken::Assignment => "assignment or increment/decrement".to_string(),
                     ExpectedToken::SwitchItem => concat!(

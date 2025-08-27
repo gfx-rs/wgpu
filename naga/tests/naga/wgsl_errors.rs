@@ -2615,11 +2615,11 @@ fn binary_statement() {
             3 + 5;
         }
     ",
-        r###"error: expected assignment or increment/decrement, found "+"
-  ┌─ wgsl:3:15
+        r###"error: expected assignment destination, found "3"
+  ┌─ wgsl:3:13
   │
 3 │             3 + 5;
-  │               ^ expected assignment or increment/decrement
+  │             ^ expected assignment destination
 
 "###,
     );
@@ -2633,11 +2633,11 @@ fn assign_to_expr() {
             3 + 5 = 10;
         }
         ",
-        r###"error: expected assignment or increment/decrement, found "+"
-  ┌─ wgsl:3:15
+        r###"error: expected assignment destination, found "3"
+  ┌─ wgsl:3:13
   │
 3 │             3 + 5 = 10;
-  │               ^ expected assignment or increment/decrement
+  │             ^ expected assignment destination
 
 "###,
     );
