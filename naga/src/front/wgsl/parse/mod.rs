@@ -1024,56 +1024,66 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<'a, Handle<ast::Expression<'a>>> {
-        self.track_recursion(|this| {
-            this.push_rule_span(Rule::UnaryExpr, lexer);
-            //TODO: refactor this to avoid backing up
-            let token = lexer.next();
-            let expr = match token.0 {
-                Token::Operation('-') => {
-                    let expr = this.unary_expression(lexer, ctx)?;
-                    let expr = ast::Expression::Unary {
-                        op: crate::UnaryOperator::Negate,
-                        expr,
-                    };
-                    let span = this.peek_rule_span(lexer);
-                    ctx.expressions.append(expr, span)
-                }
-                Token::Operation('!') => {
-                    let expr = this.unary_expression(lexer, ctx)?;
-                    let expr = ast::Expression::Unary {
-                        op: crate::UnaryOperator::LogicalNot,
-                        expr,
-                    };
-                    let span = this.peek_rule_span(lexer);
-                    ctx.expressions.append(expr, span)
-                }
-                Token::Operation('~') => {
-                    let expr = this.unary_expression(lexer, ctx)?;
-                    let expr = ast::Expression::Unary {
-                        op: crate::UnaryOperator::BitwiseNot,
-                        expr,
-                    };
-                    let span = this.peek_rule_span(lexer);
-                    ctx.expressions.append(expr, span)
-                }
-                Token::Operation('*') => {
-                    let expr = this.unary_expression(lexer, ctx)?;
-                    let expr = ast::Expression::Deref(expr);
-                    let span = this.peek_rule_span(lexer);
-                    ctx.expressions.append(expr, span)
-                }
-                Token::Operation('&') => {
-                    let expr = this.unary_expression(lexer, ctx)?;
-                    let expr = ast::Expression::AddrOf(expr);
-                    let span = this.peek_rule_span(lexer);
-                    ctx.expressions.append(expr, span)
-                }
-                _ => this.singular_expression(lexer, ctx, token)?,
-            };
+        self.push_rule_span(Rule::UnaryExpr, lexer);
 
-            this.pop_rule_span(lexer);
-            Ok(expr)
-        })
+        enum UnaryOp {
+            Negate,
+            LogicalNot,
+            BitwiseNot,
+            Deref,
+            AddrOf,
+        }
+
+        let mut ops = Vec::new();
+        let mut expr;
+
+        loop {
+            match lexer.next() {
+                (Token::Operation('-'), span) => {
+                    ops.push((UnaryOp::Negate, span));
+                }
+                (Token::Operation('!'), span) => {
+                    ops.push((UnaryOp::LogicalNot, span));
+                }
+                (Token::Operation('~'), span) => {
+                    ops.push((UnaryOp::BitwiseNot, span));
+                }
+                (Token::Operation('*'), span) => {
+                    ops.push((UnaryOp::Deref, span));
+                }
+                (Token::Operation('&'), span) => {
+                    ops.push((UnaryOp::AddrOf, span));
+                }
+                token => {
+                    expr = self.singular_expression(lexer, ctx, token)?;
+                    break;
+                }
+            };
+        }
+
+        for (op, span) in ops.into_iter().rev() {
+            let e = match op {
+                UnaryOp::Negate => ast::Expression::Unary {
+                    op: crate::UnaryOperator::Negate,
+                    expr,
+                },
+                UnaryOp::LogicalNot => ast::Expression::Unary {
+                    op: crate::UnaryOperator::LogicalNot,
+                    expr,
+                },
+                UnaryOp::BitwiseNot => ast::Expression::Unary {
+                    op: crate::UnaryOperator::BitwiseNot,
+                    expr,
+                },
+                UnaryOp::Deref => ast::Expression::Deref(expr),
+                UnaryOp::AddrOf => ast::Expression::AddrOf(expr),
+            };
+            let span = lexer.span_from(span.to_range().unwrap().start);
+            expr = ctx.expressions.append(e, span);
+        }
+
+        self.pop_rule_span(lexer);
+        Ok(expr)
     }
 
     /// Parse a `lhs_expression`.
