@@ -1784,7 +1784,7 @@ impl Parser {
                 )?
             }
             "atomic" => {
-                let scalar = lexer.next_scalar_generic()?;
+                let (scalar, _) = lexer.next_scalar_generic_with_span()?;
                 ast::Type::Atomic(scalar)
             }
             "ptr" => {

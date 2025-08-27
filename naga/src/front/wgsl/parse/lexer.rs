@@ -520,22 +520,6 @@ impl<'a> Lexer<'a> {
     }
 
     /// Parses a generic scalar type, for example `<f32>`.
-    pub(in crate::front::wgsl) fn next_scalar_generic(&mut self) -> Result<'a, Scalar> {
-        self.expect_generic_paren('<')?;
-        let (scalar, _span) = match self.next() {
-            (Token::Word(word), span) => {
-                conv::get_scalar_type(&self.enable_extensions, span, word)?
-                    .map(|scalar| (scalar, span))
-                    .ok_or(Error::UnknownScalarType(span))?
-            }
-            (_, span) => return Err(Box::new(Error::UnknownScalarType(span))),
-        };
-
-        self.expect_generic_paren('>')?;
-        Ok(scalar)
-    }
-
-    /// Parses a generic scalar type, for example `<f32>`.
     ///
     /// Returns the span covering the inner type, excluding the brackets.
     pub(in crate::front::wgsl) fn next_scalar_generic_with_span(
