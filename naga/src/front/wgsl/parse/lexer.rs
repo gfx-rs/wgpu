@@ -463,11 +463,11 @@ impl<'a> Lexer<'a> {
     }
 
     pub(in crate::front::wgsl) fn end_of_generic_arguments(&mut self) -> bool {
-        self.skip(Token::Separator(',')) && self.peek().0 != Token::Paren('>')
+        self.next_if(Token::Separator(',')) && self.peek().0 != Token::Paren('>')
     }
 
-    /// If the next token matches it is skipped and true is returned
-    pub(in crate::front::wgsl) fn skip(&mut self, what: Token<'_>) -> bool {
+    /// If the next token matches it's consumed and true is returned
+    pub(in crate::front::wgsl) fn next_if(&mut self, what: Token<'_>) -> bool {
         let (peeked_token, rest) = self.peek_token_and_rest();
         if peeked_token.0 == what {
             self.input = rest;
@@ -554,15 +554,15 @@ impl<'a> Lexer<'a> {
     }
 
     pub(in crate::front::wgsl) fn next_acceleration_structure_flags(&mut self) -> Result<'a, bool> {
-        Ok(if self.skip(Token::Paren('<')) {
-            if !self.skip(Token::Paren('>')) {
+        Ok(if self.next_if(Token::Paren('<')) {
+            if !self.next_if(Token::Paren('>')) {
                 let (name, span) = self.next_ident_with_span()?;
                 let ret = if name == "vertex_return" {
                     true
                 } else {
                     return Err(Box::new(Error::UnknownAttribute(span)));
                 };
-                self.skip(Token::Separator(','));
+                self.next_if(Token::Separator(','));
                 self.expect(Token::Paren('>'))?;
                 ret
             } else {
@@ -590,14 +590,14 @@ impl<'a> Lexer<'a> {
     }
 
     pub(in crate::front::wgsl) fn close_arguments(&mut self) -> Result<'a, ()> {
-        let _ = self.skip(Token::Separator(','));
+        let _ = self.next_if(Token::Separator(','));
         self.expect(Token::Paren(')'))
     }
 
     pub(in crate::front::wgsl) fn next_argument(&mut self) -> Result<'a, bool> {
         let paren = Token::Paren(')');
-        if self.skip(Token::Separator(',')) {
-            Ok(!self.skip(paren))
+        if self.next_if(Token::Separator(',')) {
+            Ok(!self.next_if(paren))
         } else {
             self.expect(paren).map(|()| false)
         }
