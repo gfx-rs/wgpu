@@ -792,7 +792,6 @@ impl Parser {
         Ok(expr)
     }
 
-    /// Expects [`Rule::PrimaryExpr`] or [`Rule::SingularExpr`] on top; does not pop it.
     /// Expects `name` to be consumed (not in lexer).
     fn call_expression<'a>(
         &mut self,
@@ -801,8 +800,6 @@ impl Parser {
         name_span: Span,
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<'a, Handle<ast::Expression<'a>>> {
-        assert!(self.rules.last().is_some());
-
         let expr = match name {
             // bitcast looks like a function call, but it's an operator and must be handled differently.
             "bitcast" => {
@@ -841,7 +838,7 @@ impl Parser {
             }
         };
 
-        let span = self.peek_rule_span(lexer);
+        let span = lexer.span_from(name_span.to_range().unwrap().start);
         let expr = ctx.expressions.append(expr, span);
         Ok(expr)
     }
@@ -868,8 +865,10 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
+        token: TokenSpan<'a>,
     ) -> Result<'a, Handle<ast::Expression<'a>>> {
         self.push_rule_span(Rule::PrimaryExpr, lexer);
+
         const fn literal_ray_flag<'b>(flag: crate::RayFlag) -> ast::Expression<'b> {
             ast::Expression::Literal(ast::Literal::Number(Number::U32(flag.bits())))
         }
@@ -879,9 +878,9 @@ impl Parser {
             ast::Expression::Literal(ast::Literal::Number(Number::U32(intersection as u32)))
         }
 
-        let start = lexer.start_byte_offset();
+        let start = token.1.to_range().unwrap().start;
 
-        let expr = match lexer.next() {
+        let expr = match token {
             (Token::Paren('('), _) => {
                 let expr = self.enclosed_expression(lexer, ctx)?;
                 lexer.expect(Token::Paren(')'))?;
@@ -968,7 +967,8 @@ impl Parser {
             }
         };
 
-        let span = self.pop_rule_span(lexer);
+        self.pop_rule_span(lexer);
+        let span = lexer.span_from(start);
         let expr = ctx.expressions.append(expr, span);
         Ok(expr)
     }
@@ -1027,9 +1027,9 @@ impl Parser {
         self.track_recursion(|this| {
             this.push_rule_span(Rule::UnaryExpr, lexer);
             //TODO: refactor this to avoid backing up
-            let expr = match lexer.peek().0 {
+            let token = lexer.next();
+            let expr = match token.0 {
                 Token::Operation('-') => {
-                    let _ = lexer.next();
                     let expr = this.unary_expression(lexer, ctx)?;
                     let expr = ast::Expression::Unary {
                         op: crate::UnaryOperator::Negate,
@@ -1039,7 +1039,6 @@ impl Parser {
                     ctx.expressions.append(expr, span)
                 }
                 Token::Operation('!') => {
-                    let _ = lexer.next();
                     let expr = this.unary_expression(lexer, ctx)?;
                     let expr = ast::Expression::Unary {
                         op: crate::UnaryOperator::LogicalNot,
@@ -1049,7 +1048,6 @@ impl Parser {
                     ctx.expressions.append(expr, span)
                 }
                 Token::Operation('~') => {
-                    let _ = lexer.next();
                     let expr = this.unary_expression(lexer, ctx)?;
                     let expr = ast::Expression::Unary {
                         op: crate::UnaryOperator::BitwiseNot,
@@ -1059,20 +1057,18 @@ impl Parser {
                     ctx.expressions.append(expr, span)
                 }
                 Token::Operation('*') => {
-                    let _ = lexer.next();
                     let expr = this.unary_expression(lexer, ctx)?;
                     let expr = ast::Expression::Deref(expr);
                     let span = this.peek_rule_span(lexer);
                     ctx.expressions.append(expr, span)
                 }
                 Token::Operation('&') => {
-                    let _ = lexer.next();
                     let expr = this.unary_expression(lexer, ctx)?;
                     let expr = ast::Expression::AddrOf(expr);
                     let span = this.peek_rule_span(lexer);
                     ctx.expressions.append(expr, span)
                 }
-                _ => this.singular_expression(lexer, ctx)?,
+                _ => this.singular_expression(lexer, ctx, token)?,
             };
 
             this.pop_rule_span(lexer);
@@ -1135,10 +1131,11 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
+        token: TokenSpan<'a>,
     ) -> Result<'a, Handle<ast::Expression<'a>>> {
-        let start = lexer.start_byte_offset();
+        let start = token.1.to_range().unwrap().start;
         self.push_rule_span(Rule::SingularExpr, lexer);
-        let primary_expr = self.primary_expression(lexer, ctx)?;
+        let primary_expr = self.primary_expression(lexer, ctx, token)?;
         let singular_expr = self.component_or_swizzle_specifier(start, lexer, ctx, primary_expr)?;
         self.pop_rule_span(lexer);
 
