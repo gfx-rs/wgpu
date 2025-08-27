@@ -41,11 +41,13 @@ pub mod error;
 mod features;
 pub mod instance;
 pub mod math;
+mod tokens;
 mod transfers;
 
 pub use counters::*;
 pub use features::*;
 pub use instance::*;
+pub use tokens::*;
 pub use transfers::*;
 
 /// Integral type used for [`Buffer`] offsets and sizes.
@@ -1462,6 +1464,9 @@ pub struct DeviceDescriptor<L> {
     /// Exactly the specified limits, and no better or worse,
     /// will be allowed in validation of API calls on the resulting device.
     pub required_limits: Limits,
+    /// Specifies whether `self.required_features` is allowed to contain experimental features.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub experimental_features: ExperimentalFeatures,
     /// Hints for memory allocation strategies.
     pub memory_hints: MemoryHints,
     /// Whether API tracing for debugging is enabled,
@@ -1477,6 +1482,7 @@ impl<L> DeviceDescriptor<L> {
             label: fun(&self.label),
             required_features: self.required_features,
             required_limits: self.required_limits.clone(),
+            experimental_features: self.experimental_features,
             memory_hints: self.memory_hints.clone(),
             trace: self.trace.clone(),
         }

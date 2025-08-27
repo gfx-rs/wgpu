@@ -1494,6 +1494,19 @@ impl Features {
         ]))
     }
 
+    /// Mask of all features which are experimental.
+    #[must_use]
+    pub const fn all_experimental_mask() -> Self {
+        Self::from_bits_truncate(FeatureBits([
+            FeaturesWGPU::EXPERIMENTAL_MESH_SHADER.bits()
+                | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_MULTIVIEW.bits()
+                | FeaturesWGPU::EXPERIMENTAL_RAY_QUERY.bits()
+                | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
+                | FeaturesWGPU::EXPERIMENTAL_PASSTHROUGH_SHADERS.bits(),
+            FeaturesWebGPU::empty().bits(),
+        ]))
+    }
+
     /// Vertex formats allowed for creating and building BLASes
     #[must_use]
     pub fn allowed_vertex_formats_for_blas(&self) -> Vec<VertexFormat> {
@@ -1619,5 +1632,14 @@ mod tests {
                 FeaturesWebGPU::TIMESTAMP_QUERY
             )
         );
+    }
+
+    #[test]
+    fn experimental_features_part_of_experimental_mask() {
+        for (name, feature) in Features::all().iter_names() {
+            let prefixed_with_experimental = name.starts_with("EXPERIMENTAL_");
+            let in_experimental_mask = Features::all_experimental_mask().contains(feature);
+            assert_eq!(in_experimental_mask, prefixed_with_experimental);
+        }
     }
 }

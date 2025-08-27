@@ -73,6 +73,21 @@ Difference for SPIR-V passthrough:
 ```
 This allows using precompiled shaders without manually checking which backend's code to pass, for example if you have shaders precompiled for both DXIL and SPIR-V.
 
+#### `EXPERIMENTAL_*` features now require unsafe code to enable
+
+We want to be able to expose potentially experimental features to our users before we have ensured that they are fully sound to use.
+As such, we now require any feature that is prefixed with `EXPERIMENTAL` to have a special unsafe token enabled in the device descriptor
+acknowledging that the features may still have bugs in them and to report any they find.
+
+```rust
+adapter.request_device(&wgpu::DeviceDescriptor {
+    features: wgpu::Features::EXPERIMENTAL_MESH_SHADER,
+    experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() }
+    ..
+})
+```
+
+By @cwfitzgerald in [#8163](https://github.com/gfx-rs/wgpu/pull/8163).
 
 #### Multi-draw indirect is now unconditionally supported when indirect draws are supported
 
