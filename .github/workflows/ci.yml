@@ -18,14 +18,6 @@ env:
   # Dependency versioning
   #
 
-  # Sourced from https://vulkan.lunarg.com/sdk/home#linux
-  # These Vulkan version definition is duplicated in the install-vulkan action.
-  VULKAN_SDK_VERSION: "1.4.321"
-  VULKAN_FULL_SDK_VERSION: "1.4.321.0"
-
-  # These Mesa version definition is duplicated in the install-mesa action.
-  MESA_VERSION: "24.3.4"
-
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
   REPO_MSRV: "1.88"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
@@ -563,45 +555,15 @@ jobs:
 
       - name: (Windows) Install Mesa
         if: matrix.os == 'windows-2022'
-        shell: bash
-        run: |
-          set -e
-
-          curl.exe -L --retry 5 https://github.com/pal1000/mesa-dist-win/releases/download/$MESA_VERSION/mesa3d-$MESA_VERSION-release-msvc.7z -o mesa.7z
-          7z.exe e mesa.7z -omesa x64/{opengl32.dll,libgallium_wgl.dll,libglapi.dll,vulkan_lvp.dll,lvp_icd.x86_64.json}
-
-          cp -v mesa/* target/llvm-cov-target/debug/
-          cp -v mesa/* target/llvm-cov-target/debug/deps
-
-          # We need to use cygpath to convert PWD to a windows path as we're using bash.
-          echo "VK_DRIVER_FILES=`cygpath --windows $PWD/mesa/lvp_icd.x86_64.json`" >> "$GITHUB_ENV"
-          echo "GALLIUM_DRIVER=llvmpipe" >> "$GITHUB_ENV"
+        uses: ./.github/actions/install-mesa
 
       - name: (Windows) Install Vulkan SDK
         if: matrix.os == 'windows-2022'
-        shell: bash
-        run: |
-          set -e
-
-          curl.exe -L --retry 5 https://sdk.lunarg.com/sdk/download/${{ env.VULKAN_FULL_SDK_VERSION }}/windows/vulkansdk-windows-X64-${{ env.VULKAN_FULL_SDK_VERSION }}.exe -o vulkan-sdk-installer.exe
-
-          ./vulkan-sdk-installer.exe --accept-licenses --default-answer --confirm-command install
-
-          echo "C:/VulkanSDK/${{ env.VULKAN_FULL_SDK_VERSION }}/Bin" >> "$GITHUB_PATH"
+        uses: ./.github/actions/install-vulkan-sdk
 
       - name: (Mac) Install Vulkan SDK
         if: matrix.os == 'macos-14'
-        shell: bash
-        run: |
-          set -e
-
-          curl -L --retry 5 https://sdk.lunarg.com/sdk/download/${{ env.VULKAN_FULL_SDK_VERSION }}/mac/vulkansdk-macos-${{ env.VULKAN_FULL_SDK_VERSION }}.zip -o vulkan-sdk.zip
-          unzip vulkan-sdk.zip -d vulkan-sdk
-
-          ls -l vulkan-sdk
-          sudo ./vulkan-sdk/vulkansdk-macOS-${{ env.VULKAN_FULL_SDK_VERSION }}.app/Contents/MacOS/vulkansdk-macOS-${{ env.VULKAN_FULL_SDK_VERSION }} --root "$HOME/VulkanSDK" --accept-licenses --default-answer --confirm-command install
-
-          echo "$HOME/VulkanSDK/macOS/bin" >> "$GITHUB_PATH"
+        uses: ./.github/actions/install-vulkan-sdk
 
       - name: (Linux) Install Vulkan SDK
         if: matrix.os == 'ubuntu-24.04'
