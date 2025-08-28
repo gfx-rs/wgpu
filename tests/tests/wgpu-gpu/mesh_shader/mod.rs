@@ -19,15 +19,13 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
 }
 
 // Same as in mesh shader example
-fn compile_glsl(
-    device: &wgpu::Device,
-    data: &[u8],
-    shader_stage: &'static str,
-) -> wgpu::ShaderModule {
+fn compile_glsl(device: &wgpu::Device, shader_stage: &'static str) -> wgpu::ShaderModule {
     let cmd = std::process::Command::new("glslc")
         .args([
-            &format!("-fshader-stage={shader_stage}"),
-            "-",
+            &format!(
+                "{}/tests/wgpu-gpu/mesh_shader/basic.{shader_stage}",
+                env!("CARGO_MANIFEST_DIR")
+            ),
             "-o",
             "-",
             "--target-env=vulkan1.2",
@@ -37,7 +35,6 @@ fn compile_glsl(
         .stdout(Stdio::piped())
         .spawn()
         .expect("Failed to call glslc");
-    cmd.stdin.as_ref().unwrap().write_all(data).unwrap();
     let output = cmd.wait_with_output().expect("Error waiting for glslc");
     assert!(output.status.success());
     unsafe {
@@ -95,9 +92,9 @@ fn get_shaders(
 ) -> (wgpu::ShaderModule, wgpu::ShaderModule, wgpu::ShaderModule) {
     if backend == wgpu::Backend::Vulkan {
         (
-            compile_glsl(device, include_bytes!("basic.task"), "task"),
-            compile_glsl(device, include_bytes!("basic.mesh"), "mesh"),
-            compile_glsl(device, include_bytes!("basic.frag"), "frag"),
+            compile_glsl(device, "task"),
+            compile_glsl(device, "mesh"),
+            compile_glsl(device, "frag"),
         )
     } else if backend == wgpu::Backend::Dx12 {
         (

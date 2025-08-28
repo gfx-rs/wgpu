@@ -1,15 +1,13 @@
 use std::{io::Write, process::Stdio};
 
 // Same as in mesh shader tests
-fn compile_glsl(
-    device: &wgpu::Device,
-    data: &[u8],
-    shader_stage: &'static str,
-) -> wgpu::ShaderModule {
+fn compile_glsl(device: &wgpu::Device, shader_stage: &'static str) -> wgpu::ShaderModule {
     let cmd = std::process::Command::new("glslc")
         .args([
-            &format!("-fshader-stage={shader_stage}"),
-            "-",
+            &format!(
+                "{}/src/mesh_shader/shader.{shader_stage}",
+                env!("CARGO_MANIFEST_DIR")
+            ),
             "-o",
             "-",
             "--target-env=vulkan1.2",
@@ -19,7 +17,6 @@ fn compile_glsl(
         .stdout(Stdio::piped())
         .spawn()
         .expect("Failed to call glslc");
-    cmd.stdin.as_ref().unwrap().write_all(data).unwrap();
     let output = cmd.wait_with_output().expect("Error waiting for glslc");
     assert!(output.status.success());
     unsafe {
@@ -46,6 +43,8 @@ fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::Sh
             "-Fo",
             &out_path,
         ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
         .output()
         .unwrap();
     if !cmd.status.success() {
@@ -76,9 +75,9 @@ impl crate::framework::Example for Example {
     ) -> Self {
         let (ts, ms, fs) = if adapter.get_info().backend == wgpu::Backend::Vulkan {
             (
-                compile_glsl(device, include_bytes!("shader.task"), "task"),
-                compile_glsl(device, include_bytes!("shader.mesh"), "mesh"),
-                compile_glsl(device, include_bytes!("shader.frag"), "frag"),
+                compile_glsl(device, "task"),
+                compile_glsl(device, "mesh"),
+                compile_glsl(device, "frag"),
             )
         } else if adapter.get_info().backend == wgpu::Backend::Dx12 {
             (
@@ -164,11 +163,6 @@ impl crate::framework::Example for Example {
     }
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits::defaults().using_recommended_minimum_mesh_shader_values()
-    }
-    // This is because the passthrough features are optional despite at least one
-    // being required
-    fn supported_backends() -> wgpu::Backends {
-        wgpu::Backends::VULKAN | wgpu::Backends::DX12
     }
     fn resize(
         &mut self,
