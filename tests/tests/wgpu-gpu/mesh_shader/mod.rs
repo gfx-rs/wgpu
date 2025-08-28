@@ -136,7 +136,13 @@ fn create_depth(
     (depth_texture, depth_view, state)
 }
 
-fn mesh_pipeline_build(ctx: &TestingContext, use_task: bool, use_frag: bool, draw: bool) {
+struct MeshPipelineTestInfo {
+    use_task: bool,
+    use_frag: bool,
+    draw: bool,
+}
+
+fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
     let backend = ctx.adapter.get_info().backend;
     if backend != wgpu::Backend::Vulkan && backend != wgpu::Backend::Dx12 {
         return;
@@ -144,8 +150,8 @@ fn mesh_pipeline_build(ctx: &TestingContext, use_task: bool, use_frag: bool, dra
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
     let (task, mesh, frag) = get_shaders(device, backend);
-    let task = if use_task { Some(task) } else { None };
-    let frag = if use_frag { Some(frag) } else { None };
+    let task = if info.use_task { Some(task) } else { None };
+    let frag = if info.use_frag { Some(frag) } else { None };
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
@@ -179,7 +185,7 @@ fn mesh_pipeline_build(ctx: &TestingContext, use_task: bool, use_frag: bool, dra
         multiview: None,
         cache: None,
     });
-    if draw {
+    if info.draw {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
@@ -333,22 +339,74 @@ fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
 #[gpu_test]
 pub static MESH_PIPELINE_BASIC_MESH: GpuTestConfiguration =
     default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
-        mesh_pipeline_build(&ctx, false, false, true);
+        mesh_pipeline_build(
+            &ctx,
+            MeshPipelineTestInfo {
+                use_task: false,
+                use_frag: false,
+                draw: true,
+            },
+        );
     });
 #[gpu_test]
 pub static MESH_PIPELINE_BASIC_TASK_MESH: GpuTestConfiguration =
     default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
-        mesh_pipeline_build(&ctx, true, false, true);
+        mesh_pipeline_build(
+            &ctx,
+            MeshPipelineTestInfo {
+                use_task: true,
+                use_frag: false,
+                draw: true,
+            },
+        );
     });
 #[gpu_test]
 pub static MESH_PIPELINE_BASIC_MESH_FRAG: GpuTestConfiguration =
     default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
-        mesh_pipeline_build(&ctx, false, true, true);
+        mesh_pipeline_build(
+            &ctx,
+            MeshPipelineTestInfo {
+                use_task: false,
+                use_frag: true,
+                draw: true,
+            },
+        );
     });
 #[gpu_test]
 pub static MESH_PIPELINE_BASIC_TASK_MESH_FRAG: GpuTestConfiguration =
     default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
-        mesh_pipeline_build(&ctx, true, true, true);
+        mesh_pipeline_build(
+            &ctx,
+            MeshPipelineTestInfo {
+                use_task: true,
+                use_frag: true,
+                draw: true,
+            },
+        );
+    });
+#[gpu_test]
+pub static MESH_PIPELINE_BASIC_MESH_NO_DRAW: GpuTestConfiguration =
+    default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
+        mesh_pipeline_build(
+            &ctx,
+            MeshPipelineTestInfo {
+                use_task: false,
+                use_frag: false,
+                draw: false,
+            },
+        );
+    });
+#[gpu_test]
+pub static MESH_PIPELINE_BASIC_TASK_MESH_FRAG_NO_DRAW: GpuTestConfiguration =
+    default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
+        mesh_pipeline_build(
+            &ctx,
+            MeshPipelineTestInfo {
+                use_task: true,
+                use_frag: true,
+                draw: false,
+            },
+        );
     });
 
 // Mesh draw
