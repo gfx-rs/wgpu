@@ -2287,11 +2287,17 @@ impl Parser {
                                         let value = loop {
                                             let value = this.switch_value(lexer, ctx)?;
                                             if lexer.skip(Token::Separator(',')) {
-                                                if lexer.skip(Token::Separator(':')) {
+                                                // list of values ends with ':' or a compound statement
+                                                // indicated by an attribute or '{'
+                                                if matches!(
+                                                    lexer.peek().0,
+                                                    Token::Separator(':')
+                                                        | Token::Attribute
+                                                        | Token::Paren('{')
+                                                ) {
                                                     break value;
                                                 }
                                             } else {
-                                                lexer.skip(Token::Separator(':'));
                                                 break value;
                                             }
                                             cases.push(ast::SwitchCase {
@@ -2300,6 +2306,8 @@ impl Parser {
                                                 fall_through: true,
                                             });
                                         };
+
+                                        lexer.skip(Token::Separator(':'));
 
                                         let body = this.block(lexer, ctx, brace_nesting_level)?.0;
 
