@@ -1590,8 +1590,8 @@ impl MeshShaderPipelineStateStream {
             ($subobject_type:expr, $data:expr) => {{
                 // Ensure 8-byte alignment for the subobject start
                 let alignment = 8;
-                let padding = (alignment - (bytes.len() % alignment)) % alignment;
-                bytes.extend(core::iter::repeat(0).take(padding));
+                let aligned_length = bytes.len().next_multiple_of(alignment);
+                bytes.resize(aligned_length, 0);
 
                 // Append the type tag (u32)
                 let tag: u32 = $subobject_type.0 as u32;
@@ -1599,8 +1599,8 @@ impl MeshShaderPipelineStateStream {
 
                 // Align the data
                 let obj_align = align_of_val(&$data);
-                let data_padding = (obj_align - (bytes.len() % obj_align)) % obj_align;
-                bytes.extend(core::iter::repeat(0).take(data_padding));
+                let data_start = bytes.len().next_multiple_of(obj_align);
+                bytes.resize(data_start, 0);
 
                 // Append the data itself
                 #[allow(clippy::ptr_as_ptr, trivial_casts)]
