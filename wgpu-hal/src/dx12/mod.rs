@@ -1599,8 +1599,8 @@ impl MeshShaderPipelineStateStream {
 
                 // Align the data
                 let obj_align = align_of_val(&$data);
-                let data_padding = (obj_align - (bytes.len() % obj_align)) % obj_align;
-                bytes.extend(core::iter::repeat(0).take(data_padding));
+                let data_start = bytes.len().next_multiple_of(obj_align);
+                bytes.resize(data_start, 0);
 
                 // Append the data itself
                 #[allow(clippy::ptr_as_ptr, trivial_casts)]
