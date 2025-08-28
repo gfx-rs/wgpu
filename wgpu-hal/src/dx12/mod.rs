@@ -1590,8 +1590,8 @@ impl MeshShaderPipelineStateStream {
             ($subobject_type:expr, $data:expr) => {{
                 // Ensure 8-byte alignment for the subobject start
                 let alignment = 8;
-                let padding = (alignment - (bytes.len() % alignment)) % alignment;
-                bytes.extend(core::iter::repeat(0).take(padding));
+                let aligned_length = bytes.len().next_multiple_of(alignment);
+                bytes.resize(aligned_length, 0);
 
                 // Append the type tag (u32)
                 let tag: u32 = $subobject_type.0 as u32;
