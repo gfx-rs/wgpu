@@ -15,6 +15,8 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
         MESH_DRAW_INDIRECT,
         MESH_MULTI_DRAW_INDIRECT,
         MESH_MULTI_DRAW_INDIRECT_COUNT,
+        MESH_PIPELINE_BASIC_MESH_NO_DRAW,
+        MESH_PIPELINE_BASIC_TASK_MESH_FRAG_NO_DRAW,
     ]);
 }
 
