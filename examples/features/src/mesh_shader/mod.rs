@@ -1,4 +1,4 @@
-use std::{io::Write, process::Stdio};
+use std::process::Stdio;
 
 // Same as in mesh shader tests
 fn compile_glsl(device: &wgpu::Device, shader_stage: &'static str) -> wgpu::ShaderModule {
