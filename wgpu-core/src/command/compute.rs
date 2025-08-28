@@ -438,7 +438,7 @@ impl Global {
             let cmd_buf_data = cmd_buf_data.get_inner();
 
             if let Some(ref mut list) = cmd_buf_data.commands {
-                list.push(crate::device::trace::Command::RunComputePass {
+                list.push(crate::command::Command::RunComputePass {
                     base: BasePass {
                         label: base.label.clone(),
                         error: None,

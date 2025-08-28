@@ -6,6 +6,7 @@ mod compute;
 mod compute_command;
 mod draw;
 mod encoder;
+mod encoder_command;
 mod memory_init;
 mod pass;
 mod query;
@@ -22,8 +23,8 @@ use core::ops;
 
 pub(crate) use self::clear::clear_texture;
 pub use self::{
-    bundle::*, clear::ClearError, compute::*, compute_command::ComputeCommand, draw::*, query::*,
-    render::*, render_command::RenderCommand, transfer::*,
+    bundle::*, clear::ClearError, compute::*, compute_command::ComputeCommand, draw::*,
+    encoder_command::Command, query::*, render::*, render_command::RenderCommand, transfer::*,
 };
 pub(crate) use allocator::CommandAllocator;
 
@@ -55,7 +56,7 @@ use wgt::error::{ErrorType, WebGpuError};
 use thiserror::Error;
 
 #[cfg(feature = "trace")]
-use crate::device::trace::Command as TraceCommand;
+type TraceCommand = Command;
 
 const PUSH_CONSTANT_CLEAR_ARRAY: &[u32] = &[0_u32; 64];
 

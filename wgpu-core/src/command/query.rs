@@ -2,7 +2,7 @@ use alloc::{sync::Arc, vec, vec::Vec};
 use core::{iter, mem};
 
 #[cfg(feature = "trace")]
-use crate::device::trace::Command as TraceCommand;
+use crate::command::Command as TraceCommand;
 use crate::{
     command::{CommandEncoder, EncoderStateError},
     device::{DeviceError, MissingFeatures},

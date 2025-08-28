@@ -201,7 +201,7 @@ impl Global {
         cmd_buf_data.record_with(|cmd_buf_data| {
             #[cfg(feature = "trace")]
             if let Some(ref mut list) = cmd_buf_data.commands {
-                list.push(crate::device::trace::Command::BuildAccelerationStructures {
+                list.push(crate::command::Command::BuildAccelerationStructures {
                     blas: trace_blas.clone(),
                     tlas: trace_tlas.clone(),
                 });
