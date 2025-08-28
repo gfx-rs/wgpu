@@ -343,7 +343,6 @@ impl super::Adapter {
             | wgt::Features::DEPTH32FLOAT_STENCIL8
             | wgt::Features::INDIRECT_FIRST_INSTANCE
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
-            | wgt::Features::MULTI_DRAW_INDIRECT
             | wgt::Features::MULTI_DRAW_INDIRECT_COUNT
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO
@@ -363,6 +362,7 @@ impl super::Adapter {
             | wgt::Features::TEXTURE_FORMAT_NV12
             | wgt::Features::FLOAT32_FILTERABLE
             | wgt::Features::TEXTURE_ATOMIC
+            | wgt::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS
             | wgt::Features::EXTERNAL_TEXTURE;
 
         //TODO: in order to expose this, we need to run a compute shader
@@ -413,6 +413,35 @@ impl super::Adapter {
             wgt::Features::BGRA8UNORM_STORAGE,
             bgra8unorm_storage_supported,
         );
+
+        let p010_format_supported = {
+            let mut p010_info = Direct3D12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
+                Format: Dxgi::Common::DXGI_FORMAT_P010,
+                ..Default::default()
+            };
+            let hr = unsafe {
+                device.CheckFeatureSupport(
+                    Direct3D12::D3D12_FEATURE_FORMAT_SUPPORT,
+                    <*mut _>::cast(&mut p010_info),
+                    size_of_val(&p010_info) as u32,
+                )
+            };
+            if hr.is_ok() {
+                let supports_texture2d = p010_info
+                    .Support1
+                    .contains(Direct3D12::D3D12_FORMAT_SUPPORT1_TEXTURE2D);
+                let supports_shader_load = p010_info
+                    .Support1
+                    .contains(Direct3D12::D3D12_FORMAT_SUPPORT1_SHADER_LOAD);
+                let supports_shader_sample = p010_info
+                    .Support1
+                    .contains(Direct3D12::D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE);
+                supports_texture2d && supports_shader_load && supports_shader_sample
+            } else {
+                false
+            }
+        };
+        features.set(wgt::Features::TEXTURE_FORMAT_P010, p010_format_supported);
 
         let mut features1 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS1::default();
         let hr = unsafe {

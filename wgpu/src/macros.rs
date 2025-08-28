@@ -96,22 +96,31 @@ macro_rules! include_spirv {
     };
 }
 
-/// Macro to load raw SPIR-V data statically, for use with [`Features::SPIRV_SHADER_PASSTHROUGH`].
+/// Macro to load raw SPIR-V data statically, for use with [`Features::EXPERIMENTAL_PASSTHROUGH_SHADERS`].
 ///
 /// It ensures the word alignment as well as the magic number.
 ///
-/// [`Features::SPIRV_SHADER_PASSTHROUGH`]: crate::Features::SPIRV_SHADER_PASSTHROUGH
+/// [`Features::EXPERIMENTAL_PASSTHROUGH_SHADERS`]: crate::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS
 #[macro_export]
 macro_rules! include_spirv_raw {
     ($($token:tt)*) => {
         {
             //log::info!("including '{}'", $($token)*);
-            $crate::ShaderModuleDescriptorPassthrough::SpirV(
-                $crate::ShaderModuleDescriptorSpirV {
-                    label: $crate::__macro_helpers::Some($($token)*),
-                    source: $crate::util::make_spirv_raw($crate::__macro_helpers::include_bytes!($($token)*)),
-                }
-            )
+            $crate::ShaderModuleDescriptorPassthrough {
+                label: $crate::__macro_helpers::Some($($token)*),
+                spirv: Some($crate::util::make_spirv_raw($crate::__macro_helpers::include_bytes!($($token)*))),
+
+                entry_point: "".to_owned(),
+                // This is unused for SPIR-V
+                num_workgroups: (0, 0, 0),
+                reflection: None,
+                shader_runtime_checks: $crate::ShaderRuntimeChecks::unchecked(),
+                dxil: None,
+                msl: None,
+                hlsl: None,
+                glsl: None,
+                wgsl: None,
+            }
         }
     };
 }

@@ -228,34 +228,10 @@ pub struct ShaderModuleDescriptor<'a> {
 }
 static_assertions::assert_impl_all!(ShaderModuleDescriptor<'_>: Send, Sync);
 
-/// Descriptor for a shader module that will bypass wgpu's shader tooling, for use with
-/// [`Device::create_shader_module_passthrough`].
+/// Descriptor for a shader module given by any of several sources.
+/// At least one of the shader types that may be used by the backend must be `Some`
 ///
 /// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
 /// only WGSL source code strings are accepted.
 pub type ShaderModuleDescriptorPassthrough<'a> =
     wgt::CreateShaderModuleDescriptorPassthrough<'a, Label<'a>>;
-
-/// Descriptor for a shader module given by Metal MSL source.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-pub type ShaderModuleDescriptorMsl<'a> = wgt::ShaderModuleDescriptorMsl<'a, Label<'a>>;
-
-/// Descriptor for a shader module given by SPIR-V binary.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-pub type ShaderModuleDescriptorSpirV<'a> = wgt::ShaderModuleDescriptorSpirV<'a, Label<'a>>;
-
-/// Descriptor for a shader module given by DirectX HLSL source.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-pub type ShaderModuleDescriptorHlsl<'a> = wgt::ShaderModuleDescriptorHlsl<'a, Label<'a>>;
-
-/// Descriptor for a shader module given by DirectX DXIL source.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-pub type ShaderModuleDescriptorDxil<'a> = wgt::ShaderModuleDescriptorDxil<'a, Label<'a>>;

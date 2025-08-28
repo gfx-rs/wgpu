@@ -1,15 +1,15 @@
-The **WGPU project** is a set of open-source libraries that _enables application
+The **wgpu project** is a set of open-source libraries that _enables application
 authors to write portable and performant graphics programs_. It was originally
 conceived to provide an implementation of WebGPU for Firefox as the standard
 evolved, and settled into something that could be shipped on all web browsers.
-WGPU has also enjoyed much contribution and use from other projects that require
+wgpu has also enjoyed much contribution and use from other projects that require
 graphics programming. We expect that these sorts of users will continue for the
 lifetime of project, and we embrace these contributors' needs and effort as the
-lifeblood of WGPU.
+lifeblood of wgpu.
 
 ## Mission
 
-The WGPU community seeks to realize the following directives through the
+The wgpu community seeks to realize the following directives through the
 project: it…
 
 1. …provides libraries for the WebGPU API that…
@@ -28,7 +28,7 @@ project: it…
 
 ## Decision-making
 
-The WGPU community's decision-making is influenced by the following
+The wgpu community's decision-making is influenced by the following
 groups:
 
 * Community leadership:
@@ -38,18 +38,18 @@ groups:
 * Firefox's WebGPU team (@jimblandy, @nical, @teoxoy, @ErichDonGubler, and
   others)
 * Deno's WebGPU contributors (@crowlKats)
-* Other users that ship applications based on WGPU
+* Other users that ship applications based on wgpu
 
 It is no coincidence that these groups correspond to the historically most
-active and consistent contributors. In general, WGPU's community structure is
+active and consistent contributors. In general, wgpu's community structure is
 meritocratic: social influence is granted proportionate to groups' contribution
-to and stake in WGPU's mission.
+to and stake in wgpu's mission.
 
 These decision-making groups meet together regularly to discuss issues of
-importance to the community, with a focus on WGPU's [mission](#Mission).
+importance to the community, with a focus on wgpu's [mission](#Mission).
 
 ---
 
 NOTE: The above is a snapshot of a perpetually changing state of affairs in the
-WGPU community. It is not a binding contract between users and decision-makers
-of the WGPU project.
+wgpu community. It is not a binding contract between users and decision-makers
+of the wgpu project.

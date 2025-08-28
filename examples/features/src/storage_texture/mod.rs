@@ -4,7 +4,7 @@
 //!
 //! Storage textures work like normal textures but they operate similar to storage buffers
 //! in that they can be written to. The issue is that as it stands, write-only is the
-//! only valid access mode for storage textures in WGSL and although there is a WGPU feature
+//! only valid access mode for storage textures in WGSL and although there is a wgpu feature
 //! to allow for read-write access, this is unfortunately a native-only feature and thus
 //! we won't be using it here. If we needed a reference texture, we would need to add a
 //! second texture to act as a reference and attach that as well. Luckily, we don't need

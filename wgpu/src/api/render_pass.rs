@@ -236,6 +236,8 @@ impl RenderPass<'_> {
     ///
     /// This is like calling [`RenderPass::draw`] but the contents of the call are specified in the `indirect_buffer`.
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
+    ///
+    /// Calling this requires the device support [`DownlevelFlags::INDIRECT_EXECUTION`].
     pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
         self.inner
             .draw_indirect(&indirect_buffer.inner, indirect_offset);
@@ -246,6 +248,8 @@ impl RenderPass<'_> {
     ///
     /// This is like calling [`RenderPass::draw_indexed`] but the contents of the call are specified in the `indirect_buffer`.
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
+    ///
+    /// Calling this requires the device support [`DownlevelFlags::INDIRECT_EXECUTION`].
     pub fn draw_indexed_indirect(
         &mut self,
         indirect_buffer: &Buffer,
@@ -287,10 +291,7 @@ impl RenderPass<'_> {
 
         self.inner.execute_bundles(&mut render_bundles);
     }
-}
 
-/// [`Features::MULTI_DRAW_INDIRECT`] must be enabled on the device in order to call these functions.
-impl RenderPass<'_> {
     /// Dispatches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     /// `count` draw calls are issued.
     ///
@@ -298,6 +299,8 @@ impl RenderPass<'_> {
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     /// These draw structures are expected to be tightly packed.
+    ///
+    /// Calling this requires the device support [`DownlevelFlags::INDIRECT_EXECUTION`].
     ///
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
     /// It is not affected by changes to the state that are performed after it is called.
@@ -319,6 +322,8 @@ impl RenderPass<'_> {
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     /// These draw structures are expected to be tightly packed.
+    ///
+    /// Calling this requires the device support [`DownlevelFlags::INDIRECT_EXECUTION`].
     ///
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
     /// It is not affected by changes to the state that are performed after it is called.

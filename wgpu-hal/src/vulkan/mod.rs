@@ -575,6 +575,7 @@ struct PrivateCapabilities {
     /// Ability to present contents to any screen. Only needed to work around broken platform configurations.
     can_present: bool,
     non_coherent_map_mask: wgt::BufferAddress,
+    multi_draw_indirect: bool,
 
     /// True if this adapter advertises the [`robustBufferAccess`][vrba] feature.
     ///
