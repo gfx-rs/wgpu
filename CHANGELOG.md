@@ -98,6 +98,7 @@ This allows using precompiled shaders without manually checking which backend's 
 - The function you pass to `Device::on_uncaptured_error()` must now implement `Sync` in addition to `Send`, and be wrapped in `Arc` instead of `Box`.
   In exchange for this, it is no longer possible for calling `wgpu` functions while in that callback to cause a deadlock (not that we encourage you to actually do that).
   By @kpreid in [#8011](https://github.com/gfx-rs/wgpu/pull/8011).
+- Make a compacted hal acceleration structure inherit a label from the base BLAS. By @Vecvec in [#8103](https://github.com/gfx-rs/wgpu/pull/8103).
 - The limits requested for a device must now satisfy `min_subgroup_size <= max_subgroup_size`. By @andyleiserson in [#8085](https://github.com/gfx-rs/wgpu/pull/8085).
 
 #### Naga
@@ -120,6 +121,10 @@ This allows using precompiled shaders without manually checking which backend's 
 #### DX12
 
 - Fixed a bug where access to matrices with 2 rows would not work in some cases. By @andyleiserson in [#7438](https://github.com/gfx-rs/wgpu/pull/7438).
+
+#### Naga
+
+- [wgsl-in] Allow a trailing comma in `@blend_src(…)` attributes. By @ErichDonGubler in [#8137](https://github.com/gfx-rs/wgpu/pull/8137).
 
 ## v26.0.4 (2025-08-07)
 

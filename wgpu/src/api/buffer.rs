@@ -9,10 +9,13 @@ use crate::*;
 
 /// Handle to a GPU-accessible buffer.
 ///
-/// Created with [`Device::create_buffer`] or
-/// [`DeviceExt::create_buffer_init`](util::DeviceExt::create_buffer_init).
-///
-/// Corresponds to [WebGPU `GPUBuffer`](https://gpuweb.github.io/gpuweb/#buffer-interface).
+/// A `Buffer` is a memory allocation for use by the GPU, somewhat analogous to
+/// <code>[Box]&lt;[\[u8\]][primitive@slice]&gt;</code> in Rust.
+/// The contents of buffers are untyped bytes; it is up to the application to
+/// specify the interpretation of the bytes when the buffer is used, in ways
+/// such as [`VertexBufferLayout`].
+/// A single buffer can be used to hold multiple independent pieces of data at
+/// different offsets (e.g. both vertices and indices for one or more meshes).
 ///
 /// A `Buffer`'s bytes have "interior mutability": functions like
 /// [`Queue::write_buffer`] or [mapping] a buffer for writing only require a
@@ -20,7 +23,48 @@ use crate::*;
 /// prevents simultaneous reads and writes of buffer contents using run-time
 /// checks.
 ///
+/// Created with [`Device::create_buffer()`] or
+/// [`DeviceExt::create_buffer_init()`].
+///
+/// Corresponds to [WebGPU `GPUBuffer`](https://gpuweb.github.io/gpuweb/#buffer-interface).
+///
 /// [mapping]: Buffer#mapping-buffers
+///
+/// # How to get your data into a buffer
+///
+/// Every `Buffer` starts with all bytes zeroed.
+/// There are many ways to load data into a `Buffer`:
+///
+/// - When creating a buffer, you may set the [`mapped_at_creation`][mac] flag,
+///   then write to its [`get_mapped_range_mut()`][Buffer::get_mapped_range_mut].
+///   This only works when the buffer is created and has not yet been used by
+///   the GPU, but it is all you need for buffers whose contents do not change
+///   after creation.
+///   - You may use [`DeviceExt::create_buffer_init()`] as a convenient way to
+///     do that and copy data from a `&[u8]` you provide.
+/// - After creation, you may use [`Buffer::map_async()`] to map it again;
+///   however, you then need to wait until the GPU is no longer using the buffer
+///   before you begin writing.
+/// - You may use [`CommandEncoder::copy_buffer_to_buffer()`] to copy data into
+///   this buffer from another buffer.
+/// - You may use [`Queue::write_buffer()`] to copy data into the buffer from a
+///   `&[u8]`. This uses a temporary “staging” buffer managed by `wgpu` to hold
+///   the data.
+///   - [`Queue::write_buffer_with()`] allows you to write directly into temporary
+///     storage instead of providing a slice you already prepared, which may
+///     allow *your* code to save the allocation of a [`Vec`] or such.
+/// - You may use [`util::StagingBelt`] to manage a set of temporary buffers.
+///   This may be more efficient than [`Queue::write_buffer_with()`] when you
+///   have many small copies to perform, but requires more steps to use, and
+///   tuning of the belt buffer size.
+/// - You may write your own staging buffer management customized to your
+///   application, based on mapped buffers and
+///   [`CommandEncoder::copy_buffer_to_buffer()`].
+/// - A GPU computation’s results can be stored in a buffer:
+///   - A [compute shader][ComputePipeline] may write to a buffer bound as a
+///     [storage buffer][BufferBindingType::Storage].
+///   - A render pass may render to a texture which is then copied to a buffer
+///     using [`CommandEncoder::copy_texture_to_buffer()`].
 ///
 /// # Mapping buffers
 ///
@@ -172,6 +216,7 @@ use crate::*;
 /// [mac]: BufferDescriptor::mapped_at_creation
 /// [`MAP_READ`]: BufferUsages::MAP_READ
 /// [`MAP_WRITE`]: BufferUsages::MAP_WRITE
+/// [`DeviceExt::create_buffer_init()`]: util::DeviceExt::create_buffer_init
 #[derive(Debug, Clone)]
 pub struct Buffer {
     pub(crate) inner: dispatch::DispatchBuffer,

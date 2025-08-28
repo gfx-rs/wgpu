@@ -5247,6 +5247,10 @@ bitflags::bitflags! {
     /// The usages determine what kind of memory the buffer is allocated from and what
     /// actions the buffer can partake in.
     ///
+    /// Specifying only usages the application will actually perform may increase performance.
+    /// Additionally, on the WebGL backend, there are restrictions on [`BufferUsages::INDEX`];
+    /// see [`DownlevelFlags::UNRESTRICTED_INDEX_BUFFER`] for more information.
+    ///
     /// Corresponds to [WebGPU `GPUBufferUsageFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpubufferusageflags).
     #[repr(transparent)]
@@ -5365,6 +5369,10 @@ pub struct BufferDescriptor<L> {
     pub size: BufferAddress,
     /// Usages of a buffer. If the buffer is used in any way that isn't specified here, the operation
     /// will panic.
+    ///
+    /// Specifying only usages the application will actually perform may increase performance.
+    /// Additionally, on the WebGL backend, there are restrictions on [`BufferUsages::INDEX`];
+    /// see [`DownlevelFlags::UNRESTRICTED_INDEX_BUFFER`] for more information.
     pub usage: BufferUsages,
     /// Allows a buffer to be mapped immediately after they are made. It does not have to be [`BufferUsages::MAP_READ`] or
     /// [`BufferUsages::MAP_WRITE`], all buffers are allowed to be mapped at creation.
