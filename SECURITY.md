@@ -1,6 +1,6 @@
-# WGPU Security Policy
+# wgpu Security Policy
 
-This document describes what is considered a security vulnerability in WGPU and
+This document describes what is considered a security vulnerability in wgpu and
 how vulnerabilities should be reported.
 
 
@@ -18,10 +18,10 @@ misused, and failures to do so may be considered vulnerabilities. (This is
 also in accordance with the Rust principle of safe vs. unsafe code, since the
 `wgpu` library exposes a safe API.)
 
-The WGPU maintainers have discretion in assigning a severity to individual
+The wgpu maintainers have discretion in assigning a severity to individual
 vulnerabilities. It is generally considered a high-severity vulnerability in
-WGPU if JavaScript or WebAssembly code, running with privileges of ordinary web
-content in a browser that is using WGPU to provide the WebGPU API to that
+wgpu if JavaScript or WebAssembly code, running with privileges of ordinary web
+content in a browser that is using wgpu to provide the WebGPU API to that
 content, is able to:
 
 - Access data associated with native applications other than the user agent,
@@ -31,24 +31,24 @@ content, is able to:
 - Consume system resources to the point that it is difficult to recover
   (e.g. by closing the web page).
 
-The WGPU Rust API offers some functionality, both supported and experimental,
+The wgpu Rust API offers some functionality, both supported and experimental,
 that is not part of the WebGPU standard and is not made available in JavaScript
-environments using WGPU. Associated vulnerabilities may be assigned lower
-severity than vulnerabilities that apply to a WGPU-based WebGPU implementation
+environments using wgpu. Associated vulnerabilities may be assigned lower
+severity than vulnerabilities that apply to a wgpu-based WebGPU implementation
 exposed to JavaScript.
 
 
 ## Supported Versions
 
-The WGPU project maintains security support for serious vulnerabilities in the
+The wgpu project maintains security support for serious vulnerabilities in the
 [most recent major release](https://github.com/gfx-rs/wgpu/releases). Fixes for
 security vulnerabilities found shortly after the initial release of a major
 version may also be provided for the previous major release.
 
-Mozilla provides security support for versions of WGPU used in [current
+Mozilla provides security support for versions of wgpu used in [current
 versions of Firefox](https://whattrainisitnow.com/).
 
-The version of WGPU that is active can be found in the Firefox repositories:
+The version of wgpu that is active can be found in the Firefox repositories:
 
 - [release](https://github.com/mozilla-firefox/firefox/blob/release/gfx/wgpu_bindings/Cargo.toml),
 - [beta](https://github.com/mozilla-firefox/firefox/blob/beta/gfx/wgpu_bindings/Cargo.toml), and
@@ -60,11 +60,11 @@ versions or in the latest code on the `trunk` branch.
 
 ## Reporting a Vulnerability
 
-Although not all vulnerabilities in WGPU will affect Firefox, Mozilla accepts
-all vulnerability reports for WGPU and directs them appropriately. Additionally,
-Mozilla serves as the CVE numbering authority for the WGPU project.
+Although not all vulnerabilities in wgpu will affect Firefox, Mozilla accepts
+all vulnerability reports for wgpu and directs them appropriately. Additionally,
+Mozilla serves as the CVE numbering authority for the wgpu project.
 
-To report a security problem with WGPU, create a bug in Mozilla's Bugzilla
+To report a security problem with wgpu, create a bug in Mozilla's Bugzilla
 instance in the
 [Core :: Graphics :: WebGPU](https://bugzilla.mozilla.org/enter_bug.cgi?product=Core&component=Graphics%3A+WebGPU&groups=core-security&groups=gfx-core-security)
 component.

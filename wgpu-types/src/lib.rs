@@ -1190,7 +1190,7 @@ impl DownlevelCapabilities {
 bitflags::bitflags! {
     /// Binary flags listing features that may or may not be present on downlevel adapters.
     ///
-    /// A downlevel adapter is a GPU adapter that WGPU supports, but with potentially limited
+    /// A downlevel adapter is a GPU adapter that wgpu supports, but with potentially limited
     /// features, due to the lack of hardware feature support.
     ///
     /// Flags that are **not** present for a downlevel adapter or device usually indicates
@@ -1323,6 +1323,12 @@ bitflags::bitflags! {
         /// Not Supported by:
         /// - GL ES / WebGL
         const NONBLOCKING_QUERY_RESOLVE = 1 << 22;
+
+        /// Allows shaders to use `quantizeToF16`, `pack2x16float`, and `unpack2x16float`, which
+        /// operate on `f16`-precision values stored in `f32`s.
+        ///
+        /// Not supported by Vulkan on Mesa when [`Features::SHADER_F16`] is absent.
+        const SHADER_F16_IN_F32 = 1 << 23;
     }
 }
 

@@ -19,8 +19,9 @@ env:
   #
 
   # Sourced from https://vulkan.lunarg.com/sdk/home#linux
-  VULKAN_SDK_VERSION: "1.4.313"
-  VULKAN_FULL_SDK_VERSION: "1.4.313.0"
+  # These Vulkan version definition is duplicated in the install-vulkan action.
+  VULKAN_SDK_VERSION: "1.4.321"
+  VULKAN_FULL_SDK_VERSION: "1.4.321.0"
 
   # These Mesa version definition is duplicated in the install-mesa action.
   MESA_VERSION: "24.3.4"
@@ -604,18 +605,7 @@ jobs:
 
       - name: (Linux) Install Vulkan SDK
         if: matrix.os == 'ubuntu-24.04'
-        shell: bash
-        run: |
-          set -e
-
-          sudo apt-get update -y -qq
-
-          # vulkan sdk
-          wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-${{ env.VULKAN_SDK_VERSION }}-noble.list https://packages.lunarg.com/vulkan/${{ env.VULKAN_SDK_VERSION }}/lunarg-vulkan-$VULKAN_SDK_VERSION-noble.list
-
-          sudo apt-get update
-          sudo apt install -y vulkan-sdk
+        uses: ./.github/actions/install-vulkan-sdk
 
       - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'

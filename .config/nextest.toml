@@ -42,3 +42,12 @@ slow-timeout = { period = "3m", terminate-after = 2 }
 [[profile.default.overrides]]
 filter = 'test(~oom_test)'
 threads-required = "num-test-threads"
+
+#
+# Priorities for slow tests so that they run first, increasing overall test suite speed.
+# On software renderers, they can take 10-60 seconds. Compile fail can easily take 30+
+# seconds as it has to compile wgpu.
+#
+[[profile.default.overrides]]
+priority = 1
+filter = 'test(clear_texture) | test(clear_buffer_range_respected) | test(compile_fail) | test(test_api)'
