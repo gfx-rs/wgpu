@@ -656,7 +656,7 @@ pub struct CommandBufferMutable {
     debug_scope_depth: u32,
 
     #[cfg(feature = "trace")]
-    pub(crate) commands: Option<Vec<TraceCommand>>,
+    pub(crate) trace_commands: Option<Vec<TraceCommand>>,
 }
 
 impl CommandBufferMutable {
@@ -729,7 +729,7 @@ impl CommandEncoder {
                         crate::indirect_validation::DrawResources::new(device.clone()),
                     debug_scope_depth: 0,
                     #[cfg(feature = "trace")]
-                    commands: if device.trace.lock().is_some() {
+                    trace_commands: if device.trace.lock().is_some() {
                         Some(Vec::new())
                     } else {
                         None
@@ -1225,7 +1225,7 @@ impl Global {
             cmd_buf_data.debug_scope_depth += 1;
 
             #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.commands {
+            if let Some(ref mut list) = cmd_buf_data.trace_commands {
                 list.push(TraceCommand::PushDebugGroup(label.to_owned()));
             }
 
@@ -1260,7 +1260,7 @@ impl Global {
         let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
             #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.commands {
+            if let Some(ref mut list) = cmd_buf_data.trace_commands {
                 list.push(TraceCommand::InsertDebugMarker(label.to_owned()));
             }
 
@@ -1299,7 +1299,7 @@ impl Global {
             cmd_buf_data.debug_scope_depth -= 1;
 
             #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.commands {
+            if let Some(ref mut list) = cmd_buf_data.trace_commands {
                 list.push(TraceCommand::PopDebugGroup);
             }
 

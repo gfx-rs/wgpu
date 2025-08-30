@@ -1206,7 +1206,7 @@ impl Queue {
                             if let Ok(ref mut cmd_buf_data) = cmd_buf_data {
                                 trace.add(Action::Submit(
                                     submit_index,
-                                    cmd_buf_data.commands.take().unwrap(),
+                                    cmd_buf_data.trace_commands.take().unwrap(),
                                 ));
                             }
                         }

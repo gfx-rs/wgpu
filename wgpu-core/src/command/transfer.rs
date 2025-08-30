@@ -850,7 +850,7 @@ impl Global {
             }
 
             #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.commands {
+            if let Some(ref mut list) = cmd_buf_data.trace_commands {
                 list.push(TraceCommand::CopyBufferToBuffer {
                     src: source,
                     src_offset: source_offset,
@@ -1013,7 +1013,7 @@ impl Global {
             device.check_is_valid()?;
 
             #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.commands {
+            if let Some(ref mut list) = cmd_buf_data.trace_commands {
                 list.push(TraceCommand::CopyBufferToTexture {
                     src: *source,
                     dst: *destination,
@@ -1166,7 +1166,7 @@ impl Global {
             device.check_is_valid()?;
 
             #[cfg(feature = "trace")]
-            if let Some(list) = cmd_buf_data.commands.as_mut() {
+            if let Some(list) = cmd_buf_data.trace_commands.as_mut() {
                 list.push(TraceCommand::CopyTextureToBuffer {
                     src: *source,
                     dst: *destination,
@@ -1333,7 +1333,7 @@ impl Global {
             let snatch_guard = device.snatchable_lock.read();
 
             #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.commands {
+            if let Some(ref mut list) = cmd_buf_data.trace_commands {
                 list.push(TraceCommand::CopyTextureToTexture {
                     src: *source,
                     dst: *destination,

@@ -437,7 +437,7 @@ impl Global {
             let mut cmd_buf_data = cmd_enc.data.lock();
             let cmd_buf_data = cmd_buf_data.get_inner();
 
-            if let Some(ref mut list) = cmd_buf_data.commands {
+            if let Some(ref mut list) = cmd_buf_data.trace_commands {
                 list.push(crate::command::Command::RunComputePass {
                     base: BasePass {
                         label: base.label.clone(),
