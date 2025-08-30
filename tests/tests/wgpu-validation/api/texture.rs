@@ -298,3 +298,213 @@ fn planar_texture_bad_size() {
         );
     }
 }
+
+/// Creates a texture and a buffer, and encodes a copy from the texture to the
+/// buffer.
+fn encode_copy_texture_to_buffer(
+    device: &wgpu::Device,
+    format: wgpu::TextureFormat,
+    aspect: wgpu::TextureAspect,
+    bytes_per_texel: u32,
+) -> wgpu::CommandEncoder {
+    let size = wgpu::Extent3d {
+        width: 256,
+        height: 256,
+        depth_or_array_layers: 1,
+    };
+
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+
+    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: (size.width * size.height * bytes_per_texel) as u64,
+        usage: wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder =
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &buffer,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(size.width * bytes_per_texel),
+                rows_per_image: None,
+            },
+        },
+        size,
+    );
+
+    encoder
+}
+
+/// Ensures that attempting to copy a texture with a forbidden source format to
+/// a buffer fails validation.
+#[test]
+fn copy_texture_to_buffer_forbidden_format() {
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+
+    let format = wgpu::TextureFormat::Depth24Plus;
+
+    let encoder = encode_copy_texture_to_buffer(&device, format, wgpu::TextureAspect::All, 4);
+
+    fail(
+        &device,
+        || {
+            encoder.finish();
+        },
+        Some(&format!(
+            "Copying from textures with format {format:?} is forbidden"
+        )),
+    );
+}
+
+/// Ensures that attempting ta copy a texture with a forbidden source
+/// format/aspect combination to a buffer fails validation.
+#[test]
+fn copy_texture_to_buffer_forbidden_format_aspect() {
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+
+    let format = wgpu::TextureFormat::Depth24PlusStencil8;
+    let aspect = wgpu::TextureAspect::DepthOnly;
+
+    let encoder = encode_copy_texture_to_buffer(&device, format, aspect, 4);
+
+    fail(
+        &device,
+        || {
+            encoder.finish();
+        },
+        Some(&format!(
+            "Copying from textures with format {format:?} and aspect {aspect:?} is forbidden"
+        )),
+    );
+}
+
+/// Creates a texture and a buffer, and encodes a copy from the buffer to the
+/// texture.
+fn encode_copy_buffer_to_texture(
+    device: &wgpu::Device,
+    format: wgpu::TextureFormat,
+    aspect: wgpu::TextureAspect,
+    bytes_per_texel: u32,
+) -> wgpu::CommandEncoder {
+    let size = wgpu::Extent3d {
+        width: 256,
+        height: 256,
+        depth_or_array_layers: 1,
+    };
+
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format,
+        usage: wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+
+    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: (size.width * size.height * bytes_per_texel) as u64,
+        usage: wgpu::BufferUsages::COPY_SRC,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder =
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+    encoder.copy_buffer_to_texture(
+        wgpu::TexelCopyBufferInfo {
+            buffer: &buffer,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(size.width * bytes_per_texel),
+                rows_per_image: None,
+            },
+        },
+        wgpu::TexelCopyTextureInfo {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d::ZERO,
+            aspect,
+        },
+        size,
+    );
+
+    encoder
+}
+
+/// Ensures that attempting to copy a buffer to a texture with a forbidden
+/// destination format fails validation.
+#[test]
+fn copy_buffer_to_texture_forbidden_format() {
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+
+    for format in [
+        wgpu::TextureFormat::Depth24Plus,
+        wgpu::TextureFormat::Depth32Float,
+    ] {
+        let encoder = encode_copy_buffer_to_texture(&device, format, wgpu::TextureAspect::All, 4);
+
+        fail(
+            &device,
+            || {
+                encoder.finish();
+            },
+            Some(&format!(
+                "Copying to textures with format {format:?} is forbidden"
+            )),
+        );
+    }
+}
+
+/// Ensures that attempting to copy a buffer to a texture with a forbidden
+/// destination format/aspect combination fails validation.
+#[test]
+fn copy_buffer_to_texture_forbidden_format_aspect() {
+    let required_features = wgpu::Features::DEPTH32FLOAT_STENCIL8;
+    let device_desc = wgpu::DeviceDescriptor {
+        required_features,
+        ..Default::default()
+    };
+    let (device, _queue) = wgpu::Device::noop(&device_desc);
+
+    let aspect = wgpu::TextureAspect::DepthOnly;
+
+    for (format, bytes_per_texel) in [
+        (wgpu::TextureFormat::Depth24PlusStencil8, 4),
+        (wgpu::TextureFormat::Depth32FloatStencil8, 8),
+    ] {
+        let encoder = encode_copy_buffer_to_texture(&device, format, aspect, bytes_per_texel);
+
+        fail(
+            &device,
+            || {
+                encoder.finish();
+            },
+            Some(&format!(
+                "Copying to textures with format {format:?} and aspect {aspect:?} is forbidden"
+            )),
+        );
+    }
+}

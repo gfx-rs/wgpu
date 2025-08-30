@@ -343,7 +343,6 @@ impl super::Adapter {
             | wgt::Features::DEPTH32FLOAT_STENCIL8
             | wgt::Features::INDIRECT_FIRST_INSTANCE
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
-            | wgt::Features::MULTI_DRAW_INDIRECT
             | wgt::Features::MULTI_DRAW_INDIRECT_COUNT
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO

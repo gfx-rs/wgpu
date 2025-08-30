@@ -138,6 +138,9 @@ impl WaitIdleError {
     pub fn to_poll_error(&self) -> Option<wgt::PollError> {
         match self {
             WaitIdleError::Timeout => Some(wgt::PollError::Timeout),
+            &WaitIdleError::WrongSubmissionIndex(a, b) => {
+                Some(wgt::PollError::WrongSubmissionIndex(a, b))
+            }
             _ => None,
         }
     }

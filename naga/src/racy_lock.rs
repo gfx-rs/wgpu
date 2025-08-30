@@ -1,11 +1,3 @@
-#![cfg_attr(
-    not(any(glsl_out, hlsl_out, msl_out, feature = "wgsl-in", wgsl_out)),
-    expect(
-        dead_code,
-        reason = "RacyLock is only required for the above configurations"
-    )
-)]
-
 use alloc::boxed::Box;
 use once_cell::race::OnceBox;
 
@@ -25,17 +17,13 @@ impl<T: 'static> RacyLock<T> {
             init,
         }
     }
-
-    /// Loads the internal value, initializing it if required.
-    pub fn get(&self) -> &T {
-        self.inner.get_or_init(|| Box::new((self.init)()))
-    }
 }
 
 impl<T: 'static> core::ops::Deref for RacyLock<T> {
     type Target = T;
 
+    /// Loads the internal value, initializing it if required.
     fn deref(&self) -> &Self::Target {
-        self.get()
+        self.inner.get_or_init(|| Box::new((self.init)()))
     }
 }

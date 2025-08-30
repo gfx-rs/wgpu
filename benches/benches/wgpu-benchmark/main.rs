@@ -47,6 +47,7 @@ impl DeviceState {
             required_features: adapter.features(),
             required_limits: adapter.limits(),
             memory_hints: wgpu::MemoryHints::Performance,
+            experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
             label: Some("Compute/RenderPass Device"),
             trace: wgpu::Trace::Off,
         }))

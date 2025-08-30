@@ -772,8 +772,7 @@ const FEATURES_MAPPING: [(wgt::Features, webgpu_sys::GpuFeatureName); 15] = [
 ];
 
 fn map_wgt_features(supported_features: webgpu_sys::GpuSupportedFeatures) -> wgt::Features {
-    // We emulate MDI.
-    let mut features = wgt::Features::MULTI_DRAW_INDIRECT;
+    let mut features = wgt::Features::empty();
     for (wgpu_feat, web_feat) in FEATURES_MAPPING {
         match wasm_bindgen::JsValue::from(web_feat).as_string() {
             Some(value) if supported_features.has(&value) => features |= wgpu_feat,
@@ -1876,7 +1875,7 @@ impl dispatch::DeviceInterface for WebDevice {
             Err(crate::CompilationInfo {
                 messages: vec![crate::CompilationMessage {
                     message:
-                        "Passthrough shader not compiled for WGSL on WebGPU backend (WGPU error)"
+                        "Passthrough shader not compiled for WGSL on WebGPU backend (wgpu error)"
                             .to_string(),
                     location: None,
                     message_type: crate::CompilationMessageType::Error,
