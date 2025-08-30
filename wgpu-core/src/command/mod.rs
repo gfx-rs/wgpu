@@ -36,6 +36,7 @@ use crate::binding_model::BindingError;
 use crate::command::transition_resources::TransitionResourcesError;
 use crate::device::queue::TempResource;
 use crate::device::{Device, DeviceError, MissingFeatures};
+use crate::id::Id;
 use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
 
@@ -1155,6 +1156,26 @@ impl WebGpuError for TimestampWritesError {
 }
 
 impl Global {
+    fn resolve_buffer_id(
+        &self,
+        buffer_id: Id<id::markers::Buffer>,
+    ) -> Result<Arc<crate::resource::Buffer>, InvalidResourceError> {
+        let hub = &self.hub;
+        let buffer = hub.buffers.get(buffer_id).get()?;
+
+        Ok(buffer)
+    }
+
+    fn resolve_query_set(
+        &self,
+        query_set_id: Id<id::markers::QuerySet>,
+    ) -> Result<Arc<QuerySet>, InvalidResourceError> {
+        let hub = &self.hub;
+        let query_set = hub.query_sets.get(query_set_id).get()?;
+
+        Ok(query_set)
+    }
+
     pub fn command_encoder_finish(
         &self,
         encoder_id: id::CommandEncoderId,
