@@ -266,9 +266,7 @@ impl PhysicalDeviceFeatures {
                     requested_features.contains(wgt::Features::INDIRECT_FIRST_INSTANCE),
                 )
                 //.dual_src_blend(requested_features.contains(wgt::Features::DUAL_SRC_BLENDING))
-                .multi_draw_indirect(
-                    requested_features.contains(wgt::Features::MULTI_DRAW_INDIRECT),
-                )
+                .multi_draw_indirect(phd_features.core.multi_draw_indirect != 0)
                 .fill_mode_non_solid(requested_features.intersects(
                     wgt::Features::POLYGON_MODE_LINE | wgt::Features::POLYGON_MODE_POINT,
                 ))
@@ -577,7 +575,8 @@ impl PhysicalDeviceFeatures {
             | Df::INDIRECT_EXECUTION
             | Df::VIEW_FORMATS
             | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
-            | Df::NONBLOCKING_QUERY_RESOLVE;
+            | Df::NONBLOCKING_QUERY_RESOLVE
+            | Df::SHADER_F16_IN_F32;
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,
@@ -602,7 +601,6 @@ impl PhysicalDeviceFeatures {
             self.core.draw_indirect_first_instance != 0,
         );
         //if self.core.dual_src_blend != 0
-        features.set(F::MULTI_DRAW_INDIRECT, self.core.multi_draw_indirect != 0);
         features.set(F::POLYGON_MODE_LINE, self.core.fill_mode_non_solid != 0);
         features.set(F::POLYGON_MODE_POINT, self.core.fill_mode_non_solid != 0);
         //if self.core.depth_bounds != 0 {
@@ -1680,7 +1678,7 @@ impl super::Instance {
             },
             backend: wgt::Backend::Vulkan,
         };
-        let (available_features, downlevel_flags) =
+        let (available_features, mut downlevel_flags) =
             phd_features.to_wgpu(&self.shared.raw, phd, &phd_capabilities);
         let mut workarounds = super::Workarounds::empty();
         {
@@ -1695,6 +1693,15 @@ impl super::Instance {
                 phd_capabilities.properties.vendor_id == db::nvidia::VENDOR,
             );
         };
+
+        if info.driver == "llvmpipe" {
+            // The `F16_IN_F32` instructions do not normally require native `F16` support, but on
+            // llvmpipe, they do.
+            downlevel_flags.set(
+                wgt::DownlevelFlags::SHADER_F16_IN_F32,
+                available_features.contains(wgt::Features::SHADER_F16),
+            );
+        }
 
         if let Some(driver) = phd_capabilities.driver {
             if driver.conformance_version.major == 0 {
@@ -1775,6 +1782,7 @@ impl super::Instance {
                 vk::ImageTiling::OPTIMAL,
                 depth_stencil_required_flags(),
             ),
+            multi_draw_indirect: phd_features.core.multi_draw_indirect != 0,
             non_coherent_map_mask: phd_capabilities.properties.limits.non_coherent_atom_size - 1,
             can_present: true,
             //TODO: make configurable

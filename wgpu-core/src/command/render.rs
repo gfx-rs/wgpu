@@ -2696,13 +2696,6 @@ fn multi_draw_indirect(
 
     state.is_ready(family)?;
 
-    if count != 1 {
-        state
-            .general
-            .device
-            .require_features(wgt::Features::MULTI_DRAW_INDIRECT)?;
-    }
-
     state
         .general
         .device

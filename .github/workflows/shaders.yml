@@ -13,12 +13,6 @@ on:
   pull_request:
   merge_group:
 
-env:
-  # Sourced from https://vulkan.lunarg.com/sdk/home#linux
-  #
-  # We don't include the 4th version number, as it's not used in any URL.
-  VULKAN_SDK_VERSION: "1.4.313"
-
 # Every time a PR is pushed to, cancel any previous jobs. This
 # makes us behave nicer to github and get faster turnaround times
 # on PRs that are pushed to multiple times in rapid succession.
@@ -100,18 +94,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Install Vulkan SDK
-        shell: bash
-        run: |
-          set -e
-
-          sudo apt-get update -y -qq
-
-          # vulkan sdk
-          wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-$VULKAN_SDK_VERSION-noble.list https://packages.lunarg.com/vulkan/$VULKAN_SDK_VERSION/lunarg-vulkan-$VULKAN_SDK_VERSION-noble.list
-
-          sudo apt-get update
-          sudo apt install -y vulkan-sdk
+        uses: ./.github/actions/install-vulkan-sdk
 
       - name: Install Graphviz
         run: sudo apt-get install graphviz

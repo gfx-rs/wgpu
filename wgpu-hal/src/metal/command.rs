@@ -33,6 +33,10 @@ impl Default for super::CommandState {
 }
 
 impl super::CommandEncoder {
+    pub fn raw_command_buffer(&self) -> Option<&metal::CommandBuffer> {
+        self.raw_cmd_buf.as_ref()
+    }
+
     fn enter_blit(&mut self) -> &metal::BlitCommandEncoderRef {
         if self.state.blit.is_none() {
             debug_assert!(self.state.render.is_none() && self.state.compute.is_none());

@@ -170,6 +170,27 @@ bitflags::bitflags! {
         const SHADER_FLOAT16 = 1 << 26;
         /// Support for [`ImageClass::External`]
         const TEXTURE_EXTERNAL = 1 << 27;
+        /// Support for `quantizeToF16`, `pack2x16float`, and `unpack2x16float`, which store
+        /// `f16`-precision values in `f32`s.
+        const SHADER_FLOAT16_IN_FLOAT32 = 1 << 28;
+    }
+}
+
+impl Capabilities {
+    /// Returns the extension corresponding to this capability, if there is one.
+    ///
+    /// This is used by integration tests.
+    #[cfg(feature = "wgsl-in")]
+    #[doc(hidden)]
+    pub const fn extension(&self) -> Option<crate::front::wgsl::ImplementedEnableExtension> {
+        use crate::front::wgsl::ImplementedEnableExtension as Ext;
+        match *self {
+            Self::DUAL_SOURCE_BLENDING => Some(Ext::DualSourceBlending),
+            // NOTE: `SHADER_FLOAT16_IN_FLOAT32` _does not_ require the `f16` extension
+            Self::SHADER_FLOAT16 => Some(Ext::F16),
+            Self::CLIP_DISTANCE => Some(Ext::ClipDistances),
+            _ => None,
+        }
     }
 }
 
