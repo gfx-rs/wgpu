@@ -5,6 +5,7 @@ mod clear;
 mod compute;
 mod compute_command;
 mod draw;
+mod encoder;
 mod memory_init;
 mod pass;
 mod query;
