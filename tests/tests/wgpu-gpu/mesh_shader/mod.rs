@@ -1,5 +1,7 @@
-use nanorand::Rng;
-use std::{io::Write, process::Stdio};
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    process::Stdio,
+};
 
 use wgpu::util::DeviceExt;
 use wgpu_test::{
@@ -49,14 +51,18 @@ fn compile_glsl(device: &wgpu::Device, shader_stage: &'static str) -> wgpu::Shad
     }
 }
 
-fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::ShaderModule {
+fn compile_hlsl(
+    device: &wgpu::Device,
+    entry: &str,
+    stage_str: &str,
+    test_name: &str,
+) -> wgpu::ShaderModule {
     // Each test needs its own files
-    let mut rng = nanorand::WyRand::new();
-    let rand: u32 = rng.generate();
     let out_path = format!(
-        "{}/tests/wgpu-gpu/mesh_shader/{rand}.{stage_str}.cso",
+        "{}/tests/wgpu-gpu/mesh_shader/{test_name}.{stage_str}.cso",
         env!("CARGO_MANIFEST_DIR")
     );
+    println!("{out_path}");
     let cmd = std::process::Command::new("dxc")
         .args([
             "-T",
@@ -91,6 +97,7 @@ fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::Sh
 fn get_shaders(
     device: &wgpu::Device,
     backend: wgpu::Backend,
+    test_name: &str,
 ) -> (wgpu::ShaderModule, wgpu::ShaderModule, wgpu::ShaderModule) {
     if backend == wgpu::Backend::Vulkan {
         (
@@ -100,9 +107,9 @@ fn get_shaders(
         )
     } else if backend == wgpu::Backend::Dx12 {
         (
-            compile_hlsl(device, "Task", "as"),
-            compile_hlsl(device, "Mesh", "ms"),
-            compile_hlsl(device, "Frag", "ps"),
+            compile_hlsl(device, "Task", "as", test_name),
+            compile_hlsl(device, "Mesh", "ms", test_name),
+            compile_hlsl(device, "Frag", "ps", test_name),
         )
     } else {
         unreachable!()
@@ -144,6 +151,13 @@ struct MeshPipelineTestInfo {
     draw: bool,
 }
 
+/// Many of the types aren't `Hash`
+fn hash_testing_context(ctx: &TestingContext) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    ctx.hash(&mut hasher);
+    hasher.finish()
+}
+
 fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
     let backend = ctx.adapter.get_info().backend;
     if backend != wgpu::Backend::Vulkan && backend != wgpu::Backend::Dx12 {
@@ -151,7 +165,9 @@ fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
     }
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
-    let (task, mesh, frag) = get_shaders(device, backend);
+
+    let test_hash = hash_testing_context(ctx).to_string();
+    let (task, mesh, frag) = get_shaders(device, backend, &test_hash);
     let task = if info.use_task { Some(task) } else { None };
     let frag = if info.use_frag { Some(frag) } else { None };
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -229,7 +245,8 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
     }
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
-    let (task, mesh, frag) = get_shaders(device, backend);
+    let test_hash = hash_testing_context(ctx).to_string();
+    let (task, mesh, frag) = get_shaders(device, backend, &test_hash);
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
