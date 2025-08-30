@@ -12,7 +12,9 @@ use wgt::{
 use crate::command::Command as TraceCommand;
 use crate::{
     api_log,
-    command::{clear_texture, CommandEncoderError, EncoderStateError},
+    command::{
+        clear_texture, encoder::EncodingState, ArcCommand, CommandEncoderError, EncoderStateError,
+    },
     device::{Device, MissingDownlevelFlags},
     global::Global,
     id::{BufferId, CommandEncoderId},
@@ -840,17 +842,26 @@ impl Global {
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-        cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
-            copy_buffer_to_buffer(
-                cmd_buf_data,
-                hub,
-                &cmd_enc,
-                source,
-                source_offset,
-                destination,
-                destination_offset,
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut list) = cmd_buf_data.trace() {
+            list.push(TraceCommand::CopyBufferToBuffer {
+                src: source,
+                src_offset: source_offset,
+                dst: destination,
+                dst_offset: destination_offset,
                 size,
-            )
+            });
+        }
+
+        cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
+            Ok(ArcCommand::CopyBufferToBuffer {
+                src: self.resolve_buffer_id(source)?,
+                src_offset: source_offset,
+                dst: self.resolve_buffer_id(destination)?,
+                dst_offset: destination_offset,
+                size,
+            })
         })
     }
 
@@ -924,66 +935,44 @@ impl Global {
     }
 }
 
-fn copy_buffer_to_buffer(
-    cmd_buf_data: &mut CommandBufferMutable,
-    hub: &crate::hub::Hub,
-    cmd_enc: &Arc<super::CommandEncoder>,
-    source: BufferId,
+pub(in crate::command) fn copy_buffer_to_buffer(
+    state: &mut EncodingState,
+    src_buffer: &Arc<Buffer>,
     source_offset: BufferAddress,
-    destination: BufferId,
+    dst_buffer: &Arc<Buffer>,
     destination_offset: BufferAddress,
     size: Option<BufferAddress>,
 ) -> Result<(), CommandEncoderError> {
-    let device = &cmd_enc.device;
-    device.check_is_valid()?;
-
-    if source == destination {
+    if src_buffer.is_equal(dst_buffer) {
         return Err(TransferError::SameSourceDestinationBuffer.into());
     }
 
-    #[cfg(feature = "trace")]
-    if let Some(ref mut list) = cmd_buf_data.trace_commands {
-        list.push(TraceCommand::CopyBufferToBuffer {
-            src: source,
-            src_offset: source_offset,
-            dst: destination,
-            dst_offset: destination_offset,
-            size,
-        });
-    }
+    src_buffer.same_device(state.device)?;
 
-    let snatch_guard = device.snatchable_lock.read();
-
-    let src_buffer = hub.buffers.get(source).get()?;
-
-    src_buffer.same_device_as(cmd_enc.as_ref())?;
-
-    let src_pending = cmd_buf_data
-        .trackers
+    let src_pending = state
+        .tracker
         .buffers
-        .set_single(&src_buffer, wgt::BufferUses::COPY_SRC);
+        .set_single(src_buffer, wgt::BufferUses::COPY_SRC);
 
-    let src_raw = src_buffer.try_raw(&snatch_guard)?;
+    let src_raw = src_buffer.try_raw(state.snatch_guard)?;
     src_buffer
         .check_usage(BufferUsages::COPY_SRC)
         .map_err(TransferError::MissingBufferUsage)?;
     // expecting only a single barrier
-    let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer, &snatch_guard));
+    let src_barrier = src_pending.map(|pending| pending.into_hal(src_buffer, state.snatch_guard));
 
-    let dst_buffer = hub.buffers.get(destination).get()?;
+    dst_buffer.same_device(state.device)?;
 
-    dst_buffer.same_device_as(cmd_enc.as_ref())?;
-
-    let dst_pending = cmd_buf_data
-        .trackers
+    let dst_pending = state
+        .tracker
         .buffers
-        .set_single(&dst_buffer, wgt::BufferUses::COPY_DST);
+        .set_single(dst_buffer, wgt::BufferUses::COPY_DST);
 
-    let dst_raw = dst_buffer.try_raw(&snatch_guard)?;
+    let dst_raw = dst_buffer.try_raw(state.snatch_guard)?;
     dst_buffer
         .check_usage(BufferUsages::COPY_DST)
         .map_err(TransferError::MissingBufferUsage)?;
-    let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
+    let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer, state.snatch_guard));
 
     let (size, source_end_offset) = match size {
         Some(size) => (size, source_offset + size),
@@ -999,7 +988,8 @@ fn copy_buffer_to_buffer(
     if destination_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
         return Err(TransferError::UnalignedBufferOffset(destination_offset).into());
     }
-    if !device
+    if !state
+        .device
         .downlevel
         .flags
         .contains(wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER)
@@ -1046,34 +1036,35 @@ fn copy_buffer_to_buffer(
     }
 
     // Make sure source is initialized memory and mark dest as initialized.
-    cmd_buf_data.buffer_memory_init_actions.extend(
-        dst_buffer.initialization_status.read().create_action(
-            &dst_buffer,
+    state
+        .buffer_memory_init_actions
+        .extend(dst_buffer.initialization_status.read().create_action(
+            dst_buffer,
             destination_offset..(destination_offset + size),
             MemoryInitKind::ImplicitlyInitialized,
-        ),
-    );
-    cmd_buf_data.buffer_memory_init_actions.extend(
-        src_buffer.initialization_status.read().create_action(
-            &src_buffer,
+        ));
+    state
+        .buffer_memory_init_actions
+        .extend(src_buffer.initialization_status.read().create_action(
+            src_buffer,
             source_offset..(source_offset + size),
             MemoryInitKind::NeedsInitializedMemory,
-        ),
-    );
+        ));
 
     let region = hal::BufferCopy {
         src_offset: source_offset,
         dst_offset: destination_offset,
         size: wgt::BufferSize::new(size).unwrap(),
     };
-    let cmd_buf_raw = cmd_buf_data.encoder.open()?;
     let barriers = src_barrier
         .into_iter()
         .chain(dst_barrier)
         .collect::<Vec<_>>();
     unsafe {
-        cmd_buf_raw.transition_buffers(&barriers);
-        cmd_buf_raw.copy_buffer_to_buffer(src_raw, dst_raw, &[region]);
+        state.raw_encoder.transition_buffers(&barriers);
+        state
+            .raw_encoder
+            .copy_buffer_to_buffer(src_raw, dst_raw, &[region]);
     }
 
     Ok(())

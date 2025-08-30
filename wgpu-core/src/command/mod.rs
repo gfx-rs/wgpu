@@ -24,8 +24,16 @@ use core::ops;
 
 pub(crate) use self::clear::clear_texture;
 pub use self::{
-    bundle::*, clear::ClearError, compute::*, compute_command::ComputeCommand, draw::*,
-    encoder_command::Command, query::*, render::*, render_command::RenderCommand, transfer::*,
+    bundle::*,
+    clear::ClearError,
+    compute::*,
+    compute_command::ComputeCommand,
+    draw::*,
+    encoder_command::{ArcCommand, Command},
+    query::*,
+    render::*,
+    render_command::RenderCommand,
+    transfer::*,
 };
 pub(crate) use allocator::CommandAllocator;
 
@@ -35,6 +43,7 @@ pub use timestamp_writes::PassTimestampWrites;
 use self::memory_init::CommandBufferTextureMemoryActions;
 
 use crate::binding_model::BindingError;
+use crate::command::encoder::EncodingState;
 use crate::command::transition_resources::TransitionResourcesError;
 use crate::device::queue::TempResource;
 use crate::device::{Device, DeviceError, MissingFeatures};
@@ -123,6 +132,63 @@ pub(crate) enum CommandEncoderStatus {
 }
 
 impl CommandEncoderStatus {
+    #[cfg(feature = "trace")]
+    fn trace(&mut self) -> Option<&mut Vec<TraceCommand>> {
+        match self {
+            Self::Recording(cmd_buf_data) => cmd_buf_data.trace_commands.as_mut(),
+            _ => None,
+        }
+    }
+
+    /// Push a command provided by a closure onto the encoder.
+    ///
+    /// If the encoder is in the [`Self::Recording`] state, calls the closure to
+    /// obtain a command, and pushes it onto the encoder. If the closure returns
+    /// an error, stores that error in the encoder for later reporting when
+    /// `finish()` is called. Returns `Ok(())` even if the closure returned an
+    /// error.
+    ///
+    /// If the encoder is not in the [`Self::Recording`] state, the closure will
+    /// not be called and nothing will be recorded. The encoder will be
+    /// invalidated (if it is not already). If the error is a [validation error
+    /// that should be raised immediately][ves], returns it in `Err`, otherwise,
+    /// returns `Ok(())`.
+    ///
+    /// [ves]: https://www.w3.org/TR/webgpu/#abstract-opdef-validate-the-encoder-state
+    fn push_with<
+        F: FnOnce() -> Result<ArcCommand, E>,
+        E: Clone + Into<CommandEncoderError>,
+    >(
+        &mut self,
+        f: F,
+    ) -> Result<(), EncoderStateError> {
+        match self {
+            Self::Recording(cmd_buf_data) => {
+                match f() {
+                    Ok(cmd) => cmd_buf_data.commands.push(cmd),
+                    Err(err) => {
+                        self.invalidate(err);
+                    }
+                }
+                Ok(())
+            }
+            Self::Locked(_) => {
+                // Invalidate the encoder and do not record anything, but do not
+                // return an immediate validation error.
+                self.invalidate(EncoderStateError::Locked);
+                Ok(())
+            }
+            // Encoder is ended. Invalidate the encoder, do not record anything,
+            // and return an immediate validation error.
+            Self::Finished(_) => Err(self.invalidate(EncoderStateError::Ended)),
+            Self::Consumed => Err(EncoderStateError::Ended),
+            // Encoder is already invalid. Do not record anything, but do not
+            // return an immediate validation error.
+            Self::Error(_) => Ok(()),
+            Self::Transitioning => unreachable!(),
+        }
+    }
+
     /// Record commands using the supplied closure.
     ///
     /// If the encoder is in the [`Self::Recording`] state, calls the closure to
@@ -194,6 +260,7 @@ impl CommandEncoderStatus {
     }
 
     #[cfg(feature = "trace")]
+    #[allow(dead_code)] // TODO
     fn get_inner(&mut self) -> &mut CommandBufferMutable {
         match self {
             Self::Locked(inner) | Self::Finished(inner) | Self::Recording(inner) => inner,
@@ -574,6 +641,22 @@ impl InnerCommandEncoder {
         Ok(())
     }
 
+    /// If the command encoder is not open, begin recording a new command buffer.
+    ///
+    /// If the command encoder was already open, does nothing.
+    ///
+    /// In both cases, returns a reference to the raw encoder.
+    fn open_if_closed(&mut self) -> Result<&mut dyn hal::DynCommandEncoder, DeviceError> {
+        if !self.is_open {
+            self.is_open = true;
+            let hal_label = hal_label(Some(self.label.as_str()), self.device.instance_flags);
+            unsafe { self.raw.begin_encoding(hal_label) }
+                .map_err(|e| self.device.handle_hal_error(e))?;
+        }
+
+        Ok(self.raw.as_mut())
+    }
+
     /// Begin recording a new command buffer, if we haven't already.
     ///
     /// The underlying hal encoder is put in the "recording" state.
@@ -588,7 +671,7 @@ impl InnerCommandEncoder {
         Ok(self.raw.as_mut())
     }
 
-    /// Begin recording a new command buffer for a render pass, with
+    /// Begin recording a new command buffer for a render or compute pass, with
     /// its own label.
     ///
     /// The underlying hal encoder is put in the "recording" state.
@@ -663,6 +746,8 @@ pub struct CommandBufferMutable {
 
     debug_scope_depth: u32,
 
+    pub(crate) commands: Vec<ArcCommand>,
+
     #[cfg(feature = "trace")]
     pub(crate) trace_commands: Option<Vec<TraceCommand>>,
 }
@@ -736,6 +821,7 @@ impl CommandEncoder {
                     indirect_draw_validation_resources:
                         crate::indirect_validation::DrawResources::new(device.clone()),
                     debug_scope_depth: 0,
+                    commands: Vec::new(),
                     #[cfg(feature = "trace")]
                     trace_commands: if device.trace.lock().is_some() {
                         Some(Vec::new())
@@ -1196,13 +1282,122 @@ impl Global {
         let hub = &self.hub;
 
         let cmd_enc = hub.command_encoders.get(encoder_id);
+        let mut cmd_buf_data = cmd_enc.data.lock();
 
-        let data = cmd_enc.data.lock().finish();
+        let res = cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
+            cmd_enc.device.check_is_valid()?;
+            let snatch_guard = cmd_enc.device.snatchable_lock.read();
+            let mut debug_scope_depth = 0;
 
-        // Errors related to destroyed resources are not reported until the
-        // command buffer is submitted.
-        let error = match data {
-            CommandEncoderStatus::Error(ref e) if !e.is_destroyed_error() => Some(e.clone()),
+            let mut commands = mem::take(&mut cmd_buf_data.commands);
+            for command in commands.drain(..) {
+                if matches!(
+                    command,
+                    ArcCommand::RunRenderPass { .. } | ArcCommand::RunComputePass { .. }
+                ) {
+                    todo!();
+                } else {
+                    // All the other non-pass encoding routines assume the
+                    // encoder is open, so open it if necessary. This state
+                    // object holds an `&mut dyn hal::DynCommandEncoder`. By
+                    // convention, a bare HAL encoder reference in
+                    // [`EncodingState`] must always be an open encoder.
+                    let raw_encoder = cmd_buf_data.encoder.open_if_closed()?;
+                    let mut state = EncodingState {
+                        device: &cmd_enc.device,
+                        raw_encoder,
+                        tracker: &mut cmd_buf_data.trackers,
+                        buffer_memory_init_actions: &mut cmd_buf_data.buffer_memory_init_actions,
+                        texture_memory_actions: &mut cmd_buf_data.texture_memory_actions,
+                        as_actions: &mut cmd_buf_data.as_actions,
+                        indirect_draw_validation_resources: &mut cmd_buf_data
+                            .indirect_draw_validation_resources,
+                        snatch_guard: &snatch_guard,
+                        debug_scope_depth: &mut debug_scope_depth,
+                    };
+                    match command {
+                        ArcCommand::CopyBufferToBuffer {
+                            src,
+                            src_offset,
+                            dst,
+                            dst_offset,
+                            size,
+                        } => {
+                            copy_buffer_to_buffer(
+                                &mut state, &src, src_offset, &dst, dst_offset, size,
+                            )?;
+                        }
+                        ArcCommand::CopyBufferToTexture {
+                            src: _,
+                            dst: _,
+                            size: _,
+                        } => todo!(),
+                        ArcCommand::CopyTextureToBuffer {
+                            src: _,
+                            dst: _,
+                            size: _,
+                        } => todo!(),
+                        ArcCommand::CopyTextureToTexture {
+                            src: _,
+                            dst: _,
+                            size: _,
+                        } => todo!(),
+                        ArcCommand::ClearBuffer {
+                            dst: _,
+                            offset: _,
+                            size: _,
+                        } => todo!(),
+                        ArcCommand::ClearTexture {
+                            dst: _,
+                            subresource_range: _,
+                        } => todo!(),
+                        ArcCommand::WriteTimestamp {
+                            query_set_id: _,
+                            query_index: _,
+                        } => todo!(),
+                        ArcCommand::ResolveQuerySet {
+                            query_set_id: _,
+                            start_query: _,
+                            query_count: _,
+                            destination: _,
+                            destination_offset: _,
+                        } => todo!(),
+                        ArcCommand::PushDebugGroup(_) => todo!(),
+                        ArcCommand::PopDebugGroup => todo!(),
+                        ArcCommand::InsertDebugMarker(_) => todo!(),
+                        ArcCommand::RunComputePass {
+                            base: _,
+                            timestamp_writes: _,
+                        } => todo!(),
+                        ArcCommand::RunRenderPass {
+                            base: _,
+                            target_colors: _,
+                            target_depth_stencil: _,
+                            timestamp_writes: _,
+                            occlusion_query_set: _,
+                        } => todo!(),
+                        ArcCommand::BuildAccelerationStructures { blas: _, tlas: _ } => todo!(),
+                    }
+                }
+            }
+
+            // Close the encoder, unless it was closed already by a render or compute pass.
+            cmd_buf_data.encoder.close_if_open()?;
+
+            Ok(())
+        });
+
+        let data = cmd_buf_data.finish();
+
+        let error = match (res, &data) {
+            // `EncoderStateError` if the encoder was already finished.
+            (Err(e), _) => Some(e.into()),
+
+            // Other errors encountered during encoding, but excluding destroyed resource errors.
+            (Ok(()), CommandEncoderStatus::Error(e)) if !e.is_destroyed_error() => Some(e.clone()),
+
+            // Errors related to destroyed resources are not reported until the
+            // command buffer is submitted.
             _ => None,
         };
 
