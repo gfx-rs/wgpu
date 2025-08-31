@@ -1227,27 +1227,7 @@ impl Global {
         let cmd_enc = hub.command_encoders.get(encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
-            cmd_buf_data.debug_scope_depth += 1;
-
-            #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.trace_commands {
-                list.push(TraceCommand::PushDebugGroup(label.to_owned()));
-            }
-
-            cmd_enc.device.check_is_valid()?;
-
-            let cmd_buf_raw = cmd_buf_data.encoder.open()?;
-            if !cmd_enc
-                .device
-                .instance_flags
-                .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-            {
-                unsafe {
-                    cmd_buf_raw.begin_debug_marker(label);
-                }
-            }
-
-            Ok(())
+            push_debug_group(cmd_buf_data, &cmd_enc, label)
         })
     }
 
@@ -1264,25 +1244,7 @@ impl Global {
         let cmd_enc = hub.command_encoders.get(encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
-            #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.trace_commands {
-                list.push(TraceCommand::InsertDebugMarker(label.to_owned()));
-            }
-
-            cmd_enc.device.check_is_valid()?;
-
-            if !cmd_enc
-                .device
-                .instance_flags
-                .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-            {
-                let cmd_buf_raw = cmd_buf_data.encoder.open()?;
-                unsafe {
-                    cmd_buf_raw.insert_debug_marker(label);
-                }
-            }
-
-            Ok(())
+            insert_debug_marker(cmd_buf_data, &cmd_enc, label)
         })
     }
 
@@ -1298,30 +1260,7 @@ impl Global {
         let cmd_enc = hub.command_encoders.get(encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
-            if cmd_buf_data.debug_scope_depth == 0 {
-                return Err(DebugGroupError::InvalidPop.into());
-            }
-            cmd_buf_data.debug_scope_depth -= 1;
-
-            #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.trace_commands {
-                list.push(TraceCommand::PopDebugGroup);
-            }
-
-            cmd_enc.device.check_is_valid()?;
-
-            let cmd_buf_raw = cmd_buf_data.encoder.open()?;
-            if !cmd_enc
-                .device
-                .instance_flags
-                .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
-            {
-                unsafe {
-                    cmd_buf_raw.end_debug_marker();
-                }
-            }
-
-            Ok(())
+            pop_debug_group(cmd_buf_data, &cmd_enc)
         })
     }
 
@@ -1375,6 +1314,90 @@ impl Global {
             end_of_pass_write_index,
         })
     }
+}
+
+pub(crate) fn push_debug_group(
+    cmd_buf_data: &mut CommandBufferMutable,
+    cmd_enc: &Arc<CommandEncoder>,
+    label: &str,
+) -> Result<(), CommandEncoderError> {
+    cmd_buf_data.debug_scope_depth += 1;
+
+    #[cfg(feature = "trace")]
+    if let Some(ref mut list) = cmd_buf_data.trace_commands {
+        list.push(TraceCommand::PushDebugGroup(label.to_owned()));
+    }
+
+    cmd_enc.device.check_is_valid()?;
+
+    let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+    if !cmd_enc
+        .device
+        .instance_flags
+        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+    {
+        unsafe {
+            cmd_buf_raw.begin_debug_marker(label);
+        }
+    }
+
+    Ok(())
+}
+
+pub(crate) fn insert_debug_marker(
+    cmd_buf_data: &mut CommandBufferMutable,
+    cmd_enc: &Arc<CommandEncoder>,
+    label: &str,
+) -> Result<(), CommandEncoderError> {
+    #[cfg(feature = "trace")]
+    if let Some(ref mut list) = cmd_buf_data.trace_commands {
+        list.push(TraceCommand::InsertDebugMarker(label.to_owned()));
+    }
+
+    cmd_enc.device.check_is_valid()?;
+
+    if !cmd_enc
+        .device
+        .instance_flags
+        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+    {
+        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+        unsafe {
+            cmd_buf_raw.insert_debug_marker(label);
+        }
+    }
+
+    Ok(())
+}
+
+pub(crate) fn pop_debug_group(
+    cmd_buf_data: &mut CommandBufferMutable,
+    cmd_enc: &Arc<CommandEncoder>,
+) -> Result<(), CommandEncoderError> {
+    if cmd_buf_data.debug_scope_depth == 0 {
+        return Err(DebugGroupError::InvalidPop.into());
+    }
+    cmd_buf_data.debug_scope_depth -= 1;
+
+    #[cfg(feature = "trace")]
+    if let Some(ref mut list) = cmd_buf_data.trace_commands {
+        list.push(TraceCommand::PopDebugGroup);
+    }
+
+    cmd_enc.device.check_is_valid()?;
+
+    let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+    if !cmd_enc
+        .device
+        .instance_flags
+        .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
+    {
+        unsafe {
+            cmd_buf_raw.end_debug_marker();
+        }
+    }
+
+    Ok(())
 }
 
 fn push_constant_clear<PushFn>(offset: u32, size_bytes: u32, mut push_fn: PushFn)

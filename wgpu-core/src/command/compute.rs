@@ -8,8 +8,8 @@ use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::{fmt, str};
 
 use crate::command::{
-    encoder::EncodingState, pass, CommandEncoder, DebugGroupError, EncoderStateError,
-    PassStateError, TimestampWritesError,
+    encoder::EncodingState, pass, CommandBufferMutable, CommandEncoder, DebugGroupError,
+    EncoderStateError, PassStateError, TimestampWritesError,
 };
 use crate::resource::DestroyedResourceError;
 use crate::{binding_model::BindError, resource::RawResourceAccess};
@@ -486,7 +486,6 @@ impl Global {
     }
 
     pub fn compute_pass_end(&self, pass: &mut ComputePass) -> Result<(), EncoderStateError> {
-        let pass_scope = PassErrorScope::Pass;
         profiling::scope!(
             "CommandEncoder::run_compute_pass {}",
             pass.base.label.as_deref().unwrap_or("")
@@ -518,286 +517,291 @@ impl Global {
         }
 
         cmd_buf_data.unlock_and_record(|cmd_buf_data| -> Result<(), ComputePassError> {
-            let device = &cmd_enc.device;
-            device.check_is_valid().map_pass_err(pass_scope)?;
+            encode_compute_pass(cmd_buf_data, &cmd_enc, pass)
+        })
+    }
+}
 
-            let base = &mut pass.base;
+fn encode_compute_pass(
+    cmd_buf_data: &mut CommandBufferMutable,
+    cmd_enc: &Arc<CommandEncoder>,
+    pass: &mut ComputePass,
+) -> Result<(), ComputePassError> {
+    let pass_scope = PassErrorScope::Pass;
 
-            let encoder = &mut cmd_buf_data.encoder;
+    let device = &cmd_enc.device;
+    device.check_is_valid().map_pass_err(pass_scope)?;
 
-            // We automatically keep extending command buffers over time, and because
-            // we want to insert a command buffer _before_ what we're about to record,
-            // we need to make sure to close the previous one.
-            encoder.close_if_open().map_pass_err(pass_scope)?;
-            let raw_encoder = encoder
-                .open_pass(base.label.as_deref())
+    let base = &mut pass.base;
+
+    let encoder = &mut cmd_buf_data.encoder;
+
+    // We automatically keep extending command buffers over time, and because
+    // we want to insert a command buffer _before_ what we're about to record,
+    // we need to make sure to close the previous one.
+    encoder.close_if_open().map_pass_err(pass_scope)?;
+    let raw_encoder = encoder
+        .open_pass(base.label.as_deref())
+        .map_pass_err(pass_scope)?;
+
+    let snatch_guard = device.snatchable_lock.read();
+    let mut debug_scope_depth = 0;
+
+    let mut state = State {
+        pipeline: None,
+
+        pass: pass::PassState {
+            base: EncodingState {
+                device,
+                raw_encoder,
+                tracker: &mut cmd_buf_data.trackers,
+                buffer_memory_init_actions: &mut cmd_buf_data.buffer_memory_init_actions,
+                texture_memory_actions: &mut cmd_buf_data.texture_memory_actions,
+                as_actions: &mut cmd_buf_data.as_actions,
+                indirect_draw_validation_resources: &mut cmd_buf_data
+                    .indirect_draw_validation_resources,
+                snatch_guard: &snatch_guard,
+                debug_scope_depth: &mut debug_scope_depth,
+            },
+            binder: Binder::new(),
+            temp_offsets: Vec::new(),
+            dynamic_offset_count: 0,
+
+            pending_discard_init_fixups: SurfacesInDiscardState::new(),
+
+            scope: device.new_usage_scope(),
+
+            string_offset: 0,
+        },
+        active_query: None,
+
+        push_constants: Vec::new(),
+
+        intermediate_trackers: Tracker::new(),
+    };
+
+    let indices = &state.pass.base.device.tracker_indices;
+    state
+        .pass
+        .base
+        .tracker
+        .buffers
+        .set_size(indices.buffers.size());
+    state
+        .pass
+        .base
+        .tracker
+        .textures
+        .set_size(indices.textures.size());
+
+    let timestamp_writes: Option<hal::PassTimestampWrites<'_, dyn hal::DynQuerySet>> =
+        if let Some(tw) = pass.timestamp_writes.take() {
+            tw.query_set
+                .same_device_as(cmd_enc.as_ref())
                 .map_pass_err(pass_scope)?;
 
-            let snatch_guard = device.snatchable_lock.read();
-            let mut debug_scope_depth = 0;
+            let query_set = state
+                .pass
+                .base
+                .tracker
+                .query_sets
+                .insert_single(tw.query_set);
 
-            let mut state = State {
-                pipeline: None,
-
-                pass: pass::PassState {
-                    base: EncodingState {
-                        device,
-                        raw_encoder,
-                        tracker: &mut cmd_buf_data.trackers,
-                        buffer_memory_init_actions: &mut cmd_buf_data.buffer_memory_init_actions,
-                        texture_memory_actions: &mut cmd_buf_data.texture_memory_actions,
-                        as_actions: &mut cmd_buf_data.as_actions,
-                        indirect_draw_validation_resources: &mut cmd_buf_data
-                            .indirect_draw_validation_resources,
-                        snatch_guard: &snatch_guard,
-                        debug_scope_depth: &mut debug_scope_depth,
-                    },
-                    binder: Binder::new(),
-                    temp_offsets: Vec::new(),
-                    dynamic_offset_count: 0,
-
-                    pending_discard_init_fixups: SurfacesInDiscardState::new(),
-
-                    scope: device.new_usage_scope(),
-
-                    string_offset: 0,
-                },
-                active_query: None,
-
-                push_constants: Vec::new(),
-
-                intermediate_trackers: Tracker::new(),
+            // Unlike in render passes we can't delay resetting the query sets since
+            // there is no auxiliary pass.
+            let range = if let (Some(index_a), Some(index_b)) =
+                (tw.beginning_of_pass_write_index, tw.end_of_pass_write_index)
+            {
+                Some(index_a.min(index_b)..index_a.max(index_b) + 1)
+            } else {
+                tw.beginning_of_pass_write_index
+                    .or(tw.end_of_pass_write_index)
+                    .map(|i| i..i + 1)
             };
-
-            let indices = &state.pass.base.device.tracker_indices;
-            state
-                .pass
-                .base
-                .tracker
-                .buffers
-                .set_size(indices.buffers.size());
-            state
-                .pass
-                .base
-                .tracker
-                .textures
-                .set_size(indices.textures.size());
-
-            let timestamp_writes: Option<hal::PassTimestampWrites<'_, dyn hal::DynQuerySet>> =
-                if let Some(tw) = pass.timestamp_writes.take() {
-                    tw.query_set
-                        .same_device_as(cmd_enc.as_ref())
-                        .map_pass_err(pass_scope)?;
-
-                    let query_set = state
+            // Range should always be Some, both values being None should lead to a validation error.
+            // But no point in erroring over that nuance here!
+            if let Some(range) = range {
+                unsafe {
+                    state
                         .pass
                         .base
-                        .tracker
-                        .query_sets
-                        .insert_single(tw.query_set);
-
-                    // Unlike in render passes we can't delay resetting the query sets since
-                    // there is no auxiliary pass.
-                    let range = if let (Some(index_a), Some(index_b)) =
-                        (tw.beginning_of_pass_write_index, tw.end_of_pass_write_index)
-                    {
-                        Some(index_a.min(index_b)..index_a.max(index_b) + 1)
-                    } else {
-                        tw.beginning_of_pass_write_index
-                            .or(tw.end_of_pass_write_index)
-                            .map(|i| i..i + 1)
-                    };
-                    // Range should always be Some, both values being None should lead to a validation error.
-                    // But no point in erroring over that nuance here!
-                    if let Some(range) = range {
-                        unsafe {
-                            state
-                                .pass
-                                .base
-                                .raw_encoder
-                                .reset_queries(query_set.raw(), range);
-                        }
-                    }
-
-                    Some(hal::PassTimestampWrites {
-                        query_set: query_set.raw(),
-                        beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
-                        end_of_pass_write_index: tw.end_of_pass_write_index,
-                    })
-                } else {
-                    None
-                };
-
-            let hal_desc = hal::ComputePassDescriptor {
-                label: hal_label(base.label.as_deref(), device.instance_flags),
-                timestamp_writes,
-            };
-
-            unsafe {
-                state.pass.base.raw_encoder.begin_compute_pass(&hal_desc);
-            }
-
-            for command in base.commands.drain(..) {
-                match command {
-                    ArcComputeCommand::SetBindGroup {
-                        index,
-                        num_dynamic_offsets,
-                        bind_group,
-                    } => {
-                        let scope = PassErrorScope::SetBindGroup;
-                        pass::set_bind_group::<ComputePassErrorInner>(
-                            &mut state.pass,
-                            cmd_enc.as_ref(),
-                            &base.dynamic_offsets,
-                            index,
-                            num_dynamic_offsets,
-                            bind_group,
-                            false,
-                        )
-                        .map_pass_err(scope)?;
-                    }
-                    ArcComputeCommand::SetPipeline(pipeline) => {
-                        let scope = PassErrorScope::SetPipelineCompute;
-                        set_pipeline(&mut state, cmd_enc.as_ref(), pipeline).map_pass_err(scope)?;
-                    }
-                    ArcComputeCommand::SetPushConstant {
-                        offset,
-                        size_bytes,
-                        values_offset,
-                    } => {
-                        let scope = PassErrorScope::SetPushConstant;
-                        pass::set_push_constant::<ComputePassErrorInner, _>(
-                            &mut state.pass,
-                            &base.push_constant_data,
-                            wgt::ShaderStages::COMPUTE,
-                            offset,
-                            size_bytes,
-                            Some(values_offset),
-                            |data_slice| {
-                                let offset_in_elements =
-                                    (offset / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
-                                let size_in_elements =
-                                    (size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
-                                state.push_constants[offset_in_elements..][..size_in_elements]
-                                    .copy_from_slice(data_slice);
-                            },
-                        )
-                        .map_pass_err(scope)?;
-                    }
-                    ArcComputeCommand::Dispatch(groups) => {
-                        let scope = PassErrorScope::Dispatch { indirect: false };
-                        dispatch(&mut state, groups).map_pass_err(scope)?;
-                    }
-                    ArcComputeCommand::DispatchIndirect { buffer, offset } => {
-                        let scope = PassErrorScope::Dispatch { indirect: true };
-                        dispatch_indirect(&mut state, cmd_enc.as_ref(), buffer, offset)
-                            .map_pass_err(scope)?;
-                    }
-                    ArcComputeCommand::PushDebugGroup { color: _, len } => {
-                        pass::push_debug_group(&mut state.pass, &base.string_data, len);
-                    }
-                    ArcComputeCommand::PopDebugGroup => {
-                        let scope = PassErrorScope::PopDebugGroup;
-                        pass::pop_debug_group::<ComputePassErrorInner>(&mut state.pass)
-                            .map_pass_err(scope)?;
-                    }
-                    ArcComputeCommand::InsertDebugMarker { color: _, len } => {
-                        pass::insert_debug_marker(&mut state.pass, &base.string_data, len);
-                    }
-                    ArcComputeCommand::WriteTimestamp {
-                        query_set,
-                        query_index,
-                    } => {
-                        let scope = PassErrorScope::WriteTimestamp;
-                        pass::write_timestamp::<ComputePassErrorInner>(
-                            &mut state.pass,
-                            cmd_enc.as_ref(),
-                            None,
-                            query_set,
-                            query_index,
-                        )
-                        .map_pass_err(scope)?;
-                    }
-                    ArcComputeCommand::BeginPipelineStatisticsQuery {
-                        query_set,
-                        query_index,
-                    } => {
-                        let scope = PassErrorScope::BeginPipelineStatisticsQuery;
-                        validate_and_begin_pipeline_statistics_query(
-                            query_set,
-                            state.pass.base.raw_encoder,
-                            &mut state.pass.base.tracker.query_sets,
-                            cmd_enc.as_ref(),
-                            query_index,
-                            None,
-                            &mut state.active_query,
-                        )
-                        .map_pass_err(scope)?;
-                    }
-                    ArcComputeCommand::EndPipelineStatisticsQuery => {
-                        let scope = PassErrorScope::EndPipelineStatisticsQuery;
-                        end_pipeline_statistics_query(
-                            state.pass.base.raw_encoder,
-                            &mut state.active_query,
-                        )
-                        .map_pass_err(scope)?;
-                    }
+                        .raw_encoder
+                        .reset_queries(query_set.raw(), range);
                 }
             }
 
-            if *state.pass.base.debug_scope_depth > 0 {
-                Err(
-                    ComputePassErrorInner::DebugGroupError(DebugGroupError::MissingPop)
-                        .map_pass_err(pass_scope),
-                )?;
-            }
+            Some(hal::PassTimestampWrites {
+                query_set: query_set.raw(),
+                beginning_of_pass_write_index: tw.beginning_of_pass_write_index,
+                end_of_pass_write_index: tw.end_of_pass_write_index,
+            })
+        } else {
+            None
+        };
 
-            unsafe {
-                state.pass.base.raw_encoder.end_compute_pass();
-            }
+    let hal_desc = hal::ComputePassDescriptor {
+        label: hal_label(base.label.as_deref(), device.instance_flags),
+        timestamp_writes,
+    };
 
-            let State {
-                pass:
-                    pass::PassState {
-                        base: EncodingState { tracker, .. },
-                        pending_discard_init_fixups,
-                        ..
-                    },
-                intermediate_trackers,
-                ..
-            } = state;
-
-            // Stop the current command encoder.
-            encoder.close().map_pass_err(pass_scope)?;
-
-            // Create a new command encoder, which we will insert _before_ the body of the compute pass.
-            //
-            // Use that buffer to insert barriers and clear discarded images.
-            let transit = encoder
-                .open_pass(hal_label(
-                    Some("(wgpu internal) Pre Pass"),
-                    self.instance.flags,
-                ))
-                .map_pass_err(pass_scope)?;
-            fixup_discarded_surfaces(
-                pending_discard_init_fixups.into_iter(),
-                transit,
-                &mut tracker.textures,
-                device,
-                &snatch_guard,
-            );
-            CommandEncoder::insert_barriers_from_tracker(
-                transit,
-                tracker,
-                &intermediate_trackers,
-                &snatch_guard,
-            );
-            // Close the command encoder, and swap it with the previous.
-            encoder.close_and_swap().map_pass_err(pass_scope)?;
-
-            Ok(())
-        })
+    unsafe {
+        state.pass.base.raw_encoder.begin_compute_pass(&hal_desc);
     }
+
+    for command in base.commands.drain(..) {
+        match command {
+            ArcComputeCommand::SetBindGroup {
+                index,
+                num_dynamic_offsets,
+                bind_group,
+            } => {
+                let scope = PassErrorScope::SetBindGroup;
+                pass::set_bind_group::<ComputePassErrorInner>(
+                    &mut state.pass,
+                    cmd_enc.as_ref(),
+                    &base.dynamic_offsets,
+                    index,
+                    num_dynamic_offsets,
+                    bind_group,
+                    false,
+                )
+                .map_pass_err(scope)?;
+            }
+            ArcComputeCommand::SetPipeline(pipeline) => {
+                let scope = PassErrorScope::SetPipelineCompute;
+                set_pipeline(&mut state, cmd_enc.as_ref(), pipeline).map_pass_err(scope)?;
+            }
+            ArcComputeCommand::SetPushConstant {
+                offset,
+                size_bytes,
+                values_offset,
+            } => {
+                let scope = PassErrorScope::SetPushConstant;
+                pass::set_push_constant::<ComputePassErrorInner, _>(
+                    &mut state.pass,
+                    &base.push_constant_data,
+                    wgt::ShaderStages::COMPUTE,
+                    offset,
+                    size_bytes,
+                    Some(values_offset),
+                    |data_slice| {
+                        let offset_in_elements = (offset / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
+                        let size_in_elements = (size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
+                        state.push_constants[offset_in_elements..][..size_in_elements]
+                            .copy_from_slice(data_slice);
+                    },
+                )
+                .map_pass_err(scope)?;
+            }
+            ArcComputeCommand::Dispatch(groups) => {
+                let scope = PassErrorScope::Dispatch { indirect: false };
+                dispatch(&mut state, groups).map_pass_err(scope)?;
+            }
+            ArcComputeCommand::DispatchIndirect { buffer, offset } => {
+                let scope = PassErrorScope::Dispatch { indirect: true };
+                dispatch_indirect(&mut state, cmd_enc.as_ref(), buffer, offset)
+                    .map_pass_err(scope)?;
+            }
+            ArcComputeCommand::PushDebugGroup { color: _, len } => {
+                pass::push_debug_group(&mut state.pass, &base.string_data, len);
+            }
+            ArcComputeCommand::PopDebugGroup => {
+                let scope = PassErrorScope::PopDebugGroup;
+                pass::pop_debug_group::<ComputePassErrorInner>(&mut state.pass)
+                    .map_pass_err(scope)?;
+            }
+            ArcComputeCommand::InsertDebugMarker { color: _, len } => {
+                pass::insert_debug_marker(&mut state.pass, &base.string_data, len);
+            }
+            ArcComputeCommand::WriteTimestamp {
+                query_set,
+                query_index,
+            } => {
+                let scope = PassErrorScope::WriteTimestamp;
+                pass::write_timestamp::<ComputePassErrorInner>(
+                    &mut state.pass,
+                    cmd_enc.as_ref(),
+                    None,
+                    query_set,
+                    query_index,
+                )
+                .map_pass_err(scope)?;
+            }
+            ArcComputeCommand::BeginPipelineStatisticsQuery {
+                query_set,
+                query_index,
+            } => {
+                let scope = PassErrorScope::BeginPipelineStatisticsQuery;
+                validate_and_begin_pipeline_statistics_query(
+                    query_set,
+                    state.pass.base.raw_encoder,
+                    &mut state.pass.base.tracker.query_sets,
+                    cmd_enc.as_ref(),
+                    query_index,
+                    None,
+                    &mut state.active_query,
+                )
+                .map_pass_err(scope)?;
+            }
+            ArcComputeCommand::EndPipelineStatisticsQuery => {
+                let scope = PassErrorScope::EndPipelineStatisticsQuery;
+                end_pipeline_statistics_query(state.pass.base.raw_encoder, &mut state.active_query)
+                    .map_pass_err(scope)?;
+            }
+        }
+    }
+
+    if *state.pass.base.debug_scope_depth > 0 {
+        Err(
+            ComputePassErrorInner::DebugGroupError(DebugGroupError::MissingPop)
+                .map_pass_err(pass_scope),
+        )?;
+    }
+
+    unsafe {
+        state.pass.base.raw_encoder.end_compute_pass();
+    }
+
+    let State {
+        pass:
+            pass::PassState {
+                base: EncodingState { tracker, .. },
+                pending_discard_init_fixups,
+                ..
+            },
+        intermediate_trackers,
+        ..
+    } = state;
+
+    // Stop the current command encoder.
+    encoder.close().map_pass_err(pass_scope)?;
+
+    // Create a new command encoder, which we will insert _before_ the body of the compute pass.
+    //
+    // Use that buffer to insert barriers and clear discarded images.
+    let transit = encoder
+        .open_pass(hal_label(
+            Some("(wgpu internal) Pre Pass"),
+            device.instance_flags,
+        ))
+        .map_pass_err(pass_scope)?;
+    fixup_discarded_surfaces(
+        pending_discard_init_fixups.into_iter(),
+        transit,
+        &mut tracker.textures,
+        device,
+        &snatch_guard,
+    );
+    CommandEncoder::insert_barriers_from_tracker(
+        transit,
+        tracker,
+        &intermediate_trackers,
+        &snatch_guard,
+    );
+    // Close the command encoder, and swap it with the previous.
+    encoder.close_and_swap().map_pass_err(pass_scope)?;
+
+    Ok(())
 }
 
 fn set_pipeline(
