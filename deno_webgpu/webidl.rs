@@ -399,8 +399,6 @@ pub enum GPUFeatureName {
     UniformBufferBindingArrays,
     #[webidl(rename = "partially-bound-binding-array")]
     PartiallyBoundBindingArray,
-    #[webidl(rename = "multi-draw-indirect")]
-    MultiDrawIndirect,
     #[webidl(rename = "multi-draw-indirect-count")]
     MultiDrawIndirectCount,
     #[webidl(rename = "push-constants")]
@@ -470,7 +468,6 @@ pub fn feature_names_to_features(names: Vec<GPUFeatureName>) -> wgpu_types::Feat
       GPUFeatureName::StorageTextureArrayNonUniformIndexing => Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
       GPUFeatureName::UniformBufferBindingArrays => Features::UNIFORM_BUFFER_BINDING_ARRAYS,
       GPUFeatureName::PartiallyBoundBindingArray => Features::PARTIALLY_BOUND_BINDING_ARRAY,
-      GPUFeatureName::MultiDrawIndirect => Features::MULTI_DRAW_INDIRECT,
       GPUFeatureName::MultiDrawIndirectCount => Features::MULTI_DRAW_INDIRECT_COUNT,
       GPUFeatureName::PushConstants => Features::PUSH_CONSTANTS,
       GPUFeatureName::AddressModeClampToZero => Features::ADDRESS_MODE_CLAMP_TO_ZERO,
@@ -592,9 +589,6 @@ pub fn features_to_feature_names(features: wgpu_types::Features) -> HashSet<GPUF
     }
     if features.contains(wgpu_types::Features::PARTIALLY_BOUND_BINDING_ARRAY) {
         return_features.insert(PartiallyBoundBindingArray);
-    }
-    if features.contains(wgpu_types::Features::MULTI_DRAW_INDIRECT) {
-        return_features.insert(MultiDrawIndirect);
     }
     if features.contains(wgpu_types::Features::MULTI_DRAW_INDIRECT_COUNT) {
         return_features.insert(MultiDrawIndirectCount);

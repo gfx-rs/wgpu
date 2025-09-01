@@ -1,10 +1,4 @@
-use alloc::{
-    borrow::{Cow, ToOwned as _},
-    collections::BTreeMap,
-    ffi::CString,
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{borrow::ToOwned as _, collections::BTreeMap, ffi::CString, sync::Arc, vec::Vec};
 use core::{
     ffi::CStr,
     mem::{self, MaybeUninit},
@@ -832,6 +826,7 @@ impl super::Device {
     fn create_shader_module_impl(
         &self,
         spv: &[u32],
+        label: &crate::Label<'_>,
     ) -> Result<vk::ShaderModule, crate::DeviceError> {
         let vk_info = vk::ShaderModuleCreateInfo::default()
             .flags(vk::ShaderModuleCreateFlags::empty())
@@ -849,6 +844,11 @@ impl super::Device {
             // VK_ERROR_INVALID_SHADER_NV
             super::map_host_device_oom_err(err)
         }
+
+        if let Some(label) = label {
+            unsafe { self.shared.set_object_name(raw, label) };
+        }
+
         Ok(raw)
     }
 
@@ -924,7 +924,7 @@ impl super::Device {
                     naga::back::spv::write_vec(&module, &info, options, Some(&pipeline_options))
                 }
                 .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
-                self.create_shader_module_impl(&spv)?
+                self.create_shader_module_impl(&spv, &None)?
             }
         };
 
@@ -1899,19 +1899,20 @@ impl crate::Device for super::Device {
         desc: &crate::ShaderModuleDescriptor,
         shader: crate::ShaderInput,
     ) -> Result<super::ShaderModule, crate::ShaderError> {
-        let spv = match shader {
-            crate::ShaderInput::Naga(naga_shader) => {
+        let shader_module = match shader {
+            crate::ShaderInput::Naga(naga_shader)
                 if self
                     .shared
                     .workarounds
                     .contains(super::Workarounds::SEPARATE_ENTRY_POINTS)
-                    || !naga_shader.module.overrides.is_empty()
-                {
-                    return Ok(super::ShaderModule::Intermediate {
-                        naga_shader,
-                        runtime_checks: desc.runtime_checks,
-                    });
+                    || !naga_shader.module.overrides.is_empty() =>
+            {
+                super::ShaderModule::Intermediate {
+                    naga_shader,
+                    runtime_checks: desc.runtime_checks,
                 }
+            }
+            crate::ShaderInput::Naga(naga_shader) => {
                 let mut naga_options = self.naga_options.clone();
                 naga_options.debug_info =
                     naga_shader
@@ -1930,32 +1931,27 @@ impl crate::Device for super::Device {
                         binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
                     };
                 }
-                Cow::Owned(
-                    naga::back::spv::write_vec(
-                        &naga_shader.module,
-                        &naga_shader.info,
-                        &naga_options,
-                        None,
-                    )
-                    .map_err(|e| crate::ShaderError::Compilation(format!("{e}")))?,
+                let spv = naga::back::spv::write_vec(
+                    &naga_shader.module,
+                    &naga_shader.info,
+                    &naga_options,
+                    None,
                 )
+                .map_err(|e| crate::ShaderError::Compilation(format!("{e}")))?;
+                super::ShaderModule::Raw(self.create_shader_module_impl(&spv, &desc.label)?)
             }
-            crate::ShaderInput::SpirV(data) => Cow::Borrowed(data),
+            crate::ShaderInput::SpirV(data) => {
+                super::ShaderModule::Raw(self.create_shader_module_impl(data, &desc.label)?)
+            }
             crate::ShaderInput::Msl { .. }
             | crate::ShaderInput::Dxil { .. }
             | crate::ShaderInput::Hlsl { .. }
             | crate::ShaderInput::Glsl { .. } => unreachable!(),
         };
 
-        let raw = self.create_shader_module_impl(&spv)?;
-
-        if let Some(label) = desc.label {
-            unsafe { self.shared.set_object_name(raw, label) };
-        }
-
         self.counters.shader_modules.add(1);
 
-        Ok(super::ShaderModule::Raw(raw))
+        Ok(shader_module)
     }
 
     unsafe fn destroy_shader_module(&self, module: super::ShaderModule) {
