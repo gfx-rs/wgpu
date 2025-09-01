@@ -156,7 +156,7 @@ async fn request_device_error_message() {
             let expected = "TypeError";
         } else {
             // This message appears whenever wgpu-core is used as the implementation.
-            let expected = "Unsupported features were requested: Features {";
+            let expected = "Unsupported features were requested:";
         }
     }
     assert!(device_error.contains(expected), "{device_error}");

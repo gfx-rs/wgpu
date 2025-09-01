@@ -535,7 +535,11 @@ bitflags_array! {
 
     /// Features that are not guaranteed to be supported.
     ///
-    /// These are extension features supported by wgpu when targeting native. For all features see [`Features`]
+    /// Most of these are native-only extension features supported by wgpu only when targeting
+    /// native. A few are intended to align with a proposed WebGPU extension, and one
+    /// (`EXTERNAL_TEXTURE`) controls WebGPU-specified behavior that is not optional in the
+    /// standard, but that we don't want to make a [`crate::DownlevelFlags`] until the
+    /// implementation is more complete. For all features see [`Features`].
     ///
     /// If you want to use a feature, you need to first verify that the adapter supports
     /// the feature. If the adapter does not support the feature, requesting a device with it enabled
@@ -784,28 +788,11 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const PARTIALLY_BOUND_BINDING_ARRAY = 1 << 13;
-        /// Allows the user to call [`RenderPass::multi_draw_indirect`] and [`RenderPass::multi_draw_indexed_indirect`].
-        ///
-        /// Allows multiple indirect calls to be dispatched from a single buffer.
-        ///
-        /// Natively Supported Platforms:
-        /// - DX12
-        /// - Vulkan
-        ///
-        /// Emulated Platforms:
-        /// - Metal
-        /// - OpenGL
-        /// - WebGPU
-        ///
-        /// Emulation is preformed by looping over the individual indirect draw calls in the backend. This is still significantly
-        /// faster than enulating it yourself, as wgpu only does draw call validation once.
-        ///
-        /// [`RenderPass::multi_draw_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indirect
-        /// [`RenderPass::multi_draw_indexed_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indexed_indirect
-        const MULTI_DRAW_INDIRECT = 1 << 14;
         /// Allows the user to call [`RenderPass::multi_draw_indirect_count`] and [`RenderPass::multi_draw_indexed_indirect_count`].
         ///
-        /// This allows the use of a buffer containing the actual number of draw calls.
+        /// This allows the use of a buffer containing the actual number of draw calls. This feature being present also implies
+        /// that all calls to [`RenderPass::multi_draw_indirect`] and [`RenderPass::multi_draw_indexed_indirect`] are not being emulated
+        /// with a series of `draw_indirect` calls.
         ///
         /// Supported platforms:
         /// - DX12
@@ -813,6 +800,8 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         ///
+        /// [`RenderPass::multi_draw_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indirect
+        /// [`RenderPass::multi_draw_indexed_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indexed_indirect
         /// [`RenderPass::multi_draw_indirect_count`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indirect_count
         /// [`RenderPass::multi_draw_indexed_indirect_count`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indexed_indirect_count
         const MULTI_DRAW_INDIRECT_COUNT = 1 << 15;
@@ -1242,7 +1231,7 @@ bitflags_array! {
 
     /// Features that are not guaranteed to be supported.
     ///
-    /// These are part of the webgpu standard. For all features see [`Features`]
+    /// These are part of the WebGPU standard. For all features, see [`Features`].
     ///
     /// If you want to use a feature, you need to first verify that the adapter supports
     /// the feature. If the adapter does not support the feature, requesting a device with it enabled
@@ -1509,6 +1498,19 @@ impl Features {
         ]))
     }
 
+    /// Mask of all features which are experimental.
+    #[must_use]
+    pub const fn all_experimental_mask() -> Self {
+        Self::from_bits_truncate(FeatureBits([
+            FeaturesWGPU::EXPERIMENTAL_MESH_SHADER.bits()
+                | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_MULTIVIEW.bits()
+                | FeaturesWGPU::EXPERIMENTAL_RAY_QUERY.bits()
+                | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
+                | FeaturesWGPU::EXPERIMENTAL_PASSTHROUGH_SHADERS.bits(),
+            FeaturesWebGPU::empty().bits(),
+        ]))
+    }
+
     /// Vertex formats allowed for creating and building BLASes
     #[must_use]
     pub fn allowed_vertex_formats_for_blas(&self) -> Vec<VertexFormat> {
@@ -1634,5 +1636,14 @@ mod tests {
                 FeaturesWebGPU::TIMESTAMP_QUERY
             )
         );
+    }
+
+    #[test]
+    fn experimental_features_part_of_experimental_mask() {
+        for (name, feature) in Features::all().iter_names() {
+            let prefixed_with_experimental = name.starts_with("EXPERIMENTAL_");
+            let in_experimental_mask = Features::all_experimental_mask().contains(feature);
+            assert_eq!(in_experimental_mask, prefixed_with_experimental);
+        }
     }
 }

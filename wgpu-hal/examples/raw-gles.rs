@@ -31,7 +31,7 @@ fn main() {
     // Other platforms don't really need one.
     let window_builder = cfg!(windows).then(|| {
         winit::window::WindowBuilder::new()
-            .with_title("WGPU raw GLES example (press Escape to exit)")
+            .with_title("wgpu raw GLES example (press Escape to exit)")
     });
 
     // The template will match only the configurations supporting rendering
@@ -70,7 +70,7 @@ fn main() {
 
     // Glutin tries to create an OpenGL context by default.  Force it to use any version of GLES.
     let context_attributes = glutin::context::ContextAttributesBuilder::new()
-        // WGPU expects GLES 3.0+.
+        // wgpu expects GLES 3.0+.
         .with_context_api(glutin::context::ContextApi::Gles(Some(Version::new(3, 0))))
         .build(raw_window_handle);
 
@@ -112,7 +112,7 @@ fn main() {
                 Event::Resumed => {
                     let window = window.take().unwrap_or_else(|| {
                         let window_builder = winit::window::WindowBuilder::new()
-                            .with_title("WGPU raw GLES example (press Escape to exit)");
+                            .with_title("wgpu raw GLES example (press Escape to exit)");
                         glutin_winit::finalize_window(window_target, window_builder, &gl_config)
                             .unwrap()
                     });

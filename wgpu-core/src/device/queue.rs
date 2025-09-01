@@ -20,10 +20,10 @@ use crate::{
     api_log,
     command::{
         extract_texture_selector, validate_linear_texture_data, validate_texture_buffer_copy,
-        validate_texture_copy_range, ClearError, CommandAllocator, CommandBuffer, CommandEncoder,
-        CommandEncoderError, CopySide, TexelCopyTextureInfo, TransferError,
+        validate_texture_copy_dst_format, validate_texture_copy_range, ClearError,
+        CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopySide,
+        TexelCopyTextureInfo, TransferError,
     },
-    conv,
     device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
     global::Global,
@@ -542,19 +542,19 @@ impl Queue {
             return Ok(());
         };
 
-        let snatch_guard = self.device.snatchable_lock.read();
-
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
         let mut staging_buffer = StagingBuffer::new(&self.device, data_size)?;
-        let mut pending_writes = self.pending_writes.lock();
 
         let staging_buffer = {
             profiling::scope!("copy");
             staging_buffer.write(data);
             staging_buffer.flush()
         };
+
+        let snatch_guard = self.device.snatchable_lock.read();
+        let mut pending_writes = self.pending_writes.lock();
 
         let result = self.write_staging_buffer_impl(
             &snatch_guard,
@@ -564,7 +564,12 @@ impl Queue {
             buffer_offset,
         );
 
+        drop(snatch_guard);
+
         pending_writes.consume(staging_buffer);
+
+        drop(pending_writes);
+
         result
     }
 
@@ -595,14 +600,14 @@ impl Queue {
 
         let buffer = buffer.get()?;
 
-        let snatch_guard = self.device.snatchable_lock.read();
-        let mut pending_writes = self.pending_writes.lock();
-
         // At this point, we have taken ownership of the staging_buffer from the
         // user. Platform validation requires that the staging buffer always
         // be freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
         let staging_buffer = staging_buffer.flush();
+
+        let snatch_guard = self.device.snatchable_lock.read();
+        let mut pending_writes = self.pending_writes.lock();
 
         let result = self.write_staging_buffer_impl(
             &snatch_guard,
@@ -612,7 +617,12 @@ impl Queue {
             buffer_offset,
         );
 
+        drop(snatch_guard);
+
         pending_writes.consume(staging_buffer);
+
+        drop(pending_writes);
+
         result
     }
 
@@ -747,13 +757,7 @@ impl Queue {
 
         let (selector, dst_base) = extract_texture_selector(&destination, size, &dst)?;
 
-        if !conv::is_valid_copy_dst_texture_format(dst.desc.format, destination.aspect) {
-            return Err(TransferError::CopyToForbiddenTextureFormat {
-                format: dst.desc.format,
-                aspect: destination.aspect,
-            }
-            .into());
-        }
+        validate_texture_copy_dst_format(dst.desc.format, destination.aspect)?;
 
         validate_texture_buffer_copy(
             &destination,
@@ -951,6 +955,8 @@ impl Queue {
         destination: wgt::CopyExternalImageDestInfo<Fallible<Texture>>,
         size: wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
+        use crate::conv;
+
         profiling::scope!("Queue::copy_external_image_to_texture");
 
         self.device.check_is_valid()?;
@@ -1465,6 +1471,8 @@ impl Queue {
         profiling::scope!("Queue::compact_blas");
         api_log!("Queue::compact_blas");
 
+        let new_label = blas.label.clone() + " (compacted)";
+
         self.device.check_is_valid()?;
         self.same_device_as(blas.as_ref())?;
 
@@ -1486,7 +1494,7 @@ impl Queue {
             device
                 .raw()
                 .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
-                    label: None,
+                    label: hal_label(Some(&new_label), device.instance_flags),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::BottomLevel,
                     allow_compaction: false,
@@ -1528,7 +1536,7 @@ impl Queue {
             // Bypass the submit checks which update this because we don't submit this normally.
             built_index: RwLock::new(rank::BLAS_BUILT_INDEX, Some(built_index)),
             handle,
-            label: blas.label.clone() + " compacted",
+            label: new_label,
             tracking_data: TrackingData::new(blas.device.tracker_indices.blas_s.clone()),
             compaction_buffer: None,
             compacted_state: Mutex::new(rank::BLAS_COMPACTION_STATE, BlasCompactState::Compacted),

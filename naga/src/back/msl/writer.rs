@@ -4279,7 +4279,7 @@ impl<W: Write> Writer<W> {
         self.namer.reset(
             module,
             &super::keywords::RESERVED_SET,
-            &[],
+            proc::CaseInsensitiveKeywordSet::empty(),
             &[CLAMPED_LOD_LOAD_PREFIX],
             &mut self.names,
         );
