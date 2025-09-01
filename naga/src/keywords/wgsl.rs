@@ -36,6 +36,7 @@ pub const RESERVED: &[&str] = &[
     "texture_3d",
     "texture_cube",
     "texture_cube_array",
+    "texture_external",
     "texture_multisampled_2d",
     "texture_storage_1d",
     "texture_storage_2d",
