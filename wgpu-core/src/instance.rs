@@ -797,6 +797,18 @@ impl Adapter {
             ));
         }
 
+        // Check if experimental features are permitted to be enabled.
+        if desc
+            .required_features
+            .intersects(wgt::Features::all_experimental_mask())
+            && !desc.experimental_features.is_enabled()
+        {
+            return Err(RequestDeviceError::ExperimentalFeaturesNotEnabled(
+                desc.required_features
+                    .intersection(wgt::Features::all_experimental_mask()),
+            ));
+        }
+
         let caps = &self.raw.capabilities;
         if Backends::PRIMARY.contains(Backends::from(self.backend()))
             && !caps.downlevel.is_webgpu_compliant()
@@ -857,8 +869,12 @@ pub enum RequestDeviceError {
     LimitsExceeded(#[from] FailedLimit),
     #[error("Failed to initialize Timestamp Normalizer")]
     TimestampNormalizerInitFailed(#[from] TimestampNormalizerInitError),
-    #[error("Unsupported features were requested: {0:?}")]
+    #[error("Unsupported features were requested: {0}")]
     UnsupportedFeature(wgt::Features),
+    #[error(
+        "Some experimental features, {0}, were requested, but experimental features are not enabled"
+    )]
+    ExperimentalFeaturesNotEnabled(wgt::Features),
 }
 
 #[derive(Clone, Debug, Error)]

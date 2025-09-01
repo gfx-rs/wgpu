@@ -269,8 +269,9 @@ fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
                 wgpu::Features::EXPERIMENTAL_MESH_SHADER
                     | wgpu::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS
                     | match draw_type {
-                        DrawType::Standard | DrawType::Indirect => wgpu::Features::empty(),
-                        DrawType::MultiIndirect => wgpu::Features::MULTI_DRAW_INDIRECT,
+                        DrawType::Standard | DrawType::Indirect | DrawType::MultiIndirect => {
+                            wgpu::Features::empty()
+                        }
                         DrawType::MultiIndirectCount => wgpu::Features::MULTI_DRAW_INDIRECT_COUNT,
                     },
             )

@@ -1146,15 +1146,29 @@ impl crate::CommandEncoder for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        unsafe {
-            self.device.raw.cmd_draw_indexed_indirect(
-                self.active,
-                buffer.raw,
-                offset,
-                draw_count,
-                size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
-            )
-        };
+        if draw_count >= 1 && self.device.private_caps.multi_draw_indirect {
+            unsafe {
+                self.device.raw.cmd_draw_indexed_indirect(
+                    self.active,
+                    buffer.raw,
+                    offset,
+                    draw_count,
+                    size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
+                )
+            };
+        } else {
+            for _ in 0..draw_count {
+                unsafe {
+                    self.device.raw.cmd_draw_indexed_indirect(
+                        self.active,
+                        buffer.raw,
+                        offset,
+                        1,
+                        size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
+                    )
+                };
+            }
+        }
     }
     unsafe fn draw_mesh_tasks_indirect(
         &mut self,

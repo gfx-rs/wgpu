@@ -49,7 +49,7 @@ trace = ["std"]
 web = ["dep:js-sys", "dep:web-sys"]
 
 [dependencies]
-bitflags = { workspace = true, features = ["serde"] }
+bitflags.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 log.workspace = true
 thiserror = { workspace = true, optional = true }
