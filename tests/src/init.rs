@@ -163,6 +163,7 @@ pub async fn initialize_device(
             label: None,
             required_features: features,
             required_limits: limits,
+            experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Off,
         })

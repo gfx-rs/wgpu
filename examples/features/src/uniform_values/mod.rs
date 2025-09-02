@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 // We won't bring StorageBuffer into scope as that might be too easy to confuse
-// with actual GPU-allocated WGPU storage buffers.
+// with actual GPU-allocated wgpu storage buffers.
 use encase::ShaderType;
 use winit::{
     event::{Event, KeyEvent, WindowEvent},
@@ -114,6 +114,7 @@ impl WgpuContext {
                 label: None,
                 required_features: wgpu::Features::empty(),
                 required_limits: wgpu::Limits::downlevel_defaults(),
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 memory_hints: wgpu::MemoryHints::MemoryUsage,
                 trace: wgpu::Trace::Off,
             })

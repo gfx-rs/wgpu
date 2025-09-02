@@ -399,8 +399,6 @@ pub enum GPUFeatureName {
     UniformBufferBindingArrays,
     #[webidl(rename = "partially-bound-binding-array")]
     PartiallyBoundBindingArray,
-    #[webidl(rename = "multi-draw-indirect")]
-    MultiDrawIndirect,
     #[webidl(rename = "multi-draw-indirect-count")]
     MultiDrawIndirectCount,
     #[webidl(rename = "push-constants")]
@@ -419,10 +417,6 @@ pub enum GPUFeatureName {
     VertexWritableStorage,
     #[webidl(rename = "clear-texture")]
     ClearTexture,
-    #[webidl(rename = "msl-shader-passthrough")]
-    MslShaderPassthrough,
-    #[webidl(rename = "spirv-shader-passthrough")]
-    SpirvShaderPassthrough,
     #[webidl(rename = "multiview")]
     Multiview,
     #[webidl(rename = "vertex-attribute-64-bit")]
@@ -435,6 +429,8 @@ pub enum GPUFeatureName {
     ShaderPrimitiveIndex,
     #[webidl(rename = "shader-early-depth-test")]
     ShaderEarlyDepthTest,
+    #[webidl(rename = "passthrough-shaders")]
+    PassthroughShaders,
 }
 
 pub fn feature_names_to_features(names: Vec<GPUFeatureName>) -> wgpu_types::Features {
@@ -472,7 +468,6 @@ pub fn feature_names_to_features(names: Vec<GPUFeatureName>) -> wgpu_types::Feat
       GPUFeatureName::StorageTextureArrayNonUniformIndexing => Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
       GPUFeatureName::UniformBufferBindingArrays => Features::UNIFORM_BUFFER_BINDING_ARRAYS,
       GPUFeatureName::PartiallyBoundBindingArray => Features::PARTIALLY_BOUND_BINDING_ARRAY,
-      GPUFeatureName::MultiDrawIndirect => Features::MULTI_DRAW_INDIRECT,
       GPUFeatureName::MultiDrawIndirectCount => Features::MULTI_DRAW_INDIRECT_COUNT,
       GPUFeatureName::PushConstants => Features::PUSH_CONSTANTS,
       GPUFeatureName::AddressModeClampToZero => Features::ADDRESS_MODE_CLAMP_TO_ZERO,
@@ -482,14 +477,13 @@ pub fn feature_names_to_features(names: Vec<GPUFeatureName>) -> wgpu_types::Feat
       GPUFeatureName::ConservativeRasterization => Features::CONSERVATIVE_RASTERIZATION,
       GPUFeatureName::VertexWritableStorage => Features::VERTEX_WRITABLE_STORAGE,
       GPUFeatureName::ClearTexture => Features::CLEAR_TEXTURE,
-      GPUFeatureName::MslShaderPassthrough => Features::MSL_SHADER_PASSTHROUGH,
-      GPUFeatureName::SpirvShaderPassthrough => Features::SPIRV_SHADER_PASSTHROUGH,
       GPUFeatureName::Multiview => Features::MULTIVIEW,
       GPUFeatureName::VertexAttribute64Bit => Features::VERTEX_ATTRIBUTE_64BIT,
       GPUFeatureName::ShaderF64 => Features::SHADER_F64,
       GPUFeatureName::ShaderI16 => Features::SHADER_I16,
       GPUFeatureName::ShaderPrimitiveIndex => Features::SHADER_PRIMITIVE_INDEX,
       GPUFeatureName::ShaderEarlyDepthTest => Features::SHADER_EARLY_DEPTH_TEST,
+      GPUFeatureName::PassthroughShaders => Features::EXPERIMENTAL_PASSTHROUGH_SHADERS,
     };
         features.set(feature, true);
     }
@@ -596,9 +590,6 @@ pub fn features_to_feature_names(features: wgpu_types::Features) -> HashSet<GPUF
     if features.contains(wgpu_types::Features::PARTIALLY_BOUND_BINDING_ARRAY) {
         return_features.insert(PartiallyBoundBindingArray);
     }
-    if features.contains(wgpu_types::Features::MULTI_DRAW_INDIRECT) {
-        return_features.insert(MultiDrawIndirect);
-    }
     if features.contains(wgpu_types::Features::MULTI_DRAW_INDIRECT_COUNT) {
         return_features.insert(MultiDrawIndirectCount);
     }
@@ -626,9 +617,6 @@ pub fn features_to_feature_names(features: wgpu_types::Features) -> HashSet<GPUF
     if features.contains(wgpu_types::Features::CLEAR_TEXTURE) {
         return_features.insert(ClearTexture);
     }
-    if features.contains(wgpu_types::Features::SPIRV_SHADER_PASSTHROUGH) {
-        return_features.insert(SpirvShaderPassthrough);
-    }
     if features.contains(wgpu_types::Features::MULTIVIEW) {
         return_features.insert(Multiview);
     }
@@ -647,6 +635,9 @@ pub fn features_to_feature_names(features: wgpu_types::Features) -> HashSet<GPUF
     }
     if features.contains(wgpu_types::Features::SHADER_EARLY_DEPTH_TEST) {
         return_features.insert(ShaderEarlyDepthTest);
+    }
+    if features.contains(wgpu_types::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS) {
+        return_features.insert(PassthroughShaders);
     }
 
     return_features

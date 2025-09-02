@@ -917,7 +917,6 @@ impl super::PrivateCapabilities {
         use wgt::Features as F;
 
         let mut features = F::empty()
-            | F::MSL_SHADER_PASSTHROUGH
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::VERTEX_WRITABLE_STORAGE
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
@@ -927,13 +926,12 @@ impl super::PrivateCapabilities {
             | F::TEXTURE_FORMAT_16BIT_NORM
             | F::SHADER_F16
             | F::DEPTH32FLOAT_STENCIL8
-            | F::BGRA8UNORM_STORAGE;
+            | F::BGRA8UNORM_STORAGE
+            | F::EXPERIMENTAL_PASSTHROUGH_SHADERS
+            | F::EXTERNAL_TEXTURE;
 
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
-        features.set(
-            F::INDIRECT_FIRST_INSTANCE | F::MULTI_DRAW_INDIRECT,
-            self.indirect_draw_dispatch,
-        );
+        features.set(F::INDIRECT_FIRST_INSTANCE, self.indirect_draw_dispatch);
         features.set(
             F::TIMESTAMP_QUERY | F::TIMESTAMP_QUERY_INSIDE_ENCODERS,
             self.timestamp_query_support

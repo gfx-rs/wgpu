@@ -6,6 +6,9 @@ Test SPIR-V backend capability checks.
 
 use spirv::Capability as Ca;
 
+#[cfg(spv_out)]
+use rspirv::binary::Disassemble;
+
 fn capabilities_used(source: &str) -> naga::FastIndexSet<Ca> {
     use naga::back::spv;
     use naga::valid;
@@ -212,4 +215,136 @@ fn int64() {
 #[test]
 fn float16() {
     require(&[Ca::Float16], "enable f16; fn f(x: f16) { }");
+}
+
+#[test]
+fn f16_io_capabilities() {
+    let source = r#"
+        enable f16;
+        
+        struct VertexOutput {
+            @location(0) color: vec3<f16>,
+        }
+        
+        @fragment  
+        fn main(input: VertexOutput) -> @location(0) vec4<f16> {
+            return vec4<f16>(input.color, f16(1.0));
+        }
+    "#;
+
+    use naga::back::spv;
+    use naga::valid;
+
+    let module = naga::front::wgsl::parse_str(source).unwrap();
+    let info = valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all())
+        .validate(&module)
+        .unwrap();
+
+    // Test native path: use_storage_input_output_16 = true
+    let options_native = spv::Options {
+        use_storage_input_output_16: true,
+        ..Default::default()
+    };
+
+    let mut words_native = vec![];
+    let mut writer_native = spv::Writer::new(&options_native).unwrap();
+    writer_native
+        .write(&module, &info, None, &None, &mut words_native)
+        .unwrap();
+    let caps_native = writer_native.get_capabilities_used();
+
+    // Should include `StorageInputOutput16` for native `f16` I/O
+    assert!(caps_native.contains(&Ca::StorageInputOutput16));
+
+    // Test polyfill path: use_storage_input_output_16 = false
+    let options_polyfill = spv::Options {
+        use_storage_input_output_16: false,
+        ..Default::default()
+    };
+
+    let mut words_polyfill = vec![];
+    let mut writer_polyfill = spv::Writer::new(&options_polyfill).unwrap();
+    writer_polyfill
+        .write(&module, &info, None, &None, &mut words_polyfill)
+        .unwrap();
+    let caps_polyfill = writer_polyfill.get_capabilities_used();
+
+    // Should not include `StorageInputOutput16` when polyfilled
+    assert!(!caps_polyfill.contains(&Ca::StorageInputOutput16));
+
+    // But should still include the basic `f16` capabilities
+    assert!(caps_polyfill.contains(&Ca::Float16));
+}
+
+#[cfg(spv_out)]
+#[test]
+fn f16_io_polyfill_codegen() {
+    let source = r#"
+        enable f16;
+
+        struct F16IO {
+            @location(0) scalar_f16: f16,
+            @location(1) scalar_f32: f32,
+            @location(2) vec2_f16: vec2<f16>,
+            @location(3) vec2_f32: vec2<f32>,
+        }
+
+        @fragment
+        fn main(input: F16IO) -> F16IO {
+            var output = input;
+            output.scalar_f16 = input.scalar_f16 + 1.0h;
+            output.vec2_f16.x = input.vec2_f16.y;
+            return output;
+        }
+    "#;
+
+    use naga::{back::spv, valid};
+
+    let module = naga::front::wgsl::parse_str(source).unwrap();
+    let info = valid::Validator::new(valid::ValidationFlags::all(), valid::Capabilities::all())
+        .validate(&module)
+        .unwrap();
+
+    // Test Native Path
+    let options_native = spv::Options {
+        use_storage_input_output_16: true,
+        ..Default::default()
+    };
+    let mut words_native = vec![];
+    let mut writer_native = spv::Writer::new(&options_native).unwrap();
+    writer_native
+        .write(&module, &info, None, &None, &mut words_native)
+        .unwrap();
+    let caps_native = writer_native.get_capabilities_used();
+    let dis_native = rspirv::dr::load_words(words_native).unwrap().disassemble();
+
+    // Native path must request the capability and must NOT have conversions.
+    assert!(caps_native.contains(&Ca::StorageInputOutput16));
+    assert!(!dis_native.contains("OpFConvert"));
+
+    // Test Polyfill Path
+    let options_polyfill = spv::Options {
+        use_storage_input_output_16: false,
+        ..Default::default()
+    };
+    let mut words_polyfill = vec![];
+    let mut writer_polyfill = spv::Writer::new(&options_polyfill).unwrap();
+    writer_polyfill
+        .write(&module, &info, None, &None, &mut words_polyfill)
+        .unwrap();
+    let caps_polyfill = writer_polyfill.get_capabilities_used();
+    let dis_polyfill = rspirv::dr::load_words(words_polyfill)
+        .unwrap()
+        .disassemble();
+
+    // Polyfill path should request the capability but not have conversions.
+    assert!(!caps_polyfill.contains(&Ca::StorageInputOutput16));
+    assert!(dis_polyfill.contains("OpFConvert"));
+
+    // Should have 2 input conversions, and 2 output conversions
+    let fconvert_count = dis_polyfill.matches("OpFConvert").count();
+    assert_eq!(
+        fconvert_count, 4,
+        "Expected 4 OpFConvert instructions for polyfilled I/O"
+    );
 }

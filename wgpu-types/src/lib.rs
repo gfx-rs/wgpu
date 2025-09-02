@@ -16,6 +16,7 @@ extern crate alloc;
 
 use alloc::borrow::Cow;
 use alloc::{string::String, vec, vec::Vec};
+use core::cmp::Ordering;
 use core::{
     fmt,
     hash::{Hash, Hasher},
@@ -40,11 +41,13 @@ pub mod error;
 mod features;
 pub mod instance;
 pub mod math;
+mod tokens;
 mod transfers;
 
 pub use counters::*;
 pub use features::*;
 pub use instance::*;
+pub use tokens::*;
 pub use transfers::*;
 
 /// Integral type used for [`Buffer`] offsets and sizes.
@@ -457,6 +460,71 @@ impl fmt::Display for RequestAdapterError {
         }
         Ok(())
     }
+}
+
+/// Invoke a macro for each of the limits.
+///
+/// The supplied macro should take two arguments. The first is a limit name, as
+/// an identifier, typically used to access a member of `struct Limits`. The
+/// second is `Ordering::Less` if valid values are less than the limit (the
+/// common case), or `Ordering::Greater` if valid values are more than the limit
+/// (for limits like alignments, which are minima instead of maxima).
+macro_rules! with_limits {
+    ($macro_name:ident) => {
+        $macro_name!(max_texture_dimension_1d, Ordering::Less);
+        $macro_name!(max_texture_dimension_1d, Ordering::Less);
+        $macro_name!(max_texture_dimension_2d, Ordering::Less);
+        $macro_name!(max_texture_dimension_3d, Ordering::Less);
+        $macro_name!(max_texture_array_layers, Ordering::Less);
+        $macro_name!(max_bind_groups, Ordering::Less);
+        $macro_name!(max_bindings_per_bind_group, Ordering::Less);
+        $macro_name!(
+            max_dynamic_uniform_buffers_per_pipeline_layout,
+            Ordering::Less
+        );
+        $macro_name!(
+            max_dynamic_storage_buffers_per_pipeline_layout,
+            Ordering::Less
+        );
+        $macro_name!(max_sampled_textures_per_shader_stage, Ordering::Less);
+        $macro_name!(max_samplers_per_shader_stage, Ordering::Less);
+        $macro_name!(max_storage_buffers_per_shader_stage, Ordering::Less);
+        $macro_name!(max_storage_textures_per_shader_stage, Ordering::Less);
+        $macro_name!(max_uniform_buffers_per_shader_stage, Ordering::Less);
+        $macro_name!(max_binding_array_elements_per_shader_stage, Ordering::Less);
+        $macro_name!(max_uniform_buffer_binding_size, Ordering::Less);
+        $macro_name!(max_storage_buffer_binding_size, Ordering::Less);
+        $macro_name!(max_vertex_buffers, Ordering::Less);
+        $macro_name!(max_buffer_size, Ordering::Less);
+        $macro_name!(max_vertex_attributes, Ordering::Less);
+        $macro_name!(max_vertex_buffer_array_stride, Ordering::Less);
+        $macro_name!(min_uniform_buffer_offset_alignment, Ordering::Greater);
+        $macro_name!(min_storage_buffer_offset_alignment, Ordering::Greater);
+        $macro_name!(max_inter_stage_shader_components, Ordering::Less);
+        $macro_name!(max_color_attachments, Ordering::Less);
+        $macro_name!(max_color_attachment_bytes_per_sample, Ordering::Less);
+        $macro_name!(max_compute_workgroup_storage_size, Ordering::Less);
+        $macro_name!(max_compute_invocations_per_workgroup, Ordering::Less);
+        $macro_name!(max_compute_workgroup_size_x, Ordering::Less);
+        $macro_name!(max_compute_workgroup_size_y, Ordering::Less);
+        $macro_name!(max_compute_workgroup_size_z, Ordering::Less);
+        $macro_name!(max_compute_workgroups_per_dimension, Ordering::Less);
+
+        $macro_name!(min_subgroup_size, Ordering::Greater);
+        $macro_name!(max_subgroup_size, Ordering::Less);
+
+        $macro_name!(max_push_constant_size, Ordering::Less);
+        $macro_name!(max_non_sampler_bindings, Ordering::Less);
+
+        $macro_name!(max_task_workgroup_total_count, Ordering::Less);
+        $macro_name!(max_task_workgroups_per_dimension, Ordering::Less);
+        $macro_name!(max_mesh_multiview_count, Ordering::Less);
+        $macro_name!(max_mesh_output_layers, Ordering::Less);
+
+        $macro_name!(max_blas_primitive_count, Ordering::Less);
+        $macro_name!(max_blas_geometry_count, Ordering::Less);
+        $macro_name!(max_tlas_instance_count, Ordering::Less);
+    };
 }
 
 /// Represents the sets of limits an adapter/device supports.
@@ -1015,68 +1083,61 @@ impl Limits {
         fatal: bool,
         mut fail_fn: impl FnMut(&'static str, u64, u64),
     ) {
-        use core::cmp::Ordering;
-
-        macro_rules! compare {
-            ($name:ident, $ordering:ident) => {
-                match self.$name.cmp(&allowed.$name) {
-                    Ordering::$ordering | Ordering::Equal => (),
-                    _ => {
-                        fail_fn(stringify!($name), self.$name as u64, allowed.$name as u64);
-                        if fatal {
-                            return;
-                        }
+        macro_rules! check_with_fail_fn {
+            ($name:ident, $ordering:expr) => {
+                let invalid_ord = $ordering.reverse();
+                // In the case of `min_subgroup_size`, requesting a value of
+                // zero means "I'm not going to use subgroups", so we have to
+                // special case that. If any of our minimum limits could
+                // meaningfully go all the way to zero, that would conflict with
+                // this.
+                if self.$name != 0 && self.$name.cmp(&allowed.$name) == invalid_ord {
+                    fail_fn(stringify!($name), self.$name as u64, allowed.$name as u64);
+                    if fatal {
+                        return;
                     }
                 }
             };
         }
 
-        compare!(max_texture_dimension_1d, Less);
-        compare!(max_texture_dimension_2d, Less);
-        compare!(max_texture_dimension_3d, Less);
-        compare!(max_texture_array_layers, Less);
-        compare!(max_bind_groups, Less);
-        compare!(max_bindings_per_bind_group, Less);
-        compare!(max_dynamic_uniform_buffers_per_pipeline_layout, Less);
-        compare!(max_dynamic_storage_buffers_per_pipeline_layout, Less);
-        compare!(max_sampled_textures_per_shader_stage, Less);
-        compare!(max_samplers_per_shader_stage, Less);
-        compare!(max_storage_buffers_per_shader_stage, Less);
-        compare!(max_storage_textures_per_shader_stage, Less);
-        compare!(max_uniform_buffers_per_shader_stage, Less);
-        compare!(max_binding_array_elements_per_shader_stage, Less);
-        compare!(max_uniform_buffer_binding_size, Less);
-        compare!(max_storage_buffer_binding_size, Less);
-        compare!(max_vertex_buffers, Less);
-        compare!(max_buffer_size, Less);
-        compare!(max_vertex_attributes, Less);
-        compare!(max_vertex_buffer_array_stride, Less);
-        compare!(min_uniform_buffer_offset_alignment, Greater);
-        compare!(min_storage_buffer_offset_alignment, Greater);
-        compare!(max_inter_stage_shader_components, Less);
-        compare!(max_color_attachments, Less);
-        compare!(max_color_attachment_bytes_per_sample, Less);
-        compare!(max_compute_workgroup_storage_size, Less);
-        compare!(max_compute_invocations_per_workgroup, Less);
-        compare!(max_compute_workgroup_size_x, Less);
-        compare!(max_compute_workgroup_size_y, Less);
-        compare!(max_compute_workgroup_size_z, Less);
-        compare!(max_compute_workgroups_per_dimension, Less);
-        if self.min_subgroup_size > 0 && self.max_subgroup_size > 0 {
-            compare!(min_subgroup_size, Greater);
-            compare!(max_subgroup_size, Less);
+        if self.min_subgroup_size > self.max_subgroup_size {
+            fail_fn(
+                "max_subgroup_size",
+                self.min_subgroup_size as u64,
+                allowed.min_subgroup_size as u64,
+            );
         }
-        compare!(max_push_constant_size, Less);
-        compare!(max_non_sampler_bindings, Less);
+        with_limits!(check_with_fail_fn);
+    }
 
-        compare!(max_task_workgroup_total_count, Less);
-        compare!(max_task_workgroups_per_dimension, Less);
-        compare!(max_mesh_multiview_count, Less);
-        compare!(max_mesh_output_layers, Less);
+    /// For each limit in `other` that is better than the value in `self`,
+    /// replace the value in `self` with the value from `other`.
+    ///
+    /// A request for a limit value less than the WebGPU-specified default must
+    /// be ignored. This function is used to clamp such requests to the default
+    /// value.
+    ///
+    /// This function is not for clamping requests for values beyond the
+    /// supported limits. For that purpose the desired function would be
+    /// `or_worse_values_from` (which doesn't exist, but could be added if
+    /// needed).
+    #[must_use]
+    pub fn or_better_values_from(mut self, other: &Self) -> Self {
+        macro_rules! or_better_value_from {
+            ($name:ident, $ordering:expr) => {
+                match $ordering {
+                    // Limits that are maximum values (most of them)
+                    Ordering::Less => self.$name = self.$name.max(other.$name),
+                    // Limits that are minimum values
+                    Ordering::Greater => self.$name = self.$name.min(other.$name),
+                    Ordering::Equal => unreachable!(),
+                }
+            };
+        }
 
-        compare!(max_blas_primitive_count, Less);
-        compare!(max_blas_geometry_count, Less);
-        compare!(max_tlas_instance_count, Less);
+        with_limits!(or_better_value_from);
+
+        self
     }
 }
 
@@ -1131,7 +1192,7 @@ impl DownlevelCapabilities {
 bitflags::bitflags! {
     /// Binary flags listing features that may or may not be present on downlevel adapters.
     ///
-    /// A downlevel adapter is a GPU adapter that WGPU supports, but with potentially limited
+    /// A downlevel adapter is a GPU adapter that wgpu supports, but with potentially limited
     /// features, due to the lack of hardware feature support.
     ///
     /// Flags that are **not** present for a downlevel adapter or device usually indicates
@@ -1264,6 +1325,12 @@ bitflags::bitflags! {
         /// Not Supported by:
         /// - GL ES / WebGL
         const NONBLOCKING_QUERY_RESOLVE = 1 << 22;
+
+        /// Allows shaders to use `quantizeToF16`, `pack2x16float`, and `unpack2x16float`, which
+        /// operate on `f16`-precision values stored in `f32`s.
+        ///
+        /// Not supported by Vulkan on Mesa when [`Features::SHADER_F16`] is absent.
+        const SHADER_F16_IN_F32 = 1 << 23;
     }
 }
 
@@ -1403,6 +1470,9 @@ pub struct DeviceDescriptor<L> {
     /// Exactly the specified limits, and no better or worse,
     /// will be allowed in validation of API calls on the resulting device.
     pub required_limits: Limits,
+    /// Specifies whether `self.required_features` is allowed to contain experimental features.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub experimental_features: ExperimentalFeatures,
     /// Hints for memory allocation strategies.
     pub memory_hints: MemoryHints,
     /// Whether API tracing for debugging is enabled,
@@ -1418,6 +1488,7 @@ impl<L> DeviceDescriptor<L> {
             label: fun(&self.label),
             required_features: self.required_features,
             required_limits: self.required_limits.clone(),
+            experimental_features: self.experimental_features,
             memory_hints: self.memory_hints.clone(),
             trace: self.trace.clone(),
         }
@@ -4490,6 +4561,12 @@ pub enum PollError {
         error("The requested Wait timed out before the submission was completed.")
     )]
     Timeout,
+    /// The requested Wait was given a wrong submission index.
+    #[cfg_attr(
+        feature = "std",
+        error("Tried to wait using a submission index ({0}) that has not been returned by a successful submission (last successful submission: {1})")
+    )]
+    WrongSubmissionIndex(u64, u64),
 }
 
 /// Status of device poll operation.
@@ -5188,6 +5265,10 @@ bitflags::bitflags! {
     /// The usages determine what kind of memory the buffer is allocated from and what
     /// actions the buffer can partake in.
     ///
+    /// Specifying only usages the application will actually perform may increase performance.
+    /// Additionally, on the WebGL backend, there are restrictions on [`BufferUsages::INDEX`];
+    /// see [`DownlevelFlags::UNRESTRICTED_INDEX_BUFFER`] for more information.
+    ///
     /// Corresponds to [WebGPU `GPUBufferUsageFlags`](
     /// https://gpuweb.github.io/gpuweb/#typedefdef-gpubufferusageflags).
     #[repr(transparent)]
@@ -5306,6 +5387,10 @@ pub struct BufferDescriptor<L> {
     pub size: BufferAddress,
     /// Usages of a buffer. If the buffer is used in any way that isn't specified here, the operation
     /// will panic.
+    ///
+    /// Specifying only usages the application will actually perform may increase performance.
+    /// Additionally, on the WebGL backend, there are restrictions on [`BufferUsages::INDEX`];
+    /// see [`DownlevelFlags::UNRESTRICTED_INDEX_BUFFER`] for more information.
     pub usage: BufferUsages,
     /// Allows a buffer to be mapped immediately after they are made. It does not have to be [`BufferUsages::MAP_READ`] or
     /// [`BufferUsages::MAP_WRITE`], all buffers are allowed to be mapped at creation.
@@ -8032,20 +8117,52 @@ pub enum DeviceLostReason {
     Destroyed = 1,
 }
 
-/// Descriptor for creating a shader module.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
+/// Descriptor for a shader module given by any of several sources.
+/// These shaders are passed through directly to the underlying api.
+/// At least one shader type that may be used by the backend must be `Some` or a panic is raised.
 #[derive(Debug, Clone)]
-pub enum CreateShaderModuleDescriptorPassthrough<'a, L> {
-    /// Passthrough for SPIR-V binaries.
-    SpirV(ShaderModuleDescriptorSpirV<'a, L>),
-    /// Passthrough for MSL source code.
-    Msl(ShaderModuleDescriptorMsl<'a, L>),
-    /// Passthrough for DXIL compiled with DXC
-    Dxil(ShaderModuleDescriptorDxil<'a, L>),
-    /// Passthrough for HLSL
-    Hlsl(ShaderModuleDescriptorHlsl<'a, L>),
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
+    /// Entrypoint. Unused for Spir-V.
+    pub entry_point: String,
+    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
+    pub label: L,
+    /// Number of workgroups in each dimension x, y and z. Unused for Spir-V.
+    pub num_workgroups: (u32, u32, u32),
+    /// Runtime checks that should be enabled.
+    pub runtime_checks: ShaderRuntimeChecks,
+
+    /// Binary SPIR-V data, in 4-byte words.
+    pub spirv: Option<Cow<'a, [u32]>>,
+    /// Shader DXIL source.
+    pub dxil: Option<Cow<'a, [u8]>>,
+    /// Shader MSL source.
+    pub msl: Option<Cow<'a, str>>,
+    /// Shader HLSL source.
+    pub hlsl: Option<Cow<'a, str>>,
+    /// Shader GLSL source (currently unused).
+    pub glsl: Option<Cow<'a, str>>,
+    /// Shader WGSL source.
+    pub wgsl: Option<Cow<'a, str>>,
+}
+
+// This is so people don't have to fill in fields they don't use, like num_workgroups,
+// entry_point, or other shader languages they didn't compile for
+impl<'a, L: Default> Default for CreateShaderModuleDescriptorPassthrough<'a, L> {
+    fn default() -> Self {
+        Self {
+            entry_point: "".into(),
+            label: Default::default(),
+            num_workgroups: (0, 0, 0),
+            runtime_checks: ShaderRuntimeChecks::unchecked(),
+            spirv: None,
+            dxil: None,
+            msl: None,
+            hlsl: None,
+            glsl: None,
+            wgsl: None,
+        }
+    }
 }
 
 impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
@@ -8053,134 +8170,46 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
     pub fn map_label<K>(
         &self,
         fun: impl FnOnce(&L) -> K,
-    ) -> CreateShaderModuleDescriptorPassthrough<'_, K> {
-        match self {
-            CreateShaderModuleDescriptorPassthrough::SpirV(inner) => {
-                CreateShaderModuleDescriptorPassthrough::<'_, K>::SpirV(
-                    ShaderModuleDescriptorSpirV {
-                        label: fun(&inner.label),
-                        source: inner.source.clone(),
-                    },
-                )
-            }
-            CreateShaderModuleDescriptorPassthrough::Msl(inner) => {
-                CreateShaderModuleDescriptorPassthrough::<'_, K>::Msl(ShaderModuleDescriptorMsl {
-                    entry_point: inner.entry_point.clone(),
-                    label: fun(&inner.label),
-                    num_workgroups: inner.num_workgroups,
-                    source: inner.source.clone(),
-                })
-            }
-            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => {
-                CreateShaderModuleDescriptorPassthrough::<'_, K>::Dxil(ShaderModuleDescriptorDxil {
-                    entry_point: inner.entry_point.clone(),
-                    label: fun(&inner.label),
-                    num_workgroups: inner.num_workgroups,
-                    source: inner.source,
-                })
-            }
-            CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => {
-                CreateShaderModuleDescriptorPassthrough::<'_, K>::Hlsl(ShaderModuleDescriptorHlsl {
-                    entry_point: inner.entry_point.clone(),
-                    label: fun(&inner.label),
-                    num_workgroups: inner.num_workgroups,
-                    source: inner.source,
-                })
-            }
-        }
-    }
-
-    /// Returns the label of shader module passthrough descriptor.
-    pub fn label(&'a self) -> &'a L {
-        match self {
-            CreateShaderModuleDescriptorPassthrough::SpirV(inner) => &inner.label,
-            CreateShaderModuleDescriptorPassthrough::Msl(inner) => &inner.label,
-            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => &inner.label,
-            CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => &inner.label,
+    ) -> CreateShaderModuleDescriptorPassthrough<'a, K> {
+        CreateShaderModuleDescriptorPassthrough {
+            entry_point: self.entry_point.clone(),
+            label: fun(&self.label),
+            num_workgroups: self.num_workgroups,
+            runtime_checks: self.runtime_checks,
+            spirv: self.spirv.clone(),
+            dxil: self.dxil.clone(),
+            msl: self.msl.clone(),
+            hlsl: self.hlsl.clone(),
+            glsl: self.glsl.clone(),
+            wgsl: self.wgsl.clone(),
         }
     }
 
     #[cfg(feature = "trace")]
     /// Returns the source data for tracing purpose.
     pub fn trace_data(&self) -> &[u8] {
-        match self {
-            CreateShaderModuleDescriptorPassthrough::SpirV(inner) => {
-                bytemuck::cast_slice(&inner.source)
-            }
-            CreateShaderModuleDescriptorPassthrough::Msl(inner) => inner.source.as_bytes(),
-            CreateShaderModuleDescriptorPassthrough::Dxil(inner) => inner.source,
-            CreateShaderModuleDescriptorPassthrough::Hlsl(inner) => inner.source.as_bytes(),
+        if let Some(spirv) = &self.spirv {
+            bytemuck::cast_slice(spirv)
+        } else if let Some(msl) = &self.msl {
+            msl.as_bytes()
+        } else if let Some(dxil) = &self.dxil {
+            dxil
+        } else {
+            panic!("No binary data provided to `ShaderModuleDescriptorGeneric`")
         }
     }
 
     #[cfg(feature = "trace")]
     /// Returns the binary file extension for tracing purpose.
     pub fn trace_binary_ext(&self) -> &'static str {
-        match self {
-            CreateShaderModuleDescriptorPassthrough::SpirV(..) => "spv",
-            CreateShaderModuleDescriptorPassthrough::Msl(..) => "msl",
-            CreateShaderModuleDescriptorPassthrough::Dxil(..) => "dxil",
-            CreateShaderModuleDescriptorPassthrough::Hlsl(..) => "hlsl",
+        if self.spirv.is_some() {
+            "spv"
+        } else if self.msl.is_some() {
+            "msl"
+        } else if self.dxil.is_some() {
+            "dxil"
+        } else {
+            panic!("No binary data provided to `ShaderModuleDescriptorGeneric`")
         }
     }
-}
-
-/// Descriptor for a shader module given by Metal MSL source.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-#[derive(Debug, Clone)]
-pub struct ShaderModuleDescriptorMsl<'a, L> {
-    /// Entrypoint.
-    pub entry_point: String,
-    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
-    pub label: L,
-    /// Number of workgroups in each dimension x, y and z.
-    pub num_workgroups: (u32, u32, u32),
-    /// Shader MSL source.
-    pub source: Cow<'a, str>,
-}
-
-/// Descriptor for a shader module given by DirectX DXIL source.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-#[derive(Debug, Clone)]
-pub struct ShaderModuleDescriptorDxil<'a, L> {
-    /// Entrypoint.
-    pub entry_point: String,
-    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
-    pub label: L,
-    /// Number of workgroups in each dimension x, y and z.
-    pub num_workgroups: (u32, u32, u32),
-    /// Shader DXIL source.
-    pub source: &'a [u8],
-}
-
-/// Descriptor for a shader module given by DirectX HLSL source.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-#[derive(Debug, Clone)]
-pub struct ShaderModuleDescriptorHlsl<'a, L> {
-    /// Entrypoint.
-    pub entry_point: String,
-    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
-    pub label: L,
-    /// Number of workgroups in each dimension x, y and z.
-    pub num_workgroups: (u32, u32, u32),
-    /// Shader HLSL source.
-    pub source: &'a str,
-}
-
-/// Descriptor for a shader module given by SPIR-V binary.
-///
-/// This type is unique to the Rust API of `wgpu`. In the WebGPU specification,
-/// only WGSL source code strings are accepted.
-#[derive(Debug, Clone)]
-pub struct ShaderModuleDescriptorSpirV<'a, L> {
-    /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
-    pub label: L,
-    /// Binary SPIR-V data, in 4-byte words.
-    pub source: Cow<'a, [u32]>,
 }

@@ -13,7 +13,6 @@ use crate::device::trace::Command as TraceCommand;
 use crate::{
     api_log,
     command::{clear_texture, CommandEncoderError, EncoderStateError},
-    conv,
     device::{Device, MissingDownlevelFlags},
     global::Global,
     id::{BufferId, CommandEncoderId, TextureId},
@@ -133,13 +132,17 @@ pub enum TransferError {
     CopyDstMissingAspects,
     #[error("Copy aspect must refer to a single aspect of texture format")]
     CopyAspectNotOne,
+    #[error("Copying from textures with format {0:?} is forbidden")]
+    CopyFromForbiddenTextureFormat(wgt::TextureFormat),
     #[error("Copying from textures with format {format:?} and aspect {aspect:?} is forbidden")]
-    CopyFromForbiddenTextureFormat {
+    CopyFromForbiddenTextureFormatAspect {
         format: wgt::TextureFormat,
         aspect: wgt::TextureAspect,
     },
+    #[error("Copying to textures with format {0:?} is forbidden")]
+    CopyToForbiddenTextureFormat(wgt::TextureFormat),
     #[error("Copying to textures with format {format:?} and aspect {aspect:?} is forbidden")]
-    CopyToForbiddenTextureFormat {
+    CopyToForbiddenTextureFormatAspect {
         format: wgt::TextureFormat,
         aspect: wgt::TextureAspect,
     },
@@ -200,8 +203,10 @@ impl WebGpuError for TransferError {
             | Self::CopySrcMissingAspects
             | Self::CopyDstMissingAspects
             | Self::CopyAspectNotOne
-            | Self::CopyFromForbiddenTextureFormat { .. }
-            | Self::CopyToForbiddenTextureFormat { .. }
+            | Self::CopyFromForbiddenTextureFormat(..)
+            | Self::CopyFromForbiddenTextureFormatAspect { .. }
+            | Self::CopyToForbiddenTextureFormat(..)
+            | Self::CopyToForbiddenTextureFormatAspect { .. }
             | Self::ExternalCopyToForbiddenTextureFormat(..)
             | Self::TextureFormatsNotCopyCompatible { .. }
             | Self::MissingDownlevelFlags(..)
@@ -364,6 +369,54 @@ pub(crate) fn validate_linear_texture_data(
     Ok((bytes_in_copy, image_stride_bytes))
 }
 
+/// Validate the source format of a texture copy.
+///
+/// This performs the check from WebGPU's [validating texture buffer copy][vtbc]
+/// algorithm that ensures that the format and aspect form a valid texel copy source
+/// as defined in the [depth-stencil formats][dsf].
+///
+/// [vtbc]: https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-texture-buffer-copy
+/// [dsf]: https://gpuweb.github.io/gpuweb/#depth-formats
+pub(crate) fn validate_texture_copy_src_format(
+    format: wgt::TextureFormat,
+    aspect: wgt::TextureAspect,
+) -> Result<(), TransferError> {
+    use wgt::TextureAspect as Ta;
+    use wgt::TextureFormat as Tf;
+    match (format, aspect) {
+        (Tf::Depth24Plus, _) => Err(TransferError::CopyFromForbiddenTextureFormat(format)),
+        (Tf::Depth24PlusStencil8, Ta::DepthOnly) => {
+            Err(TransferError::CopyFromForbiddenTextureFormatAspect { format, aspect })
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Validate the destination format of a texture copy.
+///
+/// This performs the check from WebGPU's [validating texture buffer copy][vtbc]
+/// algorithm that ensures that the format and aspect form a valid texel copy destination
+/// as defined in the [depth-stencil formats][dsf].
+///
+/// [vtbc]: https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-texture-buffer-copy
+/// [dsf]: https://gpuweb.github.io/gpuweb/#depth-formats
+pub(crate) fn validate_texture_copy_dst_format(
+    format: wgt::TextureFormat,
+    aspect: wgt::TextureAspect,
+) -> Result<(), TransferError> {
+    use wgt::TextureAspect as Ta;
+    use wgt::TextureFormat as Tf;
+    match (format, aspect) {
+        (Tf::Depth24Plus | Tf::Depth32Float, _) => {
+            Err(TransferError::CopyToForbiddenTextureFormat(format))
+        }
+        (Tf::Depth24PlusStencil8 | Tf::Depth32FloatStencil8, Ta::DepthOnly) => {
+            Err(TransferError::CopyToForbiddenTextureFormatAspect { format, aspect })
+        }
+        _ => Ok(()),
+    }
+}
+
 /// Validation for texture/buffer copies.
 ///
 /// This implements the following checks from WebGPU's [validating texture buffer copy][vtbc]
@@ -376,7 +429,7 @@ pub(crate) fn validate_linear_texture_data(
 ///  * Invocation of other validation algorithms.
 ///  * The texture usage (COPY_DST / COPY_SRC) check.
 ///  * The check for non-copyable depth/stencil formats. The caller must perform
-///    this check using `is_valid_copy_src_format` / `is_valid_copy_dst_format`
+///    this check using `validate_texture_copy_src_format` / `validate_texture_copy_dst_format`
 ///    before calling this function. This function will panic if
 ///    [`wgt::TextureFormat::block_copy_size`] returns `None` due to a
 ///    non-copyable format.
@@ -945,14 +998,7 @@ impl Global {
                 .map(|pending| pending.into_hal(dst_raw))
                 .collect::<Vec<_>>();
 
-            if !conv::is_valid_copy_dst_texture_format(dst_texture.desc.format, destination.aspect)
-            {
-                return Err(TransferError::CopyToForbiddenTextureFormat {
-                    format: dst_texture.desc.format,
-                    aspect: destination.aspect,
-                }
-                .into());
-            }
+            validate_texture_copy_dst_format(dst_texture.desc.format, destination.aspect)?;
 
             validate_texture_buffer_copy(
                 destination,
@@ -1073,13 +1119,7 @@ impl Global {
                 .into());
             }
 
-            if !conv::is_valid_copy_src_texture_format(src_texture.desc.format, source.aspect) {
-                return Err(TransferError::CopyFromForbiddenTextureFormat {
-                    format: src_texture.desc.format,
-                    aspect: source.aspect,
-                }
-                .into());
-            }
+            validate_texture_copy_src_format(src_texture.desc.format, source.aspect)?;
 
             validate_texture_buffer_copy(
                 source,

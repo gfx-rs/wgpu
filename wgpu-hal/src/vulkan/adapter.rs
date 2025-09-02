@@ -198,6 +198,13 @@ impl PhysicalDeviceFeatures {
         info
     }
 
+    fn supports_storage_input_output_16(&self) -> bool {
+        self._16bit_storage
+            .as_ref()
+            .map(|features| features.storage_input_output16 != 0)
+            .unwrap_or(false)
+    }
+
     /// Create a `PhysicalDeviceFeatures` that can be used to create a logical
     /// device.
     ///
@@ -226,7 +233,7 @@ impl PhysicalDeviceFeatures {
     /// [`Adapter::required_device_extensions`]: super::Adapter::required_device_extensions
     fn from_extensions_and_requested_features(
         phd_capabilities: &PhysicalDeviceProperties,
-        _phd_features: &PhysicalDeviceFeatures,
+        phd_features: &PhysicalDeviceFeatures,
         enabled_extensions: &[&'static CStr],
         requested_features: wgt::Features,
         downlevel_flags: wgt::DownlevelFlags,
@@ -259,9 +266,7 @@ impl PhysicalDeviceFeatures {
                     requested_features.contains(wgt::Features::INDIRECT_FIRST_INSTANCE),
                 )
                 //.dual_src_blend(requested_features.contains(wgt::Features::DUAL_SRC_BLENDING))
-                .multi_draw_indirect(
-                    requested_features.contains(wgt::Features::MULTI_DRAW_INDIRECT),
-                )
+                .multi_draw_indirect(phd_features.core.multi_draw_indirect != 0)
                 .fill_mode_non_solid(requested_features.intersects(
                     wgt::Features::POLYGON_MODE_LINE | wgt::Features::POLYGON_MODE_POINT,
                 ))
@@ -399,7 +404,7 @@ impl PhysicalDeviceFeatures {
                 Some(
                     vk::PhysicalDevice16BitStorageFeatures::default()
                         .storage_buffer16_bit_access(true)
-                        .storage_input_output16(true)
+                        .storage_input_output16(phd_features.supports_storage_input_output_16())
                         .uniform_and_storage_buffer16_bit_access(true),
                 )
             } else {
@@ -543,7 +548,6 @@ impl PhysicalDeviceFeatures {
     ) -> (wgt::Features, wgt::DownlevelFlags) {
         use wgt::{DownlevelFlags as Df, Features as F};
         let mut features = F::empty()
-            | F::SPIRV_SHADER_PASSTHROUGH
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::PUSH_CONSTANTS
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
@@ -555,7 +559,8 @@ impl PhysicalDeviceFeatures {
             | F::CLEAR_TEXTURE
             | F::PIPELINE_CACHE
             | F::SHADER_EARLY_DEPTH_TEST
-            | F::TEXTURE_ATOMIC;
+            | F::TEXTURE_ATOMIC
+            | F::EXPERIMENTAL_PASSTHROUGH_SHADERS;
 
         let mut dl_flags = Df::COMPUTE_SHADERS
             | Df::BASE_VERTEX
@@ -570,7 +575,8 @@ impl PhysicalDeviceFeatures {
             | Df::INDIRECT_EXECUTION
             | Df::VIEW_FORMATS
             | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
-            | Df::NONBLOCKING_QUERY_RESOLVE;
+            | Df::NONBLOCKING_QUERY_RESOLVE
+            | Df::SHADER_F16_IN_F32;
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,
@@ -595,7 +601,6 @@ impl PhysicalDeviceFeatures {
             self.core.draw_indirect_first_instance != 0,
         );
         //if self.core.dual_src_blend != 0
-        features.set(F::MULTI_DRAW_INDIRECT, self.core.multi_draw_indirect != 0);
         features.set(F::POLYGON_MODE_LINE, self.core.fill_mode_non_solid != 0);
         features.set(F::POLYGON_MODE_POINT, self.core.fill_mode_non_solid != 0);
         //if self.core.depth_bounds != 0 {
@@ -736,12 +741,13 @@ impl PhysicalDeviceFeatures {
 
         if let (Some(ref f16_i8), Some(ref bit16)) = (self.shader_float16_int8, self._16bit_storage)
         {
+            // Note `storage_input_output16` is not required, we polyfill `f16` I/O using `f32`
+            // types when this capability is not available
             features.set(
                 F::SHADER_F16,
                 f16_i8.shader_float16 != 0
                     && bit16.storage_buffer16_bit_access != 0
-                    && bit16.uniform_and_storage_buffer16_bit_access != 0
-                    && bit16.storage_input_output16 != 0,
+                    && bit16.uniform_and_storage_buffer16_bit_access != 0,
             );
         }
 
@@ -1672,7 +1678,7 @@ impl super::Instance {
             },
             backend: wgt::Backend::Vulkan,
         };
-        let (available_features, downlevel_flags) =
+        let (available_features, mut downlevel_flags) =
             phd_features.to_wgpu(&self.shared.raw, phd, &phd_capabilities);
         let mut workarounds = super::Workarounds::empty();
         {
@@ -1687,6 +1693,15 @@ impl super::Instance {
                 phd_capabilities.properties.vendor_id == db::nvidia::VENDOR,
             );
         };
+
+        if info.driver == "llvmpipe" {
+            // The `F16_IN_F32` instructions do not normally require native `F16` support, but on
+            // llvmpipe, they do.
+            downlevel_flags.set(
+                wgt::DownlevelFlags::SHADER_F16_IN_F32,
+                available_features.contains(wgt::Features::SHADER_F16),
+            );
+        }
 
         if let Some(driver) = phd_capabilities.driver {
             if driver.conformance_version.major == 0 {
@@ -1767,6 +1782,7 @@ impl super::Instance {
                 vk::ImageTiling::OPTIMAL,
                 depth_stencil_required_flags(),
             ),
+            multi_draw_indirect: phd_features.core.multi_draw_indirect != 0,
             non_coherent_map_mask: phd_capabilities.properties.limits.non_coherent_atom_size - 1,
             can_present: true,
             //TODO: make configurable
@@ -2148,6 +2164,8 @@ impl super::Adapter {
                     spv::ZeroInitializeWorkgroupMemoryMode::Polyfill
                 },
                 force_loop_bounding: true,
+                use_storage_input_output_16: features.contains(wgt::Features::SHADER_F16)
+                    && self.phd_features.supports_storage_input_output_16(),
                 // We need to build this separately for each invocation, so just default it out here
                 binding_map: BTreeMap::default(),
                 debug_info: None,

@@ -590,6 +590,11 @@ impl super::Validator {
                     }
                 }
 
+                // External textures can only be sampled using clamp_to_edge.
+                if matches!(class, crate::ImageClass::External) && !clamp_to_edge {
+                    return Err(ExpressionError::InvalidImageClass(class));
+                }
+
                 // check level properties
                 match level {
                     crate::SampleLevel::Auto => ShaderStages::FRAGMENT,
@@ -1055,6 +1060,20 @@ impl super::Validator {
                 arg2,
                 arg3,
             } => {
+                if matches!(
+                    fun,
+                    crate::MathFunction::QuantizeToF16
+                        | crate::MathFunction::Pack2x16float
+                        | crate::MathFunction::Unpack2x16float
+                ) && !self
+                    .capabilities
+                    .contains(crate::valid::Capabilities::SHADER_FLOAT16_IN_FLOAT32)
+                {
+                    return Err(ExpressionError::MissingCapabilities(
+                        crate::valid::Capabilities::SHADER_FLOAT16_IN_FLOAT32,
+                    ));
+                }
+
                 let actuals: &[_] = match (arg1, arg2, arg3) {
                     (None, None, None) => &[arg],
                     (Some(arg1), None, None) => &[arg, arg1],

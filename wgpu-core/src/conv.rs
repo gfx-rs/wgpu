@@ -5,31 +5,6 @@ use crate::resource::{self, TextureDescriptor};
 // Some core-only texture format helpers. The helper methods on `TextureFormat`
 // defined in wgpu-types may need to be modified along with the ones here.
 
-pub fn is_valid_copy_src_texture_format(
-    format: wgt::TextureFormat,
-    aspect: wgt::TextureAspect,
-) -> bool {
-    use wgt::TextureAspect as Ta;
-    use wgt::TextureFormat as Tf;
-    match (format, aspect) {
-        (Tf::Depth24Plus, _) | (Tf::Depth24PlusStencil8, Ta::DepthOnly) => false,
-        _ => true,
-    }
-}
-
-pub fn is_valid_copy_dst_texture_format(
-    format: wgt::TextureFormat,
-    aspect: wgt::TextureAspect,
-) -> bool {
-    use wgt::TextureAspect as Ta;
-    use wgt::TextureFormat as Tf;
-    match (format, aspect) {
-        (Tf::Depth24Plus | Tf::Depth32Float, _)
-        | (Tf::Depth24PlusStencil8 | Tf::Depth32FloatStencil8, Ta::DepthOnly) => false,
-        _ => true,
-    }
-}
-
 #[cfg_attr(any(not(webgl)), expect(unused))]
 pub fn is_valid_external_image_copy_dst_texture_format(format: wgt::TextureFormat) -> bool {
     use wgt::TextureFormat as Tf;

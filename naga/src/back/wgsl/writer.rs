@@ -101,7 +101,7 @@ impl<W: Write> Writer<W> {
             module,
             &crate::keywords::wgsl::RESERVED_SET,
             // an identifier must not start with two underscore
-            &[],
+            proc::CaseInsensitiveKeywordSet::empty(),
             &["__", "_naga"],
             &mut self.names,
         );
