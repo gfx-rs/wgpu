@@ -29,37 +29,28 @@ pub struct InnerState {
 impl InnerState {
     /// Creates a DirectComposition device and a target for the given window handle.
     pub unsafe fn init(hwnd: &HWND) -> Result<Self, crate::SurfaceError> {
+        profiling::scope!("DCompState::init");
         let dcomp_device: DirectComposition::IDCompositionDevice = {
-            profiling::scope!("DirectComposition::DCompositionCreateDevice");
             unsafe { DirectComposition::DCompositionCreateDevice2(None) }.map_err(|err| {
                 log::error!("DirectComposition::DCompositionCreateDevice failed: {err}");
                 crate::SurfaceError::Other("DirectComposition::DCompositionCreateDevice")
             })?
         };
 
-        let target = {
-            profiling::scope!("IDCompositionDevice::CreateTargetForHwnd");
-            unsafe { dcomp_device.CreateTargetForHwnd(*hwnd, false) }.map_err(|err| {
-                log::error!("IDCompositionDevice::CreateTargetForHwnd failed: {err}");
-                crate::SurfaceError::Other("IDCompositionDevice::CreateTargetForHwnd")
-            })?
-        };
+        let target = unsafe { dcomp_device.CreateTargetForHwnd(*hwnd, false) }.map_err(|err| {
+            log::error!("IDCompositionDevice::CreateTargetForHwnd failed: {err}");
+            crate::SurfaceError::Other("IDCompositionDevice::CreateTargetForHwnd")
+        })?;
 
-        let visual = {
-            profiling::scope!("IDCompositionDevice::CreateVisual");
-            unsafe { dcomp_device.CreateVisual() }.map_err(|err| {
-                log::error!("IDCompositionDevice::CreateVisual failed: {err}");
-                crate::SurfaceError::Other("IDCompositionDevice::CreateVisual")
-            })?
-        };
+        let visual = unsafe { dcomp_device.CreateVisual() }.map_err(|err| {
+            log::error!("IDCompositionDevice::CreateVisual failed: {err}");
+            crate::SurfaceError::Other("IDCompositionDevice::CreateVisual")
+        })?;
 
-        {
-            profiling::scope!("IDCompositionTarget::SetRoot");
-            unsafe { target.SetRoot(&visual) }.map_err(|err| {
-                log::error!("IDCompositionTarget::SetRoot failed: {err}");
-                crate::SurfaceError::Other("IDCompositionTarget::SetRoot")
-            })?;
-        }
+        unsafe { target.SetRoot(&visual) }.map_err(|err| {
+            log::error!("IDCompositionTarget::SetRoot failed: {err}");
+            crate::SurfaceError::Other("IDCompositionTarget::SetRoot")
+        })?;
 
         Ok(InnerState {
             visual,
