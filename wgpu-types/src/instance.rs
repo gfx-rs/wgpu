@@ -470,7 +470,7 @@ impl Dx12SwapchainKind {
             .as_deref()?
             .to_lowercase();
         match value.as_str() {
-            "dcomp" => Some(Self::DirectComposition),
+            "dcomp" | "directcomposition" => Some(Self::DirectComposition),
             "dxgi" => Some(Self::Dxgi),
             _ => None,
         }
