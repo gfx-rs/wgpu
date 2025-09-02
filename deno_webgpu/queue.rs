@@ -140,7 +140,7 @@ impl GPUQueue {
         #[webidl] data_layout: GPUTexelCopyBufferLayout,
         #[webidl] size: GPUExtent3D,
     ) {
-        let destination = wgpu_core::command::TexelCopyTextureInfo {
+        let destination = wgpu_types::TexelCopyTextureInfo {
             texture: destination.texture.id,
             mip_level: destination.mip_level,
             origin: destination.origin.into(),

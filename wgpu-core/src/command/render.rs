@@ -494,7 +494,7 @@ impl VertexState {
     }
 }
 
-struct State<'scope, 'snatch_guard, 'cmd_enc, 'raw_encoder> {
+struct State<'scope, 'snatch_guard, 'cmd_enc> {
     pipeline_flags: PipelineFlags,
     blend_constant: OptionalState,
     stencil_reference: u32,
@@ -504,15 +504,13 @@ struct State<'scope, 'snatch_guard, 'cmd_enc, 'raw_encoder> {
 
     info: RenderPassInfo,
 
-    pass: pass::PassState<'scope, 'snatch_guard, 'cmd_enc, 'raw_encoder>,
+    pass: pass::PassState<'scope, 'snatch_guard, 'cmd_enc>,
 
     active_occlusion_query: Option<(Arc<QuerySet>, u32)>,
     active_pipeline_statistics_query: Option<(Arc<QuerySet>, u32)>,
 }
 
-impl<'scope, 'snatch_guard, 'cmd_enc, 'raw_encoder>
-    State<'scope, 'snatch_guard, 'cmd_enc, 'raw_encoder>
-{
+impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
     fn is_ready(&self, family: DrawCommandFamily) -> Result<(), DrawError> {
         if let Some(pipeline) = self.pipeline.as_ref() {
             self.pass.binder.check_compatibility(pipeline.as_ref())?;
@@ -1838,19 +1836,18 @@ impl Global {
         }
 
         cmd_buf_data.unlock_and_record(|cmd_buf_data| -> Result<(), RenderPassError> {
-            encode_render_pass(cmd_buf_data, &cmd_enc, pass)
+            encode_render_pass(cmd_buf_data, &cmd_enc.device, pass)
         })
     }
 }
 
 fn encode_render_pass(
     cmd_buf_data: &mut CommandBufferMutable,
-    cmd_enc: &Arc<CommandEncoder>,
+    device: &Arc<Device>,
     pass: &mut RenderPass,
 ) -> Result<(), RenderPassError> {
     let pass_scope = PassErrorScope::Pass;
 
-    let device = &cmd_enc.device;
     device.check_is_valid().map_pass_err(pass_scope)?;
     let snatch_guard = &device.snatchable_lock.read();
 
@@ -1946,7 +1943,7 @@ fn encode_render_pass(
                     let scope = PassErrorScope::SetBindGroup;
                     pass::set_bind_group::<RenderPassErrorInner>(
                         &mut state.pass,
-                        cmd_enc.as_ref(),
+                        device,
                         &base.dynamic_offsets,
                         index,
                         num_dynamic_offsets,
@@ -1957,7 +1954,7 @@ fn encode_render_pass(
                 }
                 ArcRenderCommand::SetPipeline(pipeline) => {
                     let scope = PassErrorScope::SetPipelineRender;
-                    set_pipeline(&mut state, cmd_enc, pipeline).map_pass_err(scope)?;
+                    set_pipeline(&mut state, device, pipeline).map_pass_err(scope)?;
                 }
                 ArcRenderCommand::SetIndexBuffer {
                     buffer,
@@ -1966,7 +1963,7 @@ fn encode_render_pass(
                     size,
                 } => {
                     let scope = PassErrorScope::SetIndexBuffer;
-                    set_index_buffer(&mut state, cmd_enc, buffer, index_format, offset, size)
+                    set_index_buffer(&mut state, device, buffer, index_format, offset, size)
                         .map_pass_err(scope)?;
                 }
                 ArcRenderCommand::SetVertexBuffer {
@@ -1976,7 +1973,7 @@ fn encode_render_pass(
                     size,
                 } => {
                     let scope = PassErrorScope::SetVertexBuffer;
-                    set_vertex_buffer(&mut state, cmd_enc, slot, buffer, offset, size)
+                    set_vertex_buffer(&mut state, device, slot, buffer, offset, size)
                         .map_pass_err(scope)?;
                 }
                 ArcRenderCommand::SetBlendConstant(ref color) => {
@@ -2087,7 +2084,7 @@ fn encode_render_pass(
                     multi_draw_indirect(
                         &mut state,
                         &mut indirect_draw_validation_batcher,
-                        cmd_enc,
+                        device,
                         buffer,
                         offset,
                         count,
@@ -2109,7 +2106,7 @@ fn encode_render_pass(
                     };
                     multi_draw_indirect_count(
                         &mut state,
-                        cmd_enc,
+                        device,
                         buffer,
                         offset,
                         count_buffer,
@@ -2137,7 +2134,7 @@ fn encode_render_pass(
                     let scope = PassErrorScope::WriteTimestamp;
                     pass::write_timestamp::<RenderPassErrorInner>(
                         &mut state.pass,
-                        cmd_enc.as_ref(),
+                        device,
                         Some(&mut pending_query_resets),
                         query_set,
                         query_index,
@@ -2188,7 +2185,7 @@ fn encode_render_pass(
                         query_set,
                         state.pass.base.raw_encoder,
                         &mut state.pass.base.tracker.query_sets,
-                        cmd_enc.as_ref(),
+                        device,
                         query_index,
                         Some(&mut pending_query_resets),
                         &mut state.active_pipeline_statistics_query,
@@ -2210,7 +2207,7 @@ fn encode_render_pass(
                     execute_bundle(
                         &mut state,
                         &mut indirect_draw_validation_batcher,
-                        cmd_enc,
+                        device,
                         bundle,
                     )
                     .map_pass_err(scope)?;
@@ -2259,7 +2256,7 @@ fn encode_render_pass(
             pending_discard_init_fixups.into_iter(),
             transit,
             &mut tracker.textures,
-            &cmd_enc.device,
+            device,
             snatch_guard,
         );
 
@@ -2289,7 +2286,7 @@ fn encode_render_pass(
 
 fn set_pipeline(
     state: &mut State,
-    cmd_enc: &Arc<CommandEncoder>,
+    device: &Arc<Device>,
     pipeline: Arc<RenderPipeline>,
 ) -> Result<(), RenderPassErrorInner> {
     api_log!("RenderPass::set_pipeline {}", pipeline.error_ident());
@@ -2304,7 +2301,7 @@ fn set_pipeline(
         .insert_single(pipeline)
         .clone();
 
-    pipeline.same_device_as(cmd_enc.as_ref())?;
+    pipeline.same_device(device)?;
 
     state
         .info
@@ -2359,7 +2356,7 @@ fn set_pipeline(
 // This function is duplicative of `bundle::set_index_buffer`.
 fn set_index_buffer(
     state: &mut State,
-    cmd_enc: &Arc<CommandEncoder>,
+    device: &Arc<Device>,
     buffer: Arc<crate::resource::Buffer>,
     index_format: IndexFormat,
     offset: u64,
@@ -2373,7 +2370,7 @@ fn set_index_buffer(
         .buffers
         .merge_single(&buffer, wgt::BufferUses::INDEX)?;
 
-    buffer.same_device_as(cmd_enc.as_ref())?;
+    buffer.same_device(device)?;
 
     buffer.check_usage(BufferUsages::INDEX)?;
 
@@ -2411,7 +2408,7 @@ fn set_index_buffer(
 // This function is duplicative of `render::set_vertex_buffer`.
 fn set_vertex_buffer(
     state: &mut State,
-    cmd_enc: &Arc<CommandEncoder>,
+    device: &Arc<Device>,
     slot: u32,
     buffer: Arc<crate::resource::Buffer>,
     offset: u64,
@@ -2428,7 +2425,7 @@ fn set_vertex_buffer(
         .buffers
         .merge_single(&buffer, wgt::BufferUses::VERTEX)?;
 
-    buffer.same_device_as(cmd_enc.as_ref())?;
+    buffer.same_device(device)?;
 
     let max_vertex_buffers = state.pass.base.device.limits.max_vertex_buffers;
     if slot >= max_vertex_buffers {
@@ -2688,7 +2685,7 @@ fn draw_mesh_tasks(
 fn multi_draw_indirect(
     state: &mut State,
     indirect_draw_validation_batcher: &mut crate::indirect_validation::DrawBatcher,
-    cmd_enc: &Arc<CommandEncoder>,
+    device: &Arc<Device>,
     indirect_buffer: Arc<crate::resource::Buffer>,
     offset: u64,
     count: u32,
@@ -2707,7 +2704,7 @@ fn multi_draw_indirect(
         .device
         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
 
-    indirect_buffer.same_device_as(cmd_enc.as_ref())?;
+    indirect_buffer.same_device(device)?;
     indirect_buffer.check_usage(BufferUsages::INDIRECT)?;
     indirect_buffer.check_destroyed(state.pass.base.snatch_guard)?;
 
@@ -2866,7 +2863,7 @@ fn multi_draw_indirect(
 
 fn multi_draw_indirect_count(
     state: &mut State,
-    cmd_enc: &Arc<CommandEncoder>,
+    device: &Arc<Device>,
     indirect_buffer: Arc<crate::resource::Buffer>,
     offset: u64,
     count_buffer: Arc<crate::resource::Buffer>,
@@ -2895,8 +2892,8 @@ fn multi_draw_indirect_count(
         .device
         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
 
-    indirect_buffer.same_device_as(cmd_enc.as_ref())?;
-    count_buffer.same_device_as(cmd_enc.as_ref())?;
+    indirect_buffer.same_device(device)?;
+    count_buffer.same_device(device)?;
 
     state
         .pass
@@ -2989,14 +2986,14 @@ fn multi_draw_indirect_count(
 fn execute_bundle(
     state: &mut State,
     indirect_draw_validation_batcher: &mut crate::indirect_validation::DrawBatcher,
-    cmd_enc: &Arc<CommandEncoder>,
+    device: &Arc<Device>,
     bundle: Arc<super::RenderBundle>,
 ) -> Result<(), RenderPassErrorInner> {
     api_log!("RenderPass::execute_bundle {}", bundle.error_ident());
 
     let bundle = state.pass.base.tracker.bundles.insert_single(bundle);
 
-    bundle.same_device_as(cmd_enc.as_ref())?;
+    bundle.same_device(device)?;
 
     state
         .info

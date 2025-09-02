@@ -5,7 +5,7 @@ use core::{iter, mem};
 use crate::command::Command as TraceCommand;
 use crate::{
     command::{CommandBufferMutable, CommandEncoder, EncoderStateError},
-    device::{DeviceError, MissingFeatures},
+    device::{Device, DeviceError, MissingFeatures},
     global::Global,
     id,
     init_tracker::MemoryInitKind,
@@ -307,12 +307,12 @@ pub(super) fn validate_and_begin_pipeline_statistics_query(
     query_set: Arc<QuerySet>,
     raw_encoder: &mut dyn hal::DynCommandEncoder,
     tracker: &mut StatelessTracker<QuerySet>,
-    cmd_enc: &CommandEncoder,
+    device: &Arc<Device>,
     query_index: u32,
     reset_state: Option<&mut QueryResetMap>,
     active_query: &mut Option<(Arc<QuerySet>, u32)>,
 ) -> Result<(), QueryUseError> {
-    query_set.same_device_as(cmd_enc)?;
+    query_set.same_device(device)?;
 
     let needs_reset = reset_state.is_none();
     query_set.validate_query(

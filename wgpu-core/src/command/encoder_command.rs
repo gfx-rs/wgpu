@@ -120,11 +120,8 @@ pub enum ArcCommand {
     PopDebugGroup,
     InsertDebugMarker(String),
     RunComputePass {
-        base: crate::command::BasePass<
-            crate::command::compute_command::ArcComputeCommand,
-            Infallible,
-        >,
-        timestamp_writes: Option<crate::command::PassTimestampWrites>,
+        pass: super::BasePass<super::ArcComputeCommand, Infallible>,
+        timestamp_writes: Option<super::ArcPassTimestampWrites>,
     },
     RunRenderPass {
         base:
