@@ -11,7 +11,8 @@ to breaking changes, suggestions for the API exposed by this should be posted on
 
 ## Mesh shaders overview
 
-### What are mesh shaders
+### What are mesh shaders?
+
 Mesh shaders are a new kind of rasterization pipeline intended to address some of the shortfalls with the vertex shader pipeline. The core idea of mesh shaders is that the GPU decides how to render the many small parts of a scene instead of the CPU issuing a draw call for every small part or issuing an inefficient monolithic draw call for a large part of the scene.
 
 Mesh shaders are specifically designed to be used with **meshlet rendering**, a technique where every object is split into many subobjects called meshlets that are each rendered with their own parameters. With the standard vertex pipeline, each draw call specifies an exact number of primitives to render and the same parameters for all vertex shaders on an entire object (or even multiple objects). This doesn't leave room for different LODs for different parts of an object, for example a closer part having more detail, nor does it allow culling smaller sections (or primitives) of objects. With mesh shaders, each task workgroup might get assigned to a single object. It can then analyze the different meshlets(sections) of that object, determine which are visible and should actually be rendered, and for those meshlets determine what LOD to use based on the distance from the camera. It can then dispatch a mesh workgroup for each meshlet, with each mesh workgroup then reading the data for that specific LOD of its meshlet, determining which and how many vertices and primitives to output, determining which remaining primitives need to be culled, and passing the resulting primitives to the rasterizer.
@@ -21,18 +22,51 @@ Mesh shaders are most effective in scenes with many polygons. They can allow ski
 Mesh shaders were first shown off in [NVIDIA's asteroids demo](https://www.youtube.com/watch?v=CRfZYJ_sk5E). Now, they form the basis for [Unreal Engine's Nanite](https://www.unrealengine.com/en-US/blog/unreal-engine-5-is-now-available-in-preview#Nanite).
 
 ### Mesh shader pipeline
-A mesh shader pipeline is just like a standard render pipeline, except that the vertex shader stage is replaced by a mesh shader stage (and optionally a task shader stage). This functions as follows:
 
-* If there is a task shader stage, task shader workgroups are invoked first, with the number of workgroups determined by the draw call. Each task shader workgroup outputs a workgroup size and a task payload. A dispatch group of mesh shaders with the given workgroup size is then invoked with the task payload as a parameter.
-* Otherwise, a single dispatch group of mesh shaders with workgroup size given by the draw call is invoked.
-* Each mesh shader dispatch group functions exactly as a compute dispatch group, except that it has special outputs and may take a task payload as input. Mesh dispatch groups invoked by different task shader workgroups cannot interact.
-* Each workgroup within the mesh shader dispatch group can output vertices and primitives
-  * It determines how many vertices and primitives to write and then sets those vertices and primitives.
-  * Primitives have an indices field which determines the indices of the vertices of that primitive. The indices are based on the output of that mesh shader workgroup only; there is no sharing of vertices across workgroups (no vertex or index buffer equivalents).
-  * Primitives can then be culled by setting the appropriate builtin
-  * Each vertex output functions exactly as the output from a vertex shader would
-  * There can also be per-primitive outputs passed to fragment shaders; these are not interpolated or based on the vertices of the primitive in any way.
-* Once all of the primitives are written, those that weren't culled are are rasterized. From this point forward, the only difference from a standard render pipeline is that there may be some per-primitive inputs passed to fragment shaders.
+With the current pipeline set to a mesh pipeline, a draw command like
+`render_pass.draw_mesh_tasks(x, y, z)` takes the following steps:
+
+* If the pipeline has a task shader stage:
+
+    * Dispatch a grid of task shader workgroups, where `x`, `y`, and `z` give
+      the number of workgroups along each axis of the grid. Each task shader
+      workgroup produces a mesh shader workgroup grid size `(mx, my, mz)` and a
+      task payload value `mp`.
+
+    * For each task shader workgroup, dispatch a grid of mesh shader workgroups,
+      where `mx`, `my`, and `mz` give the number of workgroups along each axis
+      of the grid. Pass `mp` to each of these workgroup's mesh shader
+      invocations.
+
+* Alternatively, if the pipeline does not have a task shader stage:
+
+    * Dispatch a single grid of mesh shader workgroups, where `x`, `y`, and `z`
+      give the number of workgroups along each axis of the grid. These mesh
+      shaders receive no task payload value.
+
+* Each mesh shader workgroup produces a list of output vertices, and a list of
+  primitives built from those vertices. The workgroup can supply per-primitive
+  values as well, if needed. Each primitive selects its vertices by index, like
+  an indexed draw call, from among the vertices generated by this workgroup.
+
+  Unlike a grid of ordinary compute shader workgroups collaborating to build
+  vertex and index data in common storage buffers, the vertices and primitives
+  produced by a mesh shader workgroup are entirely private to that workgroup,
+  and are not accessible by other workgroups.
+
+* Primitives produced by a mesh shader workgroup can have a culling flag. If a
+  primitive's culling flag is false, it is skipped during rasterization.
+
+* The primitives produced by all mesh shader workgroups are then rasterized in
+  the usual way, with each fragment shader invocation handling one pixel.
+
+  Attributes from the vertices produced by the mesh shader workgroup are
+  provided to the fragment shader with interpolation applied as appropriate.
+
+  If the mesh shader workgroup supplied per-primitive values, these are
+  available to each primitive's fragment shader invocations. Per-primitive
+  values are never interpolated; fragment shaders simply receive the values
+  the mesh shader workgroup associated with their primitive.
 
 ## `wgpu` API
 
@@ -99,34 +133,57 @@ Using any of these features in a `wgsl` program will require adding the `enable 
 Two new shader stages will be added to `WGSL`. Fragment shaders are also modified slightly. Both task shaders and mesh shaders are allowed to use any compute-specific functionality, such as subgroup operations.
 
 ### Task shader
-This shader stage can be selected by marking a function with `@task`. Task shaders must return a `vec3<u32>` as their output type. Similar to compute shaders, task shaders run in a workgroup. The output must be uniform across all threads in a workgroup.
 
-The output of this determines how many workgroups of mesh shaders will be dispatched. Once dispatched, global id variables will be local to the task shader workgroup dispatch, and mesh shaders won't know the position of their dispatch among all mesh shader dispatches unless this is passed through the payload. The output may be zero to skip dispatching any mesh shader workgroups for the task shader workgroup.
+A function with the `@task` attribute is a **task shader entry point**. A mesh shader pipeline may optionally specify a task shader entry point, and if it does, mesh draw commands using that pipeline dispatch a **task shader grid** of workgroups running the task shader entry point. Like compute shader dispatches, the three-component size passed to `draw_mesh_tasks`, or drawn from the indirect buffer for its indirect variants, specifies the size of the task shader grid as the number of workgroups along each of the grid's three axes.
 
-Task shaders must be marked with `@payload(someVar)`, where `someVar` is global variable declared like `var<task_payload> someVar: <type>`. Task shaders may use `someVar` as if it is a read-write workgroup storage variable. This payload is passed to the mesh shader workgroup that is invoked.
+A task shader entry point must have a `@workgroup_size` attribute, meeting the same requirements as one appearing on a compute shader entry point.
+
+A task shader entry point must return a `vec3<u32>` value. The return value of each workgroup's first invocation (that is, the one whose `local_invocation_index` is `0`) is taken as the size of a **mesh shader grid** to dispatch, measured in workgroups. (If the task shader entry point returns `vec3(0, 0, 0)`, then no mesh shaders are dispatched.) Mesh shader grids are described in the next section.
+
+If a task shader entry point has a `@payload(G)` property, then `G` must be the name of a global variable in the `task_payload` address space. Each task shader workgroup has its own instance of this variable, visible to all invocations in the workgroup. Whatever value the workgroup collectively stores in that global variable becomes the **task payload**, and is provided to all invocations in the mesh shader grid dispatched for the workgroup.
+
+Each task shader workgroup dispatches an independent mesh shader grid: in mesh shader invocations, `@builtin` values like `workgroup_id` and `global_invocation_id` describe the position of the workgroup and invocation within that grid;
+and `@builtin(num_workgroups)` matches the task shader workgroup's return value. Mesh shaders dispatched for other task shader workgroups are not included in the count. If it is necessary for a mesh shader to know which task shader workgroup dispatched it, the task shader can include its own workgroup id in the task payload.
 
 ### Mesh shader
-This shader stage can be selected by marking a function with `@mesh`. Mesh shaders must not return anything.
 
-Mesh shaders can be marked with `@payload(someVar)` similar to task shaders. Unlike task shaders, this is optional, and mesh shaders cannot write to this memory. Declaring `@payload` in a pipeline with no task shader or in a task shader with an `@payload` that is statically sized and differently than the mesh shader payload is illegal. The `@payload` attribute can only be ignored in pipelines that don't have a task shader.
+A function with the `@mesh` attribute is a **mesh shader entry point**. Mesh shaders must not return anything.
 
-Mesh shaders must be marked with `@vertex_output(OutputType, numOutputs)`, where `numOutputs` is the maximum number of vertices to be output by a mesh shader, and `OutputType` is the data associated with vertices, similar to a standard vertex shader output, and must be a struct.
+Like compute shaders, mesh shaders are invoked in a grid of workgroups, called a **mesh shader grid**. If the mesh shader pipeline has a task shader, then each task shader workgroup determines the size of a mesh shader grid to be dispatched, as described above. Otherwise, the three-component size passed to `draw_mesh_tasks`, or drawn from the indirect buffer for its indirect variants, specifies the size of the mesh shader grid directly, as the number of workgroups along each of the grid's three axes.
 
-Mesh shaders must also be marked with `@primitive_output(OutputType, numOutputs)`, which is similar to `@vertex_output` except it describes the primitive outputs.
+A mesh shader entry point must have a `@workgroup_size` attribute, meeting the same requirements as one appearing on a compute shader entry point.
 
-### Mesh shader outputs
+If the mesh shader pipeline has a task shader entry point with a `@payload(G)` attribute, then the pipeline's mesh shader entry point must also have a `@payload(G)` attribute, naming the same variable. Mesh shader invocations can read, but not write, this variable, which is initialized to whatever value was written to it by the task shader workgroup that dispatched this mesh shader grid.
 
-Vertex outputs from mesh shaders function identically to outputs of vertex shaders, and as such must have a field with `@builtin(position)`.
+If the mesh shader pipeline does not have a task shader entry point, or the task shader entry point does not have a `@payload(G)` attribute, then the mesh shader entry point must not have any `@payload` attribute.
 
-Primitive outputs from mesh shaders have some additional builtins they can set. These include `@builtin(cull_primitive)`, which must be a boolean value. If this is set to true, then the primitive is skipped during rendering. All non-builtin primitive outputs must be decorated with `@per_primitive`.
+A mesh shader entry point must have the following attributes:
 
-Mesh shader primitive outputs must also specify exactly one of `@builtin(triangle_indices)`, `@builtin(line_indices)`, or `@builtin(point_index)`. This determines the output topology of the mesh shader, and must match the output topology of the pipeline descriptor the mesh shader is used with. These must be of type `vec3<u32>`, `vec2<u32>`, and `u32` respectively. When setting this, each of the indices must be less than the number of vertices declared in `setMeshOutputs`.
+- `@vertex_output(V, NV)`: This indicates that the mesh shader workgroup will generate at most `NV` vertex values, each of type `V`.
 
-Additionally, the `@location` attributes from the vertex and primitive outputs can't overlap.
+- `@primitive_output(P, NP)`: This indicates that the mesh shader workgroup will generate at most `NP` primitives, each of type `P`.
 
-Before exiting, the mesh shader must call `setMeshOutputs(numVertices: u32, numIndices: u32)`, which declares the number of vertices and indices that will be written to. These must be less than the corresponding maximums set in `@vertex_output` and `@primitive_output`. The mesh shader must then write to exactly this range of vertices and primitives. A varying member with `@per_primitive` cannot be used in function interfaces except as a primitive output for mesh shaders or as input for fragment shaders.
+Each mesh shader entry point invocation must call the `setMeshOutputs(numVertices: u32, numPrimitives: u32)` builtin function exactly once, in uniform control flow. The values passed by each workgroup's first invocation (that is, the one whose `local_invocation_index` is `0`) determine how many vertices (values of type `V`) and primitives (values of type `P`) the workgroup must produce. This call essentially establishes two implicit arrays of vertex and primitive values, shared across the workgroup, for invocations to populate.
 
-The mesh shader can write to vertices using the `setVertex(idx: u32, vertex: VertexOutput)` where `VertexOutput` is replaced with the vertex type declared in `@vertex_output`, and `idx` is the index of the vertex to write. Similarly, the mesh shader can write to vertices using `setPrimitive(idx: u32, primitive: PrimitiveOutput)`. These can be written to multiple times, however unsynchronized writes are undefined behavior. The primitives and indices are shared across the entire mesh shader workgroup.
+The `numVertices` and `numPrimitives` arguments must be no greater than `NV` and `NP` from the `@vertex_output` and `@primitive_output` attributes.
+
+To produce vertex data, the workgroup as a whole must make `numVertices` calls to the `setVertex(i: u32, vertex: V)` builtin function. This establishes `vertex` as the value of the `i`'th vertex. `V` is the type given in the `@vertex_output` attribute. `V` must meet the same requirements as a struct type returned by a `@vertex` entry point: all members must have either `@builtin` or `@location` attributes, there must be a '@builtin(position)`, and so on. An invocation may only call `setVertex` after its call to `setMeshOutputs`.
+
+To produce primitives, the workgroup as a whole must make `numPrimitives` calls to the `setPrimitive(i: u32, primitive: P)` builtin function. This establishes `primitive` as the value of the `i`'th primitive. `P` is the type given in the `@primitive_output` attribute. `P` must be a struct type, every member of which either has a `@location` or `@builtin` attribute. The following `@builtin` attributes are allowed:
+
+- `triangle_indices`, `line_indices`, or `point_index`: The annotated member must be of type `vec3<u32>`, `vec2<u32>`, or `u32`.
+
+    The member's components are indices (or, its value is an index) into the list of vertices generated by this workgroup, identifying the vertices of the primitive to be drawn. These indices must be less than the value of `numVertices` passed to `setMeshOutputs`.
+
+    The type `P` must contain exactly one member with one of these attributes, determining what sort of primitives the mesh shader generates.
+
+- `cull_primitive`: The annotated member must be of type `bool`. If it is true, then the primitive is skipped during rendering.
+
+Every member of `P` with a `@location` attribute must either have a `@per_primitive` attribute, or be part of a struct type that appears in the primitive data as a struct member with the `@per_primitive` attribute.
+
+The `@location` attributes of `P` and `V` must not overlap, since they are merged to produce the user-defined inputs to the fragment shader.
+
+It is possible to write to the same vertex or primitive index repeatedly. Since the implicit arrays written by `setVertex` and `setPrimitive` are shared by the workgroup, data races on writes to the same index for a given type are undefined behavior.
 
 ### Fragment shader
 

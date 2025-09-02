@@ -231,9 +231,9 @@ impl RenderPass<'_> {
         self.inner.draw_indexed(indices, base_vertex, instances);
     }
 
-    /// Draws using a mesh shader pipeline.
+    /// Draws using a mesh pipeline.
     ///
-    /// The current pipeline must be a mesh shader pipeline.
+    /// The current pipeline must be a mesh pipeline.
     ///
     /// If the current pipeline has a task shader, run it with an workgroup for
     /// every `vec3<u32>(i, j, k)` where `i`, `j`, and `k` are between `0` and
@@ -290,7 +290,7 @@ impl RenderPass<'_> {
             .draw_indexed_indirect(&indirect_buffer.inner, indirect_offset);
     }
 
-    /// Draws using a mesh shader pipeline,
+    /// Draws using a mesh pipeline,
     /// based on the contents of the `indirect_buffer`
     ///
     /// This is like calling [`RenderPass::draw_mesh_tasks`] but the contents of the call are specified in the `indirect_buffer`.

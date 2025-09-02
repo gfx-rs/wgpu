@@ -856,13 +856,14 @@ impl super::Validator {
             {
                 return Err(EntryPointError::UnexpectedMeshShaderEntryResult.with_span());
             }
-            // Cannot have any other built-ins or @location outputs as those are per-vertex or per-primitive
-            if ep.stage == crate::ShaderStage::Task
-                && (!result_built_ins.contains(&crate::BuiltIn::MeshTaskSize)
-                    || result_built_ins.len() != 1
-                    || !self.location_mask.is_empty())
-            {
-                return Err(EntryPointError::WrongTaskShaderEntryResult.with_span());
+            // Task shaders must have a single `MeshTaskSize` output, and nothing else.
+            if ep.stage == crate::ShaderStage::Task {
+                let ok = result_built_ins.contains(&crate::BuiltIn::MeshTaskSize)
+                     && result_built_ins.len() == 1
+                     && self.location_mask.is_empty();
+                if !ok {
+                    return Err(EntryPointError::WrongTaskShaderEntryResult.with_span());
+                }
             }
             if !self.blend_src_mask.is_empty() {
                 info.dual_source_blending = true;
@@ -960,8 +961,10 @@ impl super::Validator {
             }
         }
 
+        // If this is a `Mesh` entry point, check its interface.
         if let &Some(ref mesh_info) = &ep.mesh_info {
-            // Technically it is allowed to not output anything
+            // Mesh shaders don't return any value. All their results are supplied through
+            // [`SetVertex`] and [`SetPrimitive`] calls.
             // TODO: check that only the allowed builtins are used here
             if let Some(used_vertex_type) = info.mesh_shader_info.vertex_type {
                 if used_vertex_type.0 != mesh_info.vertex_output_type {

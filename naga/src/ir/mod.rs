@@ -320,14 +320,21 @@ pub enum ConservativeDepth {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-#[allow(missing_docs)] // The names are self evident
 pub enum ShaderStage {
+    /// A vertex shader, in a render pipeline.
     Vertex,
-    Fragment,
-    Compute,
-    // Mesh shader stages
+
+    /// A task shader, in a mesh render pipeline.
     Task,
+
+    /// A mesh shader, in a mesh render pipeline.
     Mesh,
+
+    /// A fragment shader, in a render pipeline.
+    Fragment,
+
+    /// Compute pipeline shader.
+    Compute,
 }
 
 impl ShaderStage {
@@ -964,6 +971,9 @@ pub enum Binding {
 
     /// Indexed location.
     ///
+    /// This is a value passed to a [`Fragment`] shader from a [`Vertex`] or
+    /// [`Mesh`] shader.
+    ///
     /// Values passed from the [`Vertex`] stage to the [`Fragment`] stage must
     /// have their `interpolation` defaulted (i.e. not `None`) by the front end
     /// as appropriate for that language.
@@ -977,6 +987,7 @@ pub enum Binding {
     /// interpolation must be `Flat`.
     ///
     /// [`Vertex`]: crate::ShaderStage::Vertex
+    /// [`Mesh`]: crate::ShaderStage::Mesh
     /// [`Fragment`]: crate::ShaderStage::Fragment
     Location {
         location: u32,
@@ -1751,10 +1762,12 @@ pub enum Expression {
         query: Handle<Expression>,
         committed: bool,
     },
+
     /// Result of a [`SubgroupBallot`] statement.
     ///
     /// [`SubgroupBallot`]: Statement::SubgroupBallot
     SubgroupBallotResult,
+
     /// Result of a [`SubgroupCollectiveOperation`] or [`SubgroupGather`] statement.
     ///
     /// [`SubgroupCollectiveOperation`]: Statement::SubgroupCollectiveOperation
@@ -2343,7 +2356,9 @@ pub struct EntryPoint {
     pub workgroup_size_overrides: Option<[Option<Handle<Expression>>; 3]>,
     /// The entrance function.
     pub function: Function,
-    /// The information relating to a mesh shader
+    /// Information for [`Mesh`] shaders.
+    ///
+    /// [`Mesh`]: ShaderStage::Mesh
     pub mesh_info: Option<MeshStageInfo>,
     /// The unique global variable used as a task payload from task shader to mesh shader
     pub task_payload: Option<Handle<GlobalVariable>>,
@@ -2523,6 +2538,51 @@ pub struct DocComments {
     pub module: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum MeshOutputTopology {
+    Points,
+    Lines,
+    Triangles,
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+#[allow(dead_code)]
+pub struct MeshStageInfo {
+    pub topology: MeshOutputTopology,
+    pub max_vertices: u32,
+    pub max_vertices_override: Option<Handle<Expression>>,
+    pub max_primitives: u32,
+    pub max_primitives_override: Option<Handle<Expression>>,
+    pub vertex_output_type: Handle<Type>,
+    pub primitive_output_type: Handle<Type>,
+}
+
+/// Mesh shader intrinsics
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum MeshFunction {
+    SetMeshOutputs {
+        vertex_count: Handle<Expression>,
+        primitive_count: Handle<Expression>,
+    },
+    SetVertex {
+        index: Handle<Expression>,
+        value: Handle<Expression>,
+    },
+    SetPrimitive {
+        index: Handle<Expression>,
+        value: Handle<Expression>,
+    },
+}
+
 /// Shader module.
 ///
 /// A module is a set of constants, global variables and functions, as well as
@@ -2610,49 +2670,4 @@ pub struct Module {
     pub diagnostic_filter_leaf: Option<Handle<DiagnosticFilterNode>>,
     /// Doc comments.
     pub doc_comments: Option<Box<DocComments>>,
-}
-
-#[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub enum MeshOutputTopology {
-    Points,
-    Lines,
-    Triangles,
-}
-
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-#[allow(dead_code)]
-pub struct MeshStageInfo {
-    pub topology: MeshOutputTopology,
-    pub max_vertices: u32,
-    pub max_vertices_override: Option<Handle<Expression>>,
-    pub max_primitives: u32,
-    pub max_primitives_override: Option<Handle<Expression>>,
-    pub vertex_output_type: Handle<Type>,
-    pub primitive_output_type: Handle<Type>,
-}
-
-/// Mesh shader intrinsics
-#[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub enum MeshFunction {
-    SetMeshOutputs {
-        vertex_count: Handle<Expression>,
-        primitive_count: Handle<Expression>,
-    },
-    SetVertex {
-        index: Handle<Expression>,
-        value: Handle<Expression>,
-    },
-    SetPrimitive {
-        index: Handle<Expression>,
-        value: Handle<Expression>,
-    },
 }

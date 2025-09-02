@@ -152,13 +152,15 @@ static_assertions::assert_impl_all!(FragmentState<'_>: Send, Sync);
 pub struct TaskState<'a> {
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
-    /// The name of the entry point in the compiled shader to use.
+
+    /// The name of the task shader entry point in the shader module to use.
     ///
-    /// If [`Some`], there must be a vertex-stage shader entry point with this name in `module`.
-    /// Otherwise, expect exactly one vertex-stage entry point in `module`, which will be
-    /// selected.
+    /// If [`Some`], there must be a task shader entry point with the given name
+    /// in `module`. Otherwise, there must be exactly one task shader entry
+    /// point in `module`, which will be selected.
     pub entry_point: Option<&'a str>,
-    /// Advanced options for when this pipeline is compiled
+
+    /// Advanced options for when this pipeline is compiled.
     ///
     /// This implements `Default`, and for most users can be set to `Default::default()`
     pub compilation_options: PipelineCompilationOptions<'a>,
@@ -299,8 +301,15 @@ pub struct MeshPipelineDescriptor<'a> {
     ///
     /// [default layout]: https://www.w3.org/TR/webgpu/#default-pipeline-layout
     pub layout: Option<&'a PipelineLayout>,
-    /// The compiled task stage and its entry point.
+
+    /// The mesh pipeline's task shader.
+    ///
+    /// If this is `None`, the mesh pipeline has no task shader. Executing a
+    /// mesh drawing command simply dispatches a grid of mesh shaders directly.
+    ///
+    /// [`draw_mesh_tasks`]: RenderPass::draw_mesh_tasks
     pub task: Option<TaskState<'a>>,
+
     /// The compiled mesh stage and its entry point
     pub mesh: MeshState<'a>,
     /// The properties of the pipeline at the primitive assembly and rasterization level.

@@ -1151,7 +1151,7 @@ impl FunctionInfo {
                         let _ = self.add_ref(index);
                         let _ = self.add_ref(value);
                         let ty =
-                            self.expressions[value.index()].ty.clone().handle().ok_or(
+                            self.expressions[value.index()].ty.handle().ok_or(
                                 FunctionError::InvalidMeshShaderOutputType(value).with_span(),
                             )?;
 
@@ -1244,14 +1244,15 @@ impl FunctionInfo {
         Ok(())
     }
 
+    /// Update this function's mesh shader info, given that it calls `callee`.
     fn try_update_mesh_info(
         &mut self,
-        other: &FunctionMeshShaderInfo,
+        callee: &FunctionMeshShaderInfo,
     ) -> Result<(), WithSpan<FunctionError>> {
-        if let &Some(ref other_vertex) = &other.vertex_type {
+        if let &Some(ref other_vertex) = &callee.vertex_type {
             self.try_update_mesh_vertex_type(other_vertex.0, other_vertex.1)?;
         }
-        if let &Some(ref other_primitive) = &other.vertex_type {
+        if let &Some(ref other_primitive) = &callee.vertex_type {
             self.try_update_mesh_primitive_type(other_primitive.0, other_primitive.1)?;
         }
         Ok(())
