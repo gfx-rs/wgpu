@@ -124,11 +124,10 @@ pub enum ArcCommand {
         timestamp_writes: Option<super::ArcPassTimestampWrites>,
     },
     RunRenderPass {
-        base:
-            crate::command::BasePass<crate::command::render_command::ArcRenderCommand, Infallible>,
-        target_colors: Vec<Option<crate::command::RenderPassColorAttachment>>,
-        target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachment>,
-        timestamp_writes: Option<crate::command::PassTimestampWrites>,
+        pass: super::BasePass<super::ArcRenderCommand, Infallible>,
+        color_attachments: super::ArcRenderPassColorAttachmentArray,
+        depth_stencil_attachment: Option<super::ArcRenderPassDepthStencilAttachment>,
+        timestamp_writes: Option<super::ArcPassTimestampWrites>,
         occlusion_query_set: Option<Arc<QuerySet>>,
     },
     BuildAccelerationStructures {

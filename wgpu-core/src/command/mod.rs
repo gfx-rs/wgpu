@@ -43,7 +43,7 @@ pub use self::{
     encoder_command::{ArcCommand, Command},
     query::*,
     render::*,
-    render_command::RenderCommand,
+    render_command::{ArcRenderCommand, RenderCommand},
     transfer::*,
 };
 pub(crate) use allocator::CommandAllocator;
@@ -1344,6 +1344,7 @@ impl Global {
                         buffer_memory_init_actions: &mut cmd_buf_data.buffer_memory_init_actions,
                         texture_memory_actions: &mut cmd_buf_data.texture_memory_actions,
                         as_actions: &mut cmd_buf_data.as_actions,
+                        temp_resources: &mut cmd_buf_data.temp_resources,
                         indirect_draw_validation_resources: &mut cmd_buf_data
                             .indirect_draw_validation_resources,
                         snatch_guard: &snatch_guard,
@@ -1351,7 +1352,22 @@ impl Global {
                     };
 
                     match command {
-                        ArcCommand::RunRenderPass { .. } => todo!(),
+                        ArcCommand::RunRenderPass {
+                            pass,
+                            color_attachments,
+                            depth_stencil_attachment,
+                            timestamp_writes,
+                            occlusion_query_set,
+                        } => {
+                            encode_render_pass(
+                                &mut state,
+                                pass,
+                                color_attachments,
+                                depth_stencil_attachment,
+                                timestamp_writes,
+                                occlusion_query_set,
+                            )?;
+                        }
                         ArcCommand::RunComputePass {
                             pass,
                             timestamp_writes,
@@ -1374,6 +1390,7 @@ impl Global {
                         buffer_memory_init_actions: &mut cmd_buf_data.buffer_memory_init_actions,
                         texture_memory_actions: &mut cmd_buf_data.texture_memory_actions,
                         as_actions: &mut cmd_buf_data.as_actions,
+                        temp_resources: &mut cmd_buf_data.temp_resources,
                         indirect_draw_validation_resources: &mut cmd_buf_data
                             .indirect_draw_validation_resources,
                         snatch_guard: &snatch_guard,
@@ -1430,9 +1447,6 @@ impl Global {
                     }
                 }
             }
-            // Close the encoder, unless it was closed already by a render or compute pass.
-            // TODO unwrap
-            cmd_buf_data.encoder.close_if_open()?;
 
             // Close the encoder, unless it was closed already by a render or compute pass.
             cmd_buf_data.encoder.close_if_open()?;

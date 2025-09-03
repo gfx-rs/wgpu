@@ -584,6 +584,7 @@ pub(super) fn encode_compute_pass(
                 buffer_memory_init_actions: parent_state.buffer_memory_init_actions,
                 texture_memory_actions: parent_state.texture_memory_actions,
                 as_actions: parent_state.as_actions,
+                temp_resources: parent_state.temp_resources,
                 indirect_draw_validation_resources: parent_state.indirect_draw_validation_resources,
                 snatch_guard: parent_state.snatch_guard,
                 debug_scope_depth: &mut debug_scope_depth,

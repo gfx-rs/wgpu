@@ -1,5 +1,6 @@
 use alloc::{borrow::Cow, sync::Arc, vec::Vec};
-use core::{fmt, num::NonZeroU32, ops::Range, str};
+use core::{convert::Infallible, fmt, num::NonZeroU32, ops::Range, str};
+use smallvec::SmallVec;
 
 use arrayvec::ArrayVec;
 use thiserror::Error;
@@ -11,8 +12,8 @@ use wgt::{
 
 use crate::command::{
     encoder::EncodingState, pass, pass_base, pass_try, validate_and_begin_occlusion_query,
-    validate_and_begin_pipeline_statistics_query, CommandBufferMutable, DebugGroupError,
-    EncoderStateError, InnerCommandEncoder, PassStateError, TimestampWritesError,
+    validate_and_begin_pipeline_statistics_query, ArcCommand, DebugGroupError, EncoderStateError,
+    InnerCommandEncoder, PassStateError, TimestampWritesError,
 };
 use crate::pipeline::{RenderPipeline, VertexStep};
 use crate::resource::RawResourceAccess;
@@ -117,7 +118,7 @@ impl<V: Copy + Default> PassChannel<Option<V>> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ResolvedPassChannel<V> {
     ReadOnly,
     Operational(wgt::Operations<V>),
@@ -180,6 +181,11 @@ pub struct RenderPassColorAttachment<TV = id::TextureViewId> {
 
 pub type ArcRenderPassColorAttachment = RenderPassColorAttachment<Arc<TextureView>>;
 
+// Avoid allocation in the common case that there is only one color attachment,
+// but don't bloat `ArcCommand::RunRenderPass` excessively.
+pub type ArcRenderPassColorAttachmentArray =
+    SmallVec<[Option<RenderPassColorAttachment<Arc<TextureView>>>; 1]>;
+
 impl ArcRenderPassColorAttachment {
     fn hal_ops(&self) -> hal::AttachmentOps {
         load_hal_ops(self.load_op) | store_hal_ops(self.store_op)
@@ -207,7 +213,7 @@ pub struct RenderPassDepthStencilAttachment {
 }
 
 /// Describes a depth/stencil attachment to a render pass.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ArcRenderPassDepthStencilAttachment {
     /// The view to use as an attachment.
     pub view: Arc<TextureView>,
@@ -951,14 +957,11 @@ impl RenderPassInfo {
     fn start(
         device: &Arc<Device>,
         hal_label: Option<&str>,
-        color_attachments: ArrayVec<
-            Option<ArcRenderPassColorAttachment>,
-            { hal::MAX_COLOR_ATTACHMENTS },
-        >,
+        color_attachments: &[Option<ArcRenderPassColorAttachment>],
         mut depth_stencil_attachment: Option<ArcRenderPassDepthStencilAttachment>,
         mut timestamp_writes: Option<ArcPassTimestampWrites>,
         mut occlusion_query_set: Option<Arc<QuerySet>>,
-        encoder: &mut InnerCommandEncoder,
+        encoder: &mut dyn hal::DynCommandEncoder,
         trackers: &mut Tracker,
         texture_memory_actions: &mut CommandBufferTextureMemoryActions,
         pending_query_resets: &mut QueryResetMap,
@@ -1420,7 +1423,6 @@ impl RenderPassInfo {
         };
         unsafe {
             encoder
-                .raw
                 .begin_render_pass(&hal_desc)
                 .map_err(|e| device.handle_hal_error(e))?;
         };
@@ -1436,9 +1438,9 @@ impl RenderPassInfo {
         if let Some(at) = depth_stencil_attachment.take() {
             trackers.views.insert_single(at.view.clone());
         }
-        for at in color_attachments.into_iter().flatten() {
+        for at in color_attachments.iter().flatten() {
             trackers.views.insert_single(at.view.clone());
-            if let Some(resolve_target) = at.resolve_target {
+            if let Some(resolve_target) = at.resolve_target.clone() {
                 trackers.views.insert_single(resolve_target);
             }
         }
@@ -1738,7 +1740,7 @@ impl Global {
     pub fn render_pass_end_with_unresolved_commands(
         &self,
         encoder_id: id::CommandEncoderId,
-        base: BasePass<super::RenderCommand, core::convert::Infallible>,
+        base: BasePass<super::RenderCommand, Infallible>,
         color_attachments: &[Option<RenderPassColorAttachment>],
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<&PassTimestampWrites>,
@@ -1835,64 +1837,99 @@ impl Global {
             }
         }
 
-        cmd_buf_data.unlock_and_record(|cmd_buf_data| -> Result<(), RenderPassError> {
-            encode_render_pass(cmd_buf_data, &cmd_enc.device, pass)
+        // Unlock the encoder. This can be moved to a lighter-weight mechanism
+        // completely decoupled from HAL encoders.
+        cmd_buf_data.unlock_and_record(|_| -> Result<(), RenderPassError> { Ok(()) })?;
+
+        let base = pass.base.take();
+
+        if matches!(
+            base,
+            Err(RenderPassError {
+                inner: RenderPassErrorInner::EncoderState(EncoderStateError::Ended),
+                scope: _,
+            })
+        ) {
+            // If the encoder was already finished at time of pass creation,
+            // then it was not put in the locked state, so we need to
+            // generate a validation error here and now due to the encoder not
+            // being locked. The encoder already holds an error from when the
+            // pass was opened, or earlier.
+            //
+            // All other errors are propagated to the encoder within `push_with`,
+            // and will be reported later.
+            return Err(EncoderStateError::Ended);
+        }
+
+        cmd_buf_data.push_with(|| -> Result<_, RenderPassError> {
+            Ok(ArcCommand::RunRenderPass {
+                pass: base?,
+                color_attachments: SmallVec::from(pass.color_attachments.as_slice()),
+                depth_stencil_attachment: pass.depth_stencil_attachment.take(),
+                timestamp_writes: pass.timestamp_writes.take(),
+                occlusion_query_set: pass.occlusion_query_set.take(),
+            })
         })
     }
 }
 
-fn encode_render_pass(
-    cmd_buf_data: &mut CommandBufferMutable,
-    device: &Arc<Device>,
-    pass: &mut RenderPass,
+pub(super) fn encode_render_pass(
+    parent_state: &mut EncodingState<InnerCommandEncoder>,
+    mut base: BasePass<ArcRenderCommand, Infallible>,
+    color_attachments: ArcRenderPassColorAttachmentArray,
+    mut depth_stencil_attachment: Option<ArcRenderPassDepthStencilAttachment>,
+    mut timestamp_writes: Option<ArcPassTimestampWrites>,
+    occlusion_query_set: Option<Arc<QuerySet>>,
 ) -> Result<(), RenderPassError> {
     let pass_scope = PassErrorScope::Pass;
 
-    device.check_is_valid().map_pass_err(pass_scope)?;
-    let snatch_guard = &device.snatchable_lock.read();
-
-    let base = &mut pass.base;
+    let device = parent_state.device;
 
     let mut indirect_draw_validation_batcher = crate::indirect_validation::DrawBatcher::new();
 
+    // We automatically keep extending command buffers over time, and because
+    // we want to insert a command buffer _before_ what we're about to record,
+    // we need to make sure to close the previous one.
+    parent_state
+        .raw_encoder
+        .close_if_open()
+        .map_pass_err(pass_scope)?;
+    let raw_encoder = parent_state
+        .raw_encoder
+        .open_pass(base.label.as_deref())
+        .map_pass_err(pass_scope)?;
+
     let (scope, pending_discard_init_fixups, mut pending_query_resets) = {
-        let encoder = &mut cmd_buf_data.encoder;
-        let tracker = &mut cmd_buf_data.trackers;
-        let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
-        let texture_memory_actions = &mut cmd_buf_data.texture_memory_actions;
-
-        // We automatically keep extending command buffers over time, and because
-        // we want to insert a command buffer _before_ what we're about to record,
-        // we need to make sure to close the previous one.
-        encoder.close_if_open().map_pass_err(pass_scope)?;
-        encoder
-            .open_pass(base.label.as_deref())
-            .map_pass_err(pass_scope)?;
-
         let mut pending_query_resets = QueryResetMap::new();
         let mut pending_discard_init_fixups = SurfacesInDiscardState::new();
 
         let info = RenderPassInfo::start(
             device,
             hal_label(base.label.as_deref(), device.instance_flags),
-            pass.color_attachments.take(),
-            pass.depth_stencil_attachment.take(),
-            pass.timestamp_writes.take(),
+            &color_attachments,
+            depth_stencil_attachment.take(),
+            timestamp_writes.take(),
             // Still needed down the line.
             // TODO(wumpf): by restructuring the code, we could get rid of some of this Arc clone.
-            pass.occlusion_query_set.clone(),
-            encoder,
-            tracker,
-            texture_memory_actions,
+            occlusion_query_set.clone(),
+            raw_encoder,
+            parent_state.tracker,
+            parent_state.texture_memory_actions,
             &mut pending_query_resets,
             &mut pending_discard_init_fixups,
-            snatch_guard,
+            parent_state.snatch_guard,
         )
         .map_pass_err(pass_scope)?;
 
         let indices = &device.tracker_indices;
-        tracker.buffers.set_size(indices.buffers.size());
-        tracker.textures.set_size(indices.textures.size());
+        parent_state
+            .tracker
+            .buffers
+            .set_size(indices.buffers.size());
+        parent_state
+            .tracker
+            .textures
+            .set_size(indices.textures.size());
 
         let mut debug_scope_depth = 0;
 
@@ -1909,14 +1946,15 @@ fn encode_render_pass(
             pass: pass::PassState {
                 base: EncodingState {
                     device,
-                    raw_encoder: encoder.raw.as_mut(),
-                    tracker,
-                    buffer_memory_init_actions,
-                    texture_memory_actions,
-                    as_actions: &mut cmd_buf_data.as_actions,
-                    indirect_draw_validation_resources: &mut cmd_buf_data
+                    raw_encoder,
+                    tracker: parent_state.tracker,
+                    buffer_memory_init_actions: parent_state.buffer_memory_init_actions,
+                    texture_memory_actions: parent_state.texture_memory_actions,
+                    as_actions: parent_state.as_actions,
+                    temp_resources: parent_state.temp_resources,
+                    indirect_draw_validation_resources: parent_state
                         .indirect_draw_validation_resources,
-                    snatch_guard,
+                    snatch_guard: parent_state.snatch_guard,
                     debug_scope_depth: &mut debug_scope_depth,
                 },
                 pending_discard_init_fixups,
@@ -2145,8 +2183,7 @@ fn encode_render_pass(
                     api_log!("RenderPass::begin_occlusion_query {query_index}");
                     let scope = PassErrorScope::BeginOcclusionQuery;
 
-                    let query_set = pass
-                        .occlusion_query_set
+                    let query_set = occlusion_query_set
                         .clone()
                         .ok_or(RenderPassErrorInner::MissingOcclusionQuerySet)
                         .map_pass_err(scope)?;
@@ -2237,12 +2274,12 @@ fn encode_render_pass(
 
         let pending_discard_init_fixups = state.pass.pending_discard_init_fixups;
 
-        encoder.close().map_pass_err(pass_scope)?;
+        parent_state.raw_encoder.close().map_pass_err(pass_scope)?;
         (trackers, pending_discard_init_fixups, pending_query_resets)
     };
 
-    let encoder = &mut cmd_buf_data.encoder;
-    let tracker = &mut cmd_buf_data.trackers;
+    let encoder = &mut parent_state.raw_encoder;
+    let tracker = &mut parent_state.tracker;
 
     {
         let transit = encoder
@@ -2257,21 +2294,26 @@ fn encode_render_pass(
             transit,
             &mut tracker.textures,
             device,
-            snatch_guard,
+            parent_state.snatch_guard,
         );
 
         pending_query_resets.reset_queries(transit);
 
-        CommandEncoder::insert_barriers_from_scope(transit, tracker, &scope, snatch_guard);
+        CommandEncoder::insert_barriers_from_scope(
+            transit,
+            tracker,
+            &scope,
+            parent_state.snatch_guard,
+        );
 
         if let Some(ref indirect_validation) = device.indirect_validation {
             indirect_validation
                 .draw
                 .inject_validation_pass(
                     device,
-                    snatch_guard,
-                    &mut cmd_buf_data.indirect_draw_validation_resources,
-                    &mut cmd_buf_data.temp_resources,
+                    parent_state.snatch_guard,
+                    parent_state.indirect_draw_validation_resources,
+                    parent_state.temp_resources,
                     transit,
                     indirect_draw_validation_batcher,
                 )

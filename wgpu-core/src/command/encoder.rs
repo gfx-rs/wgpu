@@ -1,8 +1,11 @@
 use alloc::{sync::Arc, vec::Vec};
 
 use crate::{
-    command::memory_init::CommandBufferTextureMemoryActions, device::Device,
-    init_tracker::BufferInitTrackerAction, ray_tracing::AsAction, snatch::SnatchGuard,
+    command::memory_init::CommandBufferTextureMemoryActions,
+    device::{queue::TempResource, Device},
+    init_tracker::BufferInitTrackerAction,
+    ray_tracing::AsAction,
+    snatch::SnatchGuard,
     track::Tracker,
 };
 
@@ -36,6 +39,7 @@ pub(crate) struct EncodingState<'snatch_guard, 'cmd_enc, E: ?Sized = dyn hal::Dy
     pub(crate) buffer_memory_init_actions: &'cmd_enc mut Vec<BufferInitTrackerAction>,
     pub(crate) texture_memory_actions: &'cmd_enc mut CommandBufferTextureMemoryActions,
     pub(crate) as_actions: &'cmd_enc mut Vec<AsAction>,
+    pub(crate) temp_resources: &'cmd_enc mut Vec<TempResource>,
     pub(crate) indirect_draw_validation_resources:
         &'cmd_enc mut crate::indirect_validation::DrawResources,
 
