@@ -1427,16 +1427,27 @@ impl Global {
                             subresource_range: _,
                         } => todo!(),
                         ArcCommand::WriteTimestamp {
-                            query_set_id: _,
-                            query_index: _,
-                        } => todo!(),
+                            query_set,
+                            query_index,
+                        } => {
+                            write_timestamp(&mut state, query_set, query_index)?;
+                        }
                         ArcCommand::ResolveQuerySet {
-                            query_set_id: _,
-                            start_query: _,
-                            query_count: _,
-                            destination: _,
-                            destination_offset: _,
-                        } => todo!(),
+                            query_set,
+                            start_query,
+                            query_count,
+                            destination,
+                            destination_offset,
+                        } => {
+                            resolve_query_set(
+                                &mut state,
+                                query_set,
+                                start_query,
+                                query_count,
+                                destination,
+                                destination_offset,
+                            )?;
+                        }
                         ArcCommand::PushDebugGroup(_) => todo!(),
                         ArcCommand::PopDebugGroup => todo!(),
                         ArcCommand::InsertDebugMarker(_) => todo!(),

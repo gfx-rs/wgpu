@@ -106,11 +106,11 @@ pub enum ArcCommand {
         subresource_range: wgt::ImageSubresourceRange,
     },
     WriteTimestamp {
-        query_set_id: Arc<QuerySet>,
+        query_set: Arc<QuerySet>,
         query_index: u32,
     },
     ResolveQuerySet {
-        query_set_id: Arc<QuerySet>,
+        query_set: Arc<QuerySet>,
         start_query: u32,
         query_count: u32,
         destination: Arc<Buffer>,
