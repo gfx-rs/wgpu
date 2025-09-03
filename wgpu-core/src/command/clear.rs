@@ -5,7 +5,7 @@ use core::ops::Range;
 use crate::command::Command as TraceCommand;
 use crate::{
     api_log,
-    command::{CommandBufferMutable, CommandEncoder, EncoderStateError},
+    command::{encoder::EncodingState, ArcCommand, EncoderStateError},
     device::{DeviceError, MissingFeatures},
     get_lowest_common_denom,
     global::Global,
@@ -13,7 +13,7 @@ use crate::{
     id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{MemoryInitKind, TextureInitRange},
     resource::{
-        DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
+        Buffer, DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
         ParentDevice, RawResourceAccess, ResourceErrorIdent, Texture, TextureClearMode,
     },
     snatch::SnatchGuard,
@@ -118,8 +118,18 @@ impl Global {
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-        cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), ClearError> {
-            clear_buffer(cmd_buf_data, hub, &cmd_enc, dst, offset, size)
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut list) = cmd_buf_data.trace() {
+            list.push(TraceCommand::ClearBuffer { dst, offset, size });
+        }
+
+        cmd_buf_data.push_with(|| -> Result<_, ClearError> {
+            Ok(ArcCommand::ClearBuffer {
+                dst: self.resolve_buffer_id(dst)?,
+                offset,
+                size,
+            })
         })
     }
 
@@ -136,38 +146,38 @@ impl Global {
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-        cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), ClearError> {
-            clear_texture_cmd(cmd_buf_data, hub, &cmd_enc, dst, subresource_range)
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut list) = cmd_buf_data.trace() {
+            list.push(TraceCommand::ClearTexture {
+                dst,
+                subresource_range: *subresource_range,
+            });
+        }
+
+        cmd_buf_data.push_with(|| -> Result<_, ClearError> {
+            Ok(ArcCommand::ClearTexture {
+                dst: self.resolve_texture_id(dst)?,
+                subresource_range: *subresource_range,
+            })
         })
     }
 }
 
 pub(super) fn clear_buffer(
-    cmd_buf_data: &mut CommandBufferMutable,
-    hub: &crate::hub::Hub,
-    cmd_enc: &Arc<CommandEncoder>,
-    dst: BufferId,
+    state: &mut EncodingState,
+    dst_buffer: Arc<Buffer>,
     offset: BufferAddress,
     size: Option<BufferAddress>,
 ) -> Result<(), ClearError> {
-    #[cfg(feature = "trace")]
-    if let Some(ref mut list) = cmd_buf_data.trace_commands {
-        list.push(TraceCommand::ClearBuffer { dst, offset, size });
-    }
+    dst_buffer.same_device(state.device)?;
 
-    cmd_enc.device.check_is_valid()?;
-
-    let dst_buffer = hub.buffers.get(dst).get()?;
-
-    dst_buffer.same_device_as(cmd_enc.as_ref())?;
-
-    let dst_pending = cmd_buf_data
-        .trackers
+    let dst_pending = state
+        .tracker
         .buffers
         .set_single(&dst_buffer, wgt::BufferUses::COPY_DST);
 
-    let snatch_guard = dst_buffer.device.snatchable_lock.read();
-    let dst_raw = dst_buffer.try_raw(&snatch_guard)?;
+    let dst_raw = dst_buffer.try_raw(state.snatch_guard)?;
     dst_buffer.check_usage(BufferUsages::COPY_DST)?;
 
     // Check if offset & size are valid.
@@ -200,20 +210,19 @@ pub(super) fn clear_buffer(
     }
 
     // Mark dest as initialized.
-    cmd_buf_data.buffer_memory_init_actions.extend(
-        dst_buffer.initialization_status.read().create_action(
+    state
+        .buffer_memory_init_actions
+        .extend(dst_buffer.initialization_status.read().create_action(
             &dst_buffer,
             offset..end_offset,
             MemoryInitKind::ImplicitlyInitialized,
-        ),
-    );
+        ));
 
     // actual hal barrier & operation
-    let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
-    let cmd_buf_raw = cmd_buf_data.encoder.open()?;
+    let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, state.snatch_guard));
     unsafe {
-        cmd_buf_raw.transition_buffers(dst_barrier.as_slice());
-        cmd_buf_raw.clear_buffer(dst_raw, offset..end_offset);
+        state.raw_encoder.transition_buffers(dst_barrier.as_slice());
+        state.raw_encoder.clear_buffer(dst_raw, offset..end_offset);
     }
 
     Ok(())
@@ -227,29 +236,14 @@ pub(super) fn clear_buffer(
 /// this function, is a lower-level function that encodes a texture clear
 /// operation without validating it.
 pub(super) fn clear_texture_cmd(
-    cmd_buf_data: &mut CommandBufferMutable,
-    hub: &crate::hub::Hub,
-    cmd_enc: &Arc<CommandEncoder>,
-    dst: TextureId,
+    state: &mut EncodingState,
+    dst_texture: Arc<Texture>,
     subresource_range: &ImageSubresourceRange,
 ) -> Result<(), ClearError> {
-    #[cfg(feature = "trace")]
-    if let Some(ref mut list) = cmd_buf_data.trace_commands {
-        list.push(TraceCommand::ClearTexture {
-            dst,
-            subresource_range: *subresource_range,
-        });
-    }
-
-    cmd_enc.device.check_is_valid()?;
-
-    cmd_enc
+    dst_texture.same_device(state.device)?;
+    state
         .device
         .require_features(wgt::Features::CLEAR_TEXTURE)?;
-
-    let dst_texture = hub.textures.get(dst).get()?;
-
-    dst_texture.same_device_as(cmd_enc.as_ref())?;
 
     // Check if subresource aspects are valid.
     let clear_aspects = hal::FormatAspects::new(dst_texture.desc.format, subresource_range.aspect);
@@ -283,23 +277,18 @@ pub(super) fn clear_texture_cmd(
         });
     }
 
-    let device = &cmd_enc.device;
-    device.check_is_valid()?;
-    let (encoder, tracker) = cmd_buf_data.open_encoder_and_tracker()?;
-
-    let snatch_guard = device.snatchable_lock.read();
     clear_texture(
         &dst_texture,
         TextureInitRange {
             mip_range: subresource_mip_range,
             layer_range: subresource_layer_range,
         },
-        encoder,
-        &mut tracker.textures,
-        &device.alignments,
-        device.zero_buffer.as_ref(),
-        &snatch_guard,
-        device.instance_flags,
+        state.raw_encoder,
+        &mut state.tracker.textures,
+        &state.device.alignments,
+        state.device.zero_buffer.as_ref(),
+        state.snatch_guard,
+        state.device.instance_flags,
     )?;
 
     Ok(())

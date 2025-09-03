@@ -51,7 +51,10 @@ pub(crate) use allocator::CommandAllocator;
 pub(crate) use timestamp_writes::ArcPassTimestampWrites;
 pub use timestamp_writes::PassTimestampWrites;
 
-use self::memory_init::CommandBufferTextureMemoryActions;
+use self::{
+    clear::{clear_buffer, clear_texture_cmd},
+    memory_init::CommandBufferTextureMemoryActions,
+};
 
 use crate::binding_model::BindingError;
 use crate::command::encoder::EncodingState;
@@ -764,15 +767,6 @@ pub struct CommandBufferMutable {
 }
 
 impl CommandBufferMutable {
-    pub(crate) fn open_encoder_and_tracker(
-        &mut self,
-    ) -> Result<(&mut dyn hal::DynCommandEncoder, &mut Tracker), DeviceError> {
-        let encoder = self.encoder.open()?;
-        let tracker = &mut self.trackers;
-
-        Ok((encoder, tracker))
-    }
-
     pub(crate) fn into_baked_commands(self) -> BakedCommands {
         BakedCommands {
             encoder: self.encoder,
@@ -1417,15 +1411,15 @@ impl Global {
                         ArcCommand::CopyTextureToTexture { src, dst, size } => {
                             copy_texture_to_texture(&mut state, &src, &dst, &size)?;
                         }
-                        ArcCommand::ClearBuffer {
-                            dst: _,
-                            offset: _,
-                            size: _,
-                        } => todo!(),
+                        ArcCommand::ClearBuffer { dst, offset, size } => {
+                            clear_buffer(&mut state, dst, offset, size)?;
+                        }
                         ArcCommand::ClearTexture {
-                            dst: _,
-                            subresource_range: _,
-                        } => todo!(),
+                            dst,
+                            subresource_range,
+                        } => {
+                            clear_texture_cmd(&mut state, dst, &subresource_range)?;
+                        }
                         ArcCommand::WriteTimestamp {
                             query_set,
                             query_index,
@@ -1448,9 +1442,15 @@ impl Global {
                                 destination_offset,
                             )?;
                         }
-                        ArcCommand::PushDebugGroup(_) => todo!(),
-                        ArcCommand::PopDebugGroup => todo!(),
-                        ArcCommand::InsertDebugMarker(_) => todo!(),
+                        ArcCommand::PushDebugGroup(label) => {
+                            push_debug_group(&mut state, &label)?;
+                        }
+                        ArcCommand::PopDebugGroup => {
+                            pop_debug_group(&mut state)?;
+                        }
+                        ArcCommand::InsertDebugMarker(label) => {
+                            insert_debug_marker(&mut state, &label)?;
+                        }
                         ArcCommand::BuildAccelerationStructures { blas: _, tlas: _ } => todo!(),
                         ArcCommand::RunComputePass { .. } | ArcCommand::RunRenderPass { .. } => {
                             unreachable!()
@@ -1502,8 +1502,14 @@ impl Global {
 
         let cmd_enc = hub.command_encoders.get(encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-        cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
-            push_debug_group(cmd_buf_data, &cmd_enc, label)
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut list) = cmd_buf_data.trace() {
+            list.push(TraceCommand::PushDebugGroup(label.to_owned()));
+        }
+
+        cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
+            Ok(ArcCommand::PushDebugGroup(label.to_owned()))
         })
     }
 
@@ -1519,8 +1525,14 @@ impl Global {
 
         let cmd_enc = hub.command_encoders.get(encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-        cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
-            insert_debug_marker(cmd_buf_data, &cmd_enc, label)
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut list) = cmd_buf_data.trace() {
+            list.push(TraceCommand::InsertDebugMarker(label.to_owned()));
+        }
+
+        cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
+            Ok(ArcCommand::InsertDebugMarker(label.to_owned()))
         })
     }
 
@@ -1535,9 +1547,14 @@ impl Global {
 
         let cmd_enc = hub.command_encoders.get(encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-        cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
-            pop_debug_group(cmd_buf_data, &cmd_enc)
-        })
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut list) = cmd_buf_data.trace() {
+            list.push(TraceCommand::PopDebugGroup);
+        }
+
+        cmd_buf_data
+            .push_with(|| -> Result<_, CommandEncoderError> { Ok(ArcCommand::PopDebugGroup) })
     }
 
     fn validate_pass_timestamp_writes<E>(
@@ -1593,84 +1610,49 @@ impl Global {
 }
 
 pub(crate) fn push_debug_group(
-    cmd_buf_data: &mut CommandBufferMutable,
-    cmd_enc: &Arc<CommandEncoder>,
+    state: &mut EncodingState,
     label: &str,
 ) -> Result<(), CommandEncoderError> {
-    cmd_buf_data.debug_scope_depth += 1;
+    *state.debug_scope_depth += 1;
 
-    #[cfg(feature = "trace")]
-    if let Some(ref mut list) = cmd_buf_data.trace_commands {
-        list.push(TraceCommand::PushDebugGroup(label.to_owned()));
-    }
-
-    cmd_enc.device.check_is_valid()?;
-
-    let cmd_buf_raw = cmd_buf_data.encoder.open()?;
-    if !cmd_enc
+    if !state
         .device
         .instance_flags
         .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
     {
-        unsafe {
-            cmd_buf_raw.begin_debug_marker(label);
-        }
+        unsafe { state.raw_encoder.begin_debug_marker(label) };
     }
 
     Ok(())
 }
 
 pub(crate) fn insert_debug_marker(
-    cmd_buf_data: &mut CommandBufferMutable,
-    cmd_enc: &Arc<CommandEncoder>,
+    state: &mut EncodingState,
     label: &str,
 ) -> Result<(), CommandEncoderError> {
-    #[cfg(feature = "trace")]
-    if let Some(ref mut list) = cmd_buf_data.trace_commands {
-        list.push(TraceCommand::InsertDebugMarker(label.to_owned()));
-    }
-
-    cmd_enc.device.check_is_valid()?;
-
-    if !cmd_enc
+    if !state
         .device
         .instance_flags
         .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
     {
-        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
-        unsafe {
-            cmd_buf_raw.insert_debug_marker(label);
-        }
+        unsafe { state.raw_encoder.insert_debug_marker(label) };
     }
 
     Ok(())
 }
 
-pub(crate) fn pop_debug_group(
-    cmd_buf_data: &mut CommandBufferMutable,
-    cmd_enc: &Arc<CommandEncoder>,
-) -> Result<(), CommandEncoderError> {
-    if cmd_buf_data.debug_scope_depth == 0 {
+pub(crate) fn pop_debug_group(state: &mut EncodingState) -> Result<(), CommandEncoderError> {
+    if *state.debug_scope_depth == 0 {
         return Err(DebugGroupError::InvalidPop.into());
     }
-    cmd_buf_data.debug_scope_depth -= 1;
+    *state.debug_scope_depth -= 1;
 
-    #[cfg(feature = "trace")]
-    if let Some(ref mut list) = cmd_buf_data.trace_commands {
-        list.push(TraceCommand::PopDebugGroup);
-    }
-
-    cmd_enc.device.check_is_valid()?;
-
-    let cmd_buf_raw = cmd_buf_data.encoder.open()?;
-    if !cmd_enc
+    if !state
         .device
         .instance_flags
         .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
     {
-        unsafe {
-            cmd_buf_raw.end_debug_marker();
-        }
+        unsafe { state.raw_encoder.end_debug_marker() };
     }
 
     Ok(())
