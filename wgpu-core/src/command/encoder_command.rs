@@ -131,8 +131,8 @@ pub enum ArcCommand {
         occlusion_query_set: Option<Arc<QuerySet>>,
     },
     BuildAccelerationStructures {
-        blas: Vec<crate::ray_tracing::TraceBlasBuildEntry>,
-        tlas: Vec<crate::ray_tracing::TraceTlasPackage>,
+        blas: Vec<crate::ray_tracing::ArcBlasBuildEntry>,
+        tlas: Vec<crate::ray_tracing::ArcTlasPackage>,
     },
     TransitionResources {
         buffer_transitions: Vec<wgt::BufferTransition<Arc<Buffer>>>,
