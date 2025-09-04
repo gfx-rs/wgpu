@@ -134,4 +134,8 @@ pub enum ArcCommand {
         blas: Vec<crate::ray_tracing::TraceBlasBuildEntry>,
         tlas: Vec<crate::ray_tracing::TraceTlasPackage>,
     },
+    TransitionResources {
+        buffer_transitions: Vec<wgt::BufferTransition<Arc<Buffer>>>,
+        texture_transitions: Vec<wgt::TextureTransition<Arc<Texture>>>,
+    },
 }

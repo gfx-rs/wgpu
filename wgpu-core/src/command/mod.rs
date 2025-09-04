@@ -54,6 +54,7 @@ pub use timestamp_writes::PassTimestampWrites;
 use self::{
     clear::{clear_buffer, clear_texture_cmd},
     memory_init::CommandBufferTextureMemoryActions,
+    transition_resources::transition_resources,
 };
 
 use crate::binding_model::BindingError;
@@ -1441,6 +1442,16 @@ impl Global {
                             insert_debug_marker(&mut state, &label)?;
                         }
                         ArcCommand::BuildAccelerationStructures { blas: _, tlas: _ } => todo!(),
+                        ArcCommand::TransitionResources {
+                            buffer_transitions,
+                            texture_transitions,
+                        } => {
+                            transition_resources(
+                                &mut state,
+                                buffer_transitions,
+                                texture_transitions,
+                            )?;
+                        }
                         ArcCommand::RunComputePass { .. } | ArcCommand::RunRenderPass { .. } => {
                             unreachable!()
                         }
