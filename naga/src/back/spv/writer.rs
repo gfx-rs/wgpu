@@ -110,7 +110,10 @@ impl Writer {
         self.bounds_check_policies = options.bounds_check_policies;
         self.zero_initialize_workgroup_memory = options.zero_initialize_workgroup_memory;
         self.force_loop_bounding = options.force_loop_bounding;
+        self.use_storage_input_output_16 = options.use_storage_input_output_16;
         self.binding_map = options.binding_map.clone();
+        self.io_f16_polyfills =
+            super::f16_polyfill::F16IoPolyfill::new(options.use_storage_input_output_16);
         Ok(())
     }
 
