@@ -2513,6 +2513,7 @@ dependencies = [
  "itertools 0.14.0",
  "libm",
  "log",
+ "naga-test",
  "num-traits",
  "once_cell",
  "petgraph 0.8.2",
@@ -2526,7 +2527,6 @@ dependencies = [
  "thiserror 2.0.16",
  "unicode-ident",
  "walkdir",
- "wgpu-test",
 ]
 
 [[package]]
@@ -2550,6 +2550,22 @@ dependencies = [
  "cfg_aliases 0.2.1",
  "libfuzzer-sys",
  "naga",
+]
+
+[[package]]
+name = "naga-test"
+version = "26.0.0"
+dependencies = [
+ "bitflags 2.9.3",
+ "env_logger",
+ "naga",
+ "ron",
+ "rspirv",
+ "serde",
+ "serde_json",
+ "spirv",
+ "toml 0.9.5",
+ "walkdir",
 ]
 
 [[package]]
@@ -4940,13 +4956,13 @@ dependencies = [
  "bytemuck",
  "criterion",
  "naga",
+ "naga-test",
  "nanorand 0.8.0",
  "pollster",
  "profiling",
  "rayon",
  "tracy-client",
  "wgpu",
- "wgpu-test",
 ]
 
 [[package]]
@@ -5169,20 +5185,15 @@ dependencies = [
  "js-sys",
  "libtest-mimic",
  "log",
- "naga",
  "nanorand 0.8.0",
  "nv-flip",
  "parking_lot",
  "png",
  "pollster",
  "profiling",
- "ron",
- "rspirv",
  "serde",
  "serde_json",
- "spirv",
  "strum 0.27.2",
- "toml 0.9.5",
  "trybuild",
  "wasm-bindgen",
  "wasm-bindgen-futures",

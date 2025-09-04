@@ -20,20 +20,20 @@ all-features = true
 
 [features]
 default = []
-dot-out = ["wgpu-test/dot-out"]
-glsl-in = ["dep:pp-rs", "wgpu-test/glsl-in"]
-glsl-out = ["wgpu-test/glsl-out"]
+dot-out = []
+glsl-in = ["dep:pp-rs"]
+glsl-out = []
 
 ## Enables outputting to the Metal Shading Language (MSL).
 ##
 ## This enables MSL output regardless of the target platform.
 ## If you want to enable it only when targeting iOS/tvOS/watchOS/macOS, use `naga/msl-out-if-target-apple`.
-msl-out = ["wgpu-test/msl-out"]
+msl-out = []
 
 ## Enables outputting to the Metal Shading Language (MSL) only if the target platform is iOS/tvOS/watchOS/macOS.
 ##
 ## If you want to enable MSL output it regardless of the target platform, use `naga/msl-out`.
-msl-out-if-target-apple = ["wgpu-test/msl-out"]
+msl-out-if-target-apple = []
 
 serialize = [
     "dep:serde",
@@ -56,16 +56,16 @@ arbitrary = [
     "half/arbitrary",
     "half/std",
 ]
-spv-in = ["dep:petgraph", "petgraph/graphmap", "dep:spirv", "wgpu-test/spv-in"]
-spv-out = ["dep:spirv", "wgpu-test/spv-out"]
-wgsl-in = ["dep:hexf-parse", "dep:unicode-ident", "wgpu-test/wgsl-in"]
-wgsl-out = ["wgpu-test/wgsl-out"]
+spv-in = ["dep:petgraph", "petgraph/graphmap", "dep:spirv"]
+spv-out = ["dep:spirv"]
+wgsl-in = ["dep:hexf-parse", "dep:unicode-ident"]
+wgsl-out = []
 
 ## Enables outputting to HLSL (Microsoft's High-Level Shader Language).
 ##
 ## This enables HLSL output regardless of the target platform.
 ## If you want to enable it only when targeting Windows, use `hlsl-out-if-target-windows`.
-hlsl-out = ["wgpu-test/hlsl-out"]
+hlsl-out = []
 
 ## Enables outputting to HLSL (Microsoft's High-Level Shader Language) only if the target platform is Windows.
 ##
@@ -118,7 +118,7 @@ rspirv.workspace = true
 serde = { workspace = true, features = ["default", "derive"] }
 strum = { workspace = true }
 walkdir.workspace = true
-wgpu-test.workspace = true
+naga-test.workspace = true
 
 [lints.clippy]
 std_instead_of_alloc = "warn"

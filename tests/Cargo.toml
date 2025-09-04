@@ -33,28 +33,10 @@ webgl = ["wgpu/webgl"]
 # allows us to force the build to have profiling code enabled so we can test that configuration.
 test-build-with-profiling = ["profiling/type-check"]
 
-# Naga forwarded features
-glsl-in = ["naga/glsl-in"]
-glsl-out = ["naga/glsl-out"]
-spv-in = ["naga/spv-in"]
-spv-out = ["naga/spv-out"]
-wgsl-in = ["naga/wgsl-in"]
-wgsl-out = ["naga/wgsl-out"]
-msl-out = ["naga/msl-out"]
-dot-out = ["naga/dot-out"]
-hlsl-out = ["naga/hlsl-out"]
-
 [dependencies]
 wgpu = { workspace = true, features = ["noop"] }
 wgpu-hal = { workspace = true, features = ["validation_canary"] }
 wgpu-macros.workspace = true
-
-# Naga stuff that lives here due to sharing logic with benchmarks
-naga = { workspace = true, features = ["serialize", "deserialize"] }
-spirv = { workspace = true, features = ["deserialize"] }
-rspirv.workspace = true
-ron.workspace = true
-toml.workspace = true
 
 anyhow.workspace = true
 arrayvec.workspace = true

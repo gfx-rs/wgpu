@@ -24,6 +24,7 @@ members = [
     "wgpu-types",
     "wgpu",
     "xtask",
+    "naga/tests",
 ]
 exclude = []
 default-members = [
@@ -46,6 +47,7 @@ default-members = [
     "wgpu-types",
     "wgpu",
     "xtask",
+    "naga/tests",
 ]
 
 [workspace.lints.clippy]
@@ -78,6 +80,7 @@ wgpu-core = { version = "26.0.0", path = "./wgpu-core" }
 wgpu-hal = { version = "26.0.0", path = "./wgpu-hal" }
 wgpu-macros = { version = "26.0.0", path = "./wgpu-macros" }
 wgpu-test = { version = "26.0.0", path = "./tests" }
+naga-test = { version = "26.0.0", path = "./naga/tests" }
 wgpu-types = { version = "26.0.0", path = "./wgpu-types", default-features = false }
 
 # These _cannot_ have a version specified. If it does, crates.io will look

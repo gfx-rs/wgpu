@@ -1,5 +1,5 @@
 use naga::compact::KeepUnused;
-use wgpu_test::naga::*;
+use naga_test::*;
 
 const DIR_IN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/in");
 const DIR_OUT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/out");

@@ -3,7 +3,7 @@ use std::{fs, process::Command};
 
 const DIR_IN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../naga/tests/in");
 
-use wgpu_test::naga::*;
+use naga_test::*;
 
 struct InputWithInfo {
     inner: Input,
