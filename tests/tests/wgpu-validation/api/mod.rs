@@ -1,5 +1,6 @@
 mod binding_arrays;
 mod buffer;
+mod buffer_mapping;
 mod buffer_slice;
 mod device;
 mod experimental;
