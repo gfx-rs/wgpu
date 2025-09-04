@@ -257,9 +257,9 @@ jobs:
           export RUSTFLAGS="$RUSTFLAGS --cfg getrandom_backend=\"wasm_js\""
 
           # build for WebGPU
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --features glsl,fragile-send-sync-non-atomic-wasm
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --features glsl
-          cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-deps --features glsl
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --features glsl,spirv,fragile-send-sync-non-atomic-wasm
+          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --features glsl,spirv
+          cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-deps --features glsl,spirv
 
           # check with only the web feature
           cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-default-features --features=web
