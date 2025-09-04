@@ -53,14 +53,12 @@ impl Default for SpvOutVersion {
     }
 }
 
-#[cfg(feature = "spv-out")]
 #[derive(serde::Deserialize)]
 pub struct BindingMapSerialization {
     pub resource_binding: naga::ResourceBinding,
     pub bind_target: naga::back::spv::BindingInfo,
 }
 
-#[cfg(feature = "spv-out")]
 pub fn deserialize_binding_map<'de, D>(
     deserializer: D,
 ) -> Result<naga::back::spv::BindingMap, D::Error>
@@ -82,7 +80,6 @@ where
 pub struct WgslInParameters {
     pub parse_doc_comments: bool,
 }
-#[cfg(feature = "wgsl-in")]
 impl From<&WgslInParameters> for naga::front::wgsl::Options {
     fn from(value: &WgslInParameters) -> Self {
         Self {
@@ -96,7 +93,6 @@ impl From<&WgslInParameters> for naga::front::wgsl::Options {
 pub struct SpirvInParameters {
     pub adjust_coordinate_space: bool,
 }
-#[cfg(feature = "spv-in")]
 impl From<&SpirvInParameters> for naga::front::spv::Options {
     fn from(value: &SpirvInParameters) -> Self {
         Self {
@@ -116,7 +112,6 @@ pub struct SpirvOutParameters {
     pub force_point_size: bool,
     pub clamp_frag_depth: bool,
     pub separate_entry_points: bool,
-    #[cfg(feature = "spv-out")]
     #[serde(deserialize_with = "deserialize_binding_map")]
     pub binding_map: naga::back::spv::BindingMap,
     pub use_storage_input_output_16: bool,
@@ -132,12 +127,10 @@ impl Default for SpirvOutParameters {
             clamp_frag_depth: false,
             separate_entry_points: false,
             use_storage_input_output_16: true,
-            #[cfg(feature = "spv-out")]
             binding_map: naga::back::spv::BindingMap::default(),
         }
     }
 }
-#[cfg(feature = "spv-out")]
 impl SpirvOutParameters {
     pub fn to_options<'a>(
         &'a self,
@@ -176,7 +169,6 @@ impl SpirvOutParameters {
 pub struct WgslOutParameters {
     pub explicit_types: bool,
 }
-#[cfg(feature = "wgsl-out")]
 impl From<&WgslOutParameters> for naga::back::wgsl::WriterFlags {
     fn from(value: &WgslOutParameters) -> Self {
         let mut flags = Self::empty();
@@ -213,21 +205,16 @@ pub struct Parameters {
     pub targets: Option<Targets>,
 
     // -- MSL options --
-    #[cfg(feature = "msl-out")]
     pub msl: naga::back::msl::Options,
-    #[cfg(feature = "msl-out")]
     #[serde(default)]
     pub msl_pipeline: naga::back::msl::PipelineOptions,
 
     // -- GLSL options --
-    #[cfg(feature = "glsl-out")]
     pub glsl: naga::back::glsl::Options,
     pub glsl_exclude_list: naga::FastHashSet<String>,
-    #[cfg(feature = "glsl-out")]
     pub glsl_multiview: Option<core::num::NonZeroU32>,
 
     // -- HLSL options --
-    #[cfg(feature = "hlsl-out")]
     pub hlsl: naga::back::hlsl::Options,
 
     // -- WGSL options --
@@ -240,13 +227,6 @@ pub struct Parameters {
     pub fragment_module: Option<FragmentModule>,
 
     pub bounds_check_policies: naga::proc::BoundsCheckPolicies,
-
-    #[cfg(any(
-        feature = "hlsl-out",
-        feature = "msl-out",
-        feature = "spv-out",
-        feature = "glsl-out"
-    ))]
     pub pipeline_constants: naga::back::PipelineConstants,
 }
 

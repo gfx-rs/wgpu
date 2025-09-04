@@ -13,19 +13,21 @@ publish = false
 
 
 [features]
-# Naga forwarded features
-glsl-in = ["naga/glsl-in"]
-glsl-out = ["naga/glsl-out"]
-spv-in = ["naga/spv-in"]
-spv-out = ["naga/spv-out"]
-wgsl-in = ["naga/wgsl-in"]
-wgsl-out = ["naga/wgsl-out"]
-msl-out = ["naga/msl-out"]
-dot-out = ["naga/dot-out"]
-hlsl-out = ["naga/hlsl-out"]
 
 [dependencies]
-naga = { workspace = true, features = ["serialize", "deserialize"] }
+naga = { workspace = true, features = [
+    "serialize",
+    "deserialize",
+    "glsl-in",
+    "glsl-out",
+    "spv-in",
+    "spv-out",
+    "wgsl-in",
+    "wgsl-out",
+    "msl-out",
+    "dot-out",
+    "hlsl-out",
+] }
 spirv = { workspace = true, features = ["deserialize"] }
 rspirv.workspace = true
 ron.workspace = true

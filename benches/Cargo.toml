@@ -47,13 +47,4 @@ profiling.workspace = true
 rayon.workspace = true
 tracy-client = { workspace = true, optional = true }
 wgpu.workspace = true
-naga-test = { workspace = true, features = [
-    "wgsl-in",
-    "spv-in",
-    "glsl-in",
-    "spv-out",
-    "msl-out",
-    "hlsl-out",
-    "glsl-out",
-    "wgsl-out",
-] }
+naga-test = { workspace = true, features = [] }
