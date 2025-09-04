@@ -21,14 +21,14 @@ all-features = true
 [features]
 default = []
 dot-out = []
-glsl-in = ["dep:pp-rs"]
-glsl-out = []
+glsl-in = ["dep:pp-rs", "naga-test/glsl-in"]
+glsl-out = ["naga-test/glsl-out"]
 
 ## Enables outputting to the Metal Shading Language (MSL).
 ##
 ## This enables MSL output regardless of the target platform.
 ## If you want to enable it only when targeting iOS/tvOS/watchOS/macOS, use `naga/msl-out-if-target-apple`.
-msl-out = []
+msl-out = ["naga-test/msl-out"]
 
 ## Enables outputting to the Metal Shading Language (MSL) only if the target platform is iOS/tvOS/watchOS/macOS.
 ##
@@ -56,16 +56,16 @@ arbitrary = [
     "half/arbitrary",
     "half/std",
 ]
-spv-in = ["dep:petgraph", "petgraph/graphmap", "dep:spirv"]
-spv-out = ["dep:spirv"]
-wgsl-in = ["dep:hexf-parse", "dep:unicode-ident"]
-wgsl-out = []
+spv-in = ["dep:petgraph", "petgraph/graphmap", "dep:spirv", "naga-test/spv-in"]
+spv-out = ["dep:spirv", "naga-test/spv-out"]
+wgsl-in = ["dep:hexf-parse", "dep:unicode-ident", "naga-test/wgsl-in"]
+wgsl-out = ["naga-test/wgsl-out"]
 
 ## Enables outputting to HLSL (Microsoft's High-Level Shader Language).
 ##
 ## This enables HLSL output regardless of the target platform.
 ## If you want to enable it only when targeting Windows, use `hlsl-out-if-target-windows`.
-hlsl-out = []
+hlsl-out = ["naga-test/hlsl-out"]
 
 ## Enables outputting to HLSL (Microsoft's High-Level Shader Language) only if the target platform is Windows.
 ##
