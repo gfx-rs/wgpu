@@ -262,10 +262,7 @@ impl Device {
     /// Creates a [`Buffer`].
     #[must_use]
     pub fn create_buffer(&self, desc: &BufferDescriptor<'_>) -> Buffer {
-        let mut map_context = MapContext::new();
-        if desc.mapped_at_creation {
-            map_context.initial_range = 0..desc.size;
-        }
+        let map_context = MapContext::new(desc.mapped_at_creation.then_some(0..desc.size));
 
         let buffer = self.inner.create_buffer(desc);
 
@@ -371,10 +368,7 @@ impl Device {
         hal_buffer: A::Buffer,
         desc: &BufferDescriptor<'_>,
     ) -> Buffer {
-        let mut map_context = MapContext::new();
-        if desc.mapped_at_creation {
-            map_context.initial_range = 0..desc.size;
-        }
+        let map_context = MapContext::new(desc.mapped_at_creation.then_some(0..desc.size));
 
         let buffer = unsafe {
             let core_device = self.inner.as_core();
