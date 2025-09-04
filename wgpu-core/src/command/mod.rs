@@ -373,18 +373,10 @@ impl CommandEncoderStatus {
         // Replace our state with `Consumed`, and return either the inner
         // state or an error, to be transferred to the command buffer.
         match mem::replace(self, Self::Consumed) {
-            Self::Recording(mut inner) => {
-                if let Err(err) = inner.encoder.close_if_open() {
-                    Self::Error(err.into())
-                } else if inner.debug_scope_depth > 0 {
-                    Self::Error(CommandEncoderError::DebugGroupError(
-                        DebugGroupError::MissingPop,
-                    ))
-                } else {
-                    // Note: if we want to stop tracking the swapchain texture view,
-                    // this is the place to do it.
-                    Self::Finished(inner)
-                }
+            Self::Recording(inner) => {
+                // Nothing should have opened the encoder yet.
+                assert!(!inner.encoder.is_open);
+                Self::Finished(inner)
             }
             Self::Consumed | Self::Finished(_) => Self::Error(EncoderStateError::Ended.into()),
             Self::Locked(_) => Self::Error(EncoderStateError::Locked.into()),
@@ -758,8 +750,6 @@ pub struct CommandBufferMutable {
 
     indirect_draw_validation_resources: crate::indirect_validation::DrawResources,
 
-    debug_scope_depth: u32,
-
     pub(crate) commands: Vec<ArcCommand>,
 
     #[cfg(feature = "trace")]
@@ -825,7 +815,6 @@ impl CommandEncoder {
                     temp_resources: Default::default(),
                     indirect_draw_validation_resources:
                         crate::indirect_validation::DrawResources::new(device.clone()),
-                    debug_scope_depth: 0,
                     commands: Vec::new(),
                     #[cfg(feature = "trace")]
                     trace_commands: if device.trace.lock().is_some() {
@@ -1459,8 +1448,17 @@ impl Global {
                 }
             }
 
+            if debug_scope_depth > 0 {
+                Err(CommandEncoderError::DebugGroupError(
+                    DebugGroupError::MissingPop,
+                ))?;
+            }
+
             // Close the encoder, unless it was closed already by a render or compute pass.
             cmd_buf_data.encoder.close_if_open()?;
+
+            // Note: if we want to stop tracking the swapchain texture view,
+            // this is the place to do it.
 
             Ok(cmd_buf_data)
         });
