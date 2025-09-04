@@ -106,7 +106,7 @@ impl From<&SpirvInParameters> for naga::front::spv::Options {
     }
 }
 
-#[derive(Default, serde::Deserialize)]
+#[derive(serde::Deserialize)]
 #[serde(default)]
 pub struct SpirvOutParameters {
     pub version: SpvOutVersion,
@@ -120,6 +120,22 @@ pub struct SpirvOutParameters {
     #[serde(deserialize_with = "deserialize_binding_map")]
     pub binding_map: naga::back::spv::BindingMap,
     pub use_storage_input_output_16: bool,
+}
+impl Default for SpirvOutParameters {
+    fn default() -> Self {
+        Self {
+            version: SpvOutVersion::default(),
+            capabilities: naga::FastHashSet::default(),
+            debug: false,
+            adjust_coordinate_space: false,
+            force_point_size: false,
+            clamp_frag_depth: false,
+            separate_entry_points: false,
+            use_storage_input_output_16: true,
+            #[cfg(feature = "spv-out")]
+            binding_map: naga::back::spv::BindingMap::default(),
+        }
+    }
 }
 #[cfg(feature = "spv-out")]
 impl SpirvOutParameters {
