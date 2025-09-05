@@ -450,30 +450,31 @@ fn backends(c: &mut Criterion) {
                 zero_initialize_workgroup_memory: true,
             };
             for input in &inputs.inner {
-                if input.options.targets.unwrap().contains(Targets::GLSL) {
-                    let module = input.module.as_ref().unwrap();
-                    let info = input.module_info.as_ref().unwrap();
-                    for ep in module.entry_points.iter() {
-                        let pipeline_options = naga::back::glsl::PipelineOptions {
-                            shader_stage: ep.stage,
-                            entry_point: ep.name.clone(),
-                            multiview: None,
-                        };
+                if !input.options.targets.unwrap().contains(Targets::GLSL) {
+                    continue;
+                }
+                let module = input.module.as_ref().unwrap();
+                let info = input.module_info.as_ref().unwrap();
+                for ep in module.entry_points.iter() {
+                    let pipeline_options = naga::back::glsl::PipelineOptions {
+                        shader_stage: ep.stage,
+                        entry_point: ep.name.clone(),
+                        multiview: None,
+                    };
 
-                        // might be `Err` if missing features
-                        if let Ok(mut writer) = naga::back::glsl::Writer::new(
-                            &mut string,
-                            module,
-                            info,
-                            &options,
-                            &pipeline_options,
-                            naga::proc::BoundsCheckPolicies::default(),
-                        ) {
-                            let _ = writer.write(); // might be `Err` if unsupported
-                        }
-
-                        string.clear();
+                    // might be `Err` if missing features
+                    if let Ok(mut writer) = naga::back::glsl::Writer::new(
+                        &mut string,
+                        module,
+                        info,
+                        &options,
+                        &pipeline_options,
+                        naga::proc::BoundsCheckPolicies::default(),
+                    ) {
+                        let _ = writer.write(); // might be `Err` if unsupported
                     }
+
+                    string.clear();
                 }
             }
         });

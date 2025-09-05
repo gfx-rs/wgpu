@@ -41,10 +41,10 @@ naga = { workspace = true, features = [
     "glsl-out",
     "wgsl-out",
 ] }
+naga-test = { workspace = true, features = [] }
 nanorand.workspace = true
 pollster.workspace = true
 profiling.workspace = true
 rayon.workspace = true
 tracy-client = { workspace = true, optional = true }
 wgpu.workspace = true
-naga-test = { workspace = true, features = [] }

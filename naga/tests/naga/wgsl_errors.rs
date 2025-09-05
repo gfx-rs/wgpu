@@ -3922,7 +3922,6 @@ fn invalid_clip_distances() {
     }
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn max_type_size_large_array() {
     // The total size of an array is not resolved until validation. Type aliases
@@ -3938,7 +3937,6 @@ fn max_type_size_large_array() {
     }
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn max_type_size_array_of_arrays() {
     // If the size of the base type of an array is oversize, the error is raised
@@ -3953,7 +3951,6 @@ fn max_type_size_array_of_arrays() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn max_type_size_override_array() {
     // The validation that occurs after override processing should reject any
@@ -3990,7 +3987,6 @@ fn max_type_size_override_array() {
     ));
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn max_type_size_array_in_struct() {
     // If a struct member is oversize, the error is raised during lowering.
@@ -4013,7 +4009,6 @@ fn max_type_size_array_in_struct() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn max_type_size_two_arrays_in_struct() {
     // The total size of a struct is checked during lowering. For a struct,
@@ -4039,7 +4034,6 @@ fn max_type_size_two_arrays_in_struct() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn max_type_size_array_of_structs() {
     // The total size of an array is not resolved until validation. Type aliases
@@ -4060,7 +4054,6 @@ fn max_type_size_array_of_structs() {
     }
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn source_with_control_char() {
     check(

@@ -361,7 +361,6 @@ fn builtin_cross_product_args() {
     assert!(variant(VectorSize::Quad, 2).is_err());
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn incompatible_interpolation_and_sampling_types() {
     use dummy_interpolation_shader::DummyInterpolationShader;
@@ -443,7 +442,6 @@ fn incompatible_interpolation_and_sampling_types() {
     }
 }
 
-#[cfg(all(feature = "wgsl-in", feature = "glsl-out"))]
 #[test]
 fn no_flat_first_in_glsl() {
     use dummy_interpolation_shader::DummyInterpolationShader;
@@ -484,13 +482,11 @@ fn no_flat_first_in_glsl() {
     ));
 }
 
-#[cfg(all(test, feature = "wgsl-in"))]
 mod dummy_interpolation_shader {
     pub struct DummyInterpolationShader {
         pub source: String,
         pub module: naga::Module,
         pub interpolate_attr: String,
-        #[cfg_attr(not(feature = "glsl-out"), expect(dead_code))]
         pub entry_point: &'static str,
     }
 
@@ -656,7 +652,6 @@ fn binding_arrays_cannot_hold_scalars() {
     assert!(t.validator.validate(&t.module).is_err());
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn validation_error_messages() {
     let cases = [(
@@ -693,7 +688,6 @@ error: Function [1] 'main' is invalid
     }
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn bad_texture_dimensions_level() {
     fn validate(level: &str) -> Result<ModuleInfo, naga::valid::ValidationError> {
@@ -790,7 +784,6 @@ fn arity_check() {
     assert!(validate(Mf::Pow, &[3]).is_err());
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn global_use_scalar() {
     let source = "
@@ -815,7 +808,6 @@ fn main() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn global_use_array() {
     let source = "
@@ -840,7 +832,6 @@ fn main() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn global_use_array_index() {
     let source = "
@@ -865,7 +856,6 @@ fn main() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn global_use_phony() {
     let source = "
@@ -890,7 +880,6 @@ fn main() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn global_use_unreachable() {
     // We should allow statements after `return`, and such statements should
@@ -924,7 +913,6 @@ fn main() {
 /// Parse and validate the module defined in `source`.
 ///
 /// Panics if unsuccessful.
-#[cfg(feature = "wgsl-in")]
 fn parse_validate(source: &str) -> (Module, ModuleInfo) {
     let module = naga::front::wgsl::parse_str(source).expect("module should parse");
     let info = valid::Validator::new(Default::default(), valid::Capabilities::all())
@@ -948,7 +936,6 @@ fn parse_validate(source: &str) -> (Module, ModuleInfo) {
 ///
 /// The optional `unused_body` can introduce additional objects to the module,
 /// to verify that they are adjusted correctly by compaction.
-#[cfg(feature = "wgsl-in")]
 fn override_test(test_case: &str, unused_body: Option<&str>) {
     use hashbrown::HashMap;
     use naga::back::pipeline_constants::PipelineConstantError;
@@ -1004,7 +991,6 @@ fn unused() {
     .unwrap();
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn override_in_workgroup_size() {
     override_test(
@@ -1017,7 +1003,6 @@ fn used() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn override_in_workgroup_size_nested() {
     // Initializer for override used in workgroup size refers to another
@@ -1034,7 +1019,6 @@ fn used() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn override_in_function() {
     override_test(
@@ -1052,7 +1036,6 @@ fn used() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn override_in_entrypoint() {
     override_test(
@@ -1070,7 +1053,6 @@ fn used() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn override_in_array_size() {
     override_test(
@@ -1086,7 +1068,6 @@ fn used() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn override_in_global_init() {
     override_test(
@@ -1102,7 +1083,6 @@ fn used() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn override_with_multiple_globals() {
     // Test that when compaction of the `unused` entrypoint removes `arr1`, the

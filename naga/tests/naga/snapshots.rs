@@ -89,121 +89,104 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
         }
     }
 
-    #[cfg(feature = "spv-out")]
-    {
-        if targets.contains(Targets::SPIRV) {
-            let mut debug_info = None;
-            if let Some(source_code) = source_code {
-                debug_info = Some(naga::back::spv::DebugInfo {
-                    source_code,
-                    file_name: name.as_path().into(),
-                    // wgpu#6266: we technically know all the information here to
-                    // produce the valid language but it's not too important for
-                    // validation purposes
-                    language: naga::back::spv::SourceLanguage::Unknown,
-                })
-            }
+    if targets.contains(Targets::SPIRV) {
+        let mut debug_info = None;
+        if let Some(source_code) = source_code {
+            debug_info = Some(naga::back::spv::DebugInfo {
+                source_code,
+                file_name: name.as_path().into(),
+                // wgpu#6266: we technically know all the information here to
+                // produce the valid language but it's not too important for
+                // validation purposes
+                language: naga::back::spv::SourceLanguage::Unknown,
+            })
+        }
 
-            write_output_spv(
+        write_output_spv(
+            input,
+            module,
+            &info,
+            debug_info,
+            &params.spv,
+            params.bounds_check_policies,
+            &params.pipeline_constants,
+        );
+    }
+
+    if targets.contains(Targets::METAL) {
+        write_output_msl(
+            input,
+            module,
+            &info,
+            &params.msl,
+            &params.msl_pipeline,
+            params.bounds_check_policies,
+            &params.pipeline_constants,
+        );
+    }
+
+    if targets.contains(Targets::GLSL) {
+        for ep in module.entry_points.iter() {
+            if params.glsl_exclude_list.contains(&ep.name) {
+                continue;
+            }
+            write_output_glsl(
                 input,
                 module,
                 &info,
-                debug_info,
-                &params.spv,
+                ep.stage,
+                &ep.name,
+                &params.glsl,
                 params.bounds_check_policies,
+                params.glsl_multiview,
                 &params.pipeline_constants,
             );
         }
     }
-    #[cfg(feature = "msl-out")]
-    {
-        if targets.contains(Targets::METAL) {
-            write_output_msl(
-                input,
-                module,
-                &info,
-                &params.msl,
-                &params.msl_pipeline,
-                params.bounds_check_policies,
-                &params.pipeline_constants,
+
+    if targets.contains(Targets::DOT) {
+        let string = naga::back::dot::write(module, Some(&info), Default::default()).unwrap();
+        input.write_output_file("dot", "dot", string, DIR_OUT);
+    }
+
+    if targets.contains(Targets::HLSL) {
+        let frag_module;
+        let mut frag_ep = None;
+        if let Some(ref module_spec) = params.fragment_module {
+            let full_path = input.input_directory(DIR_IN).join(&module_spec.path);
+
+            assert_eq!(
+                full_path.extension().unwrap().to_string_lossy(),
+                "wgsl",
+                "Currently all fragment modules must be in WGSL"
             );
-        }
-    }
-    #[cfg(feature = "glsl-out")]
-    {
-        if targets.contains(Targets::GLSL) {
-            for ep in module.entry_points.iter() {
-                if params.glsl_exclude_list.contains(&ep.name) {
-                    continue;
-                }
-                write_output_glsl(
-                    input,
-                    module,
-                    &info,
-                    ep.stage,
-                    &ep.name,
-                    &params.glsl,
-                    params.bounds_check_policies,
-                    params.glsl_multiview,
-                    &params.pipeline_constants,
-                );
-            }
-        }
-    }
-    #[cfg(feature = "dot-out")]
-    {
-        if targets.contains(Targets::DOT) {
-            let string = naga::back::dot::write(module, Some(&info), Default::default()).unwrap();
-            input.write_output_file("dot", "dot", string, DIR_OUT);
-        }
-    }
-    #[cfg(feature = "hlsl-out")]
-    {
-        if targets.contains(Targets::HLSL) {
-            let frag_module;
-            let mut frag_ep = None;
-            if let Some(ref module_spec) = params.fragment_module {
-                let full_path = input.input_directory(DIR_IN).join(&module_spec.path);
 
-                assert_eq!(
-                    full_path.extension().unwrap().to_string_lossy(),
-                    "wgsl",
-                    "Currently all fragment modules must be in WGSL"
-                );
+            let frag_src = std::fs::read_to_string(full_path).unwrap();
 
-                let frag_src = std::fs::read_to_string(full_path).unwrap();
+            frag_module =
+                naga::front::wgsl::parse_str(&frag_src).expect("Failed to parse fragment module");
 
-                frag_module = naga::front::wgsl::parse_str(&frag_src)
-                    .expect("Failed to parse fragment module");
-
-                frag_ep = Some(
-                    naga::back::hlsl::FragmentEntryPoint::new(
-                        &frag_module,
-                        &module_spec.entry_point,
-                    )
+            frag_ep = Some(
+                naga::back::hlsl::FragmentEntryPoint::new(&frag_module, &module_spec.entry_point)
                     .expect("Could not find fragment entry point"),
-                );
-            }
-
-            write_output_hlsl(
-                input,
-                module,
-                &info,
-                &params.hlsl,
-                &params.pipeline_constants,
-                frag_ep,
             );
         }
+
+        write_output_hlsl(
+            input,
+            module,
+            &info,
+            &params.hlsl,
+            &params.pipeline_constants,
+            frag_ep,
+        );
     }
-    #[cfg(feature = "wgsl-out")]
-    {
-        if targets.contains(Targets::WGSL) {
-            write_output_wgsl(input, module, &info, &params.wgsl);
-        }
+
+    if targets.contains(Targets::WGSL) {
+        write_output_wgsl(input, module, &info, &params.wgsl);
     }
 }
 
-#[cfg(feature = "spv-out")]
 fn write_output_spv(
     input: &Input,
     module: &naga::Module,
@@ -241,7 +224,6 @@ fn write_output_spv(
     }
 }
 
-#[cfg(feature = "spv-out")]
 fn write_output_spv_inner(
     input: &Input,
     module: &naga::Module,
@@ -267,7 +249,6 @@ fn write_output_spv_inner(
     input.write_output_file("spv", extension, dis, DIR_OUT);
 }
 
-#[cfg(feature = "msl-out")]
 fn write_output_msl(
     input: &Input,
     module: &naga::Module,
@@ -299,7 +280,6 @@ fn write_output_msl(
     input.write_output_file("msl", "msl", string, DIR_OUT);
 }
 
-#[cfg(feature = "glsl-out")]
 #[allow(clippy::too_many_arguments)]
 fn write_output_glsl(
     input: &Input,
@@ -341,7 +321,6 @@ fn write_output_glsl(
     input.write_output_file("glsl", &extension, buffer, DIR_OUT);
 }
 
-#[cfg(feature = "hlsl-out")]
 fn write_output_hlsl(
     input: &Input,
     module: &naga::Module,
@@ -397,7 +376,6 @@ fn write_output_hlsl(
         .unwrap();
 }
 
-#[cfg(feature = "wgsl-out")]
 fn write_output_wgsl(
     input: &Input,
     module: &naga::Module,
@@ -415,7 +393,6 @@ fn write_output_wgsl(
 
 // While we _can_ run this test under miri, it is extremely slow (>5 minutes),
 // and naga isn't the primary target for miri testing, so we disable it.
-#[cfg(feature = "wgsl-in")]
 #[cfg_attr(miri, ignore)]
 #[test]
 fn convert_snapshots_wgsl() {
@@ -440,7 +417,6 @@ fn convert_snapshots_wgsl() {
 }
 
 // miri doesn't allow us to shell out to `spirv-as`
-#[cfg(feature = "spv-in")]
 #[cfg_attr(miri, ignore)]
 #[test]
 fn convert_snapshots_spv() {
@@ -482,7 +458,6 @@ fn convert_snapshots_spv() {
 
 // While we _can_ run this test under miri, it is extremely slow (>5 minutes),
 // and naga isn't the primary target for miri testing, so we disable it.
-#[cfg(feature = "glsl-in")]
 #[cfg_attr(miri, ignore)]
 #[allow(unused_variables)]
 #[test]
