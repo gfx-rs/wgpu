@@ -118,6 +118,7 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
   - Copies within the same texture must not overlap.
   - Copies of multisampled or depth/stencil formats must span an entire subresource (layer).
   - Copies of depth/stencil formats must be 4B aligned.
+  - For texture-buffer copies, `bytes_per_row` on the buffer side must be 256B-aligned, even if the transfer is a single row.
 - The offset for `set_vertex_buffer` and `set_index_buffer` must be 4B aligned. By @andyleiserson in [#7929](https://github.com/gfx-rs/wgpu/pull/7929).
 - The offset and size of bindings are validated as fitting within the underlying buffer in more cases. By @andyleiserson in [#7911](https://github.com/gfx-rs/wgpu/pull/7911).
 - The function you pass to `Device::on_uncaptured_error()` must now implement `Sync` in addition to `Send`, and be wrapped in `Arc` instead of `Box`.
@@ -128,6 +129,7 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 - Improve errors when buffer mapping is done incorrectly. Allow aliasing immutable [`BufferViews`]. By @cwfitzgerald in [#8150](https://github.com/gfx-rs/wgpu/pull/8150).
 - Require new `F16_IN_F32` downlevel flag for `quantizeToF16`, `pack2x16float`, and `unpack2x16float` in WGSL input. By @aleiserson in [#8130](https://github.com/gfx-rs/wgpu/pull/8130).
 - The error message for non-copyable depth/stencil formats no longer mentions the aspect when it is not relevant. By @reima in [#8156](https://github.com/gfx-rs/wgpu/pull/8156).
+- Track the initialization status of buffer memory correctly when `copy_texture_to_buffer` skips over padding space between rows or layers, or when the start/end of a texture-buffer transfer is not 4B aligned. By @andyleiserson in [#8099](https://github.com/gfx-rs/wgpu/pull/8099).
 
 #### naga
 
