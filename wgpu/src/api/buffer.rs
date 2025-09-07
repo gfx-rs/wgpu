@@ -396,9 +396,10 @@ impl Buffer {
     /// - If `bounds` has a length less than 1.
     /// - If the start and end of `bounds` are not aligned to [`MAP_ALIGNMENT`].
     /// - If the buffer to which `self` refers is not currently [mapped].
-    /// - If you try to create overlapping views of a buffer, mutable or otherwise.
+    /// - If you try to create a view which overlaps an existing [`BufferViewMut`].
     ///
     /// [mapped]: Buffer#mapping-buffers
+    #[track_caller]
     pub fn get_mapped_range<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferView {
         self.slice(bounds).get_mapped_range()
     }
@@ -419,9 +420,10 @@ impl Buffer {
     /// - If `bounds` has a length less than 1.
     /// - If the start and end of `bounds` are not aligned to [`MAP_ALIGNMENT`].
     /// - If the buffer to which `self` refers is not currently [mapped].
-    /// - If you try to create overlapping views of a buffer, mutable or otherwise.
+    /// - If you try to create a view which overlaps an existing [`BufferView`] or [`BufferViewMut`].
     ///
     /// [mapped]: Buffer#mapping-buffers
+    #[track_caller]
     pub fn get_mapped_range_mut<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferViewMut {
         self.slice(bounds).get_mapped_range_mut()
     }
@@ -534,9 +536,9 @@ impl<'a> BufferSlice<'a> {
         callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
     ) {
         let mut mc = self.buffer.map_context.lock();
-        assert_eq!(mc.initial_range, 0..0, "Buffer is already mapped");
+        assert_eq!(mc.mapped_range, 0..0, "Buffer is already mapped");
         let end = self.offset + self.size.get();
-        mc.initial_range = self.offset..end;
+        mc.mapped_range = self.offset..end;
 
         self.buffer
             .inner
@@ -557,12 +559,17 @@ impl<'a> BufferSlice<'a> {
     ///
     /// - If the endpoints of this slice are not aligned to [`MAP_ALIGNMENT`] within the buffer.
     /// - If the buffer to which `self` refers is not currently [mapped].
-    /// - If you try to create overlapping views of a buffer, mutable or otherwise.
+    /// - If you try to create a view which overlaps an existing [`BufferViewMut`].
     ///
     /// [mapped]: Buffer#mapping-buffers
+    #[track_caller]
     pub fn get_mapped_range(&self) -> BufferView {
-        let end = self.buffer.map_context.lock().add(self.offset, self.size);
-        let range = self.buffer.inner.get_mapped_range(self.offset..end);
+        let subrange = Subrange::new(self.offset, self.size, RangeMappingKind::Immutable);
+        self.buffer
+            .map_context
+            .lock()
+            .validate_and_add(subrange.clone());
+        let range = self.buffer.inner.get_mapped_range(subrange.index);
         BufferView {
             buffer: self.buffer.clone(),
             size: self.size,
@@ -585,12 +592,17 @@ impl<'a> BufferSlice<'a> {
     ///
     /// - If the endpoints of this slice are not aligned to [`MAP_ALIGNMENT`].
     /// - If the buffer to which `self` refers is not currently [mapped].
-    /// - If you try to create overlapping views of a buffer, mutable or otherwise.
+    /// - If you try to create a view which overlaps an existing [`BufferView`] or [`BufferViewMut`].
     ///
     /// [mapped]: Buffer#mapping-buffers
+    #[track_caller]
     pub fn get_mapped_range_mut(&self) -> BufferViewMut {
-        let end = self.buffer.map_context.lock().add(self.offset, self.size);
-        let range = self.buffer.inner.get_mapped_range(self.offset..end);
+        let subrange = Subrange::new(self.offset, self.size, RangeMappingKind::Mutable);
+        self.buffer
+            .map_context
+            .lock()
+            .validate_and_add(subrange.clone());
+        let range = self.buffer.inner.get_mapped_range(subrange.index);
         BufferViewMut {
             buffer: self.buffer.clone(),
             size: self.size,
@@ -640,6 +652,53 @@ impl<'a> From<BufferSlice<'a>> for crate::BindingResource<'a> {
     }
 }
 
+fn range_overlaps(a: &Range<BufferAddress>, b: &Range<BufferAddress>) -> bool {
+    a.start < b.end && b.start < a.end
+}
+
+#[derive(Debug, Copy, Clone)]
+enum RangeMappingKind {
+    Mutable,
+    Immutable,
+}
+
+impl RangeMappingKind {
+    /// Returns true if a range of this kind can touch the same bytes as a range of the other kind.
+    ///
+    /// This is Rust's Mutable XOR Shared rule.
+    fn allowed_concurrently_with(self, other: Self) -> bool {
+        matches!(
+            (self, other),
+            (RangeMappingKind::Immutable, RangeMappingKind::Immutable)
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Subrange {
+    index: Range<BufferAddress>,
+    kind: RangeMappingKind,
+}
+
+impl Subrange {
+    fn new(offset: BufferAddress, size: BufferSize, kind: RangeMappingKind) -> Self {
+        Self {
+            index: offset..(offset + size.get()),
+            kind,
+        }
+    }
+}
+
+impl fmt::Display for Subrange {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}..{} ({:?})",
+            self.index.start, self.index.end, self.kind
+        )
+    }
+}
+
 /// The mapped portion of a buffer, if any, and its outstanding views.
 ///
 /// This ensures that views fall within the mapped range and don't overlap.
@@ -653,25 +712,31 @@ pub(crate) struct MapContext {
     /// *or has been requested to be* mapped.)
     ///
     /// All [`BufferView`]s and [`BufferViewMut`]s must fall within this range.
-    pub(crate) initial_range: Range<BufferAddress>,
+    mapped_range: Range<BufferAddress>,
 
     /// The ranges covered by all outstanding [`BufferView`]s and
     /// [`BufferViewMut`]s. These are non-overlapping, and are all contained
-    /// within `initial_range`.
-    sub_ranges: Vec<Range<BufferAddress>>,
+    /// within `mapped_range`.
+    sub_ranges: Vec<Subrange>,
 }
 
 impl MapContext {
-    pub(crate) fn new() -> Self {
+    /// Creates a new `MapContext`.
+    ///
+    /// For [`mapped_at_creation`] buffers, pass the full buffer range in the
+    /// `mapped_range` argument. For other buffers, pass `None`.
+    ///
+    /// [`mapped_at_creation`]: BufferDescriptor::mapped_at_creation
+    pub(crate) fn new(mapped_range: Option<Range<BufferAddress>>) -> Self {
         Self {
-            initial_range: 0..0,
+            mapped_range: mapped_range.unwrap_or(0..0),
             sub_ranges: Vec::new(),
         }
     }
 
     /// Record that the buffer is no longer mapped.
     fn reset(&mut self) {
-        self.initial_range = 0..0;
+        self.mapped_range = 0..0;
 
         assert!(
             self.sub_ranges.is_empty(),
@@ -681,25 +746,38 @@ impl MapContext {
 
     /// Record that the `size` bytes of the buffer at `offset` are now viewed.
     ///
-    /// Return the byte offset within the buffer of the end of the viewed range.
-    ///
     /// # Panics
     ///
-    /// This panics if the given range overlaps with any existing range.
-    fn add(&mut self, offset: BufferAddress, size: BufferSize) -> BufferAddress {
-        let end = offset + size.get();
-        assert!(self.initial_range.start <= offset && end <= self.initial_range.end);
+    /// This panics if the given range is invalid.
+    #[track_caller]
+    fn validate_and_add(&mut self, new_sub: Subrange) {
+        if self.mapped_range.is_empty() {
+            panic!("tried to call get_mapped_range(_mut) on an unmapped buffer");
+        }
+        if !range_overlaps(&self.mapped_range, &new_sub.index) {
+            panic!(
+                "tried to call get_mapped_range(_mut) on a range that is not entirely mapped. \
+                 Attempted to get range {}, but the mapped range is {}..{}",
+                new_sub, self.mapped_range.start, self.mapped_range.end
+            );
+        }
+
         // This check is essential for avoiding undefined behavior: it is the
         // only thing that ensures that `&mut` references to the buffer's
         // contents don't alias anything else.
         for sub in self.sub_ranges.iter() {
-            assert!(
-                end <= sub.start || offset >= sub.end,
-                "Intersecting map range with {sub:?}"
-            );
+            if range_overlaps(&sub.index, &new_sub.index)
+                && !sub.kind.allowed_concurrently_with(new_sub.kind)
+            {
+                panic!(
+                    "tried to call get_mapped_range(_mut) on a range that has already \
+                     been mapped and would break Rust memory aliasing rules. Attempted \
+                     to get range {}, and the conflicting range is {}",
+                    new_sub, sub
+                );
+            }
         }
-        self.sub_ranges.push(offset..end);
-        end
+        self.sub_ranges.push(new_sub);
     }
 
     /// Record that the `size` bytes of the buffer at `offset` are no longer viewed.
@@ -707,16 +785,14 @@ impl MapContext {
     /// # Panics
     ///
     /// This panics if the given range does not exactly match one previously
-    /// passed to [`add`].
-    ///
-    /// [`add]`: MapContext::add
+    /// passed to [`MapContext::validate_and_add`].
     fn remove(&mut self, offset: BufferAddress, size: BufferSize) {
         let end = offset + size.get();
 
         let index = self
             .sub_ranges
             .iter()
-            .position(|r| *r == (offset..end))
+            .position(|r| r.index == (offset..end))
             .expect("unable to remove range from map context");
         self.sub_ranges.swap_remove(index);
     }
@@ -922,7 +998,9 @@ fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
 
 #[cfg(test)]
 mod tests {
-    use super::{check_buffer_bounds, range_to_offset_size, BufferAddress, BufferSize};
+    use super::{
+        check_buffer_bounds, range_overlaps, range_to_offset_size, BufferAddress, BufferSize,
+    };
 
     fn bs(value: BufferAddress) -> BufferSize {
         BufferSize::new(value).unwrap()
@@ -971,5 +1049,21 @@ mod tests {
     #[should_panic]
     fn check_buffer_bounds_panics_for_end_wraparound() {
         check_buffer_bounds(u64::MAX, 1, bs(u64::MAX));
+    }
+
+    #[test]
+    fn range_overlapping() {
+        // First range to the left
+        assert_eq!(range_overlaps(&(0..1), &(1..3)), false);
+        // First range overlaps left edge
+        assert_eq!(range_overlaps(&(0..2), &(1..3)), true);
+        // First range completely inside second
+        assert_eq!(range_overlaps(&(1..2), &(0..3)), true);
+        // First range completely surrounds second
+        assert_eq!(range_overlaps(&(0..3), &(1..2)), true);
+        // First range overlaps right edge
+        assert_eq!(range_overlaps(&(1..3), &(0..2)), true);
+        // First range entirely to the right
+        assert_eq!(range_overlaps(&(2..3), &(0..2)), false);
     }
 }

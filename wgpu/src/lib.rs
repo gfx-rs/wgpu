@@ -45,7 +45,10 @@
 )]
 #![allow(
     // We need to investiagate these.
-    clippy::large_enum_variant
+    clippy::large_enum_variant,
+    // These degrade readability significantly.
+    clippy::bool_assert_comparison,
+    clippy::bool_comparison,
 )]
 // NOTE: Keep this in sync with `wgpu-core`.
 #![cfg_attr(not(send_sync), allow(clippy::arc_with_non_send_sync))]
@@ -91,7 +94,7 @@ pub use wgt::{
     CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, CopyExternalImageDestInfo,
     CoreCounters, DepthBiasState, DepthStencilState, DeviceLostReason, DeviceType,
     DownlevelCapabilities, DownlevelFlags, DownlevelLimits, Dx12BackendOptions, Dx12Compiler,
-    DxcShaderModel, DynamicOffset, Extent3d, ExternalTextureFormat,
+    DxcShaderModel, DynamicOffset, ExperimentalFeatures, Extent3d, ExternalTextureFormat,
     ExternalTextureTransferFunction, Face, Features, FeaturesWGPU, FeaturesWebGPU, FilterMode,
     FrontFace, GlBackendOptions, GlFenceBehavior, Gles3MinorVersion, HalCounters,
     ImageSubresourceRange, IndexFormat, InstanceDescriptor, InstanceFlags, InternalCounters,

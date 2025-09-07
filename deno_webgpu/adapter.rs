@@ -146,6 +146,7 @@ impl GPUAdapter {
                 descriptor.required_features,
             ),
             required_limits,
+            experimental_features: wgpu_types::ExperimentalFeatures::disabled(),
             memory_hints: Default::default(),
             trace,
         };
