@@ -1,7 +1,99 @@
 /*!
 Backend for [SPIR-V][spv] (Standard Portable Intermediate Representation).
 
+# Layout of values in `uniform` buffers
+
+WGSL's ["Internal Layout of Values"][ilov] rules specify the memory layout of
+each WGSL type. The memory layout is important for data stored in `uniform` and
+`storage` buffers, especially when exchanging data with CPU code.
+
+Both WGSL and Vulkan specify some conditions that a type's memory layout
+must satisfy in order to use that type in a `uniform` or `storage` buffer.
+For `storage` buffers, the WGSL and Vulkan restrictions are compatible, but
+for `uniform` buffers, WGSL allows some types that Vulkan does not, requiring
+adjustments when emitting SPIR-V for `uniform` buffers.
+
+## Padding in two-row matrices
+
+SPIR-V provides detailed control over the layout of matrix types, and is
+capable of describing the WGSL memory layout. However, Vulkan imposes
+additional restrictions.
+
+Vulkan's ["extended layout"][extended-layout] (also known as std140) rules
+apply to types used in `uniform` buffers. Under these rules, matrices are
+defined in terms of arrays of their vector type, and arrays are defined to have
+an alignment equal to the alignment of their element type rounded up to a
+multiple of 16. This means that each column of the matrix has a minimum
+alignment of 16. WGSL, and consequently Naga IR, on the other hand specifies
+column alignment equal to the alignment of the vector type, without being
+rounded up to 16.
+
+To compensate for this, for any `struct` used as a `uniform` buffer which
+contains a two-row matrix, we declare an additional "std140 compatible" type
+in which each column of the matrix has been decomposed into the containing
+struct. For example, the following WGSL struct type:
+
+```ignore
+struct Baz {
+    m: mat3x2<f32>,
+}
+```
+
+is rendered as the SPIR-V struct type:
+
+```ignore
+OpTypeStruct %v2float %v2float %v2float
+```
+
+This has the effect that struct indices in Naga IR for such types do not
+correspond to the struct indices used in SPIR-V. A mapping of struct indices
+for these types is maintained in [`Std140CompatTypeInfo`].
+
+Additionally, any two-row matrices that are declared directly as uniform
+buffers without being wrapped in a struct are declared as a struct containing a
+vector member for each column. Any array of a two-row matrix in a uniform
+buffer is declared as an array of a struct containing a vector member for each
+column. Any struct or array within a uniform buffer which contains a member or
+whose base type requires a std140 compatible type declaration, itself requires a
+std140 compatible type declaration.
+
+Whenever a value of such a type is [`loaded`] we insert code to convert the
+loaded value from the std140 compatible type to the regular type. This occurs
+in `BlockContext::write_checked_load`, making use of the wrapper function
+defined by `Writer::write_wrapped_convert_from_std140_compat_type`. For matrices
+that have been decomposed as separate columns in the containing struct, we load
+each column separately then composite the matrix type in
+`BlockContext::maybe_write_load_uniform_matcx2_struct_member`.
+
+Whenever a column of a matrix that has been decomposed into its containing
+struct is [`accessed`] with a constant index we adjust the emitted access chain
+to access from the containing struct instead, in `BlockContext::write_access_chain`.
+
+Whenever a column of a uniform buffer two-row matrix is [`dynamically accessed`]
+we must first load the matrix type, converting it from its std140 compatible
+type as described above, then access the column using the wrapper function
+defined by `Writer::write_wrapped_matcx2_get_column`. This is handled by
+`BlockContext::maybe_write_uniform_matcx2_dynamic_access`.
+
+Note that this approach differs somewhat from the equivalent code in the HLSL
+backend. For HLSL all structs containing two-row matrices (or arrays of such)
+have their declarations modified, not just those used as uniform buffers.
+Two-row matrices and arrays of such only use modified type declarations when
+used as uniform buffers, or additionally when used as struct member in any
+context. This avoids the need to convert struct values when loading from uniform
+buffers, but when loading arrays and matrices from uniform buffers or from any
+struct the conversion is still required. In contrast, the approach used here
+always requires converting *any* affected type when loading from a uniform
+buffer, but consistently *only* when loading from a uniform buffer. As a result
+this also means we only have to handle loads and not stores, as uniform buffers
+are read-only.
+
 [spv]: https://www.khronos.org/registry/SPIR-V/
+[ilov]: https://gpuweb.github.io/gpuweb/wgsl/#internal-value-layout
+[extended-layout]: https://docs.vulkan.org/spec/latest/chapters/interfaces.html#interfaces-resources-layout
+[`loaded`]: crate::Expression::Load
+[`accessed`]: crate::Expression::AccessIndex
+[`dynamically accessed`]: crate::Expression::Access
 */
 
 mod block;
@@ -518,6 +610,12 @@ enum WrappedFunction {
         left_type_id: Word,
         right_type_id: Word,
     },
+    ConvertFromStd140CompatType {
+        r#type: Handle<crate::Type>,
+    },
+    MatCx2GetColumn {
+        r#type: Handle<crate::Type>,
+    },
 }
 
 /// A map from evaluated [`Expression`](crate::Expression)s to their SPIR-V ids.
@@ -793,6 +891,20 @@ impl BlockContext<'_> {
     }
 }
 
+/// Information about a type for which we have declared a std140 layout
+/// compatible variant, because the type is used in a uniform but does not
+/// adhere to std140 requirements. The uniform will be declared using the
+/// type `type_id`, and the result of any `Load` will be immediately converted
+/// to the base type. This is used for matrices with 2 rows, as well as any
+/// arrays or structs containing such matrices.
+pub struct Std140CompatTypeInfo {
+    /// ID of the std140 compatible type declaration.
+    type_id: Word,
+    /// For structs, a mapping of Naga IR struct member indices to the indices
+    /// used in the generated SPIR-V. For non-struct types this will be empty.
+    member_indices: Vec<u32>,
+}
+
 pub struct Writer {
     physical_layout: PhysicalLayout,
     logical_layout: LogicalLayout,
@@ -833,6 +945,7 @@ pub struct Writer {
     constant_ids: HandleVec<crate::Expression, Word>,
     cached_constants: crate::FastHashMap<CachedConstant, Word>,
     global_variables: HandleVec<crate::GlobalVariable, GlobalVariable>,
+    std140_compat_uniform_types: crate::FastHashMap<Handle<crate::Type>, Std140CompatTypeInfo>,
     fake_missing_bindings: bool,
     binding_map: BindingMap,
 
