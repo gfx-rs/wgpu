@@ -158,7 +158,7 @@ pico-args = { version = "0.5", features = [
     "short-space-opt",
     "combined-flags",
 ] }
-png = "0.17.6"
+png = "0.18"
 pollster = "0.4"
 portable-atomic = "1.8"
 portable-atomic-util = "0.2.4"
