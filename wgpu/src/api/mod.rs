@@ -26,6 +26,8 @@ mod bind_group_layout;
 mod blas;
 mod buffer;
 mod command_buffer;
+/// Not a root type, but common types for command buffer deferral actions.
+mod command_buffer_actions;
 mod command_encoder;
 // Not a root type, but common descriptor types for pipelines.
 mod common_pipeline;
@@ -56,6 +58,7 @@ pub use bind_group_layout::*;
 pub use blas::*;
 pub use buffer::*;
 pub use command_buffer::*;
+use command_buffer_actions::*;
 pub use command_encoder::*;
 pub use common_pipeline::*;
 pub use compute_pass::*;

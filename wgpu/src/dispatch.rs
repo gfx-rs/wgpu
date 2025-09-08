@@ -232,6 +232,7 @@ pub trait QueueInterface: CommonTraits {
         size: crate::Extent3d,
     );
 
+    /// Submit must always drain the iterator, even in the case of error.
     fn submit(&self, command_buffers: &mut dyn Iterator<Item = DispatchCommandBuffer>) -> u64;
 
     fn get_timestamp_period(&self) -> f32;

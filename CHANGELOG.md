@@ -42,6 +42,28 @@ Bottom level categories:
 
 ### Major Changes
 
+#### Deferred command buffer actions: `map_buffer_on_submit` and `on_submitted_work_done`
+
+You may schedule buffer mapping and a submission-complete callback to run automatically after you submit, directly from encoders, command buffers, and passes. 
+
+```rust
+// Record some GPU work so the submission isn't empty and touches `buffer`.
+encoder.clear_buffer(&buffer, 0, None);
+
+// Defer mapping until this encoder is submitted.
+encoder.map_buffer_on_submit(&buffer, wgpu::MapMode::Read, 0..size, |result| { .. });
+
+// Fires after the command buffer's work is finished.
+encoder.on_submitted_work_done(|| { .. });
+
+// Automatically calls `map_async` and `on_submitted_work_done` after this submission finishes.
+queue.submit([encoder.finish()]);
+```
+
+Available on `CommandEncoder`, `CommandBuffer`, `RenderPass`, and `ComputePass`.
+
+By @cwfitzgerald in [#8125](https://github.com/gfx-rs/wgpu/pull/8125).
+
 #### `EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE` has been merged into `EXPERIMENTAL_RAY_QUERY`
 
 We have merged the acceleration structure feature into the `RayQuery` feature. This is to help work around an AMD driver bug and reduce the feature complexity of ray tracing. In the future when ray tracing pipelines are implemented, if either feature is enabled, acceleration structures will be available.
@@ -54,6 +76,7 @@ We have merged the acceleration structure feature into the `RayQuery` feature. T
 By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
 #### New `EXPERIMENTAL_PRECOMPILED_SHADERS` API
+
 We have added `Features::EXPERIMENTAL_PRECOMPILED_SHADERS`, replacing existing passthrough types with a unified `CreateShaderModuleDescriptorPassthrough` which allows passing multiple shader codes for different backends. By @SupaMaggie70Incorporated in [#7834](https://github.com/gfx-rs/wgpu/pull/7834)
 
 Difference for SPIR-V passthrough:
@@ -73,6 +96,21 @@ Difference for SPIR-V passthrough:
 ```
 This allows using precompiled shaders without manually checking which backend's code to pass, for example if you have shaders precompiled for both DXIL and SPIR-V.
 
+#### Buffer mapping apis no longer have lifetimes
+
+`Buffer::get_mapped_range()`, `Buffer::get_mapped_range_mut()`, and `Queue::write_buffer_with()` now return guard objects without any lifetimes. This
+makes it significantly easier to store these types in structs, which is useful for building utilities that build the contents of a buffer over time.
+
+```diff
+- let buffer_mapping_ref: wgpu::BufferView<'_>           = buffer.get_mapped_range(..);
+- let buffer_mapping_mut: wgpu::BufferViewMut<'_>        = buffer.get_mapped_range_mut(..);
+- let queue_write_with:   wgpu::QueueWriteBufferView<'_> = queue.write_buffer_with(..);
++ let buffer_mapping_ref: wgpu::BufferView               = buffer.get_mapped_range(..);
++ let buffer_mapping_mut: wgpu::BufferViewMut            = buffer.get_mapped_range_mut(..);
++ let queue_write_with:   wgpu::QueueWriteBufferView     = queue.write_buffer_with(..);
+```
+
+By @sagudev in [#8046](https://github.com/gfx-rs/wgpu/pull/8046) and @cwfitzgerald in [#8070](https://github.com/gfx-rs/wgpu/pull/8161).
 #### `EXPERIMENTAL_*` features now require unsafe code to enable
 
 We want to be able to expose potentially experimental features to our users before we have ensured that they are fully sound to use.
