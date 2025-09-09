@@ -1166,6 +1166,16 @@ fn validation_error(
         .map_err(|e| e.into_inner()) // TODO(https://github.com/gfx-rs/wgpu/issues/8153): Add tests for spans
 }
 
+/// Check that a shader validates successfully.
+///
+/// In a few tests it is useful to check conditions where a validation error
+/// should be absent alongside conditions where it should be present. This
+/// wrapper is less confusing than `validation_error().unwrap()`.
+#[track_caller]
+fn no_validation_error(source: &str, caps: naga::valid::Capabilities) {
+    validation_error(source, caps).unwrap();
+}
+
 #[test]
 fn int64_capability() {
     check_validation! {
@@ -3585,6 +3595,7 @@ fn issue7165() {
         fn invalid_return_type(a: Struct) -> i32 { return a; }
     ";
 
+    // We need the span for the error, so have to invoke manually.
     let module = naga::front::wgsl::parse_str(shader).unwrap();
     let err = naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
@@ -3832,6 +3843,171 @@ fn const_eval_value_errors() {
     assert!(variant("f32(abs(1))").is_ok());
     assert!(variant("f32(abs(-9223372036854775807))").is_ok());
     assert!(variant("f32(abs(-9223372036854775807 - 1))").is_ok());
+}
+
+#[test]
+fn subgroup_capability() {
+    // Some of these tests should be `check_extension_validation` tests that
+    // also check handling of the enable directive, but that handling is not
+    // currently correct. https://github.com/gfx-rs/wgpu/issues/8202
+
+    // Non-barrier subgroup operations...
+
+    // ...in fragment and compute shaders require [`Capabilities::SUBGROUP`]`.
+    for stage in [naga::ShaderStage::Fragment, naga::ShaderStage::Compute] {
+        let stage_attr = match stage {
+            naga::ShaderStage::Fragment => "@fragment",
+            naga::ShaderStage::Compute => "@compute @workgroup_size(1)",
+            _ => unreachable!(),
+        };
+        check_one_validation! {
+            &format!("
+                {stage_attr}
+                fn main() {{
+                    subgroupBallot();
+                }}
+            "),
+            Err(naga::valid::ValidationError::EntryPoint {
+                stage: err_stage,
+                source: naga::valid::EntryPointError::Function(
+                    naga::valid::FunctionError::MissingCapability(Capabilities::SUBGROUP)
+                ),
+                ..
+            }) if *err_stage == stage
+        }
+    }
+
+    // ...in fragment and compute shaders require *only* [`Capabilities::SUBGROUP`]`.
+    for stage in [naga::ShaderStage::Fragment, naga::ShaderStage::Compute] {
+        let stage_attr = match stage {
+            naga::ShaderStage::Fragment => "@fragment",
+            naga::ShaderStage::Compute => "@compute @workgroup_size(1)",
+            _ => unreachable!(),
+        };
+        no_validation_error(
+            &format!(
+                "
+                {stage_attr}
+                fn main() {{
+                    subgroupBallot();
+                }}
+            "
+            ),
+            Capabilities::SUBGROUP,
+        );
+    }
+
+    // ...in vertex shaders require both [`Capabilities::SUBGROUP`] and
+    // [`Capabilities::SUBGROUP_VERTEX_STAGE`]`. (But note that
+    // `create_validator` automatically sets `Capabilities::SUBGROUP` whenever
+    // `Features::SUBGROUP_VERTEX` is available.)
+    for cap in [Capabilities::SUBGROUP, Capabilities::SUBGROUP_VERTEX_STAGE] {
+        check_validation! {
+            "
+                @vertex
+                fn main() -> @builtin(position) vec4<f32> {{
+                    subgroupBallot();
+                    return vec4();
+                }}
+            ":
+            Err(_),
+            cap
+        }
+    }
+    no_validation_error(
+        "
+            @vertex
+            fn main() -> @builtin(position) vec4<f32> {{
+                subgroupBallot();
+                return vec4();
+            }}
+        ",
+        Capabilities::SUBGROUP | Capabilities::SUBGROUP_VERTEX_STAGE,
+    );
+
+    // Subgroup barriers...
+
+    // ...require both SUBGROUP and SUBGROUP_BARRIER.
+    for cap in [Capabilities::SUBGROUP, Capabilities::SUBGROUP_BARRIER] {
+        check_validation! {
+            r#"
+                @compute @workgroup_size(1)
+                fn main() {
+                    subgroupBarrier();
+                }
+            "#:
+            Err(naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Compute,
+                source: naga::valid::EntryPointError::Function(
+                    naga::valid::FunctionError::MissingCapability(required_caps)
+                ),
+                ..
+            }) if *required_caps == Capabilities::SUBGROUP | Capabilities::SUBGROUP_BARRIER,
+            cap
+        }
+    }
+
+    // ...are never supported in vertex shaders.
+    check_validation! {
+        r#"
+            @vertex
+            fn main() -> @builtin(position) vec4<f32> {
+                subgroupBarrier();
+                return vec4();
+            }
+        "#:
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Vertex,
+            source: naga::valid::EntryPointError::ForbiddenStageOperations,
+            ..
+        }),
+        Capabilities::SUBGROUP | Capabilities::SUBGROUP_BARRIER | Capabilities::SUBGROUP_VERTEX_STAGE
+    }
+
+    // ...are never supported in fragment shaders.
+    check_validation! {
+        r#"
+            @fragment
+            fn main() {
+                subgroupBarrier();
+            }
+        "#:
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Fragment,
+            source: naga::valid::EntryPointError::ForbiddenStageOperations,
+            ..
+        }),
+        Capabilities::SUBGROUP | Capabilities::SUBGROUP_BARRIER
+    }
+
+    // The `subgroup_id` built-in...
+
+    // ...in compute shaders requires [`Capabilities::SUBGROUP`]`.
+    check_one_validation! {
+        "
+            @compute @workgroup_size(1)
+            fn main(@builtin(subgroup_id) subgroup_id: u32) {{
+            }}
+        ",
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Compute,
+            source: naga::valid::EntryPointError::Argument(
+                _,
+                naga::valid::VaryingError::UnsupportedCapability(Capabilities::SUBGROUP)
+            ),
+            ..
+        })
+    }
+
+    // ...in compute shaders requires *only* [`Capabilities::SUBGROUP`]`.
+    no_validation_error(
+        "
+        @compute @workgroup_size(1)
+        fn main(@builtin(subgroup_id) subgroup_id: u32) {{
+        }}
+        ",
+        Capabilities::SUBGROUP,
+    );
 }
 
 #[test]

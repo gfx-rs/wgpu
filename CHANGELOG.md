@@ -198,6 +198,12 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 
 - [wgsl-in] Allow a trailing comma in `@blend_src(…)` attributes. By @ErichDonGubler in [#8137](https://github.com/gfx-rs/wgpu/pull/8137).
 
+### Documentation
+
+#### General
+
+- Clarify that subgroup barriers require both the `SUBGROUP` and `SUBGROUP_BARRIER` features / capabilities. By @andyleiserson in TBD.
+
 ## v26.0.4 (2025-08-07)
 
 ### Bug Fixes
