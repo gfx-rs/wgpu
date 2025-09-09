@@ -56,6 +56,9 @@ private = { ignore = true }
 [sources]
 allow-git = [
     # Waiting on releases; used in examples/tests only
+
+    # Pending a release for https://github.com/Xudong-Huang/generator-rs/pull/75
+    "https://github.com/Xudong-Huang/generator-rs",
 ]
 unknown-registry = "deny"
 unknown-git = "deny"
