@@ -40,11 +40,12 @@ enum IdSource {
 /// some external allocator. Combining internal and external allocation is not
 /// allowed; calling both `alloc` and `mark_as_used` on the same
 /// `IdentityValues` will result in a panic. The external mode is used when
-/// playing back a trace of wgpu operations.
+/// [playing back a trace of wgpu operations][player].
 ///
 /// [`Id`]: crate::id::Id
 /// [`alloc`]: IdentityValues::alloc
 /// [`release`]: IdentityValues::release
+/// [player]: https://github.com/gfx-rs/wgpu/tree/trunk/player/
 #[derive(Debug)]
 pub(super) struct IdentityValues {
     free: Vec<(Index, Epoch)>,
@@ -57,7 +58,7 @@ pub(super) struct IdentityValues {
 }
 
 impl IdentityValues {
-    /// Allocate a fresh, never-before-seen id.
+    /// Allocate a fresh, never-before-seen ID.
     ///
     /// # Panics
     ///
