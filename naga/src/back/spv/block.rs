@@ -1621,7 +1621,12 @@ impl BlockContext<'_> {
                 });
                 id
             }
-            crate::Expression::LocalVariable(variable) => self.function.variables[&variable].id,
+            crate::Expression::LocalVariable(variable) => {
+                if let Some(rq_tracker) = self.function.ray_query_tracker_variables.get(&variable) {
+                    self.ray_query_tracker_expr.insert(expr_handle, rq_tracker.id);
+                }
+                self.function.variables[&variable].id
+            },
             crate::Expression::Load { pointer } => {
                 self.write_checked_load(pointer, block, AccessTypeAdjustment::None, result_type_id)?
             }

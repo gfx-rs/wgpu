@@ -151,6 +151,8 @@ struct Function {
     signature: Option<Instruction>,
     parameters: Vec<FunctionArgument>,
     variables: crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
+    /// Map from a local variable that is a ray query to its u32 tracker.
+    ray_query_tracker_variables: crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
     /// List of local variables used as a counters to ensure that all loops are bounded.
     force_loop_bounding_vars: Vec<LocalVariable>,
 
@@ -445,6 +447,11 @@ struct LookupFunctionType {
     return_type_id: Word,
 }
 
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
+enum LookupRayQueryFuction {
+    GetIntersection { committed: bool },
+}
+
 #[derive(Debug)]
 enum Dimension {
     Scalar,
@@ -685,6 +692,10 @@ struct BlockContext<'w> {
     expression_constness: ExpressionConstnessTracker,
 
     force_loop_bounding: bool,
+
+    /// Hash from an expression whose type is a ray query / pointer to a ray query to its tracker.
+    /// Note: this is sparse, so can't be a handle vec
+    ray_query_tracker_expr: crate::FastHashMap<Handle<crate::Expression>, Word>,
 }
 
 impl BlockContext<'_> {
@@ -773,8 +784,7 @@ pub struct Writer {
     // Just a temporary list of SPIR-V ids
     temp_list: Vec<Word>,
 
-    ray_get_committed_intersection_function: Option<Word>,
-    ray_get_candidate_intersection_function: Option<Word>,
+    ray_query_functions: crate::FastHashMap<LookupRayQueryFuction, Word>,
 
     /// F16 I/O polyfill manager for handling `f16` input/output variables
     /// when `StorageInputOutput16` capability is not available.
@@ -810,6 +820,19 @@ bitflags::bitflags! {
         ///
         /// [`BuiltIn::FragDepth`]: crate::BuiltIn::FragDepth
         const CLAMP_FRAG_DEPTH = 0x10;
+    }
+}
+
+bitflags::bitflags! {
+    /// How far through a ray query are we
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub(super) struct RayQueryPoint: u32 {
+        /// Ray query has been successfully initialized.
+        const INITIALIZED = 1 << 0;
+        /// Proceed has been called on ray query.
+        const PROCEED = 1 << 1;
+        /// Proceed has returned false (have finished traversal).
+        const FINISHED_TRAVERSAL = 1 << 2;
     }
 }
 

@@ -35,6 +35,9 @@ impl Function {
                 for local_var in self.variables.values() {
                     local_var.instruction.to_words(sink);
                 }
+                for local_var in self.ray_query_tracker_variables.values() {
+                    local_var.instruction.to_words(sink);
+                }
                 for local_var in self.force_loop_bounding_vars.iter() {
                     local_var.instruction.to_words(sink);
                 }
@@ -91,8 +94,7 @@ impl Writer {
             saved_cached: CachedExpressions::default(),
             gl450_ext_inst_id,
             temp_list: Vec::new(),
-            ray_get_committed_intersection_function: None,
-            ray_get_candidate_intersection_function: None,
+            ray_query_functions: crate::FastHashMap::default(),
             io_f16_polyfills: super::f16_polyfill::F16IoPolyfill::new(
                 options.use_storage_input_output_16,
             ),
@@ -173,8 +175,7 @@ impl Writer {
             global_variables: take(&mut self.global_variables).recycle(),
             saved_cached: take(&mut self.saved_cached).recycle(),
             temp_list: take(&mut self.temp_list).recycle(),
-            ray_get_candidate_intersection_function: None,
-            ray_get_committed_intersection_function: None,
+            ray_query_functions: take(&mut self.ray_query_functions).recycle(),
             io_f16_polyfills: take(&mut self.io_f16_polyfills).recycle(),
         };
 
@@ -1022,6 +1023,7 @@ impl Writer {
             expression_constness: super::ExpressionConstnessTracker::from_arena(
                 &ir_function.expressions,
             ),
+            ray_query_tracker_expr: crate::FastHashMap::default(),
         };
 
         // fill up the pre-emitted and const expressions
@@ -1063,6 +1065,32 @@ impl Writer {
                 .function
                 .variables
                 .insert(handle, LocalVariable { id, instruction });
+
+            if let crate::TypeInner::RayQuery { .. } = ir_module.types[variable.ty].inner {
+                // Don't refactor this into a struct: Although spirv itself allows opaque types in structs,
+                // the vulkan environment for spirv does not. Putting ray queries into structs can cause
+                // confusing bugs.
+                let u32_type_id = context.writer.get_u32_type_id();
+                let ptr_u32_type_id = context
+                    .writer
+                    .get_pointer_type_id(u32_type_id, spirv::StorageClass::Function);
+                let tracker_id = context.gen_id();
+                let tracker_init_id = context.writer.get_constant_scalar(crate::Literal::U32(super::RayQueryPoint::empty().bits()));
+                let tracker_instruction = Instruction::variable(
+                    ptr_u32_type_id,
+                    tracker_id,
+                    spirv::StorageClass::Function,
+                    Some(tracker_init_id),
+                );
+
+                context.function.ray_query_tracker_variables.insert(
+                    handle,
+                    LocalVariable {
+                        id: tracker_id,
+                        instruction: tracker_instruction,
+                    },
+                );
+            }
         }
 
         for (handle, expr) in ir_function.expressions.iter() {

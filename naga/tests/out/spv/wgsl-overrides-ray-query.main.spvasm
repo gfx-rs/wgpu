@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.4
 ; Generator: rspirv
-; Bound: 65
+; Bound: 67
 OpCapability Shader
 OpCapability RayQueryKHR
 OpExtension "SPV_KHR_ray_query"
@@ -40,61 +40,63 @@ OpDecorate %10 Binding 0
 %25 = OpConstantComposite  %7  %22 %23 %24
 %26 = OpConstantComposite  %8  %16 %17 %18 %19 %21 %25
 %28 = OpTypePointer Function %5
-%40 = OpTypeVector %6 2
-%41 = OpTypePointer Function %40
-%42 = OpTypeBool
-%43 = OpTypeVector %42 2
-%44 = OpConstant  %6  0
-%45 = OpConstantComposite  %40  %44 %44
-%46 = OpConstant  %6  1
-%47 = OpConstant  %6  4294967295
-%48 = OpConstantComposite  %40  %47 %47
+%29 = OpTypePointer Function %6
+%31 = OpConstant  %6  0
+%43 = OpTypeVector %6 2
+%44 = OpTypePointer Function %43
+%45 = OpTypeBool
+%46 = OpTypeVector %45 2
+%47 = OpConstantComposite  %43  %31 %31
+%48 = OpConstant  %6  1
+%49 = OpConstant  %6  4294967295
+%50 = OpConstantComposite  %43  %49 %49
 %13 = OpFunction  %2  None %14
 %12 = OpLabel
 %27 = OpVariable  %28  Function
-%49 = OpVariable  %41  Function %48
+%30 = OpVariable  %29  Function %31
+%51 = OpVariable  %44  Function %50
 %15 = OpLoad  %4  %10
-OpBranch %29
-%29 = OpLabel
-%30 = OpCompositeExtract  %6  %26 0
-%31 = OpCompositeExtract  %6  %26 1
-%32 = OpCompositeExtract  %3  %26 2
-%33 = OpCompositeExtract  %3  %26 3
-%34 = OpCompositeExtract  %7  %26 4
-%35 = OpCompositeExtract  %7  %26 5
-OpRayQueryInitializeKHR %27 %15 %30 %31 %34 %32 %35 %33
-OpBranch %36
-%36 = OpLabel
-OpLoopMerge %37 %39 None
-OpBranch %50
-%50 = OpLabel
-%51 = OpLoad  %40  %49
-%52 = OpIEqual  %43  %45 %51
-%53 = OpAll  %42  %52
-OpSelectionMerge %54 None
-OpBranchConditional %53 %37 %54
-%54 = OpLabel
-%55 = OpCompositeExtract  %6  %51 1
-%56 = OpIEqual  %42  %55 %44
-%57 = OpSelect  %6  %56 %46 %44
-%58 = OpCompositeConstruct  %40  %57 %46
-%59 = OpISub  %40  %51 %58
-OpStore %49 %59
-OpBranch %38
-%38 = OpLabel
-%60 = OpRayQueryProceedKHR  %42  %27
-OpSelectionMerge %61 None
-OpBranchConditional %60 %61 %62
-%62 = OpLabel
-OpBranch %37
-%61 = OpLabel
-OpBranch %63
-%63 = OpLabel
-OpBranch %64
-%64 = OpLabel
+OpBranch %32
+%32 = OpLabel
+%33 = OpCompositeExtract  %6  %26 0
+%34 = OpCompositeExtract  %6  %26 1
+%35 = OpCompositeExtract  %3  %26 2
+%36 = OpCompositeExtract  %3  %26 3
+%37 = OpCompositeExtract  %7  %26 4
+%38 = OpCompositeExtract  %7  %26 5
+OpRayQueryInitializeKHR %27 %15 %33 %34 %37 %35 %38 %36
 OpBranch %39
 %39 = OpLabel
-OpBranch %36
-%37 = OpLabel
+OpLoopMerge %40 %42 None
+OpBranch %52
+%52 = OpLabel
+%53 = OpLoad  %43  %51
+%54 = OpIEqual  %46  %47 %53
+%55 = OpAll  %45  %54
+OpSelectionMerge %56 None
+OpBranchConditional %55 %40 %56
+%56 = OpLabel
+%57 = OpCompositeExtract  %6  %53 1
+%58 = OpIEqual  %45  %57 %31
+%59 = OpSelect  %6  %58 %48 %31
+%60 = OpCompositeConstruct  %43  %59 %48
+%61 = OpISub  %43  %53 %60
+OpStore %51 %61
+OpBranch %41
+%41 = OpLabel
+%62 = OpRayQueryProceedKHR  %45  %27
+OpSelectionMerge %63 None
+OpBranchConditional %62 %63 %64
+%64 = OpLabel
+OpBranch %40
+%63 = OpLabel
+OpBranch %65
+%65 = OpLabel
+OpBranch %66
+%66 = OpLabel
+OpBranch %42
+%42 = OpLabel
+OpBranch %39
+%40 = OpLabel
 OpReturn
 OpFunctionEnd

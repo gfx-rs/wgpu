@@ -8,7 +8,7 @@ use super::{
     Block, BlockContext, Function, FunctionArgument, Instruction, LookupFunctionType, NumericType,
     Writer,
 };
-use crate::arena::Handle;
+use crate::{arena::Handle, back::spv::LookupRayQueryFuction};
 
 impl Writer {
     pub(super) fn write_ray_query_get_intersection_function(
@@ -16,13 +16,14 @@ impl Writer {
         is_committed: bool,
         ir_module: &crate::Module,
     ) -> spirv::Word {
-        if is_committed {
-            if let Some(func_id) = self.ray_get_committed_intersection_function {
-                return func_id;
-            }
-        } else if let Some(func_id) = self.ray_get_candidate_intersection_function {
-            return func_id;
-        };
+        if let Some(&word) = self
+            .ray_query_functions
+            .get(&LookupRayQueryFuction::GetIntersection {
+                committed: is_committed,
+            })
+        {
+            return word;
+        }
         let ray_intersection = ir_module.special_types.ray_intersection.unwrap();
         let intersection_type_id = self.get_handle_type_id(ray_intersection);
         let intersection_pointer_type_id =
@@ -81,6 +82,7 @@ impl Writer {
         let mut block = Block::new(label_id);
 
         let blank_intersection_id = self.id_gen.next();
+        // This must be before everything else in the function.
         block.body.push(Instruction::variable(
             intersection_pointer_type_id,
             blank_intersection_id,
@@ -441,11 +443,12 @@ impl Writer {
         );
 
         function.to_words(&mut self.logical_layout.function_definitions);
-        if is_committed {
-            self.ray_get_committed_intersection_function = Some(func_id);
-        } else {
-            self.ray_get_candidate_intersection_function = Some(func_id);
-        }
+        self.ray_query_functions.insert(
+            LookupRayQueryFuction::GetIntersection {
+                committed: is_committed,
+            },
+            func_id,
+        );
         func_id
     }
 }
@@ -458,6 +461,7 @@ impl BlockContext<'_> {
         block: &mut Block,
     ) {
         let query_id = self.cached[query];
+
         match *function {
             crate::RayQueryFunction::Initialize {
                 acceleration_structure,
