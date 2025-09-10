@@ -92,13 +92,13 @@ async fn run_test(ctx: TestingContext) {
     };
     const TEXTURE_SIZE: u32 = 512;
     let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
-    let create_texture = || {
+    let (texture, view) = {
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: wgpu::Extent3d {
                 width: TEXTURE_SIZE,
                 height: TEXTURE_SIZE,
-                depth_or_array_layers: 1,
+                depth_or_array_layers: 2,
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -110,18 +110,16 @@ async fn run_test(ctx: TestingContext) {
         let view = texture.create_view(&wgpu::TextureViewDescriptor {
             label: None,
             format: Some(wgpu::TextureFormat::R8Unorm),
-            dimension: Some(wgpu::TextureViewDimension::D2),
+            dimension: Some(wgpu::TextureViewDimension::D2Array),
             usage: Some(wgpu::TextureUsages::RENDER_ATTACHMENT),
             aspect: wgpu::TextureAspect::All,
             base_mip_level: 0,
             mip_level_count: None,
             base_array_layer: 0,
-            array_layer_count: None,
+            array_layer_count: Some(2),
         });
         (texture, view)
     };
-    let (texture1, view1) = create_texture();
-    let (texture2, view2) = create_texture();
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: TEXTURE_SIZE as u64 * TEXTURE_SIZE as u64 * 2,
@@ -134,26 +132,15 @@ async fn run_test(ctx: TestingContext) {
         .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: None,
-        color_attachments: &[
-            Some(wgpu::RenderPassColorAttachment {
-                view: &view1,
-                depth_slice: None,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                    store: wgpu::StoreOp::Store,
-                },
-            }),
-            Some(wgpu::RenderPassColorAttachment {
-                view: &view2,
-                depth_slice: None,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                    store: wgpu::StoreOp::Store,
-                },
-            }),
-        ],
+        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            view: &view,
+            depth_slice: None,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                store: wgpu::StoreOp::Store,
+            },
+        })],
         depth_stencil_attachment: None,
         timestamp_writes: None,
         occlusion_query_set: None,
@@ -163,12 +150,15 @@ async fn run_test(ctx: TestingContext) {
     rpass.draw(0..6, 0..1);
     drop(rpass);
     for i in 0..2 {
-        let texture = [&texture1, &texture2][i];
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
-                texture,
+                texture: &texture,
                 mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
+                origin: wgpu::Origin3d {
+                    x: 512,
+                    y: 512,
+                    z: i,
+                },
                 aspect: wgpu::TextureAspect::All,
             },
             wgpu::TexelCopyBufferInfo {
