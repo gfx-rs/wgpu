@@ -2631,6 +2631,15 @@ fn draw_indexed(
         .vertex
         .limits
         .validate_instance_limit(first_instance, instance_count)?;
+    if state.info.multiview.is_some()
+        && first_instance + instance_count
+            > state.general.device.limits.max_multiview_instance_index + 1
+    {
+        return Err(DrawError::InstanceBeyondMultiviewLimit {
+            last_instance: (first_instance + instance_count) as u64,
+            instance_limit: (state.general.device.limits.max_multiview_instance_index + 1) as u64,
+        });
+    }
 
     unsafe {
         if instance_count > 0 && index_count > 0 {
@@ -2663,7 +2672,10 @@ fn draw_mesh_tasks(
             .contains(wgt::Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW)
             || mv.get() > state.general.device.limits.max_mesh_multiview_view_count
         {
-            return Err(DrawError::MeshPipelineMultiviewLimitsViolated);
+            return Err(DrawError::MeshPipelineMultiviewLimitsViolated {
+                views_given: mv.get(),
+                max_multiviews: state.general.device.limits.max_mesh_multiview_view_count,
+            });
         }
     }
 

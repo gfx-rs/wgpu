@@ -44,6 +44,13 @@ pub enum DrawError {
         instance_limit: u64,
         slot: u32,
     },
+    #[error(
+        "Instance {last_instance} extends beyond limit {instance_limit} imposed by multiview restrictions on the render pass."
+    )]
+    InstanceBeyondMultiviewLimit {
+        last_instance: u64,
+        instance_limit: u64,
+    },
     #[error("Index {last_index} extends beyond limit {index_limit}. Did you bind the correct index buffer?")]
     IndexBeyondLimit { last_index: u64, index_limit: u64 },
     #[error(
@@ -71,8 +78,13 @@ pub enum DrawError {
         limit: u32,
         max_total: u32,
     },
-    #[error("Mesh shader calls in multiview render passes require `EXPERIMENTAL_MESH_SHADER_MULTIVIEW`, and the view count must be <= `Limits::max_mesh_multiview_view_count`")]
-    MeshPipelineMultiviewLimitsViolated,
+    #[error(
+        "Mesh shader calls in multiview render passes require `EXPERIMENTAL_MESH_SHADER_MULTIVIEW`, and the view count ({views_given}) must be <= `Limits::max_multiview_view_count` ({max_multiviews})"
+    )]
+    MeshPipelineMultiviewLimitsViolated {
+        views_given: u32,
+        max_multiviews: u32,
+    },
 }
 
 impl WebGpuError for DrawError {
