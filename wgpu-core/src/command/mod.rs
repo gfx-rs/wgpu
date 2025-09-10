@@ -33,24 +33,51 @@ use core::convert::Infallible;
 use core::mem::{self, ManuallyDrop};
 use core::{ops, panic};
 
-pub(crate) use self::clear::clear_texture;
 #[cfg(feature = "serde")]
 pub(crate) use self::encoder_command::serde_object_reference_struct;
 #[cfg(any(feature = "trace", feature = "replay"))]
 #[doc(hidden)]
 pub use self::encoder_command::PointerReferences;
+// This module previously did `pub use *` for some of the submodules. When that
+// was removed, types were listed here if it seemed like they could possibly
+// have a legitimate external use. Some types may be exported unnecessarily.
 pub use self::{
-    bundle::*,
+    bundle::{
+        bundle_ffi, CreateRenderBundleError, ExecutionError, RenderBundle, RenderBundleDescriptor,
+        RenderBundleEncoder, RenderBundleEncoderDescriptor, RenderBundleError,
+        RenderBundleErrorInner,
+    },
     clear::ClearError,
-    compute::*,
+    compute::{
+        ComputeBasePass, ComputePass, ComputePassDescriptor, ComputePassError,
+        ComputePassErrorInner, DispatchError,
+    },
     compute_command::ArcComputeCommand,
-    draw::*,
+    draw::{DrawError, Rect, RenderCommandError},
     encoder_command::{ArcCommand, ArcReferences, Command, IdReferences, ReferenceType},
-    query::*,
-    render::*,
+    query::{QueryError, QueryUseError, ResolveError, SimplifiedQueryType},
+    render::{
+        ArcRenderPassColorAttachment, AttachmentError, AttachmentErrorLocation,
+        ColorAttachmentError, ColorAttachments, LoadOp, PassChannel, RenderBasePass, RenderPass,
+        RenderPassColorAttachment, RenderPassDepthStencilAttachment, RenderPassDescriptor,
+        RenderPassError, RenderPassErrorInner, ResolvedPassChannel,
+        ResolvedRenderPassDepthStencilAttachment, StoreOp,
+    },
     render_command::ArcRenderCommand,
-    transfer::*,
+    transfer::TransferError,
+    transition_resources::TransitionResourcesError,
 };
+pub(crate) use self::{
+    clear::clear_texture,
+    encoder::EncodingState,
+    memory_init::CommandBufferTextureMemoryActions,
+    render::{get_stride_of_indirect_args, VertexLimits},
+    transfer::{
+        extract_texture_selector, validate_linear_texture_data, validate_texture_buffer_copy,
+        validate_texture_copy_dst_format, validate_texture_copy_range, CopySide,
+    },
+};
+
 pub(crate) use allocator::CommandAllocator;
 
 /// cbindgen:ignore
@@ -59,16 +86,7 @@ pub use self::{compute_command::ComputeCommand, render_command::RenderCommand};
 pub(crate) use timestamp_writes::ArcPassTimestampWrites;
 pub use timestamp_writes::PassTimestampWrites;
 
-use self::{
-    clear::{clear_buffer, clear_texture_cmd},
-    memory_init::CommandBufferTextureMemoryActions,
-    ray_tracing::build_acceleration_structures,
-    transition_resources::transition_resources,
-};
-
 use crate::binding_model::BindingError;
-use crate::command::encoder::EncodingState;
-use crate::command::transition_resources::TransitionResourcesError;
 use crate::device::queue::TempResource;
 use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::id::Id;
@@ -1045,7 +1063,7 @@ impl CommandEncoder {
                             "Begin encoding render pass with '{}' label",
                             pass.label.as_deref().unwrap_or("")
                         );
-                        let res = encode_render_pass(
+                        let res = render::encode_render_pass(
                             &mut state,
                             pass,
                             color_attachments,
@@ -1072,7 +1090,7 @@ impl CommandEncoder {
                             "Begin encoding compute pass with '{}' label",
                             pass.label.as_deref().unwrap_or("")
                         );
-                        let res = encode_compute_pass(&mut state, pass, timestamp_writes);
+                        let res = compute::encode_compute_pass(&mut state, pass, timestamp_writes);
                         match res.as_ref() {
                             Err(err) => {
                                 api_log!("Finished encoding compute pass ({err:?})")
@@ -1113,33 +1131,33 @@ impl CommandEncoder {
                         dst_offset,
                         size,
                     } => {
-                        copy_buffer_to_buffer(
+                        transfer::copy_buffer_to_buffer(
                             &mut state, &src, src_offset, &dst, dst_offset, size,
                         )?;
                     }
                     ArcCommand::CopyBufferToTexture { src, dst, size } => {
-                        copy_buffer_to_texture(&mut state, &src, &dst, &size)?;
+                        transfer::copy_buffer_to_texture(&mut state, &src, &dst, &size)?;
                     }
                     ArcCommand::CopyTextureToBuffer { src, dst, size } => {
-                        copy_texture_to_buffer(&mut state, &src, &dst, &size)?;
+                        transfer::copy_texture_to_buffer(&mut state, &src, &dst, &size)?;
                     }
                     ArcCommand::CopyTextureToTexture { src, dst, size } => {
-                        copy_texture_to_texture(&mut state, &src, &dst, &size)?;
+                        transfer::copy_texture_to_texture(&mut state, &src, &dst, &size)?;
                     }
                     ArcCommand::ClearBuffer { dst, offset, size } => {
-                        clear_buffer(&mut state, dst, offset, size)?;
+                        clear::clear_buffer(&mut state, dst, offset, size)?;
                     }
                     ArcCommand::ClearTexture {
                         dst,
                         subresource_range,
                     } => {
-                        clear_texture_cmd(&mut state, dst, &subresource_range)?;
+                        clear::clear_texture_cmd(&mut state, dst, &subresource_range)?;
                     }
                     ArcCommand::WriteTimestamp {
                         query_set,
                         query_index,
                     } => {
-                        write_timestamp(&mut state, query_set, query_index)?;
+                        query::write_timestamp(&mut state, query_set, query_index)?;
                     }
                     ArcCommand::ResolveQuerySet {
                         query_set,
@@ -1148,7 +1166,7 @@ impl CommandEncoder {
                         destination,
                         destination_offset,
                     } => {
-                        resolve_query_set(
+                        query::resolve_query_set(
                             &mut state,
                             query_set,
                             start_query,
@@ -1167,13 +1185,17 @@ impl CommandEncoder {
                         insert_debug_marker(&mut state, &label)?;
                     }
                     ArcCommand::BuildAccelerationStructures { blas, tlas } => {
-                        build_acceleration_structures(&mut state, blas, tlas)?;
+                        ray_tracing::build_acceleration_structures(&mut state, blas, tlas)?;
                     }
                     ArcCommand::TransitionResources {
                         buffer_transitions,
                         texture_transitions,
                     } => {
-                        transition_resources(&mut state, buffer_transitions, texture_transitions)?;
+                        transition_resources::transition_resources(
+                            &mut state,
+                            buffer_transitions,
+                            texture_transitions,
+                        )?;
                     }
                     ArcCommand::RunComputePass { .. } | ArcCommand::RunRenderPass { .. } => {
                         unreachable!()

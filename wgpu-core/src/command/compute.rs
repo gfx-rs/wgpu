@@ -9,39 +9,31 @@ use core::{convert::Infallible, fmt, str};
 
 use crate::{
     api_log,
-    binding_model::BindError,
-    command::pass::flush_bindings_helper,
-    resource::{RawResourceAccess, Trackable},
-};
-use crate::{
-    binding_model::{ImmediateUploadError, LateMinBufferBindingSizeMismatch},
+    binding_model::{BindError, ImmediateUploadError, LateMinBufferBindingSizeMismatch},
     command::{
         bind::{Binder, BinderError},
         compute_command::ArcComputeCommand,
-        end_pipeline_statistics_query,
+        encoder::EncodingState,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
-        pass_base, pass_try, validate_and_begin_pipeline_statistics_query, ArcPassTimestampWrites,
-        BasePass, BindGroupStateChange, CommandEncoderError, MapPassErr, PassErrorScope,
-        PassTimestampWrites, QueryUseError, StateChange,
+        pass::{self, flush_bindings_helper},
+        pass_base, pass_try,
+        query::{end_pipeline_statistics_query, validate_and_begin_pipeline_statistics_query},
+        ArcCommand, ArcPassTimestampWrites, BasePass, BindGroupStateChange, CommandEncoder,
+        CommandEncoderError, DebugGroupError, EncoderStateError, InnerCommandEncoder, MapPassErr,
+        PassErrorScope, PassStateError, PassTimestampWrites, QueryUseError, StateChange,
+        TimestampWritesError,
     },
-    device::{DeviceError, MissingDownlevelFlags, MissingFeatures},
+    device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
     global::Global,
     hal_label, id,
     init_tracker::MemoryInitKind,
     pipeline::ComputePipeline,
     resource::{
-        self, Buffer, InvalidResourceError, Labeled, MissingBufferUsageError, ParentDevice,
+        self, Buffer, DestroyedResourceError, InvalidResourceError, Labeled,
+        MissingBufferUsageError, ParentDevice, RawResourceAccess, Trackable,
     },
     track::{ResourceUsageCompatibilityError, Tracker},
     Label,
-};
-use crate::{command::InnerCommandEncoder, resource::DestroyedResourceError};
-use crate::{
-    command::{
-        encoder::EncodingState, pass, ArcCommand, CommandEncoder, DebugGroupError,
-        EncoderStateError, PassStateError, TimestampWritesError,
-    },
-    device::Device,
 };
 
 pub type ComputeBasePass = BasePass<ArcComputeCommand, ComputePassError>;
