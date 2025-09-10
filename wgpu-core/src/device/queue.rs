@@ -22,7 +22,7 @@ use crate::{
         extract_texture_selector, validate_linear_texture_data, validate_texture_buffer_copy,
         validate_texture_copy_dst_format, validate_texture_copy_range, ClearError,
         CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopySide,
-        TexelCopyTextureInfo, TransferError,
+        TransferError,
     },
     device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
@@ -1617,7 +1617,7 @@ impl Global {
     pub fn queue_write_texture(
         &self,
         queue_id: QueueId,
-        destination: &TexelCopyTextureInfo,
+        destination: &wgt::TexelCopyTextureInfo<id::TextureId>,
         data: &[u8],
         data_layout: &wgt::TexelCopyBufferLayout,
         size: &wgt::Extent3d,

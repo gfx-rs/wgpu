@@ -7,6 +7,7 @@ mod compute_command;
 mod draw;
 mod encoder;
 mod encoder_command;
+pub mod ffi;
 mod memory_init;
 mod pass;
 mod query;
@@ -57,6 +58,10 @@ use thiserror::Error;
 
 #[cfg(feature = "trace")]
 type TraceCommand = Command;
+
+pub type TexelCopyBufferInfo = ffi::TexelCopyBufferInfo;
+pub type TexelCopyTextureInfo = ffi::TexelCopyTextureInfo;
+pub type CopyExternalImageDestInfo = ffi::CopyExternalImageDestInfo;
 
 const PUSH_CONSTANT_CLEAR_ARRAY: &[u32] = &[0_u32; 64];
 

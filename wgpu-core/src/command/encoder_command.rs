@@ -15,18 +15,18 @@ pub enum Command {
         size: Option<wgt::BufferAddress>,
     },
     CopyBufferToTexture {
-        src: crate::command::TexelCopyBufferInfo,
-        dst: crate::command::TexelCopyTextureInfo,
+        src: wgt::TexelCopyBufferInfo<id::BufferId>,
+        dst: wgt::TexelCopyTextureInfo<id::TextureId>,
         size: wgt::Extent3d,
     },
     CopyTextureToBuffer {
-        src: crate::command::TexelCopyTextureInfo,
-        dst: crate::command::TexelCopyBufferInfo,
+        src: wgt::TexelCopyTextureInfo<id::TextureId>,
+        dst: wgt::TexelCopyBufferInfo<id::BufferId>,
         size: wgt::Extent3d,
     },
     CopyTextureToTexture {
-        src: crate::command::TexelCopyTextureInfo,
-        dst: crate::command::TexelCopyTextureInfo,
+        src: wgt::TexelCopyTextureInfo<id::TextureId>,
+        dst: wgt::TexelCopyTextureInfo<id::TextureId>,
         size: wgt::Extent3d,
     },
     ClearBuffer {

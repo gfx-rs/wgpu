@@ -140,7 +140,7 @@ pub enum Action<'a> {
         queued: bool,
     },
     WriteTexture {
-        to: crate::command::TexelCopyTextureInfo,
+        to: wgt::TexelCopyTextureInfo<id::TextureId>,
         data: FileName,
         layout: wgt::TexelCopyBufferLayout,
         size: wgt::Extent3d,

@@ -15,7 +15,7 @@ use crate::{
     command::{clear_texture, CommandEncoderError, EncoderStateError},
     device::{Device, MissingDownlevelFlags},
     global::Global,
-    id::{BufferId, CommandEncoderId, TextureId},
+    id::{BufferId, CommandEncoderId},
     init_tracker::{
         has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
         TextureInitTrackerAction,
@@ -29,9 +29,8 @@ use crate::{
 
 use super::{ClearError, CommandBufferMutable};
 
-pub type TexelCopyBufferInfo = wgt::TexelCopyBufferInfo<BufferId>;
-pub type TexelCopyTextureInfo = wgt::TexelCopyTextureInfo<TextureId>;
-pub type CopyExternalImageDestInfo = wgt::CopyExternalImageDestInfo<TextureId>;
+use super::TexelCopyBufferInfo;
+use super::TexelCopyTextureInfo;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CopySide {
