@@ -49,8 +49,8 @@ async fn run_test(ctx: TestingContext) {
             }
 
             @fragment
-            fn fs_main() -> @location(0) vec4f {
-                return vec4f(1.0);
+            fn fs_main(@view_index view_index: u32) -> @location(0) vec4f {
+                return vec4f(f32(view_index));
             }
         ";
 
@@ -154,11 +154,7 @@ async fn run_test(ctx: TestingContext) {
             wgpu::TexelCopyTextureInfo {
                 texture: &texture,
                 mip_level: 0,
-                origin: wgpu::Origin3d {
-                    x: 512,
-                    y: 512,
-                    z: i,
-                },
+                origin: wgpu::Origin3d { x: 0, y: 0, z: i },
                 aspect: wgpu::TextureAspect::All,
             },
             wgpu::TexelCopyBufferInfo {
@@ -184,6 +180,11 @@ async fn run_test(ctx: TestingContext) {
     ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
 
     let data = slice.get_mapped_range();
-    let succeeded = data.iter().all(|b| *b == u8::MAX);
-    assert!(succeeded);
+    for view_idx in 0..2 {
+        let texture_bytes = (TEXTURE_SIZE * TEXTURE_SIZE) as usize;
+        let succeeded = &data[texture_bytes * view_idx..texture_bytes * (view_idx + 1)]
+            .iter()
+            .all(|b| *b == if view_idx == 1 { u8::MAX } else { 0 });
+        assert!(succeeded);
+    }
 }
