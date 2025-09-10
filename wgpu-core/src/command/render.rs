@@ -775,6 +775,8 @@ pub enum RenderPassErrorInner {
         "Multiview pass texture views with more than one array layer must have D2Array dimension"
     )]
     MultiViewDimensionMismatch,
+    #[error("Multiview view count limit violated")]
+    TooManyMultiviewViews,
     #[error("missing occlusion query set")]
     MissingOcclusionQuerySet,
     #[error(transparent)]
@@ -876,6 +878,7 @@ impl WebGpuError for RenderPassError {
             | RenderPassErrorInner::PushConstantOutOfMemory
             | RenderPassErrorInner::MultiViewMismatch
             | RenderPassErrorInner::MultiViewDimensionMismatch
+            | RenderPassErrorInner::TooManyMultiviewViews
             | RenderPassErrorInner::MissingOcclusionQuerySet
             | RenderPassErrorInner::PassEnded => return ErrorType::Validation,
         };
@@ -1010,8 +1013,11 @@ impl RenderPassInfo {
                 }
             } else {
                 // Multiview is only supported if the feature is enabled
-                if this_multiview.is_some() {
+                if let Some(this_multiview) = this_multiview {
                     device.require_features(wgt::Features::MULTIVIEW)?;
+                    if this_multiview.get() > device.limits.max_multiview_view_count {
+                        return Err(RenderPassErrorInner::TooManyMultiviewViews);
+                    }
                 }
 
                 detected_multiview = Some(this_multiview);
@@ -2649,6 +2655,17 @@ fn draw_mesh_tasks(
     api_log!("RenderPass::draw_mesh_tasks {group_count_x} {group_count_y} {group_count_z}");
 
     state.is_ready(DrawCommandFamily::DrawMeshTasks)?;
+    if let Some(mv) = state.info.multiview {
+        if !state
+            .general
+            .device
+            .features
+            .contains(wgt::Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW)
+            || mv.get() > state.general.device.limits.max_mesh_multiview_view_count
+        {
+            return Err(DrawError::MeshPipelineMultiviewLimitsViolated);
+        }
+    }
 
     let groups_size_limit = state
         .general
