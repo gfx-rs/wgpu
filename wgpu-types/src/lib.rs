@@ -776,12 +776,14 @@ impl Limits {
     ///     max_non_sampler_bindings: 1_000_000,
     ///     max_task_workgroup_total_count: 0,
     ///     max_task_workgroups_per_dimension: 0,
-    ///     max_mesh_multiview_count: 0,
+    ///     max_mesh_multiview_view_count: 0,
     ///     max_mesh_output_layers: 0,
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
     ///     max_tlas_instance_count: 0,
     ///     max_acceleration_structures_per_shader_stage: 0,
+    ///     max_multiview_view_count: 0,
+    ///     max_multiview_instance_index: 0,
     /// });
     /// ```
     ///
@@ -887,13 +889,16 @@ impl Limits {
     ///
     ///     max_task_workgroup_total_count: 0,
     ///     max_task_workgroups_per_dimension: 0,
-    ///     max_mesh_multiview_count: 0,
+    ///     max_mesh_multiview_view_count: 0,
     ///     max_mesh_output_layers: 0,
     ///
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
     ///     max_tlas_instance_count: 0,
     ///     max_acceleration_structures_per_shader_stage: 0,
+    ///
+    ///     max_multiview_view_count: 0,
+    ///     max_multiview_instance_index: 0,
     /// });
     /// ```
     #[must_use]
@@ -962,13 +967,16 @@ impl Limits {
     ///
     ///     max_task_workgroup_total_count: 0,
     ///     max_task_workgroups_per_dimension: 0,
-    ///     max_mesh_multiview_count: 0,
+    ///     max_mesh_multiview_view_count: 0,
     ///     max_mesh_output_layers: 0,
     ///
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
     ///     max_tlas_instance_count: 0,
     ///     max_acceleration_structures_per_shader_stage: 0,
+    ///
+    ///     max_multiview_view_count: 0,
+    ///     max_multiview_instance_index: 0,
     /// });
     /// ```
     #[must_use]

@@ -648,7 +648,7 @@ impl super::Adapter {
 
                     max_task_workgroup_total_count: 0,
                     max_task_workgroups_per_dimension: 0,
-                    max_mesh_multiview_count: 0,
+                    max_mesh_multiview_view_count: 0,
                     max_mesh_output_layers: 0,
 
                     max_blas_primitive_count: if supports_ray_tracing {
