@@ -1031,7 +1031,6 @@ impl super::PrivateCapabilities {
         downlevel
             .flags
             .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
-
         let base = wgt::Limits::default();
         crate::Capabilities {
             limits: wgt::Limits {
@@ -1079,7 +1078,7 @@ impl super::PrivateCapabilities {
 
                 max_task_workgroup_total_count: 0,
                 max_task_workgroups_per_dimension: 0,
-                max_mesh_multiview_count: 0,
+                max_mesh_multiview_view_count: 0,
                 max_mesh_output_layers: 0,
 
                 max_blas_primitive_count: 0, // When added: 2^28 from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits
@@ -1092,6 +1091,9 @@ impl super::PrivateCapabilities {
                 // > [Acceleration structures] are opaque objects that can be bound directly using
                 // buffer binding points or via argument buffers
                 max_acceleration_structures_per_shader_stage: 0,
+
+                max_multiview_view_count: 0,
+                max_multiview_instance_index: 0,
             },
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),

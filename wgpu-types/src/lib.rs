@@ -518,12 +518,15 @@ macro_rules! with_limits {
 
         $macro_name!(max_task_workgroup_total_count, Ordering::Less);
         $macro_name!(max_task_workgroups_per_dimension, Ordering::Less);
-        $macro_name!(max_mesh_multiview_count, Ordering::Less);
+        $macro_name!(max_mesh_multiview_view_count, Ordering::Less);
         $macro_name!(max_mesh_output_layers, Ordering::Less);
 
         $macro_name!(max_blas_primitive_count, Ordering::Less);
         $macro_name!(max_blas_geometry_count, Ordering::Less);
         $macro_name!(max_tlas_instance_count, Ordering::Less);
+
+        $macro_name!(max_multiview_view_count, Ordering::Less);
+        $macro_name!(max_multiview_instance_index, Ordering::Less);
     };
 }
 
@@ -693,8 +696,8 @@ pub struct Limits {
     pub max_task_workgroups_per_dimension: u32,
     /// The maximum number of layers that can be output from a mesh shader
     pub max_mesh_output_layers: u32,
-    /// The maximum number of views that can be used by a mesh shader
-    pub max_mesh_multiview_count: u32,
+    /// The maximum number of views that can be used by a mesh shader in multiview rendering
+    pub max_mesh_multiview_view_count: u32,
 
     /// The maximum number of primitive (ex: triangles, aabbs) a BLAS is allowed to have. Requesting
     /// more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_QUERY`]
@@ -712,6 +715,13 @@ pub struct Limits {
     /// Requesting more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_QUERY`]
     /// is enabled.
     pub max_acceleration_structures_per_shader_stage: u32,
+
+    /// The maximum number of views that can be used in multiview rendering
+    pub max_multiview_view_count: u32,
+    /// For an instanced draw call using multiview, the maximum instance index. For example,
+    /// if draw is called with instances a..b, then b must be <= this limit + 1.
+    /// Note that this is NOT just the maximum total number of instances.
+    pub max_multiview_instance_index: u32,
 }
 
 impl Default for Limits {
@@ -819,13 +829,16 @@ impl Limits {
 
             max_task_workgroup_total_count: 0,
             max_task_workgroups_per_dimension: 0,
-            max_mesh_multiview_count: 0,
+            max_mesh_multiview_view_count: 0,
             max_mesh_output_layers: 0,
 
             max_blas_primitive_count: 0,
             max_blas_geometry_count: 0,
             max_tlas_instance_count: 0,
             max_acceleration_structures_per_shader_stage: 0,
+
+            max_multiview_view_count: 0,
+            max_multiview_instance_index: 0,
         }
     }
 
@@ -897,7 +910,7 @@ impl Limits {
 
             max_task_workgroups_per_dimension: 0,
             max_task_workgroup_total_count: 0,
-            max_mesh_multiview_count: 0,
+            max_mesh_multiview_view_count: 0,
             max_mesh_output_layers: 0,
             ..Self::defaults()
         }
@@ -1050,7 +1063,7 @@ impl Limits {
             max_task_workgroup_total_count: 65536,
             max_task_workgroups_per_dimension: 256,
             // llvmpipe reports 0 multiview count, which just means no multiview is allowed
-            max_mesh_multiview_count: 0,
+            max_mesh_multiview_view_count: 0,
             // llvmpipe once again requires this to be 8. An RTX 3060 supports well over 1024.
             max_mesh_output_layers: 8,
             ..self

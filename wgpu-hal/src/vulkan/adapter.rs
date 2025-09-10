@@ -958,6 +958,10 @@ pub struct PhysicalDeviceProperties {
     /// `VK_EXT_mesh_shader` extension.
     mesh_shader: Option<vk::PhysicalDeviceMeshShaderPropertiesEXT<'static>>,
 
+    /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_KHR_multiview` extension.
+    multiview: Option<vk::PhysicalDeviceMultiviewPropertiesKHR<'static>>,
+
     /// The device API version.
     ///
     /// Which is the version of Vulkan supported for device-level functionality.
@@ -1187,7 +1191,7 @@ impl PhysicalDeviceProperties {
         let (
             max_task_workgroup_total_count,
             max_task_workgroups_per_dimension,
-            max_mesh_multiview_count,
+            max_mesh_multiview_view_count,
             max_mesh_output_layers,
         ) = match self.mesh_shader {
             Some(m) => (
@@ -1249,6 +1253,16 @@ impl PhysicalDeviceProperties {
                 properties.max_per_stage_descriptor_acceleration_structures;
         }
 
+        let (max_multiview_view_count, max_multiview_instance_index) =
+            if let Some(properties) = self.multiview {
+                (
+                    properties.max_multiview_view_count,
+                    properties.max_multiview_instance_index,
+                )
+            } else {
+                (0, 0)
+            };
+
         wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
             max_texture_dimension_2d: limits.max_image_dimension2_d,
@@ -1309,13 +1323,16 @@ impl PhysicalDeviceProperties {
 
             max_task_workgroup_total_count,
             max_task_workgroups_per_dimension,
-            max_mesh_multiview_count,
+            max_mesh_multiview_view_count,
             max_mesh_output_layers,
 
             max_blas_primitive_count,
             max_blas_geometry_count,
             max_tlas_instance_count,
             max_acceleration_structures_per_shader_stage,
+
+            max_multiview_view_count,
+            max_multiview_instance_index,
         }
     }
 
@@ -1373,6 +1390,9 @@ impl super::InstanceShared {
                 unsafe { self.raw.enumerate_device_extension_properties(phd).unwrap() };
             capabilities.properties = unsafe { self.raw.get_physical_device_properties(phd) };
             capabilities.device_api_version = capabilities.properties.api_version;
+
+            let supports_multiview = capabilities.device_api_version >= vk::API_VERSION_1_1
+                || capabilities.supports_extension(khr::multiview::NAME);
 
             if let Some(ref get_device_properties) = self.get_physical_device_properties {
                 // Get these now to avoid borrowing conflicts later
@@ -1448,6 +1468,13 @@ impl super::InstanceShared {
                     let next = capabilities
                         .mesh_shader
                         .insert(vk::PhysicalDeviceMeshShaderPropertiesEXT::default());
+                    properties2 = properties2.push_next(next);
+                }
+
+                if supports_multiview {
+                    let next = capabilities
+                        .multiview
+                        .insert(vk::PhysicalDeviceMultiviewProperties::default());
                     properties2 = properties2.push_next(next);
                 }
 

@@ -671,6 +671,9 @@ impl super::Adapter {
                     } else {
                         0
                     },
+
+                    max_multiview_view_count: 0,
+                    max_multiview_instance_index: 0,
                 },
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(
