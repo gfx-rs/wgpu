@@ -124,13 +124,11 @@ impl crate::Instance for super::Instance {
                 // https://github.com/rust-windowing/raw-window-handle/issues/171
                 let handle = Foundation::HWND(handle.hwnd.get() as *mut _);
                 let target = match self.presentation_system {
-                    wgt::Dx12SwapchainKind::Dxgi => SurfaceTarget::WndHandle(handle),
-                    wgt::Dx12SwapchainKind::DirectComposition => {
-                        SurfaceTarget::VisualFromWndHandle {
-                            handle,
-                            dcomp_state: Default::default(),
-                        }
-                    }
+                    wgt::Dx12SwapchainKind::DxgiFromHwnd => SurfaceTarget::WndHandle(handle),
+                    wgt::Dx12SwapchainKind::DxgiFromVisual => SurfaceTarget::VisualFromWndHandle {
+                        handle,
+                        dcomp_state: Default::default(),
+                    },
                 };
 
                 Ok(super::Surface {

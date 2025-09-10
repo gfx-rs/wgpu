@@ -42,15 +42,23 @@ Bottom level categories:
 
 ### Major Changes
 
-#### Builtin Support for DirectComposition/DXGI swapchains in DX12
+#### Builtin Support for DXGI swapchains on top of of DirectComposition Visuals in DX12
 
-By selecting DirectComposition, the compositor cannot optimize your Swapchain as much, but you can support transparent windows.
+By enabling DirectComposition support, the dx12 backend can now support transparent windows.
 
-This creates a single `IDCompositionVisual` over the entire window that is used by the `Surface`. If a user wants to manage the composition tree themselves, they should create their own device and composition, and pass the relevant visual down into `wgpu` via `IDCompositionTarget::CompositionVisual` or `IDCompositionTarget::SurfaceHandle`.
+This creates a single `IDCompositionVisual` over the entire window that is used by the mf`Surface`. If a user wants to manage the composition tree themselves, they should create their own device and composition, and pass the relevant visual down into `wgpu` via `SurfaceTargetUnsafe::CompositionVisual`.
 
-```diff
--pub struct Dx12BackendOptions { pub shader_compiler: Dx12Compiler }
-+pub struct Dx12BackendOptions { pub shader_compiler: Dx12Compiler, pub presentation_system: Dx12SwapchainKind }
+```rust
+let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+    backend_options: wgpu::BackendOptions {
+        dx12: wgpu::Dx12BackendOptions {
+            presentation_system: wgpu::Dx12SwapchainKind::DxgiFromVisual,
+            ..
+        },
+        ..
+    },
+    ..
+});
 ```
 
 By @n1ght-hunter in [#7550](https://github.com/gfx-rs/wgpu/pull/7550).

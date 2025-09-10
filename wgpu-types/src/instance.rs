@@ -449,29 +449,36 @@ impl NoopBackendOptions {
 pub enum Dx12SwapchainKind {
     /// Use a DXGI swapchain made directly from the window's HWND.
     ///
-    /// This supports fullscreen optimization, making borderless windows just as efficient as exclusive fullscreen. It does not support transparent windows.
+    /// This does not support transparency but has better support from developer tooling from RenderDoc.
     #[default]
-    Dxgi,
-    /// Use a DXGI swapchain made from a DirectComposition visual made from the window.
+    DxgiFromHwnd,
+    /// Use a DXGI swapchain made from a DirectComposition visual made automatically from the window's HWND.
     ///
-    /// This supports transparent windows, but does not support fullscreen optimization.
-    DirectComposition,
+    /// This creates a single [`IDCompositionVisual`] over the entire window that is used by the `Surface`.
+    /// If a user wants to manage the composition tree themselves, they should create their own device and
+    /// composition, and pass the relevant visual down via [`SurfaceTargetUnsafe::CompositionVisual`][CV].
+    ///
+    /// This supports transparent windows, but does not have support from RenderDoc.
+    ///
+    /// [`IDCompositionVisual`]: https://learn.microsoft.com/en-us/windows/win32/api/dcomp/nn-dcomp-idcompositionvisual
+    /// [CV]: ../wgpu/struct.SurfaceTargetUnsafe.html#variant.CompositionVisual
+    DxgiFromVisual,
 }
 
 impl Dx12SwapchainKind {
     /// Choose which presentation system to use from the environment variable `WGPU_DX12_PRESENTATION_SYSTEM`.
     ///
     /// Valid values, case insensitive:
-    /// - `Dxgi`
-    /// - `DirectComposition`
+    /// - `DxgiFromVisual` or `Visual`
+    /// - `DxgiFromHwnd` or `Hwnd` for [`Self::DxgiFromHwnd`]
     #[must_use]
     pub fn from_env() -> Option<Self> {
         let value = crate::env::var("WGPU_DX12_PRESENTATION_SYSTEM")
             .as_deref()?
             .to_lowercase();
         match value.as_str() {
-            "dcomp" | "directcomposition" => Some(Self::DirectComposition),
-            "dxgi" => Some(Self::Dxgi),
+            "dxgifromvisual" | "visual" => Some(Self::DxgiFromVisual),
+            "dxgifromhwnd" | "hwnd" => Some(Self::DxgiFromHwnd),
             _ => None,
         }
     }
