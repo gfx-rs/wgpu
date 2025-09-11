@@ -275,8 +275,7 @@ impl CommandEncoderStatus {
         }
     }
 
-    #[cfg(feature = "trace")]
-    #[allow(dead_code)] // TODO
+    #[cfg(all(feature = "trace", any(feature = "serde", feature = "replay")))]
     fn get_inner(&mut self) -> &mut CommandBufferMutable {
         match self {
             Self::Locked(inner) | Self::Finished(inner) | Self::Recording(inner) => inner,
@@ -965,6 +964,10 @@ pub struct BasePass<C, E> {
     pub error: Option<E>,
 
     /// The stream of commands.
+    ///
+    /// The commands are moved out of this vector when the pass is ended (i.e.
+    /// at the same time that `parent` is taken out of the
+    /// `ComputePass`/`RenderPass`).
     pub commands: Vec<C>,
 
     /// Dynamic offsets consumed by [`SetBindGroup`] commands in `commands`.

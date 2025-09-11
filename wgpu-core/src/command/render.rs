@@ -1815,28 +1815,6 @@ impl Global {
         let cmd_enc = pass.parent.take().ok_or(EncoderStateError::Ended)?;
         let mut cmd_buf_data = cmd_enc.data.lock();
 
-        if let Some(err) = pass.base.error.take() {
-            if matches!(
-                err,
-                RenderPassError {
-                    inner: RenderPassErrorInner::EncoderState(EncoderStateError::Ended),
-                    scope: _,
-                }
-            ) {
-                // If the encoder was already finished at time of pass creation,
-                // then it was not put in the locked state, so we need to
-                // generate a validation error here due to the encoder not being
-                // locked. The encoder already has a copy of the error.
-                return Err(EncoderStateError::Ended);
-            } else {
-                // If the pass is invalid, invalidate the parent encoder and return.
-                // Since we do not track the state of an invalid encoder, it is not
-                // necessary to unlock it.
-                cmd_buf_data.invalidate(err);
-                return Ok(());
-            }
-        }
-
         // Unlock the encoder. This can be moved to a lighter-weight mechanism
         // completely decoupled from HAL encoders.
         cmd_buf_data.unlock_and_record(|_| -> Result<(), RenderPassError> { Ok(()) })?;
