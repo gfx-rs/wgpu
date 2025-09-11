@@ -1,5 +1,5 @@
 use alloc::{string::String, vec::Vec};
-use core::{convert::Infallible, ops::Range};
+use core::{convert::Infallible, num::NonZeroU32, ops::Range};
 
 #[cfg(feature = "trace")]
 use {alloc::borrow::Cow, std::io::Write as _};
@@ -217,6 +217,7 @@ pub enum Command {
         target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<crate::command::PassTimestampWrites>,
         occlusion_query_set_id: Option<id::QuerySetId>,
+        multiview_mask: Option<NonZeroU32>,
     },
     BuildAccelerationStructures {
         blas: Vec<crate::ray_tracing::TraceBlasBuildEntry>,

@@ -704,7 +704,7 @@ struct RenderPassKey {
     colors: ArrayVec<Option<ColorAttachmentKey>, { crate::MAX_COLOR_ATTACHMENTS }>,
     depth_stencil: Option<DepthStencilAttachmentKey>,
     sample_count: u32,
-    multiview: Option<NonZeroU32>,
+    multiview_mask: Option<NonZeroU32>,
 }
 
 struct DeviceShared {
@@ -965,7 +965,7 @@ impl Texture {
 pub struct TextureView {
     raw_texture: vk::Image,
     raw: vk::ImageView,
-    layers: NonZeroU32,
+    _layers: NonZeroU32,
     format: wgt::TextureFormat,
     raw_format: vk::Format,
     base_mip_level: u32,

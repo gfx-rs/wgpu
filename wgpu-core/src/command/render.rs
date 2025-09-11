@@ -229,6 +229,7 @@ pub struct RenderPassDescriptor<'a> {
     pub timestamp_writes: Option<&'a PassTimestampWrites>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<id::QuerySetId>,
+    pub multiview_mask: Option<NonZeroU32>,
 }
 
 /// Describes the attachments of a render pass.
@@ -243,6 +244,8 @@ struct ArcRenderPassDescriptor<'a> {
     pub timestamp_writes: Option<ArcPassTimestampWrites>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<Arc<QuerySet>>,
+    /// The multiview array layers that will be used
+    pub multiview_mask: Option<NonZeroU32>,
 }
 
 pub type RenderBasePass = BasePass<ArcRenderCommand, RenderPassError>;
@@ -270,6 +273,7 @@ pub struct RenderPass {
     depth_stencil_attachment: Option<ArcRenderPassDepthStencilAttachment>,
     timestamp_writes: Option<ArcPassTimestampWrites>,
     occlusion_query_set: Option<Arc<QuerySet>>,
+    multiview_mask: Option<NonZeroU32>,
 
     // Resource binding dedupe state.
     current_bind_groups: BindGroupStateChange,
@@ -285,6 +289,7 @@ impl RenderPass {
             color_attachments,
             depth_stencil_attachment,
             occlusion_query_set,
+            multiview_mask,
         } = desc;
 
         Self {
@@ -294,6 +299,7 @@ impl RenderPass {
             depth_stencil_attachment,
             timestamp_writes,
             occlusion_query_set,
+            multiview_mask,
 
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
@@ -308,6 +314,7 @@ impl RenderPass {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
         }
@@ -331,6 +338,7 @@ impl fmt::Debug for RenderPass {
                 "push constant u32 count",
                 &self.base.push_constant_data.len(),
             )
+            .field("multiview mask", &self.multiview_mask)
             .finish()
     }
 }
@@ -915,6 +923,7 @@ struct RenderPassInfo {
 
     divergent_discarded_depth_stencil_aspect: Option<(wgt::TextureAspect, Arc<TextureView>)>,
     multiview: Option<NonZeroU32>,
+    multiview_mask: Option<NonZeroU32>,
 }
 
 impl RenderPassInfo {
@@ -969,6 +978,7 @@ impl RenderPassInfo {
         pending_query_resets: &mut QueryResetMap,
         pending_discard_init_fixups: &mut SurfacesInDiscardState,
         snatch_guard: &SnatchGuard<'_>,
+        multiview_mask: Option<NonZeroU32>,
     ) -> Result<Self, RenderPassErrorInner> {
         profiling::scope!("RenderPassInfo::start");
 
@@ -1422,7 +1432,7 @@ impl RenderPassInfo {
             sample_count,
             color_attachments: &color_attachments_hal,
             depth_stencil_attachment: depth_stencil,
-            multiview,
+            multiview_mask,
             timestamp_writes: timestamp_writes_hal,
             occlusion_query_set: occlusion_query_set_hal,
         };
@@ -1459,6 +1469,7 @@ impl RenderPassInfo {
             extent,
             divergent_discarded_depth_stencil_aspect,
             multiview,
+            multiview_mask,
         })
     }
 
@@ -1525,7 +1536,7 @@ impl RenderPassInfo {
                     stencil_ops,
                     clear_value: (0.0, 0),
                 }),
-                multiview: self.multiview,
+                multiview_mask: self.multiview_mask,
                 timestamp_writes: None,
                 occlusion_query_set: None,
             };
@@ -1692,6 +1703,7 @@ impl Global {
                     color_attachments: ArrayVec::new(),
                     depth_stencil_attachment: None,
                     occlusion_query_set: None,
+                    multiview_mask: None,
                 };
                 match fill_arc_desc(hub, desc, &mut arc_desc, &cmd_enc.device) {
                     Ok(()) => (RenderPass::new(cmd_enc, arc_desc), None),
@@ -1751,6 +1763,7 @@ impl Global {
         depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<&PassTimestampWrites>,
         occlusion_query_set: Option<id::QuerySetId>,
+        multiview_mask: Option<NonZeroU32>,
     ) {
         #[cfg(feature = "trace")]
         {
@@ -1772,6 +1785,7 @@ impl Global {
                     target_depth_stencil: depth_stencil_attachment.cloned(),
                     timestamp_writes: timestamp_writes.cloned(),
                     occlusion_query_set_id: occlusion_query_set,
+                    multiview_mask,
                 });
             }
         }
@@ -1793,6 +1807,7 @@ impl Global {
                 depth_stencil_attachment,
                 timestamp_writes,
                 occlusion_query_set,
+                multiview_mask,
             },
         );
         if let Some(err) = encoder_error {
@@ -1888,6 +1903,7 @@ impl Global {
                     &mut pending_query_resets,
                     &mut pending_discard_init_fixups,
                     snatch_guard,
+                    pass.multiview_mask,
                 )
                 .map_pass_err(pass_scope)?;
 

@@ -784,7 +784,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             colors: ArrayVec::default(),
             depth_stencil: None,
             sample_count: desc.sample_count,
-            multiview: desc.multiview,
+            multiview_mask: desc.multiview_mask,
         };
         let mut fb_key = super::FramebufferKey {
             raw_pass: vk::RenderPass::null(),
@@ -825,15 +825,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     vk_clear_values.push(unsafe { mem::zeroed() });
                     fb_key.push_view(at.view.identified_raw_view());
                 }
-
-                // Assert this attachment is valid for the detected multiview, as a sanity check
-                // The driver crash for this is really bad on AMD, so the check is worth it
-                if let Some(multiview) = desc.multiview {
-                    assert_eq!(cat.target.view.layers, multiview);
-                    if let Some(ref resolve_target) = cat.resolve_target {
-                        assert_eq!(resolve_target.view.layers, multiview);
-                    }
-                }
             } else {
                 rp_key.colors.push(None);
             }
@@ -850,12 +841,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 stencil_ops: ds.stencil_ops,
             });
             fb_key.push_view(ds.target.view.identified_raw_view());
-
-            // Assert this attachment is valid for the detected multiview, as a sanity check
-            // The driver crash for this is really bad on AMD, so the check is worth it
-            if let Some(multiview) = desc.multiview {
-                assert_eq!(ds.target.view.layers, multiview);
-            }
         }
 
         let render_area = vk::Rect2D {

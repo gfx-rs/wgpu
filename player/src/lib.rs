@@ -113,6 +113,7 @@ impl GlobalPlay for wgc::global::Global {
                     target_depth_stencil,
                     timestamp_writes,
                     occlusion_query_set_id,
+                    multiview_mask,
                 } => {
                     self.render_pass_end_with_unresolved_commands(
                         encoder,
@@ -121,6 +122,7 @@ impl GlobalPlay for wgc::global::Global {
                         target_depth_stencil.as_ref(),
                         timestamp_writes.as_ref(),
                         occlusion_query_set_id,
+                        multiview_mask,
                     );
                 }
                 trace::Command::BuildAccelerationStructures { blas, tlas } => {

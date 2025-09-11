@@ -1,4 +1,4 @@
-use core::ops::Range;
+use core::{num::NonZeroU32, ops::Range};
 
 use crate::{
     api::{impl_deferred_command_buffer_actions, SharedDeferredCommandBufferActions},
@@ -654,6 +654,8 @@ pub struct RenderPassDescriptor<'a> {
     pub timestamp_writes: Option<RenderPassTimestampWrites<'a>>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<&'a QuerySet>,
+    /// The mask of multiview image layers to use for this render pass
+    pub multiview_mask: Option<NonZeroU32>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPassDescriptor<'_>: Send, Sync);

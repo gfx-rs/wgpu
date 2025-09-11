@@ -887,13 +887,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
             }
         }
 
-        if let Some(multiview) = desc.multiview {
-            // Currently with multiview we render to all views.
-            let multiview_mask = (1 << multiview.get()) - 1;
+        if let Some(multiview_mask) = desc.multiview_mask {
             unsafe {
                 list.cast::<Direct3D12::ID3D12GraphicsCommandList2>()
                     .unwrap()
-                    .SetViewInstanceMask(multiview_mask);
+                    .SetViewInstanceMask(multiview_mask.get());
             }
         }
 

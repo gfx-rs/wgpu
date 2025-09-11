@@ -83,7 +83,7 @@ impl super::DeviceShared {
                     ref colors,
                     ref depth_stencil,
                     sample_count,
-                    multiview,
+                    multiview_mask,
                 } = *e.key();
 
                 let mut vk_attachments = Vec::new();
@@ -208,11 +208,11 @@ impl super::DeviceShared {
 
                 let mut multiview_info;
                 let mask;
-                if let Some(multiview) = multiview {
+                if let Some(multiview_mask) = multiview_mask {
                     // Right now we enable all bits on the view masks and correlation masks.
                     // This means we're rendering to all views in the subpass, and that all views
                     // can be rendered concurrently.
-                    mask = [(1 << multiview.get()) - 1];
+                    mask = [multiview_mask.get()];
 
                     // On Vulkan 1.1 or later, this is an alias for core functionality
                     multiview_info = vk::RenderPassMultiviewCreateInfoKHR::default()
@@ -1362,7 +1362,7 @@ impl crate::Device for super::Device {
         Ok(super::TextureView {
             raw_texture: texture.raw,
             raw,
-            layers,
+            _layers: layers,
             format: desc.format,
             raw_format,
             base_mip_level: desc.range.base_mip_level,
@@ -1977,7 +1977,6 @@ impl crate::Device for super::Device {
         ];
         let mut compatible_rp_key = super::RenderPassKey {
             sample_count: desc.multisample.count,
-            multiview: desc.multiview,
             ..Default::default()
         };
         let mut stages = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
