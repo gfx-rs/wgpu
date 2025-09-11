@@ -171,9 +171,9 @@ impl super::Adapter {
                 && features2.DepthBoundsTestSupported.as_bool()
         };
 
-        let casting_fully_typed_format_supported = {
+        let (casting_fully_typed_format_supported, view_instancing) = {
             let mut features3 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS3::default();
-            unsafe {
+            if unsafe {
                 device.CheckFeatureSupport(
                     Direct3D12::D3D12_FEATURE_D3D12_OPTIONS3,
                     <*mut _>::cast(&mut features3),
@@ -181,7 +181,14 @@ impl super::Adapter {
                 )
             }
             .is_ok()
-                && features3.CastingFullyTypedFormatSupported.as_bool()
+            {
+                (
+                    features3.CastingFullyTypedFormatSupported.as_bool(),
+                    features3.ViewInstancingTier.0 >= Direct3D12::D3D12_VIEW_INSTANCING_TIER_1.0,
+                )
+            } else {
+                (false, false)
+            }
         };
 
         let heap_create_not_zeroed = {
@@ -528,6 +535,8 @@ impl super::Adapter {
             atomic_int64_on_typed_resource_supported,
         );
 
+        features.set(wgt::Features::MULTIVIEW, view_instancing);
+
         // TODO: Determine if IPresentationManager is supported
         let presentation_timer = auxil::dxgi::time::PresentationTimer::new_dxgi();
 
@@ -672,8 +681,10 @@ impl super::Adapter {
                         0
                     },
 
-                    max_multiview_view_count: 0,
-                    max_multiview_instance_index: 0,
+                    // See https://microsoft.github.io/DirectX-Specs/d3d/ViewInstancing.html#maximum-viewinstancecount
+                    max_multiview_view_count: if view_instancing { 4 } else { 0 },
+                    // This limit is specific to vulkan
+                    max_multiview_instance_index: if view_instancing { u32::MAX } else { 0 },
                 },
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(

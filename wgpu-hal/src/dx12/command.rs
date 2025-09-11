@@ -887,6 +887,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
             }
         }
 
+        if let Some(multiview) = desc.multiview {
+            // Currently with multiview we render to all views.
+            let multiview_mask = (1 << multiview.get()) - 1;
+            unsafe {
+                list.cast::<Direct3D12::ID3D12GraphicsCommandList2>()
+                    .unwrap()
+                    .SetViewInstanceMask(multiview_mask);
+            }
+        }
+
         let raw_vp = Direct3D12::D3D12_VIEWPORT {
             TopLeftX: 0.0,
             TopLeftY: 0.0,

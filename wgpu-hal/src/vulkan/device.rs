@@ -209,10 +209,6 @@ impl super::DeviceShared {
                 let mut multiview_info;
                 let mask;
                 if let Some(multiview) = multiview {
-                    // Sanity checks, better to panic here than cause a driver crash
-                    assert!(multiview.get() <= 8);
-                    assert!(multiview.get() > 1);
-
                     // Right now we enable all bits on the view masks and correlation masks.
                     // This means we're rendering to all views in the subpass, and that all views
                     // can be rendered concurrently.
