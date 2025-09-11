@@ -223,7 +223,7 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 
 #### General
 
-- Clarify that subgroup barriers require both the `SUBGROUP` and `SUBGROUP_BARRIER` features / capabilities. By @andyleiserson in TBD.
+- Clarify that subgroup barriers require both the `SUBGROUP` and `SUBGROUP_BARRIER` features / capabilities. By @andyleiserson in [#8203](https://github.com/gfx-rs/wgpu/pull/8203).
 
 ## v26.0.4 (2025-08-07)
 
