@@ -1,6 +1,9 @@
 use core::ops::Range;
 
-use crate::*;
+use crate::{
+    api::{impl_deferred_command_buffer_actions, SharedDeferredCommandBufferActions},
+    *,
+};
 pub use wgt::{LoadOp, Operations, StoreOp};
 
 /// In-progress recording of a render pass: a list of render commands in a [`CommandEncoder`].
@@ -24,6 +27,7 @@ pub use wgt::{LoadOp, Operations, StoreOp};
 #[derive(Debug)]
 pub struct RenderPass<'encoder> {
     pub(crate) inner: dispatch::DispatchRenderPass,
+    pub(crate) actions: SharedDeferredCommandBufferActions,
 
     /// This lifetime is used to protect the [`CommandEncoder`] from being used
     /// while the pass is alive. This needs to be PhantomDrop to prevent the lifetime
@@ -52,6 +56,7 @@ impl RenderPass<'_> {
     pub fn forget_lifetime(self) -> RenderPass<'static> {
         RenderPass {
             inner: self.inner,
+            actions: self.actions,
             _encoder_guard: crate::api::PhantomDrop::default(),
         }
     }
@@ -277,6 +282,8 @@ impl RenderPass<'_> {
         self.inner
             .draw_mesh_tasks_indirect(&indirect_buffer.inner, indirect_offset);
     }
+
+    impl_deferred_command_buffer_actions!();
 
     /// Execute a [render bundle][RenderBundle], which is a set of pre-recorded commands
     /// that can be run together.

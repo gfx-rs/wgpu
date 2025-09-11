@@ -347,20 +347,28 @@ impl Buffer {
         self.usage
     }
 
-    /// Map the buffer to host (CPU) memory, making it available for reading or writing
-    /// via [`get_mapped_range()`](Self::get_mapped_range).
-    /// It is available once the `callback` is called with an [`Ok`] response.
+    /// Map the buffer to host (CPU) memory, making it available for reading or writing via
+    /// [`get_mapped_range()`](Self::get_mapped_range). The buffer becomes accessible once the
+    /// `callback` is invoked with [`Ok`].
     ///
-    /// For the callback to complete, either `queue.submit(..)`, `instance.poll_all(..)`, or `device.poll(..)`
-    /// must be called elsewhere in the runtime, possibly integrated into an event loop or run on a separate thread.
+    /// Use this when you want to map the buffer immediately. If you need to submit GPU work that
+    /// uses the buffer before mapping it, use `map_buffer_on_submit` on
+    /// [`CommandEncoder`][CEmbos], [`CommandBuffer`][CBmbos], [`RenderPass`][RPmbos], or
+    /// [`ComputePass`][CPmbos] to schedule the mapping after submission. This avoids extra calls to
+    /// [`Buffer::map_async()`] or [`BufferSlice::map_async()`] and lets you initiate mapping from a
+    /// more convenient place.
     ///
-    /// The callback will be called on the thread that first calls the above functions after the GPU work
-    /// has completed. There are no restrictions on the code you can run in the callback, however on native the
-    /// call to the function will not complete until the callback returns, so prefer keeping callbacks short
-    /// and used to set flags, send messages, etc.
+    /// For the callback to run, either [`queue.submit(..)`][q::s], [`instance.poll_all(..)`][i::p_a],
+    /// or [`device.poll(..)`][d::p] must be called elsewhere in the runtime, possibly integrated into
+    /// an event loop or run on a separate thread.
     ///
-    /// As long as a buffer is mapped, it is not available for use by any other commands;
-    /// at all times, either the GPU or the CPU has exclusive access to the contents of the buffer.
+    /// The callback runs on the thread that first calls one of the above functions after the GPU work
+    /// completes. There are no restrictions on the code you can run in the callback; however, on native
+    /// the polling call will not return until the callback finishes, so keep callbacks short (set flags,
+    /// send messages, etc.).
+    ///
+    /// While a buffer is mapped, it cannot be used by other commands; at any time, either the GPU or
+    /// the CPU has exclusive access to the buffer’s contents.
     ///
     /// This can also be performed using [`BufferSlice::map_async()`].
     ///
@@ -371,6 +379,14 @@ impl Buffer {
     /// - If `bounds` is outside of the bounds of `self`.
     /// - If `bounds` has a length less than 1.
     /// - If the start and end of `bounds` are not be aligned to [`MAP_ALIGNMENT`].
+    ///
+    /// [CEmbos]: CommandEncoder::map_buffer_on_submit
+    /// [CBmbos]: CommandBuffer::map_buffer_on_submit
+    /// [RPmbos]: RenderPass::map_buffer_on_submit
+    /// [CPmbos]: ComputePass::map_buffer_on_submit
+    /// [q::s]: Queue::submit
+    /// [i::p_a]: Instance::poll_all
+    /// [d::p]: Device::poll
     pub fn map_async<S: RangeBounds<BufferAddress>>(
         &self,
         mode: MapMode,
@@ -508,20 +524,28 @@ impl<'a> BufferSlice<'a> {
         }
     }
 
-    /// Map the buffer to host (CPU) memory, making it available for reading or writing
-    /// via [`get_mapped_range()`](Self::get_mapped_range).
-    /// It is available once the `callback` is called with an [`Ok`] response.
+    /// Map the buffer to host (CPU) memory, making it available for reading or writing via
+    /// [`get_mapped_range()`](Self::get_mapped_range). The buffer becomes accessible once the
+    /// `callback` is invoked with [`Ok`].
     ///
-    /// For the callback to complete, either `queue.submit(..)`, `instance.poll_all(..)`, or `device.poll(..)`
-    /// must be called elsewhere in the runtime, possibly integrated into an event loop or run on a separate thread.
+    /// Use this when you want to map the buffer immediately. If you need to submit GPU work that
+    /// uses the buffer before mapping it, use `map_buffer_on_submit` on
+    /// [`CommandEncoder`][CEmbos], [`CommandBuffer`][CBmbos], [`RenderPass`][RPmbos], or
+    /// [`ComputePass`][CPmbos] to schedule the mapping after submission. This avoids extra calls to
+    /// [`Buffer::map_async()`] or [`BufferSlice::map_async()`] and lets you initiate mapping from a
+    /// more convenient place.
     ///
-    /// The callback will be called on the thread that first calls the above functions after the GPU work
-    /// has completed. There are no restrictions on the code you can run in the callback, however on native the
-    /// call to the function will not complete until the callback returns, so prefer keeping callbacks short
-    /// and used to set flags, send messages, etc.
+    /// For the callback to run, either [`queue.submit(..)`][q::s], [`instance.poll_all(..)`][i::p_a],
+    /// or [`device.poll(..)`][d::p] must be called elsewhere in the runtime, possibly integrated into
+    /// an event loop or run on a separate thread.
     ///
-    /// As long as a buffer is mapped, it is not available for use by any other commands;
-    /// at all times, either the GPU or the CPU has exclusive access to the contents of the buffer.
+    /// The callback runs on the thread that first calls one of the above functions after the GPU work
+    /// completes. There are no restrictions on the code you can run in the callback; however, on native
+    /// the polling call will not return until the callback finishes, so keep callbacks short (set flags,
+    /// send messages, etc.).
+    ///
+    /// While a buffer is mapped, it cannot be used by other commands; at any time, either the GPU or
+    /// the CPU has exclusive access to the buffer’s contents.
     ///
     /// This can also be performed using [`Buffer::map_async()`].
     ///
@@ -530,6 +554,14 @@ impl<'a> BufferSlice<'a> {
     /// - If the buffer is already mapped.
     /// - If the buffer’s [`BufferUsages`] do not allow the requested [`MapMode`].
     /// - If the endpoints of this slice are not aligned to [`MAP_ALIGNMENT`] within the buffer.
+    ///
+    /// [CEmbos]: CommandEncoder::map_buffer_on_submit
+    /// [CBmbos]: CommandBuffer::map_buffer_on_submit
+    /// [RPmbos]: RenderPass::map_buffer_on_submit
+    /// [CPmbos]: ComputePass::map_buffer_on_submit
+    /// [q::s]: Queue::submit
+    /// [i::p_a]: Instance::poll_all
+    /// [d::p]: Device::poll
     pub fn map_async(
         &self,
         mode: MapMode,
@@ -977,7 +1009,7 @@ fn check_buffer_bounds(
 }
 
 #[track_caller]
-fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
+pub(crate) fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
     bounds: S,
     whole_size: BufferAddress,
 ) -> (BufferAddress, BufferSize) {

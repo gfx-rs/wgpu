@@ -198,7 +198,12 @@ impl Device {
     #[must_use]
     pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor<'_>) -> CommandEncoder {
         let encoder = self.inner.create_command_encoder(desc);
-        CommandEncoder { inner: encoder }
+        // Each encoder starts with its own deferred-action store that travels
+        // with the CommandBuffer produced by finish().
+        CommandEncoder {
+            inner: encoder,
+            actions: Default::default(),
+        }
     }
 
     /// Creates an empty [`RenderBundleEncoder`].

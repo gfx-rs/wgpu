@@ -1,7 +1,7 @@
 use alloc::boxed::Box;
 use core::ops::{Deref, DerefMut};
 
-use crate::*;
+use crate::{api::DeferredCommandBufferActions, *};
 
 /// Handle to a command queue on a device.
 ///
@@ -58,16 +58,16 @@ static_assertions::assert_impl_all!(PollType: Send, Sync);
 /// Reading into this buffer won't yield the contents of the buffer from the
 /// GPU and is likely to be slow. Because of this, although [`AsMut`] is
 /// implemented for this type, [`AsRef`] is not.
-pub struct QueueWriteBufferView<'a> {
-    queue: &'a Queue,
-    buffer: &'a Buffer,
+pub struct QueueWriteBufferView {
+    queue: Queue,
+    buffer: Buffer,
     offset: BufferAddress,
     inner: dispatch::DispatchQueueWriteBuffer,
 }
 #[cfg(send_sync)]
-static_assertions::assert_impl_all!(QueueWriteBufferView<'_>: Send, Sync);
+static_assertions::assert_impl_all!(QueueWriteBufferView: Send, Sync);
 
-impl QueueWriteBufferView<'_> {
+impl QueueWriteBufferView {
     #[cfg(custom)]
     /// Returns custom implementation of QueueWriteBufferView (if custom backend and is internally T)
     pub fn as_custom<T: custom::QueueWriteBufferInterface>(&self) -> Option<&T> {
@@ -75,7 +75,7 @@ impl QueueWriteBufferView<'_> {
     }
 }
 
-impl Deref for QueueWriteBufferView<'_> {
+impl Deref for QueueWriteBufferView {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
@@ -84,19 +84,19 @@ impl Deref for QueueWriteBufferView<'_> {
     }
 }
 
-impl DerefMut for QueueWriteBufferView<'_> {
+impl DerefMut for QueueWriteBufferView {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner.slice_mut()
     }
 }
 
-impl AsMut<[u8]> for QueueWriteBufferView<'_> {
+impl AsMut<[u8]> for QueueWriteBufferView {
     fn as_mut(&mut self) -> &mut [u8] {
         self.inner.slice_mut()
     }
 }
 
-impl Drop for QueueWriteBufferView<'_> {
+impl Drop for QueueWriteBufferView {
     fn drop(&mut self) {
         self.queue
             .inner
@@ -182,19 +182,19 @@ impl Queue {
     ///   allocations, you might be able to use [`StagingBelt`](crate::util::StagingBelt),
     ///   or buffers you explicitly create, map, and unmap yourself.
     #[must_use]
-    pub fn write_buffer_with<'a>(
-        &'a self,
-        buffer: &'a Buffer,
+    pub fn write_buffer_with(
+        &self,
+        buffer: &Buffer,
         offset: BufferAddress,
         size: BufferSize,
-    ) -> Option<QueueWriteBufferView<'a>> {
+    ) -> Option<QueueWriteBufferView> {
         profiling::scope!("Queue::write_buffer_with");
         self.inner
             .validate_write_buffer(&buffer.inner, offset, size)?;
         let staging_buffer = self.inner.create_staging_buffer(size)?;
         Some(QueueWriteBufferView {
-            queue: self,
-            buffer,
+            queue: self.clone(),
+            buffer: buffer.clone(),
             offset,
             inner: staging_buffer,
         })
@@ -248,9 +248,18 @@ impl Queue {
         &self,
         command_buffers: I,
     ) -> SubmissionIndex {
-        let mut command_buffers = command_buffers.into_iter().map(|comb| comb.buffer);
+        // As submit drains the iterator (even on error), collect deferred actions
+        // from each CommandBuffer along the way.
+        let mut actions = DeferredCommandBufferActions::default();
 
+        let mut command_buffers = command_buffers.into_iter().map(|comb| {
+            actions.append(&mut comb.actions.lock());
+            comb.buffer
+        });
         let index = self.inner.submit(&mut command_buffers);
+
+        // Execute all deferred actions after submit.
+        actions.execute(&self.inner);
 
         SubmissionIndex { index }
     }
@@ -265,17 +274,22 @@ impl Queue {
         self.inner.get_timestamp_period()
     }
 
-    /// Registers a callback when the previous call to submit finishes running on the gpu. This callback
-    /// being called implies that all mapped buffer callbacks which were registered before this call will
-    /// have been called.
+    /// Registers a callback that is invoked when the previous [`Queue::submit`] finishes executing
+    /// on the GPU. When this callback runs, all mapped-buffer callbacks registered for the same
+    /// submission are guaranteed to have been called.
     ///
-    /// For the callback to complete, either `queue.submit(..)`, `instance.poll_all(..)`, or `device.poll(..)`
-    /// must be called elsewhere in the runtime, possibly integrated into an event loop or run on a separate thread.
+    /// For the callback to run, either [`queue.submit(..)`][q::s], [`instance.poll_all(..)`][i::p_a],
+    /// or [`device.poll(..)`][d::p] must be called elsewhere in the runtime, possibly integrated into
+    /// an event loop or run on a separate thread.
     ///
-    /// The callback will be called on the thread that first calls the above functions after the gpu work
-    /// has completed. There are no restrictions on the code you can run in the callback, however on native the
-    /// call to the function will not complete until the callback returns, so prefer keeping callbacks short
-    /// and used to set flags, send messages, etc.
+    /// The callback runs on the thread that first calls one of the above functions after the GPU work
+    /// completes. There are no restrictions on the code you can run in the callback; however, on native
+    /// the polling call will not return until the callback finishes, so keep callbacks short (set flags,
+    /// send messages, etc.).
+    ///
+    /// [q::s]: Queue::submit
+    /// [i::p_a]: Instance::poll_all
+    /// [d::p]: Device::poll
     pub fn on_submitted_work_done(&self, callback: impl FnOnce() + Send + 'static) {
         self.inner.on_submitted_work_done(Box::new(callback));
     }

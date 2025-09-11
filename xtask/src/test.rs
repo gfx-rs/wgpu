@@ -1,10 +1,19 @@
+use std::ffi::OsString;
+
 use anyhow::Context;
 use pico_args::Arguments;
 use xshell::Shell;
 
-pub fn run_tests(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
+use crate::util::flatten_args;
+
+pub fn run_tests(
+    shell: Shell,
+    mut args: Arguments,
+    passthrough_args: Option<Vec<OsString>>,
+) -> anyhow::Result<()> {
     let llvm_cov = args.contains("--llvm-cov");
     let list = args.contains("--list");
+    let cargo_args = flatten_args(args, passthrough_args);
     // Retries handled by cargo nextest natively
 
     // These needs to match the command in "run wgpu-info" in `.github/workflows/ci.yml`
@@ -58,7 +67,7 @@ pub fn run_tests(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
             .cmd("cargo")
             .args(llvm_cov_nextest_flags)
             .args(["-v", "--benches", "--tests", "--all-features"])
-            .args(args.finish())
+            .args(cargo_args)
             .run()
             .context("Failed to list tests")?;
         return Ok(());
@@ -69,7 +78,7 @@ pub fn run_tests(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
         .cmd("cargo")
         .args(llvm_cov_nextest_flags)
         .args(["--benches", "--tests", "--all-features"])
-        .args(args.finish())
+        .args(cargo_args)
         .quiet()
         .run()
         .context("Tests failed")?;
