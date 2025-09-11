@@ -1,3 +1,7 @@
+// The following may be useful to generate lists of tests for this file:
+// ```
+// cargo xtask cts -- --list <selector>
+// ```
 unittests:*
 webgpu:api,operation,command_buffer,basic:*
 webgpu:api,operation,command_buffer,copyBufferToBuffer:*
@@ -102,7 +106,13 @@ webgpu:api,validation,image_copy,layout_related:copy_end_overflows_u64:*
 fails-if(dx12) webgpu:api,validation,image_copy,layout_related:offset_alignment:*
 webgpu:api,validation,image_copy,texture_related:format:dimension="1d";*
 webgpu:api,validation,queue,submit:command_buffer,*
-webgpu:api,validation,render_pass,render_pass_descriptor:attachments,*
+// `GPUTexture` as `GPUTextureView` not supported by Deno. https://github.com/gfx-rs/wgpu/issues/8200
+//FAIL: webgpu:api,validation,render_pass,render_pass_descriptor:attachments,one_color_attachment:
+//FAIL: webgpu:api,validation,render_pass,render_pass_descriptor:attachments,one_depth_stencil_attachment:
+webgpu:api,validation,render_pass,render_pass_descriptor:attachments,same_size:
+webgpu:api,validation,render_pass,render_pass_descriptor:attachments,color_depth_mismatch:
+webgpu:api,validation,render_pass,render_pass_descriptor:attachments,layer_count:*
+webgpu:api,validation,render_pass,render_pass_descriptor:attachments,mip_level_count:*
 webgpu:api,validation,render_pass,render_pass_descriptor:resolveTarget,*
 webgpu:api,validation,texture,rg11b10ufloat_renderable:*
 webgpu:api,operation,render_pipeline,overrides:*

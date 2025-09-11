@@ -1,57 +1,56 @@
 use criterion::*;
-use std::{fs, path::PathBuf, process::Command};
+use std::{fs, process::Command};
 
-struct Input {
-    filename: String,
-    size: u64,
+const DIR_IN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../naga/tests/in");
+
+use naga_test::*;
+
+struct InputWithInfo {
+    inner: Input,
     data: Vec<u8>,
     string: Option<String>,
+    options: Parameters,
     module: Option<naga::Module>,
     module_info: Option<naga::valid::ModuleInfo>,
 }
+impl From<Input> for InputWithInfo {
+    fn from(value: Input) -> Self {
+        let mut options = value.read_parameters(DIR_IN);
+        options.targets = Some(options.targets.unwrap_or(Targets::all()));
+        Self {
+            options,
+            inner: value,
+            data: Vec::new(),
+            string: None,
+            module: None,
+            module_info: None,
+        }
+    }
+}
+impl InputWithInfo {
+    fn filename(&self) -> &str {
+        self.inner.file_name.file_name().unwrap().to_str().unwrap()
+    }
+}
 
 struct Inputs {
-    inner: Vec<Input>,
+    inner: Vec<InputWithInfo>,
 }
 
 impl Inputs {
     #[track_caller]
     fn from_dir(folder: &str, extension: &str) -> Self {
-        let mut inputs = Vec::new();
-        let read_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join(folder)
-            .read_dir()
-            .unwrap();
-
-        for file_entry in read_dir {
-            match file_entry {
-                Ok(entry) => match entry.path().extension() {
-                    Some(ostr) if ostr == extension => {
-                        let path = entry.path();
-
-                        inputs.push(Input {
-                            filename: path.to_string_lossy().into_owned(),
-                            size: entry.metadata().unwrap().len(),
-                            string: None,
-                            data: vec![],
-                            module: None,
-                            module_info: None,
-                        });
-                    }
-                    _ => continue,
-                },
-                Err(e) => {
-                    eprintln!("Skipping file: {e:?}");
-                    continue;
-                }
-            }
-        }
+        let inputs: Vec<InputWithInfo> = Input::files_in_dir(folder, &[extension], DIR_IN)
+            .map(|a| a.into())
+            .collect();
 
         Self { inner: inputs }
     }
-
     fn bytes(&self) -> u64 {
-        self.inner.iter().map(|input| input.size).sum()
+        self.inner
+            .iter()
+            .map(|input| input.inner.bytes(DIR_IN))
+            .sum()
     }
 
     fn load(&mut self) {
@@ -60,7 +59,7 @@ impl Inputs {
                 continue;
             }
 
-            input.data = fs::read(&input.filename).unwrap_or_default();
+            input.data = fs::read(input.inner.input_path(DIR_IN)).unwrap_or_default();
         }
     }
 
@@ -84,6 +83,8 @@ impl Inputs {
             if input.module.is_some() {
                 continue;
             }
+
+            parser.set_options((&input.options.wgsl_in).into());
 
             input.module = Some(parser.parse(input.string.as_ref().unwrap()).unwrap());
         }
@@ -122,22 +123,22 @@ fn parse_glsl(stage: naga::ShaderStage, inputs: &Inputs) {
     };
     for input in &inputs.inner {
         parser
-            .parse(&options, input.string.as_deref().unwrap())
+            .parse(&options, &input.inner.read_source(DIR_IN, false))
             .unwrap();
     }
 }
 
 fn get_wgsl_inputs() -> Inputs {
-    let mut inputs = Inputs::from_dir("../naga/tests/in/wgsl", "wgsl");
+    let mut inputs: Vec<InputWithInfo> = Input::files_in_dir("wgsl", &["wgsl"], DIR_IN)
+        .map(|a| a.into())
+        .collect();
 
     // remove "large-source" tests, they skew the results
-    inputs
-        .inner
-        .retain(|input| !input.filename.contains("large-source"));
+    inputs.retain(|input| !input.filename().contains("large-source"));
 
     assert!(!inputs.is_empty());
 
-    inputs
+    Inputs { inner: inputs }
 }
 
 fn frontends(c: &mut Criterion) {
@@ -178,19 +179,20 @@ fn frontends(c: &mut Criterion) {
         let mut frontend = naga::front::wgsl::Frontend::new();
         b.iter(|| {
             for input in &inputs_wgsl.inner {
+                frontend.set_options((&input.options.wgsl_in).into());
                 frontend.parse(input.string.as_ref().unwrap()).unwrap();
             }
         });
     });
 
-    let inputs_spirv = Inputs::from_dir("../naga/tests/in/spv", "spvasm");
+    let inputs_spirv = Inputs::from_dir("spv", "spvasm");
     assert!(!inputs_spirv.is_empty());
 
     // Assemble all the SPIR-V assembly.
     let mut assembled_spirv = Vec::<Vec<u32>>::new();
     'spirv: for input in &inputs_spirv.inner {
         let output = match Command::new("spirv-as")
-            .arg(&input.filename)
+            .arg(input.inner.input_path(DIR_IN))
             .arg("-o")
             .arg("-")
             .output()
@@ -220,19 +222,32 @@ fn frontends(c: &mut Criterion) {
 
     let total_bytes = assembled_spirv.iter().map(|spv| spv.len() as u64).sum();
 
+    assert!(assembled_spirv.len() == inputs_spirv.inner.len() || assembled_spirv.is_empty());
+
     group.throughput(Throughput::Bytes(total_bytes));
     group.bench_function("shader: spv-in", |b| {
         b.iter(|| {
-            let options = naga::front::spv::Options::default();
-            for input in &assembled_spirv {
-                let parser = naga::front::spv::Frontend::new(input.iter().cloned(), &options);
+            for (i, input) in assembled_spirv.iter().enumerate() {
+                let params = &inputs_spirv.inner[i].options;
+                let SpirvInParameters {
+                    adjust_coordinate_space,
+                } = params.spv_in;
+
+                let parser = naga::front::spv::Frontend::new(
+                    input.iter().cloned(),
+                    &naga::front::spv::Options {
+                        adjust_coordinate_space,
+                        strict_capabilities: true,
+                        ..Default::default()
+                    },
+                );
                 parser.parse().unwrap();
             }
         });
     });
 
-    let mut inputs_vertex = Inputs::from_dir("../naga/tests/in/glsl", "vert");
-    let mut inputs_fragment = Inputs::from_dir("../naga/tests/in/glsl", "frag");
+    let mut inputs_vertex = Inputs::from_dir("glsl", "vert");
+    let mut inputs_fragment = Inputs::from_dir("glsl", "frag");
     assert!(!inputs_vertex.is_empty());
     assert!(!inputs_fragment.is_empty());
     // let mut inputs_compute = Inputs::from_dir("../naga/tests/in/glsl", "comp");
@@ -312,14 +327,16 @@ fn backends(c: &mut Criterion) {
     group.bench_function("shader: wgsl-out", |b| {
         b.iter(|| {
             let mut string = String::new();
-            let flags = naga::back::wgsl::WriterFlags::empty();
             for input in &inputs.inner {
-                let mut writer = naga::back::wgsl::Writer::new(&mut string, flags);
-                let _ = writer.write(
-                    input.module.as_ref().unwrap(),
-                    input.module_info.as_ref().unwrap(),
-                );
-                string.clear();
+                if input.options.targets.unwrap().contains(Targets::WGSL) {
+                    let mut writer =
+                        naga::back::wgsl::Writer::new(&mut string, (&input.options.wgsl).into());
+                    let _ = writer.write(
+                        input.module.as_ref().unwrap(),
+                        input.module_info.as_ref().unwrap(),
+                    );
+                    string.clear();
+                }
             }
         });
     });
@@ -327,21 +344,28 @@ fn backends(c: &mut Criterion) {
     group.bench_function("shader: spv-out", |b| {
         b.iter(|| {
             let mut data = Vec::new();
-            let options = naga::back::spv::Options::default();
+            let mut writer = naga::back::spv::Writer::new(&Default::default()).unwrap();
             for input in &inputs.inner {
-                if input.filename.contains("pointer-function-arg") {
-                    // These fail due to https://github.com/gfx-rs/wgpu/issues/7315
-                    continue;
+                if input.options.targets.unwrap().contains(Targets::SPIRV) {
+                    if input.filename().contains("pointer-function-arg") {
+                        // These fail due to https://github.com/gfx-rs/wgpu/issues/7315
+                        continue;
+                    }
+                    let opt = input
+                        .options
+                        .spv
+                        .to_options(input.options.bounds_check_policies, None);
+                    if writer.set_options(&opt).is_ok() {
+                        let _ = writer.write(
+                            input.module.as_ref().unwrap(),
+                            input.module_info.as_ref().unwrap(),
+                            None,
+                            &None,
+                            &mut data,
+                        );
+                        data.clear();
+                    }
                 }
-                let mut writer = naga::back::spv::Writer::new(&options).unwrap();
-                let _ = writer.write(
-                    input.module.as_ref().unwrap(),
-                    input.module_info.as_ref().unwrap(),
-                    None,
-                    &None,
-                    &mut data,
-                );
-                data.clear();
             }
         });
     });
@@ -350,25 +374,27 @@ fn backends(c: &mut Criterion) {
             let mut data = Vec::new();
             let options = naga::back::spv::Options::default();
             for input in &inputs.inner {
-                if input.filename.contains("pointer-function-arg") {
-                    // These fail due to https://github.com/gfx-rs/wgpu/issues/7315
-                    continue;
-                }
-                let mut writer = naga::back::spv::Writer::new(&options).unwrap();
-                let module = input.module.as_ref().unwrap();
-                for ep in module.entry_points.iter() {
-                    let pipeline_options = naga::back::spv::PipelineOptions {
-                        shader_stage: ep.stage,
-                        entry_point: ep.name.clone(),
-                    };
-                    let _ = writer.write(
-                        input.module.as_ref().unwrap(),
-                        input.module_info.as_ref().unwrap(),
-                        Some(&pipeline_options),
-                        &None,
-                        &mut data,
-                    );
-                    data.clear();
+                if input.options.targets.unwrap().contains(Targets::SPIRV) {
+                    if input.filename().contains("pointer-function-arg") {
+                        // These fail due to https://github.com/gfx-rs/wgpu/issues/7315
+                        continue;
+                    }
+                    let mut writer = naga::back::spv::Writer::new(&options).unwrap();
+                    let module = input.module.as_ref().unwrap();
+                    for ep in module.entry_points.iter() {
+                        let pipeline_options = naga::back::spv::PipelineOptions {
+                            shader_stage: ep.stage,
+                            entry_point: ep.name.clone(),
+                        };
+                        let _ = writer.write(
+                            input.module.as_ref().unwrap(),
+                            input.module_info.as_ref().unwrap(),
+                            Some(&pipeline_options),
+                            &None,
+                            &mut data,
+                        );
+                        data.clear();
+                    }
                 }
             }
         });
@@ -379,15 +405,17 @@ fn backends(c: &mut Criterion) {
             let mut string = String::new();
             let options = naga::back::msl::Options::default();
             for input in &inputs.inner {
-                let pipeline_options = naga::back::msl::PipelineOptions::default();
-                let mut writer = naga::back::msl::Writer::new(&mut string);
-                let _ = writer.write(
-                    input.module.as_ref().unwrap(),
-                    input.module_info.as_ref().unwrap(),
-                    &options,
-                    &pipeline_options,
-                );
-                string.clear();
+                if input.options.targets.unwrap().contains(Targets::METAL) {
+                    let pipeline_options = naga::back::msl::PipelineOptions::default();
+                    let mut writer = naga::back::msl::Writer::new(&mut string);
+                    let _ = writer.write(
+                        input.module.as_ref().unwrap(),
+                        input.module_info.as_ref().unwrap(),
+                        &options,
+                        &pipeline_options,
+                    );
+                    string.clear();
+                }
             }
         });
     });
@@ -397,15 +425,17 @@ fn backends(c: &mut Criterion) {
             let options = naga::back::hlsl::Options::default();
             let mut string = String::new();
             for input in &inputs.inner {
-                let pipeline_options = Default::default();
-                let mut writer =
-                    naga::back::hlsl::Writer::new(&mut string, &options, &pipeline_options);
-                let _ = writer.write(
-                    input.module.as_ref().unwrap(),
-                    input.module_info.as_ref().unwrap(),
-                    None,
-                ); // may fail on unimplemented things
-                string.clear();
+                if input.options.targets.unwrap().contains(Targets::HLSL) {
+                    let pipeline_options = Default::default();
+                    let mut writer =
+                        naga::back::hlsl::Writer::new(&mut string, &options, &pipeline_options);
+                    let _ = writer.write(
+                        input.module.as_ref().unwrap(),
+                        input.module_info.as_ref().unwrap(),
+                        None,
+                    ); // may fail on unimplemented things
+                    string.clear();
+                }
             }
         });
     });
@@ -420,6 +450,9 @@ fn backends(c: &mut Criterion) {
                 zero_initialize_workgroup_memory: true,
             };
             for input in &inputs.inner {
+                if !input.options.targets.unwrap().contains(Targets::GLSL) {
+                    continue;
+                }
                 let module = input.module.as_ref().unwrap();
                 let info = input.module_info.as_ref().unwrap();
                 for ep in module.entry_points.iter() {

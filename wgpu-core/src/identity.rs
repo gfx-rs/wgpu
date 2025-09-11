@@ -32,9 +32,20 @@ enum IdSource {
 /// - `IdentityValues` reuses the index values of freed ids before returning
 ///   ids with new index values. Freed vector entries get reused.
 ///
+/// - The non-reuse property is achieved by storing an `epoch` alongside the
+///   index in an `Id`. Index values are reused, but only with a different
+///   epoch.
+///
+/// `IdentityValues` can also be used to track the count of IDs allocated by
+/// some external allocator. Combining internal and external allocation is not
+/// allowed; calling both `alloc` and `mark_as_used` on the same
+/// `IdentityValues` will result in a panic. The external mode is used when
+/// [playing back a trace of wgpu operations][player].
+///
 /// [`Id`]: crate::id::Id
 /// [`alloc`]: IdentityValues::alloc
 /// [`release`]: IdentityValues::release
+/// [player]: https://github.com/gfx-rs/wgpu/tree/trunk/player/
 #[derive(Debug)]
 pub(super) struct IdentityValues {
     free: Vec<(Index, Epoch)>,
@@ -47,10 +58,11 @@ pub(super) struct IdentityValues {
 }
 
 impl IdentityValues {
-    /// Allocate a fresh, never-before-seen id with the given `backend`.
+    /// Allocate a fresh, never-before-seen ID.
     ///
-    /// The backend is incorporated into the id, so that ids allocated with
-    /// different `backend` values are always distinct.
+    /// # Panics
+    ///
+    /// If `mark_as_used` has previously been called on this `IdentityValues`.
     pub fn alloc<T: Marker>(&mut self) -> Id<T> {
         assert!(
             self.id_source != IdSource::External,
@@ -70,6 +82,11 @@ impl IdentityValues {
         }
     }
 
+    /// Increment the count of used IDs.
+    ///
+    /// # Panics
+    ///
+    /// If `alloc` has previously been called on this `IdentityValues`.
     pub fn mark_as_used<T: Marker>(&mut self, id: Id<T>) -> Id<T> {
         assert!(
             self.id_source != IdSource::Allocated,
@@ -81,7 +98,9 @@ impl IdentityValues {
         id
     }
 
-    /// Free `id`. It will never be returned from `alloc` again.
+    /// Free `id` and/or decrement the count of used IDs.
+    ///
+    /// Freed IDs will never be returned from `alloc` again.
     pub fn release<T: Marker>(&mut self, id: Id<T>) {
         if let IdSource::Allocated = self.id_source {
             let (index, epoch) = id.unzip();

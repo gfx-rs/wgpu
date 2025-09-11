@@ -1848,12 +1848,11 @@ impl Global {
             let mut indirect_draw_validation_batcher =
                 crate::indirect_validation::DrawBatcher::new();
 
-            let (scope, pending_discard_init_fixups) = {
+            let (scope, pending_discard_init_fixups, mut pending_query_resets) = {
                 let encoder = &mut cmd_buf_data.encoder;
                 let tracker = &mut cmd_buf_data.trackers;
                 let buffer_memory_init_actions = &mut cmd_buf_data.buffer_memory_init_actions;
                 let texture_memory_actions = &mut cmd_buf_data.texture_memory_actions;
-                let pending_query_resets = &mut cmd_buf_data.pending_query_resets;
                 let indirect_draw_validation_resources =
                     &mut cmd_buf_data.indirect_draw_validation_resources;
 
@@ -1865,6 +1864,7 @@ impl Global {
                     .open_pass(base.label.as_deref())
                     .map_pass_err(pass_scope)?;
 
+                let mut pending_query_resets = QueryResetMap::new();
                 let mut pending_discard_init_fixups = SurfacesInDiscardState::new();
 
                 let info = RenderPassInfo::start(
@@ -1879,7 +1879,7 @@ impl Global {
                     encoder,
                     tracker,
                     texture_memory_actions,
-                    pending_query_resets,
+                    &mut pending_query_resets,
                     &mut pending_discard_init_fixups,
                     snatch_guard,
                 )
@@ -2139,7 +2139,7 @@ impl Global {
                             pass::write_timestamp::<RenderPassErrorInner>(
                                 &mut state.general,
                                 cmd_enc.as_ref(),
-                                Some(&mut cmd_buf_data.pending_query_resets),
+                                Some(&mut pending_query_resets),
                                 query_set,
                                 query_index,
                             )
@@ -2160,7 +2160,7 @@ impl Global {
                                 state.general.raw_encoder,
                                 &mut state.general.tracker.query_sets,
                                 query_index,
-                                Some(&mut cmd_buf_data.pending_query_resets),
+                                Some(&mut pending_query_resets),
                                 &mut state.active_occlusion_query,
                             )
                             .map_pass_err(scope)?;
@@ -2191,7 +2191,7 @@ impl Global {
                                 &mut state.general.tracker.query_sets,
                                 cmd_enc.as_ref(),
                                 query_index,
-                                Some(&mut cmd_buf_data.pending_query_resets),
+                                Some(&mut pending_query_resets),
                                 &mut state.active_pipeline_statistics_query,
                             )
                             .map_pass_err(scope)?;
@@ -2243,7 +2243,7 @@ impl Global {
                 let pending_discard_init_fixups = state.general.pending_discard_init_fixups;
 
                 encoder.close().map_pass_err(pass_scope)?;
-                (trackers, pending_discard_init_fixups)
+                (trackers, pending_discard_init_fixups, pending_query_resets)
             };
 
             let encoder = &mut cmd_buf_data.encoder;
@@ -2265,7 +2265,7 @@ impl Global {
                     snatch_guard,
                 );
 
-                cmd_buf_data.pending_query_resets.reset_queries(transit);
+                pending_query_resets.reset_queries(transit);
 
                 CommandEncoder::insert_barriers_from_scope(transit, tracker, &scope, snatch_guard);
 
