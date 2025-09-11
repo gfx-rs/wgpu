@@ -42,6 +42,28 @@ Bottom level categories:
 
 ### Major Changes
 
+#### Deferred command buffer actions: `map_buffer_on_submit` and `on_submitted_work_done`
+
+You may schedule buffer mapping and a submission-complete callback to run automatically after you submit, directly from encoders, command buffers, and passes. 
+
+```rust
+// Record some GPU work so the submission isn't empty and touches `buffer`.
+encoder.clear_buffer(&buffer, 0, None);
+
+// Defer mapping until this encoder is submitted.
+encoder.map_buffer_on_submit(&buffer, wgpu::MapMode::Read, 0..size, |result| { .. });
+
+// Fires after the command buffer's work is finished.
+encoder.on_submitted_work_done(|| { .. });
+
+// Automatically calls `map_async` and `on_submitted_work_done` after this submission finishes.
+queue.submit([encoder.finish()]);
+```
+
+Available on `CommandEncoder`, `CommandBuffer`, `RenderPass`, and `ComputePass`.
+
+By @cwfitzgerald in [#8125](https://github.com/gfx-rs/wgpu/pull/8125).
+
 #### Builtin Support for DXGI swapchains on top of of DirectComposition Visuals in DX12
 
 By enabling DirectComposition support, the dx12 backend can now support transparent windows.
@@ -75,6 +97,7 @@ We have merged the acceleration structure feature into the `RayQuery` feature. T
 By @Vecvec in [#7913](https://github.com/gfx-rs/wgpu/pull/7913).
 
 #### New `EXPERIMENTAL_PRECOMPILED_SHADERS` API
+
 We have added `Features::EXPERIMENTAL_PRECOMPILED_SHADERS`, replacing existing passthrough types with a unified `CreateShaderModuleDescriptorPassthrough` which allows passing multiple shader codes for different backends. By @SupaMaggie70Incorporated in [#7834](https://github.com/gfx-rs/wgpu/pull/7834)
 
 Difference for SPIR-V passthrough:
@@ -94,6 +117,21 @@ Difference for SPIR-V passthrough:
 ```
 This allows using precompiled shaders without manually checking which backend's code to pass, for example if you have shaders precompiled for both DXIL and SPIR-V.
 
+#### Buffer mapping apis no longer have lifetimes
+
+`Buffer::get_mapped_range()`, `Buffer::get_mapped_range_mut()`, and `Queue::write_buffer_with()` now return guard objects without any lifetimes. This
+makes it significantly easier to store these types in structs, which is useful for building utilities that build the contents of a buffer over time.
+
+```diff
+- let buffer_mapping_ref: wgpu::BufferView<'_>           = buffer.get_mapped_range(..);
+- let buffer_mapping_mut: wgpu::BufferViewMut<'_>        = buffer.get_mapped_range_mut(..);
+- let queue_write_with:   wgpu::QueueWriteBufferView<'_> = queue.write_buffer_with(..);
++ let buffer_mapping_ref: wgpu::BufferView               = buffer.get_mapped_range(..);
++ let buffer_mapping_mut: wgpu::BufferViewMut            = buffer.get_mapped_range_mut(..);
++ let queue_write_with:   wgpu::QueueWriteBufferView     = queue.write_buffer_with(..);
+```
+
+By @sagudev in [#8046](https://github.com/gfx-rs/wgpu/pull/8046) and @cwfitzgerald in [#8070](https://github.com/gfx-rs/wgpu/pull/8161).
 #### `EXPERIMENTAL_*` features now require unsafe code to enable
 
 We want to be able to expose potentially experimental features to our users before we have ensured that they are fully sound to use.
@@ -139,6 +177,7 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
   - Copies within the same texture must not overlap.
   - Copies of multisampled or depth/stencil formats must span an entire subresource (layer).
   - Copies of depth/stencil formats must be 4B aligned.
+  - For texture-buffer copies, `bytes_per_row` on the buffer side must be 256B-aligned, even if the transfer is a single row.
 - The offset for `set_vertex_buffer` and `set_index_buffer` must be 4B aligned. By @andyleiserson in [#7929](https://github.com/gfx-rs/wgpu/pull/7929).
 - The offset and size of bindings are validated as fitting within the underlying buffer in more cases. By @andyleiserson in [#7911](https://github.com/gfx-rs/wgpu/pull/7911).
 - The function you pass to `Device::on_uncaptured_error()` must now implement `Sync` in addition to `Send`, and be wrapped in `Arc` instead of `Box`.
@@ -146,8 +185,10 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
   By @kpreid in [#8011](https://github.com/gfx-rs/wgpu/pull/8011).
 - Make a compacted hal acceleration structure inherit a label from the base BLAS. By @Vecvec in [#8103](https://github.com/gfx-rs/wgpu/pull/8103).
 - The limits requested for a device must now satisfy `min_subgroup_size <= max_subgroup_size`. By @andyleiserson in [#8085](https://github.com/gfx-rs/wgpu/pull/8085).
+- Improve errors when buffer mapping is done incorrectly. Allow aliasing immutable [`BufferViews`]. By @cwfitzgerald in [#8150](https://github.com/gfx-rs/wgpu/pull/8150).
 - Require new `F16_IN_F32` downlevel flag for `quantizeToF16`, `pack2x16float`, and `unpack2x16float` in WGSL input. By @aleiserson in [#8130](https://github.com/gfx-rs/wgpu/pull/8130).
 - The error message for non-copyable depth/stencil formats no longer mentions the aspect when it is not relevant. By @reima in [#8156](https://github.com/gfx-rs/wgpu/pull/8156).
+- Track the initialization status of buffer memory correctly when `copy_texture_to_buffer` skips over padding space between rows or layers, or when the start/end of a texture-buffer transfer is not 4B aligned. By @andyleiserson in [#8099](https://github.com/gfx-rs/wgpu/pull/8099).
 
 #### naga
 

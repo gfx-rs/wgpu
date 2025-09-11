@@ -21,7 +21,7 @@ use crate::{
         TextureInitTrackerAction,
     },
     resource::{
-        MissingBufferUsageError, MissingTextureUsageError, ParentDevice, RawResourceAccess,
+        Buffer, MissingBufferUsageError, MissingTextureUsageError, ParentDevice, RawResourceAccess,
         Texture, TextureErrorDimension,
     },
     snatch::SnatchGuard,
@@ -33,7 +33,7 @@ pub type TexelCopyBufferInfo = wgt::TexelCopyBufferInfo<BufferId>;
 pub type TexelCopyTextureInfo = wgt::TexelCopyTextureInfo<TextureId>;
 pub type CopyExternalImageDestInfo = wgt::CopyExternalImageDestInfo<TextureId>;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CopySide {
     Source,
     Destination,
@@ -276,9 +276,11 @@ pub(crate) fn extract_texture_selector<T>(
 ///
 /// Copied with some modifications from WebGPU standard.
 ///
-/// If successful, returns a pair `(bytes, stride)`, where:
+/// If successful, returns a tuple `(bytes, stride, is_contiguous)`, where:
 /// - `bytes` is the number of buffer bytes required for this copy, and
 /// - `stride` number of bytes between array layers.
+/// - `is_contiguous` is true if the linear texture data does not have padding
+///   between rows or between images.
 ///
 /// [vltd]: https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-linear-texture-data
 pub(crate) fn validate_linear_texture_data(
@@ -288,8 +290,7 @@ pub(crate) fn validate_linear_texture_data(
     buffer_size: BufferAddress,
     buffer_side: CopySide,
     copy_size: &Extent3d,
-    need_copy_aligned_rows: bool,
-) -> Result<(BufferAddress, BufferAddress), TransferError> {
+) -> Result<(BufferAddress, BufferAddress, bool), TransferError> {
     let wgt::BufferTextureCopyInfo {
         copy_width,
         copy_height,
@@ -297,21 +298,21 @@ pub(crate) fn validate_linear_texture_data(
 
         offset,
 
-        block_size_bytes,
+        block_size_bytes: _,
         block_width_texels,
         block_height_texels,
 
         width_blocks: _,
         height_blocks,
 
-        row_bytes_dense: _,
+        row_bytes_dense,
         row_stride_bytes,
 
         image_stride_rows: _,
         image_stride_bytes,
 
         image_rows_dense: _,
-        image_bytes_dense: _,
+        image_bytes_dense,
 
         bytes_in_copy,
     } = layout.get_buffer_texture_copy_info(format, aspect, copy_size)?;
@@ -338,24 +339,6 @@ pub(crate) fn validate_linear_texture_data(
         return Err(TransferError::UnspecifiedRowsPerImage);
     };
 
-    if need_copy_aligned_rows {
-        let bytes_per_row_alignment = wgt::COPY_BYTES_PER_ROW_ALIGNMENT as BufferAddress;
-
-        let mut offset_alignment = block_size_bytes;
-        if format.is_depth_stencil_format() {
-            offset_alignment = 4
-        }
-        if offset % offset_alignment != 0 {
-            return Err(TransferError::UnalignedBufferOffset(offset));
-        }
-
-        // The alignment of row_stride_bytes is only required if there are
-        // multiple rows
-        if requires_multiple_rows && row_stride_bytes % bytes_per_row_alignment != 0 {
-            return Err(TransferError::UnalignedBytesPerRow);
-        }
-    }
-
     // Avoid underflow in the subtraction by checking bytes_in_copy against buffer_size first.
     if bytes_in_copy > buffer_size || offset > buffer_size - bytes_in_copy {
         return Err(TransferError::BufferOverrun {
@@ -366,7 +349,10 @@ pub(crate) fn validate_linear_texture_data(
         });
     }
 
-    Ok((bytes_in_copy, image_stride_bytes))
+    let is_contiguous = (row_stride_bytes == row_bytes_dense || !requires_multiple_rows)
+        && (image_stride_bytes == image_bytes_dense || !requires_multiple_images);
+
+    Ok((bytes_in_copy, image_stride_bytes, is_contiguous))
 }
 
 /// Validate the source format of a texture copy.
@@ -425,7 +411,15 @@ pub(crate) fn validate_texture_copy_dst_format(
 ///  * The copy must be from/to a single aspect of the texture.
 ///  * If `aligned` is true, the buffer offset must be aligned appropriately.
 ///
-/// The following steps in the algorithm are implemented elsewhere:
+/// And implements the following check from WebGPU's [validating GPUTexelCopyBufferInfo][vtcbi]
+/// algorithm:
+///  * If `aligned` is true, `bytesPerRow` must be a multiple of 256.
+///
+/// Note that the `bytesPerRow` alignment check is enforced whenever
+/// `bytesPerRow` is specified, even if the transfer is not multiple rows and
+/// `bytesPerRow` could have been omitted.
+///
+/// The following steps in [validating texture buffer copy][vtbc] are implemented elsewhere:
 ///  * Invocation of other validation algorithms.
 ///  * The texture usage (COPY_DST / COPY_SRC) check.
 ///  * The check for non-copyable depth/stencil formats. The caller must perform
@@ -435,11 +429,12 @@ pub(crate) fn validate_texture_copy_dst_format(
 ///    non-copyable format.
 ///
 /// [vtbc]: https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-texture-buffer-copy
+/// [vtcbi]: https://www.w3.org/TR/webgpu/#abstract-opdef-validating-gputexelcopybufferinfo
 pub(crate) fn validate_texture_buffer_copy<T>(
     texture_copy_view: &wgt::TexelCopyTextureInfo<T>,
     aspect: hal::FormatAspects,
     desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
-    offset: BufferAddress,
+    layout: &wgt::TexelCopyBufferLayout,
     aligned: bool,
 ) -> Result<(), TransferError> {
     if desc.sample_count != 1 {
@@ -464,8 +459,14 @@ pub(crate) fn validate_texture_buffer_copy<T>(
             .expect("non-copyable formats should have been rejected previously")
     };
 
-    if aligned && offset % u64::from(offset_alignment) != 0 {
-        return Err(TransferError::UnalignedBufferOffset(offset));
+    if aligned && layout.offset % u64::from(offset_alignment) != 0 {
+        return Err(TransferError::UnalignedBufferOffset(layout.offset));
+    }
+
+    if let Some(bytes_per_row) = layout.bytes_per_row {
+        if aligned && bytes_per_row % wgt::COPY_BYTES_PER_ROW_ALIGNMENT != 0 {
+            return Err(TransferError::UnalignedBytesPerRow);
+        }
     }
 
     Ok(())
@@ -737,6 +738,90 @@ fn handle_dst_texture_init(
     Ok(())
 }
 
+/// Handle initialization tracking for a transfer's source or destination buffer.
+///
+/// Ensures that the transfer will not read from uninitialized memory, and updates
+/// the initialization state information to reflect the transfer.
+fn handle_buffer_init(
+    cmd_buf_data: &mut CommandBufferMutable,
+    info: &TexelCopyBufferInfo,
+    buffer: &Arc<Buffer>,
+    direction: CopySide,
+    required_buffer_bytes_in_copy: BufferAddress,
+    is_contiguous: bool,
+) {
+    const ALIGN_SIZE: BufferAddress = wgt::COPY_BUFFER_ALIGNMENT;
+    const ALIGN_MASK: BufferAddress = wgt::COPY_BUFFER_ALIGNMENT - 1;
+
+    let start = info.layout.offset;
+    let end = info.layout.offset + required_buffer_bytes_in_copy;
+    if !is_contiguous || direction == CopySide::Source {
+        // If the transfer will read the buffer, then the whole region needs to
+        // be initialized.
+        //
+        // If the transfer will not write a contiguous region of the buffer,
+        // then we need to make sure the padding areas are initialized. For now,
+        // initialize the whole region, although this could be improved to
+        // initialize only the necessary parts if doing so is likely to be
+        // faster than initializing the whole thing.
+        //
+        // Adjust the start/end outwards to 4B alignment.
+        let aligned_start = start & !ALIGN_MASK;
+        let aligned_end = (end + ALIGN_MASK) & !ALIGN_MASK;
+        cmd_buf_data.buffer_memory_init_actions.extend(
+            buffer.initialization_status.read().create_action(
+                buffer,
+                aligned_start..aligned_end,
+                MemoryInitKind::NeedsInitializedMemory,
+            ),
+        );
+    } else {
+        // If the transfer will write a contiguous region of the buffer, then we
+        // don't need to initialize that region.
+        //
+        // However, if the start and end are not 4B aligned, we need to make
+        // sure that we don't end up trying to initialize non-4B-aligned regions
+        // later.
+        //
+        // Adjust the start/end inwards to 4B alignment, we will handle the
+        // first/last pieces differently.
+        let aligned_start = (start + ALIGN_MASK) & !ALIGN_MASK;
+        let aligned_end = end & !ALIGN_MASK;
+        if aligned_start != start {
+            cmd_buf_data.buffer_memory_init_actions.extend(
+                buffer.initialization_status.read().create_action(
+                    buffer,
+                    aligned_start - ALIGN_SIZE..aligned_start,
+                    MemoryInitKind::NeedsInitializedMemory,
+                ),
+            );
+        }
+        if aligned_start != aligned_end {
+            cmd_buf_data.buffer_memory_init_actions.extend(
+                buffer.initialization_status.read().create_action(
+                    buffer,
+                    aligned_start..aligned_end,
+                    MemoryInitKind::ImplicitlyInitialized,
+                ),
+            );
+        }
+        if aligned_end != end {
+            // It is possible that `aligned_end + ALIGN_SIZE > dst_buffer.size`,
+            // because `dst_buffer.size` is the user-requested size, not the
+            // final size of the buffer. The final size of the buffer is not
+            // readily available, but was rounded up to COPY_BUFFER_ALIGNMENT,
+            // so no overrun is possible.
+            cmd_buf_data.buffer_memory_init_actions.extend(
+                buffer.initialization_status.read().create_action(
+                    buffer,
+                    aligned_end..aligned_end + ALIGN_SIZE,
+                    MemoryInitKind::NeedsInitializedMemory,
+                ),
+            );
+        }
+    }
+}
+
 impl Global {
     pub fn command_encoder_copy_buffer_to_buffer(
         &self,
@@ -1004,11 +1089,11 @@ impl Global {
                 destination,
                 dst_base.aspect,
                 &dst_texture.desc,
-                source.layout.offset,
+                &source.layout,
                 true, // alignment required for buffer offset
             )?;
 
-            let (required_buffer_bytes_in_copy, bytes_per_array_layer) =
+            let (required_buffer_bytes_in_copy, bytes_per_array_layer, is_contiguous) =
                 validate_linear_texture_data(
                     &source.layout,
                     dst_texture.desc.format,
@@ -1016,7 +1101,6 @@ impl Global {
                     src_buffer.size,
                     CopySide::Source,
                     copy_size,
-                    true,
                 )?;
 
             if dst_texture.desc.format.is_depth_stencil_format() {
@@ -1025,12 +1109,13 @@ impl Global {
                     .map_err(TransferError::from)?;
             }
 
-            cmd_buf_data.buffer_memory_init_actions.extend(
-                src_buffer.initialization_status.read().create_action(
-                    &src_buffer,
-                    source.layout.offset..(source.layout.offset + required_buffer_bytes_in_copy),
-                    MemoryInitKind::NeedsInitializedMemory,
-                ),
+            handle_buffer_init(
+                cmd_buf_data,
+                source,
+                &src_buffer,
+                CopySide::Source,
+                required_buffer_bytes_in_copy,
+                is_contiguous,
             );
 
             let regions = (0..array_layer_count)
@@ -1125,11 +1210,11 @@ impl Global {
                 source,
                 src_base.aspect,
                 &src_texture.desc,
-                destination.layout.offset,
+                &destination.layout,
                 true, // alignment required for buffer offset
             )?;
 
-            let (required_buffer_bytes_in_copy, bytes_per_array_layer) =
+            let (required_buffer_bytes_in_copy, bytes_per_array_layer, is_contiguous) =
                 validate_linear_texture_data(
                     &destination.layout,
                     src_texture.desc.format,
@@ -1137,7 +1222,6 @@ impl Global {
                     dst_buffer.size,
                     CopySide::Destination,
                     copy_size,
-                    true,
                 )?;
 
             if src_texture.desc.format.is_depth_stencil_format() {
@@ -1186,13 +1270,13 @@ impl Global {
             let dst_barrier =
                 dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
 
-            cmd_buf_data.buffer_memory_init_actions.extend(
-                dst_buffer.initialization_status.read().create_action(
-                    &dst_buffer,
-                    destination.layout.offset
-                        ..(destination.layout.offset + required_buffer_bytes_in_copy),
-                    MemoryInitKind::ImplicitlyInitialized,
-                ),
+            handle_buffer_init(
+                cmd_buf_data,
+                destination,
+                &dst_buffer,
+                CopySide::Destination,
+                required_buffer_bytes_in_copy,
+                is_contiguous,
             );
 
             let regions = (0..array_layer_count)
