@@ -2,7 +2,7 @@ use alloc::{sync::Arc, vec, vec::Vec};
 use core::{iter, mem};
 
 #[cfg(feature = "trace")]
-use crate::device::trace::Command as TraceCommand;
+use crate::command::Command as TraceCommand;
 use crate::{
     command::{CommandEncoder, EncoderStateError},
     device::{DeviceError, MissingFeatures},
@@ -367,7 +367,7 @@ impl Global {
         let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), QueryError> {
             #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.commands {
+            if let Some(ref mut list) = cmd_buf_data.trace_commands {
                 list.push(TraceCommand::WriteTimestamp {
                     query_set_id,
                     query_index,
@@ -408,7 +408,7 @@ impl Global {
         let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), QueryError> {
             #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.commands {
+            if let Some(ref mut list) = cmd_buf_data.trace_commands {
                 list.push(TraceCommand::ResolveQuerySet {
                     query_set_id,
                     start_query,

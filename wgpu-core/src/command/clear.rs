@@ -2,7 +2,7 @@ use alloc::{sync::Arc, vec::Vec};
 use core::ops::Range;
 
 #[cfg(feature = "trace")]
-use crate::device::trace::Command as TraceCommand;
+use crate::command::Command as TraceCommand;
 use crate::{
     api_log,
     command::EncoderStateError,
@@ -120,7 +120,7 @@ impl Global {
         let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), ClearError> {
             #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.commands {
+            if let Some(ref mut list) = cmd_buf_data.trace_commands {
                 list.push(TraceCommand::ClearBuffer { dst, offset, size });
             }
 
@@ -205,7 +205,7 @@ impl Global {
         let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), ClearError> {
             #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.commands {
+            if let Some(ref mut list) = cmd_buf_data.trace_commands {
                 list.push(TraceCommand::ClearTexture {
                     dst,
                     subresource_range: *subresource_range,

@@ -9,13 +9,13 @@ use wgt::{
 };
 
 #[cfg(feature = "trace")]
-use crate::device::trace::Command as TraceCommand;
+use crate::command::Command as TraceCommand;
 use crate::{
     api_log,
     command::{clear_texture, CommandEncoderError, EncoderStateError},
     device::{Device, MissingDownlevelFlags},
     global::Global,
-    id::{BufferId, CommandEncoderId, TextureId},
+    id::{BufferId, CommandEncoderId},
     init_tracker::{
         has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
         TextureInitTrackerAction,
@@ -29,9 +29,8 @@ use crate::{
 
 use super::{ClearError, CommandBufferMutable};
 
-pub type TexelCopyBufferInfo = wgt::TexelCopyBufferInfo<BufferId>;
-pub type TexelCopyTextureInfo = wgt::TexelCopyTextureInfo<TextureId>;
-pub type CopyExternalImageDestInfo = wgt::CopyExternalImageDestInfo<TextureId>;
+use super::TexelCopyBufferInfo;
+use super::TexelCopyTextureInfo;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CopySide {
@@ -850,7 +849,7 @@ impl Global {
             }
 
             #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.commands {
+            if let Some(ref mut list) = cmd_buf_data.trace_commands {
                 list.push(TraceCommand::CopyBufferToBuffer {
                     src: source,
                     src_offset: source_offset,
@@ -1013,7 +1012,7 @@ impl Global {
             device.check_is_valid()?;
 
             #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.commands {
+            if let Some(ref mut list) = cmd_buf_data.trace_commands {
                 list.push(TraceCommand::CopyBufferToTexture {
                     src: *source,
                     dst: *destination,
@@ -1166,7 +1165,7 @@ impl Global {
             device.check_is_valid()?;
 
             #[cfg(feature = "trace")]
-            if let Some(list) = cmd_buf_data.commands.as_mut() {
+            if let Some(list) = cmd_buf_data.trace_commands.as_mut() {
                 list.push(TraceCommand::CopyTextureToBuffer {
                     src: *source,
                     dst: *destination,
@@ -1333,7 +1332,7 @@ impl Global {
             let snatch_guard = device.snatchable_lock.read();
 
             #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.commands {
+            if let Some(ref mut list) = cmd_buf_data.trace_commands {
                 list.push(TraceCommand::CopyTextureToTexture {
                     src: *source,
                     dst: *destination,
