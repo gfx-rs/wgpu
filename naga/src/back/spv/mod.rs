@@ -752,6 +752,7 @@ pub struct Writer {
     /// The set of spirv extensions used.
     extensions_used: crate::FastIndexSet<&'static str>,
 
+    debug_strings: Vec<Instruction>,
     debugs: Vec<Instruction>,
     annotations: Vec<Instruction>,
     flags: WriterFlags,
@@ -789,6 +790,9 @@ pub struct Writer {
     /// F16 I/O polyfill manager for handling `f16` input/output variables
     /// when `StorageInputOutput16` capability is not available.
     io_f16_polyfills: f16_polyfill::F16IoPolyfill,
+
+    /// Non semantic debug printf extension `OpExtInstImport`
+    debug_printf: Option<Word>,
 }
 
 bitflags::bitflags! {

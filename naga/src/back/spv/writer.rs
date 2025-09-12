@@ -74,6 +74,7 @@ impl Writer {
             capabilities_available: options.capabilities.clone(),
             capabilities_used,
             extensions_used: crate::FastIndexSet::default(),
+            debug_strings: vec![],
             debugs: vec![],
             annotations: vec![],
             flags: options.flags,
@@ -98,6 +99,7 @@ impl Writer {
             io_f16_polyfills: super::f16_polyfill::F16IoPolyfill::new(
                 options.use_storage_input_output_16,
             ),
+            debug_printf: None,
         })
     }
 
@@ -164,6 +166,7 @@ impl Writer {
             extensions_used: take(&mut self.extensions_used).recycle(),
             physical_layout: self.physical_layout.clone().recycle(),
             logical_layout: take(&mut self.logical_layout).recycle(),
+            debug_strings: take(&mut self.debug_strings).recycle(),
             debugs: take(&mut self.debugs).recycle(),
             annotations: take(&mut self.annotations).recycle(),
             lookup_type: take(&mut self.lookup_type).recycle(),
@@ -177,6 +180,7 @@ impl Writer {
             temp_list: take(&mut self.temp_list).recycle(),
             ray_query_functions: take(&mut self.ray_query_functions).recycle(),
             io_f16_polyfills: take(&mut self.io_f16_polyfills).recycle(),
+            debug_printf: None,
         };
 
         *self = fresh;
@@ -2679,6 +2683,10 @@ impl Writer {
         Instruction::memory_model(addressing_model, memory_model)
             .to_words(&mut self.logical_layout.memory_model);
 
+        for debug_string in self.debug_strings.iter() {
+            debug_string.to_words(&mut self.logical_layout.debugs);
+        }
+
         if self.flags.contains(WriterFlags::DEBUG) {
             for debug in self.debugs.iter() {
                 debug.to_words(&mut self.logical_layout.debugs);
@@ -2737,6 +2745,39 @@ impl Writer {
 
     pub(super) fn needs_f16_polyfill(&self, ty_inner: &crate::TypeInner) -> bool {
         self.io_f16_polyfills.needs_polyfill(ty_inner)
+    }
+
+    #[allow(dead_code)]
+    pub(super) fn write_debug_printf(
+        &mut self,
+        block: &mut Block,
+        string: &str,
+        format_params: &[Word],
+    ) {
+        if self.debug_printf.is_none() {
+            self.use_extension("SPV_KHR_non_semantic_info");
+            let import_id = self.id_gen.next();
+            Instruction::ext_inst_import(import_id, "NonSemantic.DebugPrintf").to_words(&mut self.logical_layout.ext_inst_imports);
+            self.debug_printf = Some(import_id)
+        }
+
+        let import_id = self.debug_printf.unwrap();
+
+        let string_id = self.id_gen.next();
+        self.debug_strings.push(Instruction::string(string, string_id));
+
+        let mut operands = Vec::with_capacity(1 + format_params.len());
+        operands.push(string_id);
+        operands.extend(format_params.iter());
+
+        let print_id = self.id_gen.next();
+        block.body.push(Instruction::ext_inst(
+            import_id,
+            1,
+            self.void_type,
+            print_id,
+            &operands,
+        ));
     }
 }
 
