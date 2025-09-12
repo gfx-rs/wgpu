@@ -288,7 +288,7 @@ impl CommandEncoderStatus {
     /// Locks the encoder by putting it in the [`Self::Locked`] state.
     ///
     /// Render or compute passes call this on start. At the end of the pass,
-    /// they call [`Self::unlock_and_record`] to put the [`CommandBuffer`] back
+    /// they call [`Self::unlock_encoder`] to put the [`CommandBuffer`] back
     /// into the [`Self::Recording`] state.
     fn lock_encoder(&mut self) -> Result<(), EncoderStateError> {
         match mem::replace(self, Self::Transitioning) {

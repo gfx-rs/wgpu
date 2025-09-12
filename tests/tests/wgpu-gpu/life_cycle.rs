@@ -1,7 +1,5 @@
 use wgpu::util::DeviceExt;
-use wgpu_test::{
-    fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters,
-};
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([

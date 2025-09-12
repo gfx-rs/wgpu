@@ -170,6 +170,7 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 
 #### General
 
+- Command encoding now happens when `CommandEncoder::finish` is called, not when the individual operations are requested. This does not affect the API, but may affect performance characteristics. By @andyleiserson in [#8220](https://github.com/gfx-rs/wgpu/pull/8220).
 - Prevent resources for acceleration structures being created if acceleration structures are not enabled. By @Vecvec in [#8036](https://github.com/gfx-rs/wgpu/pull/8036).
 - Validate that each `push_debug_group` pairs with exactly one `pop_debug_group`. By @andyleiserson in [#8048](https://github.com/gfx-rs/wgpu/pull/8048).
 - `set_viewport` now requires that the supplied minimum depth value is less than the maximum depth value. By @andyleiserson in [#8040](https://github.com/gfx-rs/wgpu/pull/8040).
