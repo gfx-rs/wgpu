@@ -146,6 +146,9 @@ impl Parse for MacroArgs {
 }
 impl MacroArgs {
     fn target_enabled(&self, target: CompileTarget) -> bool {
+        // TODO: only enable if we are actually targetting that platform.
+        // This is especially important for DXIL, which requires dxc. No need
+        // to fail to compile on MacOS if dxc isn't present!
         match target {
             CompileTarget::Dxil => self.targets.contains(&CompileTarget::Dxil),
             CompileTarget::Hlsl => {
@@ -324,7 +327,31 @@ pub fn precompile(input: TokenStream) -> TokenStream {
 
     #[cfg(feature = "hlsl")]
     let dxil_tokens = if args.target_enabled(CompileTarget::Dxil) {
-        todo!()
+        let target_profile = match shader_stage {
+            naga::ShaderStage::Vertex => "vs_5_1",
+            naga::ShaderStage::Fragment => "ps_5_1",
+            naga::ShaderStage::Compute => "cs_5_1",
+            naga::ShaderStage::Task => "as_5_1",
+            naga::ShaderStage::Mesh => "ms_5_1",
+        };
+        let dxil = hassle_rs::compile_hlsl(
+            match &args.file_name {
+                Some(f) => f,
+                None => "precompile-inline.hlsl",
+            },
+            &hlsl_str,
+            &hlsl_entry_point,
+            target_profile,
+            &["-spirv"],
+            &[],
+        )
+        .expect("Hassle failed to compile HLSL to DXIL");
+        quote! {
+            #wgpu_path::__macro_helpers::Some(#wgpu_path::DxilPassthroughDescriptor {
+                code: #wgpu_path::__macro_helpers::Cow::Borrowed(&[#(#dxil),*]),
+                entry_point: #wgpu_path::__macro_helpers::ToString::to_string(#hlsl_entry_point),
+            })
+        }
     } else {
         none_tokens.clone()
     };

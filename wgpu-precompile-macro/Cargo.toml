@@ -22,10 +22,13 @@ msl = ["naga/msl-out"]
 wgsl = ["naga/wgsl-out"]
 spv = ["naga/spv-out"]
 glsl = ["naga/glsl-out"]
-hlsl = ["naga/hlsl-out"]
+hlsl = ["naga/hlsl-out", "dep:hassle-rs"]
 
 [dependencies]
 naga = { workspace = true, features = ["spv-in", "wgsl-in", "glsl-in"] }
+
+# TODO: verify that this dependency should be allowed
+hassle-rs = { version = "0.12", optional = true }
 
 quote.workspace = true
 syn = { workspace = true, features = ["full"] }
