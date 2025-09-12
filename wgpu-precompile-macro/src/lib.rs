@@ -4,6 +4,7 @@ use quote::quote;
 use std::path::PathBuf;
 use syn::{parse::Parse, parse_macro_input, Ident, Path};
 
+#[derive(PartialEq, Eq)]
 enum SourceType {
     Wgsl,
     Glsl,
@@ -64,9 +65,21 @@ impl ShaderSource {
     }
 }
 
+fn parse_shader_stage(str: &str) -> Option<naga::ShaderStage> {
+    match str {
+        "vertex" => Some(naga::ShaderStage::Vertex),
+        "fragment" => Some(naga::ShaderStage::Fragment),
+        "compute" => Some(naga::ShaderStage::Compute),
+        "task" => Some(naga::ShaderStage::Task),
+        "mesh" => Some(naga::ShaderStage::Mesh),
+        _ => None,
+    }
+}
+
 struct MacroArgs {
     wgpu_crate: Path,
     source_type: SourceType,
+    shader_stage: Option<naga::ShaderStage>,
     source: ShaderSource,
     targets: HashSet<CompileTarget>,
     entry_point: String,
@@ -76,6 +89,16 @@ impl Parse for MacroArgs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let wgpu_crate: Path = input.parse()?;
         let source_type = SourceType::parse(&input.parse::<Ident>()?.to_string());
+        let shader_stage = if source_type == SourceType::Glsl {
+            let ident = input.parse::<Ident>()?.to_string();
+            let stage = parse_shader_stage(&ident);
+            if stage.is_none() {
+                panic!("Invalid shader stage for GLSL: {ident}");
+            }
+            stage
+        } else {
+            None
+        };
         let is_file_path = input.parse::<syn::LitBool>()?.value;
         let source_literal = input.parse::<syn::LitStr>()?.value();
         let entry_point = input.parse::<syn::LitStr>()?.value();
@@ -111,6 +134,7 @@ impl Parse for MacroArgs {
         Ok(Self {
             wgpu_crate,
             source_type,
+            shader_stage,
             source,
             entry_point,
             targets,
@@ -127,7 +151,7 @@ impl MacroArgs {
 /// This is to be re-exported by wgpu in a certain way, so that it can refer to items in the `wgpu` crate
 ///
 /// Input format:
-/// precompile!(wgpu_crate_name source_type is_file_path source_string entry_point shader_stage targets...)
+/// precompile!(wgpu_crate_name source_type <shader_stage if glsl input> is_file_path source_string entry_point  targets...)
 #[proc_macro]
 pub fn precompile(input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(input as MacroArgs);
@@ -145,10 +169,24 @@ pub fn precompile(input: TokenStream) -> TokenStream {
         }
         SourceType::Wgsl => {
             let source = args.source.clone().expect_string();
-            naga::front::wgsl::parse_str(&source).expect("Naga failed to parse WGSL input")
+            naga::front::wgsl::Frontend::new_with_options(naga::front::wgsl::Options {
+                parse_doc_comments: false,
+            })
+            .parse(&source)
+            .expect("Naga failed to parse WGSL input")
         }
         SourceType::Glsl => {
-            panic!("GLSL parsing support is not yet available")
+            let src = args.source.clone().expect_string();
+            naga::front::glsl::Frontend::default()
+                .parse(
+                    &naga::front::glsl::Options {
+                        // This is guaranteed to be some
+                        stage: args.shader_stage.unwrap(),
+                        defines: Default::default(),
+                    },
+                    &src,
+                )
+                .expect("Naga failed to parse GLSL input")
         }
     };
 

@@ -230,21 +230,142 @@ macro_rules! hal_type_gles {
     };
 }
 
-/// Precompile WGSL shader for all supported backends. Will fail at compiletime
-/// in case of error. Note that file paths are relative to the `MANIFEST_DIR`, i.e. not the same
-/// folder as the invoking file as in `include_bytes` or the like.
+/// Include precompiled WGSL shader from file. Will fail at compiletime in case of error. Note that file
+/// paths are relative to the `MANIFEST_DIR`, i.e. not the same folder as the invoking file like in
+/// the `include_*` family.
 ///
-/// This can always take in wgsl, spirv, and glsl input, even if the corresponding features aren't
-/// enabled on the wgpu crate.
+/// This macro is always valid, even if the `wgsl` feature isn't enabled.
 ///
 /// ```ignore
-/// device.create_shader_module_passthrough(precompile_wgsl!("path/to/file", "entry_point_name"))
+/// device.create_shader_module_passthrough(include_precompiled_wgsl!("path/to/file", "entry_point_name"))
 /// ```
+/// or
+/// ```ignore
+/// device.create_shader_module_passthrough(include_precompiled_wgsl!("path/to/file", "entry_point_name", backends))
+/// ```
+/// If specified, backends is a list of shader languages to be used, without comma separators. For example,
+/// `wgsl glsl hlsl spirv msl`. If the `all` backend is specified, then all shader languages supported by the
+/// backends in wgpu features will be compiled for. All backends will be compiled for by naga; the input wgsl
+/// code won't be the same as the output wgsl.
+#[macro_export]
+#[cfg(feature = "precompile")]
+macro_rules! include_precompiled_wgsl {
+    ($path: literal, $entry: literal) => {
+        $crate::__macro_helpers::precompile!($crate wgsl true $path $entry all)
+    };
+    ($path: literal, $entry: literal,$($id: ident)+) => {
+        $crate::__macro_helpers::precompile!($crate wgsl true $path $entry $id)
+    };
+}
+
+/// Precompile WGSL shader string. Will fail at compiletime in case of error.
+///
+///
+/// This macro is always valid when the `precompile` feature is enabled, even if the `wgsl` feature isn't enabled.
+///
+/// ```ignore
+/// device.create_shader_module_passthrough(precompile_wgsl!("<raw shader>", "entry_point_name"))
+/// ```
+/// or
+/// ```ignore
+/// device.create_shader_module_passthrough(precompile_wgsl!("<raw shader>", "entry_point_name", backends))
+/// ```
+/// If specified, backends is a list of shader languages to be used, without comma separators. For example,
+/// `wgsl glsl hlsl spirv msl`. If the `all` backend is specified, then all shader languages supported by the
+/// backends in wgpu features will be compiled for. All backends will be compiled for by naga; the input wgsl
+/// code won't be the same as the output wgsl.
 #[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! precompile_wgsl {
+    ($shader: literal, $entry: literal) => {
+        $crate::__macro_helpers::precompile!($crate wgsl false $shader $entry all)
+    };
+    ($shader: literal, $entry: literal,$($id: ident)+) => {
+        $crate::__macro_helpers::precompile!($crate wgsl false $shader $entry $id)
+    };
+}
+
+/// Include precompiled SPIR-V shader from file. Will fail at compiletime in case of error. Note that file
+/// paths are relative to the `MANIFEST_DIR`, i.e. not the same folder as the invoking file like in
+/// the `include_*` family.
+///
+/// This macro is always valid when the `precompile` feature is enabled, even if the `spirv` feature isn't
+/// enabled.
+///
+/// ```ignore
+/// device.create_shader_module_passthrough(include_precompiled_spirv!("path/to/file", "entry_point_name"))
+/// ```
+/// or
+/// ```ignore
+/// device.create_shader_module_passthrough(include_precompiled_spirv!("path/to/file", "entry_point_name", backends))
+/// ```
+/// If specified, backends is a list of shader languages to be used, without comma separators. For example,
+/// `wgsl glsl hlsl spirv msl`. If the `all` backend is specified, then all shader languages supported by the
+/// backends in wgpu features will be compiled for. All backends will be compiled for by naga; the input spirv
+/// code won't be the same as the output spirv.
+#[macro_export]
+#[cfg(feature = "precompile")]
+macro_rules! include_precompiled_spirv {
     ($path: literal, $entry: literal) => {
-        $crate::__macro_helpers::precompile!($crate wgsl true $path $entry all)
+        $crate::__macro_helpers::precompile!($crate spirv true $path $entry all)
+    };
+    ($path: literal, $entry: literal,$($id: ident)+) => {
+        $crate::__macro_helpers::precompile!($crate spirv true $path $entry $id)
+    };
+}
+
+/// Include precompiled GLSL shader from file. Will fail at compiletime in case of error. Note that file
+/// paths are relative to the `MANIFEST_DIR`, i.e. not the same folder as the invoking file like in
+/// the `include_*` family.
+///
+/// This macro is always valid, even if the `glsl` feature isn't enabled.
+///
+/// ```ignore
+/// device.create_shader_module_passthrough(include_precompiled_wgsl!("path/to/file", "entry_point_name"))
+/// ```
+/// or
+/// ```ignore
+/// device.create_shader_module_passthrough(include_precompiled_wgsl!("path/to/file", "entry_point_name", backends))
+/// ```
+/// If specified, backends is a list of shader languages to be used, without comma separators. For example,
+/// `wgsl glsl hlsl spirv msl`. If the `all` backend is specified, then all shader languages supported by the
+/// backends in wgpu features will be compiled for. All backends will be compiled for by naga; the input glsl
+/// code won't be the same as the output glsl.
+#[macro_export]
+#[cfg(feature = "precompile")]
+macro_rules! include_precompiled_glsl {
+    ($path: literal, $entry: literal) => {
+        $crate::__macro_helpers::precompile!($crate glsl true $path $entry all)
+    };
+    ($path: literal, $entry: literal,$($id: ident)+) => {
+        $crate::__macro_helpers::precompile!($crate glsl true $path $entry $id)
+    };
+}
+
+/// Precompile GLSL shader string. Will fail at compiletime in case of error.
+///
+///
+/// This macro is always valid when the `precompile` feature is enabled, even if the `glsl` feature isn't enabled.
+///
+/// ```ignore
+/// device.create_shader_module_passthrough(precompile_wgsl!("<raw shader>", "entry_point_name"))
+/// ```
+/// or
+/// ```ignore
+/// device.create_shader_module_passthrough(precompile_wgsl!("<raw shader>", "entry_point_name", backends))
+/// ```
+/// If specified, backends is a list of shader languages to be used, without comma separators. For example,
+/// `wgsl glsl hlsl spirv msl`. If the `all` backend is specified, then all shader languages supported by the
+/// backends in wgpu features will be compiled for. All backends will be compiled for by naga; the input glsl
+/// code won't be the same as the output glsl.
+#[macro_export]
+#[cfg(feature = "precompile")]
+macro_rules! precompile_glsl {
+    ($shader: literal, $entry: literal) => {
+        $crate::__macro_helpers::precompile!($crate glsl false $shader $entry all)
+    };
+    ($shader: literal, $entry: literal,$($id: ident)+) => {
+        $crate::__macro_helpers::precompile!($crate glsl false $shader $entry $id)
     };
 }
 

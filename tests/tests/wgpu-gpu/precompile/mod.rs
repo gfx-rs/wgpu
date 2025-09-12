@@ -12,19 +12,19 @@ static PRECOMPILE_ALL_STAGES_TEST: GpuTestConfiguration = GpuTestConfiguration::
     .run_async(async |ctx| unsafe {
         let _ = ctx
             .device
-            .create_shader_module_passthrough(wgpu::precompile_wgsl!(
+            .create_shader_module_passthrough(wgpu::include_precompiled_wgsl!(
                 "tests/wgpu-gpu/precompile/shader.wgsl",
                 "vs_main"
             ));
         let _ = ctx
             .device
-            .create_shader_module_passthrough(wgpu::precompile_wgsl!(
+            .create_shader_module_passthrough(wgpu::include_precompiled_wgsl!(
                 "tests/wgpu-gpu/precompile/shader.wgsl",
                 "fs_main"
             ));
         let _ = ctx
             .device
-            .create_shader_module_passthrough(wgpu::precompile_wgsl!(
+            .create_shader_module_passthrough(wgpu::include_precompiled_wgsl!(
                 "tests/wgpu-gpu/precompile/shader.wgsl",
                 "cs_main"
             ));
