@@ -130,7 +130,7 @@ pub struct PhysicalDeviceFeatures {
 
 impl PhysicalDeviceFeatures {
     pub fn get_core(&self) -> vk::PhysicalDeviceFeatures {
-      self.core
+        self.core
     }
 
     /// Add the members of `self` into `info.enabled_features` and its `p_next` chain.
