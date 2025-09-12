@@ -117,27 +117,7 @@ impl Parse for MacroArgs {
 }
 impl MacroArgs {
     fn target_enabled(&self, target: CompileTarget) -> bool {
-        if self.targets.contains(&target) {
-            return true;
-        } else if self.targets.contains(&CompileTarget::AllSupported) {
-            #[cfg(feature = "glsl")]
-            if target == CompileTarget::Glsl {
-                return true;
-            }
-            #[cfg(feature = "hlsl")]
-            if target == CompileTarget::Hlsl {
-                return true;
-            }
-            #[cfg(feature = "spv")]
-            if target == CompileTarget::Spirv {
-                return true;
-            }
-            #[cfg(feature = "msl")]
-            if target == CompileTarget::Msl {
-                return true;
-            }
-        }
-        false
+        self.targets.contains(&target) || self.targets.contains(&CompileTarget::AllSupported)
     }
 }
 
@@ -188,6 +168,11 @@ pub fn precompile(input: TokenStream) -> TokenStream {
 
     let wgpu_path = &args.wgpu_crate;
 
+    let none_tokens = quote! {
+        #wgpu_path::__macro_helpers::None
+    };
+
+    #[cfg(feature = "spv")]
     let spirv_tokens = if args.target_enabled(CompileTarget::Spirv) {
         let spirv_data = naga::back::spv::write_vec(
             &module,
@@ -203,11 +188,12 @@ pub fn precompile(input: TokenStream) -> TokenStream {
             #wgpu_path::__macro_helpers::Some(#wgpu_path::__macro_helpers::Cow::Borrowed(&[#(#spirv_data),*]))
         }
     } else {
-        quote! {
-            #wgpu_path::__macro_helpers::None
-        }
+        none_tokens.clone()
     };
+    #[cfg(not(feature = "spv"))]
+    let spirv_tokens = none_tokens.clone();
 
+    #[cfg(feature = "msl")]
     let msl_tokens = if args.target_enabled(CompileTarget::Msl) {
         let msl_str = naga::back::msl::write_string(
             &module,
@@ -224,12 +210,13 @@ pub fn precompile(input: TokenStream) -> TokenStream {
             #wgpu_path::__macro_helpers::Some(#wgpu_path::__macro_helpers::Cow::Borrowed(#msl_str))
         }
     } else {
-        quote! {
-            #wgpu_path::__macro_helpers::None
-        }
+        none_tokens.clone()
     };
+    #[cfg(not(feature = "msl"))]
+    let msl_tokens = none_tokens.clone();
 
     // TODO: compile DXIL if DXC can be detected
+    #[cfg(feature = "hlsl")]
     let hlsl_tokens = if args.target_enabled(CompileTarget::Hlsl) {
         let mut hlsl_str = String::new();
         naga::back::hlsl::Writer::new(
@@ -249,7 +236,10 @@ pub fn precompile(input: TokenStream) -> TokenStream {
             #wgpu_path::__macro_helpers::None
         }
     };
+    #[cfg(not(feature = "hlsl"))]
+    let hlsl_tokens = none_tokens.clone();
 
+    #[cfg(feature = "wgsl")]
     let wgsl_tokens = if args.target_enabled(CompileTarget::Wgsl) {
         let mut wgsl_str = String::new();
         naga::back::wgsl::Writer::new(&mut wgsl_str, naga::back::wgsl::WriterFlags::empty())
@@ -263,7 +253,10 @@ pub fn precompile(input: TokenStream) -> TokenStream {
             #wgpu_path::__macro_helpers::None
         }
     };
+    #[cfg(not(feature = "wgsl"))]
+    let wgsl_tokens = none_tokens.clone();
 
+    #[cfg(feature = "glsl")]
     let glsl_tokens = if args.target_enabled(CompileTarget::Glsl) {
         let mut glsl_str = String::new();
         naga::back::glsl::Writer::new(
@@ -289,6 +282,8 @@ pub fn precompile(input: TokenStream) -> TokenStream {
             #wgpu_path::__macro_helpers::None
         }
     };
+    #[cfg(not(feature = "glsl"))]
+    let glsl_tokens = none_tokens.clone();
 
     let label_tokens = match args.file_name {
         Some(f) => quote! {#wgpu_path::__macro_helpers::Some(#f)},
