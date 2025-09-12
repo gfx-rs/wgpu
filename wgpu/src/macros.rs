@@ -230,9 +230,18 @@ macro_rules! hal_type_gles {
     };
 }
 
+#[cfg(feature = "precompile")]
+macro_rules! precompile_wgsl {
+    () => {
+        $crate::__macro_helpers::precompile($crate)
+    };
+}
+
 #[doc(hidden)]
 pub mod helpers {
     pub use alloc::borrow::Cow;
     pub use core::{include_bytes, include_str};
+    #[cfg(feature = "precompile")]
+    pub use wgpu_precompile_macro::precompile;
     pub use Some;
 }

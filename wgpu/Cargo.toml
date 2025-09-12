@@ -178,6 +178,8 @@ std = ["raw-window-handle/std", "wgpu-types/std", "wgpu-core?/std"]
 ## based on whether `std` is enabled or not.
 parking_lot = ["dep:parking_lot"]
 
+precompile = ["dep:wgpu-precompile-macro"]
+
 #########################
 # Standard Dependencies #
 #########################
@@ -185,6 +187,7 @@ parking_lot = ["dep:parking_lot"]
 [dependencies]
 naga = { workspace = true, optional = true, features = ["termcolor"] }
 wgpu-core = { workspace = true, optional = true }
+wgpu-precompile-macro = { workspace = true, optional = true }
 wgpu-types.workspace = true
 
 # Needed for both wgpu-core and webgpu
@@ -198,6 +201,7 @@ parking_lot = { workspace = true, optional = true }
 profiling.workspace = true
 raw-window-handle = { workspace = true, features = ["alloc"] }
 static_assertions.workspace = true
+
 
 ########################################
 # Target Specific Feature Dependencies #

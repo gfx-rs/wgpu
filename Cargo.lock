@@ -4935,6 +4935,7 @@ dependencies = [
  "web-sys",
  "wgpu-core",
  "wgpu-hal",
+ "wgpu-precompile-macro",
  "wgpu-types",
 ]
 
@@ -5148,6 +5149,16 @@ name = "wgpu-macros"
 version = "26.0.0"
 dependencies = [
  "heck 0.5.0",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "wgpu-precompile-macro"
+version = "26.0.0"
+dependencies = [
+ "hashbrown",
+ "naga",
  "quote",
  "syn",
 ]
