@@ -17,7 +17,7 @@ use crate::{
         self,
         dxgi::{factory::DxgiAdapter, result::HResult},
     },
-    dx12::{shader_compilation, SurfaceTarget},
+    dx12::{dcomp::DCompLib, shader_compilation, SurfaceTarget},
 };
 
 impl Drop for super::Adapter {
@@ -55,6 +55,7 @@ impl super::Adapter {
     pub(super) fn expose(
         adapter: DxgiAdapter,
         library: &Arc<D3D12Lib>,
+        dcomp_lib: &Arc<DCompLib>,
         instance_flags: wgt::InstanceFlags,
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
         compiler_container: Arc<shader_compilation::CompilerContainer>,
@@ -559,6 +560,7 @@ impl super::Adapter {
                 raw: adapter,
                 device,
                 library: Arc::clone(library),
+                dcomp_lib: Arc::clone(dcomp_lib),
                 private_caps,
                 presentation_timer,
                 workarounds,
@@ -726,6 +728,7 @@ impl crate::Adapter for super::Adapter {
             memory_hints,
             self.private_caps,
             &self.library,
+            &self.dcomp_lib,
             self.memory_budget_thresholds,
             self.compiler_container.clone(),
             self.options.clone(),

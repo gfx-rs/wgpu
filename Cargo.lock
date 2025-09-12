@@ -5126,6 +5126,7 @@ dependencies = [
  "naga",
  "ndk-sys 0.6.0+11769913",
  "objc",
+ "once_cell",
  "ordered-float 5.0.0",
  "parking_lot",
  "portable-atomic",
