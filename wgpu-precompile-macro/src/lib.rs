@@ -28,6 +28,7 @@ enum CompileTarget {
     Hlsl,
     Spirv,
     Glsl,
+    Dxil,
     AllSupported,
 }
 impl CompileTarget {
@@ -38,6 +39,7 @@ impl CompileTarget {
             "hlsl" => Self::Hlsl,
             "spirv" => Self::Spirv,
             "glsl" => Self::Glsl,
+            "dxil" => Self::Dxil,
             "all" => Self::AllSupported,
             other => panic!("Unrecognized compile target: {other}"),
         }
@@ -144,9 +146,18 @@ impl Parse for MacroArgs {
 }
 impl MacroArgs {
     fn target_enabled(&self, target: CompileTarget) -> bool {
-        self.targets.contains(&target)
-            || self.targets.contains(&CompileTarget::AllSupported)
-            || self.targets.is_empty()
+        match target {
+            CompileTarget::Dxil => self.targets.contains(&CompileTarget::Dxil),
+            CompileTarget::Hlsl => {
+                (self.targets.contains(&CompileTarget::Hlsl)
+                    || self.targets.contains(&CompileTarget::AllSupported))
+                    && !self.targets.contains(&CompileTarget::Dxil)
+            }
+            CompileTarget::AllSupported => unreachable!(),
+            other => {
+                self.targets.contains(&other) || self.targets.contains(&CompileTarget::AllSupported)
+            }
+        }
     }
 }
 

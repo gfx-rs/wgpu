@@ -49,12 +49,14 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         device.create_shader_module_passthrough(wgpu::include_precompiled_wgsl!(
             "src/hello_triangle/shader.wgsl",
             "vs_main",
+            all
         ))
     };
     let fs_shader = unsafe {
         device.create_shader_module_passthrough(wgpu::include_precompiled_wgsl!(
             "src/hello_triangle/shader.wgsl",
             "fs_main",
+            all
         ))
     };
 

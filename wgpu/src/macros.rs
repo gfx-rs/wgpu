@@ -250,7 +250,7 @@ macro_rules! hal_type_gles {
 #[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! include_precompiled_wgsl {
-    ($path: literal, $entry: literal, $($id: ident)*) => {
+    ($path: literal, $entry: literal, $($id: ident)+) => {
         $crate::__macro_helpers::precompile!($crate wgsl true $path $entry $($id)*)
     };
 }
@@ -274,7 +274,7 @@ macro_rules! include_precompiled_wgsl {
 #[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! precompile_wgsl {
-    ($shader: literal, $entry: literal, $($id: ident)*) => {
+    ($shader: literal, $entry: literal, $($id: ident)+) => {
         $crate::__macro_helpers::precompile!($crate wgsl false $shader $entry $($id)*)
     };
 }
@@ -300,7 +300,7 @@ macro_rules! precompile_wgsl {
 #[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! include_precompiled_spirv {
-    ($path: literal, $entry: literal, $($id: ident)*) => {
+    ($path: literal, $entry: literal, $($id: ident)+) => {
         $crate::__macro_helpers::precompile!($crate spirv true $path $entry $($id)*)
     };
 }
@@ -325,7 +325,7 @@ macro_rules! include_precompiled_spirv {
 #[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! include_precompiled_glsl {
-    ($path: literal, $stage: ident, $($id: ident)*) => {
+    ($path: literal, $stage: ident, $($id: ident)+) => {
         $crate::__macro_helpers::precompile!($crate glsl $stage true $path "main" $($id)*)
     };
 }
@@ -349,8 +349,8 @@ macro_rules! include_precompiled_glsl {
 #[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! precompile_glsl {
-    ($shader: literal, $stage: ident, $($id: ident)*) => {
-        $crate::__macro_helpers::precompile!($crate glsl $stage false $shader "main" $($id)*)
+    ($shader: literal, $stage: ident, $($id: ident)+) => {
+        $crate::__macro_helpers::precompile!($crate glsl $stage false $shader "main" $($id)+)
     };
 }
 
