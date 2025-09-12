@@ -8117,14 +8117,68 @@ pub enum DeviceLostReason {
     Destroyed = 1,
 }
 
+/// Descriptor for MSL shader passthrough.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MslPassthroughDescriptor<'a> {
+    /// The shader code.
+    pub code: Cow<'a, str>,
+    /// The entry point name.
+    pub entry_point: String,
+}
+
+/// Descriptor for HLSL shader passthrough.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct HlslPassthroughDescriptor<'a> {
+    /// The shader code.
+    pub code: Cow<'a, str>,
+    /// The entry point name.
+    pub entry_point: String,
+}
+
+/// Descriptor for WGSL shader passthrough.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct WgslPassthroughDescriptor<'a> {
+    /// The shader code.
+    pub code: Cow<'a, str>,
+    /// The entry point name.
+    pub entry_point: String,
+}
+
+/// Descriptor for GLSL shader passthrough.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct GlslPassthroughDescriptor<'a> {
+    /// The shader code.
+    pub code: Cow<'a, str>,
+}
+
+/// Descriptor for SPIR-V shader passthrough.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SpirvPassthroughDescriptor<'a> {
+    /// The shader code.
+    pub code: Cow<'a, [u32]>,
+}
+
+/// Descriptor for DXIL shader passthrough.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct DxilPassthroughDescriptor<'a> {
+    /// The shader code.
+    pub code: Cow<'a, [u8]>,
+    /// The entry point name.
+    pub entry_point: String,
+}
+
 /// Descriptor for a shader module given by any of several sources.
 /// These shaders are passed through directly to the underlying api.
 /// At least one shader type that may be used by the backend must be `Some` or a panic is raised.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
-    /// Entrypoint. Unused for Spir-V.
-    pub entry_point: String,
     /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
     pub label: L,
     /// Number of workgroups in each dimension x, y and z. Unused for Spir-V.
@@ -8133,17 +8187,17 @@ pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
     pub runtime_checks: ShaderRuntimeChecks,
 
     /// Binary SPIR-V data, in 4-byte words.
-    pub spirv: Option<Cow<'a, [u32]>>,
+    pub spirv: Option<SpirvPassthroughDescriptor<'a>>,
     /// Shader DXIL source.
-    pub dxil: Option<Cow<'a, [u8]>>,
+    pub dxil: Option<DxilPassthroughDescriptor<'a>>,
     /// Shader MSL source.
-    pub msl: Option<Cow<'a, str>>,
+    pub msl: Option<MslPassthroughDescriptor<'a>>,
     /// Shader HLSL source.
-    pub hlsl: Option<Cow<'a, str>>,
+    pub hlsl: Option<HlslPassthroughDescriptor<'a>>,
     /// Shader GLSL source (currently unused).
-    pub glsl: Option<Cow<'a, str>>,
+    pub glsl: Option<GlslPassthroughDescriptor<'a>>,
     /// Shader WGSL source.
-    pub wgsl: Option<Cow<'a, str>>,
+    pub wgsl: Option<WgslPassthroughDescriptor<'a>>,
 }
 
 // This is so people don't have to fill in fields they don't use, like num_workgroups,
@@ -8151,7 +8205,6 @@ pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
 impl<'a, L: Default> Default for CreateShaderModuleDescriptorPassthrough<'a, L> {
     fn default() -> Self {
         Self {
-            entry_point: "".into(),
             label: Default::default(),
             num_workgroups: (0, 0, 0),
             runtime_checks: ShaderRuntimeChecks::unchecked(),
@@ -8172,7 +8225,6 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
         fun: impl FnOnce(&L) -> K,
     ) -> CreateShaderModuleDescriptorPassthrough<'a, K> {
         CreateShaderModuleDescriptorPassthrough {
-            entry_point: self.entry_point.clone(),
             label: fun(&self.label),
             num_workgroups: self.num_workgroups,
             runtime_checks: self.runtime_checks,
@@ -8189,11 +8241,11 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
     /// Returns the source data for tracing purpose.
     pub fn trace_data(&self) -> &[u8] {
         if let Some(spirv) = &self.spirv {
-            bytemuck::cast_slice(spirv)
+            bytemuck::cast_slice(&spirv.code)
         } else if let Some(msl) = &self.msl {
-            msl.as_bytes()
+            msl.code.as_bytes()
         } else if let Some(dxil) = &self.dxil {
-            dxil
+            &dxil.code
         } else {
             panic!("No binary data provided to `ShaderModuleDescriptorGeneric`")
         }

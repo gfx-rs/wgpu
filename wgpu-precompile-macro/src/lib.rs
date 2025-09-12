@@ -228,7 +228,9 @@ pub fn precompile(input: TokenStream) -> TokenStream {
         )
         .expect("Naga failed to write SPIR-V code");
         quote! {
-            #wgpu_path::__macro_helpers::Some(#wgpu_path::__macro_helpers::Cow::Borrowed(&[#(#spirv_data),*]))
+            #wgpu_path::__macro_helpers::Some(#wgpu_path::SpirvPassthroughDescriptor {
+                code: #wgpu_path::__macro_helpers::Cow::Borrowed(&[#(#spirv_data),*]),
+            })
         }
     } else {
         none_tokens.clone()
@@ -238,7 +240,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
 
     #[cfg(feature = "msl")]
     let msl_tokens = if args.target_enabled(CompileTarget::Msl) {
-        let msl_str = naga::back::msl::write_string(
+        let (msl_str, translation_info) = naga::back::msl::write_string(
             &module,
             &module_info,
             &naga::back::msl::Options::default(),
@@ -247,10 +249,13 @@ pub fn precompile(input: TokenStream) -> TokenStream {
                 ..Default::default()
             },
         )
-        .expect("Naga failed to write MSL code")
-        .0;
+        .expect("Naga failed to write MSL code");
+        let entry_point = translation_info.entry_point_names[0].as_ref().unwrap();
         quote! {
-            #wgpu_path::__macro_helpers::Some(#wgpu_path::__macro_helpers::Cow::Borrowed(#msl_str))
+            #wgpu_path::__macro_helpers::Some(#wgpu_path::MslPassthroughDescriptor {
+                code: #wgpu_path::__macro_helpers::Cow::Borrowed(#msl_str),
+                entry_point: #wgpu_path::__macro_helpers::ToString::to_string(#entry_point),
+            })
         }
     } else {
         none_tokens.clone()
@@ -262,7 +267,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
     #[cfg(feature = "hlsl")]
     let hlsl_tokens = if args.target_enabled(CompileTarget::Hlsl) {
         let mut hlsl_str = String::new();
-        naga::back::hlsl::Writer::new(
+        let reflection = naga::back::hlsl::Writer::new(
             &mut hlsl_str,
             &naga::back::hlsl::Options::default(),
             &naga::back::hlsl::PipelineOptions {
@@ -271,8 +276,12 @@ pub fn precompile(input: TokenStream) -> TokenStream {
         )
         .write(&module, &module_info, None)
         .expect("Naga failed to write HLSL code");
+        let entry_point = reflection.entry_point_names[0].as_ref().unwrap();
         quote! {
-            #wgpu_path::__macro_helpers::Some(#wgpu_path::__macro_helpers::Cow::Borrowed(#hlsl_str))
+            #wgpu_path::__macro_helpers::Some(#wgpu_path::HlslPassthroughDescriptor {
+                code: #wgpu_path::__macro_helpers::Cow::Borrowed(#hlsl_str),
+                entry_point: #wgpu_path::__macro_helpers::ToString::to_string(#entry_point),
+            })
         }
     } else {
         quote! {
@@ -284,12 +293,19 @@ pub fn precompile(input: TokenStream) -> TokenStream {
 
     #[cfg(feature = "wgsl")]
     let wgsl_tokens = if args.target_enabled(CompileTarget::Wgsl) {
-        let mut wgsl_str = String::new();
-        naga::back::wgsl::Writer::new(&mut wgsl_str, naga::back::wgsl::WriterFlags::empty())
+        let mut writer =
+            naga::back::wgsl::Writer::new(String::new(), naga::back::wgsl::WriterFlags::empty());
+        writer
             .write(&module, &module_info)
             .expect("Naga failed to write WGSL code");
+        let wgsl_str = writer.finish();
+        // TODO: ensure that the entry point here is sensible
+        let entry_point = &args.entry_point;
         quote! {
-            #wgpu_path::__macro_helpers::Some(#wgpu_path::__macro_helpers::Cow::Borrowed(#wgsl_str))
+            #wgpu_path::__macro_helpers::Some(#wgpu_path::WgslPassthroughDescriptor {
+                code: #wgpu_path::__macro_helpers::Cow::Borrowed(#wgsl_str),
+                entry_point: #wgpu_path::__macro_helpers::ToString::to_string(#entry_point),
+            })
         }
     } else {
         quote! {
@@ -318,7 +334,9 @@ pub fn precompile(input: TokenStream) -> TokenStream {
         .write()
         .expect("Naga failed write GLSL code");
         quote! {
-            #wgpu_path::__macro_helpers::Some(#wgpu_path::__macro_helpers::Cow::Borrowed(#glsl_str))
+            #wgpu_path::__macro_helpers::Some(#wgpu_path::GlslPassthroughDescriptor {
+                code: #wgpu_path::__macro_helpers::Cow::Borrowed(#glsl_str),
+            })
         }
     } else {
         quote! {
@@ -333,13 +351,10 @@ pub fn precompile(input: TokenStream) -> TokenStream {
         None => quote! {#wgpu_path::__macro_helpers::None},
     };
 
-    let entry_point = &args.entry_point;
-
     quote! {
         #wgpu_path::ShaderModuleDescriptorPassthrough {
             // TODO: make this something else when file name is provided
             label: #label_tokens,
-            entry_point: #wgpu_path::__macro_helpers::String::from(#entry_point),
             num_workgroups: (#x, #y, #z),
             runtime_checks: #wgpu_path::ShaderRuntimeChecks::default(),
             spirv: #spirv_tokens,

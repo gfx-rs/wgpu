@@ -97,7 +97,7 @@ pub enum Action<'a> {
         id: id::ShaderModuleId,
         data: Vec<FileName>,
 
-        entry_point: String,
+        entry_points: Vec<String>,
         label: crate::Label<'a>,
         num_workgroups: (u32, u32, u32),
         runtime_checks: wgt::ShaderRuntimeChecks,

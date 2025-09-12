@@ -42,9 +42,10 @@ fn compile_glsl(
     assert!(output.status.success());
     unsafe {
         device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-            entry_point: "main".into(),
             label: None,
-            spirv: Some(wgpu::util::make_spirv_raw(&output.stdout)),
+            spirv: Some(wgpu::SpirvPassthroughDescriptor {
+                code: wgpu::util::make_spirv_raw(&output.stdout),
+            }),
             ..Default::default()
         })
     }

@@ -2136,44 +2136,51 @@ impl Device {
         log::info!("Backend: {}", self.backend());
         let hal_shader = match self.backend() {
             wgt::Backend::Vulkan => hal::ShaderInput::SpirV(
-                descriptor
+                &descriptor
                     .spirv
                     .as_ref()
-                    .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
+                    .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?
+                    .code,
             ),
             wgt::Backend::Dx12 => {
                 if let Some(dxil) = &descriptor.dxil {
                     hal::ShaderInput::Dxil {
-                        shader: dxil,
-                        entry_point: descriptor.entry_point.clone(),
+                        shader: &dxil.code,
+                        entry_point: dxil.entry_point.clone(),
                         num_workgroups: descriptor.num_workgroups,
                     }
                 } else if let Some(hlsl) = &descriptor.hlsl {
                     hal::ShaderInput::Hlsl {
-                        shader: hlsl,
-                        entry_point: descriptor.entry_point.clone(),
+                        shader: &hlsl.code,
+                        entry_point: hlsl.entry_point.clone(),
                         num_workgroups: descriptor.num_workgroups,
                     }
                 } else {
                     return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend);
                 }
             }
-            wgt::Backend::Metal => hal::ShaderInput::Msl {
-                shader: descriptor
+            wgt::Backend::Metal => {
+                let msl = descriptor
                     .msl
                     .as_ref()
-                    .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
-                entry_point: descriptor.entry_point.clone(),
-                num_workgroups: descriptor.num_workgroups,
-            },
-            wgt::Backend::Gl => hal::ShaderInput::Glsl {
-                shader: descriptor
+                    .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?;
+                hal::ShaderInput::Msl {
+                    shader: &msl.code,
+                    entry_point: msl.entry_point.clone(),
+                    num_workgroups: descriptor.num_workgroups,
+                }
+            }
+            wgt::Backend::Gl => {
+                let glsl = descriptor
                     .glsl
                     .as_ref()
-                    .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
-                entry_point: descriptor.entry_point.clone(),
-                num_workgroups: descriptor.num_workgroups,
-            },
+                    .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?;
+                hal::ShaderInput::Glsl {
+                    shader: &glsl.code,
+                    entry_point: "main".to_string(),
+                    num_workgroups: descriptor.num_workgroups,
+                }
+            }
             wgt::Backend::Noop => {
                 return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend)
             }

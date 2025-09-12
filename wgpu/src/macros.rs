@@ -357,7 +357,7 @@ macro_rules! precompile_glsl {
 #[doc(hidden)]
 pub mod helpers {
     pub use alloc::borrow::Cow;
-    pub use alloc::string::String;
+    pub use alloc::string::{String, ToString};
     pub use core::{include_bytes, include_str};
     #[cfg(feature = "precompile")]
     pub use wgpu_precompile_macro::precompile;

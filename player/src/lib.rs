@@ -316,7 +316,7 @@ impl GlobalPlay for wgc::global::Global {
             Action::CreateShaderModulePassthrough {
                 id,
                 data,
-                entry_point,
+                entry_points,
                 label,
                 num_workgroups,
                 runtime_checks,
@@ -326,31 +326,43 @@ impl GlobalPlay for wgc::global::Global {
                         let data = fs::read(dir.join(a)).unwrap();
                         assert!(data.len() % 4 == 0);
 
-                        Some(Cow::Owned(bytemuck::pod_collect_to_vec(&data)))
+                        Some(wgt::SpirvPassthroughDescriptor {
+                            code: Cow::Owned(bytemuck::pod_collect_to_vec(&data)),
+                        })
                     } else {
                         None
                     }
                 });
-                let dxil = data.iter().find_map(|a| {
+                let dxil = data.iter().zip(&entry_points).find_map(|(a, entry_point)| {
                     if a.ends_with(".dxil") {
                         let vec = std::fs::read(dir.join(a)).unwrap();
-                        Some(Cow::Owned(vec))
+                        Some(wgt::DxilPassthroughDescriptor {
+                            code: Cow::Owned(vec),
+                            entry_point: entry_point.to_owned(),
+                        })
                     } else {
                         None
                     }
                 });
-                let hlsl = data.iter().find_map(|a| {
+                let hlsl = data.iter().zip(&entry_points).find_map(|(a, entry_point)| {
                     if a.ends_with(".hlsl") {
                         let code = fs::read_to_string(dir.join(a)).unwrap();
-                        Some(Cow::Owned(code))
+
+                        Some(wgt::HlslPassthroughDescriptor {
+                            code: Cow::Owned(code),
+                            entry_point: entry_point.to_owned(),
+                        })
                     } else {
                         None
                     }
                 });
-                let msl = data.iter().find_map(|a| {
+                let msl = data.iter().zip(&entry_points).find_map(|(a, entry_point)| {
                     if a.ends_with(".msl") {
                         let code = fs::read_to_string(dir.join(a)).unwrap();
-                        Some(Cow::Owned(code))
+                        Some(wgt::MslPassthroughDescriptor {
+                            code: Cow::Owned(code),
+                            entry_point: entry_point.to_owned(),
+                        })
                     } else {
                         None
                     }
@@ -358,21 +370,25 @@ impl GlobalPlay for wgc::global::Global {
                 let glsl = data.iter().find_map(|a| {
                     if a.ends_with(".glsl") {
                         let code = fs::read_to_string(dir.join(a)).unwrap();
-                        Some(Cow::Owned(code))
+                        Some(wgt::GlslPassthroughDescriptor {
+                            code: Cow::Owned(code),
+                        })
                     } else {
                         None
                     }
                 });
-                let wgsl = data.iter().find_map(|a| {
+                let wgsl = data.iter().zip(&entry_points).find_map(|(a, entry_point)| {
                     if a.ends_with(".wgsl") {
                         let code = fs::read_to_string(dir.join(a)).unwrap();
-                        Some(Cow::Owned(code))
+                        Some(wgt::WgslPassthroughDescriptor {
+                            code: Cow::Owned(code),
+                            entry_point: entry_point.to_owned(),
+                        })
                     } else {
                         None
                     }
                 });
                 let desc = wgt::CreateShaderModuleDescriptorPassthrough {
-                    entry_point,
                     label,
                     num_workgroups,
                     runtime_checks,
