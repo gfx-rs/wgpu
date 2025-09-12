@@ -230,6 +230,16 @@ macro_rules! hal_type_gles {
     };
 }
 
+/// Precompile WGSL shader for all supported backends. Will fail at compiletime
+/// in case of error. Note that file paths are relative to the `MANIFEST_DIR`, i.e. not the same
+/// folder as the invoking file as in `include_bytes` or the like.
+///
+/// This can always take in wgsl, spirv, and glsl input, even if the corresponding features aren't
+/// enabled on the wgpu crate.
+///
+/// ```ignore
+/// device.create_shader_module_passthrough(precompile_wgsl!("path/to/file", "entry_point_name"))
+/// ```
 #[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! precompile_wgsl {

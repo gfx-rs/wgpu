@@ -157,6 +157,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
     let module = match args.source_type {
         SourceType::Spirv => {
             let source = args.source.clone().expect_bytes();
+            // This is yanked from wgpu-hal. Maybe at some point this kinda logic should be unified somewhere
             let options = naga::front::spv::Options {
                 adjust_coordinate_space: false, // we require NDC_Y_UP feature
                 strict_capabilities: true,
@@ -307,7 +308,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
             label: #label_tokens,
             entry_point: #wgpu_path::__macro_helpers::String::from(#entry_point),
             num_workgroups: (#x, #y, #z),
-            runtime_checks: #wgpu_path::ShaderRuntimeChecks::unchecked(),
+            runtime_checks: #wgpu_path::ShaderRuntimeChecks::default(),
             spirv: #spirv_tokens,
             dxil: #wgpu_path::__macro_helpers::None,
             msl: #msl_tokens,
