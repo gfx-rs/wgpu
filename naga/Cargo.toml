@@ -113,12 +113,17 @@ env_logger.workspace = true
 hashbrown = { workspace = true, features = ["serde"] }
 hlsl-snapshots.workspace = true
 itertools.workspace = true
+naga-test.workspace = true
 ron.workspace = true
 rspirv.workspace = true
+# So we don't actually need this, however if we remove this, it
+# brakes calling `--features spirv` at the workspace level. I think
+# this is because there is a `dep:spirv` in the regular feature set,
+# so cargo tries to match the feature against that, fails as it's a optional dep,
+# and then refuses to build instead of ignoring it.
+spirv.workspace = true
 serde = { workspace = true, features = ["default", "derive"] }
-spirv = { workspace = true, features = ["deserialize"] }
 strum = { workspace = true }
-toml.workspace = true
 walkdir.workspace = true
 
 [lints.clippy]

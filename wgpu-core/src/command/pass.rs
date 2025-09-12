@@ -2,15 +2,14 @@
 
 use crate::binding_model::{BindError, BindGroup, PushConstantUploadError};
 use crate::command::bind::Binder;
-use crate::command::memory_init::{CommandBufferTextureMemoryActions, SurfacesInDiscardState};
+use crate::command::encoder::EncodingState;
+use crate::command::memory_init::SurfacesInDiscardState;
 use crate::command::{CommandEncoder, DebugGroupError, QueryResetMap, QueryUseError};
-use crate::device::{Device, DeviceError, MissingFeatures};
-use crate::init_tracker::BufferInitTrackerAction;
+use crate::device::{DeviceError, MissingFeatures};
 use crate::pipeline::LateSizedBufferGroup;
 use crate::ray_tracing::AsAction;
 use crate::resource::{DestroyedResourceError, Labeled, ParentDevice, QuerySet};
-use crate::snatch::SnatchGuard;
-use crate::track::{ResourceUsageCompatibilityError, Tracker, UsageScope};
+use crate::track::{ResourceUsageCompatibilityError, UsageScope};
 use crate::{api_log, binding_model};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -42,15 +41,8 @@ impl WebGpuError for InvalidValuesOffset {
     }
 }
 
-pub(crate) struct BaseState<'scope, 'snatch_guard, 'cmd_enc, 'raw_encoder> {
-    pub(crate) device: &'cmd_enc Arc<Device>,
-
-    pub(crate) raw_encoder: &'raw_encoder mut dyn hal::DynCommandEncoder,
-
-    pub(crate) tracker: &'cmd_enc mut Tracker,
-    pub(crate) buffer_memory_init_actions: &'cmd_enc mut Vec<BufferInitTrackerAction>,
-    pub(crate) texture_memory_actions: &'cmd_enc mut CommandBufferTextureMemoryActions,
-    pub(crate) as_actions: &'cmd_enc mut Vec<AsAction>,
+pub(crate) struct PassState<'scope, 'snatch_guard, 'cmd_enc, 'raw_encoder> {
+    pub(crate) base: EncodingState<'snatch_guard, 'cmd_enc, 'raw_encoder>,
 
     /// Immediate texture inits required because of prior discards. Need to
     /// be inserted before texture reads.
@@ -64,14 +56,11 @@ pub(crate) struct BaseState<'scope, 'snatch_guard, 'cmd_enc, 'raw_encoder> {
 
     pub(crate) dynamic_offset_count: usize,
 
-    pub(crate) snatch_guard: &'snatch_guard SnatchGuard<'snatch_guard>,
-
-    pub(crate) debug_scope_depth: u32,
     pub(crate) string_offset: usize,
 }
 
 pub(crate) fn set_bind_group<E>(
-    state: &mut BaseState,
+    state: &mut PassState,
     cmd_enc: &CommandEncoder,
     dynamic_offsets: &[DynamicOffset],
     index: u32,
@@ -95,7 +84,7 @@ where
         );
     }
 
-    let max_bind_groups = state.device.limits.max_bind_groups;
+    let max_bind_groups = state.base.device.limits.max_bind_groups;
     if index >= max_bind_groups {
         return Err(BindGroupIndexOutOfRange {
             index,
@@ -117,7 +106,7 @@ where
     }
 
     let bind_group = bind_group.unwrap();
-    let bind_group = state.tracker.bind_groups.insert_single(bind_group);
+    let bind_group = state.base.tracker.bind_groups.insert_single(bind_group);
 
     bind_group.same_device_as(cmd_enc)?;
 
@@ -133,6 +122,7 @@ where
     // is held to the bind group itself.
 
     state
+        .base
         .buffer_memory_init_actions
         .extend(bind_group.used_buffer_ranges.iter().filter_map(|action| {
             action
@@ -142,9 +132,12 @@ where
                 .check_action(action)
         }));
     for action in bind_group.used_texture_ranges.iter() {
-        state
-            .pending_discard_init_fixups
-            .extend(state.texture_memory_actions.register_init_action(action));
+        state.pending_discard_init_fixups.extend(
+            state
+                .base
+                .texture_memory_actions
+                .register_init_action(action),
+        );
     }
 
     let used_resource = bind_group
@@ -153,7 +146,7 @@ where
         .into_iter()
         .map(|tlas| AsAction::UseTlas(tlas.clone()));
 
-    state.as_actions.extend(used_resource);
+    state.base.as_actions.extend(used_resource);
 
     let pipeline_layout = state.binder.pipeline_layout.clone();
     let entries = state
@@ -163,9 +156,9 @@ where
         let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
         for (i, e) in entries.iter().enumerate() {
             if let Some(group) = e.group.as_ref() {
-                let raw_bg = group.try_raw(state.snatch_guard)?;
+                let raw_bg = group.try_raw(state.base.snatch_guard)?;
                 unsafe {
-                    state.raw_encoder.set_bind_group(
+                    state.base.raw_encoder.set_bind_group(
                         pipeline_layout,
                         index + i as u32,
                         Some(raw_bg),
@@ -180,7 +173,7 @@ where
 
 /// After a pipeline has been changed, resources must be rebound
 pub(crate) fn rebind_resources<E, F: FnOnce()>(
-    state: &mut BaseState,
+    state: &mut PassState,
     pipeline_layout: &Arc<binding_model::PipelineLayout>,
     late_sized_buffer_groups: &[LateSizedBufferGroup],
     f: F,
@@ -202,9 +195,9 @@ where
         if !entries.is_empty() {
             for (i, e) in entries.iter().enumerate() {
                 if let Some(group) = e.group.as_ref() {
-                    let raw_bg = group.try_raw(state.snatch_guard)?;
+                    let raw_bg = group.try_raw(state.base.snatch_guard)?;
                     unsafe {
-                        state.raw_encoder.set_bind_group(
+                        state.base.raw_encoder.set_bind_group(
                             pipeline_layout.raw(),
                             start_index as u32 + i as u32,
                             Some(raw_bg),
@@ -225,7 +218,7 @@ where
             let offset = range.range.start;
             let size_bytes = range.range.end - offset;
             super::push_constant_clear(offset, size_bytes, |clear_offset, clear_data| unsafe {
-                state.raw_encoder.set_push_constants(
+                state.base.raw_encoder.set_push_constants(
                     pipeline_layout.raw(),
                     range.stages,
                     clear_offset,
@@ -238,7 +231,7 @@ where
 }
 
 pub(crate) fn set_push_constant<E, F: FnOnce(&[u32])>(
-    state: &mut BaseState,
+    state: &mut PassState,
     push_constant_data: &[u32],
     stages: wgt::ShaderStages,
     offset: u32,
@@ -269,6 +262,7 @@ where
 
     unsafe {
         state
+            .base
             .raw_encoder
             .set_push_constants(pipeline_layout.raw(), stages, offset, data_slice)
     }
@@ -276,7 +270,7 @@ where
 }
 
 pub(crate) fn write_timestamp<E>(
-    state: &mut BaseState,
+    state: &mut PassState,
     cmd_enc: &CommandEncoder,
     pending_query_resets: Option<&mut QueryResetMap>,
     query_set: Arc<QuerySet>,
@@ -293,18 +287,24 @@ where
     query_set.same_device_as(cmd_enc)?;
 
     state
+        .base
         .device
         .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_PASSES)?;
 
-    let query_set = state.tracker.query_sets.insert_single(query_set);
+    let query_set = state.base.tracker.query_sets.insert_single(query_set);
 
-    query_set.validate_and_write_timestamp(state.raw_encoder, query_index, pending_query_resets)?;
+    query_set.validate_and_write_timestamp(
+        state.base.raw_encoder,
+        query_index,
+        pending_query_resets,
+    )?;
     Ok(())
 }
 
-pub(crate) fn push_debug_group(state: &mut BaseState, string_data: &[u8], len: usize) {
-    state.debug_scope_depth += 1;
+pub(crate) fn push_debug_group(state: &mut PassState, string_data: &[u8], len: usize) {
+    *state.base.debug_scope_depth += 1;
     if !state
+        .base
         .device
         .instance_flags
         .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
@@ -314,36 +314,38 @@ pub(crate) fn push_debug_group(state: &mut BaseState, string_data: &[u8], len: u
 
         api_log!("Pass::push_debug_group {label:?}");
         unsafe {
-            state.raw_encoder.begin_debug_marker(label);
+            state.base.raw_encoder.begin_debug_marker(label);
         }
     }
     state.string_offset += len;
 }
 
-pub(crate) fn pop_debug_group<E>(state: &mut BaseState) -> Result<(), E>
+pub(crate) fn pop_debug_group<E>(state: &mut PassState) -> Result<(), E>
 where
     E: From<DebugGroupError>,
 {
     api_log!("Pass::pop_debug_group");
 
-    if state.debug_scope_depth == 0 {
+    if *state.base.debug_scope_depth == 0 {
         return Err(DebugGroupError::InvalidPop.into());
     }
-    state.debug_scope_depth -= 1;
+    *state.base.debug_scope_depth -= 1;
     if !state
+        .base
         .device
         .instance_flags
         .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
     {
         unsafe {
-            state.raw_encoder.end_debug_marker();
+            state.base.raw_encoder.end_debug_marker();
         }
     }
     Ok(())
 }
 
-pub(crate) fn insert_debug_marker(state: &mut BaseState, string_data: &[u8], len: usize) {
+pub(crate) fn insert_debug_marker(state: &mut PassState, string_data: &[u8], len: usize) {
     if !state
+        .base
         .device
         .instance_flags
         .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS)
@@ -352,7 +354,7 @@ pub(crate) fn insert_debug_marker(state: &mut BaseState, string_data: &[u8], len
             str::from_utf8(&string_data[state.string_offset..state.string_offset + len]).unwrap();
         api_log!("Pass::insert_debug_marker {label:?}");
         unsafe {
-            state.raw_encoder.insert_debug_marker(label);
+            state.base.raw_encoder.insert_debug_marker(label);
         }
     }
     state.string_offset += len;

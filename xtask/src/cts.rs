@@ -62,7 +62,11 @@ struct TestLine {
     pub fails_if: Option<String>,
 }
 
-pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
+pub fn run_cts(
+    shell: Shell,
+    mut args: Arguments,
+    passthrough_args: Option<Vec<OsString>>,
+) -> anyhow::Result<()> {
     let skip_checkout = args.contains("--skip-checkout");
     let llvm_cov = args.contains("--llvm-cov");
     let release = args.contains("--release");
@@ -89,8 +93,12 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
         .collect::<Vec<_>>();
 
     if tests.is_empty() && list_files.is_empty() {
-        log::info!("Reading default test list from {CTS_DEFAULT_TEST_LIST}");
-        list_files.push(OsString::from(CTS_DEFAULT_TEST_LIST));
+        if passthrough_args.is_none() {
+            log::info!("Reading default test list from {CTS_DEFAULT_TEST_LIST}");
+            list_files.push(OsString::from(CTS_DEFAULT_TEST_LIST));
+        }
+    } else if passthrough_args.is_some() {
+        bail!("Test(s) and test list(s) are incompatible with passthrough arguments.");
     }
 
     for file in list_files {
@@ -207,6 +215,25 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     } else {
         &["run"][..]
     };
+
+    if let Some(passthrough_args) = passthrough_args {
+        let mut cmd = shell
+            .cmd("cargo")
+            .args(run_flags)
+            .args(["--manifest-path".as_ref(), wgpu_cargo_toml.as_os_str()])
+            .args(["-p", "cts_runner"])
+            .args(["--bin", "cts_runner"]);
+
+        if release {
+            cmd = cmd.arg("--release")
+        }
+
+        cmd.args(["--", "./tools/run_deno", "--verbose"])
+            .args(&passthrough_args)
+            .run()?;
+
+        return Ok(());
+    }
 
     log::info!("Running CTS");
     for test in &tests {
