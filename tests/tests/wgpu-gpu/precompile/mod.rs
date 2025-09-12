@@ -40,6 +40,9 @@ fn cs_main() {}
         "#,
                 "cs_main",
             ));
+        // This is just the GLSL file compiled with glslang -V shader.vert -o shader.spv.
+        // The spirv file must exist before parsing begins. I didn't want to add it to
+        // the build script but that is another viable option.
         let _ = ctx
             .device
             .create_shader_module_passthrough(wgpu::include_precompiled_spirv!(
