@@ -47,10 +47,10 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let swapchain_format = swapchain_capabilities.formats[0];
 
     let vs_shader = unsafe {
-        device.create_shader_module_passthrough(wgpu::__macro_helpers::precompile!(wgpu wgsl true "src/hello_triangle/shader.wgsl" "vs_main" vertex spirv msl hlsl wgsl glsl dxil))
+        device.create_shader_module_passthrough(wgpu::__macro_helpers::precompile!(wgpu wgsl true "src/hello_triangle/shader.wgsl" "vs_main" spirv msl hlsl wgsl glsl dxil))
     };
     let fs_shader = unsafe {
-        device.create_shader_module_passthrough(wgpu::__macro_helpers::precompile!(wgpu wgsl true "src/hello_triangle/shader.wgsl" "fs_main" fragment spirv msl hlsl wgsl glsl dxil))
+        device.create_shader_module_passthrough(wgpu::__macro_helpers::precompile!(wgpu wgsl true "src/hello_triangle/shader.wgsl" "fs_main" spirv msl hlsl wgsl glsl dxil))
     };
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

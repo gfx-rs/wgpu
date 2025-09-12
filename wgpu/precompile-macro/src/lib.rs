@@ -43,17 +43,6 @@ impl CompileTarget {
     }
 }
 
-fn parse_shader_stage(str: &str) -> naga::ShaderStage {
-    match str {
-        "vertex" => naga::ShaderStage::Vertex,
-        "fragment" => naga::ShaderStage::Fragment,
-        "compute" => naga::ShaderStage::Compute,
-        "Task" => naga::ShaderStage::Task,
-        "Mesh" => naga::ShaderStage::Mesh,
-        other => panic!("Unrecognized shader stage: {other}"),
-    }
-}
-
 enum ShaderSource {
     String(String),
     File(Vec<u8>),
@@ -80,7 +69,6 @@ struct MacroArgs {
     source: ShaderSource,
     targets: HashSet<CompileTarget>,
     entry_point: String,
-    shader_stage: naga::ShaderStage,
 }
 impl Parse for MacroArgs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
@@ -89,7 +77,6 @@ impl Parse for MacroArgs {
         let is_file_path = input.parse::<syn::LitBool>()?.value;
         let source_literal = input.parse::<syn::LitStr>()?.value();
         let entry_point = input.parse::<syn::LitStr>()?.value();
-        let shader_stage = parse_shader_stage(&input.parse::<Ident>()?.to_string());
 
         let mut targets = HashSet::new();
         while !input.is_empty() {
@@ -115,7 +102,6 @@ impl Parse for MacroArgs {
             source_type,
             source,
             entry_point,
-            shader_stage,
             targets,
         })
     }
@@ -157,18 +143,13 @@ pub fn precompile(input: TokenStream) -> TokenStream {
     .validate(&module)
     .expect("Naga failed to validate module");
 
-    let entry_point_idx = module
+    let entry_point = module
         .entry_points
         .iter()
-        .position(|a| a.name == args.entry_point)
+        .find(|a| a.name == args.entry_point)
         .expect("Requested entry point not present in module");
-
-    if args.shader_stage != module.entry_points[entry_point_idx].stage {
-        panic!(
-            "Incorrect shader stage: given {:?} but entry point has stage {:?}",
-            args.shader_stage, module.entry_points[entry_point_idx].stage
-        )
-    }
+    let shader_stage = entry_point.stage;
+    let [x, y, z] = entry_point.workgroup_size;
 
     let wgpu_path = &args.wgpu_crate;
 
@@ -178,7 +159,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
             &module_info,
             &naga::back::spv::Options::default(),
             Some(&naga::back::spv::PipelineOptions {
-                shader_stage: args.shader_stage,
+                shader_stage,
                 entry_point: args.entry_point.clone(),
             }),
         )
@@ -198,7 +179,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
             &module_info,
             &naga::back::msl::Options::default(),
             &naga::back::msl::PipelineOptions {
-                entry_point: Some((args.shader_stage, args.entry_point.clone())),
+                entry_point: Some((shader_stage, args.entry_point.clone())),
                 ..Default::default()
             },
         )
@@ -219,7 +200,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
             &mut hlsl_str,
             &naga::back::hlsl::Options::default(),
             &naga::back::hlsl::PipelineOptions {
-                entry_point: Some((args.shader_stage, args.entry_point.clone())),
+                entry_point: Some((shader_stage, args.entry_point.clone())),
             },
         )
         .write(&module, &module_info, None)
@@ -255,7 +236,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
             &module_info,
             &naga::back::glsl::Options::default(),
             &naga::back::glsl::PipelineOptions {
-                shader_stage: args.shader_stage,
+                shader_stage,
                 entry_point: args.entry_point.clone(),
                 multiview: None,
             },
@@ -273,7 +254,6 @@ pub fn precompile(input: TokenStream) -> TokenStream {
         }
     };
 
-    let [x, y, z] = module.entry_points[entry_point_idx].workgroup_size;
     let entry_point = &args.entry_point;
 
     quote! {
