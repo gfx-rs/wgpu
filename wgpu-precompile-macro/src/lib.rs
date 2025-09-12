@@ -228,10 +228,25 @@ pub fn precompile(input: TokenStream) -> TokenStream {
 
     #[cfg(feature = "spv")]
     let spirv_tokens = if args.target_enabled(CompileTarget::Spirv) {
-        let spirv_data = naga::back::spv::write_vec(
+        use naga::back::spv;
+        // Ripped from wgpu-hal backend
+        let mut flags = spv::WriterFlags::empty();
+        flags.set(spv::WriterFlags::DEBUG, false);
+        flags.set(spv::WriterFlags::LABEL_VARYINGS, false);
+        flags.set(
+            spv::WriterFlags::FORCE_POINT_SIZE,
+            //Note: we could technically disable this when we are compiling separate entry points,
+            // and we know exactly that the primitive topology is not `PointList`.
+            // But this requires cloning the `spv::Options` struct, which has heap allocations.
+            true, // could check `super::Workarounds::SEPARATE_ENTRY_POINTS`
+        );
+        let spirv_data = spv::write_vec(
             &module,
             &module_info,
-            &naga::back::spv::Options::default(),
+            &naga::back::spv::Options {
+                flags,
+                ..Default::default()
+            },
             Some(&naga::back::spv::PipelineOptions {
                 shader_stage,
                 entry_point: args.entry_point.clone(),
