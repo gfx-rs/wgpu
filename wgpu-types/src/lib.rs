@@ -8176,6 +8176,9 @@ pub struct DxilPassthroughDescriptor<'a> {
 /// Descriptor for a shader module given by any of several sources.
 /// These shaders are passed through directly to the underlying api.
 /// At least one shader type that may be used by the backend must be `Some` or a panic is raised.
+///
+/// The entry point name may differ by format. For example, SPIR-V and GLSL code will always parse
+/// this as `main` but MSL treats `main` as a keyword so naga converts it to `_main`.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
