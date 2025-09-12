@@ -146,7 +146,7 @@ impl Parse for MacroArgs {
 }
 impl MacroArgs {
     fn target_enabled(&self, target: CompileTarget) -> bool {
-        // TODO: only enable if we are actually targetting that platform.
+        // TODO: only enable if we are actually targeting that platform.
         // This is especially important for DXIL, which requires dxc. No need
         // to fail to compile on MacOS if dxc isn't present!
         match target {

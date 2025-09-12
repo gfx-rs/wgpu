@@ -1865,11 +1865,11 @@ impl dispatch::DeviceInterface for WebDevice {
         desc: &crate::ShaderModuleDescriptorPassthrough<'_>,
     ) -> dispatch::DispatchShaderModule {
         let shader_module_result = if let Some(ref code) = desc.wgsl {
-            let shader_module = webgpu_sys::GpuShaderModuleDescriptor::new(code);
+            let shader_module = webgpu_sys::GpuShaderModuleDescriptor::new(&code.code);
             Ok((
                 shader_module,
                 WebShaderCompilationInfo::Wgsl {
-                    source: code.to_string(),
+                    source: code.code.to_string(),
                 },
             ))
         } else {
