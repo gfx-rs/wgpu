@@ -86,7 +86,7 @@ impl Global {
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
 
         let mut cmd_buf_data = cmd_enc.data.lock();
-        cmd_buf_data.record_with(
+        cmd_buf_data.with_buffer(
             |cmd_buf_data| -> Result<(), BuildAccelerationStructureError> {
                 let device = &cmd_enc.device;
                 device.check_is_valid()?;

@@ -1815,9 +1815,7 @@ impl Global {
         let cmd_enc = pass.parent.take().ok_or(EncoderStateError::Ended)?;
         let mut cmd_buf_data = cmd_enc.data.lock();
 
-        // Unlock the encoder. This can be moved to a lighter-weight mechanism
-        // completely decoupled from HAL encoders.
-        cmd_buf_data.unlock_and_record(|_| -> Result<(), RenderPassError> { Ok(()) })?;
+        cmd_buf_data.unlock_encoder()?;
 
         let base = pass.base.take();
 

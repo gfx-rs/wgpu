@@ -171,10 +171,7 @@ impl CommandEncoderStatus {
     /// returns `Ok(())`.
     ///
     /// [ves]: https://www.w3.org/TR/webgpu/#abstract-opdef-validate-the-encoder-state
-    fn push_with<
-        F: FnOnce() -> Result<ArcCommand, E>,
-        E: Clone + Into<CommandEncoderError>,
-    >(
+    fn push_with<F: FnOnce() -> Result<ArcCommand, E>, E: Clone + Into<CommandEncoderError>>(
         &mut self,
         f: F,
     ) -> Result<(), EncoderStateError> {
@@ -205,21 +202,20 @@ impl CommandEncoderStatus {
         }
     }
 
-    /// Record commands using the supplied closure.
+    /// Call a closure with the inner command buffer structure.
     ///
-    /// If the encoder is in the [`Self::Recording`] state, calls the closure to
-    /// record commands. If the closure returns an error, stores that error in
-    /// the encoder for later reporting when `finish()` is called. Returns
-    /// `Ok(())` even if the closure returned an error.
+    /// If the encoder is in the [`Self::Recording`] state, calls the provided
+    /// closure. If the closure returns an error, stores that error in the
+    /// encoder for later reporting when `finish()` is called. Returns `Ok(())`
+    /// even if the closure returned an error.
     ///
     /// If the encoder is not in the [`Self::Recording`] state, the closure will
-    /// not be called and nothing will be recorded. The encoder will be
-    /// invalidated (if it is not already). If the error is a [validation error
-    /// that should be raised immediately][ves], returns it in `Err`, otherwise,
-    /// returns `Ok(())`.
+    /// not be called. The encoder will be invalidated (if it is not already).
+    /// If the error is a [validation error that should be raised
+    /// immediately][ves], returns it in `Err`, otherwise, returns `Ok(())`.
     ///
     /// [ves]: https://www.w3.org/TR/webgpu/#abstract-opdef-validate-the-encoder-state
-    fn record_with<
+    fn with_buffer<
         F: FnOnce(&mut CommandBufferMutable) -> Result<(), E>,
         E: Clone + Into<CommandEncoderError>,
     >(
@@ -320,32 +316,19 @@ impl CommandEncoderStatus {
         }
     }
 
-    /// Unlocks the [`CommandBuffer`] and puts it back into the
-    /// [`Self::Recording`] state, then records commands using the supplied
-    /// closure.
+    /// Unlocks the encoder and puts it back into the [`Self::Recording`] state.
     ///
     /// This function is the unlocking counterpart to [`Self::lock_encoder`]. It
     /// is only valid to call this function if the encoder is in the
     /// [`Self::Locked`] state.
     ///
-    /// If the closure returns an error, stores that error in the encoder for
-    /// later reporting when `finish()` is called. Returns `Ok(())` even if the
-    /// closure returned an error.
-    ///
-    /// If the encoder is not in the [`Self::Locked`] state, the closure will
-    /// not be called and nothing will be recorded. If a validation error should
-    /// be raised immediately, returns it in `Err`, otherwise, returns `Ok(())`.
-    fn unlock_and_record<
-        F: FnOnce(&mut CommandBufferMutable) -> Result<(), E>,
-        E: Clone + Into<CommandEncoderError>,
-    >(
-        &mut self,
-        f: F,
-    ) -> Result<(), EncoderStateError> {
+    /// If the encoder is in a state other than [`Self::Locked`] and a
+    /// validation error should be raised immediately, returns it in `Err`,
+    /// otherwise, stores the error in the encoder and returns `Ok(())`.
+    fn unlock_encoder(&mut self) -> Result<(), EncoderStateError> {
         match mem::replace(self, Self::Transitioning) {
             Self::Locked(inner) => {
                 *self = Self::Recording(inner);
-                RecordingGuard { inner: self }.record(f);
                 Ok(())
             }
             st @ Self::Finished(_) => {
@@ -361,8 +344,8 @@ impl CommandEncoderStatus {
                 Err(EncoderStateError::Ended)
             }
             st @ Self::Error(_) => {
-                // Encoder is invalid. Do not record anything, but do not
-                // return an immediate validation error.
+                // Encoder is already invalid. The error will be reported by
+                // `CommandEncoder.finish`.
                 *self = st;
                 Ok(())
             }
