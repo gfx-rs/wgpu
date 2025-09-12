@@ -1,0 +1,31 @@
+[package]
+name = "wgpu-precompile-macro"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Macros for wgpu that enables precompiling shaders"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+[lib]
+proc-macro = true
+
+[features]
+
+[dependencies]
+naga = { workspace = true, features = [
+    "spv-in",
+    "wgsl-in",
+    "glsl-in",
+    "msl-out",
+    "wgsl-out",
+    "spv-out",
+    "hlsl-out",
+    "glsl-out",
+] }
+
+quote.workspace = true
+syn = { workspace = true, features = ["full"] }
+hashbrown.workspace = true
