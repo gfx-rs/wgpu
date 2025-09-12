@@ -144,7 +144,9 @@ impl Parse for MacroArgs {
 }
 impl MacroArgs {
     fn target_enabled(&self, target: CompileTarget) -> bool {
-        self.targets.contains(&target) || self.targets.contains(&CompileTarget::AllSupported)
+        self.targets.contains(&target)
+            || self.targets.contains(&CompileTarget::AllSupported)
+            || self.targets.is_empty()
     }
 }
 

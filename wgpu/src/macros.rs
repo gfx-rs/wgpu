@@ -237,7 +237,7 @@ macro_rules! hal_type_gles {
 /// This macro is always valid, even if the `wgsl` feature isn't enabled.
 ///
 /// ```ignore
-/// device.create_shader_module_passthrough(include_precompiled_wgsl!("path/to/file", "entry_point_name"))
+/// device.create_shader_module_passthrough(include_precompiled_wgsl!("path/to/file", "entry_point_name",))
 /// ```
 /// or
 /// ```ignore
@@ -250,11 +250,8 @@ macro_rules! hal_type_gles {
 #[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! include_precompiled_wgsl {
-    ($path: literal, $entry: literal) => {
-        $crate::__macro_helpers::precompile!($crate wgsl true $path $entry all)
-    };
-    ($path: literal, $entry: literal,$($id: ident)+) => {
-        $crate::__macro_helpers::precompile!($crate wgsl true $path $entry $id)
+    ($path: literal, $entry: literal, $($id: ident)*) => {
+        $crate::__macro_helpers::precompile!($crate wgsl true $path $entry $($id)*)
     };
 }
 
@@ -264,7 +261,7 @@ macro_rules! include_precompiled_wgsl {
 /// This macro is always valid when the `precompile` feature is enabled, even if the `wgsl` feature isn't enabled.
 ///
 /// ```ignore
-/// device.create_shader_module_passthrough(precompile_wgsl!("<raw shader>", "entry_point_name"))
+/// device.create_shader_module_passthrough(precompile_wgsl!("<raw shader>", "entry_point_name",))
 /// ```
 /// or
 /// ```ignore
@@ -277,11 +274,8 @@ macro_rules! include_precompiled_wgsl {
 #[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! precompile_wgsl {
-    ($shader: literal, $entry: literal) => {
-        $crate::__macro_helpers::precompile!($crate wgsl false $shader $entry all)
-    };
-    ($shader: literal, $entry: literal,$($id: ident)+) => {
-        $crate::__macro_helpers::precompile!($crate wgsl false $shader $entry $id)
+    ($shader: literal, $entry: literal, $($id: ident)*) => {
+        $crate::__macro_helpers::precompile!($crate wgsl false $shader $entry $($id)*)
     };
 }
 
@@ -293,7 +287,7 @@ macro_rules! precompile_wgsl {
 /// enabled.
 ///
 /// ```ignore
-/// device.create_shader_module_passthrough(include_precompiled_spirv!("path/to/file", "entry_point_name"))
+/// device.create_shader_module_passthrough(include_precompiled_spirv!("path/to/file", "entry_point_name",))
 /// ```
 /// or
 /// ```ignore
@@ -306,11 +300,8 @@ macro_rules! precompile_wgsl {
 #[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! include_precompiled_spirv {
-    ($path: literal, $entry: literal) => {
-        $crate::__macro_helpers::precompile!($crate spirv true $path $entry all)
-    };
-    ($path: literal, $entry: literal,$($id: ident)+) => {
-        $crate::__macro_helpers::precompile!($crate spirv true $path $entry $id)
+    ($path: literal, $entry: literal, $($id: ident)*) => {
+        $crate::__macro_helpers::precompile!($crate spirv true $path $entry $($id)*)
     };
 }
 
@@ -321,11 +312,11 @@ macro_rules! include_precompiled_spirv {
 /// This macro is always valid, even if the `glsl` feature isn't enabled.
 ///
 /// ```ignore
-/// device.create_shader_module_passthrough(include_precompiled_wgsl!("path/to/file", "entry_point_name"))
+/// device.create_shader_module_passthrough(include_precompiled_wgsl!("path/to/file", shader_stage, "entry_point_name",))
 /// ```
 /// or
 /// ```ignore
-/// device.create_shader_module_passthrough(include_precompiled_wgsl!("path/to/file", "entry_point_name", backends))
+/// device.create_shader_module_passthrough(include_precompiled_wgsl!("path/to/file", shader_stage, "entry_point_name", backends))
 /// ```
 /// If specified, backends is a list of shader languages to be used, without comma separators. For example,
 /// `wgsl glsl hlsl spirv msl`. If the `all` backend is specified, then all shader languages supported by the
@@ -334,11 +325,8 @@ macro_rules! include_precompiled_spirv {
 #[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! include_precompiled_glsl {
-    ($path: literal, $entry: literal) => {
-        $crate::__macro_helpers::precompile!($crate glsl true $path $entry all)
-    };
-    ($path: literal, $entry: literal,$($id: ident)+) => {
-        $crate::__macro_helpers::precompile!($crate glsl true $path $entry $id)
+    ($path: literal, $stage: ident, $($id: ident)*) => {
+        $crate::__macro_helpers::precompile!($crate glsl $stage true $path "main" $($id)*)
     };
 }
 
@@ -348,7 +336,7 @@ macro_rules! include_precompiled_glsl {
 /// This macro is always valid when the `precompile` feature is enabled, even if the `glsl` feature isn't enabled.
 ///
 /// ```ignore
-/// device.create_shader_module_passthrough(precompile_wgsl!("<raw shader>", "entry_point_name"))
+/// device.create_shader_module_passthrough(precompile_wgsl!("<raw shader>", "entry_point_name",))
 /// ```
 /// or
 /// ```ignore
@@ -361,11 +349,8 @@ macro_rules! include_precompiled_glsl {
 #[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! precompile_glsl {
-    ($shader: literal, $entry: literal) => {
-        $crate::__macro_helpers::precompile!($crate glsl false $shader $entry all)
-    };
-    ($shader: literal, $entry: literal,$($id: ident)+) => {
-        $crate::__macro_helpers::precompile!($crate glsl false $shader $entry $id)
+    ($shader: literal, $stage: ident, $($id: ident)*) => {
+        $crate::__macro_helpers::precompile!($crate glsl $stage false $shader "main" $($id)*)
     };
 }
 
