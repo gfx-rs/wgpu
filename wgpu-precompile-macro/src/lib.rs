@@ -27,7 +27,6 @@ enum CompileTarget {
     Hlsl,
     Spirv,
     Glsl,
-    Dxil,
     AllSupported,
 }
 impl CompileTarget {
@@ -38,7 +37,6 @@ impl CompileTarget {
             "hlsl" => Self::Hlsl,
             "spirv" => Self::Spirv,
             "glsl" => Self::Glsl,
-            "dxil" => Self::Dxil,
             "all" => Self::AllSupported,
             other => panic!("Unrecognized compile target: {other}"),
         }
@@ -122,10 +120,6 @@ impl MacroArgs {
         if self.targets.contains(&target) {
             return true;
         } else if self.targets.contains(&CompileTarget::AllSupported) {
-            #[cfg(feature = "dxil")]
-            if target == CompileTarget::Dxil {
-                return true;
-            }
             #[cfg(feature = "glsl")]
             if target == CompileTarget::Glsl {
                 return true;
@@ -235,6 +229,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
         }
     };
 
+    // TODO: compile DXIL if DXC can be detected
     let hlsl_tokens = if args.target_enabled(CompileTarget::Hlsl) {
         let mut hlsl_str = String::new();
         naga::back::hlsl::Writer::new(

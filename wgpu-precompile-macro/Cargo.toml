@@ -13,12 +13,16 @@ license.workspace = true
 proc-macro = true
 
 [features]
+
+# Wgpu enables these features if the corresponding backend's feature is enabled.
+# That means even if we are compiling to Windows, the MSL feature will be enabled
+# by default. So eventually to not include unnecessary shader files we should add
+# extra logic to detect target platforms and such.
 msl = ["naga/msl-out"]
 wgsl = ["naga/wgsl-out"]
 spv = ["naga/spv-out"]
 glsl = ["naga/glsl-out"]
 hlsl = ["naga/hlsl-out"]
-dxil = ["hlsl"]
 
 [dependencies]
 naga = { workspace = true, features = ["spv-in", "wgsl-in", "glsl-in"] }
