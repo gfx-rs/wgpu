@@ -274,33 +274,47 @@ pub fn precompile(input: TokenStream) -> TokenStream {
     #[cfg(not(feature = "msl"))]
     let msl_tokens = none_tokens.clone();
 
-    // TODO: compile DXIL if DXC can be detected
+    #[cfg(feature = "hlsl")]
+    let (hlsl_str, hlsl_entry_point) =
+        if args.target_enabled(CompileTarget::Hlsl) || args.target_enabled(CompileTarget::Dxil) {
+            let mut hlsl_str = String::new();
+            let reflection = naga::back::hlsl::Writer::new(
+                &mut hlsl_str,
+                &naga::back::hlsl::Options::default(),
+                &naga::back::hlsl::PipelineOptions {
+                    entry_point: Some((shader_stage, args.entry_point.clone())),
+                },
+            )
+            .write(&module, &module_info, None)
+            .expect("Naga failed to write HLSL code");
+            let entry_point = reflection.entry_point_names[0].as_ref().unwrap();
+            (hlsl_str, entry_point.clone())
+        } else {
+            (String::new(), String::new())
+        };
+
     #[cfg(feature = "hlsl")]
     let hlsl_tokens = if args.target_enabled(CompileTarget::Hlsl) {
-        let mut hlsl_str = String::new();
-        let reflection = naga::back::hlsl::Writer::new(
-            &mut hlsl_str,
-            &naga::back::hlsl::Options::default(),
-            &naga::back::hlsl::PipelineOptions {
-                entry_point: Some((shader_stage, args.entry_point.clone())),
-            },
-        )
-        .write(&module, &module_info, None)
-        .expect("Naga failed to write HLSL code");
-        let entry_point = reflection.entry_point_names[0].as_ref().unwrap();
         quote! {
             #wgpu_path::__macro_helpers::Some(#wgpu_path::HlslPassthroughDescriptor {
                 code: #wgpu_path::__macro_helpers::Cow::Borrowed(#hlsl_str),
-                entry_point: #wgpu_path::__macro_helpers::ToString::to_string(#entry_point),
+                entry_point: #wgpu_path::__macro_helpers::ToString::to_string(#hlsl_entry_point),
             })
         }
     } else {
-        quote! {
-            #wgpu_path::__macro_helpers::None
-        }
+        none_tokens.clone()
     };
     #[cfg(not(feature = "hlsl"))]
     let hlsl_tokens = none_tokens.clone();
+
+    #[cfg(feature = "hlsl")]
+    let dxil_tokens = if args.target_enabled(CompileTarget::Dxil) {
+        todo!()
+    } else {
+        none_tokens.clone()
+    };
+    #[cfg(not(feature = "hlsl"))]
+    let dxil_tokens = none_tokens.clone();
 
     #[cfg(feature = "wgsl")]
     let wgsl_tokens = if args.target_enabled(CompileTarget::Wgsl) {
@@ -369,7 +383,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
             num_workgroups: (#x, #y, #z),
             runtime_checks: #wgpu_path::ShaderRuntimeChecks::default(),
             spirv: #spirv_tokens,
-            dxil: #wgpu_path::__macro_helpers::None,
+            dxil: #dxil_tokens,
             msl: #msl_tokens,
             hlsl: #hlsl_tokens,
             glsl: #glsl_tokens,

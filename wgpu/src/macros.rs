@@ -237,16 +237,13 @@ macro_rules! hal_type_gles {
 /// This macro is always valid, even if the `wgsl` feature isn't enabled.
 ///
 /// ```ignore
-/// device.create_shader_module_passthrough(include_precompiled_wgsl!("path/to/file", "entry_point_name",))
-/// ```
-/// or
-/// ```ignore
 /// device.create_shader_module_passthrough(include_precompiled_wgsl!("path/to/file", "entry_point_name", backends))
 /// ```
-/// If specified, backends is a list of shader languages to be used, without comma separators. For example,
-/// `wgsl glsl hlsl spirv msl`. If the `all` backend is specified, then all shader languages supported by the
-/// backends in wgpu features will be compiled for. All backends will be compiled for by naga; the input wgsl
-/// code won't be the same as the output wgsl.
+/// Backends is a list of shader languages to be written, without comma separators. For example,
+/// `wgsl glsl hlsl spirv msl dxil`. If the `all` backend is specified, then all shader languages supported by the
+/// backends in wgpu features will be compiled for (except dxil which must be specified separately). If the dxil
+/// backend is enabled, hlsl won't be compiled. All backends will be compiled for by naga; the input wgsl code won't
+/// necessarily be the same as the output wgsl.
 #[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! include_precompiled_wgsl {
@@ -261,16 +258,13 @@ macro_rules! include_precompiled_wgsl {
 /// This macro is always valid when the `precompile` feature is enabled, even if the `wgsl` feature isn't enabled.
 ///
 /// ```ignore
-/// device.create_shader_module_passthrough(precompile_wgsl!("<raw shader>", "entry_point_name",))
+/// device.create_shader_module_passthrough(precompile_wgsl!("shader_code", "entry_point_name", backends))
 /// ```
-/// or
-/// ```ignore
-/// device.create_shader_module_passthrough(precompile_wgsl!("<raw shader>", "entry_point_name", backends))
-/// ```
-/// If specified, backends is a list of shader languages to be used, without comma separators. For example,
-/// `wgsl glsl hlsl spirv msl`. If the `all` backend is specified, then all shader languages supported by the
-/// backends in wgpu features will be compiled for. All backends will be compiled for by naga; the input wgsl
-/// code won't be the same as the output wgsl.
+/// Backends is a list of shader languages to be written, without comma separators. For example,
+/// `wgsl glsl hlsl spirv msl dxil`. If the `all` backend is specified, then all shader languages supported by the
+/// backends in wgpu features will be compiled for (except dxil which must be specified separately). If the dxil
+/// backend is enabled, hlsl won't be compiled. All backends will be compiled for by naga; the input wgsl code won't
+/// necessarily be the same as the output wgsl.
 #[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! precompile_wgsl {
@@ -287,16 +281,13 @@ macro_rules! precompile_wgsl {
 /// enabled.
 ///
 /// ```ignore
-/// device.create_shader_module_passthrough(include_precompiled_spirv!("path/to/file", "entry_point_name",))
-/// ```
-/// or
-/// ```ignore
 /// device.create_shader_module_passthrough(include_precompiled_spirv!("path/to/file", "entry_point_name", backends))
 /// ```
-/// If specified, backends is a list of shader languages to be used, without comma separators. For example,
-/// `wgsl glsl hlsl spirv msl`. If the `all` backend is specified, then all shader languages supported by the
-/// backends in wgpu features will be compiled for. All backends will be compiled for by naga; the input spirv
-/// code won't be the same as the output spirv.
+/// Backends is a list of shader languages to be written, without comma separators. For example,
+/// `wgsl glsl hlsl spirv msl dxil`. If the `all` backend is specified, then all shader languages supported by the
+/// backends in wgpu features will be compiled for (except dxil which must be specified separately). If the dxil
+/// backend is enabled, hlsl won't be compiled. All backends will be compiled for by naga; the input spirv code won't
+/// necessarily be the same as the output spirv.
 #[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! include_precompiled_spirv {
@@ -312,16 +303,13 @@ macro_rules! include_precompiled_spirv {
 /// This macro is always valid, even if the `glsl` feature isn't enabled.
 ///
 /// ```ignore
-/// device.create_shader_module_passthrough(include_precompiled_wgsl!("path/to/file", shader_stage, "entry_point_name",))
+/// device.create_shader_module_passthrough(include_precompiled_glsl!("path/to/file", "entry_point_name", backends))
 /// ```
-/// or
-/// ```ignore
-/// device.create_shader_module_passthrough(include_precompiled_wgsl!("path/to/file", shader_stage, "entry_point_name", backends))
-/// ```
-/// If specified, backends is a list of shader languages to be used, without comma separators. For example,
-/// `wgsl glsl hlsl spirv msl`. If the `all` backend is specified, then all shader languages supported by the
-/// backends in wgpu features will be compiled for. All backends will be compiled for by naga; the input glsl
-/// code won't be the same as the output glsl.
+/// Backends is a list of shader languages to be written, without comma separators. For example,
+/// `wgsl glsl hlsl spirv msl dxil`. If the `all` backend is specified, then all shader languages supported by the
+/// backends in wgpu features will be compiled for (except dxil which must be specified separately). If the dxil
+/// backend is enabled, hlsl won't be compiled. All backends will be compiled for by naga; the input glsl code won't
+/// necessarily be the same as the output glsl.
 #[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! include_precompiled_glsl {
@@ -336,16 +324,13 @@ macro_rules! include_precompiled_glsl {
 /// This macro is always valid when the `precompile` feature is enabled, even if the `glsl` feature isn't enabled.
 ///
 /// ```ignore
-/// device.create_shader_module_passthrough(precompile_wgsl!("<raw shader>", "entry_point_name",))
+/// device.create_shader_module_passthrough(precompile_glsl!("shader_code", "entry_point_name", backends))
 /// ```
-/// or
-/// ```ignore
-/// device.create_shader_module_passthrough(precompile_wgsl!("<raw shader>", "entry_point_name", backends))
-/// ```
-/// If specified, backends is a list of shader languages to be used, without comma separators. For example,
-/// `wgsl glsl hlsl spirv msl`. If the `all` backend is specified, then all shader languages supported by the
-/// backends in wgpu features will be compiled for. All backends will be compiled for by naga; the input glsl
-/// code won't be the same as the output glsl.
+/// Backends is a list of shader languages to be written, without comma separators. For example,
+/// `wgsl glsl hlsl spirv msl dxil`. If the `all` backend is specified, then all shader languages supported by the
+/// backends in wgpu features will be compiled for (except dxil which must be specified separately). If the dxil
+/// backend is enabled, hlsl won't be compiled. All backends will be compiled for by naga; the input glsl code won't
+/// be the same as the output glsl.
 #[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! precompile_glsl {
