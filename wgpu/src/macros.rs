@@ -240,8 +240,10 @@ macro_rules! precompile_wgsl {
 #[doc(hidden)]
 pub mod helpers {
     pub use alloc::borrow::Cow;
+    pub use alloc::string::String;
     pub use core::{include_bytes, include_str};
     #[cfg(feature = "precompile")]
     pub use wgpu_precompile_macro::precompile;
+    pub use None;
     pub use Some;
 }
