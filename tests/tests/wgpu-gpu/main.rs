@@ -43,6 +43,7 @@ mod pipeline;
 mod pipeline_cache;
 mod planar_texture;
 mod poll;
+mod precompile;
 mod push_constants;
 mod query_set;
 mod queue_transfer;
@@ -104,6 +105,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     planar_texture::all_tests(&mut tests);
     poll::all_tests(&mut tests);
     push_constants::all_tests(&mut tests);
+    precompile::all_tests(&mut tests);
     query_set::all_tests(&mut tests);
     queue_transfer::all_tests(&mut tests);
     ray_tracing::all_tests(&mut tests);

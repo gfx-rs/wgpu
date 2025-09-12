@@ -34,7 +34,7 @@ webgl = ["wgpu/webgl"]
 test-build-with-profiling = ["profiling/type-check"]
 
 [dependencies]
-wgpu = { workspace = true, features = ["noop"] }
+wgpu = { workspace = true, features = ["noop", "precompile"] }
 wgpu-hal = { workspace = true, features = ["validation_canary"] }
 wgpu-macros.workspace = true
 

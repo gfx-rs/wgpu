@@ -100,6 +100,9 @@ impl Parse for MacroArgs {
             } else {
                 relative_path
             };
+            if !path_to_read.is_file() {
+                panic!("Path does not exist or is not a file: {path_to_read:?}")
+            }
             let bytes = std::fs::read(path_to_read).expect("Failed to read input file");
             (ShaderSource::File(bytes), Some(file_name))
         } else {
