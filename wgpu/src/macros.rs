@@ -230,10 +230,11 @@ macro_rules! hal_type_gles {
     };
 }
 
+#[macro_export]
 #[cfg(feature = "precompile")]
 macro_rules! precompile_wgsl {
-    () => {
-        $crate::__macro_helpers::precompile($crate)
+    ($path: literal, $entry: literal) => {
+        $crate::__macro_helpers::precompile!($crate wgsl true $path $entry all)
     };
 }
 

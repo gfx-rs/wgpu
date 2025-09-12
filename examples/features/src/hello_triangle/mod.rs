@@ -45,12 +45,17 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     let swapchain_capabilities = surface.get_capabilities(&adapter);
     let swapchain_format = swapchain_capabilities.formats[0];
-
     let vs_shader = unsafe {
-        device.create_shader_module_passthrough(wgpu::__macro_helpers::precompile!(wgpu wgsl true "src/hello_triangle/shader.wgsl" "vs_main" spirv msl hlsl wgsl glsl dxil))
+        device.create_shader_module_passthrough(wgpu::precompile_wgsl!(
+            "src/hello_triangle/shader.wgsl",
+            "vs_main"
+        ))
     };
     let fs_shader = unsafe {
-        device.create_shader_module_passthrough(wgpu::__macro_helpers::precompile!(wgpu wgsl true "src/hello_triangle/shader.wgsl" "fs_main" spirv msl hlsl wgsl glsl dxil))
+        device.create_shader_module_passthrough(wgpu::precompile_wgsl!(
+            "src/hello_triangle/shader.wgsl",
+            "fs_main"
+        ))
     };
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

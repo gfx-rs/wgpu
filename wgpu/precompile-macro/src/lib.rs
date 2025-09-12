@@ -28,6 +28,7 @@ enum CompileTarget {
     Spirv,
     Glsl,
     Dxil,
+    AllSupported,
 }
 impl CompileTarget {
     fn parse(str: &str) -> Self {
@@ -38,11 +39,13 @@ impl CompileTarget {
             "spirv" => Self::Spirv,
             "glsl" => Self::Glsl,
             "dxil" => Self::Dxil,
+            "all" => Self::AllSupported,
             other => panic!("Unrecognized compile target: {other}"),
         }
     }
 }
 
+#[derive(Clone)]
 enum ShaderSource {
     String(String),
     File(Vec<u8>),
@@ -69,6 +72,7 @@ struct MacroArgs {
     source: ShaderSource,
     targets: HashSet<CompileTarget>,
     entry_point: String,
+    file_name: Option<String>,
 }
 impl Parse for MacroArgs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
@@ -84,18 +88,24 @@ impl Parse for MacroArgs {
             targets.insert(target);
         }
 
-        let source = if is_file_path {
+        let (source, file_name) = if is_file_path {
             let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
             let relative_path = PathBuf::from(source_literal);
+            let file_name = relative_path
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_owned();
             let path_to_read = if relative_path.is_relative() {
                 PathBuf::from(manifest_dir).join(relative_path)
             } else {
                 relative_path
             };
             let bytes = std::fs::read(path_to_read).expect("Failed to read input file");
-            ShaderSource::File(bytes)
+            (ShaderSource::File(bytes), Some(file_name))
         } else {
-            ShaderSource::String(source_literal)
+            (ShaderSource::String(source_literal), None)
         };
         Ok(Self {
             wgpu_crate,
@@ -103,7 +113,37 @@ impl Parse for MacroArgs {
             source,
             entry_point,
             targets,
+            file_name,
         })
+    }
+}
+impl MacroArgs {
+    fn target_enabled(&self, target: CompileTarget) -> bool {
+        if self.targets.contains(&target) {
+            return true;
+        } else if self.targets.contains(&CompileTarget::AllSupported) {
+            #[cfg(feature = "dxil")]
+            if target == CompileTarget::Dxil {
+                return true;
+            }
+            #[cfg(feature = "glsl")]
+            if target == CompileTarget::Glsl {
+                return true;
+            }
+            #[cfg(feature = "hlsl")]
+            if target == CompileTarget::Hlsl {
+                return true;
+            }
+            #[cfg(feature = "spv")]
+            if target == CompileTarget::Spirv {
+                return true;
+            }
+            #[cfg(feature = "msl")]
+            if target == CompileTarget::Msl {
+                return true;
+            }
+        }
+        false
     }
 }
 
@@ -116,7 +156,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
     let args = parse_macro_input!(input as MacroArgs);
     let module = match args.source_type {
         SourceType::Spirv => {
-            let source = args.source.expect_bytes();
+            let source = args.source.clone().expect_bytes();
             let options = naga::front::spv::Options {
                 adjust_coordinate_space: false, // we require NDC_Y_UP feature
                 strict_capabilities: true,
@@ -126,7 +166,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
                 .expect("Naga failed to parse SPIR-V input")
         }
         SourceType::Wgsl => {
-            let source = args.source.expect_string();
+            let source = args.source.clone().expect_string();
             naga::front::wgsl::parse_str(&source).expect("Naga failed to parse WGSL input")
         }
         SourceType::Glsl => {
@@ -153,7 +193,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
 
     let wgpu_path = &args.wgpu_crate;
 
-    let spirv_tokens = if args.targets.contains(&CompileTarget::Spirv) {
+    let spirv_tokens = if args.target_enabled(CompileTarget::Spirv) {
         let spirv_data = naga::back::spv::write_vec(
             &module,
             &module_info,
@@ -173,7 +213,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
         }
     };
 
-    let msl_tokens = if args.targets.contains(&CompileTarget::Msl) {
+    let msl_tokens = if args.target_enabled(CompileTarget::Msl) {
         let msl_str = naga::back::msl::write_string(
             &module,
             &module_info,
@@ -194,7 +234,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
         }
     };
 
-    let hlsl_tokens = if args.targets.contains(&CompileTarget::Hlsl) {
+    let hlsl_tokens = if args.target_enabled(CompileTarget::Hlsl) {
         let mut hlsl_str = String::new();
         naga::back::hlsl::Writer::new(
             &mut hlsl_str,
@@ -214,7 +254,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
         }
     };
 
-    let wgsl_tokens = if args.targets.contains(&CompileTarget::Wgsl) {
+    let wgsl_tokens = if args.target_enabled(CompileTarget::Wgsl) {
         let mut wgsl_str = String::new();
         naga::back::wgsl::Writer::new(&mut wgsl_str, naga::back::wgsl::WriterFlags::empty())
             .write(&module, &module_info)
@@ -228,7 +268,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
         }
     };
 
-    let glsl_tokens = if args.targets.contains(&CompileTarget::Glsl) {
+    let glsl_tokens = if args.target_enabled(CompileTarget::Glsl) {
         let mut glsl_str = String::new();
         naga::back::glsl::Writer::new(
             &mut glsl_str,
@@ -254,12 +294,17 @@ pub fn precompile(input: TokenStream) -> TokenStream {
         }
     };
 
+    let label_tokens = match args.file_name {
+        Some(f) => quote! {#wgpu_path::__macro_helpers::Some(#f)},
+        None => quote! {#wgpu_path::__macro_helpers::None},
+    };
+
     let entry_point = &args.entry_point;
 
     quote! {
         #wgpu_path::ShaderModuleDescriptorPassthrough {
             // TODO: make this something else when file name is provided
-            label: #wgpu_path::__macro_helpers::None,
+            label: #label_tokens,
             entry_point: #wgpu_path::__macro_helpers::String::from(#entry_point),
             num_workgroups: (#x, #y, #z),
             runtime_checks: #wgpu_path::ShaderRuntimeChecks::unchecked(),

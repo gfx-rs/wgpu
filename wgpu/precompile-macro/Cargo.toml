@@ -13,18 +13,15 @@ license.workspace = true
 proc-macro = true
 
 [features]
+msl = ["naga/msl-out"]
+wgsl = ["naga/wgsl-out"]
+spv = ["naga/spv-out"]
+glsl = ["naga/glsl-out"]
+hlsl = ["naga/hlsl-out"]
+dxil = ["hlsl"]
 
 [dependencies]
-naga = { workspace = true, features = [
-    "spv-in",
-    "wgsl-in",
-    "glsl-in",
-    "msl-out",
-    "wgsl-out",
-    "spv-out",
-    "hlsl-out",
-    "glsl-out",
-] }
+naga = { workspace = true, features = ["spv-in", "wgsl-in", "glsl-in"] }
 
 quote.workspace = true
 syn = { workspace = true, features = ["full"] }

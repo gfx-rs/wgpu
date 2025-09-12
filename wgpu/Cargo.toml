@@ -44,19 +44,20 @@ default = [
 # --------------------------------------------------------------------
 
 ## Enables the DX12 backend on Windows.
-dx12 = ["wgpu-core?/dx12"]
+dx12 = ["wgpu-core?/dx12", "wgpu-precompile-macro/hlsl"]
 
 ## Enables the Metal backend on macOS & iOS.
-metal = ["wgpu-core?/metal"]
+metal = ["wgpu-core?/metal", "wgpu-precompile-macro/msl"]
 
 ## Enables the Vulkan backend on Windows, Linux, and Android.
-vulkan = ["wgpu-core?/vulkan"]
+vulkan = ["wgpu-core?/vulkan", "wgpu-precompile-macro/spv"]
 
 ## Enables the OpenGL/GLES backend on Windows, Linux, Android, and Emscripten.
-gles = ["wgpu-core?/gles"]
+gles = ["wgpu-core?/gles", "wgpu-precompile-macro/glsl"]
 
 ## Enables the WebGPU backend on WebAssembly.
 webgpu = [
+    "wgpu-precompile-macro/wgsl",
     "web",
     "naga?/wgsl-out",
     "dep:wasm-bindgen-futures",
