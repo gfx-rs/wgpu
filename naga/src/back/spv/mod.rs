@@ -448,7 +448,13 @@ struct LookupFunctionType {
 }
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
-enum LookupRayQueryFuction {
+#[expect(dead_code)]
+enum LookupRayQueryFunction {
+    Initialize,
+    Proceed,
+    GenerateIntersection,
+    ConfirmIntersection,
+    GetVertexPositions { committed: bool },
     GetIntersection { committed: bool },
 }
 
@@ -785,7 +791,7 @@ pub struct Writer {
     // Just a temporary list of SPIR-V ids
     temp_list: Vec<Word>,
 
-    ray_query_functions: crate::FastHashMap<LookupRayQueryFuction, Word>,
+    ray_query_functions: crate::FastHashMap<LookupRayQueryFunction, Word>,
 
     /// F16 I/O polyfill manager for handling `f16` input/output variables
     /// when `StorageInputOutput16` capability is not available.
@@ -824,6 +830,12 @@ bitflags::bitflags! {
         ///
         /// [`BuiltIn::FragDepth`]: crate::BuiltIn::FragDepth
         const CLAMP_FRAG_DEPTH = 0x10;
+
+        /// Instead of silently failing if the arguments to generate a ray query are
+        /// invalid, uses debug printf extension to print to the command line
+        ///
+        /// Note: VK_KHR_shader_non_semantic_info must be enabled.
+        const PRINT_ON_RAY_QUERY_INITIALIZATION_FAIL = 0x20;
     }
 }
 

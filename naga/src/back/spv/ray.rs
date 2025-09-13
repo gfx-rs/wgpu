@@ -2,13 +2,46 @@
 Generating SPIR-V for ray query operations.
 */
 
-use alloc::vec;
+use alloc::{vec, vec::Vec};
 
 use super::{
     Block, BlockContext, Function, FunctionArgument, Instruction, LookupFunctionType, NumericType,
     Writer,
 };
-use crate::{arena::Handle, back::spv::LookupRayQueryFuction};
+use crate::{arena::Handle, back::spv::LookupRayQueryFunction};
+
+/// helper function to check if a particular flag is set in a u32.
+fn write_ray_flags_contains_flags(
+    writer: &mut Writer,
+    block: &mut Block,
+    id: spirv::Word,
+    flag: u32,
+) -> spirv::Word {
+    let bit_id = writer.get_constant_scalar(crate::Literal::U32(flag));
+    let zero_id = writer.get_constant_scalar(crate::Literal::U32(0));
+    let u32_type_id = writer.get_u32_type_id();
+    let bool_ty = writer.get_bool_type_id();
+
+    let and_id = writer.id_gen.next();
+    block.body.push(Instruction::binary(
+        spirv::Op::BitwiseAnd,
+        u32_type_id,
+        and_id,
+        id,
+        bit_id,
+    ));
+
+    let eq_id = writer.id_gen.next();
+    block.body.push(Instruction::binary(
+        spirv::Op::INotEqual,
+        bool_ty,
+        eq_id,
+        and_id,
+        zero_id,
+    ));
+
+    eq_id
+}
 
 impl Writer {
     pub(super) fn write_ray_query_get_intersection_function(
@@ -16,11 +49,11 @@ impl Writer {
         is_committed: bool,
         ir_module: &crate::Module,
     ) -> spirv::Word {
-        if let Some(&word) = self
-            .ray_query_functions
-            .get(&LookupRayQueryFuction::GetIntersection {
-                committed: is_committed,
-            })
+        if let Some(&word) =
+            self.ray_query_functions
+                .get(&LookupRayQueryFunction::GetIntersection {
+                    committed: is_committed,
+                })
         {
             return word;
         }
@@ -444,11 +477,501 @@ impl Writer {
 
         function.to_words(&mut self.logical_layout.function_definitions);
         self.ray_query_functions.insert(
-            LookupRayQueryFuction::GetIntersection {
+            LookupRayQueryFunction::GetIntersection {
                 committed: is_committed,
             },
             func_id,
         );
+        func_id
+    }
+
+    fn write_ray_query_initialize(&mut self, ir_module: &crate::Module) -> spirv::Word {
+        if let Some(&word) = self
+            .ray_query_functions
+            .get(&LookupRayQueryFunction::Initialize)
+        {
+            return word;
+        }
+
+        let ray_query_type_id = self.get_ray_query_pointer_id();
+        let acceleration_structure_type_id =
+            self.get_localtype_id(super::LocalType::AccelerationStructure);
+        let ray_desc_type_id = self.get_handle_type_id(
+            ir_module
+                .special_types
+                .ray_desc
+                .expect("ray desc should be set if ray queries are being initialized"),
+        );
+
+        let u32_ty = self.get_u32_type_id();
+        let u32_ptr_ty = self.get_pointer_type_id(u32_ty, spirv::StorageClass::Function);
+
+        let bool_type_id = self.get_bool_type_id();
+        let bool_vec3_type_id = self.get_vec3_bool_type_id();
+
+        let func_ty = self.get_function_type(LookupFunctionType {
+            parameter_type_ids: vec![
+                ray_query_type_id,
+                acceleration_structure_type_id,
+                ray_desc_type_id,
+                u32_ptr_ty,
+            ],
+            return_type_id: self.void_type,
+        });
+
+        let mut function = Function::default();
+        let func_id = self.id_gen.next();
+        function.signature = Some(Instruction::function(
+            self.void_type,
+            func_id,
+            spirv::FunctionControl::empty(),
+            func_ty,
+        ));
+
+        let query_id = self.id_gen.next();
+        let instruction = Instruction::function_parameter(ray_query_type_id, query_id);
+        function.parameters.push(FunctionArgument {
+            instruction,
+            handle_id: 0,
+        });
+
+        let acceleration_structure_id = self.id_gen.next();
+        let instruction = Instruction::function_parameter(
+            acceleration_structure_type_id,
+            acceleration_structure_id,
+        );
+        function.parameters.push(FunctionArgument {
+            instruction,
+            handle_id: 1,
+        });
+
+        let desc_id = self.id_gen.next();
+        let instruction = Instruction::function_parameter(ray_desc_type_id, desc_id);
+        function.parameters.push(FunctionArgument {
+            instruction,
+            handle_id: 2,
+        });
+
+        let init_tracker_id = self.id_gen.next();
+        let instruction = Instruction::function_parameter(u32_ptr_ty, init_tracker_id);
+        function.parameters.push(FunctionArgument {
+            instruction,
+            handle_id: 3,
+        });
+
+        let label_id = self.id_gen.next();
+        let mut block = Block::new(label_id);
+
+        let flag_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::U32));
+
+        //Note: composite extract indices and types must match `generate_ray_desc_type`
+        let ray_flags_id = self.id_gen.next();
+        block.body.push(Instruction::composite_extract(
+            flag_type_id,
+            ray_flags_id,
+            desc_id,
+            &[0],
+        ));
+        let cull_mask_id = self.id_gen.next();
+        block.body.push(Instruction::composite_extract(
+            flag_type_id,
+            cull_mask_id,
+            desc_id,
+            &[1],
+        ));
+
+        let scalar_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::F32));
+        let tmin_id = self.id_gen.next();
+        block.body.push(Instruction::composite_extract(
+            scalar_type_id,
+            tmin_id,
+            desc_id,
+            &[2],
+        ));
+        let tmax_id = self.id_gen.next();
+        block.body.push(Instruction::composite_extract(
+            scalar_type_id,
+            tmax_id,
+            desc_id,
+            &[3],
+        ));
+
+        let vector_type_id = self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Tri,
+            scalar: crate::Scalar::F32,
+        });
+        let ray_origin_id = self.id_gen.next();
+        block.body.push(Instruction::composite_extract(
+            vector_type_id,
+            ray_origin_id,
+            desc_id,
+            &[4],
+        ));
+        let ray_dir_id = self.id_gen.next();
+        block.body.push(Instruction::composite_extract(
+            vector_type_id,
+            ray_dir_id,
+            desc_id,
+            &[5],
+        ));
+
+        let tmin_le_tmax_id = self.id_gen.next();
+        // Because this checks if tmin and tmax are ordered too (i.e: not NaN), there is no need for an additional check.
+        block.body.push(Instruction::binary(
+            spirv::Op::FOrdLessThanEqual,
+            bool_type_id,
+            tmin_le_tmax_id,
+            tmin_id,
+            tmax_id,
+        ));
+
+        let tmin_ge_zero_id = self.id_gen.next();
+        let zero_id = self.get_constant_scalar(crate::Literal::F32(0.0));
+        block.body.push(Instruction::binary(
+            spirv::Op::FOrdGreaterThanEqual,
+            bool_type_id,
+            tmin_ge_zero_id,
+            tmin_id,
+            zero_id,
+        ));
+
+        let ray_origin_infinite_id = self.id_gen.next();
+        block.body.push(Instruction::unary(
+            spirv::Op::IsInf,
+            bool_vec3_type_id,
+            ray_origin_infinite_id,
+            ray_origin_id,
+        ));
+        let any_ray_origin_infinite_id = self.id_gen.next();
+        block.body.push(Instruction::unary(
+            spirv::Op::Any,
+            bool_type_id,
+            any_ray_origin_infinite_id,
+            ray_origin_infinite_id,
+        ));
+
+        let ray_origin_nan_id = self.id_gen.next();
+        block.body.push(Instruction::unary(
+            spirv::Op::IsNan,
+            bool_vec3_type_id,
+            ray_origin_nan_id,
+            ray_origin_id,
+        ));
+        let any_ray_origin_nan_id = self.id_gen.next();
+        block.body.push(Instruction::unary(
+            spirv::Op::Any,
+            bool_type_id,
+            any_ray_origin_nan_id,
+            ray_origin_nan_id,
+        ));
+
+        let ray_origin_not_finite_id = self.id_gen.next();
+        block.body.push(Instruction::binary(
+            spirv::Op::LogicalOr,
+            bool_type_id,
+            ray_origin_not_finite_id,
+            any_ray_origin_nan_id,
+            any_ray_origin_infinite_id,
+        ));
+
+        let all_ray_origin_finite_id = self.id_gen.next();
+        block.body.push(Instruction::unary(
+            spirv::Op::LogicalNot,
+            bool_type_id,
+            all_ray_origin_finite_id,
+            ray_origin_not_finite_id,
+        ));
+
+        let ray_dir_infinite_id = self.id_gen.next();
+        block.body.push(Instruction::unary(
+            spirv::Op::IsInf,
+            bool_vec3_type_id,
+            ray_dir_infinite_id,
+            ray_dir_id,
+        ));
+        let any_ray_dir_infinite_id = self.id_gen.next();
+        block.body.push(Instruction::unary(
+            spirv::Op::Any,
+            bool_type_id,
+            any_ray_dir_infinite_id,
+            ray_dir_infinite_id,
+        ));
+
+        let ray_dir_nan_id = self.id_gen.next();
+        block.body.push(Instruction::unary(
+            spirv::Op::IsNan,
+            bool_vec3_type_id,
+            ray_dir_nan_id,
+            ray_dir_id,
+        ));
+        let any_ray_dir_nan_id = self.id_gen.next();
+        block.body.push(Instruction::unary(
+            spirv::Op::Any,
+            bool_type_id,
+            any_ray_dir_nan_id,
+            ray_dir_nan_id,
+        ));
+
+        let ray_dir_not_finite_id = self.id_gen.next();
+        block.body.push(Instruction::binary(
+            spirv::Op::LogicalOr,
+            bool_type_id,
+            ray_dir_not_finite_id,
+            any_ray_dir_nan_id,
+            any_ray_dir_infinite_id,
+        ));
+
+        let all_ray_dir_finite_id = self.id_gen.next();
+        block.body.push(Instruction::unary(
+            spirv::Op::LogicalNot,
+            bool_type_id,
+            all_ray_dir_finite_id,
+            ray_dir_not_finite_id,
+        ));
+
+        /// Writes spirv to check that less than two booleans are true
+        ///
+        /// For each boolean: removes it, `and`s it with all others (i.e for all possible combinations of two booleans in the list checks to see if both are true).
+        /// Then `or`s all of these checks together. This produces whether two or more booleans are true.
+        fn write_less_than_2_true(
+            writer: &mut Writer,
+            block: &mut Block,
+            mut bools: Vec<spirv::Word>,
+        ) -> spirv::Word {
+            assert!(bools.len() > 1, "Must have multiple booleans!");
+            let bool_ty = writer.get_bool_type_id();
+            let mut each_two_true = Vec::new();
+            while let Some(last_bool) = bools.pop() {
+                for &bool in &bools {
+                    let both_true_id = writer.id_gen.next();
+                    block.body.push(Instruction::binary(
+                        spirv::Op::LogicalAnd,
+                        bool_ty,
+                        both_true_id,
+                        last_bool,
+                        bool,
+                    ));
+                    each_two_true.push(both_true_id);
+                }
+            }
+            let mut all_or_id = each_two_true.pop().expect("since this must have multiple booleans, there must be at least one thing in `each_two_true");
+            for two_true in each_two_true {
+                let new_all_or_id = writer.id_gen.next();
+                block.body.push(Instruction::binary(
+                    spirv::Op::LogicalOr,
+                    bool_ty,
+                    new_all_or_id,
+                    all_or_id,
+                    two_true,
+                ));
+                all_or_id = new_all_or_id;
+            }
+
+            let less_than_two_id = writer.id_gen.next();
+            block.body.push(Instruction::unary(
+                spirv::Op::LogicalNot,
+                bool_ty,
+                less_than_two_id,
+                all_or_id,
+            ));
+            less_than_two_id
+        }
+
+        let contains_skip_triangles = write_ray_flags_contains_flags(
+            self,
+            &mut block,
+            ray_flags_id,
+            crate::RayFlag::SKIP_TRIANGLES.bits(),
+        );
+        let contains_skip_aabbs = write_ray_flags_contains_flags(
+            self,
+            &mut block,
+            ray_flags_id,
+            crate::RayFlag::SKIP_AABBS.bits(),
+        );
+
+        let not_contain_skip_triangles_aabbs = write_less_than_2_true(
+            self,
+            &mut block,
+            vec![contains_skip_triangles, contains_skip_aabbs],
+        );
+
+        let contains_cull_back = write_ray_flags_contains_flags(
+            self,
+            &mut block,
+            ray_flags_id,
+            crate::RayFlag::CULL_BACK_FACING.bits(),
+        );
+        let contains_cull_front = write_ray_flags_contains_flags(
+            self,
+            &mut block,
+            ray_flags_id,
+            crate::RayFlag::CULL_FRONT_FACING.bits(),
+        );
+
+        let not_contain_skip_triangles_cull = write_less_than_2_true(
+            self,
+            &mut block,
+            vec![
+                contains_skip_triangles,
+                contains_cull_back,
+                contains_cull_front,
+            ],
+        );
+
+        let contains_opaque = write_ray_flags_contains_flags(
+            self,
+            &mut block,
+            ray_flags_id,
+            crate::RayFlag::FORCE_OPAQUE.bits(),
+        );
+        let contains_no_opaque = write_ray_flags_contains_flags(
+            self,
+            &mut block,
+            ray_flags_id,
+            crate::RayFlag::FORCE_NO_OPAQUE.bits(),
+        );
+        let contains_cull_opaque = write_ray_flags_contains_flags(
+            self,
+            &mut block,
+            ray_flags_id,
+            crate::RayFlag::CULL_OPAQUE.bits(),
+        );
+        let contains_cull_no_opaque = write_ray_flags_contains_flags(
+            self,
+            &mut block,
+            ray_flags_id,
+            crate::RayFlag::CULL_NO_OPAQUE.bits(),
+        );
+
+        let not_contain_multiple_opaque = write_less_than_2_true(
+            self,
+            &mut block,
+            vec![
+                contains_opaque,
+                contains_no_opaque,
+                contains_cull_opaque,
+                contains_cull_no_opaque,
+            ],
+        );
+
+        let tmin_tmax_valid_id = self.id_gen.next();
+        block.body.push(Instruction::binary(
+            spirv::Op::LogicalAnd,
+            bool_type_id,
+            tmin_tmax_valid_id,
+            tmin_le_tmax_id,
+            tmin_ge_zero_id,
+        ));
+
+        let origin_dir_valid_id = self.id_gen.next();
+        block.body.push(Instruction::binary(
+            spirv::Op::LogicalAnd,
+            bool_type_id,
+            origin_dir_valid_id,
+            all_ray_origin_finite_id,
+            all_ray_dir_finite_id,
+        ));
+
+        let flags_skip_tri_aabbs_tri_cull_id = self.id_gen.next();
+        block.body.push(Instruction::binary(
+            spirv::Op::LogicalAnd,
+            bool_type_id,
+            flags_skip_tri_aabbs_tri_cull_id,
+            not_contain_skip_triangles_aabbs,
+            not_contain_skip_triangles_cull,
+        ));
+        let flags_valid_id = self.id_gen.next();
+        block.body.push(Instruction::binary(
+            spirv::Op::LogicalAnd,
+            bool_type_id,
+            flags_valid_id,
+            flags_skip_tri_aabbs_tri_cull_id,
+            not_contain_multiple_opaque,
+        ));
+
+        let tmin_tmax_origin_dir_valid_id = self.id_gen.next();
+        block.body.push(Instruction::binary(
+            spirv::Op::LogicalAnd,
+            bool_type_id,
+            tmin_tmax_origin_dir_valid_id,
+            tmin_tmax_valid_id,
+            origin_dir_valid_id,
+        ));
+
+        let all_valid_id = self.id_gen.next();
+        block.body.push(Instruction::binary(
+            spirv::Op::LogicalAnd,
+            bool_type_id,
+            all_valid_id,
+            tmin_tmax_origin_dir_valid_id,
+            flags_valid_id,
+        ));
+
+        let merge_label_id = self.id_gen.next();
+        let merge_block = Block::new(merge_label_id);
+
+        let invalid_label_id = self.id_gen.next();
+        let mut invalid_block = Block::new(invalid_label_id);
+
+        let valid_label_id = self.id_gen.next();
+        let mut valid_block = Block::new(valid_label_id);
+
+        block.body.push(Instruction::selection_merge(
+            merge_label_id,
+            spirv::SelectionControl::NONE,
+        ));
+
+        function.consume(
+            block,
+            Instruction::branch_conditional(all_valid_id, valid_label_id, invalid_label_id),
+        );
+
+        valid_block.body.push(Instruction::ray_query_initialize(
+            query_id,
+            acceleration_structure_id,
+            ray_flags_id,
+            cull_mask_id,
+            ray_origin_id,
+            tmin_id,
+            ray_dir_id,
+            tmax_id,
+        ));
+
+        let const_initialized = self.get_constant_scalar(crate::Literal::U32(
+            super::RayQueryPoint::INITIALIZED.bits(),
+        ));
+        valid_block
+            .body
+            .push(Instruction::store(init_tracker_id, const_initialized, None));
+
+        function.consume(valid_block, Instruction::branch(merge_label_id));
+
+        if self
+            .flags
+            .contains(super::WriterFlags::PRINT_ON_RAY_QUERY_INITIALIZATION_FAIL)
+        {
+            self.write_debug_printf(
+                &mut invalid_block,
+                "Naga ignored invalid arguments to rayQueryInitialize with flags: %u t_min: %f t_max: %f origin: %v4f dir: %v4f",
+                &[
+                    ray_flags_id,
+                    tmin_id,
+                    tmax_id,
+                    ray_origin_id,
+                    ray_dir_id,
+                ],
+            );
+        }
+
+        function.consume(invalid_block, Instruction::branch(merge_label_id));
+
+        function.consume(merge_block, Instruction::return_void());
+
+        function.to_words(&mut self.logical_layout.function_definitions);
+
+        self.ray_query_functions
+            .insert(LookupRayQueryFunction::Initialize, func_id);
         func_id
     }
 }
@@ -461,78 +984,27 @@ impl BlockContext<'_> {
         block: &mut Block,
     ) {
         let query_id = self.cached[query];
+        let init_tracker_id = *self
+            .ray_query_tracker_expr
+            .get(&query)
+            .expect("not a cached ray query");
 
         match *function {
             crate::RayQueryFunction::Initialize {
                 acceleration_structure,
                 descriptor,
             } => {
-                //Note: composite extract indices and types must match `generate_ray_desc_type`
                 let desc_id = self.cached[descriptor];
                 let acc_struct_id = self.get_handle_id(acceleration_structure);
 
-                let flag_type_id =
-                    self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::U32));
-                let ray_flags_id = self.gen_id();
-                block.body.push(Instruction::composite_extract(
-                    flag_type_id,
-                    ray_flags_id,
-                    desc_id,
-                    &[0],
-                ));
-                let cull_mask_id = self.gen_id();
-                block.body.push(Instruction::composite_extract(
-                    flag_type_id,
-                    cull_mask_id,
-                    desc_id,
-                    &[1],
-                ));
+                let func = self.writer.write_ray_query_initialize(self.ir_module);
 
-                let scalar_type_id =
-                    self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::F32));
-                let tmin_id = self.gen_id();
-                block.body.push(Instruction::composite_extract(
-                    scalar_type_id,
-                    tmin_id,
-                    desc_id,
-                    &[2],
-                ));
-                let tmax_id = self.gen_id();
-                block.body.push(Instruction::composite_extract(
-                    scalar_type_id,
-                    tmax_id,
-                    desc_id,
-                    &[3],
-                ));
-
-                let vector_type_id = self.get_numeric_type_id(NumericType::Vector {
-                    size: crate::VectorSize::Tri,
-                    scalar: crate::Scalar::F32,
-                });
-                let ray_origin_id = self.gen_id();
-                block.body.push(Instruction::composite_extract(
-                    vector_type_id,
-                    ray_origin_id,
-                    desc_id,
-                    &[4],
-                ));
-                let ray_dir_id = self.gen_id();
-                block.body.push(Instruction::composite_extract(
-                    vector_type_id,
-                    ray_dir_id,
-                    desc_id,
-                    &[5],
-                ));
-
-                block.body.push(Instruction::ray_query_initialize(
-                    query_id,
-                    acc_struct_id,
-                    ray_flags_id,
-                    cull_mask_id,
-                    ray_origin_id,
-                    tmin_id,
-                    ray_dir_id,
-                    tmax_id,
+                let func_id = self.gen_id();
+                block.body.push(Instruction::function_call(
+                    self.writer.void_type,
+                    func_id,
+                    func,
+                    &[query_id, acc_struct_id, desc_id, init_tracker_id],
                 ));
             }
             crate::RayQueryFunction::Proceed { result } => {

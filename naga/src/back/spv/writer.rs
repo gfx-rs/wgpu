@@ -1079,7 +1079,9 @@ impl Writer {
                     .writer
                     .get_pointer_type_id(u32_type_id, spirv::StorageClass::Function);
                 let tracker_id = context.gen_id();
-                let tracker_init_id = context.writer.get_constant_scalar(crate::Literal::U32(super::RayQueryPoint::empty().bits()));
+                let tracker_init_id = context
+                    .writer
+                    .get_constant_scalar(crate::Literal::U32(super::RayQueryPoint::empty().bits()));
                 let tracker_instruction = Instruction::variable(
                     ptr_u32_type_id,
                     tracker_id,
@@ -2757,14 +2759,16 @@ impl Writer {
         if self.debug_printf.is_none() {
             self.use_extension("SPV_KHR_non_semantic_info");
             let import_id = self.id_gen.next();
-            Instruction::ext_inst_import(import_id, "NonSemantic.DebugPrintf").to_words(&mut self.logical_layout.ext_inst_imports);
+            Instruction::ext_inst_import(import_id, "NonSemantic.DebugPrintf")
+                .to_words(&mut self.logical_layout.ext_inst_imports);
             self.debug_printf = Some(import_id)
         }
 
         let import_id = self.debug_printf.unwrap();
 
         let string_id = self.id_gen.next();
-        self.debug_strings.push(Instruction::string(string, string_id));
+        self.debug_strings
+            .push(Instruction::string(string, string_id));
 
         let mut operands = Vec::with_capacity(1 + format_params.len());
         operands.push(string_id);
