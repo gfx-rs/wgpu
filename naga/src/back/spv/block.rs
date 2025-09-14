@@ -1778,6 +1778,10 @@ impl BlockContext<'_> {
             crate::Expression::ArrayLength(expr) => self.write_runtime_array_length(expr, block)?,
             crate::Expression::RayQueryGetIntersection { query, committed } => {
                 let query_id = self.cached[query];
+                let init_tracker_id = *self
+                    .ray_query_tracker_expr
+                    .get(&query)
+                    .expect("not a cached ray query");
                 let func_id = self
                     .writer
                     .write_ray_query_get_intersection_function(committed, self.ir_module);
@@ -1788,7 +1792,7 @@ impl BlockContext<'_> {
                     intersection_type_id,
                     id,
                     func_id,
-                    &[query_id],
+                    &[query_id, init_tracker_id],
                 ));
                 id
             }

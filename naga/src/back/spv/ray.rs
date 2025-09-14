@@ -91,7 +91,7 @@ impl Writer {
         let argument_type_id = self.get_ray_query_pointer_id();
 
         let func_ty = self.get_function_type(LookupFunctionType {
-            parameter_type_ids: vec![argument_type_id],
+            parameter_type_ids: vec![argument_type_id, flag_pointer_type_id],
             return_type_id: intersection_type_id,
         });
 
@@ -111,6 +111,14 @@ impl Writer {
             handle_id: 0,
         });
 
+        let intersection_tracker_id = self.id_gen.next();
+        let instruction =
+            Instruction::function_parameter(flag_pointer_type_id, intersection_tracker_id);
+        function.parameters.push(FunctionArgument {
+            instruction,
+            handle_id: 1,
+        });
+
         let label_id = self.id_gen.next();
         let mut block = Block::new(label_id);
 
@@ -128,14 +136,73 @@ impl Writer {
         } else {
             spirv::RayQueryIntersection::RayQueryCandidateIntersectionKHR
         } as _));
-        let raw_kind_id = self.id_gen.next();
-        block.body.push(Instruction::ray_query_get_intersection(
-            spirv::Op::RayQueryGetIntersectionTypeKHR,
+
+        let loaded_ray_query_tracker_id = self.id_gen.next();
+        block.body.push(Instruction::load(
             flag_type_id,
-            raw_kind_id,
-            query_id,
-            intersection_id,
+            loaded_ray_query_tracker_id,
+            intersection_tracker_id,
+            None,
         ));
+        let proceeded_id = write_ray_flags_contains_flags(
+            self,
+            &mut block,
+            loaded_ray_query_tracker_id,
+            super::RayQueryPoint::PROCEED.bits(),
+        );
+        let finished_proceed_id = write_ray_flags_contains_flags(
+            self,
+            &mut block,
+            loaded_ray_query_tracker_id,
+            super::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+        );
+        let proceed_finished_correct_id = if is_committed {
+            finished_proceed_id
+        } else {
+            let not_finished_id = self.id_gen.next();
+            block.body.push(Instruction::unary(
+                spirv::Op::LogicalNot,
+                bool_type_id,
+                not_finished_id,
+                finished_proceed_id,
+            ));
+            not_finished_id
+        };
+
+        let is_valid_id = self.id_gen.next();
+        block.body.push(Instruction::binary(
+            spirv::Op::LogicalAnd,
+            bool_type_id,
+            is_valid_id,
+            proceed_finished_correct_id,
+            proceeded_id,
+        ));
+
+        let valid_id = self.id_gen.next();
+        let mut valid_block = Block::new(valid_id);
+
+        let final_label_id = self.id_gen.next();
+        let mut final_block = Block::new(final_label_id);
+
+        block.body.push(Instruction::selection_merge(
+            final_label_id,
+            spirv::SelectionControl::NONE,
+        ));
+        function.consume(
+            block,
+            Instruction::branch_conditional(is_valid_id, valid_id, final_label_id),
+        );
+
+        let raw_kind_id = self.id_gen.next();
+        valid_block
+            .body
+            .push(Instruction::ray_query_get_intersection(
+                spirv::Op::RayQueryGetIntersectionTypeKHR,
+                flag_type_id,
+                raw_kind_id,
+                query_id,
+                intersection_id,
+            ));
         let kind_id = if is_committed {
             // Nothing to do: the IR value matches `spirv::RayQueryCommittedIntersectionType`
             raw_kind_id
@@ -146,7 +213,7 @@ impl Writer {
                 spirv::RayQueryCandidateIntersectionType::RayQueryCandidateIntersectionTriangleKHR
                     as _,
             ));
-            block.body.push(Instruction::binary(
+            valid_block.body.push(Instruction::binary(
                 spirv::Op::IEqual,
                 self.get_bool_type_id(),
                 condition_id,
@@ -154,7 +221,7 @@ impl Writer {
                 committed_triangle_kind_id,
             ));
             let kind_id = self.id_gen.next();
-            block.body.push(Instruction::select(
+            valid_block.body.push(Instruction::select(
                 flag_type_id,
                 kind_id,
                 condition_id,
@@ -169,20 +236,20 @@ impl Writer {
         };
         let idx_id = self.get_index_constant(0);
         let access_idx = self.id_gen.next();
-        block.body.push(Instruction::access_chain(
+        valid_block.body.push(Instruction::access_chain(
             flag_pointer_type_id,
             access_idx,
             blank_intersection_id,
             &[idx_id],
         ));
-        block
+        valid_block
             .body
             .push(Instruction::store(access_idx, kind_id, None));
 
         let not_none_comp_id = self.id_gen.next();
         let none_id =
             self.get_constant_scalar(crate::Literal::U32(crate::RayQueryIntersection::None as _));
-        block.body.push(Instruction::binary(
+        valid_block.body.push(Instruction::binary(
             spirv::Op::INotEqual,
             self.get_bool_type_id(),
             not_none_comp_id,
@@ -193,16 +260,20 @@ impl Writer {
         let not_none_label_id = self.id_gen.next();
         let mut not_none_block = Block::new(not_none_label_id);
 
-        let final_label_id = self.id_gen.next();
-        let mut final_block = Block::new(final_label_id);
+        let outer_merge_label_id = self.id_gen.next();
+        let outer_merge_block = Block::new(outer_merge_label_id);
 
-        block.body.push(Instruction::selection_merge(
-            final_label_id,
+        valid_block.body.push(Instruction::selection_merge(
+            outer_merge_label_id,
             spirv::SelectionControl::NONE,
         ));
         function.consume(
-            block,
-            Instruction::branch_conditional(not_none_comp_id, not_none_label_id, final_label_id),
+            valid_block,
+            Instruction::branch_conditional(
+                not_none_comp_id,
+                not_none_label_id,
+                outer_merge_label_id,
+            ),
         );
 
         let instance_custom_index_id = self.id_gen.next();
@@ -461,7 +532,8 @@ impl Writer {
             .body
             .push(Instruction::store(access_idx, front_face_id, None));
         function.consume(tri_block, Instruction::branch(merge_label_id));
-        function.consume(merge_block, Instruction::branch(final_label_id));
+        function.consume(merge_block, Instruction::branch(outer_merge_label_id));
+        function.consume(outer_merge_block, Instruction::branch(final_label_id));
 
         let loaded_blank_intersection_id = self.id_gen.next();
         final_block.body.push(Instruction::load(
