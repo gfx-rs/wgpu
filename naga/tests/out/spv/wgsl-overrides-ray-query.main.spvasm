@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.4
 ; Generator: rspirv
-; Bound: 143
+; Bound: 161
 OpCapability Shader
 OpCapability RayQueryKHR
 OpExtension "SPV_KHR_ray_query"
@@ -60,6 +60,10 @@ OpDecorate %10 Binding 0
 %124 = OpConstantComposite  %121  %31 %31
 %125 = OpConstant  %6  4294967295
 %126 = OpConstantComposite  %121  %125 %125
+%139 = OpTypePointer Function %33
+%140 = OpTypeFunction %33 %28 %29
+%146 = OpConstantFalse  %33
+%153 = OpConstant  %6  6
 %36 = OpFunction  %2  None %35
 %37 = OpFunctionParameter  %28
 %38 = OpFunctionParameter  %4
@@ -139,6 +143,27 @@ OpBranch %113
 %113 = OpLabel
 OpReturn
 OpFunctionEnd
+%141 = OpFunction  %33  None %140
+%142 = OpFunctionParameter  %28
+%143 = OpFunctionParameter  %29
+%144 = OpLabel
+%145 = OpVariable  %139  Function %146
+%147 = OpLoad  %6  %143
+%148 = OpBitwiseAnd  %6  %147 %83
+%149 = OpINotEqual  %33  %148 %31
+OpSelectionMerge %150 None
+OpBranchConditional %149 %151 %150
+%151 = OpLabel
+%152 = OpRayQueryProceedKHR  %33  %142
+OpStore %145 %152
+%154 = OpSelect  %6  %152 %86 %153
+%155 = OpBitwiseOr  %6  %147 %154
+OpStore %143 %155
+OpBranch %150
+%150 = OpLabel
+%156 = OpLoad  %33  %145
+OpReturnValue %156
+OpFunctionEnd
 %13 = OpFunction  %2  None %14
 %12 = OpLabel
 %27 = OpVariable  %28  Function
@@ -167,16 +192,16 @@ OpBranchConditional %131 %118 %132
 OpStore %127 %137
 OpBranch %119
 %119 = OpLabel
-%138 = OpRayQueryProceedKHR  %33  %27
-OpSelectionMerge %139 None
-OpBranchConditional %138 %139 %140
-%140 = OpLabel
+%138 = OpFunctionCall  %33  %141 %27 %30
+OpSelectionMerge %157 None
+OpBranchConditional %138 %157 %158
+%158 = OpLabel
 OpBranch %118
-%139 = OpLabel
-OpBranch %141
-%141 = OpLabel
-OpBranch %142
-%142 = OpLabel
+%157 = OpLabel
+OpBranch %159
+%159 = OpLabel
+OpBranch %160
+%160 = OpLabel
 OpBranch %120
 %120 = OpLabel
 OpBranch %117

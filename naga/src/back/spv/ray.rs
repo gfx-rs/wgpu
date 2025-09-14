@@ -974,6 +974,150 @@ impl Writer {
             .insert(LookupRayQueryFunction::Initialize, func_id);
         func_id
     }
+
+    fn write_ray_query_proceed(&mut self) -> spirv::Word {
+        if let Some(&word) = self
+            .ray_query_functions
+            .get(&LookupRayQueryFunction::Proceed)
+        {
+            return word;
+        }
+
+        let ray_query_type_id = self.get_ray_query_pointer_id();
+
+        let u32_ty = self.get_u32_type_id();
+        let u32_ptr_ty = self.get_pointer_type_id(u32_ty, spirv::StorageClass::Function);
+
+        let bool_type_id = self.get_bool_type_id();
+        let bool_ptr_ty = self.get_pointer_type_id(bool_type_id, spirv::StorageClass::Function);
+
+        let func_ty = self.get_function_type(LookupFunctionType {
+            parameter_type_ids: vec![ray_query_type_id, u32_ptr_ty],
+            return_type_id: bool_type_id,
+        });
+
+        let mut function = Function::default();
+        let func_id = self.id_gen.next();
+        function.signature = Some(Instruction::function(
+            bool_type_id,
+            func_id,
+            spirv::FunctionControl::empty(),
+            func_ty,
+        ));
+
+        let query_id = self.id_gen.next();
+        let instruction = Instruction::function_parameter(ray_query_type_id, query_id);
+        function.parameters.push(FunctionArgument {
+            instruction,
+            handle_id: 0,
+        });
+
+        let init_tracker_id = self.id_gen.next();
+        let instruction = Instruction::function_parameter(u32_ptr_ty, init_tracker_id);
+        function.parameters.push(FunctionArgument {
+            instruction,
+            handle_id: 1,
+        });
+
+        let block_id = self.id_gen.next();
+        let mut block = Block::new(block_id);
+
+        // TODO: perhaps this could be replaced with an OpPhi?
+        let proceeded_id = self.id_gen.next();
+        let const_false = self.get_constant_scalar(crate::Literal::Bool(false));
+        block.body.push(Instruction::variable(
+            bool_ptr_ty,
+            proceeded_id,
+            spirv::StorageClass::Function,
+            Some(const_false),
+        ));
+
+        let initialized_tracker_id = self.id_gen.next();
+        block.body.push(Instruction::load(
+            u32_ty,
+            initialized_tracker_id,
+            init_tracker_id,
+            None,
+        ));
+
+        let is_initialized = write_ray_flags_contains_flags(
+            self,
+            &mut block,
+            initialized_tracker_id,
+            super::RayQueryPoint::INITIALIZED.bits(),
+        );
+
+        let merge_id = self.id_gen.next();
+        let mut merge_block = Block::new(merge_id);
+
+        let valid_block_id = self.id_gen.next();
+        let mut valid_block = Block::new(valid_block_id);
+
+        block.body.push(Instruction::selection_merge(
+            merge_id,
+            spirv::SelectionControl::NONE,
+        ));
+
+        function.consume(
+            block,
+            Instruction::branch_conditional(is_initialized, valid_block_id, merge_id),
+        );
+
+        let has_proceeded = self.id_gen.next();
+        valid_block.body.push(Instruction::ray_query_proceed(
+            bool_type_id,
+            has_proceeded,
+            query_id,
+        ));
+
+        valid_block
+            .body
+            .push(Instruction::store(proceeded_id, has_proceeded, None));
+
+        let add_flag_finished = self.get_constant_scalar(crate::Literal::U32(
+            (super::RayQueryPoint::PROCEED | super::RayQueryPoint::FINISHED_TRAVERSAL).bits(),
+        ));
+        let add_flag_continuing =
+            self.get_constant_scalar(crate::Literal::U32(super::RayQueryPoint::PROCEED.bits()));
+
+        let add_flags_id = self.id_gen.next();
+        valid_block.body.push(Instruction::select(
+            u32_ty,
+            add_flags_id,
+            has_proceeded,
+            add_flag_continuing,
+            add_flag_finished,
+        ));
+        let final_flags = self.id_gen.next();
+        valid_block.body.push(Instruction::binary(
+            spirv::Op::BitwiseOr,
+            u32_ty,
+            final_flags,
+            initialized_tracker_id,
+            add_flags_id,
+        ));
+        valid_block
+            .body
+            .push(Instruction::store(init_tracker_id, final_flags, None));
+
+        function.consume(valid_block, Instruction::branch(merge_id));
+
+        let loaded_proceeded_id = self.id_gen.next();
+        merge_block.body.push(Instruction::load(
+            bool_type_id,
+            loaded_proceeded_id,
+            proceeded_id,
+            None,
+        ));
+
+        function.consume(merge_block, Instruction::return_value(loaded_proceeded_id));
+
+        function.to_words(&mut self.logical_layout.function_definitions);
+
+        self.ray_query_functions
+            .insert(LookupRayQueryFunction::Proceed, func_id);
+        func_id
+    }
 }
 
 impl BlockContext<'_> {
@@ -1010,11 +1154,16 @@ impl BlockContext<'_> {
             crate::RayQueryFunction::Proceed { result } => {
                 let id = self.gen_id();
                 self.cached[result] = id;
-                let result_type_id = self.get_expression_type_id(&self.fun_info[result].ty);
 
-                block
-                    .body
-                    .push(Instruction::ray_query_proceed(result_type_id, id, query_id));
+                let bool_ty = self.writer.get_bool_type_id();
+
+                let func_id = self.writer.write_ray_query_proceed();
+                block.body.push(Instruction::function_call(
+                    bool_ty,
+                    id,
+                    func_id,
+                    &[query_id, init_tracker_id],
+                ));
             }
             crate::RayQueryFunction::GenerateIntersection { hit_t } => {
                 let hit_id = self.cached[hit_t];
