@@ -161,7 +161,8 @@ impl super::PrivateCapabilities {
 pub fn map_vk_surface_formats(sf: vk::SurfaceFormatKHR) -> Option<wgt::TextureFormat> {
     use ash::vk::Format as F;
     use wgt::TextureFormat as Tf;
-    // List we care about pulled from https://vulkan.gpuinfo.org/listsurfaceformats.php
+    // List we care about pulled from https://vulkan.gpuinfo.org/listsurfaceformats.php.
+    // Device::create_swapchain() hardcodes linear scRGB for fp16, non-linear sRGB otherwise.
     Some(match sf.color_space {
         vk::ColorSpaceKHR::SRGB_NONLINEAR => match sf.format {
             F::B8G8R8A8_UNORM => Tf::Bgra8Unorm,
@@ -169,13 +170,13 @@ pub fn map_vk_surface_formats(sf: vk::SurfaceFormatKHR) -> Option<wgt::TextureFo
             F::R8G8B8A8_SNORM => Tf::Rgba8Snorm,
             F::R8G8B8A8_UNORM => Tf::Rgba8Unorm,
             F::R8G8B8A8_SRGB => Tf::Rgba8UnormSrgb,
+            F::R16G16B16A16_SNORM => Tf::Rgba16Snorm,
+            F::R16G16B16A16_UNORM => Tf::Rgba16Unorm,
+            F::A2B10G10R10_UNORM_PACK32 => Tf::Rgb10a2Unorm,
             _ => return None,
         },
         vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT => match sf.format {
             F::R16G16B16A16_SFLOAT => Tf::Rgba16Float,
-            F::R16G16B16A16_SNORM => Tf::Rgba16Snorm,
-            F::R16G16B16A16_UNORM => Tf::Rgba16Unorm,
-            F::A2B10G10R10_UNORM_PACK32 => Tf::Rgb10a2Unorm,
             _ => return None,
         },
         _ => return None,

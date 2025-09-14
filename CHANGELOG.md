@@ -220,6 +220,10 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 
 - Fixed unwrap failed in context creation for some Android devices. By @uael in [#8024](https://github.com/gfx-rs/wgpu/pull/8024).
 
+##### Vulkan
+
+- Fixed wrong color format+space being reported versus what is hardcoded in `create_swapchain()`. By @MarijnS95 in [#8226](https://github.com/gfx-rs/wgpu/pull/8226).
+
 #### naga
 
 - [wgsl-in] Allow a trailing comma in `@blend_src(…)` attributes. By @ErichDonGubler in [#8137](https://github.com/gfx-rs/wgpu/pull/8137).
