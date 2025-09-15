@@ -109,9 +109,10 @@ Difference for SPIR-V passthrough:
 -     },
 - ))
 + device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-+     entry_point: "main".into(),
 +     label: None,
-+     spirv: Some(spirv_code),
++     spirv: Some(wgpu::SpirvPassthroughDescriptor {
++         code: spirv_code
++     }),
 +     ..Default::default()
 })
 ```
