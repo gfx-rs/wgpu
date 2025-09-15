@@ -1569,6 +1569,20 @@ impl dispatch::InstanceInterface for ContextWebGpu {
             ))))
         }
     }
+    fn enumerate_adapters(
+        &self,
+        _backends: crate::Backends,
+    ) -> Pin<Box<dyn dispatch::EnumerateAdapterFuture>> {
+        let future = self.request_adapter(&crate::RequestAdapterOptions::default());
+        let enumerate_future = async move {
+            let adapter = future.await;
+            match adapter {
+                Ok(a) => vec![a],
+                Err(_) => vec![],
+            }
+        };
+        Box::pin(enumerate_future)
+    }
 
     fn poll_all_devices(&self, _force_wait: bool) -> bool {
         // Devices are automatically polled.

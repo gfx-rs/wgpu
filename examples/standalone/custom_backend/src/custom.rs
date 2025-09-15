@@ -55,6 +55,13 @@ impl InstanceInterface for CustomInstance {
     fn wgsl_language_features(&self) -> wgpu::WgslLanguageFeatures {
         unimplemented!()
     }
+
+    fn enumerate_adapters(
+        &self,
+        _backends: wgpu::Backends,
+    ) -> Pin<Box<dyn wgpu::custom::EnumerateAdapterFuture>> {
+        unimplemented!()
+    }
 }
 
 #[derive(Debug)]

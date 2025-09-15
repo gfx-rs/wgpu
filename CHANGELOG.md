@@ -158,6 +158,20 @@ by if the `Feature::MULTI_DRAW_INDIRECT_COUNT` feature is available on the devic
 
 By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 
+#### enumerate_adapters was made async
+
+Making `enumerate_adapters` async allows custom backends to use it along with elimnating some native/non-native distinctions
+
+This is a breaking change
+
+```diff
+- pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
++ pub fn enumerate_adapters(&self, backends: Backends) -> impl Future<Output = Vec<Adapter>> {
+
+```
+
+By @R-Cramer4 in [#8230](https://github.com/gfx-rs/wgpu/pull/8230)
+
 ### New Features
 
 #### General
