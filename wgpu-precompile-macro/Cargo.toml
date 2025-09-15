@@ -36,7 +36,8 @@ hlsl = ["naga/hlsl-out"]
 [dependencies]
 naga = { workspace = true, features = ["spv-in", "wgsl-in", "glsl-in"] }
 
-nanorand = { workspace = true, features = ["tls"] }
+# This is so we can have each DXIL generation path have a unique file/folder
+getrandom = "0.3"
 quote.workspace = true
 syn = { workspace = true, features = ["full"] }
 proc-macro2 = "1.0"

@@ -1,8 +1,7 @@
 use hashbrown::HashSet;
-use nanorand::Rng;
 use proc_macro::TokenStream;
 use quote::quote;
-use std::{io::Write, path::PathBuf, process::Stdio};
+use std::{path::PathBuf, process::Stdio};
 use syn::{parse::Parse, parse_macro_input, Ident, Path};
 
 #[derive(PartialEq, Eq)]
@@ -208,30 +207,33 @@ pub fn precompile_hlsl_to_dxil(input: TokenStream) -> TokenStream {
         naga::ShaderStage::Mesh => "ms_5_1",
     };
 
-    let temporary_folder_location =
-        std::env::temp_dir().join(nanorand::WyRand::new().generate::<u64>().to_string());
+    let temporary_folder_location = std::env::temp_dir().join(
+        getrandom::u64()
+            .expect("Failed to generate random u64")
+            .to_string(),
+    );
     std::fs::create_dir(&temporary_folder_location).expect("Failed to create temporary directory");
 
+    // The naming matters for DXIL debug info. We don't want to give it a name that seems like something the
+    // user might've specified, as that could cause confusion.
+    let input_file = temporary_folder_location.join("__wgpu_inline.hlsl");
+    std::fs::write(&input_file, args.hlsl_code.as_bytes())
+        .expect("Failed to write to HLSL input file");
     let temporary_file_location = temporary_folder_location.join("file.dxil");
-    let mut cmd = std::process::Command::new("dxc")
+    let output = std::process::Command::new("dxc")
         .args([
             "-T",
             target_profile,
             "-E",
             &args.entry_point,
-            "-",
+            &input_file.display().to_string(),
             "-Fo",
             &temporary_file_location.display().to_string(),
         ])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .spawn()
+        .output()
         .expect("Failed to spawn DXC");
-    let mut stdin = cmd.stdin.take().unwrap();
-    stdin
-        .write_all(args.hlsl_code.as_bytes())
-        .expect("Failed to write to DXC stdin");
-    let output = cmd.wait_with_output().expect("DXC failed to wait");
     if !output.status.success() {
         panic!("DXC failed:\n{}", String::from_utf8(output.stderr).unwrap());
     }
@@ -316,7 +318,7 @@ fn generate_conditional_guard(target: CompileTarget) -> proc_macro2::TokenStream
                 windows
             }
             #[cfg(not(feature = "dx12"))]
-            always_false
+            always_fals
         }
         CompileTarget::AllSupported => unreachable!(),
     }
