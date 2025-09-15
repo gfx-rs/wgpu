@@ -318,7 +318,7 @@ fn generate_conditional_guard(target: CompileTarget) -> proc_macro2::TokenStream
                 windows
             }
             #[cfg(not(feature = "dx12"))]
-            always_fals
+            always_false
         }
         CompileTarget::AllSupported => unreachable!(),
     }
