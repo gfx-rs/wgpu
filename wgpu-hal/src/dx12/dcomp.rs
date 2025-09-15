@@ -16,14 +16,11 @@ pub(crate) struct DCompLib {
 impl DCompLib {
     pub(crate) fn new() -> Self {
         Self {
-            lib: Lazy::new(|| {
-                unsafe {
-                    DynLib::new("dcomp.dll").map_err(|err| {
-                        // Stringify because `libloading::Error` is not `Clone`
-                        log::error!("Error loading dcomp.dll: {err}");
-                        crate::SurfaceError::Other("Error loading dcomp.dll")
-                    })
-                }
+            lib: Lazy::new(|| unsafe {
+                DynLib::new("dcomp.dll").map_err(|err| {
+                    log::error!("Error loading dcomp.dll: {err}");
+                    crate::SurfaceError::Other("Error loading dcomp.dll")
+                })
             }),
         }
     }
