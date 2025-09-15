@@ -114,7 +114,7 @@ codespan-reporting = { version = "0.12", default-features = false }
 ctor = "0.5"
 diff = "0.1"
 document-features = "0.2.10"
-encase = "0.11"
+encase = "0.12"
 env_logger = { version = "0.11", default-features = false }
 fern = "0.7"
 flume = "0.11"
