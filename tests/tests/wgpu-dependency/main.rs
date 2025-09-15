@@ -18,17 +18,23 @@ struct Requirement<'a> {
     features: &'a [&'a str],
     default_features: bool,
     search_terms: &'a [Search<'a>],
+    prune: &'a [&'a str],
 }
 
 fn check_feature_dependency(requirement: Requirement) {
     println!("Checking: {}", requirement.human_readable_name);
 
     let mut args = Vec::new();
-    args.extend(["tree", "--target", requirement.target]);
+    args.extend(["tree", "-e", "normal", "--target", requirement.target]);
 
     for package in requirement.packages {
         args.push("--package");
         args.push(package);
+    }
+
+    for prune in requirement.prune {
+        args.push("--prune");
+        args.push(prune);
     }
 
     if !requirement.default_features {
@@ -116,6 +122,7 @@ fn wasm32_without_webgl_or_noop_does_not_depend_on_wgpu_core() {
         features: &features_no_webgl,
         default_features: false,
         search_terms: &[Search::Negative("wgpu-core")],
+        prune: &[],
     });
 }
 
@@ -128,6 +135,7 @@ fn wasm32_with_webgpu_and_wgsl_does_not_depend_on_naga() {
         features: &["webgpu", "wgsl"],
         default_features: false,
         search_terms: &[Search::Negative("naga")],
+        prune: &["wgpu-precompile-macro"],
     });
 }
 
@@ -140,6 +148,7 @@ fn wasm32_with_webgl_depends_on_glow() {
         features: &["webgl"],
         default_features: false,
         search_terms: &[Search::Positive("glow")],
+        prune: &[],
     });
 }
 
@@ -152,6 +161,7 @@ fn wasm32_with_only_custom_backend_does_not_depend_on_web_specifics() {
         features: &["custom"],
         default_features: false,
         search_terms: &[Search::Negative("wasm-bindgen"), Search::Negative("js-sys"), Search::Negative("web-sys")],
+        prune: &[],
     });
 }
 
@@ -164,6 +174,7 @@ fn wasm32_with_webgpu_backend_does_depend_on_web_specifics() {
         features: &["webgpu"],
         default_features: false,
         search_terms: &[Search::Positive("wasm-bindgen"), Search::Positive("js-sys"), Search::Positive("web-sys")],
+        prune: &[],
     });
 }
 
@@ -176,6 +187,7 @@ fn wasm32_with_webgl_backend_does_depend_on_web_specifics() {
         features: &["webgl"],
         default_features: false,
         search_terms: &[Search::Positive("wasm-bindgen"), Search::Positive("js-sys"), Search::Positive("web-sys")],
+        prune: &[],
     });
 }
 
@@ -188,6 +200,7 @@ fn windows_with_webgpu_webgl_backend_does_not_depend_on_web_specifics() {
         features: &["webgpu", "webgl"],
         default_features: false,
         search_terms: &[Search::Negative("wasm-bindgen"), Search::Negative("js-sys"), Search::Negative("web-sys")],
+        prune: &[],
     });
 }
 
@@ -200,6 +213,7 @@ fn windows_with_webgl_does_not_depend_on_glow() {
         features: &["webgl"],
         default_features: false,
         search_terms: &[Search::Negative("glow")],
+        prune: &[],
     });
 }
 
@@ -212,6 +226,7 @@ fn apple_with_vulkan_does_not_depend_on_ash() {
         features: &["vulkan"],
         default_features: false,
         search_terms: &[Search::Negative("ash")],
+        prune: &[],
     });
 }
 
@@ -225,6 +240,7 @@ fn apple_with_vulkan_portability_depends_on_ash_and_renderdoc_sys() {
         features: &["vulkan-portability"],
         default_features: false,
         search_terms: &[Search::Positive("ash"), Search::Positive("renderdoc-sys")],
+        prune: &[],
     });
 }
 
@@ -237,6 +253,7 @@ fn apple_with_gles_does_not_depend_on_glow() {
         features: &["gles"],
         default_features: false,
         search_terms: &[Search::Negative("glow")],
+        prune: &[],
     });
 }
 
@@ -249,6 +266,7 @@ fn apple_with_angle_depends_on_glow_and_renderdoc_sys() {
         features: &["angle"],
         default_features: false,
         search_terms: &[Search::Positive("glow"), Search::Positive("renderdoc-sys")],
+        prune: &[],
     });
 }
 
@@ -261,6 +279,7 @@ fn apple_with_no_features_does_not_depend_on_renderdoc_sys() {
         features: &[],
         default_features: false,
         search_terms: &[Search::Negative("renderdoc-sys")],
+        prune: &[],
     });
 }
 
@@ -278,6 +297,7 @@ fn windows_with_no_features_does_not_depend_on_glow_windows_or_ash() {
             Search::Negative("windows"),
             Search::Negative("ash"),
         ],
+        prune: &[],
     });
 }
 
@@ -290,6 +310,7 @@ fn windows_with_no_features_depends_on_renderdoc_sys() {
         features: &[],
         default_features: false,
         search_terms: &[Search::Positive("renderdoc-sys")],
+        prune: &[],
     });
 }
 
@@ -302,6 +323,7 @@ fn emscripten_with_webgl_does_not_depend_on_glow() {
         features: &["webgl"],
         default_features: false,
         search_terms: &[Search::Negative("glow")],
+        prune: &[],
     });
 }
 
@@ -314,6 +336,7 @@ fn emscripten_with_gles_depends_on_glow() {
         features: &["gles"],
         default_features: false,
         search_terms: &[Search::Positive("glow")],
+        prune: &[],
     });
 }
 
@@ -326,6 +349,7 @@ fn x86_64_does_not_depend_on_portable_atomic() {
         features: &[],
         default_features: false,
         search_terms: &[Search::Negative("portable-atomic")],
+        prune: &[],
     });
 }
 
@@ -338,5 +362,6 @@ fn ppc32_does_depend_on_portable_atomic() {
         features: &[],
         default_features: false,
         search_terms: &[Search::Positive("portable-atomic")],
+        prune: &[],
     });
 }
