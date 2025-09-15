@@ -2,9 +2,9 @@ use alloc::{sync::Arc, vec, vec::Vec};
 use core::{iter, mem};
 
 #[cfg(feature = "trace")]
-use crate::device::trace::Command as TraceCommand;
+use crate::command::Command as TraceCommand;
 use crate::{
-    command::{CommandEncoder, EncoderStateError},
+    command::{CommandBufferMutable, CommandEncoder, EncoderStateError},
     device::{DeviceError, MissingFeatures},
     global::Global,
     id,
@@ -366,30 +366,7 @@ impl Global {
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), QueryError> {
-            #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.commands {
-                list.push(TraceCommand::WriteTimestamp {
-                    query_set_id,
-                    query_index,
-                });
-            }
-
-            cmd_enc.device.check_is_valid()?;
-
-            cmd_enc
-                .device
-                .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)?;
-
-            let raw_encoder = cmd_buf_data.encoder.open()?;
-
-            let query_set = hub.query_sets.get(query_set_id).get()?;
-            query_set.same_device_as(cmd_enc.as_ref())?;
-
-            query_set.validate_and_write_timestamp(raw_encoder, query_index, None)?;
-
-            cmd_buf_data.trackers.query_sets.insert_single(query_set);
-
-            Ok(())
+            write_timestamp(cmd_buf_data, hub, &cmd_enc, query_set_id, query_index)
         })
     }
 
@@ -407,129 +384,182 @@ impl Global {
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), QueryError> {
-            #[cfg(feature = "trace")]
-            if let Some(ref mut list) = cmd_buf_data.commands {
-                list.push(TraceCommand::ResolveQuerySet {
-                    query_set_id,
-                    start_query,
-                    query_count,
-                    destination,
-                    destination_offset,
-                });
-            }
-
-            cmd_enc.device.check_is_valid()?;
-
-            if destination_offset % wgt::QUERY_RESOLVE_BUFFER_ALIGNMENT != 0 {
-                return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));
-            }
-
-            let query_set = hub.query_sets.get(query_set_id).get()?;
-
-            query_set.same_device_as(cmd_enc.as_ref())?;
-
-            let dst_buffer = hub.buffers.get(destination).get()?;
-
-            dst_buffer.same_device_as(cmd_enc.as_ref())?;
-
-            let snatch_guard = dst_buffer.device.snatchable_lock.read();
-            dst_buffer.check_destroyed(&snatch_guard)?;
-
-            let dst_pending = cmd_buf_data
-                .trackers
-                .buffers
-                .set_single(&dst_buffer, wgt::BufferUses::COPY_DST);
-
-            let dst_barrier =
-                dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
-
-            dst_buffer
-                .check_usage(wgt::BufferUsages::QUERY_RESOLVE)
-                .map_err(ResolveError::MissingBufferUsage)?;
-
-            let end_query = u64::from(start_query)
-                .checked_add(u64::from(query_count))
-                .expect("`u64` overflow from adding two `u32`s, should be unreachable");
-            if end_query > u64::from(query_set.desc.count) {
-                return Err(ResolveError::QueryOverrun {
-                    start_query,
-                    end_query,
-                    query_set_size: query_set.desc.count,
-                }
-                .into());
-            }
-            let end_query = u32::try_from(end_query)
-                .expect("`u32` overflow for `end_query`, which should be `u32`");
-
-            let elements_per_query = match query_set.desc.ty {
-                wgt::QueryType::Occlusion => 1,
-                wgt::QueryType::PipelineStatistics(ps) => ps.bits().count_ones(),
-                wgt::QueryType::Timestamp => 1,
-            };
-            let stride = elements_per_query * wgt::QUERY_SIZE;
-            let bytes_used: BufferAddress = u64::from(stride)
-                .checked_mul(u64::from(query_count))
-                .expect("`stride` * `query_count` overflowed `u32`, should be unreachable");
-
-            let buffer_start_offset = destination_offset;
-            let buffer_end_offset = buffer_start_offset
-                .checked_add(bytes_used)
-                .filter(|buffer_end_offset| *buffer_end_offset <= dst_buffer.size)
-                .ok_or(ResolveError::BufferOverrun {
-                    start_query,
-                    end_query,
-                    stride,
-                    buffer_size: dst_buffer.size,
-                    buffer_start_offset,
-                    bytes_used,
-                })?;
-
-            // TODO(https://github.com/gfx-rs/wgpu/issues/3993): Need to track initialization state.
-            cmd_buf_data.buffer_memory_init_actions.extend(
-                dst_buffer.initialization_status.read().create_action(
-                    &dst_buffer,
-                    buffer_start_offset..buffer_end_offset,
-                    MemoryInitKind::ImplicitlyInitialized,
-                ),
-            );
-
-            let raw_dst_buffer = dst_buffer.try_raw(&snatch_guard)?;
-            let raw_encoder = cmd_buf_data.encoder.open()?;
-            unsafe {
-                raw_encoder.transition_buffers(dst_barrier.as_slice());
-                raw_encoder.copy_query_results(
-                    query_set.raw(),
-                    start_query..end_query,
-                    raw_dst_buffer,
-                    destination_offset,
-                    wgt::BufferSize::new_unchecked(stride as u64),
-                );
-            }
-
-            if matches!(query_set.desc.ty, wgt::QueryType::Timestamp) {
-                // Timestamp normalization is only needed for timestamps.
-                cmd_enc
-                    .device
-                    .timestamp_normalizer
-                    .get()
-                    .unwrap()
-                    .normalize(
-                        &snatch_guard,
-                        raw_encoder,
-                        &mut cmd_buf_data.trackers.buffers,
-                        dst_buffer
-                            .timestamp_normalization_bind_group
-                            .get(&snatch_guard)
-                            .unwrap(),
-                        &dst_buffer,
-                        destination_offset,
-                        query_count,
-                    );
-            }
-
-            cmd_buf_data.trackers.query_sets.insert_single(query_set);
-
-            Ok(())
+            resolve_query_set(
+                cmd_buf_data,
+                hub,
+                &cmd_enc,
+                query_set_id,
+                start_query,
+                query_count,
+                destination,
+                destination_offset,
+            )
         })
     }
+}
+
+pub(super) fn write_timestamp(
+    cmd_buf_data: &mut CommandBufferMutable,
+    hub: &crate::hub::Hub,
+    cmd_enc: &Arc<CommandEncoder>,
+    query_set_id: id::QuerySetId,
+    query_index: u32,
+) -> Result<(), QueryError> {
+    #[cfg(feature = "trace")]
+    if let Some(ref mut list) = cmd_buf_data.trace_commands {
+        list.push(TraceCommand::WriteTimestamp {
+            query_set_id,
+            query_index,
+        });
+    }
+
+    cmd_enc.device.check_is_valid()?;
+
+    cmd_enc
+        .device
+        .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)?;
+
+    let raw_encoder = cmd_buf_data.encoder.open()?;
+
+    let query_set = hub.query_sets.get(query_set_id).get()?;
+    query_set.same_device_as(cmd_enc.as_ref())?;
+
+    query_set.validate_and_write_timestamp(raw_encoder, query_index, None)?;
+
+    cmd_buf_data.trackers.query_sets.insert_single(query_set);
+
+    Ok(())
+}
+
+pub(super) fn resolve_query_set(
+    cmd_buf_data: &mut CommandBufferMutable,
+    hub: &crate::hub::Hub,
+    cmd_enc: &Arc<CommandEncoder>,
+    query_set_id: id::QuerySetId,
+    start_query: u32,
+    query_count: u32,
+    destination: id::BufferId,
+    destination_offset: BufferAddress,
+) -> Result<(), QueryError> {
+    #[cfg(feature = "trace")]
+    if let Some(ref mut list) = cmd_buf_data.trace_commands {
+        list.push(TraceCommand::ResolveQuerySet {
+            query_set_id,
+            start_query,
+            query_count,
+            destination,
+            destination_offset,
+        });
+    }
+
+    cmd_enc.device.check_is_valid()?;
+
+    if destination_offset % wgt::QUERY_RESOLVE_BUFFER_ALIGNMENT != 0 {
+        return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));
+    }
+
+    let query_set = hub.query_sets.get(query_set_id).get()?;
+
+    query_set.same_device_as(cmd_enc.as_ref())?;
+
+    let dst_buffer = hub.buffers.get(destination).get()?;
+
+    dst_buffer.same_device_as(cmd_enc.as_ref())?;
+
+    let snatch_guard = dst_buffer.device.snatchable_lock.read();
+    dst_buffer.check_destroyed(&snatch_guard)?;
+
+    let dst_pending = cmd_buf_data
+        .trackers
+        .buffers
+        .set_single(&dst_buffer, wgt::BufferUses::COPY_DST);
+    let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
+
+    dst_buffer
+        .check_usage(wgt::BufferUsages::QUERY_RESOLVE)
+        .map_err(ResolveError::MissingBufferUsage)?;
+
+    let end_query = u64::from(start_query)
+        .checked_add(u64::from(query_count))
+        .expect("`u64` overflow from adding two `u32`s, should be unreachable");
+    if end_query > u64::from(query_set.desc.count) {
+        return Err(ResolveError::QueryOverrun {
+            start_query,
+            end_query,
+            query_set_size: query_set.desc.count,
+        }
+        .into());
+    }
+    let end_query =
+        u32::try_from(end_query).expect("`u32` overflow for `end_query`, which should be `u32`");
+
+    let elements_per_query = match query_set.desc.ty {
+        wgt::QueryType::Occlusion => 1,
+        wgt::QueryType::PipelineStatistics(ps) => ps.bits().count_ones(),
+        wgt::QueryType::Timestamp => 1,
+    };
+    let stride = elements_per_query * wgt::QUERY_SIZE;
+    let bytes_used: BufferAddress = u64::from(stride)
+        .checked_mul(u64::from(query_count))
+        .expect("`stride` * `query_count` overflowed `u32`, should be unreachable");
+
+    let buffer_start_offset = destination_offset;
+    let buffer_end_offset = buffer_start_offset
+        .checked_add(bytes_used)
+        .filter(|buffer_end_offset| *buffer_end_offset <= dst_buffer.size)
+        .ok_or(ResolveError::BufferOverrun {
+            start_query,
+            end_query,
+            stride,
+            buffer_size: dst_buffer.size,
+            buffer_start_offset,
+            bytes_used,
+        })?;
+
+    // TODO(https://github.com/gfx-rs/wgpu/issues/3993): Need to track initialization state.
+    cmd_buf_data.buffer_memory_init_actions.extend(
+        dst_buffer.initialization_status.read().create_action(
+            &dst_buffer,
+            buffer_start_offset..buffer_end_offset,
+            MemoryInitKind::ImplicitlyInitialized,
+        ),
+    );
+
+    let raw_dst_buffer = dst_buffer.try_raw(&snatch_guard)?;
+    let raw_encoder = cmd_buf_data.encoder.open()?;
+    unsafe {
+        raw_encoder.transition_buffers(dst_barrier.as_slice());
+        raw_encoder.copy_query_results(
+            query_set.raw(),
+            start_query..end_query,
+            raw_dst_buffer,
+            destination_offset,
+            wgt::BufferSize::new_unchecked(stride as u64),
+        );
+    }
+
+    if matches!(query_set.desc.ty, wgt::QueryType::Timestamp) {
+        // Timestamp normalization is only needed for timestamps.
+        cmd_enc
+            .device
+            .timestamp_normalizer
+            .get()
+            .unwrap()
+            .normalize(
+                &snatch_guard,
+                raw_encoder,
+                &mut cmd_buf_data.trackers.buffers,
+                dst_buffer
+                    .timestamp_normalization_bind_group
+                    .get(&snatch_guard)
+                    .unwrap(),
+                &dst_buffer,
+                destination_offset,
+                query_count,
+            );
+    }
+
+    cmd_buf_data.trackers.query_sets.insert_single(query_set);
+
+    Ok(())
 }

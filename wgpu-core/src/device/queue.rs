@@ -22,7 +22,7 @@ use crate::{
         extract_texture_selector, validate_linear_texture_data, validate_texture_buffer_copy,
         validate_texture_copy_dst_format, validate_texture_copy_range, ClearError,
         CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopySide,
-        TexelCopyTextureInfo, TransferError,
+        TransferError,
     },
     device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
@@ -763,21 +763,21 @@ impl Queue {
             &destination,
             dst_base.aspect,
             &dst.desc,
-            data_layout.offset,
-            false, // alignment not required for buffer offset
+            data_layout,
+            false, // alignment not required for buffer offset or bytes per row
         )?;
 
         // Note: `_source_bytes_per_array_layer` is ignored since we
         // have a staging copy, and it can have a different value.
-        let (required_bytes_in_copy, _source_bytes_per_array_layer) = validate_linear_texture_data(
-            data_layout,
-            dst.desc.format,
-            destination.aspect,
-            data.len() as wgt::BufferAddress,
-            CopySide::Source,
-            size,
-            false,
-        )?;
+        let (required_bytes_in_copy, _source_bytes_per_array_layer, _) =
+            validate_linear_texture_data(
+                data_layout,
+                dst.desc.format,
+                destination.aspect,
+                data.len() as wgt::BufferAddress,
+                CopySide::Source,
+                size,
+            )?;
 
         if dst.desc.format.is_depth_stencil_format() {
             self.device
@@ -1206,7 +1206,7 @@ impl Queue {
                             if let Ok(ref mut cmd_buf_data) = cmd_buf_data {
                                 trace.add(Action::Submit(
                                     submit_index,
-                                    cmd_buf_data.commands.take().unwrap(),
+                                    cmd_buf_data.trace_commands.take().unwrap(),
                                 ));
                             }
                         }
@@ -1617,7 +1617,7 @@ impl Global {
     pub fn queue_write_texture(
         &self,
         queue_id: QueueId,
-        destination: &TexelCopyTextureInfo,
+        destination: &wgt::TexelCopyTextureInfo<id::TextureId>,
         data: &[u8],
         data_layout: &wgt::TexelCopyBufferLayout,
         size: &wgt::Extent3d,

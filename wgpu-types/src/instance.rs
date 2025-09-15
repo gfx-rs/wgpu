@@ -359,6 +359,8 @@ impl GlBackendOptions {
 pub struct Dx12BackendOptions {
     /// Which DX12 shader compiler to use.
     pub shader_compiler: Dx12Compiler,
+    /// Presentation system to use.
+    pub presentation_system: Dx12SwapchainKind,
     /// Whether to wait for the latency waitable object before acquiring the next swapchain image.
     pub latency_waitable_object: Dx12UseFrameLatencyWaitableObject,
 }
@@ -370,10 +372,12 @@ impl Dx12BackendOptions {
     #[must_use]
     pub fn from_env_or_default() -> Self {
         let compiler = Dx12Compiler::from_env().unwrap_or_default();
+        let presentation_system = Dx12SwapchainKind::from_env().unwrap_or_default();
         let latency_waitable_object =
             Dx12UseFrameLatencyWaitableObject::from_env().unwrap_or_default();
         Self {
             shader_compiler: compiler,
+            presentation_system,
             latency_waitable_object,
         }
     }
@@ -384,10 +388,11 @@ impl Dx12BackendOptions {
     #[must_use]
     pub fn with_env(self) -> Self {
         let shader_compiler = self.shader_compiler.with_env();
+        let presentation_system = self.presentation_system.with_env();
         let latency_waitable_object = self.latency_waitable_object.with_env();
-
         Self {
             shader_compiler,
+            presentation_system,
             latency_waitable_object,
         }
     }
@@ -435,6 +440,58 @@ impl NoopBackendOptions {
             "1" => Some(true),
             "0" => Some(false),
             _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Copy, PartialEq, Eq)]
+/// Selects which kind of swapchain to use on DX12.
+pub enum Dx12SwapchainKind {
+    /// Use a DXGI swapchain made directly from the window's HWND.
+    ///
+    /// This does not support transparency but has better support from developer tooling from RenderDoc.
+    #[default]
+    DxgiFromHwnd,
+    /// Use a DXGI swapchain made from a DirectComposition visual made automatically from the window's HWND.
+    ///
+    /// This creates a single [`IDCompositionVisual`] over the entire window that is used by the `Surface`.
+    /// If a user wants to manage the composition tree themselves, they should create their own device and
+    /// composition, and pass the relevant visual down via [`SurfaceTargetUnsafe::CompositionVisual`][CV].
+    ///
+    /// This supports transparent windows, but does not have support from RenderDoc.
+    ///
+    /// [`IDCompositionVisual`]: https://learn.microsoft.com/en-us/windows/win32/api/dcomp/nn-dcomp-idcompositionvisual
+    /// [CV]: ../wgpu/struct.SurfaceTargetUnsafe.html#variant.CompositionVisual
+    DxgiFromVisual,
+}
+
+impl Dx12SwapchainKind {
+    /// Choose which presentation system to use from the environment variable `WGPU_DX12_PRESENTATION_SYSTEM`.
+    ///
+    /// Valid values, case insensitive:
+    /// - `DxgiFromVisual` or `Visual`
+    /// - `DxgiFromHwnd` or `Hwnd` for [`Self::DxgiFromHwnd`]
+    #[must_use]
+    pub fn from_env() -> Option<Self> {
+        let value = crate::env::var("WGPU_DX12_PRESENTATION_SYSTEM")
+            .as_deref()?
+            .to_lowercase();
+        match value.as_str() {
+            "dxgifromvisual" | "visual" => Some(Self::DxgiFromVisual),
+            "dxgifromhwnd" | "hwnd" => Some(Self::DxgiFromHwnd),
+            _ => None,
+        }
+    }
+
+    /// Takes the given presentation system, modifies it based on the `WGPU_DX12_PRESENTATION_SYSTEM` environment variable, and returns the result.
+    ///
+    /// See [`from_env`](Self::from_env) for more information.
+    #[must_use]
+    pub fn with_env(self) -> Self {
+        if let Some(presentation_system) = Self::from_env() {
+            presentation_system
+        } else {
+            self
         }
     }
 }

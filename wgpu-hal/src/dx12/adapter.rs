@@ -919,7 +919,10 @@ impl crate::Adapter for super::Adapter {
     ) -> Option<crate::SurfaceCapabilities> {
         let current_extent = {
             match surface.target {
-                SurfaceTarget::WndHandle(wnd_handle) => {
+                SurfaceTarget::WndHandle(wnd_handle)
+                | SurfaceTarget::VisualFromWndHandle {
+                    handle: wnd_handle, ..
+                } => {
                     let mut rect = Default::default();
                     if unsafe { WindowsAndMessaging::GetClientRect(wnd_handle, &mut rect) }.is_ok()
                     {
@@ -963,6 +966,7 @@ impl crate::Adapter for super::Adapter {
             composite_alpha_modes: match surface.target {
                 SurfaceTarget::WndHandle(_) => vec![wgt::CompositeAlphaMode::Opaque],
                 SurfaceTarget::Visual(_)
+                | SurfaceTarget::VisualFromWndHandle { .. }
                 | SurfaceTarget::SurfaceHandle(_)
                 | SurfaceTarget::SwapChainPanel(_) => vec![
                     wgt::CompositeAlphaMode::Auto,

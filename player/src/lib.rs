@@ -6,7 +6,7 @@
 extern crate wgpu_core as wgc;
 extern crate wgpu_types as wgt;
 
-use wgc::{device::trace, identity::IdentityManager};
+use wgc::{command::Command, device::trace, identity::IdentityManager};
 
 use std::{borrow::Cow, fs, path::Path};
 
@@ -14,7 +14,7 @@ pub trait GlobalPlay {
     fn encode_commands(
         &self,
         encoder: wgc::id::CommandEncoderId,
-        commands: Vec<trace::Command>,
+        commands: Vec<Command>,
         command_buffer_id_manager: &mut IdentityManager<wgc::id::markers::CommandBuffer>,
     ) -> wgc::id::CommandBufferId;
     fn process(
@@ -32,12 +32,12 @@ impl GlobalPlay for wgc::global::Global {
     fn encode_commands(
         &self,
         encoder: wgc::id::CommandEncoderId,
-        commands: Vec<trace::Command>,
+        commands: Vec<Command>,
         command_buffer_id_manager: &mut IdentityManager<wgc::id::markers::CommandBuffer>,
     ) -> wgc::id::CommandBufferId {
         for command in commands {
             match command {
-                trace::Command::CopyBufferToBuffer {
+                Command::CopyBufferToBuffer {
                     src,
                     src_offset,
                     dst,
@@ -48,31 +48,31 @@ impl GlobalPlay for wgc::global::Global {
                         encoder, src, src_offset, dst, dst_offset, size,
                     )
                     .unwrap(),
-                trace::Command::CopyBufferToTexture { src, dst, size } => self
+                Command::CopyBufferToTexture { src, dst, size } => self
                     .command_encoder_copy_buffer_to_texture(encoder, &src, &dst, &size)
                     .unwrap(),
-                trace::Command::CopyTextureToBuffer { src, dst, size } => self
+                Command::CopyTextureToBuffer { src, dst, size } => self
                     .command_encoder_copy_texture_to_buffer(encoder, &src, &dst, &size)
                     .unwrap(),
-                trace::Command::CopyTextureToTexture { src, dst, size } => self
+                Command::CopyTextureToTexture { src, dst, size } => self
                     .command_encoder_copy_texture_to_texture(encoder, &src, &dst, &size)
                     .unwrap(),
-                trace::Command::ClearBuffer { dst, offset, size } => self
+                Command::ClearBuffer { dst, offset, size } => self
                     .command_encoder_clear_buffer(encoder, dst, offset, size)
                     .unwrap(),
-                trace::Command::ClearTexture {
+                Command::ClearTexture {
                     dst,
                     subresource_range,
                 } => self
                     .command_encoder_clear_texture(encoder, dst, &subresource_range)
                     .unwrap(),
-                trace::Command::WriteTimestamp {
+                Command::WriteTimestamp {
                     query_set_id,
                     query_index,
                 } => self
                     .command_encoder_write_timestamp(encoder, query_set_id, query_index)
                     .unwrap(),
-                trace::Command::ResolveQuerySet {
+                Command::ResolveQuerySet {
                     query_set_id,
                     start_query,
                     query_count,
@@ -88,16 +88,14 @@ impl GlobalPlay for wgc::global::Global {
                         destination_offset,
                     )
                     .unwrap(),
-                trace::Command::PushDebugGroup(marker) => self
+                Command::PushDebugGroup(marker) => self
                     .command_encoder_push_debug_group(encoder, &marker)
                     .unwrap(),
-                trace::Command::PopDebugGroup => {
-                    self.command_encoder_pop_debug_group(encoder).unwrap()
-                }
-                trace::Command::InsertDebugMarker(marker) => self
+                Command::PopDebugGroup => self.command_encoder_pop_debug_group(encoder).unwrap(),
+                Command::InsertDebugMarker(marker) => self
                     .command_encoder_insert_debug_marker(encoder, &marker)
                     .unwrap(),
-                trace::Command::RunComputePass {
+                Command::RunComputePass {
                     base,
                     timestamp_writes,
                 } => {
@@ -107,7 +105,7 @@ impl GlobalPlay for wgc::global::Global {
                         timestamp_writes.as_ref(),
                     );
                 }
-                trace::Command::RunRenderPass {
+                Command::RunRenderPass {
                     base,
                     target_colors,
                     target_depth_stencil,
@@ -123,7 +121,7 @@ impl GlobalPlay for wgc::global::Global {
                         occlusion_query_set_id,
                     );
                 }
-                trace::Command::BuildAccelerationStructures { blas, tlas } => {
+                Command::BuildAccelerationStructures { blas, tlas } => {
                     let blas_iter = blas.iter().map(|x| {
                         let geometries = match &x.geometries {
                             wgc::ray_tracing::TraceBlasGeometries::TriangleGeometries(

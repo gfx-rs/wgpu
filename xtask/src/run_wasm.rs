@@ -1,13 +1,19 @@
-use anyhow::Context;
+use std::ffi::OsString;
 
+use anyhow::Context;
 use pico_args::Arguments;
 use xshell::Shell;
 
-use crate::util::{check_all_programs, Program};
+use crate::util::{check_all_programs, flatten_args, Program};
 
-pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
+pub(crate) fn run_wasm(
+    shell: Shell,
+    mut args: Arguments,
+    passthrough_args: Option<Vec<OsString>>,
+) -> anyhow::Result<()> {
     let should_serve = !args.contains("--no-serve");
     let release = args.contains("--release");
+    let cargo_args = flatten_args(args, passthrough_args);
 
     let mut programs_needed = vec![Program {
         crate_name: "wasm-bindgen-cli",
@@ -27,8 +33,6 @@ pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> 
     let output_dir = if release { "release" } else { "debug" };
 
     log::info!("building webgpu examples");
-
-    let cargo_args = args.finish();
 
     xshell::cmd!(
         shell,
