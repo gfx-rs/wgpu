@@ -117,6 +117,21 @@ Difference for SPIR-V passthrough:
 ```
 This allows using precompiled shaders without manually checking which backend's code to pass, for example if you have shaders precompiled for both DXIL and SPIR-V.
 
+This comes along with an optional wgpu feature, `precompiled`, which provides a macro for precompiling shaders. For example, the following code is used in a test to precompile the `vs_main` entry point of `shader.wgsl` for all shader backends, excluding DXIL.
+```rust
+ctx
+    .device
+    .create_shader_module_passthrough(wgpu::include_precompiled_wgsl!(
+        // Shader source file
+        "shader.wgsl",
+        // Shader entry point
+        "vs_main",
+        // Target formats: a space separated list of backends, for example "all" or "hlsl glsl spirv"
+        all
+    ))
+```
+You can also precompile SPIR-V and GLSL, and you can precompile raw shader code (code that lives in the rust file) using `precompile_wgsl` instead of `include_precompiled_wgsl`, and the analogous functions for GLSL.
+
 #### Buffer mapping apis no longer have lifetimes
 
 `Buffer::get_mapped_range()`, `Buffer::get_mapped_range_mut()`, and `Queue::write_buffer_with()` now return guard objects without any lifetimes. This
