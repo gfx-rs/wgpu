@@ -5234,6 +5234,7 @@ dependencies = [
  "hashbrown",
  "hassle-rs",
  "naga",
+ "proc-macro2",
  "quote",
  "syn 2.0.106",
 ]

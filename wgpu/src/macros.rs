@@ -345,7 +345,7 @@ pub mod helpers {
     pub use alloc::string::{String, ToString};
     pub use core::{include_bytes, include_str};
     #[cfg(feature = "precompile")]
-    pub use wgpu_precompile_macro::precompile;
+    pub use wgpu_precompile_macro::{precompile, precompile_hlsl_to_dxil};
     pub use None;
     pub use Some;
 }

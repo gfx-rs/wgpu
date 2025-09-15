@@ -78,7 +78,17 @@ fn parse_shader_stage(str: &str) -> Option<naga::ShaderStage> {
     }
 }
 
-struct MacroArgs {
+fn shader_stage_to_string(stage: naga::ShaderStage) -> &'static str {
+    match stage {
+        naga::ShaderStage::Vertex => "vertex",
+        naga::ShaderStage::Fragment => "fragment",
+        naga::ShaderStage::Compute => "compute",
+        naga::ShaderStage::Mesh => "mesh",
+        naga::ShaderStage::Task => "task",
+    }
+}
+
+struct PrecompileArgs {
     wgpu_crate: Path,
     source_type: SourceType,
     shader_stage: Option<naga::ShaderStage>,
@@ -87,7 +97,7 @@ struct MacroArgs {
     entry_point: String,
     file_name: Option<String>,
 }
-impl Parse for MacroArgs {
+impl Parse for PrecompileArgs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let wgpu_crate: Path = input.parse()?;
         let source_type = SourceType::parse(&input.parse::<Ident>()?.to_string());
@@ -144,7 +154,7 @@ impl Parse for MacroArgs {
         })
     }
 }
-impl MacroArgs {
+impl PrecompileArgs {
     fn target_enabled(&self, target: CompileTarget) -> bool {
         // TODO: only enable if we are actually targeting that platform.
         // This is especially important for DXIL, which requires dxc. No need
@@ -164,13 +174,142 @@ impl MacroArgs {
     }
 }
 
+/// All fields represented as string literals
+struct PrecompileDxilArgs {
+    hlsl_code: String,
+    entry_point: String,
+    shader_stage: naga::ShaderStage,
+    /// For debug reasons
+    source_file_name: String,
+}
+impl Parse for PrecompileDxilArgs {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let hlsl_code = input.parse::<syn::LitStr>()?.value();
+        let entry_point = input.parse::<syn::LitStr>()?.value();
+        let shader_stage = parse_shader_stage(&input.parse::<syn::LitStr>()?.value()).unwrap();
+        let source_file_name = input.parse::<syn::LitStr>()?.value();
+        Ok(Self {
+            hlsl_code,
+            entry_point,
+            shader_stage,
+            source_file_name,
+        })
+    }
+}
+
+/// This is so we can conditionally hook into DXC depending on the target, which must be configured via #\[cfg] within the main program.
+/// Proc macros don't directly have access to the target configuration. Invoking naga unnecessarily shouldn't be *too* major, but
+/// compiling to macOS shouldn't require dxc be present.
+#[proc_macro]
+pub fn precompile_hlsl_to_dxil(input: TokenStream) -> TokenStream {
+    let args = parse_macro_input!(input as PrecompileDxilArgs);
+    let target_profile = match args.shader_stage {
+        naga::ShaderStage::Vertex => "vs_5_1",
+        naga::ShaderStage::Fragment => "ps_5_1",
+        naga::ShaderStage::Compute => "cs_5_1",
+        naga::ShaderStage::Task => "as_5_1",
+        naga::ShaderStage::Mesh => "ms_5_1",
+    };
+    let dxil = hassle_rs::compile_hlsl(
+        &args.source_file_name,
+        &args.hlsl_code,
+        &args.entry_point,
+        target_profile,
+        &["-spirv"],
+        &[],
+    )
+    .expect("Hassle failed to compile HLSL to DXIL");
+    quote! {
+        &[#(#dxil),*]
+    }
+    .into()
+}
+
+fn generate_conditional_guard(target: CompileTarget) -> proc_macro2::TokenStream {
+    // This is for my sanity. The guards should always be used within conditional code anyway.
+    #[allow(unused_variables)]
+    let always_false = quote! {
+        any()
+    };
+    // This basically mirrors the things in wgpu-core/platform-deps
+    match target {
+        CompileTarget::Msl => {
+            // Related features: metal
+            #[cfg(feature = "metal")]
+            quote! {
+                target_vendor = "apple"
+            }
+            // Always false
+            #[cfg(not(feature = "metal"))]
+            always_false
+        }
+        CompileTarget::Glsl => {
+            // Related features: gles, webgl, angle
+            let webgl = if cfg!(feature = "webgl") {
+                quote! {
+                    ,all(target_arch = "wasm32", not(target_os = "emscripten"))
+                }
+            } else {
+                quote! {}
+            };
+            let angle = if cfg!(feature = "angle") {
+                quote! {
+                    ,target_vendor = "apple"
+                }
+            } else {
+                quote! {}
+            };
+            #[cfg(feature = "gles")]
+            quote! {
+                any(target_os = "emscripten", windows, target_os = "linux", target_os = "android" #angle #webgl)
+            }
+            #[cfg(not(feature = "gles"))]
+            always_false
+        }
+        CompileTarget::Spirv => {
+            // Related features: vulkan, vulkan-portability
+            #[cfg(all(feature = "vulkan", feature = "vulkan-portability"))]
+            quote! {
+                any(target_vendor = "apple", windows, target_os = "linux", target_os = "android")
+            }
+            #[cfg(all(feature = "vulkan", not(feature = "vulkan-portability")))]
+            quote! {
+                any(windows, target_os = "linux", target_os = "android")
+            }
+            #[cfg(not(feature = "vulkan"))]
+            always_false
+        }
+        CompileTarget::Wgsl => {
+            // Related features: webgpu
+            #[cfg(feature = "webgpu")]
+            quote! {
+                all(target_arch = "wasm32", not(target_os = "emscripten"))
+            }
+            #[cfg(not(feature = "webgpu"))]
+            always_false
+        }
+        CompileTarget::Hlsl | CompileTarget::Dxil => {
+            // Related features: dx12
+            // Note: this differs slightly from platform-deps which enables dx12 even on linux/android, but just doesn't
+            // let you use it
+            #[cfg(feature = "dx12")]
+            quote! {
+                windows
+            }
+            #[cfg(not(feature = "dx12"))]
+            always_false
+        }
+        CompileTarget::AllSupported => unreachable!(),
+    }
+}
+
 /// This is to be re-exported by wgpu in a certain way, so that it can refer to items in the `wgpu` crate
 ///
 /// Input format:
 /// precompile!(wgpu_crate_name source_type <shader_stage if glsl input> is_file_path source_string entry_point  targets...)
 #[proc_macro]
 pub fn precompile(input: TokenStream) -> TokenStream {
-    let args = parse_macro_input!(input as MacroArgs);
+    let args = parse_macro_input!(input as PrecompileArgs);
     let module = match args.source_type {
         SourceType::Spirv => {
             let source = args.source.clone().expect_bytes();
@@ -229,7 +368,7 @@ pub fn precompile(input: TokenStream) -> TokenStream {
         #wgpu_path::__macro_helpers::None
     };
 
-    #[cfg(feature = "spv")]
+    #[cfg(feature = "spirv")]
     let spirv_tokens = if args.target_enabled(CompileTarget::Spirv) {
         use naga::back::spv;
         // Ripped from wgpu-hal backend
@@ -256,15 +395,21 @@ pub fn precompile(input: TokenStream) -> TokenStream {
             }),
         )
         .expect("Naga failed to write SPIR-V code");
+        let guard = generate_conditional_guard(CompileTarget::Spirv);
         quote! {
-            #wgpu_path::__macro_helpers::Some(#wgpu_path::SpirvPassthroughDescriptor {
+            #[cfg(#guard)]
+            spirv: #wgpu_path::__macro_helpers::Some(#wgpu_path::SpirvPassthroughDescriptor {
                 code: #wgpu_path::__macro_helpers::Cow::Borrowed(&[#(#spirv_data),*]),
-            })
+            }),
+            #[cfg(not(#guard))]
+            spirv: #none_tokens,
         }
     } else {
-        none_tokens.clone()
+        quote! {
+            spirv: #none_tokens,
+        }
     };
-    #[cfg(not(feature = "spv"))]
+    #[cfg(not(feature = "spirv"))]
     let spirv_tokens = none_tokens.clone();
 
     #[cfg(feature = "msl")]
@@ -280,14 +425,20 @@ pub fn precompile(input: TokenStream) -> TokenStream {
         )
         .expect("Naga failed to write MSL code");
         let entry_point = translation_info.entry_point_names[0].as_ref().unwrap();
+        let guard = generate_conditional_guard(CompileTarget::Msl);
         quote! {
-            #wgpu_path::__macro_helpers::Some(#wgpu_path::MslPassthroughDescriptor {
+            #[cfg(#guard)]
+            msl: #wgpu_path::__macro_helpers::Some(#wgpu_path::MslPassthroughDescriptor {
                 code: #wgpu_path::__macro_helpers::Cow::Borrowed(#msl_str),
                 entry_point: #wgpu_path::__macro_helpers::ToString::to_string(#entry_point),
-            })
+            }),
+            #[cfg(not(#guard))]
+            msl: #none_tokens,
         }
     } else {
-        none_tokens.clone()
+        quote! {
+            msl: #none_tokens,
+        }
     };
     #[cfg(not(feature = "msl"))]
     let msl_tokens = none_tokens.clone();
@@ -313,47 +464,46 @@ pub fn precompile(input: TokenStream) -> TokenStream {
 
     #[cfg(feature = "hlsl")]
     let hlsl_tokens = if args.target_enabled(CompileTarget::Hlsl) {
+        let guard = generate_conditional_guard(CompileTarget::Hlsl);
         quote! {
-            #wgpu_path::__macro_helpers::Some(#wgpu_path::HlslPassthroughDescriptor {
+            #[cfg(#guard)]
+            hlsl: #wgpu_path::__macro_helpers::Some(#wgpu_path::HlslPassthroughDescriptor {
                 code: #wgpu_path::__macro_helpers::Cow::Borrowed(#hlsl_str),
                 entry_point: #wgpu_path::__macro_helpers::ToString::to_string(#hlsl_entry_point),
-            })
+            }),
+            #[cfg(not(#guard))]
+            hlsl: #none_tokens,
         }
     } else {
-        none_tokens.clone()
+        quote! {
+            hlsl: #none_tokens,
+        }
     };
     #[cfg(not(feature = "hlsl"))]
     let hlsl_tokens = none_tokens.clone();
 
     #[cfg(feature = "hlsl")]
     let dxil_tokens = if args.target_enabled(CompileTarget::Dxil) {
-        let target_profile = match shader_stage {
-            naga::ShaderStage::Vertex => "vs_5_1",
-            naga::ShaderStage::Fragment => "ps_5_1",
-            naga::ShaderStage::Compute => "cs_5_1",
-            naga::ShaderStage::Task => "as_5_1",
-            naga::ShaderStage::Mesh => "ms_5_1",
+        let source_name = match &args.file_name {
+            Some(f) => f,
+            None => "precompile-inline.hlsl",
         };
-        let dxil = hassle_rs::compile_hlsl(
-            match &args.file_name {
-                Some(f) => f,
-                None => "precompile-inline.hlsl",
-            },
-            &hlsl_str,
-            &hlsl_entry_point,
-            target_profile,
-            &["-spirv"],
-            &[],
-        )
-        .expect("Hassle failed to compile HLSL to DXIL");
+        let shader_stage = shader_stage_to_string(shader_stage);
+        let guard = generate_conditional_guard(CompileTarget::Dxil);
         quote! {
-            #wgpu_path::__macro_helpers::Some(#wgpu_path::DxilPassthroughDescriptor {
-                code: #wgpu_path::__macro_helpers::Cow::Borrowed(&[#(#dxil),*]),
+            #[cfg(#guard)]
+            dxil: #wgpu_path::__macro_helpers::Some(#wgpu_path::DxilPassthroughDescriptor {
+                // HLSL, entry, shader stage, filename
+                code: #wgpu_path::__macro_helpers::Cow::Borrowed(#wgpu_path::__macro_helpers::precompile_hlsl_to_dxil!(#hlsl_str #hlsl_entry_point #shader_stage #source_name)),
                 entry_point: #wgpu_path::__macro_helpers::ToString::to_string(#hlsl_entry_point),
-            })
+            }),
+            #[cfg(not(#guard))]
+            dxil: #none_tokens,
         }
     } else {
-        none_tokens.clone()
+        quote! {
+            dxil: #none_tokens,
+        }
     };
     #[cfg(not(feature = "hlsl"))]
     let dxil_tokens = none_tokens.clone();
@@ -368,15 +518,20 @@ pub fn precompile(input: TokenStream) -> TokenStream {
         let wgsl_str = writer.finish();
         // TODO: ensure that the entry point here is sensible
         let entry_point = &args.entry_point;
+        let guard = generate_conditional_guard(CompileTarget::Wgsl);
         quote! {
-            #wgpu_path::__macro_helpers::Some(#wgpu_path::WgslPassthroughDescriptor {
+            #[cfg(#guard)]
+            wgsl: #wgpu_path::__macro_helpers::Some(#wgpu_path::WgslPassthroughDescriptor {
                 code: #wgpu_path::__macro_helpers::Cow::Borrowed(#wgsl_str),
                 entry_point: #wgpu_path::__macro_helpers::ToString::to_string(#entry_point),
-            })
+            }),
+            #[cfg(not(#guard))]
+            wgsl: #none_tokens,
+
         }
     } else {
         quote! {
-            #wgpu_path::__macro_helpers::None
+            wgsl: #none_tokens,
         }
     };
     #[cfg(not(feature = "wgsl"))]
@@ -400,14 +555,18 @@ pub fn precompile(input: TokenStream) -> TokenStream {
         .expect("Naga failed to create GLSL writer")
         .write()
         .expect("Naga failed write GLSL code");
+        let guard = generate_conditional_guard(CompileTarget::Glsl);
         quote! {
-            #wgpu_path::__macro_helpers::Some(#wgpu_path::GlslPassthroughDescriptor {
+            #[cfg(#guard)]
+            glsl: #wgpu_path::__macro_helpers::Some(#wgpu_path::GlslPassthroughDescriptor {
                 code: #wgpu_path::__macro_helpers::Cow::Borrowed(#glsl_str),
-            })
+            }),
+            #[cfg(not(#guard))]
+            glsl: #none_tokens,
         }
     } else {
         quote! {
-            #wgpu_path::__macro_helpers::None
+            glsl: #none_tokens,
         }
     };
     #[cfg(not(feature = "glsl"))]
@@ -418,19 +577,20 @@ pub fn precompile(input: TokenStream) -> TokenStream {
         None => quote! {#wgpu_path::__macro_helpers::None},
     };
 
-    quote! {
+    let f = quote! {
         #wgpu_path::ShaderModuleDescriptorPassthrough {
             // TODO: make this something else when file name is provided
             label: #label_tokens,
             num_workgroups: (#x, #y, #z),
             runtime_checks: #wgpu_path::ShaderRuntimeChecks::default(),
-            spirv: #spirv_tokens,
-            dxil: #dxil_tokens,
-            msl: #msl_tokens,
-            hlsl: #hlsl_tokens,
-            glsl: #glsl_tokens,
-            wgsl: #wgsl_tokens,
+            #spirv_tokens
+            #dxil_tokens
+            #msl_tokens
+            #hlsl_tokens
+            #glsl_tokens
+            #wgsl_tokens
         }
-    }
-    .into()
+    };
+    //panic!("FInal tokenstream: {}", f);
+    f.into()
 }

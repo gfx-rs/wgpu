@@ -44,20 +44,20 @@ default = [
 # --------------------------------------------------------------------
 
 ## Enables the DX12 backend on Windows.
-dx12 = ["wgpu-core?/dx12", "wgpu-precompile-macro/hlsl"]
+dx12 = ["wgpu-core?/dx12", "wgpu-precompile-macro/dx12"]
 
 ## Enables the Metal backend on macOS & iOS.
-metal = ["wgpu-core?/metal", "wgpu-precompile-macro/msl"]
+metal = ["wgpu-core?/metal", "wgpu-precompile-macro/metal"]
 
 ## Enables the Vulkan backend on Windows, Linux, and Android.
-vulkan = ["wgpu-core?/vulkan", "wgpu-precompile-macro/spv"]
+vulkan = ["wgpu-core?/vulkan", "wgpu-precompile-macro/vulkan"]
 
 ## Enables the OpenGL/GLES backend on Windows, Linux, Android, and Emscripten.
-gles = ["wgpu-core?/gles", "wgpu-precompile-macro/glsl"]
+gles = ["wgpu-core?/gles", "wgpu-precompile-macro/gles"]
 
 ## Enables the WebGPU backend on WebAssembly.
 webgpu = [
-    "wgpu-precompile-macro/wgsl",
+    "wgpu-precompile-macro/webgpu",
     "web",
     "naga?/wgsl-out",
     "dep:wasm-bindgen-futures",
@@ -73,13 +73,13 @@ webgpu = [
 #! ### Conditional Backends
 
 ## Enables the GLES backend on macOS only for use with [ANGLE](https://github.com/google/angle).
-angle = ["wgpu-core?/angle"]
+angle = ["wgpu-core?/angle", "wgpu-precompile-macro/angle"]
 
 ## Enables the Vulkan backend on macOS & iOS only for use with [MoltenVK](https://github.com/KhronosGroup/MoltenVK).
-vulkan-portability = ["wgpu-core?/vulkan-portability"]
+vulkan-portability = ["wgpu-core?/vulkan-portability", "wgpu-precompile-macro/vulkan-portability"]
 
 ## Enables the GLES backend on WebAssembly only.
-webgl = ["web", "wgpu-core/webgl", "dep:wgpu-hal", "dep:smallvec"]
+webgl = ["web", "wgpu-core/webgl", "dep:wgpu-hal", "dep:smallvec", "wgpu-precompile-macro/webgl"]
 
 ## Enables the noop backend for testing.
 ##

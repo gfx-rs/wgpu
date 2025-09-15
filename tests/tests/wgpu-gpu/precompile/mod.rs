@@ -15,21 +15,21 @@ static PRECOMPILE_ALL_STAGES_TEST: GpuTestConfiguration = GpuTestConfiguration::
             .create_shader_module_passthrough(wgpu::include_precompiled_wgsl!(
                 "tests/wgpu-gpu/precompile/shader.wgsl",
                 "vs_main",
-                all
+                all dxil
             ));
         let _ = ctx
             .device
             .create_shader_module_passthrough(wgpu::include_precompiled_wgsl!(
                 "tests/wgpu-gpu/precompile/shader.wgsl",
                 "fs_main",
-                all
+                all dxil
             ));
         let _ = ctx
             .device
             .create_shader_module_passthrough(wgpu::include_precompiled_wgsl!(
                 "tests/wgpu-gpu/precompile/shader.wgsl",
                 "cs_main",
-                glsl spirv wgsl hlsl msl
+                glsl spirv wgsl hlsl msl dxil
             ));
         let _ = ctx
             .device
