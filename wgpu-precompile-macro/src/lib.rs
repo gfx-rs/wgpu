@@ -1,7 +1,8 @@
 use hashbrown::HashSet;
+use nanorand::Rng;
 use proc_macro::TokenStream;
 use quote::quote;
-use std::path::PathBuf;
+use std::{io::Write, path::PathBuf, process::Stdio};
 use syn::{parse::Parse, parse_macro_input, Ident, Path};
 
 #[derive(PartialEq, Eq)]
@@ -179,20 +180,16 @@ struct PrecompileDxilArgs {
     hlsl_code: String,
     entry_point: String,
     shader_stage: naga::ShaderStage,
-    /// For debug reasons
-    source_file_name: String,
 }
 impl Parse for PrecompileDxilArgs {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let hlsl_code = input.parse::<syn::LitStr>()?.value();
         let entry_point = input.parse::<syn::LitStr>()?.value();
         let shader_stage = parse_shader_stage(&input.parse::<syn::LitStr>()?.value()).unwrap();
-        let source_file_name = input.parse::<syn::LitStr>()?.value();
         Ok(Self {
             hlsl_code,
             entry_point,
             shader_stage,
-            source_file_name,
         })
     }
 }
@@ -210,15 +207,37 @@ pub fn precompile_hlsl_to_dxil(input: TokenStream) -> TokenStream {
         naga::ShaderStage::Task => "as_5_1",
         naga::ShaderStage::Mesh => "ms_5_1",
     };
-    let dxil = hassle_rs::compile_hlsl(
-        &args.source_file_name,
-        &args.hlsl_code,
-        &args.entry_point,
-        target_profile,
-        &["-spirv"],
-        &[],
-    )
-    .expect("Hassle failed to compile HLSL to DXIL");
+
+    let temporary_folder_location =
+        std::env::temp_dir().join(nanorand::WyRand::new().generate::<u64>().to_string());
+    std::fs::create_dir(&temporary_folder_location).expect("Failed to create temporary directory");
+
+    let temporary_file_location = temporary_folder_location.join("file.dxil");
+    let mut cmd = std::process::Command::new("dxc")
+        .args([
+            "-T",
+            target_profile,
+            "-E",
+            &args.entry_point,
+            "-",
+            "-Fo",
+            &temporary_file_location.display().to_string(),
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn DXC");
+    let mut stdin = cmd.stdin.take().unwrap();
+    stdin
+        .write_all(args.hlsl_code.as_bytes())
+        .expect("Failed to write to DXC stdin");
+    let output = cmd.wait_with_output().expect("DXC failed to wait");
+    if !output.status.success() {
+        panic!("DXC failed:\n{}", String::from_utf8(output.stderr).unwrap());
+    }
+    let dxil = std::fs::read(temporary_file_location).expect("Failed to read DXC output file");
+    std::fs::remove_dir_all(temporary_folder_location)
+        .expect("Failed to remove temporary directory");
     quote! {
         &[#(#dxil),*]
     }
@@ -484,17 +503,13 @@ pub fn precompile(input: TokenStream) -> TokenStream {
 
     #[cfg(feature = "hlsl")]
     let dxil_tokens = if args.target_enabled(CompileTarget::Dxil) {
-        let source_name = match &args.file_name {
-            Some(f) => f,
-            None => "precompile-inline.hlsl",
-        };
         let shader_stage = shader_stage_to_string(shader_stage);
         let guard = generate_conditional_guard(CompileTarget::Dxil);
         quote! {
             #[cfg(#guard)]
             dxil: #wgpu_path::__macro_helpers::Some(#wgpu_path::DxilPassthroughDescriptor {
                 // HLSL, entry, shader stage, filename
-                code: #wgpu_path::__macro_helpers::Cow::Borrowed(#wgpu_path::__macro_helpers::precompile_hlsl_to_dxil!(#hlsl_str #hlsl_entry_point #shader_stage #source_name)),
+                code: #wgpu_path::__macro_helpers::Cow::Borrowed(#wgpu_path::__macro_helpers::precompile_hlsl_to_dxil!(#hlsl_str #hlsl_entry_point #shader_stage)),
                 entry_point: #wgpu_path::__macro_helpers::ToString::to_string(#hlsl_entry_point),
             }),
             #[cfg(not(#guard))]

@@ -31,14 +31,12 @@ spirv = ["naga/spv-out"]
 msl = ["naga/msl-out"]
 wgsl = ["naga/wgsl-out"]
 glsl = ["naga/glsl-out"]
-hlsl = ["naga/hlsl-out", "dep:hassle-rs"]
+hlsl = ["naga/hlsl-out"]
 
 [dependencies]
 naga = { workspace = true, features = ["spv-in", "wgsl-in", "glsl-in"] }
 
-# TODO: verify that this dependency should be allowed
-hassle-rs = { version = "0.12", optional = true }
-
+nanorand = { workspace = true, features = ["tls"] }
 quote.workspace = true
 syn = { workspace = true, features = ["full"] }
 proc-macro2 = "1.0"
