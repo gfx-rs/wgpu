@@ -90,7 +90,7 @@ dyn_type!(pub ref struct DynPipelineCache(dyn PipelineCacheInterface));
 dyn_type!(pub mut struct DynCommandEncoder(dyn CommandEncoderInterface));
 dyn_type!(pub mut struct DynComputePass(dyn ComputePassInterface));
 dyn_type!(pub mut struct DynRenderPass(dyn RenderPassInterface));
-dyn_type!(pub ref struct DynCommandBuffer(dyn CommandBufferInterface));
+dyn_type!(pub mut struct DynCommandBuffer(dyn CommandBufferInterface));
 dyn_type!(pub mut struct DynRenderBundleEncoder(dyn RenderBundleEncoderInterface));
 dyn_type!(pub ref struct DynRenderBundle(dyn RenderBundleInterface));
 dyn_type!(pub ref struct DynSurface(dyn SurfaceInterface));

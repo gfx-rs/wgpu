@@ -51,6 +51,7 @@ macro_rules! impl_send_sync {
     };
 }
 
+#[derive(Clone)]
 pub struct ContextWebGpu {
     /// `None` if browser does not advertise support for WebGPU.
     gpu: Option<DefinedNonNullJsValue<webgpu_sys::Gpu>>,
@@ -86,7 +87,7 @@ impl crate::Error {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebShaderModule {
     module: webgpu_sys::GpuShaderModule,
     compilation_info: WebShaderCompilationInfo,
@@ -1107,7 +1108,7 @@ extern "C" {
     fn worker(this: &Global) -> JsValue;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Canvas {
     Canvas(web_sys::HtmlCanvasElement),
     Offscreen(web_sys::OffscreenCanvas),
@@ -1147,49 +1148,49 @@ pub fn get_browser_gpu_property(
     Ok(DefinedNonNullJsValue::new(maybe_undefined_gpu))
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebAdapter {
     pub(crate) inner: webgpu_sys::GpuAdapter,
     /// Unique identifier for this Adapter.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebDevice {
     pub(crate) inner: webgpu_sys::GpuDevice,
     /// Unique identifier for this Device.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebQueue {
     pub(crate) inner: webgpu_sys::GpuQueue,
     /// Unique identifier for this Queue.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebBindGroupLayout {
     pub(crate) inner: webgpu_sys::GpuBindGroupLayout,
     /// Unique identifier for this BindGroupLayout.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebBindGroup {
     pub(crate) inner: webgpu_sys::GpuBindGroup,
     /// Unique identifier for this BindGroup.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebTextureView {
     pub(crate) inner: webgpu_sys::GpuTextureView,
     /// Unique identifier for this TextureView.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebSampler {
     pub(crate) inner: webgpu_sys::GpuSampler,
     /// Unique identifier for this Sampler.
@@ -1198,7 +1199,7 @@ pub struct WebSampler {
 
 /// Remembers which portion of a buffer has been mapped, along with a reference
 /// to the mapped portion.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct WebBufferMapState {
     /// The mapped memory of the buffer.
     pub mapped_buffer: Option<js_sys::ArrayBuffer>,
@@ -1210,7 +1211,7 @@ struct WebBufferMapState {
 /// The WebGPU specification forbids calling `getMappedRange` on a `webgpu_sys::GpuBuffer` more than
 /// once, so this struct stores the initial mapped range and re-uses it, allowing for multiple `get_mapped_range`
 /// calls on the Rust-side.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebBuffer {
     /// The associated GPU buffer.
     inner: webgpu_sys::GpuBuffer,
@@ -1258,66 +1259,66 @@ impl WebBuffer {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebTexture {
     pub(crate) inner: webgpu_sys::GpuTexture,
     /// Unique identifier for this Texture.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebExternalTexture {
     /// Unique identifier for this ExternalTexture.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebBlas {
     /// Unique identifier for this Blas.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebTlas {
     /// Unique identifier for this Blas.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebQuerySet {
     pub(crate) inner: webgpu_sys::GpuQuerySet,
     /// Unique identifier for this QuerySet.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebPipelineLayout {
     pub(crate) inner: webgpu_sys::GpuPipelineLayout,
     /// Unique identifier for this PipelineLayout.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebRenderPipeline {
     pub(crate) inner: webgpu_sys::GpuRenderPipeline,
     /// Unique identifier for this RenderPipeline.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebComputePipeline {
     pub(crate) inner: webgpu_sys::GpuComputePipeline,
     /// Unique identifier for this ComputePipeline.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebPipelineCache {
     /// Unique identifier for this PipelineCache.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebCommandEncoder {
     pub(crate) inner: webgpu_sys::GpuCommandEncoder,
     /// Unique identifier for this CommandEncoder.
@@ -1345,21 +1346,21 @@ pub struct WebCommandBuffer {
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebRenderBundleEncoder {
     pub(crate) inner: webgpu_sys::GpuRenderBundleEncoder,
     /// Unique identifier for this RenderBundleEncoder.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebRenderBundle {
     pub(crate) inner: webgpu_sys::GpuRenderBundle,
     /// Unique identifier for this RenderBundle.
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebSurface {
     gpu: Option<DefinedNonNullJsValue<webgpu_sys::Gpu>>,
     canvas: Canvas,
@@ -1368,7 +1369,7 @@ pub struct WebSurface {
     ident: crate::cmp::Identifier,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WebSurfaceOutputDetail {
     /// Unique identifier for this SurfaceOutputDetail.
     ident: crate::cmp::Identifier,

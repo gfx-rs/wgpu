@@ -2574,7 +2574,7 @@ dependencies = [
 name = "naga-test"
 version = "26.0.0"
 dependencies = [
- "bitflags 2.9.3",
+ "bitflags 2.9.4",
  "env_logger",
  "naga",
  "ron",
