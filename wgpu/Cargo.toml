@@ -76,10 +76,19 @@ webgpu = [
 angle = ["wgpu-core?/angle", "wgpu-precompile-macro/angle"]
 
 ## Enables the Vulkan backend on macOS & iOS only for use with [MoltenVK](https://github.com/KhronosGroup/MoltenVK).
-vulkan-portability = ["wgpu-core?/vulkan-portability", "wgpu-precompile-macro/vulkan-portability"]
+vulkan-portability = [
+    "wgpu-core?/vulkan-portability",
+    "wgpu-precompile-macro/vulkan-portability",
+]
 
 ## Enables the GLES backend on WebAssembly only.
-webgl = ["web", "wgpu-core/webgl", "dep:wgpu-hal", "dep:smallvec", "wgpu-precompile-macro/webgl"]
+webgl = [
+    "web",
+    "wgpu-core/webgl",
+    "dep:wgpu-hal",
+    "dep:smallvec",
+    "wgpu-precompile-macro/webgl",
+]
 
 ## Enables the noop backend for testing.
 ##
