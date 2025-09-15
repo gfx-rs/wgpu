@@ -21,7 +21,7 @@ lod = "lod"
 metalness = "metalness"
 
 # A DXC command line argument
--Fo = "-Fo"
+Fo = "Fo"
 
 # Usernames
 Healthire = "Healthire"
