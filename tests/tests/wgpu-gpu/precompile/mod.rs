@@ -3,34 +3,38 @@ use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParamete
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(PRECOMPILE_ALL_STAGES_TEST);
 }
-
 #[gpu_test]
 static PRECOMPILE_ALL_STAGES_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default().features(wgpu::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS),
     )
     .run_async(async |ctx| unsafe {
-        let _ = ctx
-            .device
-            .create_shader_module_passthrough(wgpu::include_precompiled_wgsl!(
-                "tests/wgpu-gpu/precompile/shader.wgsl",
-                "vs_main",
-                all dxil
-            ));
-        let _ = ctx
-            .device
-            .create_shader_module_passthrough(wgpu::include_precompiled_wgsl!(
-                "tests/wgpu-gpu/precompile/shader.wgsl",
-                "fs_main",
-                all dxil
-            ));
-        let _ = ctx
-            .device
-            .create_shader_module_passthrough(wgpu::include_precompiled_wgsl!(
-                "tests/wgpu-gpu/precompile/shader.wgsl",
-                "cs_main",
-                glsl spirv wgsl hlsl msl dxil
-            ));
+        // Don't let clippy see the ones that compile to DXIL, as the CI might not have access to DXC when not actually running tests
+        // Preferably, we'd guard this behind running tests, as `cargo check` will still fail.
+        #[cfg(not(clippy))]
+        {
+            let _ = ctx
+                .device
+                .create_shader_module_passthrough(wgpu::include_precompiled_wgsl!(
+                    "tests/wgpu-gpu/precompile/shader.wgsl",
+                    "vs_main",
+                    all dxil
+                ));
+            let _ = ctx
+                .device
+                .create_shader_module_passthrough(wgpu::include_precompiled_wgsl!(
+                    "tests/wgpu-gpu/precompile/shader.wgsl",
+                    "fs_main",
+                    all dxil
+                ));
+            let _ = ctx
+                .device
+                .create_shader_module_passthrough(wgpu::include_precompiled_wgsl!(
+                    "tests/wgpu-gpu/precompile/shader.wgsl",
+                    "cs_main",
+                    glsl spirv wgsl hlsl msl dxil
+                ));
+        }
         let _ = ctx
             .device
             .create_shader_module_passthrough(wgpu::precompile_wgsl!(
