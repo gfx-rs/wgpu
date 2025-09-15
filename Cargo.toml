@@ -169,6 +169,7 @@ pollster = "0.4"
 portable-atomic = "1.8"
 portable-atomic-util = "0.2.4"
 pp-rs = "0.2.1"
+proc-macro2 = "1.0.101"
 profiling = { version = "1.0.1", default-features = false }
 quote = "1.0.38"
 raw-window-handle = { version = "0.6.2", default-features = false }

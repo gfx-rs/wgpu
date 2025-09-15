@@ -40,5 +40,5 @@ naga = { workspace = true, features = ["spv-in", "wgsl-in", "glsl-in"] }
 getrandom = "0.3"
 quote.workspace = true
 syn = { workspace = true, features = ["full"] }
-proc-macro2 = "1.0"
+proc-macro2.workspace = true
 hashbrown.workspace = true
