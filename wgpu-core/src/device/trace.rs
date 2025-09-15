@@ -1,5 +1,5 @@
 use alloc::{string::String, vec::Vec};
-use core::{convert::Infallible, num::NonZeroU32, ops::Range};
+use core::{convert::Infallible, ops::Range};
 
 #[cfg(feature = "trace")]
 use {alloc::borrow::Cow, std::io::Write as _};

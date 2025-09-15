@@ -1,4 +1,4 @@
-use core::convert::Infallible;
+use core::{convert::Infallible, num::NonZero};
 
 use alloc::{string::String, vec::Vec};
 
@@ -62,6 +62,7 @@ pub enum Command {
         target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachment>,
         timestamp_writes: Option<crate::command::PassTimestampWrites>,
         occlusion_query_set_id: Option<id::QuerySetId>,
+        multiview_mask: Option<NonZero<u32>>,
     },
     BuildAccelerationStructures {
         blas: Vec<crate::ray_tracing::TraceBlasBuildEntry>,
