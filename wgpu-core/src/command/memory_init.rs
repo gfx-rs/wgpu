@@ -15,7 +15,7 @@ use crate::{
     FastHashMap,
 };
 
-use super::{clear::clear_texture, BakedCommands, ClearError};
+use super::{clear_texture, BakedCommands, ClearError};
 
 /// Surface that was discarded by `StoreOp::Discard` of a preceding renderpass.
 /// Any read access to this surface needs to be preceded by a texture initialization.

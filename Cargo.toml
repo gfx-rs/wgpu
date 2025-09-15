@@ -10,6 +10,7 @@ members = [
     "examples/standalone/*",
     "lock-analyzer",
     "naga-cli",
+    "naga-test",
     "naga",
     "naga/fuzz",
     "naga/hlsl-snapshots",
@@ -32,6 +33,7 @@ default-members = [
     "examples/standalone/*",
     "lock-analyzer",
     "naga-cli",
+    "naga-test",
     "naga",
     "naga/fuzz",
     "naga/hlsl-snapshots",
@@ -64,6 +66,7 @@ authors = ["gfx-rs developers"]
 
 [workspace.dependencies]
 naga = { version = "26.0.0", path = "./naga" }
+naga-test = { version = "26.0.0", path = "./naga-test" }
 wgpu = { version = "26.0.0", path = "./wgpu", default-features = false, features = [
     "serde",
     "wgsl",

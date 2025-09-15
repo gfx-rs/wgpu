@@ -99,6 +99,24 @@ impl Writer {
         })
     }
 
+    pub fn set_options(&mut self, options: &Options) -> Result<(), Error> {
+        let (major, minor) = options.lang_version;
+        if major != 1 {
+            return Err(Error::UnsupportedVersion(major, minor));
+        }
+        self.physical_layout = PhysicalLayout::new(major, minor);
+        self.capabilities_available = options.capabilities.clone();
+        self.flags = options.flags;
+        self.bounds_check_policies = options.bounds_check_policies;
+        self.zero_initialize_workgroup_memory = options.zero_initialize_workgroup_memory;
+        self.force_loop_bounding = options.force_loop_bounding;
+        self.use_storage_input_output_16 = options.use_storage_input_output_16;
+        self.binding_map = options.binding_map.clone();
+        self.io_f16_polyfills =
+            super::f16_polyfill::F16IoPolyfill::new(options.use_storage_input_output_16);
+        Ok(())
+    }
+
     /// Returns `(major, minor)` of the SPIR-V language version.
     pub const fn lang_version(&self) -> (u8, u8) {
         self.physical_layout.lang_version()

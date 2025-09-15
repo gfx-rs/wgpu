@@ -1058,7 +1058,8 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const SHADER_INT64 = 1 << 37;
-        /// Allows compute and fragment shaders to use the subgroup operation built-ins
+        /// Allows compute and fragment shaders to use the subgroup operation
+        /// built-ins and perform subgroup operations (except barriers).
         ///
         /// Supported Platforms:
         /// - Vulkan
@@ -1067,14 +1068,17 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const SUBGROUP = 1 << 38;
-        /// Allows vertex shaders to use the subgroup operation built-ins
+        /// Allows vertex shaders to use the subgroup operation built-ins and
+        /// perform subgroup operations (except barriers).
         ///
         /// Supported Platforms:
         /// - Vulkan
         ///
         /// This is a native only feature.
         const SUBGROUP_VERTEX = 1 << 39;
-        /// Allows shaders to use the subgroup barrier
+        /// Allows compute shaders to use the subgroup barrier.
+        ///
+        /// Requires [`Features::SUBGROUP`]. Without it, enables nothing.
         ///
         /// Supported Platforms:
         /// - Vulkan

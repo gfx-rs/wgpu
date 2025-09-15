@@ -2531,6 +2531,7 @@ dependencies = [
  "itertools 0.14.0",
  "libm",
  "log",
+ "naga-test",
  "num-traits",
  "once_cell",
  "petgraph 0.8.2",
@@ -2542,7 +2543,6 @@ dependencies = [
  "spirv",
  "strum 0.27.2",
  "thiserror 2.0.16",
- "toml 0.9.5",
  "unicode-ident",
  "walkdir",
 ]
@@ -2568,6 +2568,22 @@ dependencies = [
  "cfg_aliases 0.2.1",
  "libfuzzer-sys",
  "naga",
+]
+
+[[package]]
+name = "naga-test"
+version = "26.0.0"
+dependencies = [
+ "bitflags 2.9.4",
+ "env_logger",
+ "naga",
+ "ron",
+ "rspirv",
+ "serde",
+ "serde_json",
+ "spirv",
+ "toml 0.9.5",
+ "walkdir",
 ]
 
 [[package]]
@@ -4946,6 +4962,7 @@ dependencies = [
  "bytemuck",
  "criterion",
  "naga",
+ "naga-test",
  "nanorand 0.8.0",
  "pollster",
  "profiling",

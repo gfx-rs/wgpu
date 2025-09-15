@@ -104,6 +104,7 @@ impl crate::Instance for super::Instance {
             factory,
             factory_media,
             library: Arc::new(lib_main),
+            presentation_system: desc.backend_options.dx12.presentation_system,
             _lib_dxgi: lib_dxgi,
             supports_allow_tearing,
             flags: desc.flags,
@@ -119,15 +120,26 @@ impl crate::Instance for super::Instance {
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<super::Surface, crate::InstanceError> {
         match window_handle {
-            raw_window_handle::RawWindowHandle::Win32(handle) => Ok(super::Surface {
-                factory: self.factory.clone(),
-                factory_media: self.factory_media.clone(),
+            raw_window_handle::RawWindowHandle::Win32(handle) => {
                 // https://github.com/rust-windowing/raw-window-handle/issues/171
-                target: SurfaceTarget::WndHandle(Foundation::HWND(handle.hwnd.get() as *mut _)),
-                supports_allow_tearing: self.supports_allow_tearing,
-                swap_chain: RwLock::new(None),
-                options: self.options.clone(),
-            }),
+                let handle = Foundation::HWND(handle.hwnd.get() as *mut _);
+                let target = match self.presentation_system {
+                    wgt::Dx12SwapchainKind::DxgiFromHwnd => SurfaceTarget::WndHandle(handle),
+                    wgt::Dx12SwapchainKind::DxgiFromVisual => SurfaceTarget::VisualFromWndHandle {
+                        handle,
+                        dcomp_state: Default::default(),
+                    },
+                };
+
+                Ok(super::Surface {
+                    factory: self.factory.clone(),
+                    factory_media: self.factory_media.clone(),
+                    target,
+                    supports_allow_tearing: self.supports_allow_tearing,
+                    swap_chain: RwLock::new(None),
+                    options: self.options.clone(),
+                })
+            }
             _ => Err(crate::InstanceError::new(format!(
                 "window handle {window_handle:?} is not a Win32 handle"
             ))),

@@ -41,6 +41,7 @@ naga = { workspace = true, features = [
     "glsl-out",
     "wgsl-out",
 ] }
+naga-test = { workspace = true, features = [] }
 nanorand.workspace = true
 pollster.workspace = true
 profiling.workspace = true

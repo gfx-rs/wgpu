@@ -6,7 +6,6 @@ Test SPIR-V backend capability checks.
 
 use spirv::Capability as Ca;
 
-#[cfg(spv_out)]
 use rspirv::binary::Disassemble;
 
 fn capabilities_used(source: &str) -> naga::FastIndexSet<Ca> {
@@ -276,7 +275,6 @@ fn f16_io_capabilities() {
     assert!(caps_polyfill.contains(&Ca::Float16));
 }
 
-#[cfg(spv_out)]
 #[test]
 fn f16_io_polyfill_codegen() {
     let source = r#"

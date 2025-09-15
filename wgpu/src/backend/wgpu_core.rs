@@ -386,8 +386,10 @@ impl ContextWgpuCore {
     }
 }
 
-fn map_buffer_copy_view(view: crate::TexelCopyBufferInfo<'_>) -> wgc::command::TexelCopyBufferInfo {
-    wgc::command::TexelCopyBufferInfo {
+fn map_buffer_copy_view(
+    view: crate::TexelCopyBufferInfo<'_>,
+) -> wgt::TexelCopyBufferInfo<wgc::id::BufferId> {
+    wgt::TexelCopyBufferInfo {
         buffer: view.buffer.inner.as_core().id,
         layout: view.layout,
     }
@@ -407,8 +409,8 @@ fn map_texture_copy_view(
 #[cfg_attr(not(webgl), expect(unused))]
 fn map_texture_tagged_copy_view(
     view: crate::CopyExternalImageDestInfo<&api::Texture>,
-) -> wgc::command::CopyExternalImageDestInfo {
-    wgc::command::CopyExternalImageDestInfo {
+) -> wgt::CopyExternalImageDestInfo<wgc::id::TextureId> {
+    wgt::CopyExternalImageDestInfo {
         texture: view.texture.inner.as_core().id,
         mip_level: view.mip_level,
         origin: view.origin,
