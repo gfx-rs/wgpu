@@ -255,12 +255,11 @@ as the implementation catches up.
 
 Exactly which WGSL features `wgpu` supports depends on how you are using it:
 
-- When running as native code, `wgpu` uses the [Naga][naga] crate
+- When running as native code, `wgpu` uses [Naga][naga]
   to translate WGSL code into the shading language of your platform's native GPU API.
-  Naga has [a milestone][naga wgsl milestone]
-  for catching up to the WGSL specification,
-  but in general, there is no up-to-date summary
-  of the differences between Naga and the WGSL spec.
+  Naga is working on catching up to the WGSL specification,
+  with [bugs][naga bugs] tracking various issues,
+  but there is no concise summary of differences from the specification.
 
 - When running in a web browser (by compilation to WebAssembly)
   without the `"webgl"` feature enabled,
@@ -274,8 +273,8 @@ Exactly which WGSL features `wgpu` supports depends on how you are using it:
 
 [webgpu spec]: https://www.w3.org/TR/webgpu/
 [wgsl spec]: https://gpuweb.github.io/gpuweb/wgsl/
-[naga]: https://github.com/gfx-rs/naga/
-[naga wgsl milestone]: https://github.com/gfx-rs/naga/milestone/4
+[naga]: https://github.com/gfx-rs/wgpu/tree/trunk/naga/
+[naga bugs]: https://github.com/gfx-rs/wgpu/issues?q=is%3Aissue%20state%3Aopen%20label%3A%22naga%22
 
 ## Coordinate Systems
 
