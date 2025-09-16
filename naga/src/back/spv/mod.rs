@@ -152,7 +152,11 @@ struct Function {
     parameters: Vec<FunctionArgument>,
     variables: crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
     /// Map from a local variable that is a ray query to its u32 tracker.
-    ray_query_tracker_variables: crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
+    ray_query_initialization_tracker_variables:
+        crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
+    /// Map from a local variable that is a ray query to its tracker for the t max.
+    ray_query_t_max_tracker_variables:
+        crate::FastHashMap<Handle<crate::LocalVariable>, LocalVariable>,
     /// List of local variables used as a counters to ensure that all loops are bounded.
     force_loop_bounding_vars: Vec<LocalVariable>,
 
@@ -701,7 +705,18 @@ struct BlockContext<'w> {
 
     /// Hash from an expression whose type is a ray query / pointer to a ray query to its tracker.
     /// Note: this is sparse, so can't be a handle vec
-    ray_query_tracker_expr: crate::FastHashMap<Handle<crate::Expression>, Word>,
+    ray_query_tracker_expr: crate::FastHashMap<Handle<crate::Expression>, RayQueryTrackers>,
+}
+
+#[derive(Clone, Copy)]
+struct RayQueryTrackers {
+    // Initialization tracker
+    initialized_tracker: Word,
+    // Tracks the t max from ray query initialize.
+    // Unlike HLSL, spir-v's equivalent getter for the current committed t has UB (instead of just
+    // returning t_max) if there was no previous hit (though in some places it treats the behaviour as
+    // defined), therefore we must track the tmax inputted into ray query initialize.
+    t_max_tracker: Word,
 }
 
 impl BlockContext<'_> {

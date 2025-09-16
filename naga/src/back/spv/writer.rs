@@ -35,7 +35,10 @@ impl Function {
                 for local_var in self.variables.values() {
                     local_var.instruction.to_words(sink);
                 }
-                for local_var in self.ray_query_tracker_variables.values() {
+                for local_var in self.ray_query_initialization_tracker_variables.values() {
+                    local_var.instruction.to_words(sink);
+                }
+                for local_var in self.ray_query_t_max_tracker_variables.values() {
                     local_var.instruction.to_words(sink);
                 }
                 for local_var in self.force_loop_bounding_vars.iter() {
@@ -1089,11 +1092,35 @@ impl Writer {
                     Some(tracker_init_id),
                 );
 
-                context.function.ray_query_tracker_variables.insert(
+                context
+                    .function
+                    .ray_query_initialization_tracker_variables
+                    .insert(
+                        handle,
+                        LocalVariable {
+                            id: tracker_id,
+                            instruction: tracker_instruction,
+                        },
+                    );
+                let f32_type_id = context.writer.get_f32_type_id();
+                let ptr_f32_type_id = context
+                    .writer
+                    .get_pointer_type_id(f32_type_id, spirv::StorageClass::Function);
+                let t_max_tracker_id = context.gen_id();
+                let t_max_tracker_init_id =
+                    context.writer.get_constant_scalar(crate::Literal::F32(0.0));
+                let t_max_tracker_instruction = Instruction::variable(
+                    ptr_f32_type_id,
+                    t_max_tracker_id,
+                    spirv::StorageClass::Function,
+                    Some(t_max_tracker_init_id),
+                );
+
+                context.function.ray_query_t_max_tracker_variables.insert(
                     handle,
                     LocalVariable {
-                        id: tracker_id,
-                        instruction: tracker_instruction,
+                        id: t_max_tracker_id,
+                        instruction: t_max_tracker_instruction,
                     },
                 );
             }

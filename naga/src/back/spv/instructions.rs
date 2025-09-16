@@ -834,6 +834,14 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn ray_query_get_t_min(result_type_id: Word, id: Word, query: Word) -> Self {
+        let mut instruction = Self::new(Op::RayQueryGetRayTMinKHR);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(query);
+        instruction
+    }
+
     //
     //  Conversion Instructions
     //

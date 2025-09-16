@@ -1622,9 +1622,23 @@ impl BlockContext<'_> {
                 id
             }
             crate::Expression::LocalVariable(variable) => {
-                if let Some(rq_tracker) = self.function.ray_query_tracker_variables.get(&variable) {
-                    self.ray_query_tracker_expr
-                        .insert(expr_handle, rq_tracker.id);
+                if let Some(rq_tracker) = self
+                    .function
+                    .ray_query_initialization_tracker_variables
+                    .get(&variable)
+                {
+                    self.ray_query_tracker_expr.insert(
+                        expr_handle,
+                        super::RayQueryTrackers {
+                            initialized_tracker: rq_tracker.id,
+                            t_max_tracker: self
+                                .function
+                                .ray_query_t_max_tracker_variables
+                                .get(&variable)
+                                .expect("Both trackers are set at the same time.")
+                                .id,
+                        },
+                    );
                 }
                 self.function.variables[&variable].id
             }
@@ -1792,7 +1806,7 @@ impl BlockContext<'_> {
                     intersection_type_id,
                     id,
                     func_id,
-                    &[query_id, init_tracker_id],
+                    &[query_id, init_tracker_id.initialized_tracker],
                 ));
                 id
             }
