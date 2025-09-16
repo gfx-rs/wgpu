@@ -126,33 +126,66 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
             // - Do `input.member[0].x` (direct)
             // - Store `input.member[0]` in a variable; do `var.x` (vector_loaded)
             // - Store `input.member` in a variable; do `var[0].x` (fully_loaded)
-            let mut direct = String::new();
-            let mut vector_loaded = String::new();
-            let mut fully_loaded = String::from("let loaded = input.member;");
-            for column in 0..columns {
-                writeln!(vector_loaded, "let vec_{column} = input.member[{column}];").unwrap();
+            // For each of these, we can either use a static or dynamic index.
+            let mut direct_static = String::new();
+            let mut direct_dynamic = String::new();
+            let mut vector_loaded_static = String::new();
+            let mut vector_loaded_dynamic = String::new();
+            let mut fully_loaded_static = String::from("let loaded = input.member;");
+            let mut fully_loaded_dynamic = String::from("let loaded = input.member;");
+            let column_index_names = ["zero", "one", "two", "three"];
+            for (column, column_str) in column_index_names.iter().enumerate().take(columns) {
+                writeln!(direct_dynamic, "var {column_str} = {column};").unwrap();
+                writeln!(vector_loaded_dynamic, "var {column_str} = {column};").unwrap();
+                writeln!(fully_loaded_dynamic, "var {column_str} = {column};").unwrap();
+
+                writeln!(
+                    vector_loaded_static,
+                    "let vec_{column} = input.member[{column}];"
+                )
+                .unwrap();
+                writeln!(
+                    vector_loaded_dynamic,
+                    "let vec_{column} = input.member[{column_str}];",
+                )
+                .unwrap();
             }
 
             let mut output_values = Vec::new();
 
             let mut current_output_idx = 0;
             let mut current_input_idx = 0;
-            for column in 0..columns {
+            for (column, column_str) in column_index_names.iter().enumerate().take(columns) {
                 let component_accessors = ["x", "y", "z", "w"].into_iter().take(rows);
                 for component in component_accessors {
                     writeln!(
-                        direct,
+                        direct_static,
                         "output[{current_output_idx}] = bitcast<u32>(input.member[{column}].{component});"
                     )
                     .unwrap();
                     writeln!(
-                        vector_loaded,
+                        direct_dynamic,
+                        "output[{current_output_idx}] = bitcast<u32>(input.member[{column_str}].{component});"
+                    )
+                    .unwrap();
+                    writeln!(
+                        vector_loaded_static,
                         "output[{current_output_idx}] = bitcast<u32>(vec_{column}.{component});"
                     )
                     .unwrap();
                     writeln!(
-                        fully_loaded,
+                        vector_loaded_dynamic,
+                        "output[{current_output_idx}] = bitcast<u32>(vec_{column}.{component});"
+                    )
+                    .unwrap();
+                    writeln!(
+                        fully_loaded_static,
                         "output[{current_output_idx}] = bitcast<u32>(loaded[{column}].{component});"
+                    )
+                    .unwrap();
+                    writeln!(
+                        fully_loaded_dynamic,
+                        "output[{current_output_idx}] = bitcast<u32>(loaded[{column_str}].{component});"
                     )
                     .unwrap();
 
@@ -175,9 +208,19 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
 
             tests.push(
                 ShaderTest::new(
-                    format!("{ty} - direct"),
+                    format!("{ty} - direct, static index"),
                     input_members.clone(),
-                    direct,
+                    direct_static,
+                    &input_values,
+                    &output_values,
+                )
+                .failures(failures),
+            );
+            tests.push(
+                ShaderTest::new(
+                    format!("{ty} - direct, dynamic index"),
+                    input_members.clone(),
+                    direct_dynamic,
                     &input_values,
                     &output_values,
                 )
@@ -186,9 +229,19 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
 
             tests.push(
                 ShaderTest::new(
-                    format!("{ty} - vector loaded"),
+                    format!("{ty} - vector loaded, static index"),
                     input_members.clone(),
-                    vector_loaded,
+                    vector_loaded_static,
+                    &input_values,
+                    &output_values,
+                )
+                .failures(failures),
+            );
+            tests.push(
+                ShaderTest::new(
+                    format!("{ty} - vector loaded, dynamic index"),
+                    input_members.clone(),
+                    vector_loaded_dynamic,
                     &input_values,
                     &output_values,
                 )
@@ -197,15 +250,243 @@ fn create_struct_layout_tests(storage_type: InputStorageType) -> Vec<ShaderTest>
 
             tests.push(
                 ShaderTest::new(
-                    format!("{ty} - fully loaded"),
+                    format!("{ty} - fully loaded, static index"),
                     input_members.clone(),
-                    fully_loaded,
+                    fully_loaded_static,
+                    &input_values,
+                    &output_values,
+                )
+                .failures(failures),
+            );
+            tests.push(
+                ShaderTest::new(
+                    format!("{ty} - fully loaded, dynamic index"),
+                    input_members.clone(),
+                    fully_loaded_dynamic,
                     &input_values,
                     &output_values,
                 )
                 .failures(failures),
             );
         }
+    }
+
+    // Array of matrix tests
+    for columns in [2, 4] {
+        for rows in [2, 3, 4] {
+            let array_size = 2;
+            let ty = format!("mat{columns}x{rows}<f32>");
+            let input_members = format!("members: array<{ty}, {array_size}>");
+            // There's 4 possible ways to load a component of a matrix in an array:
+            // - Do `input.members[0][0].x` (direct)
+            // - Store `input.members[0][0]` in a variable; do `var.x` (vector_loaded)
+            // - Store `input.members[0]` in a variable; do `var[0].x` (matrix_loaded)
+            // - Store `input.members` in a variable; do `var[0][0].x` (fully_loaded)
+            // For each of these, we can either use a static or dynamic index.
+            let mut direct_static = String::new();
+            let mut direct_dynamic = String::new();
+            let mut vector_loaded_static = String::new();
+            let mut vector_loaded_dynamic = String::new();
+            let mut matrix_loaded_static = String::new();
+            let mut matrix_loaded_dynamic = String::new();
+            let mut fully_loaded_static = String::from("let loaded = input.members;");
+            let mut fully_loaded_dynamic = String::from("let loaded = input.members;");
+            let column_index_names = ["zero", "one", "two", "three"];
+            for (column, column_str) in column_index_names.iter().enumerate().take(columns) {
+                writeln!(direct_dynamic, "var {column_str} = {column};").unwrap();
+                writeln!(vector_loaded_dynamic, "var {column_str} = {column};").unwrap();
+                writeln!(matrix_loaded_dynamic, "var {column_str} = {column};").unwrap();
+            }
+            for element in 0..array_size {
+                writeln!(
+                    matrix_loaded_static,
+                    "let mat_{element} = input.members[{element}];"
+                )
+                .unwrap();
+                writeln!(
+                    matrix_loaded_dynamic,
+                    "let mat_{element} = input.members[{element}];"
+                )
+                .unwrap();
+                for (column, column_str) in column_index_names.iter().enumerate().take(columns) {
+                    writeln!(
+                        vector_loaded_static,
+                        "let mat_{element}_vec_{column} = input.members[{element}][{column}];"
+                    )
+                    .unwrap();
+                    writeln!(
+                        vector_loaded_dynamic,
+                        "let mat_{element}_vec_{column} = input.members[{element}][{column_str}];",
+                    )
+                    .unwrap();
+                }
+            }
+
+            let mut output_values = Vec::new();
+
+            let mut current_output_idx = 0;
+            let mut current_input_idx = 0;
+            for element in 0..array_size {
+                for (column, column_str) in column_index_names.iter().enumerate().take(columns) {
+                    let component_accessors = ["x", "y", "z", "w"].into_iter().take(rows);
+                    for component in component_accessors {
+                        writeln!(
+                            direct_static,
+                            "output[{current_output_idx}] = bitcast<u32>(input.members[{element}][{column}].{component});"
+                        )
+                        .unwrap();
+                        writeln!(
+                            direct_dynamic,
+                            "output[{current_output_idx}] = bitcast<u32>(input.members[{element}][{column_str}].{component});"
+                        )
+                        .unwrap();
+                        writeln!(
+                            vector_loaded_static,
+                            "output[{current_output_idx}] = bitcast<u32>(mat_{element}_vec_{column}.{component});"
+                        )
+                        .unwrap();
+                        writeln!(
+                            vector_loaded_dynamic,
+                            "output[{current_output_idx}] = bitcast<u32>(mat_{element}_vec_{column}.{component});"
+                        )
+                        .unwrap();
+                        writeln!(
+                            matrix_loaded_static,
+                            "output[{current_output_idx}] = bitcast<u32>(mat_{element}[{column}].{component});"
+                        )
+                        .unwrap();
+                        writeln!(
+                            matrix_loaded_dynamic,
+                            "output[{current_output_idx}] = bitcast<u32>(mat_{element}[{column_str}].{component});"
+                        )
+                        .unwrap();
+                        writeln!(
+                            fully_loaded_static,
+                            "output[{current_output_idx}] = bitcast<u32>(loaded[{column}].{component});"
+                        )
+                        .unwrap();
+                        writeln!(
+                            fully_loaded_dynamic,
+                            "output[{current_output_idx}] = bitcast<u32>(loaded[{column_str}].{component});"
+                        )
+                        .unwrap();
+
+                        output_values.push(current_input_idx);
+                        current_input_idx += 1;
+                        current_output_idx += 1;
+                    }
+                    // Round to next vec4 if we're matrices with vec3 columns
+                    if rows == 3 {
+                        current_input_idx += 1;
+                    }
+                }
+            }
+
+            // https://github.com/gfx-rs/wgpu/issues/4371
+            let failures = if storage_type == InputStorageType::Uniform && rows == 2 {
+                Backends::GL
+            } else {
+                Backends::empty()
+            };
+
+            tests.push(
+                ShaderTest::new(
+                    format!("{ty} - direct, static index"),
+                    input_members.clone(),
+                    direct_static,
+                    &input_values,
+                    &output_values,
+                )
+                .failures(failures),
+            );
+            tests.push(
+                ShaderTest::new(
+                    format!("{ty} - direct, dynamic index"),
+                    input_members.clone(),
+                    direct_dynamic,
+                    &input_values,
+                    &output_values,
+                )
+                .failures(failures),
+            );
+
+            tests.push(
+                ShaderTest::new(
+                    format!("{ty} - vector loaded, static index"),
+                    input_members.clone(),
+                    vector_loaded_static,
+                    &input_values,
+                    &output_values,
+                )
+                .failures(failures),
+            );
+            tests.push(
+                ShaderTest::new(
+                    format!("{ty} - vector loaded, dynamic index"),
+                    input_members.clone(),
+                    vector_loaded_dynamic,
+                    &input_values,
+                    &output_values,
+                )
+                .failures(failures),
+            );
+
+            tests.push(
+                ShaderTest::new(
+                    format!("{ty} - matrix loaded, static index"),
+                    input_members.clone(),
+                    matrix_loaded_static,
+                    &input_values,
+                    &output_values,
+                )
+                .failures(failures),
+            );
+            tests.push(
+                ShaderTest::new(
+                    format!("{ty} - matrix loaded, dynamic index"),
+                    input_members.clone(),
+                    matrix_loaded_dynamic,
+                    &input_values,
+                    &output_values,
+                )
+                .failures(failures),
+            );
+        }
+    }
+
+    // MatCx2 followed by other members in same struct. Since on some backends
+    // the matrix will be decomposed into separate column members in the struct,
+    // this tests that the other members can still be accessed correctly. This
+    // is especially important on SPIR-V where members are accessed by index
+    // rather than name.
+    {
+        let members = String::from("m: mat3x2<f32>,\nf: f32,");
+        let direct = String::from(
+            "\
+            output[0] = bitcast<u32>(input.m[0].x);
+            output[1] = bitcast<u32>(input.m[0].y);
+            output[2] = bitcast<u32>(input.m[1].x);
+            output[3] = bitcast<u32>(input.m[1].y);
+            output[4] = bitcast<u32>(input.m[2].x);
+            output[5] = bitcast<u32>(input.m[2].y);
+            output[6] = bitcast<u32>(input.f);
+        ",
+        );
+        tests.push(
+            ShaderTest::new(
+                String::from("MatCx2 followed by other members"),
+                members,
+                direct,
+                &input_values,
+                &[0, 1, 2, 3, 4, 5, 6],
+            )
+            // https://github.com/gfx-rs/wgpu/issues/4371
+            .failures(if storage_type == InputStorageType::Uniform {
+                Backends::GL
+            } else {
+                Backends::empty()
+            }),
+        );
     }
 
     // Vec3 alignment tests
