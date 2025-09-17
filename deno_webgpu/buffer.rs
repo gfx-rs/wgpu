@@ -13,6 +13,7 @@ use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 use wgpu_core::device::HostMap as MapMode;
 
+use crate::error::GPUGenericError;
 use crate::Instance;
 
 #[derive(WebIDL)]
@@ -80,6 +81,12 @@ impl GarbageCollected for GPUBuffer {
 
 #[op2]
 impl GPUBuffer {
+  #[constructor]
+  #[cppgc]
+  fn constructor(_: bool) -> Result<GPUBuffer, GPUGenericError> {
+    Err(GPUGenericError::InvalidConstructor)
+  }
+
   #[getter]
   #[string]
   fn label(&self) -> String {

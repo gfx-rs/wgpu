@@ -4,6 +4,7 @@ use deno_core::op2;
 use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 
+use crate::error::GPUGenericError;
 use crate::Instance;
 
 pub struct GPUCommandBuffer {
@@ -30,6 +31,12 @@ impl GarbageCollected for GPUCommandBuffer {
 
 #[op2]
 impl GPUCommandBuffer {
+  #[constructor]
+  #[cppgc]
+  fn constructor(_: bool) -> Result<GPUCommandBuffer, GPUGenericError> {
+    Err(GPUGenericError::InvalidConstructor)
+  }
+
   #[getter]
   #[string]
   fn label(&self) -> String {

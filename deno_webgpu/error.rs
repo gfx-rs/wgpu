@@ -372,3 +372,10 @@ impl From<ConfigureSurfaceError> for GPUError {
     GPUError::from_webgpu(err)
   }
 }
+
+#[derive(Debug, thiserror::Error, deno_error::JsError)]
+pub enum GPUGenericError {
+  #[class(type)]
+  #[error("Illegal constructor")]
+  InvalidConstructor,
+}

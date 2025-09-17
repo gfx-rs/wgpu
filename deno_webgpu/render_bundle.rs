@@ -17,6 +17,7 @@ use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 
 use crate::buffer::GPUBuffer;
+use crate::error::GPUGenericError;
 use crate::texture::GPUTextureFormat;
 use crate::Instance;
 
@@ -45,6 +46,12 @@ impl GarbageCollected for GPURenderBundleEncoder {
 
 #[op2]
 impl GPURenderBundleEncoder {
+  #[constructor]
+  #[cppgc]
+  fn constructor(_: bool) -> Result<GPURenderBundleEncoder, GPUGenericError> {
+    Err(GPUGenericError::InvalidConstructor)
+  }
+
   #[getter]
   #[string]
   fn label(&self) -> String {
@@ -419,6 +426,12 @@ impl GarbageCollected for GPURenderBundle {
 
 #[op2]
 impl GPURenderBundle {
+  #[constructor]
+  #[cppgc]
+  fn constructor(_: bool) -> Result<GPURenderBundle, GPUGenericError> {
+    Err(GPUGenericError::InvalidConstructor)
+  }
+
   #[getter]
   #[string]
   fn label(&self) -> String {

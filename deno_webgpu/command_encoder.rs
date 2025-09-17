@@ -16,6 +16,7 @@ use wgpu_types::{BufferAddress, TexelCopyBufferInfo};
 use crate::buffer::GPUBuffer;
 use crate::command_buffer::GPUCommandBuffer;
 use crate::compute_pass::GPUComputePassEncoder;
+use crate::error::GPUGenericError;
 use crate::queue::GPUTexelCopyTextureInfo;
 use crate::render_pass::GPULoadOp;
 use crate::render_pass::GPURenderPassEncoder;
@@ -44,6 +45,12 @@ impl GarbageCollected for GPUCommandEncoder {
 
 #[op2]
 impl GPUCommandEncoder {
+  #[constructor]
+  #[cppgc]
+  fn constructor(_: bool) -> Result<GPUCommandEncoder, GPUGenericError> {
+    Err(GPUGenericError::InvalidConstructor)
+  }
+
   #[getter]
   #[string]
   fn label(&self) -> String {

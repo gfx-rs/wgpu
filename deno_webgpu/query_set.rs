@@ -6,6 +6,7 @@ use deno_core::GarbageCollected;
 use deno_core::WebIDL;
 use deno_error::JsErrorBox;
 
+use crate::error::GPUGenericError;
 use crate::Instance;
 
 pub struct GPUQuerySet {
@@ -34,6 +35,12 @@ impl GarbageCollected for GPUQuerySet {
 
 #[op2]
 impl GPUQuerySet {
+  #[constructor]
+  #[cppgc]
+  fn constructor(_: bool) -> Result<GPUQuerySet, GPUGenericError> {
+    Err(GPUGenericError::InvalidConstructor)
+  }
+
   #[getter]
   #[string]
   fn label(&self) -> String {

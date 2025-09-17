@@ -9,6 +9,7 @@ use deno_core::WebIDL;
 use indexmap::IndexMap;
 
 use crate::bind_group_layout::GPUBindGroupLayout;
+use crate::error::GPUGenericError;
 use crate::sampler::GPUCompareFunction;
 use crate::shader::GPUShaderModule;
 use crate::texture::GPUTextureFormat;
@@ -41,6 +42,12 @@ impl GarbageCollected for GPURenderPipeline {
 
 #[op2]
 impl GPURenderPipeline {
+  #[constructor]
+  #[cppgc]
+  fn constructor(_: bool) -> Result<GPURenderPipeline, GPUGenericError> {
+    Err(GPUGenericError::InvalidConstructor)
+  }
+
   #[getter]
   #[string]
   fn label(&self) -> String {
