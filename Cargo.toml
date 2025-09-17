@@ -135,7 +135,7 @@ indicatif = "0.18"
 itertools = { version = "0.14" }
 jobserver = "0.1"
 ktx2 = "0.4"
-libc = { version = "0.2.168", default-features = false }
+libc = { version = "0.2.171", default-features = false }
 # See https://github.com/rust-fuzz/libfuzzer/issues/126
 libfuzzer-sys = ">0.4.0,<=0.4.7"
 libloading = "0.8"
