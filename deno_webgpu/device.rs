@@ -917,3 +917,21 @@ impl GPUDeviceLostInfo {
     "device was lost"
   }
 }
+
+#[op2(fast)]
+pub fn op_webgpu_device_start_capture(#[cppgc] device: &GPUDevice) {
+  unsafe {
+    device
+      .instance
+      .device_start_graphics_debugger_capture(device.id);
+  }
+}
+
+#[op2(fast)]
+pub fn op_webgpu_device_stop_capture(#[cppgc] device: &GPUDevice) {
+  unsafe {
+    device
+      .instance
+      .device_stop_graphics_debugger_capture(device.id);
+  }
+}
