@@ -13,70 +13,70 @@ use crate::webidl::GPUPipelineLayoutOrGPUAutoLayoutMode;
 use crate::Instance;
 
 pub struct GPUComputePipeline {
-    pub instance: Instance,
-    pub error_handler: super::error::ErrorHandler,
+  pub instance: Instance,
+  pub error_handler: super::error::ErrorHandler,
 
-    pub id: wgpu_core::id::ComputePipelineId,
-    pub label: String,
+  pub id: wgpu_core::id::ComputePipelineId,
+  pub label: String,
 }
 
 impl Drop for GPUComputePipeline {
-    fn drop(&mut self) {
-        self.instance.compute_pipeline_drop(self.id);
-    }
+  fn drop(&mut self) {
+    self.instance.compute_pipeline_drop(self.id);
+  }
 }
 
 impl WebIdlInterfaceConverter for GPUComputePipeline {
-    const NAME: &'static str = "GPUComputePipeline";
+  const NAME: &'static str = "GPUComputePipeline";
 }
 
 impl GarbageCollected for GPUComputePipeline {}
 
 #[op2]
 impl GPUComputePipeline {
-    #[getter]
-    #[string]
-    fn label(&self) -> String {
-        self.label.clone()
-    }
-    #[setter]
-    #[string]
-    fn label(&self, #[webidl] _label: String) {
-        // TODO(@crowlKats): no-op, needs wpgu to implement changing the label
-    }
+  #[getter]
+  #[string]
+  fn label(&self) -> String {
+    self.label.clone()
+  }
+  #[setter]
+  #[string]
+  fn label(&self, #[webidl] _label: String) {
+    // TODO(@crowlKats): no-op, needs wpgu to implement changing the label
+  }
 
-    #[cppgc]
-    fn get_bind_group_layout(&self, #[webidl] index: u32) -> GPUBindGroupLayout {
-        let (id, err) = self
-            .instance
-            .compute_pipeline_get_bind_group_layout(self.id, index, None);
+  #[cppgc]
+  fn get_bind_group_layout(&self, #[webidl] index: u32) -> GPUBindGroupLayout {
+    let (id, err) = self
+      .instance
+      .compute_pipeline_get_bind_group_layout(self.id, index, None);
 
-        self.error_handler.push_error(err);
+    self.error_handler.push_error(err);
 
-        // TODO(wgpu): needs to support retrieving the label
-        GPUBindGroupLayout {
-            instance: self.instance.clone(),
-            id,
-            label: "".to_string(),
-        }
+    // TODO(wgpu): needs to support retrieving the label
+    GPUBindGroupLayout {
+      instance: self.instance.clone(),
+      id,
+      label: "".to_string(),
     }
+  }
 }
 
 #[derive(WebIDL)]
 #[webidl(dictionary)]
 pub(crate) struct GPUComputePipelineDescriptor {
-    #[webidl(default = String::new())]
-    pub label: String,
+  #[webidl(default = String::new())]
+  pub label: String,
 
-    pub compute: GPUProgrammableStage,
-    pub layout: GPUPipelineLayoutOrGPUAutoLayoutMode,
+  pub compute: GPUProgrammableStage,
+  pub layout: GPUPipelineLayoutOrGPUAutoLayoutMode,
 }
 
 #[derive(WebIDL)]
 #[webidl(dictionary)]
 pub(crate) struct GPUProgrammableStage {
-    pub module: Ptr<GPUShaderModule>,
-    pub entry_point: Option<String>,
-    #[webidl(default = Default::default())]
-    pub constants: IndexMap<String, f64>,
+  pub module: Ptr<GPUShaderModule>,
+  pub entry_point: Option<String>,
+  #[webidl(default = Default::default())]
+  pub constants: IndexMap<String, f64>,
 }
