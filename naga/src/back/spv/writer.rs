@@ -7,10 +7,11 @@ use spirv::Word;
 use super::{
     block::DebugInfoInner,
     helpers::{contains_builtin, global_needs_wrapper, map_storage_class},
-    Block, BlockContext, CachedConstant, CachedExpressions, DebugInfo, EntryPointContext, Error,
-    Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction, LocalImageType,
-    LocalType, LocalVariable, LogicalLayout, LookupFunctionType, LookupType, NumericType, Options,
-    PhysicalLayout, PipelineOptions, ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
+    Block, BlockContext, CachedConstant, CachedExpressions, CooperativeType, DebugInfo,
+    EntryPointContext, Error, Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction,
+    LocalImageType, LocalType, LocalVariable, LogicalLayout, LookupFunctionType, LookupType,
+    NumericType, Options, PhysicalLayout, PipelineOptions, ResultMember, Writer, WriterFlags,
+    BITS_PER_BYTE,
 };
 use crate::{
     arena::{Handle, HandleVec, UniqueArena},
@@ -388,6 +389,12 @@ impl Writer {
         })
     }
 
+    pub(super) fn get_cooperative_type_id(&mut self, scalar: crate::CooperativeScalar) -> Word {
+        match scalar {
+            crate::CooperativeScalar::F32 => self.get_f32_type_id(),
+        }
+    }
+
     pub(super) fn get_f32_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
         let f32_id = self.get_f32_type_id();
         self.get_pointer_type_id(f32_id, class)
@@ -449,7 +456,9 @@ impl Writer {
                 // these cases, so unwrap.
                 LocalType::Numeric(NumericType::from_inner(inner).unwrap())
             }
-            crate::TypeInner::CooperativeMatrix { .. } => return None,
+            crate::TypeInner::CooperativeMatrix { .. } => {
+                LocalType::Cooperative(CooperativeType::from_inner(inner).unwrap())
+            }
             crate::TypeInner::Pointer { base, space } => {
                 let base_type_id = self.get_handle_type_id(base);
                 LocalType::Pointer {
@@ -1516,6 +1525,14 @@ impl Writer {
                 self.require_any("16 bit floating-point", &[spirv::Capability::Float16])?;
                 self.use_extension("SPV_KHR_16bit_storage");
             }
+            // Cooperative types and ops
+            crate::TypeInner::CooperativeMatrix { .. } => {
+                self.require_any(
+                    "cooperative matrix",
+                    &[spirv::Capability::CooperativeMatrixKHR],
+                )?;
+                self.use_extension("SPV_KHR_cooperative_matrix");
+            }
             _ => {}
         }
         Ok(())
@@ -1542,10 +1559,29 @@ impl Writer {
         instruction.to_words(&mut self.logical_layout.declarations);
     }
 
+    fn write_cooperative_type_declaration_local(&mut self, id: Word, coop: CooperativeType) {
+        let instruction = match coop {
+            CooperativeType::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => {
+                let scalar_id = self.get_cooperative_type_id(scalar);
+                Instruction::type_coop_matrix(id, scalar_id, rows, columns)
+            }
+        };
+
+        instruction.to_words(&mut self.logical_layout.declarations);
+    }
+
     fn write_type_declaration_local(&mut self, id: Word, local_ty: LocalType) {
         let instruction = match local_ty {
             LocalType::Numeric(numeric) => {
                 self.write_numeric_type_declaration_local(id, numeric);
+                return;
+            }
+            LocalType::Cooperative(coop) => {
+                self.write_cooperative_type_declaration_local(id, coop);
                 return;
             }
             LocalType::Pointer { base, class } => Instruction::type_pointer(id, class, base),

@@ -423,6 +423,7 @@ impl super::Validator {
                 rows: _,
                 scalar,
             } => {
+                self.require_type_capability(Capabilities::COOPERATIVE_MATRIX)?;
                 if scalar != crate::CooperativeScalar::F32 {
                     return Err(TypeError::MatrixElementNotFloat);
                 }

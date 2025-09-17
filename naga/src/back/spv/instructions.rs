@@ -291,6 +291,22 @@ impl super::Instruction {
         instruction
     }
 
+    pub(super) fn type_coop_matrix(
+        id: Word,
+        scalar_type_id: Word,
+        row_count: crate::CooperativeVectorSize,
+        column_count: crate::CooperativeVectorSize,
+    ) -> Self {
+        let mut instruction = Self::new(Op::TypeCooperativeMatrixKHR);
+        instruction.set_result(id);
+        instruction.add_operand(scalar_type_id);
+        instruction.add_operand(spirv::Scope::Subgroup as u32);
+        instruction.add_operand(column_count as u32);
+        instruction.add_operand(row_count as u32);
+        instruction.add_operand(spirv::CooperativeMatrixUse::MatrixAKHR as u32); //TODO: configure or expose
+        instruction
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(super) fn type_image(
         id: Word,

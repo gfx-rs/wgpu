@@ -352,6 +352,33 @@ impl NumericType {
     }
 }
 
+/// A cooperative type, for use in [`LocalType`].
+#[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
+enum CooperativeType {
+    Matrix {
+        columns: crate::CooperativeVectorSize,
+        rows: crate::CooperativeVectorSize,
+        scalar: crate::CooperativeScalar,
+    },
+}
+
+impl CooperativeType {
+    const fn from_inner(inner: &crate::TypeInner) -> Option<Self> {
+        match *inner {
+            crate::TypeInner::CooperativeMatrix {
+                columns,
+                rows,
+                scalar,
+            } => Some(Self::Matrix {
+                columns,
+                rows,
+                scalar,
+            }),
+            _ => None,
+        }
+    }
+}
+
 /// A SPIR-V type constructed during code generation.
 ///
 /// This is the variant of [`LookupType`] used to represent types that might not
@@ -401,6 +428,7 @@ impl NumericType {
 enum LocalType {
     /// A numeric type.
     Numeric(NumericType),
+    Cooperative(CooperativeType),
     Pointer {
         base: Word,
         class: spirv::StorageClass,
