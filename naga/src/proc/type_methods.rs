@@ -228,6 +228,11 @@ impl crate::TypeInner {
                 rows,
                 scalar,
             } => Some(super::Alignment::from(rows) * scalar.width as u32 * columns as u32),
+            Self::CooperativeMatrix {
+                columns,
+                rows,
+                scalar,
+            } => Some(columns as u32 * rows as u32 * scalar.width() as u32),
             Self::Pointer { .. } | Self::ValuePointer { .. } => Some(POINTER_SPAN),
             Self::Array {
                 base: _,
@@ -387,6 +392,7 @@ impl crate::TypeInner {
             crate::TypeInner::Scalar(scalar) => Some((None, scalar)),
             crate::TypeInner::Vector { size, scalar } => Some((Some(size), scalar)),
             crate::TypeInner::Matrix { .. }
+            | crate::TypeInner::CooperativeMatrix { .. }
             | crate::TypeInner::Atomic(_)
             | crate::TypeInner::Pointer { .. }
             | crate::TypeInner::ValuePointer { .. }
@@ -411,7 +417,8 @@ impl crate::TypeInner {
             | crate::TypeInner::Matrix { scalar, .. }
             | crate::TypeInner::Atomic(scalar) => scalar.is_abstract(),
             crate::TypeInner::Array { base, .. } => types[base].inner.is_abstract(types),
-            crate::TypeInner::ValuePointer { .. }
+            crate::TypeInner::CooperativeMatrix { .. }
+            | crate::TypeInner::ValuePointer { .. }
             | crate::TypeInner::Pointer { .. }
             | crate::TypeInner::Struct { .. }
             | crate::TypeInner::Image { .. }

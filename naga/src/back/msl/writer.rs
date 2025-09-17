@@ -236,6 +236,20 @@ impl Display for TypeContext<'_> {
                 rows,
                 scalar,
             } => put_numeric_type(out, scalar, &[rows, columns]),
+            crate::TypeInner::CooperativeMatrix {
+                columns,
+                rows,
+                scalar,
+            } => {
+                write!(
+                    out,
+                    "{}::simdgroup_{}{}x{}",
+                    NAMESPACE,
+                    scalar.to_msl_name(),
+                    columns as u32,
+                    rows as u32,
+                )
+            }
             crate::TypeInner::Pointer { base, space } => {
                 let sub = Self {
                     handle: base,
@@ -529,6 +543,14 @@ impl crate::Scalar {
     }
 }
 
+impl crate::CooperativeScalar {
+    const fn to_msl_name(self) -> &'static str {
+        match self {
+            Self::F32 => "float",
+        }
+    }
+}
+
 const fn separate(need_separator: bool) -> &'static str {
     if need_separator {
         ","
@@ -641,6 +663,7 @@ impl crate::Type {
             Ti::Scalar(_)
             | Ti::Vector { .. }
             | Ti::Matrix { .. }
+            | Ti::CooperativeMatrix { .. }
             | Ti::Atomic(_)
             | Ti::Pointer { .. }
             | Ti::ValuePointer { .. } => self.name.is_some(),

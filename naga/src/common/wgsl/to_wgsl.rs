@@ -310,6 +310,25 @@ impl TryToWgsl for crate::Scalar {
     }
 }
 
+impl TryToWgsl for crate::CooperativeScalar {
+    const DESCRIPTION: &'static str = "cooperative scalar type";
+
+    fn try_to_wgsl(self) -> Option<&'static str> {
+        use crate::CooperativeScalar;
+
+        Some(match self {
+            CooperativeScalar::F32 => "f32",
+        })
+    }
+
+    fn to_wgsl_for_diagnostics(self) -> String {
+        match self.try_to_wgsl() {
+            Some(static_string) => static_string.to_string(),
+            None => unreachable!(),
+        }
+    }
+}
+
 impl ToWgsl for crate::ImageDimension {
     fn to_wgsl(self) -> &'static str {
         use crate::ImageDimension as IDim;

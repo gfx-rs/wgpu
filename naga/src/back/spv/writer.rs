@@ -449,6 +449,7 @@ impl Writer {
                 // these cases, so unwrap.
                 LocalType::Numeric(NumericType::from_inner(inner).unwrap())
             }
+            crate::TypeInner::CooperativeMatrix { .. } => return None,
             crate::TypeInner::Pointer { base, space } => {
                 let base_type_id = self.get_handle_type_id(base);
                 LocalType::Pointer {
@@ -1663,6 +1664,7 @@ impl Writer {
                 | crate::TypeInner::Atomic(_)
                 | crate::TypeInner::Vector { .. }
                 | crate::TypeInner::Matrix { .. }
+                | crate::TypeInner::CooperativeMatrix { .. }
                 | crate::TypeInner::Pointer { .. }
                 | crate::TypeInner::ValuePointer { .. }
                 | crate::TypeInner::Image { .. }

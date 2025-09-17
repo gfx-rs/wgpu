@@ -317,6 +317,19 @@ where
             ctx.write_scalar(scalar, out)?;
             out.write_str(">")?;
         }
+        TypeInner::CooperativeMatrix {
+            columns,
+            rows,
+            scalar,
+        } => {
+            write!(
+                out,
+                "coop_mat{}x{}<{}>",
+                columns as u32,
+                rows as u32,
+                scalar.try_to_wgsl().unwrap_or_default()
+            )?;
+        }
         TypeInner::Pointer { base, space } => {
             let (address, maybe_access) = address_space_str(space);
             // Everything but `AddressSpace::Handle` gives us a `address` name, but

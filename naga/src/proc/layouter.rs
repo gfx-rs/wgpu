@@ -86,6 +86,12 @@ impl From<crate::VectorSize> for Alignment {
     }
 }
 
+impl From<crate::CooperativeVectorSize> for Alignment {
+    fn from(size: crate::CooperativeVectorSize) -> Self {
+        Self(unsafe { NonZeroU32::new_unchecked(size as u32) })
+    }
+}
+
 /// Size and alignment information for a type.
 #[derive(Clone, Copy, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
@@ -207,6 +213,18 @@ impl Layouter {
                     scalar,
                 } => {
                     let alignment = Alignment::new(scalar.width as u32)
+                        .ok_or(LayoutErrorInner::NonPowerOfTwoWidth.with(ty_handle))?;
+                    TypeLayout {
+                        size,
+                        alignment: Alignment::from(rows) * alignment,
+                    }
+                }
+                Ti::CooperativeMatrix {
+                    columns: _,
+                    rows,
+                    scalar,
+                } => {
+                    let alignment = Alignment::new(scalar.width() as u32)
                         .ok_or(LayoutErrorInner::NonPowerOfTwoWidth.with(ty_handle))?;
                     TypeLayout {
                         size,

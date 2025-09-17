@@ -495,6 +495,16 @@ impl From<VectorSize> for u32 {
     }
 }
 
+/// Number of components in a cooperative vector.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum CooperativeVectorSize {
+    Eight = 8,
+}
+
 /// Primitive type for a scalar.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -520,6 +530,24 @@ pub enum ScalarKind {
     ///
     /// These are forbidden by validation, and should never reach backends.
     AbstractFloat,
+}
+
+/// Primitive type for a scalar.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum CooperativeScalar {
+    F32,
+}
+
+impl CooperativeScalar {
+    pub const fn width(&self) -> Bytes {
+        match *self {
+            Self::F32 => 4,
+        }
+    }
 }
 
 /// Characteristics of a scalar type.
@@ -769,6 +797,13 @@ pub enum TypeInner {
         columns: VectorSize,
         rows: VectorSize,
         scalar: Scalar,
+    },
+    /// Matrix that is cooperatively processed by all the threads
+    /// in an opaque mapping.
+    CooperativeMatrix {
+        columns: CooperativeVectorSize,
+        rows: CooperativeVectorSize,
+        scalar: CooperativeScalar,
     },
     /// Atomic scalar.
     Atomic(Scalar),
