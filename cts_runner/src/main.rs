@@ -36,10 +36,7 @@ pub async fn run() -> Result<(), AnyError> {
             deno_webidl::deno_webidl::init(),
             deno_console::deno_console::init(),
             deno_url::deno_url::init(),
-            deno_web::deno_web::init::<Permissions>(
-                Arc::new(BlobStore::default()),
-                None,
-            ),
+            deno_web::deno_web::init::<Permissions>(Arc::new(BlobStore::default()), None),
             deno_webgpu::deno_webgpu::init(),
             cts_runner::init(),
         ],
