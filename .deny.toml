@@ -5,6 +5,7 @@ skip-tree = [
     { name = "winit", version = "0.29" },
     { name = "rustc_version", version = "0.2.3" },
     { name = "miniz_oxide", version = "0.7.4" },
+    { name = "rustc-hash", version = "1.1.0" },
 
     # introduced by Deno, to be investigated
     { name = "strum_macros", version = "0.25.3" },
