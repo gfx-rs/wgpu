@@ -60,7 +60,11 @@ impl Drop for GPUAdapter {
   }
 }
 
-impl GarbageCollected for GPUAdapter {}
+impl GarbageCollected for GPUAdapter {
+  fn get_name(&self) -> &'static std::ffi::CStr {
+    c"GPUAdapter"
+  }
+}
 
 #[op2]
 impl GPUAdapter {
@@ -211,7 +215,11 @@ pub enum CreateDeviceError {
 
 pub struct GPUSupportedLimits(pub wgpu_types::Limits);
 
-impl GarbageCollected for GPUSupportedLimits {}
+impl GarbageCollected for GPUSupportedLimits {
+  fn get_name(&self) -> &'static std::ffi::CStr {
+    c"GPUSupportedLimits"
+  }
+}
 
 #[op2]
 impl GPUSupportedLimits {
@@ -368,7 +376,11 @@ impl GPUSupportedLimits {
 
 pub struct GPUSupportedFeatures(v8::Global<v8::Value>);
 
-impl GarbageCollected for GPUSupportedFeatures {}
+impl GarbageCollected for GPUSupportedFeatures {
+  fn get_name(&self) -> &'static std::ffi::CStr {
+    c"GPUSupportedFeatures"
+  }
+}
 
 impl GPUSupportedFeatures {
   #[allow(clippy::disallowed_types)]
@@ -402,7 +414,11 @@ pub struct GPUAdapterInfo {
   pub subgroup_max_size: u32,
 }
 
-impl GarbageCollected for GPUAdapterInfo {}
+impl GarbageCollected for GPUAdapterInfo {
+  fn get_name(&self) -> &'static std::ffi::CStr {
+    c"GPUAdapterInfo"
+  }
+}
 
 #[op2]
 impl GPUAdapterInfo {

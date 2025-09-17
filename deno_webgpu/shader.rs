@@ -27,7 +27,11 @@ impl WebIdlInterfaceConverter for GPUShaderModule {
   const NAME: &'static str = "GPUShaderModule";
 }
 
-impl GarbageCollected for GPUShaderModule {}
+impl GarbageCollected for GPUShaderModule {
+  fn get_name(&self) -> &'static std::ffi::CStr {
+    c"GPUShaderModule"
+  }
+}
 
 #[op2]
 impl GPUShaderModule {
@@ -71,7 +75,11 @@ pub struct GPUCompilationMessage {
   length: u64,
 }
 
-impl GarbageCollected for GPUCompilationMessage {}
+impl GarbageCollected for GPUCompilationMessage {
+  fn get_name(&self) -> &'static std::ffi::CStr {
+    c"GPUCompilationMessage"
+  }
+}
 
 #[op2]
 impl GPUCompilationMessage {
@@ -162,7 +170,11 @@ pub struct GPUCompilationInfo {
   messages: v8::Global<v8::Object>,
 }
 
-impl GarbageCollected for GPUCompilationInfo {}
+impl GarbageCollected for GPUCompilationInfo {
+  fn get_name(&self) -> &'static std::ffi::CStr {
+    c"GPUCompilationInfo"
+  }
+}
 
 #[op2]
 impl GPUCompilationInfo {

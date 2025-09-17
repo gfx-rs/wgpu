@@ -83,7 +83,11 @@ pub struct UnsafeWindowSurface {
   pub context: SameObject<GPUCanvasContext>,
 }
 
-impl GarbageCollected for UnsafeWindowSurface {}
+impl GarbageCollected for UnsafeWindowSurface {
+  fn get_name(&self) -> &'static std::ffi::CStr {
+    c"UnsafeWindowSurface"
+  }
+}
 
 #[op2]
 impl UnsafeWindowSurface {

@@ -30,23 +30,19 @@ pub async fn run() -> Result<(), AnyError> {
         .ok_or_else(|| anyhow!("missing specifier in first command line argument"))?;
     let specifier = resolve_url_or_path(&url, &env::current_dir()?)?;
 
-    let mut feature_checker = deno_core::FeatureChecker::default();
-    feature_checker.enable_feature(deno_webgpu::UNSTABLE_FEATURE_NAME);
-
     let options = RuntimeOptions {
         module_loader: Some(Rc::new(deno_core::FsModuleLoader)),
         extensions: vec![
-            deno_webidl::deno_webidl::init_ops_and_esm(),
-            deno_console::deno_console::init_ops_and_esm(),
-            deno_url::deno_url::init_ops_and_esm(),
-            deno_web::deno_web::init_ops_and_esm::<Permissions>(
+            deno_webidl::deno_webidl::init(),
+            deno_console::deno_console::init(),
+            deno_url::deno_url::init(),
+            deno_web::deno_web::init::<Permissions>(
                 Arc::new(BlobStore::default()),
                 None,
             ),
-            deno_webgpu::deno_webgpu::init_ops_and_esm(),
-            cts_runner::init_ops_and_esm(),
+            deno_webgpu::deno_webgpu::init(),
+            cts_runner::init(),
         ],
-        feature_checker: Some(Arc::new(feature_checker)),
         ..Default::default()
     };
     let mut js_runtime = JsRuntime::new(options);
@@ -84,6 +80,9 @@ deno_core::extension!(
     esm_entry_point = "ext:cts_runner/src/bootstrap.js",
     esm = ["src/bootstrap.js"],
     state = |state| {
+        let mut feature_checker = deno_features::FeatureChecker::default();
+        feature_checker.enable_feature(deno_webgpu::UNSTABLE_FEATURE_NAME);
+        state.put(feature_checker);
         state.put(Permissions {});
     }
 );
