@@ -406,6 +406,13 @@ impl GPUDevice {
           GPUBindingResource::TextureView(texture_view) => {
             BindingResource::TextureView(texture_view.id)
           }
+          GPUBindingResource::Buffer(buffer) => {
+            BindingResource::Buffer(wgpu_core::binding_model::BufferBinding {
+              buffer: buffer.id,
+              offset: 0,
+              size: NonZeroU64::new(buffer.size),
+            })
+          }
           GPUBindingResource::BufferBinding(buffer_binding) => {
             BindingResource::Buffer(wgpu_core::binding_model::BufferBinding {
               buffer: buffer_binding.buffer.id,

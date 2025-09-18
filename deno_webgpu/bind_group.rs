@@ -94,6 +94,7 @@ pub(crate) struct GPUBufferBinding {
 pub(crate) enum GPUBindingResource {
   Sampler(Ptr<GPUSampler>),
   TextureView(Ptr<GPUTextureView>),
+  Buffer(Ptr<GPUBuffer>),
   BufferBinding(GPUBufferBinding),
 }
 
@@ -124,6 +125,16 @@ impl<'a> WebIdlConverter<'a> for GPUBindingResource {
         options,
       )
       .map(Self::TextureView)
+    })
+    .or_else(|_| {
+      <Ptr<GPUBuffer>>::convert(
+        scope,
+        value,
+        prefix.clone(),
+        context.borrowed(),
+        options,
+      )
+      .map(Self::Buffer)
     })
     .or_else(|_| {
       GPUBufferBinding::convert(scope, value, prefix, context, options)
