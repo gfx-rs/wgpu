@@ -230,6 +230,7 @@ impl GPUDevice {
       instance: self.instance.clone(),
       error_handler: self.error_handler.clone(),
       id,
+      default_view_id: Default::default(),
       label: descriptor.label,
       size: wgpu_descriptor.size,
       mip_level_count: wgpu_descriptor.mip_level_count,
@@ -402,6 +403,9 @@ impl GPUDevice {
         resource: match entry.resource {
           GPUBindingResource::Sampler(sampler) => {
             BindingResource::Sampler(sampler.id)
+          }
+          GPUBindingResource::Texture(texture) => {
+            BindingResource::TextureView(texture.default_view_id())
           }
           GPUBindingResource::TextureView(texture_view) => {
             BindingResource::TextureView(texture_view.id)

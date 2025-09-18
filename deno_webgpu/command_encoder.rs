@@ -75,9 +75,11 @@ impl GPUCommandEncoder {
         .map(|attachment| {
           attachment.into_option().map(|attachment| {
             wgpu_core::command::RenderPassColorAttachment {
-              view: attachment.view.id,
+              view: attachment.view.to_view_id(),
               depth_slice: attachment.depth_slice,
-              resolve_target: attachment.resolve_target.map(|target| target.id),
+              resolve_target: attachment
+                .resolve_target
+                .map(|target| target.to_view_id()),
               load_op: attachment
                 .load_op
                 .with_default_value(attachment.clear_value.map(Into::into)),
@@ -103,7 +105,7 @@ impl GPUCommandEncoder {
                 }
 
                 Ok(wgpu_core::command::RenderPassDepthStencilAttachment {
-                    view: attachment.view.id,
+                    view: attachment.view.to_view_id(),
                     depth: PassChannel {
                         load_op: attachment
                             .depth_load_op

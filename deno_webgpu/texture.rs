@@ -1,5 +1,7 @@
 // Copyright 2018-2025 the Deno authors. MIT license.
 
+use std::sync::OnceLock;
+
 use deno_core::op2;
 use deno_core::webidl::WebIdlInterfaceConverter;
 use deno_core::GarbageCollected;
@@ -43,6 +45,7 @@ pub struct GPUTexture {
   pub error_handler: super::error::ErrorHandler,
 
   pub id: wgpu_core::id::TextureId,
+  pub default_view_id: OnceLock<wgpu_core::id::TextureViewId>,
 
   pub label: String,
 
@@ -54,8 +57,35 @@ pub struct GPUTexture {
   pub usage: u32,
 }
 
+impl GPUTexture {
+  pub(crate) fn default_view_id(&self) -> wgpu_core::id::TextureViewId {
+    *self.default_view_id.get_or_init(|| {
+      let (id, err) =
+        self
+          .instance
+          .texture_create_view(self.id, &Default::default(), None);
+      if let Some(err) = err {
+        use wgpu_types::error::WebGpuError;
+        assert_ne!(
+          err.webgpu_error_type(),
+          wgpu_types::error::ErrorType::Validation,
+          concat!(
+            "getting default view for a texture ",
+            "caused a validation error (!?)"
+          )
+        );
+        self.error_handler.push_error(Some(err));
+      }
+      id
+    })
+  }
+}
+
 impl Drop for GPUTexture {
   fn drop(&mut self) {
+    if let Some(id) = self.default_view_id.take() {
+      self.instance.texture_view_drop(id).unwrap();
+    }
     self.instance.texture_drop(self.id);
   }
 }
