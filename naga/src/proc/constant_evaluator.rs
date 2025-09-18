@@ -268,6 +268,392 @@ gen_component_wise_extractor! {
     ],
 }
 
+/// Vectors with a concrete element type.
+#[derive(Debug)]
+enum LiteralVector {
+    F64(ArrayVec<f64, { crate::VectorSize::MAX }>),
+    F32(ArrayVec<f32, { crate::VectorSize::MAX }>),
+    F16(ArrayVec<f16, { crate::VectorSize::MAX }>),
+    U32(ArrayVec<u32, { crate::VectorSize::MAX }>),
+    I32(ArrayVec<i32, { crate::VectorSize::MAX }>),
+    U64(ArrayVec<u64, { crate::VectorSize::MAX }>),
+    I64(ArrayVec<i64, { crate::VectorSize::MAX }>),
+    Bool(ArrayVec<bool, { crate::VectorSize::MAX }>),
+    AbstractInt(ArrayVec<i64, { crate::VectorSize::MAX }>),
+    AbstractFloat(ArrayVec<f64, { crate::VectorSize::MAX }>),
+}
+
+impl LiteralVector {
+    #[allow(clippy::missing_const_for_fn, reason = "MSRV")]
+    fn len(&self) -> usize {
+        match *self {
+            LiteralVector::F64(ref v) => v.len(),
+            LiteralVector::F32(ref v) => v.len(),
+            LiteralVector::F16(ref v) => v.len(),
+            LiteralVector::U32(ref v) => v.len(),
+            LiteralVector::I32(ref v) => v.len(),
+            LiteralVector::U64(ref v) => v.len(),
+            LiteralVector::I64(ref v) => v.len(),
+            LiteralVector::Bool(ref v) => v.len(),
+            LiteralVector::AbstractInt(ref v) => v.len(),
+            LiteralVector::AbstractFloat(ref v) => v.len(),
+        }
+    }
+
+    /// Creates [`LiteralVector`] of size 1 from single [`Literal`]
+    fn from_literal(literal: Literal) -> Self {
+        match literal {
+            Literal::F64(e) => Self::F64(ArrayVec::from_iter(iter::once(e))),
+            Literal::F32(e) => Self::F32(ArrayVec::from_iter(iter::once(e))),
+            Literal::U32(e) => Self::U32(ArrayVec::from_iter(iter::once(e))),
+            Literal::I32(e) => Self::I32(ArrayVec::from_iter(iter::once(e))),
+            Literal::U64(e) => Self::U64(ArrayVec::from_iter(iter::once(e))),
+            Literal::I64(e) => Self::I64(ArrayVec::from_iter(iter::once(e))),
+            Literal::Bool(e) => Self::Bool(ArrayVec::from_iter(iter::once(e))),
+            Literal::AbstractInt(e) => Self::AbstractInt(ArrayVec::from_iter(iter::once(e))),
+            Literal::AbstractFloat(e) => Self::AbstractFloat(ArrayVec::from_iter(iter::once(e))),
+            Literal::F16(e) => Self::F16(ArrayVec::from_iter(iter::once(e))),
+        }
+    }
+
+    /// Creates [`LiteralVector`] from [`ArrayVec`] of [`Literal`]s.
+    /// Returns error if components types do not match.
+    /// # Panics
+    /// Panics if vector is empty
+    fn from_literal_vec(
+        components: ArrayVec<Literal, { crate::VectorSize::MAX }>,
+    ) -> Result<Self, ConstantEvaluatorError> {
+        assert!(!components.is_empty());
+        Ok(match components[0] {
+            Literal::I32(_) => Self::I32(
+                components
+                    .iter()
+                    .map(|l| match l {
+                        &Literal::I32(v) => Ok(v),
+                        // TODO: should we handle abstract int here?
+                        _ => Err(ConstantEvaluatorError::InvalidMathArg),
+                    })
+                    .collect::<Result<_, _>>()?,
+            ),
+            Literal::U32(_) => Self::U32(
+                components
+                    .iter()
+                    .map(|l| match l {
+                        &Literal::U32(v) => Ok(v),
+                        _ => Err(ConstantEvaluatorError::InvalidMathArg),
+                    })
+                    .collect::<Result<_, _>>()?,
+            ),
+            Literal::I64(_) => Self::I64(
+                components
+                    .iter()
+                    .map(|l| match l {
+                        &Literal::I64(v) => Ok(v),
+                        _ => Err(ConstantEvaluatorError::InvalidMathArg),
+                    })
+                    .collect::<Result<_, _>>()?,
+            ),
+            Literal::U64(_) => Self::U64(
+                components
+                    .iter()
+                    .map(|l| match l {
+                        &Literal::U64(v) => Ok(v),
+                        _ => Err(ConstantEvaluatorError::InvalidMathArg),
+                    })
+                    .collect::<Result<_, _>>()?,
+            ),
+            Literal::F32(_) => Self::F32(
+                components
+                    .iter()
+                    .map(|l| match l {
+                        &Literal::F32(v) => Ok(v),
+                        _ => Err(ConstantEvaluatorError::InvalidMathArg),
+                    })
+                    .collect::<Result<_, _>>()?,
+            ),
+            Literal::F64(_) => Self::F64(
+                components
+                    .iter()
+                    .map(|l| match l {
+                        &Literal::F64(v) => Ok(v),
+                        _ => Err(ConstantEvaluatorError::InvalidMathArg),
+                    })
+                    .collect::<Result<_, _>>()?,
+            ),
+            Literal::Bool(_) => Self::Bool(
+                components
+                    .iter()
+                    .map(|l| match l {
+                        &Literal::Bool(v) => Ok(v),
+                        _ => Err(ConstantEvaluatorError::InvalidMathArg),
+                    })
+                    .collect::<Result<_, _>>()?,
+            ),
+            Literal::AbstractInt(_) => Self::AbstractInt(
+                components
+                    .iter()
+                    .map(|l| match l {
+                        &Literal::AbstractInt(v) => Ok(v),
+                        _ => Err(ConstantEvaluatorError::InvalidMathArg),
+                    })
+                    .collect::<Result<_, _>>()?,
+            ),
+            Literal::AbstractFloat(_) => Self::AbstractFloat(
+                components
+                    .iter()
+                    .map(|l| match l {
+                        &Literal::AbstractFloat(v) => Ok(v),
+                        _ => Err(ConstantEvaluatorError::InvalidMathArg),
+                    })
+                    .collect::<Result<_, _>>()?,
+            ),
+            Literal::F16(_) => Self::F16(
+                components
+                    .iter()
+                    .map(|l| match l {
+                        &Literal::F16(v) => Ok(v),
+                        _ => Err(ConstantEvaluatorError::InvalidMathArg),
+                    })
+                    .collect::<Result<_, _>>()?,
+            ),
+        })
+    }
+
+    #[allow(dead_code)]
+    /// Returns [`ArrayVec`] of [`Literal`]s
+    fn to_literal_vec(&self) -> ArrayVec<Literal, { crate::VectorSize::MAX }> {
+        match *self {
+            LiteralVector::F64(ref v) => v.iter().map(|e| (Literal::F64(*e))).collect(),
+            LiteralVector::F32(ref v) => v.iter().map(|e| (Literal::F32(*e))).collect(),
+            LiteralVector::F16(ref v) => v.iter().map(|e| (Literal::F16(*e))).collect(),
+            LiteralVector::U32(ref v) => v.iter().map(|e| (Literal::U32(*e))).collect(),
+            LiteralVector::I32(ref v) => v.iter().map(|e| (Literal::I32(*e))).collect(),
+            LiteralVector::U64(ref v) => v.iter().map(|e| (Literal::U64(*e))).collect(),
+            LiteralVector::I64(ref v) => v.iter().map(|e| (Literal::I64(*e))).collect(),
+            LiteralVector::Bool(ref v) => v.iter().map(|e| (Literal::Bool(*e))).collect(),
+            LiteralVector::AbstractInt(ref v) => {
+                v.iter().map(|e| (Literal::AbstractInt(*e))).collect()
+            }
+            LiteralVector::AbstractFloat(ref v) => {
+                v.iter().map(|e| (Literal::AbstractFloat(*e))).collect()
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    /// Puts self into eval's expressions arena and returns handle to it
+    fn register_as_evaluated_expr(
+        &self,
+        eval: &mut ConstantEvaluator<'_>,
+        span: Span,
+    ) -> Result<Handle<Expression>, ConstantEvaluatorError> {
+        let lit_vec = self.to_literal_vec();
+        assert!(!lit_vec.is_empty());
+        let expr = if lit_vec.len() == 1 {
+            Expression::Literal(lit_vec[0])
+        } else {
+            Expression::Compose {
+                ty: eval.types.insert(
+                    Type {
+                        name: None,
+                        inner: TypeInner::Vector {
+                            size: match lit_vec.len() {
+                                2 => crate::VectorSize::Bi,
+                                3 => crate::VectorSize::Tri,
+                                4 => crate::VectorSize::Quad,
+                                _ => unreachable!(),
+                            },
+                            scalar: lit_vec[0].scalar(),
+                        },
+                    },
+                    Span::UNDEFINED,
+                ),
+                components: lit_vec
+                    .iter()
+                    .map(|&l| eval.register_evaluated_expr(Expression::Literal(l), span))
+                    .collect::<Result<_, _>>()?,
+            }
+        };
+        eval.register_evaluated_expr(expr, span)
+    }
+}
+
+/// A macro for matching on [`LiteralVector`] variants.
+///
+/// `Float` variant expands to `F16`, `F32`, `F64` and `AbstractFloat`.
+/// `Integer` variant expands to `I32`, `I64`, `U32`, `U64` and `AbstractInt`.
+///
+/// For output both [`Literal`] (fold) and [`LiteralVector`] (map) are supported.
+///
+/// Example usage:
+///
+/// ```rust,ignore
+/// match_literal_vector!(match v => Literal {
+///     F16 => |v| {v.sum()},
+///     Integer => |v| {v.sum()},
+///     U32 => |v| -> I32 {v.sum()}, // optionally override return type
+/// })
+/// ```
+///
+/// ```rust,ignore
+/// match_literal_vector!(match (e1, e2) => LiteralVector {
+///     F16 => |e1, e2| {e1+e2},
+///     Integer => |e1, e2| {e1+e2},
+///     U32 => |e1, e2| -> I32 {e1+e2}, // optionally override return type
+/// })
+/// ```
+macro_rules! match_literal_vector {
+    (match $lit_vec:expr => $out:ident {
+        $(
+            $ty:ident => |$($var:ident),+| $(-> $ret:ident)? { $body:expr }
+        ),+
+        $(,)?
+    }) => {
+        match_literal_vector!(@inner_start $lit_vec; $out; [$($ty),+]; [$({ $($var),+ ; $($ret)? ; $body }),+])
+    };
+
+    (@inner_start
+        $lit_vec:expr;
+        $out:ident;
+        [$($ty:ident),+];
+        [$({ $($var:ident),+ ; $($ret:ident)? ; $body:expr }),+]
+    ) => {
+        match_literal_vector!(@inner
+            $lit_vec;
+            $out;
+            [$($ty),+];
+            [] <> [$({ $($var),+ ; $($ret)? ; $body }),+]
+        )
+    };
+
+    (@inner
+        $lit_vec:expr;
+        $out:ident;
+        [$ty:ident $(, $ty1:ident)*];
+        [$({$_ty:ident ; $($_var:ident),+ ; $($_ret:ident)? ; $_body:expr}),*] <>
+        [$({ $($var:ident),+ ; $($ret:ident)? ; $body:expr }),+]
+    ) => {
+        match_literal_vector!(@inner
+            $ty;
+            $lit_vec;
+            $out;
+            [$($ty1),*];
+            [$({$_ty ; $($_var),+ ; $($_ret)? ; $_body}),*] <>
+            [$({ $($var),+ ; $($ret)? ; $body }),+]
+        )
+    };
+    (@inner
+        Integer;
+        $lit_vec:expr;
+        $out:ident;
+        [$($ty:ident),*];
+        [$({$_ty:ident ; $($_var:ident),+ ; $($_ret:ident)? ; $_body:expr}),*] <>
+        [
+            { $($var:ident),+ ; $($ret:ident)? ; $body:expr }
+            $(,{ $($var1:ident),+ ; $($ret1:ident)? ; $body1:expr })*
+        ]
+    ) => {
+        match_literal_vector!(@inner
+            $lit_vec;
+            $out;
+            [U32, I32, U64, I64, AbstractInt $(, $ty)*];
+            [$({$_ty ; $($_var),+ ; $($_ret)? ; $_body}),*] <>
+            [
+                { $($var),+ ; $($ret)? ; $body }, // U32
+                { $($var),+ ; $($ret)? ; $body }, // I32
+                { $($var),+ ; $($ret)? ; $body }, // U64
+                { $($var),+ ; $($ret)? ; $body }, // I64
+                { $($var),+ ; $($ret)? ; $body }  // AbstractInt
+                $(,{ $($var1),+ ; $($ret1)? ; $body1 })*
+            ]
+        )
+    };
+    (@inner
+        Float;
+        $lit_vec:expr;
+        $out:ident;
+        [$($ty:ident),*];
+        [$({$_ty:ident ; $($_var:ident),+ ; $($_ret:ident)? ; $_body:expr}),*] <>
+        [
+            { $($var:ident),+ ; $($ret:ident)? ; $body:expr }
+            $(,{ $($var1:ident),+ ; $($ret1:ident)? ; $body1:expr })*
+        ]
+    ) => {
+        match_literal_vector!(@inner
+            $lit_vec;
+            $out;
+            [F16, F32, F64, AbstractFloat $(, $ty)*];
+            [$({$_ty ; $($_var),+ ; $($_ret)? ; $_body}),*] <>
+            [
+                { $($var),+ ; $($ret)? ; $body }, // F16
+                { $($var),+ ; $($ret)? ; $body }, // F32
+                { $($var),+ ; $($ret)? ; $body }, // F64
+                { $($var),+ ; $($ret)? ; $body }  // AbstractFloat
+                $(,{ $($var1),+ ; $($ret1)? ; $body1 })*
+            ]
+        )
+    };
+    (@inner
+        $ty:ident;
+        $lit_vec:expr;
+        $out:ident;
+        [$ty1:ident $(,$ty2:ident)*];
+        [$({$_ty:ident ; $($_var:ident),+ ; $($_ret:ident)? ; $_body:expr}),*] <> [
+            { $($var:ident),+ ; $($ret:ident)? ; $body:expr }
+            $(, { $($var1:ident),+ ; $($ret1:ident)? ; $body1:expr })*
+        ]
+    ) => {
+        match_literal_vector!(@inner
+            $ty1;
+            $lit_vec;
+            $out;
+            [$($ty2),*];
+            [
+                $({$_ty ; $($_var),+ ; $($_ret)? ; $_body},)*
+                { $ty; $($var),+ ; $($ret)? ; $body }
+            ] <>
+            [$({ $($var1),+ ; $($ret1)? ; $body1 }),*]
+
+        )
+    };
+    (@inner
+        $ty:ident;
+        $lit_vec:expr;
+        $out:ident;
+        [];
+        [$({$_ty:ident ; $($_var:ident),+ ; $($_ret:ident)? ; $_body:expr}),*] <>
+        [{ $($var:ident),+ ; $($ret:ident)? ; $body:expr }]
+    ) => {
+        match_literal_vector!(@inner_finish
+            $lit_vec;
+            $out;
+            [
+                $({ $_ty ; $($_var),+ ; $($_ret)? ; $_body },)*
+                { $ty; $($var),+ ; $($ret)? ; $body }
+            ]
+        )
+    };
+    (@inner_finish
+        $lit_vec:expr;
+        $out:ident;
+        [$({$ty:ident ; $($var:ident),+ ; $($ret:ident)? ; $body:expr}),+]
+    ) => {
+        match $lit_vec {
+            $(
+                #[allow(unused_parens)]
+                ($(LiteralVector::$ty(ref $var)),+) => { Ok(match_literal_vector!(@expand_ret $out; $ty $(; $ret)? ; $body)) }
+            )+
+            _ => Err(ConstantEvaluatorError::InvalidMathArg),
+        }
+    };
+    (@expand_ret $out:ident; $ty:ident; $body:expr) => {
+        $out::$ty($body)
+    };
+    (@expand_ret $out:ident; $_ty:ident; $ret:ident; $body:expr) => {
+        $out::$ret($body)
+    };
+}
+
 #[derive(Debug)]
 enum Behavior<'a> {
     Wgsl(WgslRestrictions<'a>),
