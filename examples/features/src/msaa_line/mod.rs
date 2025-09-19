@@ -112,7 +112,7 @@ impl Example {
             sample_count,
             dimension: wgpu::TextureDimension::D2,
             format: config.view_formats[0],
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             label: None,
             view_formats: &[],
         };
@@ -126,10 +126,6 @@ impl Example {
 impl crate::framework::Example for Example {
     fn optional_features() -> wgpu::Features {
         wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-    }
-
-    fn required_features() -> wgpu::Features {
-        wgpu::Features::TRANSIENT_ATTACHMENTS
     }
 
     fn init(
@@ -218,17 +214,6 @@ impl crate::framework::Example for Example {
         }
     }
 
-    fn resize(
-        &mut self,
-        config: &wgpu::SurfaceConfiguration,
-        device: &wgpu::Device,
-        _queue: &wgpu::Queue,
-    ) {
-        self.config = config.clone();
-        self.multisampled_framebuffer =
-            Example::create_multisampled_framebuffer(device, config, self.sample_count);
-    }
-
     #[expect(clippy::single_match)]
     fn update(&mut self, event: winit::event::WindowEvent) {
         match event {
@@ -259,6 +244,17 @@ impl crate::framework::Example for Example {
             },
             _ => {}
         }
+    }
+
+    fn resize(
+        &mut self,
+        config: &wgpu::SurfaceConfiguration,
+        device: &wgpu::Device,
+        _queue: &wgpu::Queue,
+    ) {
+        self.config = config.clone();
+        self.multisampled_framebuffer =
+            Example::create_multisampled_framebuffer(device, config, self.sample_count);
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
