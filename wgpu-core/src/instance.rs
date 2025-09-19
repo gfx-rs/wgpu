@@ -706,6 +706,7 @@ impl Adapter {
             wgt::TextureUsages::STORAGE_ATOMIC,
             caps.contains(Tfc::STORAGE_ATOMIC),
         );
+        allowed_usages.set(wgt::TextureUsages::TRANSIENT, caps.contains(Tfc::TRANSIENT));
 
         let mut flags = wgt::TextureFormatFeatureFlags::empty();
         flags.set(

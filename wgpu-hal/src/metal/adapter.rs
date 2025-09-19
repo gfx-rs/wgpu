@@ -149,7 +149,7 @@ impl crate::Adapter for super::Adapter {
             | msaa_count
             | Tfc::MULTISAMPLE_RESOLVE;
 
-        let extra = match format {
+        let mut extra = match format {
             Tf::R8Unorm | Tf::R16Float | Tf::Rgba8Unorm | Tf::Rgba16Float => {
                 read_write_tier2_if | all_caps
             }
@@ -351,6 +351,11 @@ impl crate::Adapter for super::Adapter {
                 }
             }
         };
+
+        extra.set(
+            Tfc::TRANSIENT,
+            self.shared.private_caps.supports_memoryless_storage,
+        );
 
         Tfc::COPY_SRC | Tfc::COPY_DST | Tfc::SAMPLED | Tfc::STORAGE_READ_ONLY | extra
     }
@@ -902,6 +907,7 @@ impl super::PrivateCapabilities {
                 && (device.supports_family(MTLGPUFamily::Apple7)
                     || device.supports_family(MTLGPUFamily::Mac2)),
             supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
+            supports_memoryless_storage: version.at_least((11, 0), (10, 0), os_is_mac),
         }
     }
 
@@ -1000,6 +1006,8 @@ impl super::PrivateCapabilities {
         if self.supports_simd_scoped_operations {
             features.insert(F::SUBGROUP | F::SUBGROUP_BARRIER);
         }
+
+        features.set(F::TRANSIENT_ATTACHMENTS, self.supports_memoryless_storage);
 
         features
     }

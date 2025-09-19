@@ -1675,6 +1675,9 @@ bitflags!(
         const COPY_SRC = 1 << 15;
         /// Format can be copied to.
         const COPY_DST = 1 << 16;
+
+        /// Format can be created as transient.
+        const TRANSIENT = 1 << 17;
     }
 );
 

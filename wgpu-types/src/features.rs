@@ -1231,6 +1231,17 @@ bitflags_array! {
         ///
         /// [`Device::create_shader_module_passthrough`]: https://docs.rs/wgpu/latest/wgpu/struct.Device.html#method.create_shader_module_passthrough
         const EXPERIMENTAL_PASSTHROUGH_SHADERS = 1 << 52;
+
+        /// Allows transient attachments to be created with [`TextureUsages::TRANSIENT`]
+        ///
+        /// Supported platforms
+        ///  - Vulkan
+        ///  - Metal
+        ///
+        /// This is a native only feature
+        ///
+        /// [`TextureUsages::TRANSIENT`]: super::TextureUsages::TRANSIENT
+        const TRANSIENT_ATTACHMENTS = 1 << 53;
     }
 
     /// Features that are not guaranteed to be supported.

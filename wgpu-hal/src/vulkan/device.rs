@@ -1264,13 +1264,19 @@ impl crate::Device for super::Device {
                 unsafe { self.shared.raw.destroy_image(image.raw, None) };
             })?;
 
+        let mut alloc_usage = gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS;
+        alloc_usage.set(
+            gpu_alloc::UsageFlags::TRANSIENT,
+            desc.usage.contains(wgt::TextureUses::TRANSIENT),
+        );
+
         let block = unsafe {
             self.mem_allocator.lock().alloc(
                 &*self.shared,
                 gpu_alloc::Request {
                     size: image.requirements.size,
                     align_mask: image.requirements.alignment - 1,
-                    usage: gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
+                    usage: alloc_usage,
                     memory_types: image.requirements.memory_type_bits & self.valid_ash_memory_types,
                 },
             )

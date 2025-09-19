@@ -560,7 +560,8 @@ impl PhysicalDeviceFeatures {
             | F::PIPELINE_CACHE
             | F::SHADER_EARLY_DEPTH_TEST
             | F::TEXTURE_ATOMIC
-            | F::EXPERIMENTAL_PASSTHROUGH_SHADERS;
+            | F::EXPERIMENTAL_PASSTHROUGH_SHADERS
+            | F::TRANSIENT_ATTACHMENTS;
 
         let mut dl_flags = Df::COMPUTE_SHADERS
             | Df::BASE_VERTEX
@@ -2445,7 +2446,7 @@ impl crate::Adapter for super::Adapter {
         };
         let features = properties.optimal_tiling_features;
 
-        let mut flags = Tfc::empty();
+        let mut flags = Tfc::TRANSIENT;
         flags.set(
             Tfc::SAMPLED,
             features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE),

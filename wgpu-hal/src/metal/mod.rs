@@ -300,6 +300,7 @@ struct PrivateCapabilities {
     int64_atomics: bool,
     float_atomics: bool,
     supports_shared_event: bool,
+    supports_memoryless_storage: bool,
 }
 
 #[derive(Clone, Debug)]
