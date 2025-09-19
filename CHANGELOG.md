@@ -219,6 +219,7 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 #### naga
 
 - [wgsl-in] Allow a trailing comma in `@blend_src(…)` attributes. By @ErichDonGubler in [#8137](https://github.com/gfx-rs/wgpu/pull/8137).
+- [wgsl-in] Allow a trailing comma in the list of `case` values inside a `switch`. By @reima in [#8165](https://github.com/gfx-rs/wgpu/pull/8165).
 
 ### Documentation
 

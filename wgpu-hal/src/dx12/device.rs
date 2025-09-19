@@ -26,7 +26,7 @@ use crate::{
         dxgi::{name::ObjectExt, result::HResult},
     },
     dx12::{
-        borrow_optional_interface_temporarily, shader_compilation, suballocation,
+        borrow_optional_interface_temporarily, shader_compilation, suballocation, DCompLib,
         DynamicStorageBufferOffsets, Event, ShaderCacheKey, ShaderCacheValue,
     },
     AccelerationStructureEntries, TlasInstance,
@@ -46,6 +46,7 @@ impl super::Device {
         memory_hints: &wgt::MemoryHints,
         private_caps: super::PrivateCapabilities,
         library: &Arc<D3D12Lib>,
+        dcomp_lib: &Arc<DCompLib>,
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
         compiler_container: Arc<shader_compilation::CompilerContainer>,
         backend_options: wgt::Dx12BackendOptions,
@@ -201,6 +202,7 @@ impl super::Device {
             )),
             options: backend_options,
             library: Arc::clone(library),
+            dcomp_lib: Arc::clone(dcomp_lib),
             #[cfg(feature = "renderdoc")]
             render_doc: Default::default(),
             null_rtv_handle,
