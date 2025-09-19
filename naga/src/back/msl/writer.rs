@@ -5144,14 +5144,14 @@ template <typename A>
                 let name = self.namer.call("unpackSnorm16x2");
                 writeln!(
                     self.out,
-                    "metal::float2 {name}(metal::ushort b0, \
-                                          metal::ushort b1, \
-                                          metal::ushort b2, \
-                                          metal::ushort b3) {{"
+                    "metal::float2 {name}(uint b0, \
+                                          uint b1, \
+                                          uint b2, \
+                                          uint b3) {{"
                 )?;
                 writeln!(
                     self.out,
-                    "{}return metal::unpack_snorm2x16_to_float(b1 << 24 | b0 << 16 | b3 << 8 | b2);",
+                    "{}return metal::unpack_snorm2x16_to_float(b3 << 24 | b2 << 16 | b1 << 8 | b0);",
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
@@ -5161,19 +5161,19 @@ template <typename A>
                 let name = self.namer.call("unpackSnorm16x4");
                 writeln!(
                     self.out,
-                    "metal::float4 {name}(metal::ushort b0, \
-                                          metal::ushort b1, \
-                                          metal::ushort b2, \
-                                          metal::ushort b3, \
-                                          metal::ushort b4, \
-                                          metal::ushort b5, \
-                                          metal::ushort b6, \
-                                          metal::ushort b7) {{"
+                    "metal::float4 {name}(uint b0, \
+                                          uint b1, \
+                                          uint b2, \
+                                          uint b3, \
+                                          uint b4, \
+                                          uint b5, \
+                                          uint b6, \
+                                          uint b7) {{"
                 )?;
                 writeln!(
                     self.out,
-                    "{}return metal::float4(metal::unpack_snorm2x16_to_float(b1 << 24 | b0 << 16 | b3 << 8 | b2), \
-                                            metal::unpack_snorm2x16_to_float(b5 << 24 | b4 << 16 | b7 << 8 | b6));",
+                    "{}return metal::float4(metal::unpack_snorm2x16_to_float(b3 << 24 | b2 << 16 | b1 << 8 | b0), \
+                                            metal::unpack_snorm2x16_to_float(b7 << 24 | b6 << 16 | b5 << 8 | b4));",
                     back::INDENT
                 )?;
                 writeln!(self.out, "}}")?;
