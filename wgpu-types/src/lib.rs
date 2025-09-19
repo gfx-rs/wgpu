@@ -5666,7 +5666,7 @@ bitflags::bitflags! {
         /// Flag used by the wgpu-core texture tracker to say that the tracker does not know the state of the sub-resource.
         /// This is different from UNINITIALIZED as that says the tracker does know, but the texture has not been initialized.
         const UNKNOWN = 1 << 13;
-        /// Transient image
+        /// Transient image.
         const TRANSIENT = 1 << 14;
     }
 }

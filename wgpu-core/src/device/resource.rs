@@ -4464,6 +4464,10 @@ impl Device {
         {
             format_features.flags.set(tfsc::FILTERABLE, false);
         }
+        format_features.allowed_usages.set(
+            wgt::TextureUsages::TRANSIENT,
+            self.features.contains(wgt::Features::TRANSIENT_ATTACHMENTS),
+        );
         format_features
     }
 

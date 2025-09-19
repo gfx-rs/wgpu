@@ -452,9 +452,7 @@ impl crate::Device for super::Device {
                 }
             };
 
-            let mtl_storage_mode = if desc.usage.contains(wgt::TextureUses::TRANSIENT)
-                && self.features.contains(wgt::Features::TRANSIENT_ATTACHMENTS)
-            {
+            let mtl_storage_mode = if desc.usage.contains(wgt::TextureUses::TRANSIENT) {
                 MTLStorageMode::Memoryless
             } else {
                 MTLStorageMode::Private

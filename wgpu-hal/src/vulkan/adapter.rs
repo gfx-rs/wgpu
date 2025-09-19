@@ -2446,7 +2446,7 @@ impl crate::Adapter for super::Adapter {
         };
         let features = properties.optimal_tiling_features;
 
-        let mut flags = Tfc::TRANSIENT;
+        let mut flags = Tfc::empty();
         flags.set(
             Tfc::SAMPLED,
             features.contains(vk::FormatFeatureFlags::SAMPLED_IMAGE),

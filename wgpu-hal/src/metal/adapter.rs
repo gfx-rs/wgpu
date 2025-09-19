@@ -149,7 +149,7 @@ impl crate::Adapter for super::Adapter {
             | msaa_count
             | Tfc::MULTISAMPLE_RESOLVE;
 
-        let mut extra = match format {
+        let extra = match format {
             Tf::R8Unorm | Tf::R16Float | Tf::Rgba8Unorm | Tf::Rgba16Float => {
                 read_write_tier2_if | all_caps
             }
@@ -351,11 +351,6 @@ impl crate::Adapter for super::Adapter {
                 }
             }
         };
-
-        extra.set(
-            Tfc::TRANSIENT,
-            self.shared.private_caps.supports_memoryless_storage,
-        );
 
         Tfc::COPY_SRC | Tfc::COPY_DST | Tfc::SAMPLED | Tfc::STORAGE_READ_ONLY | extra
     }
