@@ -625,8 +625,8 @@ pub enum ColorAttachmentError {
         mip_level: u32,
         depth_or_array_layer: u32,
     },
-    #[error("Color attachment's usage contains {0:?}. This can only be used with StoreOp::Discard, but the provided store op was {1:?}")]
-    InvalidUsageForStoreOp(TextureUsages, StoreOp),
+    #[error("Color attachment's usage contains {0:?}. This can only be used with StoreOp::{1:?}, but was provided StoreOp::{2:?}")]
+    InvalidUsageForStoreOp(TextureUsages, StoreOp, StoreOp),
 }
 
 impl WebGpuError for ColorAttachmentError {
@@ -1593,6 +1593,7 @@ impl Global {
                         return Err(RenderPassErrorInner::ColorAttachment(
                             ColorAttachmentError::InvalidUsageForStoreOp(
                                 TextureUsages::TRANSIENT,
+                                StoreOp::Discard,
                                 *store_op,
                             ),
                         ));
