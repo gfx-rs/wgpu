@@ -1509,6 +1509,8 @@ pub enum CreateTextureError {
     CreateTextureView(#[from] CreateTextureViewError),
     #[error("Invalid usage flags {0:?}")]
     InvalidUsage(wgt::TextureUsages),
+    #[error("Texture usage {0:?} is not compatible with texture usage {1:?}")]
+    IncompatibleUsage(wgt::TextureUsages, wgt::TextureUsages),
     #[error(transparent)]
     InvalidDimension(#[from] TextureDimensionError),
     #[error("Depth texture ({1:?}) can't be created as {0:?}")]
@@ -1564,6 +1566,7 @@ impl WebGpuError for CreateTextureError {
             Self::MissingDownlevelFlags(e) => e,
 
             Self::InvalidUsage(_)
+            | Self::IncompatibleUsage(_, _)
             | Self::InvalidDepthDimension(_, _)
             | Self::InvalidCompressedDimension(_, _)
             | Self::InvalidMipLevelCount { .. }

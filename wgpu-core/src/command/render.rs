@@ -625,6 +625,8 @@ pub enum ColorAttachmentError {
         mip_level: u32,
         depth_or_array_layer: u32,
     },
+    #[error("Color attachment's usage cannot contain {0:?} if StoreOp is {1:?}")]
+    InvalidUsageForStoreOp(TextureUsages, StoreOp),
 }
 
 impl WebGpuError for ColorAttachmentError {
@@ -1584,6 +1586,17 @@ impl Global {
                 {
                     let view = texture_views.get(*view_id).get()?;
                     view.same_device(device)?;
+
+                    if view.desc.usage.contains(TextureUsages::TRANSIENT)
+                        && *store_op != StoreOp::Discard
+                    {
+                        return Err(RenderPassErrorInner::ColorAttachment(
+                            ColorAttachmentError::InvalidUsageForStoreOp(
+                                TextureUsages::TRANSIENT,
+                                *store_op,
+                            ),
+                        ));
+                    }
 
                     let resolve_target = if let Some(resolve_target_id) = resolve_target {
                         let rt_arc = texture_views.get(*resolve_target_id).get()?;

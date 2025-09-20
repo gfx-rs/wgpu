@@ -5610,7 +5610,7 @@ bitflags::bitflags! {
         //
         /// Allows a texture to be used with image atomics. Requires [`Features::TEXTURE_ATOMIC`].
         const STORAGE_ATOMIC = 1 << 16;
-        /// Allows a texture to be transient. Requires [`Features::TRANSIENT_ATTACHMENTS`].
+        /// Allows a texture to be transient. No-op on platforms other than Vulkan and Metal.
         const TRANSIENT = 1 << 17;
     }
 }

@@ -1002,8 +1002,6 @@ impl super::PrivateCapabilities {
             features.insert(F::SUBGROUP | F::SUBGROUP_BARRIER);
         }
 
-        features.set(F::TRANSIENT_ATTACHMENTS, self.supports_memoryless_storage);
-
         features
     }
 
