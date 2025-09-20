@@ -648,7 +648,6 @@ impl super::Device {
         }
     }
 
-    #[cfg(windows)]
     fn find_memory_type_index(
         &self,
         type_bits_req: u32,
