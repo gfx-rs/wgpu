@@ -740,7 +740,10 @@ impl super::Device {
         let mut req = unsafe { self.shared.raw.get_image_memory_requirements(raw) };
 
         if desc.usage.contains(wgt::TextureUses::TRANSIENT) {
-            let mem_type_index = self.find_memory_type_index(req.memory_type_bits, vk::MemoryPropertyFlags::LAZILY_ALLOCATED);
+            let mem_type_index = self.find_memory_type_index(
+                req.memory_type_bits,
+                vk::MemoryPropertyFlags::LAZILY_ALLOCATED,
+            );
             if let Some(mem_type_index) = mem_type_index {
                 req.memory_type_bits = 1 << mem_type_index;
             }
