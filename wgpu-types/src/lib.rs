@@ -5649,6 +5649,8 @@ bitflags::bitflags! {
         /// Image atomic enabled storage.
         /// cbindgen:ignore
         const STORAGE_ATOMIC = 1 << 11;
+        /// Transient texture that may not have any backing memory. Not a resource state stored in the trackers, only used for passing down usages to create_texture.
+        const TRANSIENT = 1 << 12;
         /// The combination of states that a texture may be in _at the same time_.
         /// cbindgen:ignore
         const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits();
@@ -5662,12 +5664,10 @@ bitflags::bitflags! {
         const ORDERED = Self::INCLUSIVE.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits();
 
         /// Flag used by the wgpu-core texture tracker to say a texture is in different states for every sub-resource
-        const COMPLEX = 1 << 12;
+        const COMPLEX = 1 << 13;
         /// Flag used by the wgpu-core texture tracker to say that the tracker does not know the state of the sub-resource.
         /// This is different from UNINITIALIZED as that says the tracker does know, but the texture has not been initialized.
-        const UNKNOWN = 1 << 13;
-        /// Transient texture that may not have any backing memory. Not a resource state stored in the trackers, only used for passing down usages to create_texture.
-        const TRANSIENT = 1 << 14;
+        const UNKNOWN = 1 << 14;
     }
 }
 
