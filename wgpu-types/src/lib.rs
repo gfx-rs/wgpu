@@ -5601,6 +5601,7 @@ bitflags::bitflags! {
         /// Allows a texture to be a [`BindingType::StorageTexture`] in a bind group.
         const STORAGE_BINDING = 1 << 3;
         /// Allows a texture to be an output attachment of a render pass.
+        /// NOTE: Consider adding ['TextureUsages::TRANSIENT'] if the contents are not reused.
         const RENDER_ATTACHMENT = 1 << 4;
 
         //
@@ -5610,7 +5611,9 @@ bitflags::bitflags! {
         //
         /// Allows a texture to be used with image atomics. Requires [`Features::TEXTURE_ATOMIC`].
         const STORAGE_ATOMIC = 1 << 16;
-        /// Allows a texture to be transient. No-op on platforms other than Vulkan and Metal.
+        /// Hints to the backend that the contents of this texture will not be used in another pass to potentially reduce memory usage and bandwidth.
+        /// No-op on platforms other than Vulkan and Metal.
+        /// Incompatible with ALL other usages except [`TextureUsages::RENDER_ATTACHMENT`]
         const TRANSIENT = 1 << 17;
     }
 }
