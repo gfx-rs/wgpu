@@ -737,7 +737,14 @@ impl super::Device {
             // VK_ERROR_COMPRESSION_EXHAUSTED_EXT
             super::map_host_device_oom_and_ioca_err(err)
         }
-        let req = unsafe { self.shared.raw.get_image_memory_requirements(raw) };
+        let mut req = unsafe { self.shared.raw.get_image_memory_requirements(raw) };
+
+        if desc.usage.contains(wgt::TextureUses::TRANSIENT) {
+            let mem_type_index = self.find_memory_type_index(req.memory_type_bits, vk::MemoryPropertyFlags::LAZILY_ALLOCATED);
+            if let Some(mem_type_index) = mem_type_index {
+                req.memory_type_bits = 1 << mem_type_index;
+            }
+        }
 
         Ok(ImageWithoutMemory {
             raw,
@@ -1263,19 +1270,13 @@ impl crate::Device for super::Device {
                 unsafe { self.shared.raw.destroy_image(image.raw, None) };
             })?;
 
-        let mut alloc_usage = gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS;
-        alloc_usage.set(
-            gpu_alloc::UsageFlags::TRANSIENT,
-            desc.usage.contains(wgt::TextureUses::TRANSIENT),
-        );
-
         let block = unsafe {
             self.mem_allocator.lock().alloc(
                 &*self.shared,
                 gpu_alloc::Request {
                     size: image.requirements.size,
                     align_mask: image.requirements.alignment - 1,
-                    usage: alloc_usage,
+                    usage: gpu_alloc::UsageFlags::FAST_DEVICE_ACCESS,
                     memory_types: image.requirements.memory_type_bits & self.valid_ash_memory_types,
                 },
             )
