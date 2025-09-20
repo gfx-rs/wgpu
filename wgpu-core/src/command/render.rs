@@ -625,7 +625,7 @@ pub enum ColorAttachmentError {
         mip_level: u32,
         depth_or_array_layer: u32,
     },
-    #[error("Color attachment's usage contains {0:?}. This can only be used with StoreOp::{1:?}, but was provided StoreOp::{2:?}")]
+    #[error("Color attachment's usage contains {0:?}. This can only be used with StoreOp::{1:?}, but StoreOp::{2:?} was provided")]
     InvalidUsageForStoreOp(TextureUsages, StoreOp, StoreOp),
 }
 
