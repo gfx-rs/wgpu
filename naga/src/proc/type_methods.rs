@@ -232,6 +232,7 @@ impl crate::TypeInner {
                 columns,
                 rows,
                 scalar,
+                role: _,
             } => Some(columns as u32 * rows as u32 * scalar.width() as u32),
             Self::Pointer { .. } | Self::ValuePointer { .. } => Some(POINTER_SPAN),
             Self::Array {

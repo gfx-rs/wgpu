@@ -86,8 +86,8 @@ impl From<crate::VectorSize> for Alignment {
     }
 }
 
-impl From<crate::CooperativeVectorSize> for Alignment {
-    fn from(size: crate::CooperativeVectorSize) -> Self {
+impl From<crate::CooperativeSize> for Alignment {
+    fn from(size: crate::CooperativeSize) -> Self {
         Self(unsafe { NonZeroU32::new_unchecked(size as u32) })
     }
 }
@@ -223,6 +223,7 @@ impl Layouter {
                     columns: _,
                     rows,
                     scalar,
+                    role: _,
                 } => {
                     let alignment = Alignment::new(scalar.width() as u32)
                         .ok_or(LayoutErrorInner::NonPowerOfTwoWidth.with(ty_handle))?;

@@ -416,6 +416,8 @@ pub(crate) enum Error<'a> {
     TypeTooLarge {
         span: Span,
     },
+    UnderspecifiedCooperativeMatrix,
+    UnknownCooperativeScalar(Span),
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -1399,6 +1401,16 @@ impl<'a> Error<'a> {
                     "the maximum size is {} bytes",
                     crate::valid::MAX_TYPE_SIZE
                 )],
+            },
+            Error::UnderspecifiedCooperativeMatrix => ParseError {
+                message: "cooperative matrix constructor is underspecified".into(),
+                labels: vec![],
+                notes: vec![format!("must be F32")],
+            },
+            Error::UnknownCooperativeScalar(span) => ParseError {
+                message: "unknown cooperative scalar type".into(),
+                labels: vec![(span, "type needs the scalar type specified".into())],
+                notes: vec![format!("must be F32")],
             },
         }
     }

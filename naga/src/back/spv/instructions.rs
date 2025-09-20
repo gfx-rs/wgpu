@@ -294,8 +294,9 @@ impl super::Instruction {
     pub(super) fn type_coop_matrix(
         id: Word,
         scalar_type_id: Word,
-        row_count: crate::CooperativeVectorSize,
-        column_count: crate::CooperativeVectorSize,
+        row_count: crate::CooperativeSize,
+        column_count: crate::CooperativeSize,
+        role: spirv::CooperativeMatrixUse,
     ) -> Self {
         let mut instruction = Self::new(Op::TypeCooperativeMatrixKHR);
         instruction.set_result(id);
@@ -303,7 +304,7 @@ impl super::Instruction {
         instruction.add_operand(spirv::Scope::Subgroup as u32);
         instruction.add_operand(column_count as u32);
         instruction.add_operand(row_count as u32);
-        instruction.add_operand(spirv::CooperativeMatrixUse::MatrixAKHR as u32); //TODO: configure or expose
+        instruction.add_operand(role as u32);
         instruction
     }
 
@@ -1326,6 +1327,16 @@ impl From<crate::ImageDimension> for spirv::Dim {
             Id::D2 => Self::Dim2D,
             Id::D3 => Self::Dim3D,
             Id::Cube => Self::DimCube,
+        }
+    }
+}
+
+impl From<crate::CooperativeRole> for spirv::CooperativeMatrixUse {
+    fn from(role: crate::CooperativeRole) -> Self {
+        match role {
+            crate::CooperativeRole::A => Self::MatrixAKHR,
+            crate::CooperativeRole::B => Self::MatrixBKHR,
+            crate::CooperativeRole::C => Self::MatrixAccumulatorKHR,
         }
     }
 }

@@ -1,0 +1,84 @@
+(
+    types: [
+        (
+            name: None,
+            inner: CooperativeMatrix(
+                columns: Eight,
+                rows: Eight,
+                scalar: F32,
+                role: A,
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        ray_vertex_return: None,
+        external_texture_params: None,
+        external_texture_transfer_function: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [],
+    global_variables: [
+        (
+            name: Some("a"),
+            space: Private,
+            binding: None,
+            ty: 0,
+            init: None,
+        ),
+    ],
+    global_expressions: [],
+    functions: [],
+    entry_points: [
+        (
+            name: "main",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (8, 8, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("main"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [
+                    GlobalVariable(0),
+                    Load(
+                        pointer: 0,
+                    ),
+                    GlobalVariable(0),
+                    Load(
+                        pointer: 2,
+                    ),
+                    Binary(
+                        op: Add,
+                        left: 1,
+                        right: 3,
+                    ),
+                ],
+                named_expressions: {
+                    4: "a2",
+                },
+                body: [
+                    Emit((
+                        start: 1,
+                        end: 2,
+                    )),
+                    Emit((
+                        start: 3,
+                        end: 5,
+                    )),
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+        ),
+    ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+    doc_comments: None,
+)

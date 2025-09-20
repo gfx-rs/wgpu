@@ -240,6 +240,7 @@ impl Display for TypeContext<'_> {
                 columns,
                 rows,
                 scalar,
+                role: _,
             } => {
                 write!(
                     out,

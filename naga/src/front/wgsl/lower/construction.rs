@@ -638,6 +638,32 @@ impl<'source> Lowerer<'source, '_> {
                 };
                 Constructor::Type(ty)
             }
+            ast::ConstructorType::PartialCooperativeMatrix { .. } => {
+                return Err(Box::new(Error::UnderspecifiedCooperativeMatrix));
+            }
+            ast::ConstructorType::CooperativeMatrix {
+                rows,
+                columns,
+                ty,
+                ty_span,
+                role,
+            } => {
+                let ty = self.resolve_ast_type(ty, &mut ctx.as_const())?;
+                let scalar = match ctx.module.types[ty].inner {
+                    crate::TypeInner::Scalar(crate::Scalar {
+                        kind: crate::ScalarKind::Float,
+                        width: 4,
+                    }) => crate::CooperativeScalar::F32,
+                    _ => return Err(Box::new(Error::UnknownCooperativeScalar(ty_span))),
+                };
+                let ty = ctx.ensure_type_exists(crate::TypeInner::CooperativeMatrix {
+                    columns,
+                    rows,
+                    scalar,
+                    role,
+                });
+                Constructor::Type(ty)
+            }
             ast::ConstructorType::PartialArray => Constructor::PartialArray,
             ast::ConstructorType::Array { base, size } => {
                 let base = self.resolve_ast_type(base, &mut ctx.as_const())?;

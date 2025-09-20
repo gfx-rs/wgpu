@@ -321,13 +321,15 @@ where
             columns,
             rows,
             scalar,
+            role,
         } => {
             write!(
                 out,
-                "coop_mat{}x{}<{}>",
+                "coop_mat{}x{}<{},{}>",
                 columns as u32,
                 rows as u32,
-                scalar.try_to_wgsl().unwrap_or_default()
+                scalar.try_to_wgsl().unwrap_or_default(),
+                role.to_wgsl(),
             )?;
         }
         TypeInner::Pointer { base, space } => {

@@ -422,6 +422,7 @@ impl super::Validator {
                 columns: _,
                 rows: _,
                 scalar,
+                role: _,
             } => {
                 self.require_type_capability(Capabilities::COOPERATIVE_MATRIX)?;
                 if scalar != crate::CooperativeScalar::F32 {

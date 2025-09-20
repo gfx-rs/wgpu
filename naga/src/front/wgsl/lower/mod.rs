@@ -4234,6 +4234,28 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     _ => return Err(Box::new(Error::BadMatrixScalarKind(ty_span, scalar))),
                 }
             }
+            ast::Type::CooperativeMatrix {
+                columns,
+                rows,
+                ty,
+                ty_span,
+                role,
+            } => {
+                let ty = self.resolve_ast_type(ty, ctx)?;
+                let scalar = match ctx.module.types[ty].inner {
+                    ir::TypeInner::Scalar(crate::Scalar {
+                        kind: crate::ScalarKind::Float,
+                        width: 4,
+                    }) => crate::CooperativeScalar::F32,
+                    _ => return Err(Box::new(Error::UnknownCooperativeScalar(ty_span))),
+                };
+                ir::TypeInner::CooperativeMatrix {
+                    columns,
+                    rows,
+                    scalar,
+                    role,
+                }
+            }
             ast::Type::Atomic(scalar) => scalar.to_inner_atomic(),
             ast::Type::Pointer { base, space } => {
                 let base = self.resolve_ast_type(base, ctx)?;

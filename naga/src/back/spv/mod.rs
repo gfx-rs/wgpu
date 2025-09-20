@@ -356,9 +356,10 @@ impl NumericType {
 #[derive(Debug, PartialEq, Hash, Eq, Copy, Clone)]
 enum CooperativeType {
     Matrix {
-        columns: crate::CooperativeVectorSize,
-        rows: crate::CooperativeVectorSize,
+        columns: crate::CooperativeSize,
+        rows: crate::CooperativeSize,
         scalar: crate::CooperativeScalar,
+        role: crate::CooperativeRole,
     },
 }
 
@@ -369,10 +370,12 @@ impl CooperativeType {
                 columns,
                 rows,
                 scalar,
+                role,
             } => Some(Self::Matrix {
                 columns,
                 rows,
                 scalar,
+                role,
             }),
             _ => None,
         }

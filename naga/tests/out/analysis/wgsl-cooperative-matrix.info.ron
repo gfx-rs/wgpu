@@ -1,0 +1,78 @@
+(
+    type_flags: [
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+    ],
+    functions: [],
+    entry_points: [
+        (
+            flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            uniformity: (
+                non_uniform_result: None,
+                requirements: (""),
+            ),
+            may_kill: false,
+            sampling_set: [],
+            global_uses: [
+                ("READ"),
+            ],
+            expressions: [
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(0),
+                    ty: Value(Pointer(
+                        base: 0,
+                        space: Private,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(0),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(0),
+                    ty: Value(Pointer(
+                        base: 0,
+                        space: Private,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(2),
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Handle(0),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: Some(0),
+                        requirements: (""),
+                    ),
+                    ref_count: 0,
+                    assignable_global: None,
+                    ty: Handle(0),
+                ),
+            ],
+            sampling: [],
+            dual_source_blending: false,
+            diagnostic_filter_leaf: None,
+        ),
+    ],
+    const_expression_types: [],
+)

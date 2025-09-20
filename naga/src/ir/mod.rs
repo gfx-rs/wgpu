@@ -501,7 +501,7 @@ impl From<VectorSize> for u32 {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub enum CooperativeVectorSize {
+pub enum CooperativeSize {
     Eight = 8,
 }
 
@@ -532,7 +532,7 @@ pub enum ScalarKind {
     AbstractFloat,
 }
 
-/// Primitive type for a scalar.
+/// Primitive type for a cooperative scalar.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -548,6 +548,18 @@ impl CooperativeScalar {
             Self::F32 => 4,
         }
     }
+}
+
+/// Role of a cooperative variable in the equation "A * B + C"
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum CooperativeRole {
+    A,
+    B,
+    C,
 }
 
 /// Characteristics of a scalar type.
@@ -801,9 +813,10 @@ pub enum TypeInner {
     /// Matrix that is cooperatively processed by all the threads
     /// in an opaque mapping.
     CooperativeMatrix {
-        columns: CooperativeVectorSize,
-        rows: CooperativeVectorSize,
+        columns: CooperativeSize,
+        rows: CooperativeSize,
         scalar: CooperativeScalar,
+        role: CooperativeRole,
     },
     /// Atomic scalar.
     Atomic(Scalar),

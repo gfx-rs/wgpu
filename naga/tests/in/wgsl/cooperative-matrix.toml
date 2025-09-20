@@ -1,0 +1,2 @@
+targets = "SPIRV"
+capabilities = "COOPERATIVE_MATRIX"

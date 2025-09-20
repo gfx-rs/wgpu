@@ -1565,9 +1565,10 @@ impl Writer {
                 columns,
                 rows,
                 scalar,
+                role,
             } => {
                 let scalar_id = self.get_cooperative_type_id(scalar);
-                Instruction::type_coop_matrix(id, scalar_id, rows, columns)
+                Instruction::type_coop_matrix(id, scalar_id, rows, columns, role.into())
             }
         };
 
