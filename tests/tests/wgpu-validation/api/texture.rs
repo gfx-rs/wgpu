@@ -508,3 +508,96 @@ fn copy_buffer_to_texture_forbidden_format_aspect() {
         );
     }
 }
+
+/// Ensures that attempting to create a texture with [`wgpu::TextureUsages::TRANSIENT`]
+/// and its unsupported usages fails validation.
+#[test]
+fn transient_invalid_usage() {
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+
+    let size = wgpu::Extent3d {
+        width: 256,
+        height: 256,
+        depth_or_array_layers: 1,
+    };
+
+    let invalid_usages = [
+        wgpu::TextureUsages::COPY_SRC,
+        wgpu::TextureUsages::COPY_DST,
+        wgpu::TextureUsages::TEXTURE_BINDING,
+        wgpu::TextureUsages::STORAGE_BINDING,
+        wgpu::TextureUsages::STORAGE_ATOMIC,
+    ];
+
+    for usage in invalid_usages {
+        let invalid_texture_descriptor = wgpu::TextureDescriptor {
+            label: None,
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8Unorm,
+            usage: wgpu::TextureUsages::TRANSIENT | usage,
+            view_formats: &[],
+        };
+        fail(
+            &device,
+            || {
+                device.create_texture(&invalid_texture_descriptor)
+            },
+            Some(&format!("Texture usage TextureUsages(TRANSIENT) is not compatible with texture usage {usage:?}")),
+        );
+    }
+}
+
+/// Ensures that attempting to use a texture of [`wgpu::TextureUsages::TRANSIENT`]
+/// with [`wgpu::StoreOp::Store`] fails validation.
+#[test]
+fn transient_invalid_storeop() {
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+
+    let size = wgpu::Extent3d {
+        width: 256,
+        height: 256,
+        depth_or_array_layers: 1,
+    };
+
+    let transient_texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT,
+        view_formats: &[],
+    });
+
+    fail(
+        &device,
+        || {
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
+            let invalid_render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &transient_texture.create_view(&wgpu::TextureViewDescriptor::default()),
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            drop(invalid_render_pass);
+
+            encoder.finish()
+        },
+      Some("Color attachment's usage contains TextureUsages(TRANSIENT). This can only be used with StoreOp::Discard, but StoreOp::Store was provided")
+    );
+}
