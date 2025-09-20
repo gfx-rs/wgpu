@@ -788,7 +788,9 @@ impl super::Validator {
                             Sk::Uint | Sk::Sint | Sk::Float => left_inner == right_inner,
                             Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat => false,
                         },
-                        Ti::Matrix { .. } => left_inner == right_inner,
+                        Ti::Matrix { .. } | Ti::CooperativeMatrix { .. } => {
+                            left_inner == right_inner
+                        }
                         _ => false,
                     },
                     Bo::Divide | Bo::Modulo => match *left_inner {
@@ -818,7 +820,7 @@ impl super::Validator {
                                     scalar: scalar2, ..
                                 },
                             ) => scalar1 == scalar2,
-                            // Scalar/matrix.
+                            // Scalar * matrix.
                             (
                                 &Ti::Scalar(Sc {
                                     kind: Sk::Float, ..
@@ -831,7 +833,7 @@ impl super::Validator {
                                     kind: Sk::Float, ..
                                 }),
                             ) => true,
-                            // Vector/vector.
+                            // Vector * vector.
                             (
                                 &Ti::Vector {
                                     size: size1,
@@ -864,9 +866,44 @@ impl super::Validator {
                                 },
                                 &Ti::Matrix { rows, .. },
                             ) => size == rows,
+                            // Matrix * matrix.
                             (&Ti::Matrix { columns, .. }, &Ti::Matrix { rows, .. }) => {
                                 columns == rows
                             }
+                            // Coop matrix * coop matrix.
+                            (
+                                &Ti::CooperativeMatrix {
+                                    columns,
+                                    scalar: scalar1,
+                                    role: role1,
+                                    ..
+                                },
+                                &Ti::CooperativeMatrix {
+                                    rows,
+                                    scalar: scalar2,
+                                    role: role2,
+                                    ..
+                                },
+                            ) => columns == rows && scalar1 == scalar2 && role1 == role2,
+                            // Scalar * coop matrix.
+                            (
+                                &Ti::Scalar(Sc {
+                                    kind: Sk::Float, ..
+                                }),
+                                &Ti::CooperativeMatrix {
+                                    scalar: crate::CooperativeScalar::F32,
+                                    ..
+                                },
+                            )
+                            | (
+                                &Ti::CooperativeMatrix {
+                                    scalar: crate::CooperativeScalar::F32,
+                                    ..
+                                },
+                                &Ti::Scalar(Sc {
+                                    kind: Sk::Float, ..
+                                }),
+                            ) => true,
                             _ => false,
                         };
                         let left_width = left_inner.scalar_width().unwrap_or(0);

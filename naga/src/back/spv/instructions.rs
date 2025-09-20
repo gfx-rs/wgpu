@@ -294,17 +294,18 @@ impl super::Instruction {
     pub(super) fn type_coop_matrix(
         id: Word,
         scalar_type_id: Word,
-        row_count: crate::CooperativeSize,
-        column_count: crate::CooperativeSize,
-        role: spirv::CooperativeMatrixUse,
+        scope_id: Word,
+        row_count_id: Word,
+        column_count_id: Word,
+        matrix_use_id: Word,
     ) -> Self {
         let mut instruction = Self::new(Op::TypeCooperativeMatrixKHR);
         instruction.set_result(id);
         instruction.add_operand(scalar_type_id);
-        instruction.add_operand(spirv::Scope::Subgroup as u32);
-        instruction.add_operand(column_count as u32);
-        instruction.add_operand(row_count as u32);
-        instruction.add_operand(role as u32);
+        instruction.add_operand(scope_id);
+        instruction.add_operand(row_count_id);
+        instruction.add_operand(column_count_id);
+        instruction.add_operand(matrix_use_id);
         instruction
     }
 

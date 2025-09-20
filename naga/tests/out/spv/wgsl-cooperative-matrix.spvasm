@@ -1,17 +1,46 @@
 ; SPIR-V
-; Version: 1.1
+; Version: 1.4
 ; Generator: rspirv
-; Bound: 7
+; Bound: 20
 OpCapability Shader
+OpCapability CooperativeMatrixKHR
+OpCapability VulkanMemoryModel
+OpExtension "SPV_KHR_cooperative_matrix"
+OpExtension "SPV_KHR_vulkan_memory_model"
 %1 = OpExtInstImport "GLSL.std.450"
-OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %4 "main"
-OpExecutionMode %4 LocalSize 8 8 1
+OpMemoryModel Logical Vulkan
+OpEntryPoint GLCompute %14 "main" %10
+OpExecutionMode %14 LocalSize 8 8 1
+%3 = OpString "cooperative-matrix.wgsl"
+OpSource Unknown 0 %3 "var<private> a: coop_mat8x8<f32, A>;
+//var<private> b: coop_mat8x8<f32, B>;
+
+@compute @workgroup_size(8, 8, 1)
+fn main() {
+    let a2 = a + a;
+}
+"
+OpName %10 "a"
+OpName %14 "main"
 %2 = OpTypeVoid
-%5 = OpTypeFunction %2
-%4 = OpFunction  %2  None %5
-%3 = OpLabel
-OpBranch %6
-%6 = OpLabel
+%5 = OpTypeFloat 32
+%7 = OpTypeInt 32 0
+%6 = OpConstant  %7  3
+%8 = OpConstant  %7  8
+%9 = OpConstant  %7  0
+%4 = OpTypeCooperativeMatrixKHR %5 %6 %8 %8 %9
+%11 = OpTypePointer Private %4
+%12 = OpConstantNull  %4
+%10 = OpVariable  %11  Private %12
+%15 = OpTypeFunction %2
+%14 = OpFunction  %2  None %15
+%13 = OpLabel
+OpBranch %16
+%16 = OpLabel
+OpLine %3 6 14
+%17 = OpLoad  %4  %10
+OpLine %3 6 14
+%18 = OpLoad  %4  %10
+%19 = OpFAdd  %4  %17 %18
 OpReturn
 OpFunctionEnd

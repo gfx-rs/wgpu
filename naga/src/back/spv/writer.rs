@@ -1531,7 +1531,9 @@ impl Writer {
                     "cooperative matrix",
                     &[spirv::Capability::CooperativeMatrixKHR],
                 )?;
+                self.require_any("memory model", &[spirv::Capability::VulkanMemoryModel])?;
                 self.use_extension("SPV_KHR_cooperative_matrix");
+                self.use_extension("SPV_KHR_vulkan_memory_model");
             }
             _ => {}
         }
@@ -1568,7 +1570,12 @@ impl Writer {
                 role,
             } => {
                 let scalar_id = self.get_cooperative_type_id(scalar);
-                Instruction::type_coop_matrix(id, scalar_id, rows, columns, role.into())
+                let scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
+                let columns_id = self.get_index_constant(columns as u32);
+                let rows_id = self.get_index_constant(rows as u32);
+                let role_id =
+                    self.get_index_constant(spirv::CooperativeMatrixUse::from(role) as u32);
+                Instruction::type_coop_matrix(id, scalar_id, scope_id, rows_id, columns_id, role_id)
             }
         };
 
@@ -2986,7 +2993,14 @@ impl Writer {
         }
 
         let addressing_model = spirv::AddressingModel::Logical;
-        let memory_model = spirv::MemoryModel::GLSL450;
+        let memory_model = if self
+            .capabilities_used
+            .contains(&spirv::Capability::VulkanMemoryModel)
+        {
+            spirv::MemoryModel::Vulkan
+        } else {
+            spirv::MemoryModel::GLSL450
+        };
         //self.check(addressing_model.required_capabilities())?;
         //self.check(memory_model.required_capabilities())?;
 

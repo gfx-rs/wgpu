@@ -505,6 +505,7 @@ enum Dimension {
     Scalar,
     Vector,
     Matrix,
+    CooperativeMatrix,
 }
 
 /// Key used to look up an operation which we have wrapped in a helper

@@ -141,6 +141,7 @@ impl crate::TypeInner {
         match *self {
             Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => Some(scalar),
             Ti::Matrix { scalar, .. } => Some(scalar),
+            Ti::CooperativeMatrix { scalar, .. } => Some(scalar.to_scalar()),
             _ => None,
         }
     }

@@ -548,6 +548,15 @@ impl CooperativeScalar {
             Self::F32 => 4,
         }
     }
+
+    pub const fn to_scalar(&self) -> Scalar {
+        match *self {
+            Self::F32 => Scalar {
+                kind: ScalarKind::Float,
+                width: 4,
+            },
+        }
+    }
 }
 
 /// Role of a cooperative variable in the equation "A * B + C"

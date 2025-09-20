@@ -19,6 +19,7 @@ fn get_dimension(type_inner: &crate::TypeInner) -> Dimension {
         crate::TypeInner::Scalar(_) => Dimension::Scalar,
         crate::TypeInner::Vector { .. } => Dimension::Vector,
         crate::TypeInner::Matrix { .. } => Dimension::Matrix,
+        crate::TypeInner::CooperativeMatrix { .. } => Dimension::CooperativeMatrix,
         _ => unreachable!(),
     }
 }
@@ -777,6 +778,7 @@ impl BlockContext<'_> {
                                 rows,
                                 scalar,
                             } => {
+                                //TODO: why not just rely on `Fadd` for matrices?
                                 self.write_matrix_matrix_column_op(
                                     block,
                                     id,
@@ -792,6 +794,7 @@ impl BlockContext<'_> {
                                 self.cached[expr_handle] = id;
                                 return Ok(());
                             }
+                            crate::TypeInner::CooperativeMatrix { .. } => spirv::Op::FAdd,
                             _ => unimplemented!(),
                         },
                         crate::BinaryOperator::Subtract => match *left_ty_inner {
@@ -820,6 +823,7 @@ impl BlockContext<'_> {
                                 self.cached[expr_handle] = id;
                                 return Ok(());
                             }
+                            crate::TypeInner::CooperativeMatrix { .. } => spirv::Op::FSub,
                             _ => unimplemented!(),
                         },
                         crate::BinaryOperator::Multiply => {
@@ -853,10 +857,12 @@ impl BlockContext<'_> {
                                 (Dimension::Vector, Dimension::Matrix) => {
                                     spirv::Op::VectorTimesMatrix
                                 }
-                                (Dimension::Matrix, Dimension::Scalar) => {
+                                (Dimension::Matrix, Dimension::Scalar)
+                                | (Dimension::CooperativeMatrix, Dimension::Scalar) => {
                                     spirv::Op::MatrixTimesScalar
                                 }
-                                (Dimension::Scalar, Dimension::Matrix) => {
+                                (Dimension::Scalar, Dimension::Matrix)
+                                | (Dimension::Scalar, Dimension::CooperativeMatrix) => {
                                     reverse_operands = true;
                                     spirv::Op::MatrixTimesScalar
                                 }
@@ -875,6 +881,12 @@ impl BlockContext<'_> {
                                 }
                                 (Dimension::Vector, Dimension::Vector)
                                 | (Dimension::Scalar, Dimension::Scalar) => spirv::Op::IMul,
+                                (Dimension::CooperativeMatrix, Dimension::CooperativeMatrix)
+                                //Note: technically can do `FMul` but IR doesn't have matrix per-component multiplication
+                                | (Dimension::CooperativeMatrix, _)
+                                | (_, Dimension::CooperativeMatrix) => {
+                                    unimplemented!()
+                                }
                             }
                         }
                         crate::BinaryOperator::Divide => match left_ty_inner.scalar_kind() {

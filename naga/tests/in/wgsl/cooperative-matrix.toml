@@ -1,2 +1,6 @@
 targets = "SPIRV"
 capabilities = "COOPERATIVE_MATRIX"
+
+[spv]
+debug = true
+version = [1, 4]

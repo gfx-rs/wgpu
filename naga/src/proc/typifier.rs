@@ -143,6 +143,17 @@ impl Clone for TypeResolution {
                     columns,
                     scalar,
                 },
+                Ti::CooperativeMatrix {
+                    columns,
+                    rows,
+                    scalar,
+                    role,
+                } => Ti::CooperativeMatrix {
+                    columns,
+                    rows,
+                    scalar,
+                    role,
+                },
                 Ti::Pointer { base, space } => Ti::Pointer { base, space },
                 Ti::ValuePointer {
                     size,
@@ -587,6 +598,20 @@ impl<'a> ResolveContext<'a> {
                         (&Ti::Scalar { .. }, _) => res_right.clone(),
                         (_, &Ti::Scalar { .. }) => res_left.clone(),
                         (&Ti::Vector { .. }, &Ti::Vector { .. }) => res_left.clone(),
+                        (
+                            &Ti::CooperativeMatrix {
+                                columns: _,
+                                rows,
+                                scalar,
+                                role,
+                            },
+                            &Ti::CooperativeMatrix { columns, .. },
+                        ) => TypeResolution::Value(Ti::CooperativeMatrix {
+                            columns,
+                            rows,
+                            scalar,
+                            role,
+                        }),
                         (tl, tr) => {
                             return Err(ResolveError::IncompatibleOperands(format!(
                                 "{tl:?} * {tr:?}"
