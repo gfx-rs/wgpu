@@ -189,6 +189,7 @@ impl super::Adapter {
             driver: "".to_owned(),
             driver_info: version,
             backend: wgt::Backend::Gl,
+            supports_transient: false,
         }
     }
 

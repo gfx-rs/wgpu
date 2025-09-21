@@ -159,6 +159,7 @@ impl crate::Instance for Instance {
                         driver: String::new(),
                         driver_info: String::new(),
                         backend: wgt::Backend::Metal,
+                        supports_transient: shared.private_caps.supports_memoryless_storage,
                     },
                     features: shared.private_caps.features(),
                     capabilities: shared.private_caps.capabilities(),

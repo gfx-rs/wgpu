@@ -142,6 +142,7 @@ impl super::Adapter {
                 }
             },
             driver_info: String::new(),
+            supports_transient: false,
         };
 
         let mut options = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS::default();
