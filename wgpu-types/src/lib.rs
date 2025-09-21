@@ -5615,8 +5615,11 @@ bitflags::bitflags! {
         /// Allows a texture to be used with image atomics. Requires [`Features::TEXTURE_ATOMIC`].
         const STORAGE_ATOMIC = 1 << 16;
         /// Specifies the contents of this texture will not be used in another pass to potentially reduce memory usage and bandwidth.
+        ///
         /// No-op on platforms other than Vulkan and Metal.
+        ///
         /// Incompatible with ALL other usages except [`TextureUsages::RENDER_ATTACHMENT`].
+        ///
         /// Requires [`StoreOp::Discard`].
         const TRANSIENT = 1 << 17;
     }
