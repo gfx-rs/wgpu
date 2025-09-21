@@ -2121,7 +2121,7 @@ impl Parser {
                     let _ = lexer.next();
                     this.pop_rule_span(lexer);
                 }
-                (Token::Paren('{') | Token::Attribute, _) => {
+                (token, _) if is_start_of_compound_statement(token) => {
                     let (inner, span) = this.block(lexer, ctx, brace_nesting_level)?;
                     block.stmts.push(ast::Statement {
                         kind: ast::StatementKind::Block(inner),
@@ -2287,11 +2287,14 @@ impl Parser {
                                         let value = loop {
                                             let value = this.switch_value(lexer, ctx)?;
                                             if lexer.skip(Token::Separator(',')) {
-                                                if lexer.skip(Token::Separator(':')) {
+                                                // list of values ends with ':' or a compound statement
+                                                let next_token = lexer.peek().0;
+                                                if next_token == Token::Separator(':')
+                                                    || is_start_of_compound_statement(next_token)
+                                                {
                                                     break value;
                                                 }
                                             } else {
-                                                lexer.skip(Token::Separator(':'));
                                                 break value;
                                             }
                                             cases.push(ast::SwitchCase {
@@ -2300,6 +2303,8 @@ impl Parser {
                                                 fall_through: true,
                                             });
                                         };
+
+                                        lexer.skip(Token::Separator(':'));
 
                                         let body = this.block(lexer, ctx, brace_nesting_level)?.0;
 
@@ -3243,4 +3248,8 @@ impl Parser {
                 ))
             })
     }
+}
+
+const fn is_start_of_compound_statement<'a>(token: Token<'a>) -> bool {
+    matches!(token, Token::Attribute | Token::Paren('{'))
 }

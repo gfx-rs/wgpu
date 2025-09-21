@@ -101,6 +101,7 @@ use windows::{
     },
 };
 
+use self::dcomp::DCompLib;
 use crate::auxil::{
     self,
     dxgi::{
@@ -460,6 +461,7 @@ pub struct Instance {
     factory: DxgiFactory,
     factory_media: Option<Dxgi::IDXGIFactoryMedia>,
     library: Arc<D3D12Lib>,
+    dcomp_lib: Arc<DCompLib>,
     supports_allow_tearing: bool,
     presentation_system: wgt::Dx12SwapchainKind,
     _lib_dxgi: DxgiLib,
@@ -612,6 +614,7 @@ pub struct Adapter {
     raw: DxgiAdapter,
     device: Direct3D12::ID3D12Device,
     library: Arc<D3D12Lib>,
+    dcomp_lib: Arc<DCompLib>,
     private_caps: PrivateCapabilities,
     presentation_timer: auxil::dxgi::time::PresentationTimer,
     // Note: this isn't used right now, but we'll need it later.
@@ -685,6 +688,7 @@ pub struct Device {
     srv_uav_pool: Mutex<descriptor::CpuPool>,
     // library
     library: Arc<D3D12Lib>,
+    dcomp_lib: Arc<DCompLib>,
     #[cfg(feature = "renderdoc")]
     render_doc: auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
@@ -1358,7 +1362,8 @@ impl crate::Surface for Surface {
                         dcomp_state,
                     } => {
                         let mut dcomp_state = dcomp_state.lock();
-                        let dcomp_state = unsafe { dcomp_state.get_or_init(handle) }?;
+                        let dcomp_state =
+                            unsafe { dcomp_state.get_or_init(&device.dcomp_lib, handle) }?;
                         // Set the new swap chain as the content for the backing visual
                         // and commit the changes to the composition visual tree.
                         {

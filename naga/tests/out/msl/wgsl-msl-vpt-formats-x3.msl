@@ -120,11 +120,11 @@ metal::float4 unpackUnorm16x4_(metal::ushort b0, metal::ushort b1, metal::ushort
 float unpackSnorm16_(metal::ushort b0, metal::ushort b1) {
     return metal::unpack_snorm2x16_to_float(b1 << 8 | b0).x;
 }
-metal::float2 unpackSnorm16x2_(metal::ushort b0, metal::ushort b1, metal::ushort b2, metal::ushort b3) {
-    return metal::unpack_snorm2x16_to_float(b1 << 24 | b0 << 16 | b3 << 8 | b2);
+metal::float2 unpackSnorm16x2_(uint b0, uint b1, uint b2, uint b3) {
+    return metal::unpack_snorm2x16_to_float(b3 << 24 | b2 << 16 | b1 << 8 | b0);
 }
-metal::float4 unpackSnorm16x4_(metal::ushort b0, metal::ushort b1, metal::ushort b2, metal::ushort b3, metal::ushort b4, metal::ushort b5, metal::ushort b6, metal::ushort b7) {
-    return metal::float4(metal::unpack_snorm2x16_to_float(b1 << 24 | b0 << 16 | b3 << 8 | b2), metal::unpack_snorm2x16_to_float(b5 << 24 | b4 << 16 | b7 << 8 | b6));
+metal::float4 unpackSnorm16x4_(uint b0, uint b1, uint b2, uint b3, uint b4, uint b5, uint b6, uint b7) {
+    return metal::float4(metal::unpack_snorm2x16_to_float(b3 << 24 | b2 << 16 | b1 << 8 | b0), metal::unpack_snorm2x16_to_float(b7 << 24 | b6 << 16 | b5 << 8 | b4));
 }
 float unpackFloat16_(metal::ushort b0, metal::ushort b1) {
     return float(as_type<half>(metal::ushort(b1 << 8 | b0)));
