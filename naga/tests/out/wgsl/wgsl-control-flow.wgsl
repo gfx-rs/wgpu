@@ -42,17 +42,36 @@ fn control_flow() {
         }
         case 2: {
             pos = 1i;
-            return;
         }
         case 3: {
             pos = 2i;
-            return;
         }
         case 4: {
-            return;
         }
         default: {
             pos = 3i;
+        }
+    }
+    let _e15 = pos;
+    switch _e15 {
+        case 1: {
+            pos = 0i;
+            return;
+        }
+        case 2: {
+            pos = 1i;
+            return;
+        }
+        case 3, 4: {
+            pos = 2i;
+            return;
+        }
+        case 5, 6: {
+            pos = 3i;
+            return;
+        }
+        default: {
+            pos = 4i;
             return;
         }
     }
