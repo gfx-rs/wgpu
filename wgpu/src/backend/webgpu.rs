@@ -1691,6 +1691,7 @@ impl dispatch::AdapterInterface for WebAdapter {
             driver: String::new(),
             driver_info: String::new(),
             backend: wgt::Backend::BrowserWebGpu,
+            supports_transient: false,
         }
     }
 
