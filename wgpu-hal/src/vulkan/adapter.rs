@@ -1640,12 +1640,15 @@ impl super::Instance {
 
         let mem_properties = {
             profiling::scope!("vkGetPhysicalDeviceMemoryProperties");
-            unsafe {
-                self.shared.raw.get_physical_device_memory_properties(phd)
-            }
+            unsafe { self.shared.raw.get_physical_device_memory_properties(phd) }
         };
         let memory_types = &mem_properties.memory_types_as_slice();
-        let supports_lazily_allocated = memory_types.iter().find(|mem| mem.property_flags.contains(vk::MemoryPropertyFlags::LAZILY_ALLOCATED)).is_some();
+        let supports_lazily_allocated = memory_types
+            .iter()
+            .any(|mem| {
+                mem.property_flags
+                    .contains(vk::MemoryPropertyFlags::LAZILY_ALLOCATED)
+            });
 
         let info = wgt::AdapterInfo {
             name: {
