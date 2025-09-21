@@ -282,7 +282,7 @@ fn generate_conditional_guard(target: CompileTarget) -> proc_macro2::TokenStream
             };
             #[cfg(feature = "gles")]
             quote! {
-                any(target_os = "emscripten", windows, target_os = "linux", target_os = "android" #angle #webgl)
+                any(target_os = "emscripten", windows, target_os = "linux", target_os = "android", target_os = "freebsd" #angle #webgl)
             }
             #[cfg(not(feature = "gles"))]
             always_false
@@ -291,11 +291,11 @@ fn generate_conditional_guard(target: CompileTarget) -> proc_macro2::TokenStream
             // Related features: vulkan, vulkan-portability
             #[cfg(all(feature = "vulkan", feature = "vulkan-portability"))]
             quote! {
-                any(target_vendor = "apple", windows, target_os = "linux", target_os = "android")
+                any(target_vendor = "apple", windows, target_os = "linux", target_os = "android", target_os = "freebsd")
             }
             #[cfg(all(feature = "vulkan", not(feature = "vulkan-portability")))]
             quote! {
-                any(windows, target_os = "linux", target_os = "android")
+                any(windows, target_os = "linux", target_os = "android", target_os = "freebsd")
             }
             #[cfg(not(feature = "vulkan"))]
             always_false
