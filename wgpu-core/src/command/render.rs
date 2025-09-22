@@ -1207,11 +1207,12 @@ impl RenderPassInfo {
                 },
             )?;
 
-            if !color_view
-                .desc
-                .aspects()
-                .contains(hal::FormatAspects::COLOR)
-            {
+            if !color_view.desc.aspects().intersects(
+                hal::FormatAspects::COLOR
+                    | hal::FormatAspects::PLANE_0
+                    | hal::FormatAspects::PLANE_1
+                    | hal::FormatAspects::PLANE_2,
+            ) {
                 return Err(RenderPassErrorInner::ColorAttachment(
                     ColorAttachmentError::InvalidFormat(color_view.desc.format),
                 ));

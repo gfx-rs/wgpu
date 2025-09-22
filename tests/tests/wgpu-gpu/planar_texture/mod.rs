@@ -8,6 +8,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.extend([
         NV12_TEXTURE_CREATION_SAMPLING,
         P010_TEXTURE_CREATION_SAMPLING,
+        NV12_TEXTURE_RENDERING,
     ]);
 }
 
@@ -21,7 +22,7 @@ fn test_planar_texture_creation_sampling(
 
     let shader = ctx
         .device
-        .create_shader_module(wgpu::include_wgsl!("planar_texture.wgsl"));
+        .create_shader_module(wgpu::include_wgsl!("planar_texture_sampling.wgsl"));
     let pipeline = ctx
         .device
         .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -105,7 +106,112 @@ fn test_planar_texture_creation_sampling(
     rpass.set_bind_group(0, &bind_group, &[]);
     rpass.draw(0..4, 0..1);
     drop(rpass);
-    ctx.queue.submit(Some(encoder.finish()));
+    ctx.queue.submit([encoder.finish()]);
+}
+
+// Helper function to test rendering onto planar texture.
+fn test_planar_texture_rendering(
+    ctx: &TestingContext,
+    (y_view, y_format): (&wgpu::TextureView, wgpu::TextureFormat),
+    (uv_view, uv_format): (&wgpu::TextureView, wgpu::TextureFormat),
+) {
+    let shader = ctx
+        .device
+        .create_shader_module(wgpu::include_wgsl!("planar_texture_rendering.wgsl"));
+    let y_pipeline = ctx
+        .device
+        .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("y plane pipeline"),
+            layout: None,
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_y_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(y_format.into())],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleStrip,
+                strip_index_format: Some(wgpu::IndexFormat::Uint32),
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
+    let uv_pipeline = ctx
+        .device
+        .create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("uv plane pipeline"),
+            layout: None,
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_main"),
+                compilation_options: Default::default(),
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_uv_main"),
+                compilation_options: Default::default(),
+                targets: &[Some(uv_format.into())],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleStrip,
+                strip_index_format: Some(wgpu::IndexFormat::Uint32),
+                ..Default::default()
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            multiview: None,
+            cache: None,
+        });
+
+    let mut encoder = ctx
+        .device
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
+
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations::default(),
+                resolve_target: None,
+                view: y_view,
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        rpass.set_pipeline(&y_pipeline);
+        rpass.draw(0..3, 0..1);
+    }
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                ops: wgpu::Operations::default(),
+                resolve_target: None,
+                view: uv_view,
+                depth_slice: None,
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        rpass.set_pipeline(&uv_pipeline);
+        rpass.draw(0..3, 0..1);
+    }
+
+    ctx.queue.submit([encoder.finish()]);
 }
 
 /// Ensures that creation and sampling of an NV12 format texture works as
@@ -186,4 +292,46 @@ static P010_TEXTURE_CREATION_SAMPLING: GpuTestConfiguration = GpuTestConfigurati
         });
 
         test_planar_texture_creation_sampling(&ctx, &y_view, &uv_view);
+    });
+
+/// Ensures that rendering on to NV12 format texture works as expected.
+#[gpu_test]
+static NV12_TEXTURE_RENDERING: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::TEXTURE_FORMAT_NV12)
+            .enable_noop(),
+    )
+    .run_sync(|ctx| {
+        let size = wgpu::Extent3d {
+            width: 256,
+            height: 256,
+            depth_or_array_layers: 1,
+        };
+        let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            dimension: wgpu::TextureDimension::D2,
+            size,
+            format: wgpu::TextureFormat::NV12,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            mip_level_count: 1,
+            sample_count: 1,
+            view_formats: &[],
+        });
+        let y_view = tex.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(wgpu::TextureFormat::R8Unorm),
+            aspect: wgpu::TextureAspect::Plane0,
+            ..Default::default()
+        });
+        let uv_view = tex.create_view(&wgpu::TextureViewDescriptor {
+            format: Some(wgpu::TextureFormat::Rg8Unorm),
+            aspect: wgpu::TextureAspect::Plane1,
+            ..Default::default()
+        });
+
+        test_planar_texture_rendering(
+            &ctx,
+            (&y_view, wgpu::TextureFormat::R8Unorm),
+            (&uv_view, wgpu::TextureFormat::Rg8Unorm),
+        );
     });

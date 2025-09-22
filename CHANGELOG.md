@@ -84,6 +84,7 @@ SamplerDescriptor {
 - Texture now has `from_custom`. By @R-Cramer4 in [#8315](https://github.com/gfx-rs/wgpu/pull/8315).
 - Using both the wgpu command encoding APIs and `CommandEncoder::as_hal_mut` on the same encoder will now result in a panic.
 - Allow `include_spirv!` and `include_spirv_raw!` macros to be used in constants and statics. By @clarfonthey in [#8250](https://github.com/gfx-rs/wgpu/pull/8250).
+- Added support for rendering onto multi-planar textures. By @noituri in [#8307](https://github.com/gfx-rs/wgpu/pull/8307).
 
 ### Bug Fixes
 
