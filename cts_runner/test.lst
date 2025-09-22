@@ -125,6 +125,7 @@ webgpu:api,operation,rendering,color_target_state:blend_constant,setting:*
 webgpu:api,operation,rendering,depth:*
 webgpu:api,operation,rendering,draw:*
 webgpu:api,operation,shader_module,compilation_info:*
+webgpu:api,operation,vertex_state,correctness:non_zero_array_stride_and_attribute_offset:*
 // Likely due to https://github.com/gfx-rs/wgpu/issues/7357.
 fails-if(metal) webgpu:api,operation,uncapturederror:iff_uncaptured:*
 //FAIL: webgpu:shader,execution,expression,call,builtin,select:*
