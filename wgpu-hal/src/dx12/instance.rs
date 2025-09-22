@@ -12,7 +12,7 @@ use windows::{
 use super::SurfaceTarget;
 use crate::{
     auxil,
-    dx12::{shader_compilation::CompilerContainer, D3D12Lib},
+    dx12::{shader_compilation::CompilerContainer, D3D12Lib, DCompLib},
 };
 
 impl crate::Instance for super::Instance {
@@ -104,6 +104,7 @@ impl crate::Instance for super::Instance {
             factory,
             factory_media,
             library: Arc::new(lib_main),
+            dcomp_lib: Arc::new(DCompLib::new()),
             presentation_system: desc.backend_options.dx12.presentation_system,
             _lib_dxgi: lib_dxgi,
             supports_allow_tearing,
@@ -158,6 +159,7 @@ impl crate::Instance for super::Instance {
                 super::Adapter::expose(
                     raw,
                     &self.library,
+                    &self.dcomp_lib,
                     self.flags,
                     self.memory_budget_thresholds,
                     self.compiler_container.clone(),
