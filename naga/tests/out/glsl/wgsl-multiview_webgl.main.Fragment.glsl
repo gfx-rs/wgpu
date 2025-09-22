@@ -6,7 +6,7 @@ precision highp int;
 
 
 void main() {
-    uint view_index = int(gl_ViewID_OVR);
+    uint view_index = gl_ViewIndex;
     return;
 }
 
