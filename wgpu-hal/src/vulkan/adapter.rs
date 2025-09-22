@@ -1256,8 +1256,8 @@ impl PhysicalDeviceProperties {
         let (max_multiview_view_count, max_multiview_instance_index) =
             if let Some(properties) = self.multiview {
                 (
-                    // The bitmask only uses 64 bits, so it can't be higher even if the device for some reason claims to support that.
-                    properties.max_multiview_view_count.min(64),
+                    // The bitmask only uses 32 bits, so it can't be higher even if the device for some reason claims to support that.
+                    properties.max_multiview_view_count.min(32),
                     properties.max_multiview_instance_index,
                 )
             } else {

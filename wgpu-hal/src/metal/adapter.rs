@@ -906,11 +906,13 @@ impl super::PrivateCapabilities {
                 let mut factor = 1;
                 // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=8
                 // The table specifies either none, 2, 8, or unsupported, implying it is a relatively small power of 2
-                // The bitmask only uses 64 bits, so it can't be higher even if the device for some reason claims to support that.
-                while device.supports_vertex_amplification_count(factor) && factor <= 64 {
-                    factor *= 2;
+                // The bitmask only uses 32 bits, so it can't be higher even if the device for some reason claims to support that.
+                loop {
+                    if factor >= 32 || !device.supports_vertex_amplification_count(factor * 2) {
+                        break factor as u32;
+                    }
+                    factor *= 2
                 }
-                factor as u32
             },
         }
     }

@@ -1337,6 +1337,10 @@ impl crate::Device for super::Device {
                 descriptor.set_label(name);
             }
 
+            if let Some(mv) = desc.multiview {
+                descriptor.set_max_vertex_amplification_count(mv.get() as u64);
+            }
+
             let raw = self
                 .shared
                 .device
