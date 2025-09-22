@@ -627,7 +627,7 @@ fn parse_texture_load_store_expecting_four_args() {
     for (func, texture) in [
         (
             "textureStore",
-            "texture_storage_2d_array<rg11b10float, write>",
+            "texture_storage_2d_array<rg11b10ufloat, write>",
         ),
         ("textureLoad", "texture_2d_array<i32>"),
     ] {
