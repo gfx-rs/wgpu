@@ -158,6 +158,29 @@ by if the `Feature::MULTI_DRAW_INDIRECT_COUNT` feature is available on the devic
 
 By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 
+#### Multiview on DX12 and support for view bitmasks
+
+Multiview has been reworked, adding support for DX12 and Metal, and adding testing and validation to wgpu itself.
+This change also introduces a view bitmask, a new field in `RenderPassDescriptor` that allows a render pass to render multiple to non-adjacent layers. Note that this also influences apps that don't use multiview, as they have to set this field to `None`.
+```diff
+- wgpu::RenderPassDescriptor {
+-     label: None,
+-     color_attachments: &color_attachments,
+-     depth_stencil_attachment: None,
+-     timestamp_writes: None,
+-     occlusion_query_set: None,
+- }
++ wgpu::RenderPassDescriptor {
++     label: None,
++     color_attachments: &color_attachments,
++     depth_stencil_attachment: None,
++     timestamp_writes: None,
++     occlusion_query_set: None,
++     multiview_mask: NonZero::new(3),
++ }
+```
+By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206).
+
 ### New Features
 
 #### General
@@ -189,7 +212,6 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 - Require new `F16_IN_F32` downlevel flag for `quantizeToF16`, `pack2x16float`, and `unpack2x16float` in WGSL input. By @aleiserson in [#8130](https://github.com/gfx-rs/wgpu/pull/8130).
 - The error message for non-copyable depth/stencil formats no longer mentions the aspect when it is not relevant. By @reima in [#8156](https://github.com/gfx-rs/wgpu/pull/8156).
 - Track the initialization status of buffer memory correctly when `copy_texture_to_buffer` skips over padding space between rows or layers, or when the start/end of a texture-buffer transfer is not 4B aligned. By @andyleiserson in [#8099](https://github.com/gfx-rs/wgpu/pull/8099).
-- Fix multiview, add tests, add support to DX12, add support for view bitmask. By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206).
 
 #### naga
 
