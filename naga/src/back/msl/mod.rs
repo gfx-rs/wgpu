@@ -521,6 +521,12 @@ impl Options {
                     crate::BuiltIn::PrimitiveIndex if self.lang_version < (2, 2) => {
                         return Err(Error::UnsupportedAttribute("primitive_id".to_string()));
                     }
+                    // macOS: since Metal 2.3
+                    // iOS: Since Metal 2.2
+                    // https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=114
+                    crate::BuiltIn::ViewIndex if self.lang_version < (2, 2) => {
+                        return Err(Error::UnsupportedAttribute("amplification_id".to_string()));
+                    }
                     _ => {}
                 }
 
