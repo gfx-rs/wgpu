@@ -144,7 +144,7 @@ async fn run_test(ctx: TestingContext) {
         depth_stencil_attachment: None,
         timestamp_writes: None,
         occlusion_query_set: None,
-        multiview_mask: 3,
+        multiview_mask: NonZero::new(3),
     });
     rpass.set_pipeline(&pipeline);
     rpass.set_vertex_buffer(0, vertex_buffer.slice(..));

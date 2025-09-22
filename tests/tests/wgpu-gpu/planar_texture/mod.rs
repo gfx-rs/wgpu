@@ -100,6 +100,7 @@ fn test_planar_texture_creation_sampling(
         depth_stencil_attachment: None,
         timestamp_writes: None,
         occlusion_query_set: None,
+        multiview_mask: None,
     });
     rpass.set_pipeline(&pipeline);
     rpass.set_bind_group(0, &bind_group, &[]);

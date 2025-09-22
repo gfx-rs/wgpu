@@ -360,6 +360,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         rpass.set_vertex_buffer(0, buffer_input.slice(..));

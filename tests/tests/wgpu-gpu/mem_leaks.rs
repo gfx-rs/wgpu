@@ -207,6 +207,7 @@ async fn draw_test_with_reports(
         depth_stencil_attachment: None,
         timestamp_writes: None,
         occlusion_query_set: None,
+        multiview_mask: None,
     });
 
     rpass.set_pipeline(&pipeline);
