@@ -3361,7 +3361,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             );
                             return Ok(Some(result));
                         }
-
                         "quadSwapY" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
 
@@ -3385,7 +3384,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             );
                             return Ok(Some(result));
                         }
-
                         "quadSwapDiagonal" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
 
@@ -3408,6 +3406,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 span,
                             );
                             return Ok(Some(result));
+                        }
+                        "coopMulAdd" => {
+                            let mut args = ctx.prepare_args(arguments, 3, span);
+                            let a = self.expression(args.next()?, ctx)?;
+                            let b = self.expression(args.next()?, ctx)?;
+                            let c = self.expression(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            ir::Expression::MulAdd { a, b, c }
                         }
                         _ => {
                             return Err(Box::new(Error::UnknownIdent(function.span, function.name)))

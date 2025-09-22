@@ -253,6 +253,9 @@ impl ExpressionTracer<'_> {
             } => {
                 self.expressions_used.insert(query);
             }
+            Ex::MulAdd { a, b, c } => {
+                self.expressions_used.insert_iter([a, b, c]);
+            }
         }
     }
 }
@@ -419,6 +422,15 @@ impl ModuleMap {
                 ref mut query,
                 committed: _,
             } => adjust(query),
+            Ex::MulAdd {
+                ref mut a,
+                ref mut b,
+                ref mut c,
+            } => {
+                adjust(a);
+                adjust(b);
+                adjust(c);
+            }
         }
     }
 

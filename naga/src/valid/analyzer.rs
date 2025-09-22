@@ -29,6 +29,7 @@ bitflags::bitflags! {
         const WORK_GROUP_BARRIER = 0x1;
         const DERIVATIVE = if DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE { 0 } else { 0x2 };
         const IMPLICIT_LEVEL = if DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE { 0 } else { 0x4 };
+        const COOP_OPS = 0x8;
     }
 }
 
@@ -842,6 +843,10 @@ impl FunctionInfo {
             } => Uniformity {
                 non_uniform_result: self.add_ref(query),
                 requirements: UniformityRequirements::empty(),
+            },
+            E::MulAdd { a, b, c } => Uniformity {
+                non_uniform_result: self.add_ref(a).or(self.add_ref(b).or(self.add_ref(c))),
+                requirements: UniformityRequirements::COOP_OPS,
             },
         };
 

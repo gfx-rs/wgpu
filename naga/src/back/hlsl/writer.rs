@@ -4285,7 +4285,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
             // Not supported yet
-            Expression::RayQueryVertexPositions { .. } => unreachable!(),
+            Expression::RayQueryVertexPositions { .. } | Expression::MulAdd { .. } => {
+                unreachable!()
+            }
             // Nothing to do here, since call expression already cached
             Expression::CallResult(_)
             | Expression::AtomicResult { .. }

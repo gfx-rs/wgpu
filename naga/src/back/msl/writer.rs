@@ -2848,6 +2848,13 @@ impl<W: Write> Writer<W> {
                 }
                 write!(self.out, "}}")?;
             }
+            crate::Expression::MulAdd { a, b, c } => {
+                self.put_expression(a, context, false)?;
+                write!(self.out, " * ")?;
+                self.put_expression(b, context, false)?;
+                write!(self.out, " + ")?;
+                self.put_expression(c, context, false)?;
+            }
         }
         Ok(())
     }

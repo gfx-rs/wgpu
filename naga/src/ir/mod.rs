@@ -1869,6 +1869,15 @@ pub enum Expression {
     /// [`SubgroupCollectiveOperation`]: Statement::SubgroupCollectiveOperation
     /// [`SubgroupGather`]: Statement::SubgroupGather
     SubgroupOperationResult { ty: Handle<Type> },
+
+    /// Return a * b + c.
+    /// Currently only supported for [`TypeInner::CooperativeMatrix`] types,
+    /// where it's only valid in uniform control flow.
+    MulAdd {
+        a: Handle<Expression>,
+        b: Handle<Expression>,
+        c: Handle<Expression>,
+    },
 }
 
 /// The value of the switch case.

@@ -658,6 +658,15 @@ fn adjust_expr(new_pos: &HandleVec<Expression, Handle<Expression>>, expr: &mut E
         } => {
             adjust(query);
         }
+        Expression::MulAdd {
+            ref mut a,
+            ref mut b,
+            ref mut c,
+        } => {
+            adjust(a);
+            adjust(b);
+            adjust(c);
+        }
     }
 }
 

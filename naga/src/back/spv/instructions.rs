@@ -1269,6 +1269,18 @@ impl super::Instruction {
 
         instruction
     }
+
+    // Cooperative operations
+    pub(super) fn coop_mul_add(result_type_id: Word, id: Word, a: Word, b: Word, c: Word) -> Self {
+        let mut instruction = Self::new(Op::CooperativeMatrixMulAddKHR);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(a);
+        instruction.add_operand(b);
+        instruction.add_operand(c);
+
+        instruction
+    }
 }
 
 impl From<crate::StorageFormat> for spirv::ImageFormat {

@@ -663,6 +663,9 @@ impl super::Validator {
             } => {
                 handle.check_dep(query)?;
             }
+            crate::Expression::MulAdd { a, b, c } => {
+                handle.check_dep(a)?.check_dep(b)?.check_dep(c)?;
+            }
         }
         Ok(())
     }

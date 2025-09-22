@@ -804,9 +804,8 @@ impl super::Validator {
                             | Ex::As { .. }
                             | Ex::ArrayLength(_)
                             | Ex::RayQueryGetIntersection { .. }
-                            | Ex::RayQueryVertexPositions { .. } => {
-                                self.emit_expression(handle, context)?
-                            }
+                            | Ex::RayQueryVertexPositions { .. }
+                            | Ex::MulAdd { .. } => self.emit_expression(handle, context)?,
                             Ex::CallResult(_)
                             | Ex::AtomicResult { .. }
                             | Ex::WorkGroupUniformLoadResult { .. }

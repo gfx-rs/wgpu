@@ -1775,6 +1775,15 @@ impl<W: Write> Writer<W> {
 
                 write!(self.out, ")")?
             }
+            Expression::MulAdd { a, b, c } => {
+                write!(self.out, "mulAdd(")?;
+                self.write_expr(module, a, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, b, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, c, func_ctx)?;
+                write!(self.out, ")")?
+            }
             // Not supported yet
             Expression::RayQueryGetIntersection { .. }
             | Expression::RayQueryVertexPositions { .. } => unreachable!(),

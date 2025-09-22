@@ -742,6 +742,12 @@ fn write_function_expressions(
                 let ty = if committed { "Committed" } else { "Candidate" };
                 (format!("get{ty}HitVertexPositions").into(), 4)
             }
+            E::MulAdd { a, b, c } => {
+                edges.insert("a", a);
+                edges.insert("b", b);
+                edges.insert("c", c);
+                ("MulAdd".into(), 6)
+            }
         };
 
         // give uniform expressions an outline

@@ -801,6 +801,7 @@ impl<'a> ResolveContext<'a> {
                 scalar: crate::Scalar::U32,
                 size: crate::VectorSize::Quad,
             }),
+            crate::Expression::MulAdd { a, b: _, c: _ } => past(a)?.clone(),
         })
     }
 }

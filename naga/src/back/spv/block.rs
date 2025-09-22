@@ -1840,6 +1840,17 @@ impl BlockContext<'_> {
                 )?;
                 self.write_ray_query_return_vertex_position(query, block, committed)
             }
+            crate::Expression::MulAdd { a, b, c } => {
+                let id = self.gen_id();
+                block.body.push(Instruction::coop_mul_add(
+                    result_type_id,
+                    id,
+                    self.cached[a],
+                    self.cached[b],
+                    self.cached[c],
+                ));
+                id
+            }
         };
 
         self.cached[expr_handle] = id;

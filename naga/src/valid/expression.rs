@@ -141,6 +141,8 @@ pub enum ExpressionError {
     Literal(#[from] LiteralError),
     #[error("{0:?} is not supported for Width {2} {1:?} arguments yet, see https://github.com/gfx-rs/wgpu/issues/5276")]
     UnsupportedWidth(crate::MathFunction, crate::ScalarKind, crate::Bytes),
+    #[error("Invalid operand for MulAdd")]
+    InvalidMulAddOperand,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -1267,6 +1269,39 @@ impl super::Validator {
                 }
             },
             E::SubgroupBallotResult | E::SubgroupOperationResult { .. } => self.subgroup_stages,
+            E::MulAdd { a, b, c } => {
+                match resolver[a] {
+                    Ti::CooperativeMatrix {
+                        role: crate::CooperativeRole::A,
+                        ..
+                    } => {}
+                    ref other => {
+                        log::error!("A operand type: {other:?}");
+                        return Err(ExpressionError::InvalidMulAddOperand);
+                    }
+                }
+                match resolver[b] {
+                    Ti::CooperativeMatrix {
+                        role: crate::CooperativeRole::B,
+                        ..
+                    } => {}
+                    ref other => {
+                        log::error!("B operand type: {other:?}");
+                        return Err(ExpressionError::InvalidMulAddOperand);
+                    }
+                }
+                match resolver[c] {
+                    Ti::CooperativeMatrix {
+                        role: crate::CooperativeRole::C,
+                        ..
+                    } => {}
+                    ref other => {
+                        log::error!("C operand type: {other:?}");
+                        return Err(ExpressionError::InvalidMulAddOperand);
+                    }
+                }
+                ShaderStages::COMPUTE
+            }
         };
         Ok(stages)
     }
