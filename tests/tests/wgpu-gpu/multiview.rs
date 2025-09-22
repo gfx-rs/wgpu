@@ -49,7 +49,7 @@ async fn run_test(ctx: TestingContext) {
             }
 
             @fragment
-            fn fs_main(@builtin(view_index) view_index: i32) -> @location(0) vec4f {
+            fn fs_main(@builtin(view_index) view_index: u32) -> @location(0) vec4f {
                 return vec4f(f32(view_index));
             }
         ";
