@@ -4,7 +4,7 @@
     fragment:[
         (
             entry_point:"main",
-            target_profile:"ps_5_1",
+            target_profile:"ps_6_1",
         ),
     ],
     compute:[

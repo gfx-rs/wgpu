@@ -460,7 +460,6 @@ impl IdGenerator {
 #[derive(Clone, Copy)]
 struct VaryingOptions {
     output: bool,
-    targeting_webgl: bool,
     draw_parameters: bool,
 }
 
@@ -468,7 +467,6 @@ impl VaryingOptions {
     const fn from_writer_options(options: &Options, output: bool) -> Self {
         Self {
             output,
-            targeting_webgl: options.version.is_webgl(),
             draw_parameters: options.writer_flags.contains(WriterFlags::DRAW_PARAMETERS),
         }
     }
