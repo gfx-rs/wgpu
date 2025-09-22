@@ -278,7 +278,6 @@ impl crate::framework::Example for Example {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-            multiview_mask: NonZero::new(3),
         };
 
         // get command encoder
