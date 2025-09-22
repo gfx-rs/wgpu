@@ -452,7 +452,6 @@ struct LookupFunctionType {
 }
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
-#[expect(dead_code)]
 enum LookupRayQueryFunction {
     Initialize,
     Proceed,

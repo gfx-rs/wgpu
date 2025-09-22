@@ -1680,6 +1680,220 @@ impl Writer {
 
         func_id
     }
+
+    fn write_ray_query_get_vertex_positions(
+        &mut self,
+        is_committed: bool,
+        ir_module: &crate::Module,
+    ) -> spirv::Word {
+        if let Some(&word) =
+            self.ray_query_functions
+                .get(&LookupRayQueryFunction::GetVertexPositions {
+                    committed: is_committed,
+                })
+        {
+            return word;
+        }
+
+        let (committed_ty, committed_tri_ty) = if is_committed {
+            (
+                spirv::RayQueryIntersection::RayQueryCommittedIntersectionKHR as u32,
+                spirv::RayQueryCommittedIntersectionType::RayQueryCommittedIntersectionTriangleKHR
+                    as u32,
+            )
+        } else {
+            (
+                spirv::RayQueryIntersection::RayQueryCandidateIntersectionKHR as u32,
+                spirv::RayQueryCandidateIntersectionType::RayQueryCandidateIntersectionTriangleKHR
+                    as u32,
+            )
+        };
+
+        let ray_query_type_id = self.get_ray_query_pointer_id();
+
+        let u32_ty = self.get_u32_type_id();
+        let u32_ptr_ty = self.get_pointer_type_id(u32_ty, spirv::StorageClass::Function);
+
+        let rq_get_vertex_positions_ty_id = self.get_handle_type_id(
+            *ir_module
+                .special_types
+                .ray_vertex_return
+                .as_ref()
+                .expect("must be generated when reading in get vertex position"),
+        );
+        let ptr_return_ty =
+            self.get_pointer_type_id(rq_get_vertex_positions_ty_id, spirv::StorageClass::Function);
+
+        let bool_type_id = self.get_bool_type_id();
+
+        let func_ty = self.get_function_type(LookupFunctionType {
+            parameter_type_ids: vec![ray_query_type_id, u32_ptr_ty],
+            return_type_id: self.void_type,
+        });
+
+        let mut function = Function::default();
+        let func_id = self.id_gen.next();
+        function.signature = Some(Instruction::function(
+            self.void_type,
+            func_id,
+            spirv::FunctionControl::empty(),
+            func_ty,
+        ));
+
+        let query_id = self.id_gen.next();
+        let instruction = Instruction::function_parameter(ray_query_type_id, query_id);
+        function.parameters.push(FunctionArgument {
+            instruction,
+            handle_id: 0,
+        });
+
+        let init_tracker_id = self.id_gen.next();
+        let instruction = Instruction::function_parameter(u32_ptr_ty, init_tracker_id);
+        function.parameters.push(FunctionArgument {
+            instruction,
+            handle_id: 1,
+        });
+
+        let block_id = self.id_gen.next();
+        let mut block = Block::new(block_id);
+
+        let return_id = self.id_gen.next();
+        block.body.push(Instruction::variable(
+            ptr_return_ty,
+            return_id,
+            spirv::StorageClass::Function,
+            Some(self.get_constant_null(rq_get_vertex_positions_ty_id)),
+        ));
+
+        let initialized_tracker_id = self.id_gen.next();
+        block.body.push(Instruction::load(
+            u32_ty,
+            initialized_tracker_id,
+            init_tracker_id,
+            None,
+        ));
+
+        let proceeded_id = write_ray_flags_contains_flags(
+            self,
+            &mut block,
+            initialized_tracker_id,
+            super::RayQueryPoint::PROCEED.bits(),
+        );
+        let finished_proceed_id = write_ray_flags_contains_flags(
+            self,
+            &mut block,
+            initialized_tracker_id,
+            super::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+        );
+
+        let correct_finish_id = if is_committed {
+            finished_proceed_id
+        } else {
+            let not_finished_id = self.id_gen.next();
+            block.body.push(Instruction::unary(
+                spirv::Op::LogicalNot,
+                bool_type_id,
+                not_finished_id,
+                finished_proceed_id,
+            ));
+            not_finished_id
+        };
+
+        let is_valid_id = self.id_gen.next();
+        block.body.push(Instruction::binary(
+            spirv::Op::LogicalAnd,
+            bool_type_id,
+            is_valid_id,
+            correct_finish_id,
+            proceeded_id,
+        ));
+
+        let valid_id = self.id_gen.next();
+        let mut valid_block = Block::new(valid_id);
+
+        let final_label_id = self.id_gen.next();
+        let mut final_block = Block::new(final_label_id);
+
+        block.body.push(Instruction::selection_merge(
+            final_label_id,
+            spirv::SelectionControl::NONE,
+        ));
+        function.consume(
+            block,
+            Instruction::branch_conditional(is_valid_id, valid_id, final_label_id),
+        );
+
+        let intersection_id = self.get_constant_scalar(crate::Literal::U32(committed_ty));
+        let raw_kind_id = self.id_gen.next();
+        valid_block
+            .body
+            .push(Instruction::ray_query_get_intersection(
+                spirv::Op::RayQueryGetIntersectionTypeKHR,
+                u32_ty,
+                raw_kind_id,
+                query_id,
+                intersection_id,
+            ));
+
+        let candidate_tri_id = self.get_constant_scalar(crate::Literal::U32(committed_tri_ty));
+        let intersection_tri_id = self.id_gen.next();
+        valid_block.body.push(Instruction::binary(
+            spirv::Op::IEqual,
+            bool_type_id,
+            intersection_tri_id,
+            raw_kind_id,
+            candidate_tri_id,
+        ));
+
+        let generate_label_id = self.id_gen.next();
+        let mut vertex_return_block = Block::new(generate_label_id);
+
+        let merge_label_id = self.id_gen.next();
+        let merge_block = Block::new(merge_label_id);
+
+        valid_block.body.push(Instruction::selection_merge(
+            merge_label_id,
+            spirv::SelectionControl::NONE,
+        ));
+        function.consume(
+            valid_block,
+            Instruction::branch_conditional(intersection_tri_id, generate_label_id, merge_label_id),
+        );
+
+        let vertices_id = self.id_gen.next();
+        vertex_return_block
+            .body
+            .push(Instruction::ray_query_return_vertex_position(
+                rq_get_vertex_positions_ty_id,
+                vertices_id,
+                query_id,
+                intersection_id,
+            ));
+        vertex_return_block
+            .body
+            .push(Instruction::store(return_id, vertices_id, None));
+
+        function.consume(vertex_return_block, Instruction::branch(merge_label_id));
+        function.consume(merge_block, Instruction::branch(final_label_id));
+
+        let loaded_pos_id = self.id_gen.next();
+        final_block.body.push(Instruction::load(
+            rq_get_vertex_positions_ty_id,
+            loaded_pos_id,
+            return_id,
+            None,
+        ));
+
+        function.consume(final_block, Instruction::return_value(loaded_pos_id));
+
+        self.ray_query_functions.insert(
+            LookupRayQueryFunction::GetVertexPositions {
+                committed: is_committed,
+            },
+            func_id,
+        );
+        func_id
+    }
 }
 
 impl BlockContext<'_> {
@@ -1772,29 +1986,23 @@ impl BlockContext<'_> {
         block: &mut Block,
         is_committed: bool,
     ) -> spirv::Word {
+        let fn_id = self
+            .writer
+            .write_ray_query_get_vertex_positions(is_committed, self.ir_module);
+
         let query_id = self.cached[query];
-        let id = self.gen_id();
-        let ray_vertex_return_ty = self
-            .ir_module
-            .special_types
-            .ray_vertex_return
-            .expect("type should have been populated");
-        let ray_vertex_return_ty_id = self.writer.get_handle_type_id(ray_vertex_return_ty);
-        let intersection_id =
-            self.writer
-                .get_constant_scalar(crate::Literal::U32(if is_committed {
-                    spirv::RayQueryIntersection::RayQueryCommittedIntersectionKHR
-                } else {
-                    spirv::RayQueryIntersection::RayQueryCandidateIntersectionKHR
-                } as _));
-        block
-            .body
-            .push(Instruction::ray_query_return_vertex_position(
-                ray_vertex_return_ty_id,
-                id,
-                query_id,
-                intersection_id,
-            ));
-        id
+        let tracker_id = *self
+            .ray_query_tracker_expr
+            .get(&query)
+            .expect("not a cached ray query");
+
+        let func_call_id = self.gen_id();
+        block.body.push(Instruction::function_call(
+            self.writer.void_type,
+            func_call_id,
+            fn_id,
+            &[query_id, tracker_id.initialized_tracker],
+        ));
+        func_call_id
     }
 }
