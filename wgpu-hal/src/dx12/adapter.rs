@@ -684,6 +684,8 @@ impl super::Adapter {
                     },
 
                     // See https://microsoft.github.io/DirectX-Specs/d3d/ViewInstancing.html#maximum-viewinstancecount
+                    // This is really frickin annoying, 6 (probably 8) for cube mapping would be really nice. But they
+                    // arbitrarily chose 4, eliminating tons of use cases.
                     max_multiview_view_count: if view_instancing { 4 } else { 0 },
                     // This limit is specific to vulkan
                     max_multiview_instance_index: if view_instancing { u32::MAX } else { 0 },

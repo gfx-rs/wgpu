@@ -902,6 +902,16 @@ impl super::PrivateCapabilities {
                 && (device.supports_family(MTLGPUFamily::Apple7)
                     || device.supports_family(MTLGPUFamily::Mac2)),
             supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
+            supported_vertex_amplification_factor: {
+                let mut factor = 1;
+                // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=8
+                // The table specifies either none, 2, 8, or unsupported, implying it is a relatively small power of 2
+                // The bitmask only uses 64 bits, so it can't be higher even if the device for some reason claims to support that.
+                while device.supports_vertex_amplification_count(factor) && factor <= 64 {
+                    factor *= 2;
+                }
+                factor as u32
+            },
         }
     }
 
@@ -1001,6 +1011,10 @@ impl super::PrivateCapabilities {
             features.insert(F::SUBGROUP | F::SUBGROUP_BARRIER);
         }
 
+        if self.supported_vertex_amplification_factor > 1 {
+            features.insert(F::MULTIVIEW);
+        }
+
         features
     }
 
@@ -1092,8 +1106,16 @@ impl super::PrivateCapabilities {
                 // buffer binding points or via argument buffers
                 max_acceleration_structures_per_shader_stage: 0,
 
-                max_multiview_view_count: 0,
-                max_multiview_instance_index: 0,
+                max_multiview_view_count: if self.supported_vertex_amplification_factor > 1 {
+                    self.supported_vertex_amplification_factor
+                } else {
+                    0
+                },
+                max_multiview_instance_index: if self.supported_vertex_amplification_factor > 1 {
+                    u32::MAX
+                } else {
+                    0
+                },
             },
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),
