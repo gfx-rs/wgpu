@@ -158,7 +158,7 @@ by if the `Feature::MULTI_DRAW_INDIRECT_COUNT` feature is available on the devic
 
 By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 
-#### Multiview on DX12 and support for view bitmasks
+#### Multiview on all major platforms and support for multiview bitmasks
 
 Multiview has been reworked, adding support for DX12 and Metal, and adding testing and validation to wgpu itself.
 This change also introduces a view bitmask, a new field in `RenderPassDescriptor` that allows a render pass to render multiple to non-adjacent layers. Note that this also influences apps that don't use multiview, as they have to set this field to `None`.
