@@ -395,6 +395,7 @@ fn render_pass(
             end_of_pass_write_index: Some(*next_unused_query + 1),
         }),
         occlusion_query_set: None,
+        multiview_mask: None,
     });
     *next_unused_query += 2;
 

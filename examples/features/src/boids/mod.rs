@@ -1,8 +1,6 @@
 // Flocking boids example with gpu compute update pass
 // adapted from https://github.com/austinEng/webgpu-samples/blob/master/src/examples/computeBoids.ts
 
-use std::num::NonZero;
-
 use nanorand::{Rng, WyRand};
 use wgpu::util::DeviceExt;
 
@@ -278,6 +276,7 @@ impl crate::framework::Example for Example {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         };
 
         // get command encoder
