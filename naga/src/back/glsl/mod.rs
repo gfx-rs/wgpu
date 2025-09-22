@@ -460,6 +460,7 @@ impl IdGenerator {
 #[derive(Clone, Copy)]
 struct VaryingOptions {
     output: bool,
+    targetting_webgl: bool,
     draw_parameters: bool,
 }
 
@@ -467,6 +468,7 @@ impl VaryingOptions {
     const fn from_writer_options(options: &Options, output: bool) -> Self {
         Self {
             output,
+            targetting_webgl: options.version.is_webgl(),
             draw_parameters: options.writer_flags.contains(WriterFlags::DRAW_PARAMETERS),
         }
     }
@@ -5202,7 +5204,13 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
                 "gl_FragCoord"
             }
         }
-        Bi::ViewIndex => "gl_ViewIndex",
+        Bi::ViewIndex => {
+            if options.targetting_webgl {
+                "gl_ViewID_OVR"
+            } else {
+                "gl_ViewIndex"
+            }
+        }
         // vertex
         Bi::BaseInstance => "uint(gl_BaseInstance)",
         Bi::BaseVertex => "uint(gl_BaseVertex)",
