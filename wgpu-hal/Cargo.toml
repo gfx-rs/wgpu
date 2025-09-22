@@ -99,7 +99,6 @@ vulkan = [
     "dep:ordered-float",
     "dep:parking_lot",
     "dep:profiling",
-    "dep:smallvec",
     "dep:windows",
     "windows/Win32",
 ]
@@ -233,7 +232,7 @@ glow = { workspace = true, optional = true }
 ash = { workspace = true, optional = true }
 gpu-alloc = { workspace = true, optional = true }
 gpu-descriptor = { workspace = true, optional = true }
-smallvec = { workspace = true, optional = true, features = ["union"] }
+smallvec = { workspace = true, features = ["union"] }
 # Backend: GLES
 khronos-egl = { workspace = true, features = ["dynamic"], optional = true }
 libloading = { workspace = true, optional = true }

@@ -658,6 +658,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
             let raw = self.raw_cmd_buf.as_ref().unwrap();
             let encoder = raw.new_render_command_encoder(descriptor);
             if let Some(mv) = desc.multiview_mask {
+                // Here we unpack the multiview bitmask. I'm not entirely sure why Apple makes us do this.
+                // Most likely the API just wasn't thought about enough. It's not like they ever allow you
+                // to use enough views to overflow a 32-bit bitmask.
                 let mv = mv.get();
                 let mut maps: SmallVec<[metal::VertexAmplificationViewMapping; 32]> =
                     SmallVec::new();
@@ -665,6 +668,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     if (mv & (1 << i)) != 0 {
                         maps.push(metal::VertexAmplificationViewMapping {
                             renderTargetArrayIndexOffset: i,
+                            // WGPU doesn't allow rendering to multiple viewports in a single pass
                             viewportArrayIndexOffset: 0,
                         });
                     }
