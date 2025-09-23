@@ -1623,6 +1623,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     }
                 }
                 S::WorkGroupUniformLoad { .. } => unreachable!(),
+                S::CooperativeLoadStore { .. } => unreachable!(),
             }
             i += 1;
         }

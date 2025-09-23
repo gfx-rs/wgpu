@@ -1,8 +1,12 @@
 var<private> a: coop_mat8x8<f32, A>;
 var<private> b: coop_mat8x8<f32, B>;
-var<private> c: coop_mat8x8<f32, C>;
+@group(0) @binding(0)
+var<storage, read_write> ext: array<f32>;
 
 @compute @workgroup_size(8, 8, 1)
 fn main() {
-    let d = coopMulAdd(a, b, c);
+    var c = coop_mat8x8<f32, C>();
+    coopLoad(c, &ext);
+    var d = coopMultiplyAdd(a, b, c);
+    coopStore(c, &ext);
 }

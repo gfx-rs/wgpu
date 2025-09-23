@@ -1840,14 +1840,21 @@ impl BlockContext<'_> {
                 )?;
                 self.write_ray_query_return_vertex_position(query, block, committed)
             }
-            crate::Expression::MulAdd { a, b, c } => {
+            crate::Expression::CooperativeMultiplyAdd { a, b, c } => {
+                self.writer.require_any(
+                    "CooperativeMatrix",
+                    &[spirv::Capability::CooperativeMatrixKHR],
+                )?;
+                let a_id = self.cached[a];
+                let b_id = self.cached[b];
+                let c_id = self.cached[c];
                 let id = self.gen_id();
                 block.body.push(Instruction::coop_mul_add(
                     result_type_id,
                     id,
-                    self.cached[a],
-                    self.cached[b],
-                    self.cached[c],
+                    a_id,
+                    b_id,
+                    c_id,
                 ));
                 id
             }
@@ -3721,6 +3728,42 @@ impl BlockContext<'_> {
                     result,
                 } => {
                     self.write_subgroup_gather(mode, argument, result, &mut block)?;
+                }
+                Statement::CooperativeLoadStore {
+                    store,
+                    target,
+                    pointer,
+                    stride,
+                    row_major,
+                } => {
+                    let layout = if row_major {
+                        spirv::CooperativeMatrixLayout::RowMajorKHR
+                    } else {
+                        spirv::CooperativeMatrixLayout::ColumnMajorKHR
+                    };
+                    let layout_id = self.get_index_constant(layout as u32);
+                    let stride_id = stride.map(|exp| self.cached[exp]);
+                    if store {
+                        block.body.push(Instruction::coop_store(
+                            self.cached[target],
+                            self.cached[pointer],
+                            layout_id,
+                            stride_id,
+                        ));
+                    } else {
+                        let result_type_id = self.get_expression_type_id(&self.fun_info[target].ty);
+                        let id = self.gen_id();
+                        block.body.push(Instruction::coop_load(
+                            result_type_id,
+                            id,
+                            self.cached[pointer],
+                            layout_id,
+                            stride_id,
+                        ));
+                        block
+                            .body
+                            .push(Instruction::store(self.cached[target], id, None));
+                    }
                 }
             }
         }

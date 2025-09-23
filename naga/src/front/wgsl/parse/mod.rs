@@ -673,12 +673,10 @@ impl Parser {
                     ty_span: Span::UNDEFINED,
                 }))
             }
-            "coop_mat8x8" => {
-                return Ok(Some(ast::ConstructorType::PartialCooperativeMatrix {
-                    columns: crate::CooperativeSize::Eight,
-                    rows: crate::CooperativeSize::Eight,
-                }))
-            }
+            "coop_mat8x8" => ast::ConstructorType::PartialCooperativeMatrix {
+                columns: crate::CooperativeSize::Eight,
+                rows: crate::CooperativeSize::Eight,
+            },
             "array" => ast::ConstructorType::PartialArray,
             "atomic"
             | "binding_array"

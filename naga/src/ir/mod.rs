@@ -532,33 +532,6 @@ pub enum ScalarKind {
     AbstractFloat,
 }
 
-/// Primitive type for a cooperative scalar.
-#[repr(u8)]
-#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub enum CooperativeScalar {
-    F32,
-}
-
-impl CooperativeScalar {
-    pub const fn width(&self) -> Bytes {
-        match *self {
-            Self::F32 => 4,
-        }
-    }
-
-    pub const fn to_scalar(&self) -> Scalar {
-        match *self {
-            Self::F32 => Scalar {
-                kind: ScalarKind::Float,
-                width: 4,
-            },
-        }
-    }
-}
-
 /// Role of a cooperative variable in the equation "A * B + C"
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -824,7 +797,7 @@ pub enum TypeInner {
     CooperativeMatrix {
         columns: CooperativeSize,
         rows: CooperativeSize,
-        scalar: CooperativeScalar,
+        scalar: Scalar,
         role: CooperativeRole,
     },
     /// Atomic scalar.
@@ -1870,10 +1843,8 @@ pub enum Expression {
     /// [`SubgroupGather`]: Statement::SubgroupGather
     SubgroupOperationResult { ty: Handle<Type> },
 
-    /// Return a * b + c.
-    /// Currently only supported for [`TypeInner::CooperativeMatrix`] types,
-    /// where it's only valid in uniform control flow.
-    MulAdd {
+    /// Compute `a * b + c`
+    CooperativeMultiplyAdd {
         a: Handle<Expression>,
         b: Handle<Expression>,
         c: Handle<Expression>,
@@ -2318,6 +2289,14 @@ pub enum Statement {
         ///
         /// [`SubgroupOperationResult`]: Expression::SubgroupOperationResult
         result: Handle<Expression>,
+    },
+    /// Load from or store into a cooperative primitive.
+    CooperativeLoadStore {
+        store: bool,
+        target: Handle<Expression>,
+        pointer: Handle<Expression>,
+        stride: Option<Handle<Expression>>,
+        row_major: bool,
     },
 }
 

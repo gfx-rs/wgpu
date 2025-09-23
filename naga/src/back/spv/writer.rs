@@ -389,12 +389,6 @@ impl Writer {
         })
     }
 
-    pub(super) fn get_cooperative_type_id(&mut self, scalar: crate::CooperativeScalar) -> Word {
-        match scalar {
-            crate::CooperativeScalar::F32 => self.get_f32_type_id(),
-        }
-    }
-
     pub(super) fn get_f32_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
         let f32_id = self.get_f32_type_id();
         self.get_pointer_type_id(f32_id, class)
@@ -1569,7 +1563,8 @@ impl Writer {
                 scalar,
                 role,
             } => {
-                let scalar_id = self.get_cooperative_type_id(scalar);
+                let scalar_id =
+                    self.get_localtype_id(LocalType::Numeric(NumericType::Scalar(scalar)));
                 let scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
                 let columns_id = self.get_index_constant(columns as u32);
                 let rows_id = self.get_index_constant(rows as u32);

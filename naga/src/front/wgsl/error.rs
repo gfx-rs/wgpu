@@ -417,7 +417,7 @@ pub(crate) enum Error<'a> {
         span: Span,
     },
     UnderspecifiedCooperativeMatrix,
-    UnknownCooperativeScalar(Span),
+    UnsupportedCooperativeScalar(Span),
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -1407,8 +1407,8 @@ impl<'a> Error<'a> {
                 labels: vec![],
                 notes: vec![format!("must be F32")],
             },
-            Error::UnknownCooperativeScalar(span) => ParseError {
-                message: "unknown cooperative scalar type".into(),
+            Error::UnsupportedCooperativeScalar(span) => ParseError {
+                message: "cooperative scalar type is not supported".into(),
                 labels: vec![(span, "type needs the scalar type specified".into())],
                 notes: vec![format!("must be F32")],
             },

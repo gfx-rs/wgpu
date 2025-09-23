@@ -1,4 +1,4 @@
-targets = "SPIRV"
+targets = "IR | SPIRV | METAL"
 capabilities = "COOPERATIVE_MATRIX"
 
 [spv]

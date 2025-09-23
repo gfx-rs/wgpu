@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.4
 ; Generator: rspirv
-; Bound: 20
+; Bound: 37
 OpCapability Shader
 OpCapability CooperativeMatrixKHR
 OpCapability VulkanMemoryModel
@@ -9,38 +9,74 @@ OpExtension "SPV_KHR_cooperative_matrix"
 OpExtension "SPV_KHR_vulkan_memory_model"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical Vulkan
-OpEntryPoint GLCompute %14 "main" %10
-OpExecutionMode %14 LocalSize 8 8 1
+OpEntryPoint GLCompute %25 "main" %15 %18 %21
+OpExecutionMode %25 LocalSize 8 8 1
 %3 = OpString "cooperative-matrix.wgsl"
 OpSource Unknown 0 %3 "var<private> a: coop_mat8x8<f32, A>;
-//var<private> b: coop_mat8x8<f32, B>;
+var<private> b: coop_mat8x8<f32, B>;
+@group(0) @binding(0)
+var<storage, read_write> ext: array<f32>;
 
 @compute @workgroup_size(8, 8, 1)
 fn main() {
-    let a2 = a + a;
+    var c = coop_mat8x8<f32, C>();
+    coopLoad(c, &ext);
+    var d = coopMultiplyAdd(a, b, c);
+    coopStore(c, &ext);
 }
 "
-OpName %10 "a"
-OpName %14 "main"
+OpName %15 "a"
+OpName %18 "b"
+OpName %21 "ext"
+OpName %25 "main"
+OpName %30 "c"
+OpName %32 "d"
+OpDecorate %12 ArrayStride 4
+OpDecorate %21 DescriptorSet 0
+OpDecorate %21 Binding 0
+OpDecorate %22 Block
+OpMemberDecorate %22 0 Offset 0
 %2 = OpTypeVoid
-%5 = OpTypeFloat 32
+%4 = OpTypeFloat 32
 %7 = OpTypeInt 32 0
 %6 = OpConstant  %7  3
 %8 = OpConstant  %7  8
 %9 = OpConstant  %7  0
-%4 = OpTypeCooperativeMatrixKHR %5 %6 %8 %8 %9
-%11 = OpTypePointer Private %4
-%12 = OpConstantNull  %4
-%10 = OpVariable  %11  Private %12
-%15 = OpTypeFunction %2
-%14 = OpFunction  %2  None %15
-%13 = OpLabel
-OpBranch %16
-%16 = OpLabel
-OpLine %3 6 14
-%17 = OpLoad  %4  %10
-OpLine %3 6 14
-%18 = OpLoad  %4  %10
-%19 = OpFAdd  %4  %17 %18
+%5 = OpTypeCooperativeMatrixKHR %4 %6 %8 %8 %9
+%11 = OpConstant  %7  1
+%10 = OpTypeCooperativeMatrixKHR %4 %6 %8 %8 %11
+%12 = OpTypeRuntimeArray %4
+%14 = OpConstant  %7  2
+%13 = OpTypeCooperativeMatrixKHR %4 %6 %8 %8 %14
+%16 = OpTypePointer Private %5
+%17 = OpConstantNull  %5
+%15 = OpVariable  %16  Private %17
+%19 = OpTypePointer Private %10
+%20 = OpConstantNull  %10
+%18 = OpVariable  %19  Private %20
+%22 = OpTypeStruct %12
+%23 = OpTypePointer StorageBuffer %22
+%21 = OpVariable  %23  StorageBuffer
+%26 = OpTypeFunction %2
+%27 = OpTypePointer StorageBuffer %12
+%29 = OpConstantNull  %13
+%31 = OpTypePointer Function %13
+%33 = OpConstantNull  %13
+%25 = OpFunction  %2  None %26
+%24 = OpLabel
+%30 = OpVariable  %31  Function %29
+%32 = OpVariable  %31  Function %33
+%28 = OpAccessChain  %27  %21 %9
+OpBranch %34
+%34 = OpLabel
+OpLine %3 9 5
+%35 = OpCooperativeMatrixLoadKHR  %13  %28 %11
+OpStore %30 %35
+OpLine %3 10 13
+%36 = OpCooperativeMatrixMulAddKHR  %13  %15 %18 %30
+OpLine %3 10 5
+OpStore %32 %36
+OpLine %3 11 5
+OpCooperativeMatrixStoreKHR %28 %30 %11
 OpReturn
 OpFunctionEnd

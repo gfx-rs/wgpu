@@ -454,7 +454,8 @@ impl<'a> ResolveContext<'a> {
             }
             crate::Expression::GlobalVariable(h) => {
                 let var = &self.global_vars[h];
-                if var.space == crate::AddressSpace::Handle {
+                let ty = &types[var.ty].inner;
+                if var.space == crate::AddressSpace::Handle || ty.is_handle() {
                     TypeResolution::Handle(var.ty)
                 } else {
                     TypeResolution::Value(Ti::Pointer {
@@ -465,10 +466,15 @@ impl<'a> ResolveContext<'a> {
             }
             crate::Expression::LocalVariable(h) => {
                 let var = &self.local_vars[h];
-                TypeResolution::Value(Ti::Pointer {
-                    base: var.ty,
-                    space: crate::AddressSpace::Function,
-                })
+                let ty = &types[var.ty].inner;
+                if ty.is_handle() {
+                    TypeResolution::Handle(var.ty)
+                } else {
+                    TypeResolution::Value(Ti::Pointer {
+                        base: var.ty,
+                        space: crate::AddressSpace::Function,
+                    })
+                }
             }
             crate::Expression::Load { pointer } => match *past(pointer)?.inner_with(types) {
                 Ti::Pointer { base, space: _ } => {
@@ -801,7 +807,7 @@ impl<'a> ResolveContext<'a> {
                 scalar: crate::Scalar::U32,
                 size: crate::VectorSize::Quad,
             }),
-            crate::Expression::MulAdd { a, b: _, c: _ } => past(a)?.clone(),
+            crate::Expression::CooperativeMultiplyAdd { a: _, b: _, c } => past(c)?.clone(),
         })
     }
 }

@@ -1364,7 +1364,9 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::SubgroupOperationResult { .. } => {
                 Err(ConstantEvaluatorError::SubgroupExpression)
             }
-            Expression::MulAdd { .. } => Err(ConstantEvaluatorError::CooperativeOperation),
+            Expression::CooperativeMultiplyAdd { .. } => {
+                Err(ConstantEvaluatorError::CooperativeOperation)
+            }
         }
     }
 

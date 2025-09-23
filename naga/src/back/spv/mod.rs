@@ -358,7 +358,7 @@ enum CooperativeType {
     Matrix {
         columns: crate::CooperativeSize,
         rows: crate::CooperativeSize,
-        scalar: crate::CooperativeScalar,
+        scalar: crate::Scalar,
         role: crate::CooperativeRole,
     },
 }

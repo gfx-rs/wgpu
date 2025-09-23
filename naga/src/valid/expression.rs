@@ -141,8 +141,8 @@ pub enum ExpressionError {
     Literal(#[from] LiteralError),
     #[error("{0:?} is not supported for Width {2} {1:?} arguments yet, see https://github.com/gfx-rs/wgpu/issues/5276")]
     UnsupportedWidth(crate::MathFunction, crate::ScalarKind, crate::Bytes),
-    #[error("Invalid operand for MulAdd")]
-    InvalidMulAddOperand,
+    #[error("Invalid operand for cooperative op")]
+    InvalidCooperativeOperand(Handle<crate::Expression>),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -888,24 +888,10 @@ impl super::Validator {
                                 },
                             ) => columns == rows && scalar1 == scalar2 && role1 == role2,
                             // Scalar * coop matrix.
-                            (
-                                &Ti::Scalar(Sc {
-                                    kind: Sk::Float, ..
-                                }),
-                                &Ti::CooperativeMatrix {
-                                    scalar: crate::CooperativeScalar::F32,
-                                    ..
-                                },
-                            )
-                            | (
-                                &Ti::CooperativeMatrix {
-                                    scalar: crate::CooperativeScalar::F32,
-                                    ..
-                                },
-                                &Ti::Scalar(Sc {
-                                    kind: Sk::Float, ..
-                                }),
-                            ) => true,
+                            (&Ti::Scalar(s1), &Ti::CooperativeMatrix { scalar: s2, .. })
+                            | (&Ti::CooperativeMatrix { scalar: s1, .. }, &Ti::Scalar(s2)) => {
+                                s1 == s2
+                            }
                             _ => false,
                         };
                         let left_width = left_inner.scalar_width().unwrap_or(0);
@@ -1269,7 +1255,7 @@ impl super::Validator {
                 }
             },
             E::SubgroupBallotResult | E::SubgroupOperationResult { .. } => self.subgroup_stages,
-            E::MulAdd { a, b, c } => {
+            E::CooperativeMultiplyAdd { a, b, c } => {
                 match resolver[a] {
                     Ti::CooperativeMatrix {
                         role: crate::CooperativeRole::A,
@@ -1277,7 +1263,7 @@ impl super::Validator {
                     } => {}
                     ref other => {
                         log::error!("A operand type: {other:?}");
-                        return Err(ExpressionError::InvalidMulAddOperand);
+                        return Err(ExpressionError::InvalidCooperativeOperand(a));
                     }
                 }
                 match resolver[b] {
@@ -1287,7 +1273,7 @@ impl super::Validator {
                     } => {}
                     ref other => {
                         log::error!("B operand type: {other:?}");
-                        return Err(ExpressionError::InvalidMulAddOperand);
+                        return Err(ExpressionError::InvalidCooperativeOperand(b));
                     }
                 }
                 match resolver[c] {
@@ -1297,7 +1283,7 @@ impl super::Validator {
                     } => {}
                     ref other => {
                         log::error!("C operand type: {other:?}");
-                        return Err(ExpressionError::InvalidMulAddOperand);
+                        return Err(ExpressionError::InvalidCooperativeOperand(c));
                     }
                 }
                 ShaderStages::COMPUTE

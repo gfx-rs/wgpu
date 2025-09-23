@@ -1069,6 +1069,25 @@ impl<W: Write> Writer<W> {
                 }
                 writeln!(self.out, ");")?;
             }
+            Statement::CooperativeLoadStore {
+                store,
+                target,
+                pointer,
+                stride,
+                row_major,
+            } => {
+                let op_str = if store { "Store" } else { "Load" };
+                let suffix = if row_major { "T" } else { "" };
+                write!(self.out, "coop{op_str}{suffix}(")?;
+                self.write_expr(module, target, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, pointer, func_ctx)?;
+                if let Some(stride) = stride {
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, stride, func_ctx)?;
+                }
+                write!(self.out, ")")?
+            }
         }
 
         Ok(())
@@ -1775,15 +1794,6 @@ impl<W: Write> Writer<W> {
 
                 write!(self.out, ")")?
             }
-            Expression::MulAdd { a, b, c } => {
-                write!(self.out, "mulAdd(")?;
-                self.write_expr(module, a, func_ctx)?;
-                write!(self.out, ", ")?;
-                self.write_expr(module, b, func_ctx)?;
-                write!(self.out, ", ")?;
-                self.write_expr(module, c, func_ctx)?;
-                write!(self.out, ")")?
-            }
             // Not supported yet
             Expression::RayQueryGetIntersection { .. }
             | Expression::RayQueryVertexPositions { .. } => unreachable!(),
@@ -1794,6 +1804,15 @@ impl<W: Write> Writer<W> {
             | Expression::SubgroupBallotResult
             | Expression::SubgroupOperationResult { .. }
             | Expression::WorkGroupUniformLoadResult { .. } => {}
+            Expression::CooperativeMultiplyAdd { a, b, c } => {
+                write!(self.out, "coopMultiplyAdd(")?;
+                self.write_expr(module, a, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, b, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, c, func_ctx)?;
+                write!(self.out, ")")?;
+            }
         }
 
         Ok(())

@@ -141,7 +141,7 @@ impl crate::TypeInner {
         match *self {
             Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => Some(scalar),
             Ti::Matrix { scalar, .. } => Some(scalar),
-            Ti::CooperativeMatrix { scalar, .. } => Some(scalar.to_scalar()),
+            Ti::CooperativeMatrix { scalar, .. } => Some(scalar),
             _ => None,
         }
     }
@@ -209,10 +209,21 @@ impl crate::TypeInner {
 
     pub fn is_atomic_pointer(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
         match *self {
-            crate::TypeInner::Pointer { base, .. } => match types[base].inner {
-                crate::TypeInner::Atomic { .. } => true,
+            Self::Pointer { base, .. } => match types[base].inner {
+                Self::Atomic { .. } => true,
                 _ => false,
             },
+            _ => false,
+        }
+    }
+
+    /// Returns true if a variable of this type is a handle.
+    pub const fn is_handle(&self) -> bool {
+        match *self {
+            Self::Image { .. }
+            | Self::Sampler { .. }
+            | Self::AccelerationStructure { .. }
+            | Self::CooperativeMatrix { .. } => true,
             _ => false,
         }
     }
@@ -234,7 +245,7 @@ impl crate::TypeInner {
                 rows,
                 scalar,
                 role: _,
-            } => Some(columns as u32 * rows as u32 * scalar.width() as u32),
+            } => Some(columns as u32 * rows as u32 * scalar.width as u32),
             Self::Pointer { .. } | Self::ValuePointer { .. } => Some(POINTER_SPAN),
             Self::Array {
                 base: _,

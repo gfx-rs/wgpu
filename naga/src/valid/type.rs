@@ -425,7 +425,7 @@ impl super::Validator {
                 role: _,
             } => {
                 self.require_type_capability(Capabilities::COOPERATIVE_MATRIX)?;
-                if scalar != crate::CooperativeScalar::F32 {
+                if scalar.kind != crate::ScalarKind::Float || scalar.width != 4 {
                     return Err(TypeError::MatrixElementNotFloat);
                 }
                 TypeInfo::new(
@@ -436,7 +436,7 @@ impl super::Validator {
                         | TypeFlags::ARGUMENT
                         | TypeFlags::CONSTRUCTIBLE
                         | TypeFlags::CREATION_RESOLVED,
-                    Alignment::from_width(scalar.width()),
+                    Alignment::from_width(scalar.width),
                 )
             }
             Ti::Atomic(scalar) => {

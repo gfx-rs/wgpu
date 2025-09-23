@@ -658,7 +658,7 @@ fn adjust_expr(new_pos: &HandleVec<Expression, Handle<Expression>>, expr: &mut E
         } => {
             adjust(query);
         }
-        Expression::MulAdd {
+        Expression::CooperativeMultiplyAdd {
             ref mut a,
             ref mut b,
             ref mut c,
@@ -867,6 +867,19 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 }
                 crate::RayQueryFunction::ConfirmIntersection => {}
                 crate::RayQueryFunction::Terminate => {}
+            }
+        }
+        Statement::CooperativeLoadStore {
+            store: _,
+            ref mut target,
+            ref mut pointer,
+            ref mut stride,
+            row_major: _,
+        } => {
+            adjust(target);
+            adjust(pointer);
+            if let Some(ref mut stride) = *stride {
+                adjust(stride);
             }
         }
         Statement::Break

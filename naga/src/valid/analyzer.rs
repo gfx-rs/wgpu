@@ -844,7 +844,7 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(query),
                 requirements: UniformityRequirements::empty(),
             },
-            E::MulAdd { a, b, c } => Uniformity {
+            E::CooperativeMultiplyAdd { a, b, c } => Uniformity {
                 non_uniform_result: self.add_ref(a).or(self.add_ref(b).or(self.add_ref(c))),
                 requirements: UniformityRequirements::COOP_OPS,
             },
@@ -1176,6 +1176,24 @@ impl FunctionInfo {
                         crate::GatherMode::QuadSwap(_) => {}
                     }
                     FunctionUniformity::new()
+                }
+                S::CooperativeLoadStore {
+                    store: _,
+                    target,
+                    pointer,
+                    stride,
+                    row_major: _,
+                } => {
+                    if let Some(stride) = stride {
+                        let _ = self.add_ref(stride);
+                    }
+                    FunctionUniformity {
+                        result: Uniformity {
+                            non_uniform_result: self.add_ref(target).or(self.add_ref(pointer)),
+                            requirements: UniformityRequirements::COOP_OPS,
+                        },
+                        exit: ExitFlags::empty(),
+                    }
                 }
             };
 

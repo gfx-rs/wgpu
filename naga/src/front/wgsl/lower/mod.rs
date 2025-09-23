@@ -1810,8 +1810,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .as_expression(block, &mut emitter)
                         .interrupt_emitter(ir::Expression::LocalVariable(var), Span::UNDEFINED)?;
                     block.extend(emitter.finish(&ctx.function.expressions));
-                    ctx.local_table
-                        .insert(v.handle, Declared::Runtime(Typed::Reference(handle)));
+                    let typed = if ctx.module.types[ty].inner.is_handle() {
+                        Typed::Plain(handle)
+                    } else {
+                        Typed::Reference(handle)
+                    };
+                    ctx.local_table.insert(v.handle, Declared::Runtime(typed));
 
                     match initializer {
                         Some(initializer) => ir::Statement::Store {
@@ -2267,8 +2271,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let expr = match *global {
                     LoweredGlobalDecl::Var(handle) => {
                         let expr = ir::Expression::GlobalVariable(handle);
-                        match ctx.module.global_variables[handle].space {
+                        let v = &ctx.module.global_variables[handle];
+                        let force_value = ctx.module.types[v.ty].inner.is_handle();
+                        match v.space {
                             ir::AddressSpace::Handle => Typed::Plain(expr),
+                            _ if force_value => Typed::Plain(expr),
                             _ => Typed::Reference(expr),
                         }
                     }
@@ -3407,14 +3414,41 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             );
                             return Ok(Some(result));
                         }
-                        "coopMulAdd" => {
+                        "coopLoad" | "coopLoadT" | "coopStore" | "coopStoreT" => {
+                            let mut args = ctx.prepare_args(arguments, 2, span);
+                            let target = self.expression(args.next()?, ctx)?;
+                            let pointer = self.expression(args.next()?, ctx)?;
+                            let stride = if args.total_args > 2 {
+                                Some(self.expression(args.next()?, ctx)?)
+                            } else {
+                                None
+                            };
+                            args.finish()?;
+
+                            let store = function.name.contains("Store");
+                            let row_major = function.name.ends_with("T");
+
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block.push(
+                                crate::Statement::CooperativeLoadStore {
+                                    store,
+                                    target,
+                                    pointer,
+                                    stride,
+                                    row_major,
+                                },
+                                span,
+                            );
+                            return Ok(None);
+                        }
+                        "coopMultiplyAdd" => {
                             let mut args = ctx.prepare_args(arguments, 3, span);
                             let a = self.expression(args.next()?, ctx)?;
                             let b = self.expression(args.next()?, ctx)?;
                             let c = self.expression(args.next()?, ctx)?;
                             args.finish()?;
 
-                            ir::Expression::MulAdd { a, b, c }
+                            ir::Expression::CooperativeMultiplyAdd { a, b, c }
                         }
                         _ => {
                             return Err(Box::new(Error::UnknownIdent(function.span, function.name)))
@@ -4250,11 +4284,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             } => {
                 let ty = self.resolve_ast_type(ty, ctx)?;
                 let scalar = match ctx.module.types[ty].inner {
-                    ir::TypeInner::Scalar(crate::Scalar {
-                        kind: crate::ScalarKind::Float,
-                        width: 4,
-                    }) => crate::CooperativeScalar::F32,
-                    _ => return Err(Box::new(Error::UnknownCooperativeScalar(ty_span))),
+                    ir::TypeInner::Scalar(s) => s,
+                    _ => return Err(Box::new(Error::UnsupportedCooperativeScalar(ty_span))),
                 };
                 ir::TypeInner::CooperativeMatrix {
                     columns,

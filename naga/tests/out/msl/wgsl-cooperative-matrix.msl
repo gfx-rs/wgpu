@@ -1,0 +1,31 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct _mslBufferSizes {
+    uint size2;
+};
+
+typedef float type_3[1];
+metal::simdgroup_float8x8 NagaCooperativeMultiplyAdd(const metal::simdgroup_float8x8& a, const metal::simdgroup_float8x8& b, const metal::simdgroup_float8x8& c) {
+    metal::simdgroup_float8x8 d;
+    metal::simdgroup_multiply_accumulate(d,a,b,c);
+    return d;
+}
+
+
+kernel void main_(
+  device type_3 const& ext [[user(fake0)]]
+, constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
+) {
+    metal::simdgroup_float8x8 a = {};
+    metal::simdgroup_float8x8 b = {};
+    metal::simdgroup_float8x8 c = metal::simdgroup_float8x8 {};
+    metal::simdgroup_float8x8 d = {};
+    metal::simdgroup_load(c, ext);
+    d = NagaCooperativeMultiplyAdd(a, b, c);
+    metal::simdgroup_store(c, ext);
+    return;
+}

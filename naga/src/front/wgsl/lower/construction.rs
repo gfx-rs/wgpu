@@ -650,11 +650,8 @@ impl<'source> Lowerer<'source, '_> {
             } => {
                 let ty = self.resolve_ast_type(ty, &mut ctx.as_const())?;
                 let scalar = match ctx.module.types[ty].inner {
-                    crate::TypeInner::Scalar(crate::Scalar {
-                        kind: crate::ScalarKind::Float,
-                        width: 4,
-                    }) => crate::CooperativeScalar::F32,
-                    _ => return Err(Box::new(Error::UnknownCooperativeScalar(ty_span))),
+                    crate::TypeInner::Scalar(s) => s,
+                    _ => return Err(Box::new(Error::UnsupportedCooperativeScalar(ty_span))),
                 };
                 let ty = ctx.ensure_type_exists(crate::TypeInner::CooperativeMatrix {
                     columns,

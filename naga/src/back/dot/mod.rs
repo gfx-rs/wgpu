@@ -403,6 +403,24 @@ impl StatementGraph {
                         },
                     }
                 }
+                S::CooperativeLoadStore {
+                    store,
+                    target,
+                    pointer,
+                    stride,
+                    row_major: _,
+                } => {
+                    self.dependencies.push((id, target, "target"));
+                    self.dependencies.push((id, pointer, "pointer"));
+                    if let Some(stride) = stride {
+                        self.dependencies.push((id, stride, "stride"));
+                    }
+                    if store {
+                        "Store"
+                    } else {
+                        "Load"
+                    }
+                }
             };
             // Set the last node to the merge node
             last_node = merge_id;
@@ -742,11 +760,11 @@ fn write_function_expressions(
                 let ty = if committed { "Committed" } else { "Candidate" };
                 (format!("get{ty}HitVertexPositions").into(), 4)
             }
-            E::MulAdd { a, b, c } => {
+            E::CooperativeMultiplyAdd { a, b, c } => {
                 edges.insert("a", a);
                 edges.insert("b", b);
                 edges.insert("c", c);
-                ("MulAdd".into(), 6)
+                ("cooperativeMultiplyAdd".into(), 4)
             }
         };
 

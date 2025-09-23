@@ -152,6 +152,19 @@ impl FunctionTracer<'_> {
                         self.expressions_used.insert(argument);
                         self.expressions_used.insert(result);
                     }
+                    St::CooperativeLoadStore {
+                        store: _,
+                        target,
+                        pointer,
+                        stride,
+                        row_major: _,
+                    } => {
+                        self.expressions_used.insert(target);
+                        self.expressions_used.insert(pointer);
+                        if let Some(stride) = stride {
+                            self.expressions_used.insert(stride);
+                        }
+                    }
 
                     // Trivial statements.
                     St::Break
@@ -370,6 +383,19 @@ impl FunctionMap {
                         }
                         adjust(argument);
                         adjust(result);
+                    }
+                    St::CooperativeLoadStore {
+                        store: _,
+                        ref mut target,
+                        ref mut pointer,
+                        ref mut stride,
+                        row_major: _,
+                    } => {
+                        adjust(target);
+                        adjust(pointer);
+                        if let Some(ref mut stride) = *stride {
+                            adjust(stride);
+                        }
                     }
 
                     // Trivial statements.

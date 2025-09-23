@@ -2,11 +2,53 @@
     types: [
         (
             name: None,
+            inner: Scalar((
+                kind: Float,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
             inner: CooperativeMatrix(
                 columns: Eight,
                 rows: Eight,
-                scalar: F32,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
                 role: A,
+            ),
+        ),
+        (
+            name: None,
+            inner: CooperativeMatrix(
+                columns: Eight,
+                rows: Eight,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+                role: B,
+            ),
+        ),
+        (
+            name: None,
+            inner: Array(
+                base: 0,
+                size: Dynamic,
+                stride: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: CooperativeMatrix(
+                columns: Eight,
+                rows: Eight,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+                role: C,
             ),
         ),
     ],
@@ -25,7 +67,26 @@
             name: Some("a"),
             space: Private,
             binding: None,
-            ty: 0,
+            ty: 1,
+            init: None,
+        ),
+        (
+            name: Some("b"),
+            space: Private,
+            binding: None,
+            ty: 2,
+            init: None,
+        ),
+        (
+            name: Some("ext"),
+            space: Storage(
+                access: ("LOAD | STORE"),
+            ),
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 3,
             init: None,
         ),
     ],
@@ -42,40 +103,64 @@
                 name: Some("main"),
                 arguments: [],
                 result: None,
-                local_variables: [],
-                expressions: [
-                    GlobalVariable(0),
-                    Load(
-                        pointer: 0,
+                local_variables: [
+                    (
+                        name: Some("c"),
+                        ty: 4,
+                        init: Some(0),
                     ),
-                    GlobalVariable(0),
-                    Load(
-                        pointer: 2,
-                    ),
-                    Binary(
-                        op: Add,
-                        left: 1,
-                        right: 3,
+                    (
+                        name: Some("d"),
+                        ty: 4,
+                        init: None,
                     ),
                 ],
-                named_expressions: {
-                    4: "a2",
-                },
+                expressions: [
+                    ZeroValue(4),
+                    LocalVariable(0),
+                    GlobalVariable(2),
+                    GlobalVariable(0),
+                    GlobalVariable(1),
+                    CooperativeMultiplyAdd(
+                        a: 3,
+                        b: 4,
+                        c: 1,
+                    ),
+                    LocalVariable(1),
+                    GlobalVariable(2),
+                ],
+                named_expressions: {},
                 body: [
+                    CooperativeLoadStore(
+                        store: false,
+                        target: 1,
+                        pointer: 2,
+                        stride: None,
+                        row_major: false,
+                    ),
                     Emit((
-                        start: 1,
-                        end: 2,
+                        start: 5,
+                        end: 6,
                     )),
-                    Emit((
-                        start: 3,
-                        end: 5,
-                    )),
+                    Store(
+                        pointer: 6,
+                        value: 5,
+                    ),
+                    CooperativeLoadStore(
+                        store: true,
+                        target: 1,
+                        pointer: 7,
+                        stride: None,
+                        row_major: false,
+                    ),
                     Return(
                         value: None,
                     ),
                 ],
                 diagnostic_filter_leaf: None,
             ),
+            mesh_info: None,
+            task_payload: None,
         ),
     ],
     diagnostic_filters: [],
