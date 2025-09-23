@@ -1231,6 +1231,16 @@ bitflags_array! {
         ///
         /// [`Device::create_shader_module_passthrough`]: https://docs.rs/wgpu/latest/wgpu/struct.Device.html#method.create_shader_module_passthrough
         const EXPERIMENTAL_PASSTHROUGH_SHADERS = 1 << 52;
+
+        /// Allows using the [VK_KHR_win32_keyed_mutex] Vulkan extension.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with [VK_KHR_win32_keyed_mutex])
+        ///
+        /// This is a native only feature.
+        ///
+        /// [VK_KHR_win32_keyed_mutex]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_win32_keyed_mutex.html
+        const VULKAN_WIN32_KEYED_MUTEX = 1 << 53;
     }
 
     /// Features that are not guaranteed to be supported.
