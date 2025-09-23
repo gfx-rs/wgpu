@@ -50,7 +50,7 @@ async fn run_test(ctx: TestingContext) {
 
             @fragment
             fn fs_main(@builtin(view_index) view_index: u32) -> @location(0) vec4f {
-                return vec4f(f32(view_index));
+                return vec4f(view_index);
             }
         ";
 
@@ -92,34 +92,31 @@ async fn run_test(ctx: TestingContext) {
     };
     const TEXTURE_SIZE: u32 = 512;
     let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
-    let (texture, view) = {
-        let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            size: wgpu::Extent3d {
-                width: TEXTURE_SIZE,
-                height: TEXTURE_SIZE,
-                depth_or_array_layers: 2,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R8Unorm,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
-            view_formats: &[],
-        });
-        let view = texture.create_view(&wgpu::TextureViewDescriptor {
-            label: None,
-            format: Some(wgpu::TextureFormat::R8Unorm),
-            dimension: Some(wgpu::TextureViewDimension::D2Array),
-            usage: Some(wgpu::TextureUsages::RENDER_ATTACHMENT),
-            aspect: wgpu::TextureAspect::All,
-            base_mip_level: 0,
-            mip_level_count: None,
-            base_array_layer: 0,
-            array_layer_count: Some(2),
-        });
-        (texture, view)
-    };
+    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        label: None,
+        size: wgpu::Extent3d {
+            width: TEXTURE_SIZE,
+            height: TEXTURE_SIZE,
+            depth_or_array_layers: 2,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::R8Unorm,
+        usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+        view_formats: &[],
+    });
+    let view = texture.create_view(&wgpu::TextureViewDescriptor {
+        label: None,
+        format: Some(wgpu::TextureFormat::R8Unorm),
+        dimension: Some(wgpu::TextureViewDimension::D2Array),
+        usage: Some(wgpu::TextureUsages::RENDER_ATTACHMENT),
+        aspect: wgpu::TextureAspect::All,
+        base_mip_level: 0,
+        mip_level_count: None,
+        base_array_layer: 0,
+        array_layer_count: Some(2),
+    });
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: TEXTURE_SIZE as u64 * TEXTURE_SIZE as u64 * 2,
@@ -130,49 +127,48 @@ async fn run_test(ctx: TestingContext) {
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
-    let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        label: None,
-        color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-            view: &view,
-            depth_slice: None,
-            resolve_target: None,
-            ops: wgpu::Operations {
-                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                store: wgpu::StoreOp::Store,
-            },
-        })],
-        depth_stencil_attachment: None,
-        timestamp_writes: None,
-        occlusion_query_set: None,
-        multiview_mask: NonZero::new(3),
-    });
-    rpass.set_pipeline(&pipeline);
-    rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-    rpass.draw(0..6, 0..1);
-    drop(rpass);
-    for i in 0..2 {
-        encoder.copy_texture_to_buffer(
-            wgpu::TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d { x: 0, y: 0, z: i },
-                aspect: wgpu::TextureAspect::All,
-            },
-            wgpu::TexelCopyBufferInfo {
-                buffer: &readback_buffer,
-                layout: wgpu::TexelCopyBufferLayout {
-                    offset: i as u64 * TEXTURE_SIZE as u64 * TEXTURE_SIZE as u64,
-                    bytes_per_row: Some(TEXTURE_SIZE),
-                    rows_per_image: Some(TEXTURE_SIZE),
+    {
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: None,
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                depth_slice: None,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    store: wgpu::StoreOp::Store,
                 },
-            },
-            wgpu::Extent3d {
-                width: TEXTURE_SIZE,
-                height: TEXTURE_SIZE,
-                depth_or_array_layers: 1,
-            },
-        );
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+            multiview_mask: NonZero::new(3),
+        });
+        rpass.set_pipeline(&pipeline);
+        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
+        rpass.draw(0..6, 0..1);
     }
+    encoder.copy_texture_to_buffer(
+        wgpu::TexelCopyTextureInfo {
+            texture: &texture,
+            mip_level: 0,
+            origin: wgpu::Origin3d { x: 0, y: 0, z: 0 },
+            aspect: wgpu::TextureAspect::All,
+        },
+        wgpu::TexelCopyBufferInfo {
+            buffer: &readback_buffer,
+            layout: wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(TEXTURE_SIZE),
+                rows_per_image: Some(TEXTURE_SIZE),
+            },
+        },
+        wgpu::Extent3d {
+            width: TEXTURE_SIZE,
+            height: TEXTURE_SIZE,
+            depth_or_array_layers: 2,
+        },
+    );
     ctx.queue.submit([encoder.finish()]);
 
     let slice = readback_buffer.slice(..);
@@ -182,10 +178,12 @@ async fn run_test(ctx: TestingContext) {
 
     let data = slice.get_mapped_range();
     for view_idx in 0..2 {
-        let texture_bytes = (TEXTURE_SIZE * TEXTURE_SIZE) as usize;
-        let succeeded = &data[texture_bytes * view_idx..texture_bytes * (view_idx + 1)]
+        let each_texture_size = (TEXTURE_SIZE * TEXTURE_SIZE) as usize;
+        let target_value = view_idx as u8 * u8::MAX;
+        let succeeded = data[each_texture_size * view_idx..each_texture_size * (view_idx + 1)]
             .iter()
-            .all(|b| *b == if view_idx == 1 { u8::MAX } else { 0 });
-        assert!(succeeded);
+            .all(|b| *b == target_value);
+        assert!(data.len() == each_texture_size * 2);
+        assert!(succeeded, "Failed with view {view_idx}");
     }
 }
