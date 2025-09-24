@@ -215,7 +215,7 @@ gpu-allocator = { version = "0.28", default-features = false, features = [
 ] }
 range-alloc = "0.1"
 mach-dxcompiler-rs = { version = "0.1.4", default-features = false } # remember to increase max_shader_model if applicable
-windows-core = { version = "0.61", default-features = false }
+windows-core = { version = "0.62", default-features = false }
 
 # Gles dependencies
 khronos-egl = "6"
@@ -225,7 +225,7 @@ glutin-winit = { version = "0.4", default-features = false }
 glutin_wgl_sys = "0.6"
 
 # DX12 and GLES dependencies
-windows = { version = "0.61", default-features = false }
+windows = { version = "0.62", default-features = false }
 
 # wasm32 dependencies
 console_error_panic_hook = "0.1.5"
@@ -256,6 +256,18 @@ ndk-sys = "0.6"
 # These overrides allow our examples to explicitly depend on release crates
 [patch.crates-io]
 wgpu = { path = "./wgpu" }
+
+# https://github.com/Xudong-Huang/generator-rs/pull/76
+generator = { git = "https://github.com/Xudong-Huang/generator-rs", rev = "6201b45c99b2f41d133e4c5ca1803885d61be732" }
+
+anstyle = { git = "https://github.com/erichdongubler-contrib/anstyle", rev = "c065f776e0190b400cc0afcb0ef4d36fe295dc43" }
+anstyle-query = { git = "https://github.com/erichdongubler-contrib/anstyle", rev = "c065f776e0190b400cc0afcb0ef4d36fe295dc43" }
+anstyle-wincon = { git = "https://github.com/erichdongubler-contrib/anstyle", rev = "c065f776e0190b400cc0afcb0ef4d36fe295dc43" }
+
+# https://github.com/rust-lang/backtrace-rs/pull/727
+backtrace = { git = "https://github.com/rust-lang/backtrace-rs", rev = "00105b6b2692cdbc93056d0162a52f5565480240" }
+
+gethostname = { git = "https://github.com/erichdongubler-contrib/gethostname.rs", rev = "5cd016032cb925d2396018af7b1f261a8957482e" }
 
 [profile.release]
 lto = "thin"
