@@ -155,6 +155,7 @@ impl SpirvOutParameters {
                 Some(self.capabilities.clone())
             },
             bounds_check_policies,
+            fake_missing_bindings: true,
             binding_map: self.binding_map.clone(),
             zero_initialize_workgroup_memory: spv::ZeroInitializeWorkgroupMemoryMode::Polyfill,
             force_loop_bounding: true,

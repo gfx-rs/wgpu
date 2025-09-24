@@ -1480,20 +1480,55 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::BindGroupLayoutDescriptor,
     ) -> Result<super::BindGroupLayout, crate::DeviceError> {
+        // Iterate through the entries and accumulate our Vulkan
+        // DescriptorSetLayoutBindings and DescriptorBindingFlags, as well as
+        // our binding map and our descriptor counts.
+        // Note: not bothering with on stack arrays here as it's low frequency
+        let mut vk_bindings = Vec::new();
+        let mut binding_flags = Vec::new();
+        let mut binding_map = Vec::new();
+        let mut next_binding = 0;
+        let mut contains_binding_arrays = false;
         let mut desc_count = gpu_descriptor::DescriptorTotalCount::default();
-        let mut types = Vec::new();
         for entry in desc.entries {
-            let count = entry.count.map_or(1, |c| c.get());
-            if entry.binding as usize >= types.len() {
-                types.resize(
-                    entry.binding as usize + 1,
-                    (vk::DescriptorType::INPUT_ATTACHMENT, 0),
-                );
+            if entry.count.is_some() {
+                contains_binding_arrays = true;
             }
-            types[entry.binding as usize] = (
-                conv::map_binding_type(entry.ty),
-                entry.count.map_or(1, |c| c.get()),
-            );
+
+            let partially_bound = desc
+                .flags
+                .contains(crate::BindGroupLayoutFlags::PARTIALLY_BOUND);
+            let mut flags = vk::DescriptorBindingFlags::empty();
+            if partially_bound && entry.count.is_some() {
+                flags |= vk::DescriptorBindingFlags::PARTIALLY_BOUND;
+            }
+            if entry.count.is_some() {
+                flags |= vk::DescriptorBindingFlags::UPDATE_AFTER_BIND;
+            }
+
+            let count = entry.count.map_or(1, |c| c.get());
+            match entry.ty {
+                wgt::BindingType::ExternalTexture => unimplemented!(),
+                _ => {
+                    vk_bindings.push(vk::DescriptorSetLayoutBinding {
+                        binding: next_binding,
+                        descriptor_type: conv::map_binding_type(entry.ty),
+                        descriptor_count: count,
+                        stage_flags: conv::map_shader_stage(entry.visibility),
+                        p_immutable_samplers: ptr::null(),
+                        _marker: Default::default(),
+                    });
+                    binding_flags.push(flags);
+                    binding_map.push((
+                        entry.binding,
+                        super::BindingInfo {
+                            binding: next_binding,
+                            binding_array_size: entry.count,
+                        },
+                    ));
+                    next_binding += 1;
+                }
+            }
 
             match entry.ty {
                 wgt::BindingType::Buffer {
@@ -1532,59 +1567,16 @@ impl crate::Device for super::Device {
             }
         }
 
-        //Note: not bothering with on stack array here as it's low frequency
-        let vk_bindings = desc
-            .entries
-            .iter()
-            .map(|entry| vk::DescriptorSetLayoutBinding {
-                binding: entry.binding,
-                descriptor_type: types[entry.binding as usize].0,
-                descriptor_count: types[entry.binding as usize].1,
-                stage_flags: conv::map_shader_stage(entry.visibility),
-                p_immutable_samplers: ptr::null(),
-                _marker: Default::default(),
-            })
-            .collect::<Vec<_>>();
-
-        let binding_arrays: Vec<_> = desc
-            .entries
-            .iter()
-            .enumerate()
-            .filter_map(|(idx, entry)| entry.count.map(|count| (idx as u32, count)))
-            .collect();
-
         let vk_info = vk::DescriptorSetLayoutCreateInfo::default()
             .bindings(&vk_bindings)
-            .flags(if !binding_arrays.is_empty() {
+            .flags(if contains_binding_arrays {
                 vk::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND_POOL
             } else {
                 vk::DescriptorSetLayoutCreateFlags::empty()
             });
 
-        let partially_bound = desc
-            .flags
-            .contains(crate::BindGroupLayoutFlags::PARTIALLY_BOUND);
-
-        let binding_flag_vec = desc
-            .entries
-            .iter()
-            .map(|entry| {
-                let mut flags = vk::DescriptorBindingFlags::empty();
-
-                if partially_bound && entry.count.is_some() {
-                    flags |= vk::DescriptorBindingFlags::PARTIALLY_BOUND;
-                }
-
-                if entry.count.is_some() {
-                    flags |= vk::DescriptorBindingFlags::UPDATE_AFTER_BIND;
-                }
-
-                flags
-            })
-            .collect::<Vec<_>>();
-
-        let mut binding_flag_info = vk::DescriptorSetLayoutBindingFlagsCreateInfo::default()
-            .binding_flags(&binding_flag_vec);
+        let mut binding_flag_info =
+            vk::DescriptorSetLayoutBindingFlagsCreateInfo::default().binding_flags(&binding_flags);
 
         let vk_info = vk_info.push_next(&mut binding_flag_info);
 
@@ -1604,8 +1596,9 @@ impl crate::Device for super::Device {
         Ok(super::BindGroupLayout {
             raw,
             desc_count,
-            types: types.into_boxed_slice(),
-            binding_arrays,
+            entries: desc.entries.into(),
+            binding_map,
+            contains_binding_arrays,
         })
     }
     unsafe fn destroy_bind_group_layout(&self, bg_layout: super::BindGroupLayout) {
@@ -1657,27 +1650,25 @@ impl crate::Device for super::Device {
             unsafe { self.shared.set_object_name(raw, label) };
         }
 
-        let mut binding_arrays = BTreeMap::new();
+        let mut binding_map = BTreeMap::new();
         for (group, &layout) in desc.bind_group_layouts.iter().enumerate() {
-            for &(binding, binding_array_size) in &layout.binding_arrays {
-                binding_arrays.insert(
+            for &(binding, binding_info) in &layout.binding_map {
+                binding_map.insert(
                     naga::ResourceBinding {
                         group: group as u32,
                         binding,
                     },
                     naga::back::spv::BindingInfo {
-                        binding_array_size: Some(binding_array_size.get()),
+                        descriptor_set: group as u32,
+                        binding: binding_info.binding,
+                        binding_array_size: binding_info.binding_array_size.map(NonZeroU32::get),
                     },
                 );
             }
         }
 
         self.counters.pipeline_layouts.add(1);
-
-        Ok(super::PipelineLayout {
-            raw,
-            binding_arrays,
-        })
+        Ok(super::PipelineLayout { raw, binding_map })
     }
     unsafe fn destroy_pipeline_layout(&self, pipeline_layout: super::PipelineLayout) {
         unsafe {
@@ -1699,9 +1690,7 @@ impl crate::Device for super::Device {
             super::AccelerationStructure,
         >,
     ) -> Result<super::BindGroup, crate::DeviceError> {
-        let contains_binding_arrays = !desc.layout.binding_arrays.is_empty();
-
-        let desc_set_layout_flags = if contains_binding_arrays {
+        let desc_set_layout_flags = if desc.layout.contains_binding_arrays {
             gpu_descriptor::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND
         } else {
             gpu_descriptor::DescriptorSetLayoutCreateFlags::empty()
@@ -1787,18 +1776,22 @@ impl crate::Device for super::Device {
             Vec::with_capacity(desc.acceleration_structures.len());
         let mut raw_acceleration_structures =
             ExtendStack::from_vec_capacity(&mut raw_acceleration_structures);
-        for entry in desc.entries {
-            let (ty, size) = desc.layout.types[entry.binding as usize];
-            if size == 0 {
-                continue; // empty slot
-            }
-            let mut write = vk::WriteDescriptorSet::default()
-                .dst_set(*set.raw())
-                .dst_binding(entry.binding)
-                .descriptor_type(ty);
 
-            write = match ty {
-                vk::DescriptorType::SAMPLER => {
+        let layout_and_entry_iter = desc.entries.iter().map(|entry| {
+            let layout = desc
+                .layout
+                .entries
+                .iter()
+                .find(|layout_entry| layout_entry.binding == entry.binding)
+                .expect("internal error: no layout entry found with binding slot");
+            (layout, entry)
+        });
+        let mut next_binding = 0;
+        for (layout, entry) in layout_and_entry_iter {
+            let write = vk::WriteDescriptorSet::default().dst_set(*set.raw());
+
+            match layout.ty {
+                wgt::BindingType::Sampler(_) => {
                     let start = entry.resource_index;
                     let end = start + entry.count;
                     let local_image_infos;
@@ -1806,9 +1799,15 @@ impl crate::Device for super::Device {
                         image_infos.extend(desc.samplers[start as usize..end as usize].iter().map(
                             |sampler| vk::DescriptorImageInfo::default().sampler(sampler.raw),
                         ));
-                    write.image_info(local_image_infos)
+                    writes.push(
+                        write
+                            .dst_binding(next_binding)
+                            .descriptor_type(conv::map_binding_type(layout.ty))
+                            .image_info(local_image_infos),
+                    );
+                    next_binding += 1;
                 }
-                vk::DescriptorType::SAMPLED_IMAGE | vk::DescriptorType::STORAGE_IMAGE => {
+                wgt::BindingType::Texture { .. } | wgt::BindingType::StorageTexture { .. } => {
                     let start = entry.resource_index;
                     let end = start + entry.count;
                     let local_image_infos;
@@ -1822,12 +1821,15 @@ impl crate::Device for super::Device {
                                     .image_layout(layout)
                             },
                         ));
-                    write.image_info(local_image_infos)
+                    writes.push(
+                        write
+                            .dst_binding(next_binding)
+                            .descriptor_type(conv::map_binding_type(layout.ty))
+                            .image_info(local_image_infos),
+                    );
+                    next_binding += 1;
                 }
-                vk::DescriptorType::UNIFORM_BUFFER
-                | vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC
-                | vk::DescriptorType::STORAGE_BUFFER
-                | vk::DescriptorType::STORAGE_BUFFER_DYNAMIC => {
+                wgt::BindingType::Buffer { .. } => {
                     let start = entry.resource_index;
                     let end = start + entry.count;
                     let local_buffer_infos;
@@ -1842,9 +1844,15 @@ impl crate::Device for super::Device {
                                     )
                             },
                         ));
-                    write.buffer_info(local_buffer_infos)
+                    writes.push(
+                        write
+                            .dst_binding(next_binding)
+                            .descriptor_type(conv::map_binding_type(layout.ty))
+                            .buffer_info(local_buffer_infos),
+                    );
+                    next_binding += 1;
                 }
-                vk::DescriptorType::ACCELERATION_STRUCTURE_KHR => {
+                wgt::BindingType::AccelerationStructure { .. } => {
                     let start = entry.resource_index;
                     let end = start + entry.count;
 
@@ -1867,14 +1875,17 @@ impl crate::Device for super::Device {
                             .acceleration_structures(local_raw_acceleration_structures),
                     );
 
-                    write
-                        .descriptor_count(entry.count)
-                        .push_next(local_acceleration_structure_infos)
+                    writes.push(
+                        write
+                            .dst_binding(next_binding)
+                            .descriptor_type(conv::map_binding_type(layout.ty))
+                            .descriptor_count(entry.count)
+                            .push_next(local_acceleration_structure_infos),
+                    );
+                    next_binding += 1;
                 }
-                _ => unreachable!(),
-            };
-
-            writes.push(write);
+                wgt::BindingType::ExternalTexture => unimplemented!(),
+            }
         }
 
         unsafe { self.shared.raw.update_descriptor_sets(&writes, &[]) };
@@ -2033,7 +2044,7 @@ impl crate::Device for super::Device {
                 compiled_vs = Some(self.compile_stage(
                     vertex_stage,
                     naga::ShaderStage::Vertex,
-                    &desc.layout.binding_arrays,
+                    &desc.layout.binding_map,
                 )?);
                 stages.push(compiled_vs.as_ref().unwrap().create_info);
             }
@@ -2045,14 +2056,14 @@ impl crate::Device for super::Device {
                     compiled_ts = Some(self.compile_stage(
                         t,
                         naga::ShaderStage::Task,
-                        &desc.layout.binding_arrays,
+                        &desc.layout.binding_map,
                     )?);
                     stages.push(compiled_ts.as_ref().unwrap().create_info);
                 }
                 compiled_ms = Some(self.compile_stage(
                     mesh_stage,
                     naga::ShaderStage::Mesh,
-                    &desc.layout.binding_arrays,
+                    &desc.layout.binding_map,
                 )?);
                 stages.push(compiled_ms.as_ref().unwrap().create_info);
             }
@@ -2062,7 +2073,7 @@ impl crate::Device for super::Device {
                 let compiled = self.compile_stage(
                     stage,
                     naga::ShaderStage::Fragment,
-                    &desc.layout.binding_arrays,
+                    &desc.layout.binding_map,
                 )?;
                 stages.push(compiled.create_info);
                 Some(compiled)
@@ -2270,7 +2281,7 @@ impl crate::Device for super::Device {
         let compiled = self.compile_stage(
             &desc.stage,
             naga::ShaderStage::Compute,
-            &desc.layout.binding_arrays,
+            &desc.layout.binding_map,
         )?;
 
         let vk_infos = [{

@@ -2166,6 +2166,7 @@ impl super::Adapter {
                 force_loop_bounding: true,
                 use_storage_input_output_16: features.contains(wgt::Features::SHADER_F16)
                     && self.phd_features.supports_storage_input_output_16(),
+                fake_missing_bindings: false,
                 // We need to build this separately for each invocation, so just default it out here
                 binding_map: BTreeMap::default(),
                 debug_info: None,
