@@ -999,6 +999,7 @@ dependencies = [
  "deno_webgpu",
  "deno_webidl",
  "env_logger",
+ "tempfile",
  "termcolor",
  "tokio",
 ]
@@ -4073,6 +4074,19 @@ name = "target-triple"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ac9aa371f599d22256307c24a9d748c041e548cbf599f35d890f9d365361790"
+
+[[package]]
+name = "tempfile"
+version = "3.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d31c77bdf42a745371d260a26ca7163f1e0924b64afa0b688e61b5a9fa02f16"
+dependencies = [
+ "fastrand",
+ "getrandom 0.3.3",
+ "once_cell",
+ "rustix 1.0.8",
+ "windows-sys 0.61.0",
+]
 
 [[package]]
 name = "termcolor"
