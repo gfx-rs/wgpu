@@ -3869,7 +3869,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                             crate::Barrier::TEXTURE,
                             semantics & spirv::MemorySemantics::IMAGE_MEMORY.bits() != 0,
                         );
+
+                        block.extend(emitter.finish(ctx.expressions));
                         block.push(crate::Statement::ControlBarrier(flags), span);
+                        emitter.start(ctx.expressions);
                     } else {
                         log::warn!("Unsupported barrier execution scope: {exec_scope}");
                     }
@@ -3911,7 +3914,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         crate::Barrier::TEXTURE,
                         semantics & spirv::MemorySemantics::IMAGE_MEMORY.bits() != 0,
                     );
+
+                    block.extend(emitter.finish(ctx.expressions));
                     block.push(crate::Statement::MemoryBarrier(flags), span);
+                    emitter.start(ctx.expressions);
                 }
                 Op::CopyObject => {
                     inst.expect(4)?;
