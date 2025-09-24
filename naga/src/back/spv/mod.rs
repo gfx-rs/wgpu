@@ -79,6 +79,8 @@ pub enum Error {
     Override,
     #[error(transparent)]
     ResolveArraySizeError(#[from] crate::proc::ResolveArraySizeError),
+    #[error("mapping of {0:?} is missing")]
+    MissingBinding(crate::ResourceBinding),
 }
 
 #[derive(Default)]
@@ -760,6 +762,7 @@ pub struct Writer {
     constant_ids: HandleVec<crate::Expression, Word>,
     cached_constants: crate::FastHashMap<CachedConstant, Word>,
     global_variables: HandleVec<crate::GlobalVariable, GlobalVariable>,
+    fake_missing_bindings: bool,
     binding_map: BindingMap,
 
     // Cached expressions are only meaningful within a BlockContext, but we
@@ -811,10 +814,12 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct BindingInfo {
+    pub descriptor_set: u32,
+    pub binding: u32,
     /// If the binding is an unsized binding array, this overrides the size.
     pub binding_array_size: Option<u32>,
 }
@@ -838,6 +843,10 @@ pub struct Options<'a> {
 
     /// Configuration flags for the writer.
     pub flags: WriterFlags,
+
+    /// Don't panic on missing bindings. Instead use fake values for `Binding`
+    /// and `DescriptorSet` decorations. This may result in invalid SPIR-V.
+    pub fake_missing_bindings: bool,
 
     /// Map of resources to information about the binding.
     pub binding_map: BindingMap,
@@ -877,6 +886,7 @@ impl Default for Options<'_> {
         Options {
             lang_version: (1, 0),
             flags,
+            fake_missing_bindings: true,
             binding_map: BindingMap::default(),
             capabilities: None,
             bounds_check_policies: BoundsCheckPolicies::default(),
