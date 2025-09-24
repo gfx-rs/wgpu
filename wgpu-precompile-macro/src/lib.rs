@@ -608,6 +608,6 @@ pub fn precompile(input: TokenStream) -> TokenStream {
             #wgsl_tokens
         }
     };
-    //panic!("FInal tokenstream: {}", f);
+    //panic!("Final tokenstream: {}", f);
     f.into()
 }
