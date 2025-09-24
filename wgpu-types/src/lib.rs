@@ -5606,7 +5606,7 @@ bitflags::bitflags! {
         const STORAGE_BINDING = 1 << 3;
         /// Allows a texture to be an output attachment of a render pass.
         ///
-        /// Consider adding ['TextureUsages::TRANSIENT'] if the contents are not reused.
+        /// Consider adding [`TextureUsages::TRANSIENT`] if the contents are not reused.
         const RENDER_ATTACHMENT = 1 << 4;
 
         //
