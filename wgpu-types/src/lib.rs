@@ -1414,7 +1414,7 @@ pub struct AdapterInfo {
     pub driver_info: String,
     /// Backend used for device
     pub backend: Backend,
-    /// Supports [`TextureUsages::TRANSIENT`]
+    /// If true, adding [`TextureUsages::TRANSIENT`] will decrease memory usage.
     pub supports_transient: bool,
 }
 
