@@ -5210,6 +5210,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-shaders"
+version = "26.0.0"
+dependencies = [
+ "naga",
+ "serde",
+ "thiserror 2.0.16",
+ "wgpu-types",
+]
+
+[[package]]
 name = "wgpu-test"
 version = "26.0.0"
 dependencies = [

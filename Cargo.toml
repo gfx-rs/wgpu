@@ -26,6 +26,7 @@ members = [
     "wgpu",
     "wgpu-precompile-macro",
     "xtask",
+    "wgpu-shaders",
 ]
 exclude = []
 default-members = [

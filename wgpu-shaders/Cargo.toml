@@ -1,0 +1,38 @@
+[package]
+name = "wgpu-shaders"
+edition.workspace = true
+rust-version.workspace = true
+keywords.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+version.workspace = true
+authors.workspace = true
+
+[features]
+serde = ["dep:serde", "wgpu-types/serde", "naga/serialize", "naga/deserialize"]
+
+all-in = ["spv-in", "wgsl-in", "glsl-in"]
+spv-in = ["naga/spv-in"]
+wgsl-in = ["naga/wgsl-in"]
+glsl-in = ["naga/glsl-in"]
+
+all-out = ["spv-out", "wgsl-out", "glsl-out", "hlsl-out", "msl-out"]
+spv-out = ["naga/spv-out"]
+wgsl-out = ["naga/wgsl-out"]
+glsl-out = ["naga/glsl-out"]
+hlsl-out = ["naga/hlsl-out"]
+msl-out = ["naga/msl-out"]
+
+default = ["all-in", "all-out"]
+
+
+[dependencies]
+naga = { workspace = true }
+wgpu-types = { workspace = true, default-features = false }
+
+serde = { workspace = true, optional = true }
+thiserror.workspace = true
+
+[lints]
+workspace = true

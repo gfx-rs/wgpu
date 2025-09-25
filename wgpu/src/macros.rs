@@ -245,7 +245,7 @@ macro_rules! hal_type_gles {
 /// backend is enabled, hlsl won't be compiled. All backends will be compiled for by naga; the input wgsl code won't
 /// necessarily be the same as the output wgsl.
 #[macro_export]
-#[cfg(feature = "precompile")]
+#[cfg(feature = "precompile-macro")]
 macro_rules! include_precompiled_wgsl {
     ($path: literal, $entry: literal, $($id: ident)+) => {
         $crate::__macro_helpers::precompile!($crate wgsl true $path $entry $($id)*)
@@ -266,7 +266,7 @@ macro_rules! include_precompiled_wgsl {
 /// backend is enabled, hlsl won't be compiled. All backends will be compiled for by naga; the input wgsl code won't
 /// necessarily be the same as the output wgsl.
 #[macro_export]
-#[cfg(feature = "precompile")]
+#[cfg(feature = "precompile-macro")]
 macro_rules! precompile_wgsl {
     ($shader: literal, $entry: literal, $($id: ident)+) => {
         $crate::__macro_helpers::precompile!($crate wgsl false $shader $entry $($id)*)
@@ -289,7 +289,7 @@ macro_rules! precompile_wgsl {
 /// backend is enabled, hlsl won't be compiled. All backends will be compiled for by naga; the input spirv code won't
 /// necessarily be the same as the output spirv.
 #[macro_export]
-#[cfg(feature = "precompile")]
+#[cfg(feature = "precompile-macro")]
 macro_rules! include_precompiled_spirv {
     ($path: literal, $entry: literal, $($id: ident)+) => {
         $crate::__macro_helpers::precompile!($crate spirv true $path $entry $($id)*)
@@ -311,7 +311,7 @@ macro_rules! include_precompiled_spirv {
 /// backend is enabled, hlsl won't be compiled. All backends will be compiled for by naga; the input glsl code won't
 /// necessarily be the same as the output glsl.
 #[macro_export]
-#[cfg(feature = "precompile")]
+#[cfg(feature = "precompile-macro")]
 macro_rules! include_precompiled_glsl {
     ($path: literal, $stage: ident, $($id: ident)+) => {
         $crate::__macro_helpers::precompile!($crate glsl $stage true $path "main" $($id)*)
@@ -332,7 +332,7 @@ macro_rules! include_precompiled_glsl {
 /// backend is enabled, hlsl won't be compiled. All backends will be compiled for by naga; the input glsl code won't
 /// be the same as the output glsl.
 #[macro_export]
-#[cfg(feature = "precompile")]
+#[cfg(feature = "precompile-macro")]
 macro_rules! precompile_glsl {
     ($shader: literal, $stage: ident, $($id: ident)+) => {
         $crate::__macro_helpers::precompile!($crate glsl $stage false $shader "main" $($id)+)
@@ -344,7 +344,7 @@ pub mod helpers {
     pub use alloc::borrow::Cow;
     pub use alloc::string::{String, ToString};
     pub use core::{include_bytes, include_str};
-    #[cfg(feature = "precompile")]
+    #[cfg(feature = "precompile-macro")]
     pub use wgpu_precompile_macro::{precompile, precompile_hlsl_to_dxil};
     pub use None;
     pub use Some;

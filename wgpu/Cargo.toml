@@ -188,7 +188,7 @@ std = ["raw-window-handle/std", "wgpu-types/std", "wgpu-core?/std"]
 ## based on whether `std` is enabled or not.
 parking_lot = ["dep:parking_lot"]
 
-precompile = ["dep:wgpu-precompile-macro"]
+precompile-macro = ["dep:wgpu-precompile-macro"]
 
 #########################
 # Standard Dependencies #

@@ -56,7 +56,7 @@ wgpu-test.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger.workspace = true
-wgpu = { workspace = true, features = ["precompile"] }
+wgpu = { workspace = true, features = ["precompile-macro"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook.workspace = true
@@ -67,7 +67,7 @@ wasm-bindgen-futures.workspace = true
 wgpu = { path = "../../wgpu", default-features = false, features = [
     "wgsl",
     "std",
-    "precompile",
+    "precompile-macro",
 ] }
 # We need these features in the framework examples and tests
 web-sys = { workspace = true, features = [
