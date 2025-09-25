@@ -48,12 +48,6 @@ const CTS_GIT_URL: &str = "https://github.com/gpuweb/cts.git";
 /// Path to default CTS test list.
 const CTS_DEFAULT_TEST_LIST: &str = "cts_runner/test.lst";
 
-static TEST_LINE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    RegexBuilder::new(r#"(?:fails-if\s*\(\s*(?<fails_if>\w+)\s*\)\s+)?(?<selector>.*)"#)
-        .build()
-        .unwrap()
-});
-
 #[derive(Default)]
 struct TestLine {
     pub selector: OsString,
@@ -92,6 +86,12 @@ pub fn run_cts(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
 
     for file in list_files {
         tests.extend(shell.read_file(file)?.lines().filter_map(|line| {
+            static TEST_LINE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
+                RegexBuilder::new(r#"(?:fails-if\s*\(\s*(?<fails_if>\w+)\s*\)\s+)?(?<selector>.*)"#)
+                    .build()
+                    .unwrap()
+            });
+
             let trimmed = line.trim();
             let is_comment = trimmed.starts_with("//") || trimmed.starts_with("#");
             let captures = TEST_LINE_REGEX
