@@ -8,31 +8,28 @@ use core::{
 use wgt::{math::align_to, BufferUsages, BufferUses, Features};
 
 use crate::{
-    command::CommandBufferMutable,
+    command::encoder::EncodingState,
+    ray_tracing::{AsAction, AsBuild, BlasTriangleGeometryInfo, TlasBuild, ValidateAsActionsError},
+    resource::InvalidResourceError,
+    track::Tracker,
+};
+use crate::{command::EncoderStateError, device::resource::CommandIndices};
+use crate::{
+    command::{ArcCommand, ArcReferences, CommandBufferMutable},
     device::queue::TempResource,
     global::Global,
     id::CommandEncoderId,
     init_tracker::MemoryInitKind,
     ray_tracing::{
-        BlasBuildEntry, BlasGeometries, BuildAccelerationStructureError, TlasPackage,
-        TraceBlasBuildEntry, TraceBlasGeometries, TraceBlasTriangleGeometry, TraceTlasInstance,
-        TraceTlasPackage,
+        ArcBlasBuildEntry, ArcBlasGeometries, ArcBlasTriangleGeometry, ArcTlasInstance,
+        ArcTlasPackage, BlasBuildEntry, BlasGeometries, BuildAccelerationStructureError,
+        OwnedBlasBuildEntry, OwnedTlasPackage, TlasPackage, TraceBlasBuildEntry,
+        TraceBlasGeometries, TraceBlasTriangleGeometry, TraceTlasInstance, TraceTlasPackage,
     },
     resource::{Blas, BlasCompactState, Buffer, Labeled, StagingBuffer, Tlas},
     scratch::ScratchBuffer,
     snatch::SnatchGuard,
     track::PendingTransition,
-};
-use crate::{command::EncoderStateError, device::resource::CommandIndices};
-use crate::{
-    command::{encoder::EncodingState, ArcCommand},
-    ray_tracing::{
-        ArcBlasBuildEntry, ArcBlasGeometries, ArcBlasTriangleGeometry, ArcTlasInstance,
-        ArcTlasPackage, AsAction, AsBuild, BlasTriangleGeometryInfo, TlasBuild,
-        ValidateAsActionsError,
-    },
-    resource::InvalidResourceError,
-    track::Tracker,
 };
 use crate::{lock::RwLockWriteGuard, resource::RawResourceAccess};
 
@@ -147,7 +144,7 @@ impl Global {
                     }
                 };
                 TraceBlasBuildEntry {
-                    blas_id: blas_entry.blas_id,
+                    blas: blas_entry.blas_id,
                     geometries,
                 }
             })
@@ -159,7 +156,7 @@ impl Global {
                     .instances
                     .map(|instance| {
                         instance.map(|instance| TraceTlasInstance {
-                            blas_id: instance.blas_id,
+                            blas: instance.blas_id,
                             transform: *instance.transform,
                             custom_data: instance.custom_data,
                             mask: instance.mask,
@@ -167,7 +164,7 @@ impl Global {
                     })
                     .collect();
                 TraceTlasPackage {
-                    tlas_id: package.tlas_id,
+                    tlas: package.tlas_id,
                     instances,
                     lowest_unmodified: package.lowest_unmodified,
                 }
@@ -215,7 +212,7 @@ impl Global {
                         }
                     };
                     Ok(ArcBlasBuildEntry {
-                        blas: self.resolve_blas_id(blas_entry.blas_id)?,
+                        blas: self.resolve_blas_id(blas_entry.blas)?,
                         geometries,
                     })
                 })
@@ -232,7 +229,7 @@ impl Global {
                                 .as_ref()
                                 .map(|instance| {
                                     Ok(ArcTlasInstance {
-                                        blas: self.resolve_blas_id(instance.blas_id)?,
+                                        blas: self.resolve_blas_id(instance.blas)?,
                                         transform: instance.transform,
                                         custom_data: instance.custom_data,
                                         mask: instance.mask,
@@ -242,7 +239,7 @@ impl Global {
                         })
                         .collect::<Result<_, BuildAccelerationStructureError>>()?;
                     Ok(ArcTlasPackage {
-                        tlas: self.resolve_tlas_id(tlas_package.tlas_id)?,
+                        tlas: self.resolve_tlas_id(tlas_package.tlas)?,
                         instances,
                         lowest_unmodified: tlas_package.lowest_unmodified,
                     })
@@ -256,8 +253,8 @@ impl Global {
 
 pub(crate) fn build_acceleration_structures(
     state: &mut EncodingState,
-    blas: Vec<ArcBlasBuildEntry>,
-    tlas: Vec<ArcTlasPackage>,
+    blas: Vec<OwnedBlasBuildEntry<ArcReferences>>,
+    tlas: Vec<OwnedTlasPackage<ArcReferences>>,
 ) -> Result<(), BuildAccelerationStructureError> {
     state
         .device
@@ -282,7 +279,7 @@ pub(crate) fn build_acceleration_structures(
         &mut scratch_buffer_blas_size,
         &mut blas_storage,
     )?;
-    let mut tlas_lock_store = Vec::<(Option<ArcTlasPackage>, Arc<Tlas>)>::new();
+    let mut tlas_lock_store = Vec::<(Option<OwnedTlasPackage<ArcReferences>>, Arc<Tlas>)>::new();
 
     for package in tlas.into_iter() {
         let tlas = package.tlas.clone();
@@ -615,7 +612,7 @@ impl CommandBufferMutable {
 
 ///iterates over the blas iterator, and it's geometry, pushing the buffers into a storage vector (and also some validation).
 fn iter_blas(
-    blas_iter: impl Iterator<Item = ArcBlasBuildEntry>,
+    blas_iter: impl Iterator<Item = OwnedBlasBuildEntry<ArcReferences>>,
     tracker: &mut Tracker,
     build_command: &mut AsBuild,
     buf_storage: &mut Vec<TriangleBufferStore>,

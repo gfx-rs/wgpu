@@ -20,7 +20,7 @@ use std::{
     path::{Path, PathBuf},
     slice,
 };
-use wgc::identity::IdentityManager;
+use wgc::{command::IdReferences, identity::IdentityManager};
 
 #[derive(serde::Deserialize)]
 struct RawId {
@@ -57,7 +57,7 @@ struct Expectation {
 struct Test<'a> {
     features: wgt::Features,
     expectations: Vec<Expectation>,
-    actions: Vec<wgc::device::trace::Action<'a>>,
+    actions: Vec<wgc::device::trace::Action<'a, IdReferences>>,
 }
 
 fn map_callback(status: Result<(), wgc::resource::BufferAccessError>) {

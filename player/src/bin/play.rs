@@ -7,7 +7,7 @@ fn main() {
 
     use player::GlobalPlay as _;
     use wgc::device::trace;
-    use wgpu_core::identity::IdentityManager;
+    use wgpu_core::{command::IdReferences, identity::IdentityManager};
 
     use std::{
         fs,
@@ -52,7 +52,7 @@ fn main() {
 
     log::info!("Loading trace '{trace:?}'");
     let file = fs::File::open(trace).unwrap();
-    let mut actions: Vec<trace::Action> = ron::de::from_reader(file).unwrap();
+    let mut actions: Vec<trace::Action<IdReferences>> = ron::de::from_reader(file).unwrap();
     actions.reverse(); // allows us to pop from the top
     log::info!("Found {} actions", actions.len());
 

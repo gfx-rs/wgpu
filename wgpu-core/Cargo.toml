@@ -178,6 +178,7 @@ document-features.workspace = true
 hashbrown.workspace = true
 indexmap.workspace = true
 log.workspace = true
+macro_rules_attribute.workspace = true
 once_cell = { workspace = true, features = ["std"] }
 parking_lot.workspace = true
 profiling = { workspace = true, default-features = false }

@@ -1,11 +1,76 @@
 use core::convert::Infallible;
 
 use alloc::{string::String, sync::Arc, vec::Vec};
+#[cfg(feature = "serde")]
+use macro_rules_attribute::attribute_alias;
 
 use crate::{
     id,
     resource::{Buffer, QuerySet, Texture},
 };
+
+pub trait ReferenceType {
+    type Buffer: Clone + core::fmt::Debug;
+    type Texture: Clone + core::fmt::Debug;
+    type TextureView: Clone + core::fmt::Debug;
+    type QuerySet: Clone + core::fmt::Debug;
+    type BindGroup: Clone + core::fmt::Debug;
+    type RenderPipeline: Clone + core::fmt::Debug;
+    type RenderBundle: Clone + core::fmt::Debug;
+    type ComputePipeline: Clone + core::fmt::Debug;
+    type Blas: Clone + core::fmt::Debug;
+    type Tlas: Clone + core::fmt::Debug;
+}
+
+#[derive(Clone, Debug)]
+pub struct IdReferences;
+
+#[derive(Clone, Debug)]
+pub struct ArcReferences;
+
+impl ReferenceType for IdReferences {
+    type Buffer = id::BufferId;
+    type Texture = id::TextureId;
+    type TextureView = id::TextureViewId;
+    type QuerySet = id::QuerySetId;
+    type BindGroup = id::BindGroupId;
+    type RenderPipeline = id::RenderPipelineId;
+    type RenderBundle = id::RenderBundleId;
+    type ComputePipeline = id::ComputePipelineId;
+    type Blas = id::BlasId;
+    type Tlas = id::TlasId;
+}
+
+impl ReferenceType for ArcReferences {
+    type Buffer = Arc<Buffer>;
+    type Texture = Arc<Texture>;
+    type TextureView = Arc<crate::resource::TextureView>;
+    type QuerySet = Arc<QuerySet>;
+    type BindGroup = Arc<crate::binding_model::BindGroup>;
+    type RenderPipeline = Arc<crate::pipeline::RenderPipeline>;
+    type RenderBundle = Arc<crate::command::RenderBundle>;
+    type ComputePipeline = Arc<crate::pipeline::ComputePipeline>;
+    type Blas = Arc<crate::resource::Blas>;
+    type Tlas = Arc<crate::resource::Tlas>;
+}
+
+#[cfg(feature = "serde")]
+attribute_alias! {
+    #[apply(serde_object_reference_struct)] =
+    #[derive(serde::Serialize, serde::Deserialize)]
+    #[serde(bound =
+         "R::Buffer: serde::Serialize + for<'d> serde::Deserialize<'d>,\
+          R::Texture: serde::Serialize + for<'d> serde::Deserialize<'d>,\
+          R::TextureView: serde::Serialize + for<'d> serde::Deserialize<'d>,\
+          R::QuerySet: serde::Serialize + for<'d> serde::Deserialize<'d>,\
+          R::BindGroup: serde::Serialize + for<'d> serde::Deserialize<'d>,\
+          R::RenderPipeline: serde::Serialize + for<'d> serde::Deserialize<'d>,\
+          R::RenderBundle: serde::Serialize + for<'d> serde::Deserialize<'d>,\
+          R::ComputePipeline: serde::Serialize + for<'d> serde::Deserialize<'d>,\
+          R::Blas: serde::Serialize + for<'d> serde::Deserialize<'d>,\
+          R::Tlas: serde::Serialize + for<'d> serde::Deserialize<'d>"
+    )];
+}
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

@@ -34,13 +34,15 @@ use core::mem::{self, ManuallyDrop};
 use core::ops;
 
 pub(crate) use self::clear::clear_texture;
+#[cfg(feature = "serde")]
+pub(crate) use self::encoder_command::serde_object_reference_struct;
 pub use self::{
     bundle::*,
     clear::ClearError,
     compute::*,
     compute_command::{ArcComputeCommand, ComputeCommand},
     draw::*,
-    encoder_command::{ArcCommand, Command},
+    encoder_command::{ArcCommand, ArcReferences, Command, IdReferences, ReferenceType},
     query::*,
     render::*,
     render_command::{ArcRenderCommand, RenderCommand},

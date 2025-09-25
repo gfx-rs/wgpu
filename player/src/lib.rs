@@ -6,7 +6,11 @@
 extern crate wgpu_core as wgc;
 extern crate wgpu_types as wgt;
 
-use wgc::{command::Command, device::trace, identity::IdentityManager};
+use wgc::{
+    command::{Command, IdReferences},
+    device::trace,
+    identity::IdentityManager,
+};
 
 use std::{borrow::Cow, fs, path::Path};
 
@@ -21,7 +25,7 @@ pub trait GlobalPlay {
         &self,
         device: wgc::id::DeviceId,
         queue: wgc::id::QueueId,
-        action: trace::Action,
+        action: trace::Action<IdReferences>,
         dir: &Path,
         command_encoder_id_manager: &mut IdentityManager<wgc::id::markers::CommandEncoder>,
         command_buffer_id_manager: &mut IdentityManager<wgc::id::markers::CommandBuffer>,
@@ -143,7 +147,7 @@ impl GlobalPlay for wgc::global::Global {
                             }
                         };
                         wgc::ray_tracing::BlasBuildEntry {
-                            blas_id: x.blas_id,
+                            blas_id: x.blas,
                             geometries,
                         }
                     });
@@ -153,14 +157,14 @@ impl GlobalPlay for wgc::global::Global {
                             instance
                                 .as_ref()
                                 .map(|instance| wgc::ray_tracing::TlasInstance {
-                                    blas_id: instance.blas_id,
+                                    blas_id: instance.blas,
                                     transform: &instance.transform,
                                     custom_data: instance.custom_data,
                                     mask: instance.mask,
                                 })
                         });
                         wgc::ray_tracing::TlasPackage {
-                            tlas_id: x.tlas_id,
+                            tlas_id: x.tlas,
                             instances: Box::new(instances),
                             lowest_unmodified: x.lowest_unmodified,
                         }
@@ -188,7 +192,7 @@ impl GlobalPlay for wgc::global::Global {
         &self,
         device: wgc::id::DeviceId,
         queue: wgc::id::QueueId,
-        action: trace::Action,
+        action: trace::Action<IdReferences>,
         dir: &Path,
         command_encoder_id_manager: &mut IdentityManager<wgc::id::markers::CommandEncoder>,
         command_buffer_id_manager: &mut IdentityManager<wgc::id::markers::CommandBuffer>,

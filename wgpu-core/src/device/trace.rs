@@ -1,12 +1,17 @@
-use alloc::{string::String, vec::Vec};
 use core::{convert::Infallible, ops::Range};
+
+use alloc::{string::String, vec::Vec};
+use macro_rules_attribute::apply;
 
 #[cfg(feature = "trace")]
 use {alloc::borrow::Cow, std::io::Write as _};
 
-use crate::{command::Command, id};
-
-//TODO: consider a readable Id that doesn't include the backend
+#[cfg(feature = "trace")]
+use crate::command::IdReferences;
+use crate::{
+    command::{serde_object_reference_struct, BasePass, Command, ReferenceType, RenderCommand},
+    id,
+};
 
 type FileName = String;
 
@@ -36,8 +41,8 @@ pub(crate) fn new_render_bundle_encoder_descriptor<'a>(
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum Action<'a> {
+#[apply(serde_object_reference_struct)]
+pub enum Action<'a, R: ReferenceType> {
     Init {
         desc: crate::device::DeviceDescriptor<'a>,
         backend: wgt::Backend,
@@ -46,18 +51,18 @@ pub enum Action<'a> {
         id::SurfaceId,
         wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
     ),
-    CreateBuffer(id::BufferId, crate::resource::BufferDescriptor<'a>),
-    FreeBuffer(id::BufferId),
-    DestroyBuffer(id::BufferId),
-    CreateTexture(id::TextureId, crate::resource::TextureDescriptor<'a>),
-    FreeTexture(id::TextureId),
-    DestroyTexture(id::TextureId),
+    CreateBuffer(R::Buffer, crate::resource::BufferDescriptor<'a>),
+    FreeBuffer(R::Buffer),
+    DestroyBuffer(R::Buffer),
+    CreateTexture(R::Texture, crate::resource::TextureDescriptor<'a>),
+    FreeTexture(R::Texture),
+    DestroyTexture(R::Texture),
     CreateTextureView {
-        id: id::TextureViewId,
-        parent_id: id::TextureId,
+        id: R::TextureView,
+        parent_id: R::Texture,
         desc: crate::resource::TextureViewDescriptor<'a>,
     },
-    DestroyTextureView(id::TextureViewId),
+    DestroyTextureView(R::TextureView),
     CreateExternalTexture {
         id: id::ExternalTextureId,
         desc: crate::resource::ExternalTextureDescriptor<'a>,
@@ -68,7 +73,7 @@ pub enum Action<'a> {
     CreateSampler(id::SamplerId, crate::resource::SamplerDescriptor<'a>),
     DestroySampler(id::SamplerId),
     GetSurfaceTexture {
-        id: id::TextureId,
+        id: R::Texture,
         parent_id: id::SurfaceId,
     },
     Present(id::SurfaceId),
@@ -125,7 +130,7 @@ pub enum Action<'a> {
     CreateRenderBundle {
         id: id::RenderBundleId,
         desc: crate::command::RenderBundleEncoderDescriptor<'a>,
-        base: crate::command::BasePass<crate::command::RenderCommand, Infallible>,
+        base: BasePass<RenderCommand, Infallible>,
     },
     DestroyRenderBundle(id::RenderBundleId),
     CreateQuerySet {
@@ -134,13 +139,13 @@ pub enum Action<'a> {
     },
     DestroyQuerySet(id::QuerySetId),
     WriteBuffer {
-        id: id::BufferId,
+        id: R::Buffer,
         data: FileName,
         range: Range<wgt::BufferAddress>,
         queued: bool,
     },
     WriteTexture {
-        to: wgt::TexelCopyTextureInfo<id::TextureId>,
+        to: wgt::TexelCopyTextureInfo<R::Texture>,
         data: FileName,
         layout: wgt::TexelCopyBufferLayout,
         size: wgt::Extent3d,
@@ -189,7 +194,10 @@ impl Trace {
         name
     }
 
-    pub(crate) fn add(&mut self, action: Action) {
+    pub(crate) fn add(&mut self, action: Action<'_, IdReferences>)
+    where
+        for<'a> Action<'a, IdReferences>: serde::Serialize,
+    {
         match ron::ser::to_string_pretty(&action, self.config.clone()) {
             Ok(string) => {
                 let _ = writeln!(self.file, "{string},");
