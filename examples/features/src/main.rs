@@ -63,6 +63,12 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgpu: true,
     },
     ExampleDesc {
+        name: "mesh_shader",
+        function: wgpu_examples::mesh_shader::main,
+        webgl: false,
+        webgpu: false,
+    },
+    ExampleDesc {
         name: "mipmap",
         function: wgpu_examples::mipmap::main,
         webgl: true,
@@ -78,6 +84,12 @@ const EXAMPLES: &[ExampleDesc] = &[
         name: "multiple_render_targets",
         function: wgpu_examples::multiple_render_targets::main,
         webgl: false,
+        webgpu: true,
+    },
+    ExampleDesc {
+        name: "precompiled_shader",
+        function: wgpu_examples::precompiled_shader::main,
+        webgl: true,
         webgpu: true,
     },
     ExampleDesc {
@@ -181,12 +193,6 @@ const EXAMPLES: &[ExampleDesc] = &[
         function: wgpu_examples::ray_cube_normals::main,
         webgl: false,  // No Ray-tracing extensions
         webgpu: false, // No Ray-tracing extensions (yet)
-    },
-    ExampleDesc {
-        name: "mesh_shader",
-        function: wgpu_examples::mesh_shader::main,
-        webgl: false,
-        webgpu: false,
     },
 ];
 

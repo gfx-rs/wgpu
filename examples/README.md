@@ -33,6 +33,7 @@ These examples use a common framework to handle wgpu init, window creation, and 
 #### Graphics
 
 - `hello_triangle` - Provides an example of a bare-bones wgpu workflow using the Winit crate that simply renders a red triangle on a green background.
+- `precompiled_shader` - Essentially `hello_triangle` except that the shaders are compiled at compile-time instead of runtime
 - `uniform_values` - Demonstrates the basics of enabling shaders and the GPU, in general, to access app state through uniform variables. `uniform_values` also serves as an example of rudimentary app building as the app stores state and takes window-captured keyboard events. The app displays the Mandelbrot Set in grayscale (similar to `storage_texture`) but allows the user to navigate and explore it using their arrow keys and scroll wheel.
 - `cube` - Introduces the user to slightly more advanced models. The example creates a set of triangles to form a cube on the CPU and then uses a vertex and index buffer to send the generated model to the GPU for usage in rendering. It also uses a texture generated on the CPU to shade the sides of the cube and a uniform variable to apply a transformation matrix to the cube in the shader.
 - `bunnymark` - Demonstrates many things, but chief among them is performing numerous draw calls with different bind groups in one render pass. The example also uses textures for the icon and uniform buffers to transfer both global and per-particle states.
