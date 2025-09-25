@@ -198,7 +198,7 @@ struct TempFolder {
 }
 impl Drop for TempFolder {
     fn drop(&mut self) {
-        std::fs::remove_dir_all(&self.path).expect("Failed to remove temporary folder");
+        let _ = std::fs::remove_dir_all(&self.path);
     }
 }
 
