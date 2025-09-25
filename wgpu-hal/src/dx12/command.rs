@@ -1121,8 +1121,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .enumerate()
         {
             if let Some(stride) = stride {
-                if vb.StrideInBytes != stride.get() {
-                    vb.StrideInBytes = stride.get();
+                if vb.StrideInBytes != stride {
+                    vb.StrideInBytes = stride;
                     self.pass.dirty_vertex_buffers |= 1 << index;
                 }
             }

@@ -1952,7 +1952,7 @@ impl crate::Device for super::Device {
                 let mut input_element_descs = Vec::new();
                 for (i, (stride, vbuf)) in vertex_strides.iter_mut().zip(vertex_buffers).enumerate()
                 {
-                    *stride = NonZeroU32::new(vbuf.array_stride as u32);
+                    *stride = Some(vbuf.array_stride as u32);
                     let (slot_class, step_rate) = match vbuf.step_mode {
                         wgt::VertexStepMode::Vertex => {
                             (Direct3D12::D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0)

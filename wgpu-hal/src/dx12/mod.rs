@@ -86,7 +86,7 @@ mod types;
 mod view;
 
 use alloc::{borrow::ToOwned as _, string::String, sync::Arc, vec::Vec};
-use core::{ffi, fmt, mem, num::NonZeroU32, ops::Deref};
+use core::{ffi, fmt, mem, ops::Deref};
 
 use arrayvec::ArrayVec;
 use hashbrown::HashMap;
@@ -1169,7 +1169,7 @@ pub struct RenderPipeline {
     raw: Direct3D12::ID3D12PipelineState,
     layout: PipelineLayoutShared,
     topology: Direct3D::D3D_PRIMITIVE_TOPOLOGY,
-    vertex_strides: [Option<NonZeroU32>; crate::MAX_VERTEX_BUFFERS],
+    vertex_strides: [Option<u32>; crate::MAX_VERTEX_BUFFERS],
 }
 
 impl crate::DynRenderPipeline for RenderPipeline {}
