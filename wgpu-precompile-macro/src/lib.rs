@@ -193,6 +193,15 @@ impl Parse for PrecompileDxilArgs {
     }
 }
 
+struct TempFolder {
+    path: PathBuf,
+}
+impl Drop for TempFolder {
+    fn drop(&mut self) {
+        std::fs::remove_dir_all(&self.path).expect("Failed to remove temporary folder");
+    }
+}
+
 /// This is so we can conditionally hook into DXC depending on the target, which must be configured via #\[cfg] within the main program.
 /// Proc macros don't directly have access to the target configuration. Invoking naga unnecessarily shouldn't be *too* major, but
 /// compiling to macOS shouldn't require dxc be present.
@@ -213,13 +222,17 @@ pub fn precompile_hlsl_to_dxil(input: TokenStream) -> TokenStream {
             .to_string(),
     );
     std::fs::create_dir(&temporary_folder_location).expect("Failed to create temporary directory");
+    // Drop guard essentially
+    let tempoary_folder = TempFolder {
+        path: temporary_folder_location,
+    };
 
     // The naming matters for DXIL debug info. We don't want to give it a name that seems like something the
     // user might've specified, as that could cause confusion.
-    let input_file = temporary_folder_location.join("__wgpu_inline.hlsl");
+    let input_file = tempoary_folder.path.join("__wgpu_inline.hlsl");
     std::fs::write(&input_file, args.hlsl_code.as_bytes())
         .expect("Failed to write to HLSL input file");
-    let temporary_file_location = temporary_folder_location.join("file.dxil");
+    let temporary_file_location = tempoary_folder.path.join("file.dxil");
     let output = std::process::Command::new("dxc")
         .args([
             "-T",
@@ -238,8 +251,6 @@ pub fn precompile_hlsl_to_dxil(input: TokenStream) -> TokenStream {
         panic!("DXC failed:\n{}", String::from_utf8(output.stderr).unwrap());
     }
     let dxil = std::fs::read(temporary_file_location).expect("Failed to read DXC output file");
-    std::fs::remove_dir_all(temporary_folder_location)
-        .expect("Failed to remove temporary directory");
     quote! {
         &[#(#dxil),*]
     }
