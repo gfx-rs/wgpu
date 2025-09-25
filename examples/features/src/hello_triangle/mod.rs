@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::EventLoop,
@@ -26,16 +27,22 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: None,
-            required_features: wgpu::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS,
+            required_features: wgpu::Features::empty(),
             // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
             required_limits: wgpu::Limits::downlevel_webgl2_defaults()
                 .using_resolution(adapter.limits()),
-            experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Off,
         })
         .await
         .expect("Failed to create device");
+
+    // Load the shaders from disk
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: None,
+        source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("shader.wgsl"))),
+    });
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
@@ -45,32 +52,18 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
 
     let swapchain_capabilities = surface.get_capabilities(&adapter);
     let swapchain_format = swapchain_capabilities.formats[0];
-    let vs_shader = unsafe {
-        device.create_shader_module_passthrough(wgpu::include_precompiled_wgsl!(
-            "src/hello_triangle/shader.wgsl",
-            "vs_main",
-            all
-        ))
-    };
-    let fs_shader = unsafe {
-        device.create_shader_module_passthrough(wgpu::include_precompiled_wgsl!(
-            "src/hello_triangle/shader.wgsl",
-            "fs_main",
-            all
-        ))
-    };
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
-            module: &vs_shader,
+            module: &shader,
             entry_point: Some("vs_main"),
             buffers: &[],
             compilation_options: Default::default(),
         },
         fragment: Some(wgpu::FragmentState {
-            module: &fs_shader,
+            module: &shader,
             entry_point: Some("fs_main"),
             compilation_options: Default::default(),
             targets: &[Some(swapchain_format.into())],
@@ -93,13 +86,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             // Have the closure take ownership of the resources.
             // `event_loop.run` never returns, therefore we must do this to ensure
             // the resources are properly cleaned up.
-            let _ = (
-                &instance,
-                &adapter,
-                &vs_shader,
-                &fs_shader,
-                &pipeline_layout,
-            );
+            let _ = (&instance, &adapter, &shader, &pipeline_layout);
 
             if let Event::WindowEvent {
                 window_id: _,
