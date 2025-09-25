@@ -261,6 +261,8 @@ ndk-sys = "0.6"
 # These overrides allow our examples to explicitly depend on release crates
 [patch.crates-io]
 wgpu = { path = "./wgpu" }
+rspirv = { git = "https://github.com/gfx-rs/rspirv", rev = "89ce4d0e64c91b0635f617409dc57cb031749a39" }
+spirv = { git = "https://github.com/gfx-rs/rspirv", rev = "89ce4d0e64c91b0635f617409dc57cb031749a39" }
 
 # https://github.com/Xudong-Huang/generator-rs/pull/75
 generator = { git = "https://github.com/Xudong-Huang/generator-rs", rev = "70b89fdabcc0e82fe84ca17f65cc52ff25e8e6de" }
