@@ -888,10 +888,6 @@ impl PhysicalDeviceFeatures {
             caps.supports_extension(khr::external_memory_win32::NAME),
         );
         features.set(
-            F::VULKAN_WIN32_KEYED_MUTEX,
-            caps.supports_extension(khr::win32_keyed_mutex::NAME),
-        );
-        features.set(
             F::EXPERIMENTAL_MESH_SHADER,
             caps.supports_extension(ext::mesh_shader::NAME),
         );
@@ -1104,11 +1100,6 @@ impl PhysicalDeviceProperties {
         // Optional `VK_KHR_external_memory_win32`
         if self.supports_extension(khr::external_memory_win32::NAME) {
             extensions.push(khr::external_memory_win32::NAME);
-        }
-
-        // Optional `VK_KHR_win32_keyed_mutex`
-        if self.supports_extension(khr::win32_keyed_mutex::NAME) {
-            extensions.push(khr::win32_keyed_mutex::NAME);
         }
 
         // Optional `VK_KHR_external_memory_fd`
