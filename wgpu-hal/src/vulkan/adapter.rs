@@ -129,6 +129,10 @@ pub struct PhysicalDeviceFeatures {
 }
 
 impl PhysicalDeviceFeatures {
+    pub fn get_core(&self) -> vk::PhysicalDeviceFeatures {
+        self.core
+    }
+
     /// Add the members of `self` into `info.enabled_features` and its `p_next` chain.
     pub fn add_to_device_create<'a>(
         &'a mut self,
@@ -1859,6 +1863,10 @@ impl super::Adapter {
         self.raw
     }
 
+    pub fn get_physical_device_features(&self) -> &PhysicalDeviceFeatures {
+        &self.phd_features
+    }
+
     pub fn physical_device_capabilities(&self) -> &PhysicalDeviceProperties {
         &self.phd_capabilities
     }
@@ -2166,6 +2174,7 @@ impl super::Adapter {
                 force_loop_bounding: true,
                 use_storage_input_output_16: features.contains(wgt::Features::SHADER_F16)
                     && self.phd_features.supports_storage_input_output_16(),
+                fake_missing_bindings: false,
                 // We need to build this separately for each invocation, so just default it out here
                 binding_map: BTreeMap::default(),
                 debug_info: None,

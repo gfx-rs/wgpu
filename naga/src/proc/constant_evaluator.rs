@@ -1178,6 +1178,11 @@ impl<'a> ConstantEvaluator<'a> {
             crate::MathFunction::Atan => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.atan()]) })
             }
+            crate::MathFunction::Atan2 => {
+                component_wise_float!(self, span, [arg, arg1.unwrap()], |y, x| {
+                    Ok([y.atan2(x)])
+                })
+            }
             crate::MathFunction::Asinh => {
                 component_wise_float!(self, span, [arg], |e| { Ok([e.asinh()]) })
             }
@@ -1346,8 +1351,7 @@ impl<'a> ConstantEvaluator<'a> {
             crate::MathFunction::Cross => self.cross_product(arg, arg1.unwrap(), span),
 
             // unimplemented
-            crate::MathFunction::Atan2
-            | crate::MathFunction::Modf
+            crate::MathFunction::Modf
             | crate::MathFunction::Frexp
             | crate::MathFunction::Ldexp
             | crate::MathFunction::Dot
