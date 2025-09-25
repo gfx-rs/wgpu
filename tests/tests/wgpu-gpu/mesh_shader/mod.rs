@@ -150,7 +150,6 @@ struct MeshPipelineTestInfo {
     draw: bool,
 }
 
-/// Many of the types aren't `Hash`
 fn hash_testing_context(ctx: &TestingContext) -> u64 {
     let mut hasher = DefaultHasher::new();
     ctx.hash(&mut hasher);

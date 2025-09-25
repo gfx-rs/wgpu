@@ -43,8 +43,6 @@ fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::Sh
             "-Fo",
             &out_path,
         ])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
         .output()
         .unwrap();
     if !cmd.status.success() {
