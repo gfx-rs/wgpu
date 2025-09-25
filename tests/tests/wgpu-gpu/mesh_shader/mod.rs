@@ -62,7 +62,6 @@ fn compile_hlsl(
         "{}/tests/wgpu-gpu/mesh_shader/{test_name}.{stage_str}.cso",
         env!("CARGO_MANIFEST_DIR")
     );
-    println!("{out_path}");
     let cmd = std::process::Command::new("dxc")
         .args([
             "-T",
