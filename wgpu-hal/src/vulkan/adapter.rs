@@ -129,6 +129,10 @@ pub struct PhysicalDeviceFeatures {
 }
 
 impl PhysicalDeviceFeatures {
+    pub fn get_core(&self) -> vk::PhysicalDeviceFeatures {
+        self.core
+    }
+
     /// Add the members of `self` into `info.enabled_features` and its `p_next` chain.
     pub fn add_to_device_create<'a>(
         &'a mut self,
@@ -1857,6 +1861,10 @@ impl super::Instance {
 impl super::Adapter {
     pub fn raw_physical_device(&self) -> vk::PhysicalDevice {
         self.raw
+    }
+
+    pub fn get_physical_device_features(&self) -> &PhysicalDeviceFeatures {
+        &self.phd_features
     }
 
     pub fn physical_device_capabilities(&self) -> &PhysicalDeviceProperties {

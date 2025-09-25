@@ -462,6 +462,10 @@ pub struct Surface {
 }
 
 impl Surface {
+    pub unsafe fn raw_handle(&self) -> vk::SurfaceKHR {
+        self.raw
+    }
+
     /// Get the raw Vulkan swapchain associated with this surface.
     ///
     /// Returns [`None`] if the surface is not configured.
