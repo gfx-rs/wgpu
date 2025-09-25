@@ -25,7 +25,7 @@ fn check_feature_dependency(requirement: Requirement) {
     println!("Checking: {}", requirement.human_readable_name);
 
     let mut args = Vec::new();
-    args.extend(["tree", "-e", "normal", "--target", requirement.target]);
+    args.extend(["tree", "-e", "normal,build", "--target", requirement.target]);
 
     for package in requirement.packages {
         args.push("--package");
