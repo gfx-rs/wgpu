@@ -5618,7 +5618,8 @@ bitflags::bitflags! {
         const STORAGE_ATOMIC = 1 << 16;
         /// Specifies the contents of this texture will not be used in another pass to potentially reduce memory usage and bandwidth.
         ///
-        /// No-op on platforms other than Vulkan and Metal.
+        /// No-op on platforms on platforms that do not benefit from transient textures.
+        /// Generally mobile and Apple chips care about this.
         ///
         /// Incompatible with ALL other usages except [`TextureUsages::RENDER_ATTACHMENT`].
         ///
