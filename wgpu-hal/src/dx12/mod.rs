@@ -1623,7 +1623,9 @@ struct MeshShaderPipelineStateStream {
 }
 impl MeshShaderPipelineStateStream {
     /// # Safety
-    /// Self must outlive the bytes (I think)
+    /// 
+    /// Returned bytes contain pointers into this struct, for them to be valid,
+    /// this struct may be at the same location. As if `as_bytes<'a>(&'a self) -> Vec<u8> + 'a`
     pub unsafe fn to_bytes(&self) -> Vec<u8> {
         use Direct3D12::*;
         let mut bytes = Vec::new();
