@@ -1,4 +1,5 @@
-use crate::{Epoch, Index};
+use crate::{storage::StorageItem, Epoch, Index};
+use alloc::sync::Arc;
 use core::{
     cmp::Ordering,
     fmt::{self, Debug},
@@ -82,18 +83,15 @@ impl RawId {
 /// [`Registry`]: crate::registry::Registry
 /// [`Noop`]: hal::api::Noop
 #[repr(transparent)]
-#[cfg_attr(any(feature = "serde", feature = "trace"), derive(serde::Serialize))]
-#[cfg_attr(any(feature = "serde", feature = "replay"), derive(serde::Deserialize))]
-#[cfg_attr(
-    any(feature = "serde", feature = "trace", feature = "replay"),
-    serde(transparent)
-)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct Id<T: Marker>(RawId, PhantomData<T>);
 
 // This type represents Id in a more readable (and editable) way.
-#[allow(dead_code)]
+#[cfg(feature = "serde")]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-enum SerialId {
+#[derive(Clone, Debug)]
+pub enum SerialId {
     // The only variant forces RON to not ignore "Id"
     Id(Index, Epoch),
 }
@@ -122,6 +120,48 @@ impl TryFrom<SerialId> for RawId {
         } else {
             Ok(RawId::zip(index, epoch))
         }
+    }
+}
+
+/// Identify an object by the pointer returned by `Arc::as_ptr`.
+///
+/// This is used for tracing.
+#[allow(dead_code)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug)]
+pub struct PointerId<T: Marker>(usize, #[serde(skip)] PhantomData<T>);
+
+impl<T: Marker> Copy for PointerId<T> {}
+
+impl<T: Marker> Clone for PointerId<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T: Marker> PartialEq for PointerId<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<T: Marker> Eq for PointerId<T> {}
+
+impl<T: Marker> Hash for PointerId<T> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<T: StorageItem> From<&Arc<T>> for PointerId<T::Marker> {
+    fn from(arc: &Arc<T>) -> Self {
+        // Since the memory representation of `Arc<T>` is just a pointer, it
+        // would be nice to use that pointer as the trace ID, since many
+        // `into_trace` implementations would then be no-ops at runtime.
+        // Unfortunately, because `Arc::as_ptr` returns a pointer to the
+        // contained data, and `Arc` stores reference counts before the data,
+        // we are adding an offset to the pointer here.
+        Self(Arc::as_ptr(arc) as usize, PhantomData)
     }
 }
 

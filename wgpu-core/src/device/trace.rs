@@ -27,7 +27,7 @@ pub enum Action<'a, R: ReferenceType> {
         backend: wgt::Backend,
     },
     ConfigureSurface(
-        id::SurfaceId,
+        R::Surface,
         wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
     ),
     CreateBuffer(R::Buffer, crate::resource::BufferDescriptor<'a>),
@@ -38,7 +38,7 @@ pub enum Action<'a, R: ReferenceType> {
     DestroyTexture(R::Texture),
     CreateTextureView {
         id: R::TextureView,
-        parent_id: R::Texture,
+        parent: R::Texture,
         desc: crate::resource::TextureViewDescriptor<'a>,
     },
     DestroyTextureView(R::TextureView),
@@ -53,10 +53,10 @@ pub enum Action<'a, R: ReferenceType> {
     DestroySampler(id::SamplerId),
     GetSurfaceTexture {
         id: R::Texture,
-        parent_id: id::SurfaceId,
+        parent: R::Surface,
     },
-    Present(id::SurfaceId),
-    DiscardSurfaceTexture(id::SurfaceId),
+    Present(R::Surface),
+    DiscardSurfaceTexture(R::Surface),
     CreateBindGroupLayout(
         id::BindGroupLayoutId,
         crate::binding_model::BindGroupLayoutDescriptor<'a>,
@@ -107,9 +107,9 @@ pub enum Action<'a, R: ReferenceType> {
     },
     DestroyPipelineCache(id::PipelineCacheId),
     CreateRenderBundle {
-        id: id::RenderBundleId,
+        id: R::RenderBundle,
         desc: crate::command::RenderBundleEncoderDescriptor<'a>,
-        base: BasePass<RenderCommand, Infallible>,
+        base: BasePass<RenderCommand<R>, Infallible>,
     },
     DestroyRenderBundle(id::RenderBundleId),
     CreateQuerySet {
@@ -129,7 +129,7 @@ pub enum Action<'a, R: ReferenceType> {
         layout: wgt::TexelCopyBufferLayout,
         size: wgt::Extent3d,
     },
-    Submit(crate::SubmissionIndex, Vec<Command>),
+    Submit(crate::SubmissionIndex, Vec<Command<R>>),
     CreateBlas {
         id: id::BlasId,
         desc: crate::resource::BlasDescriptor<'a>,

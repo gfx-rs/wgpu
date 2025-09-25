@@ -797,14 +797,8 @@ impl Buffer {
     }
 
     // Note: This must not be called while holding a lock.
-    pub(crate) fn unmap(
-        self: &Arc<Self>,
-        #[cfg(feature = "trace")] buffer_id: crate::id::BufferId,
-    ) -> Result<(), BufferAccessError> {
-        if let Some((mut operation, status)) = self.unmap_inner(
-            #[cfg(feature = "trace")]
-            buffer_id,
-        )? {
+    pub(crate) fn unmap(self: &Arc<Self>) -> Result<(), BufferAccessError> {
+        if let Some((mut operation, status)) = self.unmap_inner()? {
             if let Some(callback) = operation.callback.take() {
                 callback(status);
             }
@@ -813,10 +807,7 @@ impl Buffer {
         Ok(())
     }
 
-    fn unmap_inner(
-        self: &Arc<Self>,
-        #[cfg(feature = "trace")] buffer_id: crate::id::BufferId,
-    ) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
+    fn unmap_inner(self: &Arc<Self>) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
         let device = &self.device;
         let snatch_guard = device.snatchable_lock.read();
         let raw_buf = self.try_raw(&snatch_guard)?;
@@ -824,9 +815,11 @@ impl Buffer {
             BufferMapState::Init { staging_buffer } => {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut trace) = *device.trace.lock() {
+                    use crate::device::trace::IntoTrace;
+
                     let data = trace.make_binary("bin", staging_buffer.get_data());
                     trace.add(trace::Action::WriteBuffer {
-                        id: buffer_id,
+                        id: self.to_trace(),
                         data,
                         range: 0..self.size,
                         queued: true,
@@ -886,12 +879,14 @@ impl Buffer {
                 if host == HostMap::Write {
                     #[cfg(feature = "trace")]
                     if let Some(ref mut trace) = *device.trace.lock() {
+                        use crate::device::trace::IntoTrace;
+
                         let size = range.end - range.start;
                         let data = trace.make_binary("bin", unsafe {
                             core::slice::from_raw_parts(mapping.ptr.as_ptr(), size as usize)
                         });
                         trace.add(trace::Action::WriteBuffer {
-                            id: buffer_id,
+                            id: self.to_trace(),
                             data,
                             range: range.clone(),
                             queued: false,

@@ -1974,7 +1974,7 @@ impl Device {
         };
         let params = self.create_buffer(&params_desc)?;
         self.get_queue().unwrap().write_buffer(
-            Fallible::Valid(params.clone()),
+            params.clone(),
             0,
             bytemuck::bytes_of(&params_data),
         )?;

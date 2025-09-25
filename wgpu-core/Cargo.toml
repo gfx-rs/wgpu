@@ -69,7 +69,7 @@ observe_locks = ["std", "dep:ron", "serde/serde_derive"]
 # --------------------------------------------------------------------
 
 ## Enables serialization via `serde` on common wgpu types.
-serde = ["dep:serde", "wgpu-types/serde", "arrayvec/serde", "hashbrown/serde"]
+serde = ["dep:serde", "wgpu-types/serde", "arrayvec/serde", "hashbrown/serde", "smallvec/serde"]
 
 ## Enable API tracing.
 trace = ["serde", "std", "dep:ron", "naga/serialize", "wgpu-types/trace"]

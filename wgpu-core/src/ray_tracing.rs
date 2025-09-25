@@ -337,7 +337,7 @@ pub type TraceBlasGeometries = OwnedBlasGeometries<IdReferences>;
 #[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
 pub struct OwnedBlasBuildEntry<R: ReferenceType> {
     pub blas: R::Blas,
-    pub geometries: OwnedBlasGeometries<R>, // TODO
+    pub geometries: OwnedBlasGeometries<R>,
 }
 
 pub type ArcBlasBuildEntry = OwnedBlasBuildEntry<ArcReferences>;

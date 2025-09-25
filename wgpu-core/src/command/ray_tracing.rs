@@ -23,8 +23,7 @@ use crate::{
     ray_tracing::{
         ArcBlasBuildEntry, ArcBlasGeometries, ArcBlasTriangleGeometry, ArcTlasInstance,
         ArcTlasPackage, BlasBuildEntry, BlasGeometries, BuildAccelerationStructureError,
-        OwnedBlasBuildEntry, OwnedTlasPackage, TlasPackage, TraceBlasBuildEntry,
-        TraceBlasGeometries, TraceBlasTriangleGeometry, TraceTlasInstance, TraceTlasPackage,
+        OwnedBlasBuildEntry, OwnedTlasPackage, TlasPackage,
     },
     resource::{Blas, BlasCompactState, Buffer, Labeled, StagingBuffer, Tlas},
     scratch::ScratchBuffer,
@@ -122,73 +121,14 @@ impl Global {
         let hub = &self.hub;
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
-
-        let trace_blas: Vec<TraceBlasBuildEntry> = blas_iter
-            .map(|blas_entry| {
-                let geometries = match blas_entry.geometries {
-                    BlasGeometries::TriangleGeometries(triangle_geometries) => {
-                        TraceBlasGeometries::TriangleGeometries(
-                            triangle_geometries
-                                .map(|tg| TraceBlasTriangleGeometry {
-                                    size: tg.size.clone(),
-                                    vertex_buffer: tg.vertex_buffer,
-                                    index_buffer: tg.index_buffer,
-                                    transform_buffer: tg.transform_buffer,
-                                    first_vertex: tg.first_vertex,
-                                    vertex_stride: tg.vertex_stride,
-                                    first_index: tg.first_index,
-                                    transform_buffer_offset: tg.transform_buffer_offset,
-                                })
-                                .collect(),
-                        )
-                    }
-                };
-                TraceBlasBuildEntry {
-                    blas: blas_entry.blas_id,
-                    geometries,
-                }
-            })
-            .collect();
-
-        let trace_tlas: Vec<TraceTlasPackage> = tlas_iter
-            .map(|package: TlasPackage| {
-                let instances = package
-                    .instances
-                    .map(|instance| {
-                        instance.map(|instance| TraceTlasInstance {
-                            blas: instance.blas_id,
-                            transform: *instance.transform,
-                            custom_data: instance.custom_data,
-                            mask: instance.mask,
-                        })
-                    })
-                    .collect();
-                TraceTlasPackage {
-                    tlas: package.tlas_id,
-                    instances,
-                    lowest_unmodified: package.lowest_unmodified,
-                }
-            })
-            .collect();
-
         let mut cmd_buf_data = cmd_enc.data.lock();
 
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.trace() {
-            list.push(crate::command::Command::BuildAccelerationStructures {
-                blas: trace_blas.clone(),
-                tlas: trace_tlas.clone(),
-            });
-        }
-
         cmd_buf_data.push_with(|| -> Result<_, BuildAccelerationStructureError> {
-            let blas = trace_blas
-                .iter()
+            let blas = blas_iter
                 .map(|blas_entry| {
-                    let geometries = match &blas_entry.geometries {
-                        TraceBlasGeometries::TriangleGeometries(triangle_geometries) => {
+                    let geometries = match blas_entry.geometries {
+                        BlasGeometries::TriangleGeometries(triangle_geometries) => {
                             let tri_geo = triangle_geometries
-                                .iter()
                                 .map(|tg| {
                                     Ok(ArcBlasTriangleGeometry {
                                         size: tg.size.clone(),
@@ -212,25 +152,23 @@ impl Global {
                         }
                     };
                     Ok(ArcBlasBuildEntry {
-                        blas: self.resolve_blas_id(blas_entry.blas)?,
+                        blas: self.resolve_blas_id(blas_entry.blas_id)?,
                         geometries,
                     })
                 })
                 .collect::<Result<_, BuildAccelerationStructureError>>()?;
 
-            let tlas = trace_tlas
-                .iter()
+            let tlas = tlas_iter
                 .map(|tlas_package| {
                     let instances = tlas_package
                         .instances
-                        .iter()
                         .map(|instance| {
                             instance
                                 .as_ref()
                                 .map(|instance| {
                                     Ok(ArcTlasInstance {
-                                        blas: self.resolve_blas_id(instance.blas)?,
-                                        transform: instance.transform,
+                                        blas: self.resolve_blas_id(instance.blas_id)?,
+                                        transform: *instance.transform,
                                         custom_data: instance.custom_data,
                                         mask: instance.mask,
                                     })
@@ -239,7 +177,7 @@ impl Global {
                         })
                         .collect::<Result<_, BuildAccelerationStructureError>>()?;
                     Ok(ArcTlasPackage {
-                        tlas: self.resolve_tlas_id(tlas_package.tlas)?,
+                        tlas: self.resolve_tlas_id(tlas_package.tlas_id)?,
                         instances,
                         lowest_unmodified: tlas_package.lowest_unmodified,
                     })

@@ -2,7 +2,7 @@ use alloc::{borrow::Cow, boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::{ptr::NonNull, sync::atomic::Ordering};
 
 #[cfg(feature = "trace")]
-use crate::device::trace;
+use crate::device::trace::{self, IntoTrace};
 use crate::{
     api_log,
     binding_model::{
@@ -106,6 +106,13 @@ impl Global {
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
 
+            let buffer = match device.create_buffer(desc) {
+                Ok(buffer) => buffer,
+                Err(e) => {
+                    break 'error e;
+                }
+            };
+
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 let mut desc = desc.clone();
@@ -113,15 +120,8 @@ impl Global {
                 if mapped_at_creation && !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
                     desc.usage |= wgt::BufferUsages::COPY_DST;
                 }
-                trace.add(trace::Action::CreateBuffer(fid.id(), desc));
+                trace.add(trace::Action::CreateBuffer(buffer.to_trace(), desc));
             }
-
-            let buffer = match device.create_buffer(desc) {
-                Ok(buffer) => buffer,
-                Err(e) => {
-                    break 'error e;
-                }
-            };
 
             let id = fid.assign(Fallible::Valid(buffer));
 
@@ -240,13 +240,10 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(trace) = buffer.device.trace.lock().as_mut() {
-            trace.add(trace::Action::FreeBuffer(buffer_id));
+            trace.add(trace::Action::FreeBuffer(buffer.to_trace()));
         }
 
-        let _ = buffer.unmap(
-            #[cfg(feature = "trace")]
-            buffer_id,
-        );
+        let _ = buffer.unmap();
 
         buffer.destroy();
     }
@@ -266,13 +263,10 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(t) = buffer.device.trace.lock().as_mut() {
-            t.add(trace::Action::DestroyBuffer(buffer_id));
+            t.add(trace::Action::DestroyBuffer(buffer.to_trace()));
         }
 
-        let _ = buffer.unmap(
-            #[cfg(feature = "trace")]
-            buffer_id,
-        );
+        let _ = buffer.unmap();
     }
 
     pub fn device_create_texture(
@@ -290,15 +284,18 @@ impl Global {
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
 
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateTexture(fid.id(), desc.clone()));
-            }
-
             let texture = match device.create_texture(desc) {
                 Ok(texture) => texture,
                 Err(error) => break 'error error,
             };
+
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                trace.add(trace::Action::CreateTexture(
+                    texture.to_trace(),
+                    desc.clone(),
+                ));
+            }
 
             let id = fid.assign(Fallible::Valid(texture));
             api_log!("Device::create_texture({desc:?}) -> {id:?}");
@@ -331,17 +328,20 @@ impl Global {
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
 
-            // NB: Any change done through the raw texture handle will not be
-            // recorded in the replay
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateTexture(fid.id(), desc.clone()));
-            }
-
             let texture = match device.create_texture_from_hal(hal_texture, desc) {
                 Ok(texture) => texture,
                 Err(error) => break 'error error,
             };
+
+            // NB: Any change done through the raw texture handle will not be
+            // recorded in the replay
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                trace.add(trace::Action::CreateTexture(
+                    texture.to_trace(),
+                    desc.clone(),
+                ));
+            }
 
             let id = fid.assign(Fallible::Valid(texture));
             api_log!("Device::create_texture({desc:?}) -> {id:?}");
@@ -373,14 +373,19 @@ impl Global {
 
         let device = self.hub.devices.get(device_id);
 
+        let (buffer, err) = unsafe { device.create_buffer_from_hal(Box::new(hal_buffer), desc) };
+
         // NB: Any change done through the raw buffer handle will not be
         // recorded in the replay
         #[cfg(feature = "trace")]
         if let Some(trace) = device.trace.lock().as_mut() {
-            trace.add(trace::Action::CreateBuffer(fid.id(), desc.clone()));
+            match &buffer {
+                Fallible::Valid(arc) => {
+                    trace.add(trace::Action::CreateBuffer(arc.to_trace(), desc.clone()))
+                }
+                Fallible::Invalid(_) => {}
+            }
         }
-
-        let (buffer, err) = unsafe { device.create_buffer_from_hal(Box::new(hal_buffer), desc) };
 
         let id = fid.assign(buffer);
         api_log!("Device::create_buffer -> {id:?}");
@@ -401,7 +406,7 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(trace) = texture.device.trace.lock().as_mut() {
-            trace.add(trace::Action::FreeTexture(texture_id));
+            trace.add(trace::Action::FreeTexture(texture.to_trace()));
         }
 
         texture.destroy();
@@ -417,7 +422,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(texture) = _texture.get() {
             if let Some(t) = texture.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyTexture(texture_id));
+                t.add(trace::Action::DestroyTexture(texture.to_trace()));
             }
         }
     }
@@ -441,19 +446,19 @@ impl Global {
             };
             let device = &texture.device;
 
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateTextureView {
-                    id: fid.id(),
-                    parent_id: texture_id,
-                    desc: desc.clone(),
-                });
-            }
-
             let view = match device.create_texture_view(&texture, desc) {
                 Ok(view) => view,
                 Err(e) => break 'error e,
             };
+
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                trace.add(trace::Action::CreateTextureView {
+                    id: view.to_trace(),
+                    parent: texture.to_trace(),
+                    desc: desc.clone(),
+                });
+            }
 
             let id = fid.assign(Fallible::Valid(view));
 
@@ -480,7 +485,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(view) = _view.get() {
             if let Some(t) = view.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyTextureView(texture_view_id));
+                t.add(trace::Action::DestroyTextureView(view.to_trace()));
             }
         }
         Ok(())
@@ -1170,23 +1175,26 @@ impl Global {
             let device = self.hub.devices.get(bundle_encoder.parent());
 
             #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateRenderBundle {
-                    id: fid.id(),
-                    desc: trace::new_render_bundle_encoder_descriptor(
-                        desc.label.clone(),
-                        &bundle_encoder.context,
-                        bundle_encoder.is_depth_read_only,
-                        bundle_encoder.is_stencil_read_only,
-                    ),
-                    base: bundle_encoder.to_base_pass(),
-                });
-            }
+            let trace_desc = trace::new_render_bundle_encoder_descriptor(
+                desc.label.clone(),
+                &bundle_encoder.context,
+                bundle_encoder.is_depth_read_only,
+                bundle_encoder.is_stencil_read_only,
+            );
 
             let render_bundle = match bundle_encoder.finish(desc, &device, hub) {
                 Ok(bundle) => bundle,
                 Err(e) => break 'error e,
             };
+
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                trace.add(trace::Action::CreateRenderBundle {
+                    id: render_bundle.to_trace(),
+                    desc: trace_desc,
+                    base: render_bundle.to_base_pass().to_trace(),
+                });
+            }
 
             let id = fid.assign(Fallible::Valid(render_bundle));
             api_log!("RenderBundleEncoder::finish -> {id:?}");
@@ -1742,7 +1750,10 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *device.trace.lock() {
-            trace.add(trace::Action::ConfigureSurface(surface_id, config.clone()));
+            trace.add(trace::Action::ConfigureSurface(
+                surface.to_trace(),
+                config.clone(),
+            ));
         }
 
         device.configure_surface(&surface, config)
@@ -2082,9 +2093,6 @@ impl Global {
         drop(snatch_guard);
 
         buffer.device.check_is_valid()?;
-        buffer.unmap(
-            #[cfg(feature = "trace")]
-            buffer_id,
-        )
+        buffer.unmap()
     }
 }

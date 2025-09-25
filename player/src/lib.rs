@@ -18,7 +18,7 @@ pub trait GlobalPlay {
     fn encode_commands(
         &self,
         encoder: wgc::id::CommandEncoderId,
-        commands: Vec<Command>,
+        commands: Vec<Command<IdReferences>>,
         command_buffer_id_manager: &mut IdentityManager<wgc::id::markers::CommandBuffer>,
     ) -> wgc::id::CommandBufferId;
     fn process(
@@ -36,7 +36,7 @@ impl GlobalPlay for wgc::global::Global {
     fn encode_commands(
         &self,
         encoder: wgc::id::CommandEncoderId,
-        commands: Vec<Command>,
+        commands: Vec<Command<IdReferences>>,
         command_buffer_id_manager: &mut IdentityManager<wgc::id::markers::CommandBuffer>,
     ) -> wgc::id::CommandBufferId {
         for command in commands {
@@ -71,13 +71,13 @@ impl GlobalPlay for wgc::global::Global {
                     .command_encoder_clear_texture(encoder, dst, &subresource_range)
                     .unwrap(),
                 Command::WriteTimestamp {
-                    query_set_id,
+                    query_set,
                     query_index,
                 } => self
-                    .command_encoder_write_timestamp(encoder, query_set_id, query_index)
+                    .command_encoder_write_timestamp(encoder, query_set, query_index)
                     .unwrap(),
                 Command::ResolveQuerySet {
-                    query_set_id,
+                    query_set,
                     start_query,
                     query_count,
                     destination,
@@ -85,7 +85,7 @@ impl GlobalPlay for wgc::global::Global {
                 } => self
                     .command_encoder_resolve_query_set(
                         encoder,
-                        query_set_id,
+                        query_set,
                         start_query,
                         query_count,
                         destination,
@@ -100,29 +100,29 @@ impl GlobalPlay for wgc::global::Global {
                     .command_encoder_insert_debug_marker(encoder, &marker)
                     .unwrap(),
                 Command::RunComputePass {
-                    base,
+                    pass,
                     timestamp_writes,
                 } => {
                     self.compute_pass_end_with_unresolved_commands(
                         encoder,
-                        base,
+                        pass,
                         timestamp_writes.as_ref(),
                     );
                 }
                 Command::RunRenderPass {
-                    base,
-                    target_colors,
-                    target_depth_stencil,
+                    pass,
+                    color_attachments,
+                    depth_stencil_attachment,
                     timestamp_writes,
-                    occlusion_query_set_id,
+                    occlusion_query_set,
                 } => {
                     self.render_pass_end_with_unresolved_commands(
                         encoder,
-                        base,
-                        &target_colors,
-                        target_depth_stencil.as_ref(),
+                        pass,
+                        &color_attachments,
+                        depth_stencil_attachment.as_ref(),
                         timestamp_writes.as_ref(),
-                        occlusion_query_set_id,
+                        occlusion_query_set,
                     );
                 }
                 Command::BuildAccelerationStructures { blas, tlas } => {
@@ -175,6 +175,7 @@ impl GlobalPlay for wgc::global::Global {
                     )
                     .unwrap();
                 }
+                Command::TransitionResources { .. } => unimplemented!("not supported in a trace"),
             }
         }
         let (cmd_buf, error) = self.command_encoder_finish(
@@ -233,12 +234,8 @@ impl GlobalPlay for wgc::global::Global {
             Action::DestroyTexture(id) => {
                 self.texture_drop(id);
             }
-            Action::CreateTextureView {
-                id,
-                parent_id,
-                desc,
-            } => {
-                let (_, error) = self.texture_create_view(parent_id, &desc, Some(id));
+            Action::CreateTextureView { id, parent, desc } => {
+                let (_, error) = self.texture_create_view(parent, &desc, Some(id));
                 if let Some(e) = error {
                     panic!("{e}");
                 }
@@ -268,8 +265,8 @@ impl GlobalPlay for wgc::global::Global {
             Action::DestroySampler(id) => {
                 self.sampler_drop(id);
             }
-            Action::GetSurfaceTexture { id, parent_id } => {
-                self.surface_get_current_texture(parent_id, Some(id))
+            Action::GetSurfaceTexture { id, parent } => {
+                self.surface_get_current_texture(parent, Some(id))
                     .unwrap()
                     .texture
                     .unwrap();

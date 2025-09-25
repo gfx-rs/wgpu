@@ -2,15 +2,18 @@ use core::convert::Infallible;
 
 use alloc::{string::String, sync::Arc, vec::Vec};
 #[cfg(feature = "serde")]
-use macro_rules_attribute::attribute_alias;
+use macro_rules_attribute::{apply, attribute_alias};
 
 use crate::{
+    command::ColorAttachments,
     id,
+    instance::Surface,
     resource::{Buffer, QuerySet, Texture},
 };
 
 pub trait ReferenceType {
     type Buffer: Clone + core::fmt::Debug;
+    type Surface: Clone; // Surface does not implement Debug, although it probably could.
     type Texture: Clone + core::fmt::Debug;
     type TextureView: Clone + core::fmt::Debug;
     type QuerySet: Clone + core::fmt::Debug;
@@ -22,14 +25,26 @@ pub trait ReferenceType {
     type Tlas: Clone + core::fmt::Debug;
 }
 
+/// Reference wgpu objects via numeric IDs assigned by [`crate::identity::IdentityManager`].
 #[derive(Clone, Debug)]
 pub struct IdReferences;
 
+/// Reference wgpu objects via the integer value of pointers.
+///
+/// This is used for trace recording and playback. Recording stores the pointer
+/// value of `Arc` references in the trace. Playback uses the integer values
+/// as keys to a `HashMap`.
+#[doc(hidden)]
+#[derive(Clone, Debug)]
+pub struct PointerReferences;
+
+/// Reference wgpu objects via `Arc`s.
 #[derive(Clone, Debug)]
 pub struct ArcReferences;
 
 impl ReferenceType for IdReferences {
     type Buffer = id::BufferId;
+    type Surface = id::SurfaceId;
     type Texture = id::TextureId;
     type TextureView = id::TextureViewId;
     type QuerySet = id::QuerySetId;
@@ -41,8 +56,23 @@ impl ReferenceType for IdReferences {
     type Tlas = id::TlasId;
 }
 
+impl ReferenceType for PointerReferences {
+    type Buffer = id::PointerId<id::markers::Buffer>;
+    type Surface = id::PointerId<id::markers::Surface>;
+    type Texture = id::PointerId<id::markers::Texture>;
+    type TextureView = id::PointerId<id::markers::TextureView>;
+    type QuerySet = id::PointerId<id::markers::QuerySet>;
+    type BindGroup = id::PointerId<id::markers::BindGroup>;
+    type RenderPipeline = id::PointerId<id::markers::RenderPipeline>;
+    type RenderBundle = id::PointerId<id::markers::RenderBundle>;
+    type ComputePipeline = id::PointerId<id::markers::ComputePipeline>;
+    type Blas = id::PointerId<id::markers::Blas>;
+    type Tlas = id::PointerId<id::markers::Tlas>;
+}
+
 impl ReferenceType for ArcReferences {
     type Buffer = Arc<Buffer>;
+    type Surface = Arc<Surface>;
     type Texture = Arc<Texture>;
     type TextureView = Arc<crate::resource::TextureView>;
     type QuerySet = Arc<QuerySet>;
@@ -60,6 +90,7 @@ attribute_alias! {
     #[derive(serde::Serialize, serde::Deserialize)]
     #[serde(bound =
          "R::Buffer: serde::Serialize + for<'d> serde::Deserialize<'d>,\
+          R::Surface: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           R::Texture: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           R::TextureView: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           R::QuerySet: serde::Serialize + for<'d> serde::Deserialize<'d>,\
@@ -68,139 +99,80 @@ attribute_alias! {
           R::RenderBundle: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           R::ComputePipeline: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           R::Blas: serde::Serialize + for<'d> serde::Deserialize<'d>,\
-          R::Tlas: serde::Serialize + for<'d> serde::Deserialize<'d>"
+          R::Tlas: serde::Serialize + for<'d> serde::Deserialize<'d>,\
+          wgt::BufferTransition<R::Buffer>: serde::Serialize + for<'d> serde::Deserialize<'d>,\
+          wgt::TextureTransition<R::Texture>: serde::Serialize + for<'d> serde::Deserialize<'d>"
     )];
 }
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum Command {
+#[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
+pub enum Command<R: ReferenceType> {
     CopyBufferToBuffer {
-        src: id::BufferId,
+        src: R::Buffer,
         src_offset: wgt::BufferAddress,
-        dst: id::BufferId,
+        dst: R::Buffer,
         dst_offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
     },
     CopyBufferToTexture {
-        src: wgt::TexelCopyBufferInfo<id::BufferId>,
-        dst: wgt::TexelCopyTextureInfo<id::TextureId>,
+        src: wgt::TexelCopyBufferInfo<R::Buffer>,
+        dst: wgt::TexelCopyTextureInfo<R::Texture>,
         size: wgt::Extent3d,
     },
     CopyTextureToBuffer {
-        src: wgt::TexelCopyTextureInfo<id::TextureId>,
-        dst: wgt::TexelCopyBufferInfo<id::BufferId>,
+        src: wgt::TexelCopyTextureInfo<R::Texture>,
+        dst: wgt::TexelCopyBufferInfo<R::Buffer>,
         size: wgt::Extent3d,
     },
     CopyTextureToTexture {
-        src: wgt::TexelCopyTextureInfo<id::TextureId>,
-        dst: wgt::TexelCopyTextureInfo<id::TextureId>,
+        src: wgt::TexelCopyTextureInfo<R::Texture>,
+        dst: wgt::TexelCopyTextureInfo<R::Texture>,
         size: wgt::Extent3d,
     },
     ClearBuffer {
-        dst: id::BufferId,
+        dst: R::Buffer,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
     },
     ClearTexture {
-        dst: id::TextureId,
+        dst: R::Texture,
         subresource_range: wgt::ImageSubresourceRange,
     },
     WriteTimestamp {
-        query_set_id: id::QuerySetId,
+        query_set: R::QuerySet,
         query_index: u32,
     },
     ResolveQuerySet {
-        query_set_id: id::QuerySetId,
+        query_set: R::QuerySet,
         start_query: u32,
         query_count: u32,
-        destination: id::BufferId,
+        destination: R::Buffer,
         destination_offset: wgt::BufferAddress,
     },
     PushDebugGroup(String),
     PopDebugGroup,
     InsertDebugMarker(String),
     RunComputePass {
-        base: crate::command::BasePass<crate::command::ComputeCommand, Infallible>,
-        timestamp_writes: Option<crate::command::PassTimestampWrites>,
+        pass: crate::command::BasePass<crate::command::ComputeCommand<R>, Infallible>,
+        timestamp_writes: Option<crate::command::PassTimestampWrites<R::QuerySet>>,
     },
     RunRenderPass {
-        base: crate::command::BasePass<crate::command::RenderCommand, Infallible>,
-        target_colors: Vec<Option<crate::command::RenderPassColorAttachment>>,
-        target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachment>,
-        timestamp_writes: Option<crate::command::PassTimestampWrites>,
-        occlusion_query_set_id: Option<id::QuerySetId>,
+        pass: crate::command::BasePass<crate::command::RenderCommand<R>, Infallible>,
+        color_attachments: ColorAttachments<R::TextureView>,
+        depth_stencil_attachment:
+            Option<crate::command::ResolvedRenderPassDepthStencilAttachment<R::TextureView>>,
+        timestamp_writes: Option<crate::command::PassTimestampWrites<R::QuerySet>>,
+        occlusion_query_set: Option<R::QuerySet>,
     },
     BuildAccelerationStructures {
-        blas: Vec<crate::ray_tracing::TraceBlasBuildEntry>,
-        tlas: Vec<crate::ray_tracing::TraceTlasPackage>,
+        blas: Vec<crate::ray_tracing::OwnedBlasBuildEntry<R>>,
+        tlas: Vec<crate::ray_tracing::OwnedTlasPackage<R>>,
+    },
+    TransitionResources {
+        buffer_transitions: Vec<wgt::BufferTransition<R::Buffer>>,
+        texture_transitions: Vec<wgt::TextureTransition<R::Texture>>,
     },
 }
 
-#[derive(Clone, Debug)]
-pub enum ArcCommand {
-    CopyBufferToBuffer {
-        src: Arc<Buffer>,
-        src_offset: wgt::BufferAddress,
-        dst: Arc<Buffer>,
-        dst_offset: wgt::BufferAddress,
-        size: Option<wgt::BufferAddress>,
-    },
-    CopyBufferToTexture {
-        src: wgt::TexelCopyBufferInfo<Arc<Buffer>>,
-        dst: wgt::TexelCopyTextureInfo<Arc<Texture>>,
-        size: wgt::Extent3d,
-    },
-    CopyTextureToBuffer {
-        src: wgt::TexelCopyTextureInfo<Arc<Texture>>,
-        dst: wgt::TexelCopyBufferInfo<Arc<Buffer>>,
-        size: wgt::Extent3d,
-    },
-    CopyTextureToTexture {
-        src: wgt::TexelCopyTextureInfo<Arc<Texture>>,
-        dst: wgt::TexelCopyTextureInfo<Arc<Texture>>,
-        size: wgt::Extent3d,
-    },
-    ClearBuffer {
-        dst: Arc<Buffer>,
-        offset: wgt::BufferAddress,
-        size: Option<wgt::BufferAddress>,
-    },
-    ClearTexture {
-        dst: Arc<Texture>,
-        subresource_range: wgt::ImageSubresourceRange,
-    },
-    WriteTimestamp {
-        query_set: Arc<QuerySet>,
-        query_index: u32,
-    },
-    ResolveQuerySet {
-        query_set: Arc<QuerySet>,
-        start_query: u32,
-        query_count: u32,
-        destination: Arc<Buffer>,
-        destination_offset: wgt::BufferAddress,
-    },
-    PushDebugGroup(String),
-    PopDebugGroup,
-    InsertDebugMarker(String),
-    RunComputePass {
-        pass: super::BasePass<super::ArcComputeCommand, Infallible>,
-        timestamp_writes: Option<super::ArcPassTimestampWrites>,
-    },
-    RunRenderPass {
-        pass: super::BasePass<super::ArcRenderCommand, Infallible>,
-        color_attachments: super::ArcRenderPassColorAttachmentArray,
-        depth_stencil_attachment: Option<super::ArcRenderPassDepthStencilAttachment>,
-        timestamp_writes: Option<super::ArcPassTimestampWrites>,
-        occlusion_query_set: Option<Arc<QuerySet>>,
-    },
-    BuildAccelerationStructures {
-        blas: Vec<crate::ray_tracing::ArcBlasBuildEntry>,
-        tlas: Vec<crate::ray_tracing::ArcTlasPackage>,
-    },
-    TransitionResources {
-        buffer_transitions: Vec<wgt::BufferTransition<Arc<Buffer>>>,
-        texture_transitions: Vec<wgt::TextureTransition<Arc<Texture>>>,
-    },
-}
+pub type ArcCommand = Command<ArcReferences>;
