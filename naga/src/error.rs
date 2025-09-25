@@ -134,7 +134,7 @@ where
     E: Error + 'static,
 {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
-        Some(&self.inner)
+        self.inner.source()
     }
 }
 

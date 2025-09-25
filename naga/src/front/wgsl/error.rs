@@ -127,11 +127,7 @@ impl core::fmt::Display for ParseError {
     }
 }
 
-impl core::error::Error for ParseError {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-        None
-    }
-}
+impl core::error::Error for ParseError {}
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ExpectedToken<'a> {
