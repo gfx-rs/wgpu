@@ -53,10 +53,12 @@ fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::Sh
     std::fs::remove_file(out_path).unwrap();
     unsafe {
         device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-            entry_point: entry.to_owned(),
             label: None,
             num_workgroups: (1, 1, 1),
-            dxil: Some(std::borrow::Cow::Owned(file)),
+            dxil: Some(wgpu::DxilPassthroughDescriptor {
+                entry_point: entry.to_owned(),
+                code: std::borrow::Cow::Owned(file),
+            }),
             ..Default::default()
         })
     }

@@ -5202,7 +5202,7 @@ name = "wgpu-precompile-macro"
 version = "26.0.0"
 dependencies = [
  "getrandom 0.3.3",
- "hashbrown",
+ "hashbrown 0.16.0",
  "naga",
  "proc-macro2",
  "quote",
