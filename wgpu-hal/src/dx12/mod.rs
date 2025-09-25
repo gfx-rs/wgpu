@@ -1623,7 +1623,7 @@ struct MeshShaderPipelineStateStream {
 }
 impl MeshShaderPipelineStateStream {
     /// # Safety
-    /// 
+    ///
     /// Returned bytes contain pointers into this struct, for them to be valid,
     /// this struct may be at the same location. As if `as_bytes<'a>(&'a self) -> Vec<u8> + 'a`
     pub unsafe fn to_bytes(&self) -> Vec<u8> {
