@@ -231,7 +231,7 @@ pub fn precompile_hlsl_to_dxil(input: TokenStream) -> TokenStream {
     // user might've specified, as that could cause confusion.
     let input_file = tempoary_folder.path.join("__wgpu_inline.hlsl");
     std::fs::write(&input_file, args.hlsl_code.as_bytes())
-        .expect("Failed to write to HLSL input file");
+        .expect("Failed to write to HLSL input file for DXC to consume");
     let temporary_file_location = tempoary_folder.path.join("file.dxil");
     let output = std::process::Command::new("dxc")
         .args([
@@ -246,11 +246,15 @@ pub fn precompile_hlsl_to_dxil(input: TokenStream) -> TokenStream {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .output()
-        .expect("Failed to spawn DXC");
+        .expect("Failed to spawn DXC. Maybe you don't have it installed or on the path environment variable?");
     if !output.status.success() {
-        panic!("DXC failed:\n{}", String::from_utf8(output.stderr).unwrap());
+        panic!(
+            "DXC failed to precompile HLSL to DXIL. Please report this at https://github.com/gfx-rs/wgpu/issues/ :\n{}",
+            String::from_utf8(output.stderr).unwrap()
+        );
     }
-    let dxil = std::fs::read(temporary_file_location).expect("Failed to read DXC output file");
+    let dxil = std::fs::read(temporary_file_location)
+        .expect("DXC exited without error but did not write file as expected. Please report this at https://github.com/gfx-rs/wgpu/issues/.");
     quote! {
         &[#(#dxil),*]
     }
