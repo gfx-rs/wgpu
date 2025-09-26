@@ -521,7 +521,9 @@ fn transient_invalid_usage() {
         depth_or_array_layers: 1,
     };
 
-    let invalid_usages = wgpu::TextureUsages::all() - wgpu::TextureUsages::RENDER_ATTACHMENT - wgpu::TextureUsages::TRANSIENT;
+    let invalid_usages = wgpu::TextureUsages::all()
+        - wgpu::TextureUsages::RENDER_ATTACHMENT
+        - wgpu::TextureUsages::TRANSIENT;
 
     for usage in invalid_usages {
         let invalid_texture_descriptor = wgpu::TextureDescriptor {
