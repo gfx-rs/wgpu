@@ -161,9 +161,7 @@ impl FunctionTracer<'_> {
                     } => {
                         self.expressions_used.insert(target);
                         self.expressions_used.insert(pointer);
-                        if let Some(stride) = stride {
-                            self.expressions_used.insert(stride);
-                        }
+                        self.expressions_used.insert(stride);
                     }
 
                     // Trivial statements.
@@ -393,9 +391,7 @@ impl FunctionMap {
                     } => {
                         adjust(target);
                         adjust(pointer);
-                        if let Some(ref mut stride) = *stride {
-                            adjust(stride);
-                        }
+                        adjust(stride);
                     }
 
                     // Trivial statements.

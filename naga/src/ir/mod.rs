@@ -2295,7 +2295,7 @@ pub enum Statement {
         store: bool,
         target: Handle<Expression>,
         pointer: Handle<Expression>,
-        stride: Option<Handle<Expression>>,
+        stride: Handle<Expression>,
         row_major: bool,
     },
 }

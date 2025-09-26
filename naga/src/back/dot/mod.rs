@@ -412,9 +412,7 @@ impl StatementGraph {
                 } => {
                     self.dependencies.push((id, target, "target"));
                     self.dependencies.push((id, pointer, "pointer"));
-                    if let Some(stride) = stride {
-                        self.dependencies.push((id, stride, "stride"));
-                    }
+                    self.dependencies.push((id, stride, "stride"));
                     if store {
                         "Store"
                     } else {

@@ -3754,13 +3754,12 @@ impl BlockContext<'_> {
                         spirv::CooperativeMatrixLayout::ColumnMajorKHR
                     };
                     let layout_id = self.get_index_constant(layout as u32);
-                    let stride_id = stride.map(|exp| self.cached[exp]);
                     if store {
                         block.body.push(Instruction::coop_store(
                             self.cached[target],
                             pointer_id,
                             layout_id,
-                            stride_id,
+                            self.cached[stride],
                         ));
                     } else {
                         let result_type_id = self.get_expression_type_id(&self.fun_info[target].ty);
@@ -3770,7 +3769,7 @@ impl BlockContext<'_> {
                             id,
                             pointer_id,
                             layout_id,
-                            stride_id,
+                            self.cached[stride],
                         ));
                         block
                             .body

@@ -4238,30 +4238,8 @@ impl<W: Write> Writer<W> {
                     self.put_expression(target, &context.expression, true)?;
                     write!(self.out, ", ")?;
                     self.put_expression(pointer, &context.expression, true)?;
-                    if stride.is_some() || row_major {
-                        write!(self.out, ", ")?;
-                        match stride {
-                            Some(expression) => {
-                                self.put_expression(expression, &context.expression, true)?;
-                            }
-                            None => {
-                                let default_stride = match *context.expression.resolve_type(target)
-                                {
-                                    crate::TypeInner::CooperativeMatrix {
-                                        columns, rows, ..
-                                    } => {
-                                        if row_major {
-                                            columns as u32
-                                        } else {
-                                            rows as u32
-                                        }
-                                    }
-                                    _ => 0,
-                                };
-                                write!(self.out, "{default_stride}")?;
-                            }
-                        }
-                    }
+                    write!(self.out, ", ")?;
+                    self.put_expression(stride, &context.expression, true)?;
                     if row_major {
                         let matrix_origin = "0";
                         let transpose = true;

@@ -1183,18 +1183,16 @@ impl FunctionInfo {
                     pointer,
                     stride,
                     row_major: _,
-                } => {
-                    if let Some(stride) = stride {
-                        let _ = self.add_ref(stride);
-                    }
-                    FunctionUniformity {
-                        result: Uniformity {
-                            non_uniform_result: self.add_ref(target).or(self.add_ref(pointer)),
-                            requirements: UniformityRequirements::COOP_OPS,
-                        },
-                        exit: ExitFlags::empty(),
-                    }
-                }
+                } => FunctionUniformity {
+                    result: Uniformity {
+                        non_uniform_result: self
+                            .add_ref(target)
+                            .or(self.add_ref(pointer))
+                            .or(self.add_ref(stride)),
+                        requirements: UniformityRequirements::COOP_OPS,
+                    },
+                    exit: ExitFlags::empty(),
+                },
             };
 
             disruptor = disruptor.or(uniformity.exit_disruptor());

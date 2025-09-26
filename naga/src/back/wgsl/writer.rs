@@ -1082,10 +1082,8 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, target, func_ctx)?;
                 write!(self.out, ", ")?;
                 self.write_expr(module, pointer, func_ctx)?;
-                if let Some(stride) = stride {
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, stride, func_ctx)?;
-                }
+                write!(self.out, ", ")?;
+                self.write_expr(module, stride, func_ctx)?;
                 write!(self.out, ")")?
             }
         }

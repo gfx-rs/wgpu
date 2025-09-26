@@ -878,9 +878,7 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
         } => {
             adjust(target);
             adjust(pointer);
-            if let Some(ref mut stride) = *stride {
-                adjust(stride);
-            }
+            adjust(stride);
         }
         Statement::Break
         | Statement::Continue

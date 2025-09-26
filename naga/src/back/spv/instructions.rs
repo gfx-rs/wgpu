@@ -1276,33 +1276,22 @@ impl super::Instruction {
         id: Word,
         pointer_id: Word,
         layout_id: Word,
-        stride_id: Option<Word>,
+        stride_id: Word,
     ) -> Self {
         let mut instruction = Self::new(Op::CooperativeMatrixLoadKHR);
         instruction.set_type(result_type_id);
         instruction.set_result(id);
         instruction.add_operand(pointer_id);
         instruction.add_operand(layout_id);
-        if let Some(stride_id) = stride_id {
-            instruction.add_operand(stride_id);
-        }
-
+        instruction.add_operand(stride_id);
         instruction
     }
-    pub(super) fn coop_store(
-        id: Word,
-        pointer_id: Word,
-        layout_id: Word,
-        stride_id: Option<Word>,
-    ) -> Self {
+    pub(super) fn coop_store(id: Word, pointer_id: Word, layout_id: Word, stride_id: Word) -> Self {
         let mut instruction = Self::new(Op::CooperativeMatrixStoreKHR);
         instruction.add_operand(pointer_id);
         instruction.add_operand(id);
         instruction.add_operand(layout_id);
-        if let Some(stride_id) = stride_id {
-            instruction.add_operand(stride_id);
-        }
-
+        instruction.add_operand(stride_id);
         instruction
     }
     pub(super) fn coop_mul_add(result_type_id: Word, id: Word, a: Word, b: Word, c: Word) -> Self {

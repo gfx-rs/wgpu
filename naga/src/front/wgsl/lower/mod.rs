@@ -3415,18 +3415,32 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             return Ok(Some(result));
                         }
                         "coopLoad" | "coopLoadT" | "coopStore" | "coopStoreT" => {
+                            let store = function.name.contains("Store");
+                            let row_major = function.name.ends_with("T");
+
                             let mut args = ctx.prepare_args(arguments, 2, span);
                             let target = self.expression(args.next()?, ctx)?;
                             let pointer = self.expression(args.next()?, ctx)?;
                             let stride = if args.total_args > 2 {
-                                Some(self.expression(args.next()?, ctx)?)
+                                self.expression(args.next()?, ctx)?
                             } else {
-                                None
+                                // Infer the stride from the matrix type
+                                let stride = match *resolve_inner!(ctx, target) {
+                                    ir::TypeInner::CooperativeMatrix { columns, rows, .. } => {
+                                        if row_major {
+                                            columns as u32
+                                        } else {
+                                            rows as u32
+                                        }
+                                    }
+                                    _ => 0,
+                                };
+                                ctx.append_expression(
+                                    ir::Expression::Literal(ir::Literal::U32(stride)),
+                                    Span::UNDEFINED,
+                                )?
                             };
                             args.finish()?;
-
-                            let store = function.name.contains("Store");
-                            let row_major = function.name.ends_with("T");
 
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block.push(

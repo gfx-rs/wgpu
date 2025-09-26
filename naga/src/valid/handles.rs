@@ -863,7 +863,7 @@ impl super::Validator {
             } => {
                 validate_expr(target)?;
                 validate_expr(pointer)?;
-                validate_expr_opt(stride)?;
+                validate_expr(stride)?;
                 Ok(())
             }
             crate::Statement::Break
