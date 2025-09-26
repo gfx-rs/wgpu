@@ -49,5 +49,5 @@ attributes = [
     { offset = 640, shader_location = 40, format = "unorm8x4-bgra" },
 ]
 id = 1
-indexed_by_vertex = true
+step_mode = "ByVertex"
 stride = 644

@@ -1154,7 +1154,15 @@ impl crate::Device for super::Device {
                                 .try_into()
                                 .unwrap()
                         },
-                        indexed_by_vertex: (vbl.step_mode == wgt::VertexStepMode::Vertex {}),
+                        step_mode: match (vbl.array_stride == 0, vbl.step_mode) {
+                            (true, _) => naga::back::msl::VertexBufferStepMode::Constant,
+                            (false, wgt::VertexStepMode::Vertex) => {
+                                naga::back::msl::VertexBufferStepMode::ByVertex
+                            }
+                            (false, wgt::VertexStepMode::Instance) => {
+                                naga::back::msl::VertexBufferStepMode::ByInstance
+                            }
+                        },
                         attributes,
                     });
                 }

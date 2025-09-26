@@ -6359,7 +6359,7 @@ template <typename A>
         struct VertexBufferMappingResolved<'a> {
             id: u32,
             stride: u32,
-            indexed_by_vertex: bool,
+            step_mode: back::msl::VertexBufferStepMode,
             ty_name: String,
             param_name: String,
             elem_name: String,
@@ -6395,10 +6395,14 @@ template <typename A>
                     "Vertex pulling requires a non-zero buffer stride."
                 );
 
-                if vbm.indexed_by_vertex {
-                    needs_vertex_id = true;
-                } else {
-                    needs_instance_id = true;
+                match vbm.step_mode {
+                    back::msl::VertexBufferStepMode::Constant => {}
+                    back::msl::VertexBufferStepMode::ByVertex => {
+                        needs_vertex_id = true;
+                    }
+                    back::msl::VertexBufferStepMode::ByInstance => {
+                        needs_instance_id = true;
+                    }
                 }
 
                 let buffer_ty = self.namer.call(format!("vb_{buffer_id}_type").as_str());
@@ -6408,7 +6412,7 @@ template <typename A>
                 vbm_resolved.push(VertexBufferMappingResolved {
                     id: buffer_id,
                     stride: buffer_stride,
-                    indexed_by_vertex: vbm.indexed_by_vertex,
+                    step_mode: vbm.step_mode,
                     ty_name: buffer_ty,
                     param_name: buffer_param,
                     elem_name: buffer_elem,
@@ -7199,8 +7203,6 @@ template <typename A>
             }
 
             if do_vertex_pulling {
-                assert!(needs_vertex_id || needs_instance_id);
-
                 let mut separator = if is_first_argument {
                     is_first_argument = false;
                     ' '
@@ -7278,16 +7280,22 @@ template <typename A>
 
                     let idx = &vbm.id;
                     let stride = &vbm.stride;
-                    let index_name = if vbm.indexed_by_vertex {
-                        if let Some(ref name) = v_existing_id {
-                            name
-                        } else {
-                            &v_id
+                    let index_name = match vbm.step_mode {
+                        back::msl::VertexBufferStepMode::Constant => "0",
+                        back::msl::VertexBufferStepMode::ByVertex => {
+                            if let Some(ref name) = v_existing_id {
+                                name
+                            } else {
+                                &v_id
+                            }
                         }
-                    } else if let Some(ref name) = i_existing_id {
-                        name
-                    } else {
-                        &i_id
+                        back::msl::VertexBufferStepMode::ByInstance => {
+                            if let Some(ref name) = i_existing_id {
+                                name
+                            } else {
+                                &i_id
+                            }
+                        }
                     };
                     write!(
                         self.out,
