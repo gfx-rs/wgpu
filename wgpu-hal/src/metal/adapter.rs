@@ -905,7 +905,6 @@ impl super::PrivateCapabilities {
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             supports_memoryless_storage: if family_check {
                 device.supports_family(MTLGPUFamily::Apple2)
-                    || device.supports_family(MTLGPUFamily::Metal4)
             } else {
                 version.at_least((11, 0), (10, 0), os_is_mac)
             },
