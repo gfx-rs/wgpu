@@ -1649,32 +1649,20 @@ impl super::Validator {
                             }
                         };
 
-                    let ty_inner =
-                        context.resolve_type_inner(pointer, &self.valid_expression_set)?;
+                    let ty_inner = context.resolve_pointer_type(pointer);
                     //TODO: validate stride
-                    let (pty_array, space) = match *ty_inner {
+                    let (pty_scalar, space) = match *ty_inner {
                         crate::TypeInner::Pointer { base, space } => (base, space),
                         _ => {
                             return Err(FunctionError::InvalidCooperativeDataPointer(pointer)
-                                .with_span_handle(pointer, context.expressions))
-                        }
-                    };
-                    let pty_scalar = match context.types[pty_array].inner {
-                        crate::TypeInner::Array {
-                            base,
-                            size: _,
-                            stride: _,
-                        } => base,
-                        _ => {
-                            return Err(FunctionError::InvalidCooperativeDataPointer(pointer)
-                                .with_span_handle(pointer, context.expressions))
+                                .with_span_handle(pointer, context.expressions));
                         }
                     };
                     let space = match context.types[pty_scalar].inner {
                         crate::TypeInner::Scalar(s) if s == target_scalar => space,
                         _ => {
                             return Err(FunctionError::InvalidCooperativeDataPointer(pointer)
-                                .with_span_handle(pointer, context.expressions))
+                                .with_span_handle(pointer, context.expressions));
                         }
                     };
 

@@ -3736,6 +3736,18 @@ impl BlockContext<'_> {
                     stride,
                     row_major,
                 } => {
+                    let pointer_id = match self.write_access_chain(
+                        pointer,
+                        &mut block,
+                        AccessTypeAdjustment::None,
+                    )? {
+                        ExpressionPointer::Ready { pointer_id } => pointer_id,
+                        ExpressionPointer::Conditional { .. } => {
+                            return Err(Error::FeatureNotImplemented(
+                                "Copperative load/store out-of-bounds handling",
+                            ));
+                        }
+                    };
                     let layout = if row_major {
                         spirv::CooperativeMatrixLayout::RowMajorKHR
                     } else {
@@ -3746,7 +3758,7 @@ impl BlockContext<'_> {
                     if store {
                         block.body.push(Instruction::coop_store(
                             self.cached[target],
-                            self.cached[pointer],
+                            pointer_id,
                             layout_id,
                             stride_id,
                         ));
@@ -3756,7 +3768,7 @@ impl BlockContext<'_> {
                         block.body.push(Instruction::coop_load(
                             result_type_id,
                             id,
-                            self.cached[pointer],
+                            pointer_id,
                             layout_id,
                             stride_id,
                         ));
