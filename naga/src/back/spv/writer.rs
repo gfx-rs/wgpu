@@ -1032,14 +1032,13 @@ impl Writer {
                 }
             }
 
-            // Handle globals are pre-emitted and should be loaded automatically.
-            //
-            // Any that are binding arrays we skip as we cannot load the array, we must load the result after indexing.
             match ir_module.types[var.ty].inner {
+                // Any that are binding arrays we skip as we cannot load the array, we must load the result after indexing.
                 crate::TypeInner::BindingArray { .. } => {
                     gv.access_id = gv.var_id;
                 }
                 _ => {
+                    // Handle globals are pre-emitted and should be loaded automatically.
                     if var.space == crate::AddressSpace::Handle {
                         let var_type_id = self.get_handle_type_id(var.ty);
                         let id = self.id_gen.next();
@@ -1126,6 +1125,7 @@ impl Writer {
                     }
                 }),
             );
+
             context
                 .function
                 .variables

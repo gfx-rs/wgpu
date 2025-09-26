@@ -1078,13 +1078,13 @@ impl<W: Write> Writer<W> {
             } => {
                 let op_str = if store { "Store" } else { "Load" };
                 let suffix = if row_major { "T" } else { "" };
-                write!(self.out, "coop{op_str}{suffix}(")?;
+                write!(self.out, "{level}coop{op_str}{suffix}(")?;
                 self.write_expr(module, target, func_ctx)?;
                 write!(self.out, ", ")?;
                 self.write_expr(module, pointer, func_ctx)?;
                 write!(self.out, ", ")?;
                 self.write_expr(module, stride, func_ctx)?;
-                write!(self.out, ")")?
+                writeln!(self.out, ");")?
             }
         }
 
@@ -1203,6 +1203,13 @@ impl<W: Write> Writer<W> {
         // If the plain form of the expression is not what we need, emit the
         // operator necessary to correct that.
         let plain = self.plain_form_indirection(expr, module, func_ctx);
+        log::trace!(
+            "expression {:?}={:?} is {:?}, expected {:?}",
+            expr,
+            func_ctx.expressions[expr],
+            plain,
+            requested,
+        );
         match (requested, plain) {
             (Indirection::Ordinary, Indirection::Reference) => {
                 write!(self.out, "(&")?;

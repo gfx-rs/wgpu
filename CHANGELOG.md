@@ -336,6 +336,8 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 - Added `get_configuration` to `wgpu::Surface`, that returns the current configuration of `wgpu::Surface`. By @sagudev in [#8664](https://github.com/gfx-rs/wgpu/pull/8664).
 - Add `wgpu_core::Global::create_bind_group_layout_error`. By @ErichDonGubler in [#8650](https://github.com/gfx-rs/wgpu/pull/8650).
 
+- Added support for cooperative load/store operations in shaders. Currently only WGSL on the input and SPIR-V, METAL, and WGSL on the output are supported. Only unsafe for now. By @kvark in [#8251](https://github.com/gfx-rs/wgpu/issues/8251).
+
 ### Changes
 
 #### General
@@ -627,8 +629,6 @@ By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282), [#8285](https://
 #### naga
 
 - Expose `naga::front::wgsl::UnimplementedEnableExtension`. By @ErichDonGubler in [#8237](https://github.com/gfx-rs/wgpu/pull/8237).
-
-- Added support for cooperative load/store operations in shaders. Currently only WGSL on the input and SPIR-V with METAL on the output are supported. By @kvark in [#8251](https://github.com/gfx-rs/wgpu/issues/8251).
 
 ### Changes
 

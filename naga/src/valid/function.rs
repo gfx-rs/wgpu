@@ -1086,7 +1086,7 @@ impl super::Validator {
                     } else if let Some(tr) = pointer_base_tr {
                         context.compare_types(value_tr, &tr)
                     } else {
-                        value_ty.is_handle()
+                        false
                     };
 
                     if !good {

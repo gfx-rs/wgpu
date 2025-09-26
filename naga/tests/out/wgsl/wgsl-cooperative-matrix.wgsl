@@ -8,6 +8,15 @@ fn main() {
     var c: coop_mat8x8<f32,C> = coop_mat8x8<f32,C>();
     var d: coop_mat8x8<f32,C>;
 
-coopLoad((&c), (&ext[4]), 8u)    d = coopMultiplyAdd((&a), (&b), (&c));
-coopStore((&c), (&ext[0]), 8u)    return;
+    let _e2 = c;
+    coopLoad(_e2, (&ext[4]), 8u);
+    let _e7 = a;
+    let _e9 = b;
+    let _e10 = c;
+    d = coopMultiplyAdd(_e7, _e9, _e10);
+    let _e13 = d;
+    coopStore(_e13, (&ext[0]), 8u);
+    let _e17 = d;
+    c = _e17;
+    return;
 }

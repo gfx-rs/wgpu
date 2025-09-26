@@ -3771,9 +3771,20 @@ impl BlockContext<'_> {
                             layout_id,
                             self.cached[stride],
                         ));
-                        block
-                            .body
-                            .push(Instruction::store(self.cached[target], id, None));
+                        match self.write_access_chain(
+                            target,
+                            &mut block,
+                            AccessTypeAdjustment::None,
+                        )? {
+                            ExpressionPointer::Ready {
+                                pointer_id: target_id,
+                            } => {
+                                block.body.push(Instruction::store(target_id, id, None));
+                            }
+                            ExpressionPointer::Conditional { .. } => {
+                                unimplemented!()
+                            }
+                        };
                     }
                 }
             }

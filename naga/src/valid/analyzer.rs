@@ -1178,21 +1178,28 @@ impl FunctionInfo {
                     FunctionUniformity::new()
                 }
                 S::CooperativeLoadStore {
-                    store: _,
+                    store,
                     target,
                     pointer,
                     stride,
                     row_major: _,
-                } => FunctionUniformity {
-                    result: Uniformity {
-                        non_uniform_result: self
-                            .add_ref(target)
-                            .or(self.add_ref(pointer))
-                            .or(self.add_ref(stride)),
-                        requirements: UniformityRequirements::COOP_OPS,
-                    },
-                    exit: ExitFlags::empty(),
-                },
+                } => {
+                    let access = if store {
+                        GlobalUse::WRITE
+                    } else {
+                        GlobalUse::READ
+                    };
+                    FunctionUniformity {
+                        result: Uniformity {
+                            non_uniform_result: self
+                                .add_ref(target)
+                                .or(self.add_ref_impl(pointer, access))
+                                .or(self.add_ref(stride)),
+                            requirements: UniformityRequirements::COOP_OPS,
+                        },
+                        exit: ExitFlags::empty(),
+                    }
+                }
             };
 
             disruptor = disruptor.or(uniformity.exit_disruptor());

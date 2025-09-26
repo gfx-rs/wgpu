@@ -315,6 +315,16 @@ pub const fn binary_operation_str(op: crate::BinaryOperator) -> &'static str {
     }
 }
 
+impl crate::TypeInner {
+    /// Returns true if a variable of this type is a handle.
+    pub const fn is_handle(&self) -> bool {
+        match *self {
+            Self::Image { .. } | Self::Sampler { .. } | Self::AccelerationStructure { .. } => true,
+            _ => false,
+        }
+    }
+}
+
 impl crate::Statement {
     /// Returns true if the statement directly terminates the current block.
     ///

@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.4
 ; Generator: rspirv
-; Bound: 41
+; Bound: 47
 OpCapability Shader
 OpCapability CooperativeMatrixKHR
 OpCapability VulkanMemoryModel
@@ -22,7 +22,8 @@ fn main() {
     var c = coop_mat8x8<f32, C>();
     coopLoad(c, &ext[4]);
     var d = coopMultiplyAdd(a, b, c);
-    coopStore(c, &ext[0]);
+    coopStore(d, &ext[0]);
+    c = d;
 }
 "
 OpName %15 "a"
@@ -62,8 +63,8 @@ OpMemberDecorate %22 0 Offset 0
 %29 = OpConstantNull  %13
 %31 = OpTypePointer Function %13
 %33 = OpConstantNull  %13
-%35 = OpTypePointer StorageBuffer %4
-%36 = OpConstant  %7  4
+%36 = OpTypePointer StorageBuffer %4
+%37 = OpConstant  %7  4
 %25 = OpFunction  %2  None %26
 %24 = OpLabel
 %30 = OpVariable  %31  Function %29
@@ -71,18 +72,30 @@ OpMemberDecorate %22 0 Offset 0
 %28 = OpAccessChain  %27  %21 %9
 OpBranch %34
 %34 = OpLabel
+OpLine %3 1 1
+%35 = OpLoad  %13  %30
 OpLine %3 9 18
 OpLine %3 9 5
-%37 = OpAccessChain  %35  %28 %36
-%38 = OpCooperativeMatrixLoadKHR  %13  %37 %11 %8
-OpStore %30 %38
+%38 = OpAccessChain  %36  %28 %37
+%39 = OpCooperativeMatrixLoadKHR  %13  %38 %11 %8
+OpStore %35 %39
+OpLine %3 10 29
+%40 = OpLoad  %5  %15
 OpLine %3 10 13
-%39 = OpCooperativeMatrixMulAddKHR  %13  %15 %18 %30
+%41 = OpLoad  %10  %18
+%42 = OpLoad  %13  %30
+%43 = OpCooperativeMatrixMulAddKHR  %13  %40 %41 %42
 OpLine %3 10 5
-OpStore %32 %39
+OpStore %32 %43
+OpLine %3 1 1
+%44 = OpLoad  %13  %32
 OpLine %3 11 19
 OpLine %3 11 5
-%40 = OpAccessChain  %35  %28 %9
-OpCooperativeMatrixStoreKHR %40 %30 %11 %8
+%45 = OpAccessChain  %36  %28 %9
+OpCooperativeMatrixStoreKHR %45 %44 %11 %8
+OpLine %3 1 1
+%46 = OpLoad  %13  %32
+OpLine %3 12 5
+OpStore %30 %46
 OpReturn
 OpFunctionEnd

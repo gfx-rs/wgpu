@@ -227,8 +227,10 @@ pub enum Error {
     UnsupportedArrayOf(String),
     #[error("array of type '{0:?}' is not supported")]
     UnsupportedArrayOfType(Handle<crate::Type>),
-    #[error("ray tracing is not supported prior to MSL 2.3")]
+    #[error("ray tracing is not supported prior to MSL 2.4")]
     UnsupportedRayTracing,
+    #[error("cooperative matrix is not supported prior to MSL 2.3")]
+    UnsupportedCooperativeMatrix,
     #[error("overrides should not be present at this stage")]
     Override,
     #[error("bitcasting to {0:?} is not supported")]

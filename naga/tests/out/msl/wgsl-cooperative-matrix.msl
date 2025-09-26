@@ -1,4 +1,4 @@
-// language: metal1.0
+// language: metal2.3
 #include <metal_stdlib>
 #include <simd/simd.h>
 
@@ -9,23 +9,30 @@ struct _mslBufferSizes {
 };
 
 typedef float type_3[1];
-metal::simdgroup_float8x8 NagaCooperativeMultiplyAdd(const metal::simdgroup_float8x8& a, const metal::simdgroup_float8x8& b, const metal::simdgroup_float8x8& c) {
+metal::simdgroup_float8x8 NagaCooperativeMultiplyAdd(const thread metal::simdgroup_float8x8& a, const thread metal::simdgroup_float8x8& b, const thread metal::simdgroup_float8x8& c) {
     metal::simdgroup_float8x8 d;
-    metal::simdgroup_multiply_accumulate(d,a,b,c);
+    simdgroup_multiply_accumulate(d,a,b,c);
     return d;
 }
 
 
 kernel void main_(
-  device type_3 const& ext [[user(fake0)]]
+  device type_3& ext [[user(fake0)]]
 , constant _mslBufferSizes& _buffer_sizes [[user(fake0)]]
 ) {
     metal::simdgroup_float8x8 a = {};
     metal::simdgroup_float8x8 b = {};
     metal::simdgroup_float8x8 c = metal::simdgroup_float8x8 {};
     metal::simdgroup_float8x8 d = {};
-    metal::simdgroup_load(c, ext[4], 8u);
-    d = NagaCooperativeMultiplyAdd(a, b, c);
-    metal::simdgroup_store(c, ext[0], 8u);
+    metal::simdgroup_float8x8 _e2 = c;
+    simdgroup_load(_e2, &ext[4], 8u);
+    metal::simdgroup_float8x8 _e7 = a;
+    metal::simdgroup_float8x8 _e9 = b;
+    metal::simdgroup_float8x8 _e10 = c;
+    d = NagaCooperativeMultiplyAdd(_e7, _e9, _e10);
+    metal::simdgroup_float8x8 _e13 = d;
+    simdgroup_store(_e13, &ext[0], 8u);
+    metal::simdgroup_float8x8 _e17 = d;
+    c = _e17;
     return;
 }

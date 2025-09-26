@@ -217,17 +217,6 @@ impl crate::TypeInner {
         }
     }
 
-    /// Returns true if a variable of this type is a handle.
-    pub const fn is_handle(&self) -> bool {
-        match *self {
-            Self::Image { .. }
-            | Self::Sampler { .. }
-            | Self::AccelerationStructure { .. }
-            | Self::CooperativeMatrix { .. } => true,
-            _ => false,
-        }
-    }
-
     /// Attempt to calculate the size of this type. Returns `None` if the size
     /// exceeds the limit of [`crate::valid::MAX_TYPE_SIZE`].
     pub fn try_size(&self, gctx: super::GlobalCtx) -> Option<u32> {

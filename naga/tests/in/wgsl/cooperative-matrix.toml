@@ -4,3 +4,6 @@ capabilities = "COOPERATIVE_MATRIX"
 [spv]
 debug = true
 version = [1, 4]
+
+[msl]
+lang_version = [2, 3]

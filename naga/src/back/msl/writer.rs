@@ -237,6 +237,7 @@ impl Display for TypeContext<'_> {
                 rows,
                 scalar,
             } => put_numeric_type(out, scalar, &[rows, columns]),
+            // Requires Metal-2.3
             crate::TypeInner::CooperativeMatrix {
                 columns,
                 rows,
@@ -245,8 +246,7 @@ impl Display for TypeContext<'_> {
             } => {
                 write!(
                     out,
-                    "{}::simdgroup_{}{}x{}",
-                    NAMESPACE,
+                    "{NAMESPACE}::simdgroup_{}{}x{}",
                     scalar.to_msl_name(),
                     columns as u32,
                     rows as u32,
@@ -486,6 +486,7 @@ enum WrappedFunction {
         class: crate::ImageClass,
     },
     CooperativeMultiplyAdd {
+        space: crate::AddressSpace,
         columns: crate::CooperativeSize,
         rows: crate::CooperativeSize,
         intermediate: crate::CooperativeSize,
@@ -2848,6 +2849,9 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "}}")?;
             }
             crate::Expression::CooperativeMultiplyAdd { a, b, c } => {
+                if context.lang_version < (2, 3) {
+                    return Err(Error::UnsupportedCooperativeMatrix);
+                }
                 write!(self.out, "{COOPERATIVE_MULTIPLY_ADD_FUNCTION}(")?;
                 self.put_expression(a, context, true)?;
                 write!(self.out, ", ")?;
@@ -4234,10 +4238,14 @@ impl<W: Write> Writer<W> {
                     row_major,
                 } => {
                     let op_str = if store { "store" } else { "load" };
-                    write!(self.out, "{level}{NAMESPACE}::simdgroup_{op_str}(")?;
+                    write!(self.out, "{level}simdgroup_{op_str}(")?;
                     self.put_expression(target, &context.expression, true)?;
-                    write!(self.out, ", ")?;
-                    self.put_expression(pointer, &context.expression, true)?;
+                    write!(self.out, ", &")?;
+                    self.put_access_chain(
+                        pointer,
+                        context.expression.policies.index,
+                        &context.expression,
+                    )?;
                     write!(self.out, ", ")?;
                     self.put_expression(stride, &context.expression, true)?;
                     if row_major {
@@ -6364,6 +6372,7 @@ template <typename A>
         &mut self,
         module: &crate::Module,
         func_ctx: &back::FunctionCtx,
+        space: crate::AddressSpace,
         a: Handle<crate::Expression>,
         b: Handle<crate::Expression>,
     ) -> BackendResult {
@@ -6381,6 +6390,7 @@ template <typename A>
             _ => unreachable!(),
         };
         let wrapped = WrappedFunction::CooperativeMultiplyAdd {
+            space,
             columns: b_c,
             rows: a_r,
             intermediate: a_c,
@@ -6389,15 +6399,11 @@ template <typename A>
         if !self.wrapped_functions.insert(wrapped) {
             return Ok(());
         }
-        let scalar_name = match scalar.width {
-            2 => "half",
-            4 => "float",
-            8 => "double",
-            _ => unreachable!(),
-        };
+        let space_name = space.to_msl_name().unwrap_or_default();
+        let scalar_name = scalar.to_msl_name();
         writeln!(
             self.out,
-            "{NAMESPACE}::simdgroup_{scalar_name}{}x{} {COOPERATIVE_MULTIPLY_ADD_FUNCTION}(const {NAMESPACE}::simdgroup_{scalar_name}{}x{}& a, const {NAMESPACE}::simdgroup_{scalar_name}{}x{}& b, const {NAMESPACE}::simdgroup_{scalar_name}{}x{}& c) {{",
+            "{NAMESPACE}::simdgroup_{scalar_name}{}x{} {COOPERATIVE_MULTIPLY_ADD_FUNCTION}(const {space_name} {NAMESPACE}::simdgroup_{scalar_name}{}x{}& a, const {space_name} {NAMESPACE}::simdgroup_{scalar_name}{}x{}& b, const {space_name} {NAMESPACE}::simdgroup_{scalar_name}{}x{}& c) {{",
             b_c as u32, a_r as u32, a_c as u32, a_r as u32, b_c as u32, b_r as u32, b_c as u32, a_r as u32,
         )?;
         let l1 = back::Level(1);
@@ -6406,10 +6412,7 @@ template <typename A>
             "{l1}{NAMESPACE}::simdgroup_{scalar_name}{}x{} d;",
             b_c as u32, a_r as u32
         )?;
-        writeln!(
-            self.out,
-            "{l1}{NAMESPACE}::simdgroup_multiply_accumulate(d,a,b,c);"
-        )?;
+        writeln!(self.out, "{l1}simdgroup_multiply_accumulate(d,a,b,c);")?;
         writeln!(self.out, "{l1}return d;")?;
         writeln!(self.out, "}}")?;
         writeln!(self.out)?;
@@ -6491,7 +6494,8 @@ template <typename A>
                     self.write_wrapped_image_query(module, func_ctx, image, query)?;
                 }
                 crate::Expression::CooperativeMultiplyAdd { a, b, c: _ } => {
-                    self.write_wrapped_cooperative_multiply_add(module, func_ctx, a, b)?;
+                    let space = crate::AddressSpace::Private;
+                    self.write_wrapped_cooperative_multiply_add(module, func_ctx, space, a, b)?;
                 }
                 _ => {}
             }
@@ -6684,7 +6688,6 @@ template <typename A>
                     names: &self.names,
                     handle,
                     usage: fun_info[handle],
-
                     reference: true,
                 };
                 let separator =

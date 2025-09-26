@@ -454,8 +454,7 @@ impl<'a> ResolveContext<'a> {
             }
             crate::Expression::GlobalVariable(h) => {
                 let var = &self.global_vars[h];
-                let ty = &types[var.ty].inner;
-                if var.space == crate::AddressSpace::Handle || ty.is_handle() {
+                if var.space == crate::AddressSpace::Handle {
                     TypeResolution::Handle(var.ty)
                 } else {
                     TypeResolution::Value(Ti::Pointer {
@@ -466,15 +465,10 @@ impl<'a> ResolveContext<'a> {
             }
             crate::Expression::LocalVariable(h) => {
                 let var = &self.local_vars[h];
-                let ty = &types[var.ty].inner;
-                if ty.is_handle() {
-                    TypeResolution::Handle(var.ty)
-                } else {
-                    TypeResolution::Value(Ti::Pointer {
-                        base: var.ty,
-                        space: crate::AddressSpace::Function,
-                    })
-                }
+                TypeResolution::Value(Ti::Pointer {
+                    base: var.ty,
+                    space: crate::AddressSpace::Function,
+                })
             }
             crate::Expression::Load { pointer } => match *past(pointer)?.inner_with(types) {
                 Ti::Pointer { base, space: _ } => {
@@ -493,7 +487,7 @@ impl<'a> ResolveContext<'a> {
                     None => Ti::Scalar(scalar),
                 }),
                 ref other => {
-                    log::error!("Pointer type {other:?}");
+                    log::error!("Pointer {pointer:?} type {other:?}");
                     return Err(ResolveError::InvalidPointer(pointer));
                 }
             },

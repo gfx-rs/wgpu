@@ -1256,34 +1256,18 @@ impl super::Validator {
             },
             E::SubgroupBallotResult | E::SubgroupOperationResult { .. } => self.subgroup_stages,
             E::CooperativeMultiplyAdd { a, b, c } => {
-                match resolver[a] {
-                    Ti::CooperativeMatrix {
-                        role: crate::CooperativeRole::A,
-                        ..
-                    } => {}
-                    ref other => {
-                        log::error!("A operand type: {other:?}");
-                        return Err(ExpressionError::InvalidCooperativeOperand(a));
-                    }
-                }
-                match resolver[b] {
-                    Ti::CooperativeMatrix {
-                        role: crate::CooperativeRole::B,
-                        ..
-                    } => {}
-                    ref other => {
-                        log::error!("B operand type: {other:?}");
-                        return Err(ExpressionError::InvalidCooperativeOperand(b));
-                    }
-                }
-                match resolver[c] {
-                    Ti::CooperativeMatrix {
-                        role: crate::CooperativeRole::C,
-                        ..
-                    } => {}
-                    ref other => {
-                        log::error!("C operand type: {other:?}");
-                        return Err(ExpressionError::InvalidCooperativeOperand(c));
+                let roles = [
+                    crate::CooperativeRole::A,
+                    crate::CooperativeRole::B,
+                    crate::CooperativeRole::C,
+                ];
+                for (operand, expected_role) in [a, b, c].into_iter().zip(roles) {
+                    match resolver[operand] {
+                        Ti::CooperativeMatrix { role, .. } if role == expected_role => {}
+                        ref other => {
+                            log::error!("{expected_role:?} operand type: {other:?}");
+                            return Err(ExpressionError::InvalidCooperativeOperand(a));
+                        }
                     }
                 }
                 ShaderStages::COMPUTE

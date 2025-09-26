@@ -531,6 +531,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         span: Span,
     ) -> Result<'source, Handle<ir::Expression>> {
         let mut eval = self.as_const_evaluator();
+        log::debug!("appending {expr:?}");
         eval.try_eval_and_append(expr, span)
             .map_err(|e| Box::new(Error::ConstantEvaluatorError(e.into(), span)))
     }
@@ -931,6 +932,15 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     fn ensure_type_exists(&mut self, inner: ir::TypeInner) -> Handle<ir::Type> {
         self.as_global().ensure_type_exists(None, inner)
     }
+
+    fn _get_runtime_expression(&self, expr: Handle<ir::Expression>) -> &ir::Expression {
+        match self.expr_type {
+            ExpressionContextType::Runtime(ref ctx) => &ctx.function.expressions[expr],
+            ExpressionContextType::Constant(_) | ExpressionContextType::Override => {
+                unreachable!()
+            }
+        }
+    }
 }
 
 struct ArgumentContext<'ctx, 'source> {
@@ -1039,6 +1049,13 @@ impl<T> Typed<T> {
             Self::Reference(expr) => Typed::Reference(f(expr)?),
             Self::Plain(expr) => Typed::Plain(f(expr)?),
         })
+    }
+
+    fn ref_or<E>(self, error: E) -> core::result::Result<T, E> {
+        match self {
+            Self::Reference(v) => Ok(v),
+            Self::Plain(_) => Err(error),
+        }
     }
 }
 
@@ -1810,12 +1827,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .as_expression(block, &mut emitter)
                         .interrupt_emitter(ir::Expression::LocalVariable(var), Span::UNDEFINED)?;
                     block.extend(emitter.finish(&ctx.function.expressions));
-                    let typed = if ctx.module.types[ty].inner.is_handle() {
-                        Typed::Plain(handle)
-                    } else {
-                        Typed::Reference(handle)
-                    };
-                    ctx.local_table.insert(v.handle, Declared::Runtime(typed));
+                    ctx.local_table
+                        .insert(v.handle, Declared::Runtime(Typed::Reference(handle)));
 
                     match initializer {
                         Some(initializer) => ir::Statement::Store {
@@ -2110,12 +2123,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let value_span = ctx.ast_expressions.get_span(value);
                 let target = self
                     .expression_for_reference(value, &mut ctx.as_expression(block, &mut emitter))?;
-                let target_handle = match target {
-                    Typed::Reference(handle) => handle,
-                    Typed::Plain(_) => {
-                        return Err(Box::new(Error::BadIncrDecrReferenceType(value_span)))
-                    }
-                };
+                let target_handle = target.ref_or(Error::BadIncrDecrReferenceType(value_span))?;
 
                 let mut ectx = ctx.as_expression(block, &mut emitter);
                 let scalar = match *resolve_inner!(ectx, target_handle) {
@@ -2272,10 +2280,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     LoweredGlobalDecl::Var(handle) => {
                         let expr = ir::Expression::GlobalVariable(handle);
                         let v = &ctx.module.global_variables[handle];
-                        let force_value = ctx.module.types[v.ty].inner.is_handle();
                         match v.space {
                             ir::AddressSpace::Handle => Typed::Plain(expr),
-                            _ if force_value => Typed::Plain(expr),
                             _ => Typed::Reference(expr),
                         }
                     }
