@@ -5,6 +5,7 @@ skip-tree = [
     { name = "winit", version = "0.29" },
     { name = "rustc_version", version = "0.2.3" },
     { name = "miniz_oxide", version = "0.7.4" },
+    { name = "rustc-hash", version = "1.1.0" },
 
     # introduced by Deno, to be investigated
     { name = "strum_macros", version = "0.25.3" },
@@ -49,10 +50,6 @@ ignore = [
     # It's a dependency of `metal` (which is to be replaced with `objc2-metal`), and a
     # transitive dependency of `deno`. https://github.com/gfx-rs/wgpu/issues/7873
     "RUSTSEC-2024-0436",
-    # `adler` crate is no longer maintained https://rustsec.org/advisories/RUSTSEC-2025-0056
-    # It's a dependency of `miniz_oxide` 0.7.4, and a transitive dependency of `deno`.
-    # https://github.com/gfx-rs/wgpu/issues/7961
-    "RUSTSEC-2025-0056",
 ]
 
 [licenses]

@@ -963,6 +963,13 @@ impl Texture {
     pub unsafe fn raw_handle(&self) -> vk::Image {
         self.raw
     }
+
+    /// # Safety
+    ///
+    /// - The external memory must not be manually freed
+    pub unsafe fn external_memory(&self) -> Option<vk::DeviceMemory> {
+        self.external_memory
+    }
 }
 
 #[derive(Debug)]

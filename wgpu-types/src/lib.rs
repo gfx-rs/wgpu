@@ -5367,7 +5367,7 @@ bitflags::bitflags! {
 }
 
 /// A buffer transition for use with `CommandEncoder::transition_resources`.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BufferTransition<T> {
     /// The buffer to transition.
     pub buffer: T,
@@ -5683,7 +5683,7 @@ bitflags::bitflags! {
 }
 
 /// A texture transition for use with `CommandEncoder::transition_resources`.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TextureTransition<T> {
     /// The texture to transition.
     pub texture: T,

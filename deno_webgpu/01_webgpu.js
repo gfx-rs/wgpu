@@ -37,6 +37,8 @@ import {
   GPUTextureView,
   GPUExternalTexture,
   op_create_gpu,
+  op_webgpu_device_start_capture,
+  op_webgpu_device_stop_capture,
 } from "ext:core/ops";
 const {
   ObjectDefineProperty,
@@ -57,9 +59,10 @@ import {
 import { DOMException } from "ext:deno_web/01_dom_exception.js";
 import { createFilteredInspectProxy } from "ext:deno_console/01_console.js";
 
-const customInspect = SymbolFor("Deno.privateCustomInspect");
+const privateCustomInspect = SymbolFor("Deno.privateCustomInspect");
 const _message = Symbol("[[message]]");
 const illegalConstructorKey = Symbol("illegalConstructorKey");
+
 class GPUError {
   constructor(key = null) {
     if (key !== illegalConstructorKey) {
@@ -73,7 +76,7 @@ class GPUError {
     return this[_message];
   }
 
-  [customInspect](inspect, inspectOptions) {
+  [privateCustomInspect](inspect, inspectOptions) {
     return inspect(
       createFilteredInspectProxy({
         object: this,
@@ -170,14 +173,16 @@ class GPUUncapturedErrorEvent extends Event {
 }
 const GPUUncapturedErrorEventPrototype = GPUUncapturedErrorEvent.prototype;
 
-ObjectDefineProperty(GPU, customInspect, {
+const GPUPrototype = GPU.prototype;
+ObjectDefineProperty(GPUPrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return `${this.constructor.name} ${inspect({}, inspectOptions)}`;
   },
 });
 
-ObjectDefineProperty(GPUAdapter, customInspect, {
+const GPUAdapterPrototype = GPUAdapter.prototype;
+ObjectDefineProperty(GPUAdapterPrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -188,16 +193,15 @@ ObjectDefineProperty(GPUAdapter, customInspect, {
           "features",
           "limits",
           "info",
-          "isFallbackAdapter",
         ],
       }),
       inspectOptions,
     );
   },
 });
-const GPUAdapterPrototype = GPUAdapter.prototype;
 
-ObjectDefineProperty(GPUAdapterInfo, customInspect, {
+const GPUAdapterInfoPrototype = GPUAdapterInfo.prototype;
+ObjectDefineProperty(GPUAdapterInfoPrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -209,15 +213,19 @@ ObjectDefineProperty(GPUAdapterInfo, customInspect, {
           "architecture",
           "device",
           "description",
+          "subgroupMinSize",
+          "subgroupMaxSize",
+          "isFallbackAdapter",
         ],
       }),
       inspectOptions,
     );
   },
 });
-const GPUAdapterInfoPrototype = GPUAdapterInfo.prototype;
 
-ObjectDefineProperty(GPUSupportedFeatures, customInspect, {
+const GPUSupportedFeaturesPrototype = GPUSupportedFeatures.prototype;
+webidl.setlikeObjectWrap(GPUSupportedFeaturesPrototype, true);
+ObjectDefineProperty(GPUSupportedFeaturesPrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     if (ObjectPrototypeIsPrototypeOf(GPUSupportedFeaturesPrototype, this)) {
@@ -229,10 +237,61 @@ ObjectDefineProperty(GPUSupportedFeatures, customInspect, {
     }
   },
 });
-const GPUSupportedFeaturesPrototype = GPUSupportedFeatures.prototype;
-webidl.setlikeObjectWrap(GPUSupportedFeaturesPrototype, true);
 
-ObjectDefineProperty(GPUDeviceLostInfo, customInspect, {
+const GPUSupportedLimitsPrototype = GPUSupportedLimits.prototype;
+ObjectDefineProperty(GPUSupportedLimitsPrototype, privateCustomInspect, {
+  __proto__: null,
+  value(inspect, inspectOptions) {
+    return inspect(
+      createFilteredInspectProxy({
+        object: this,
+        evaluate: ObjectPrototypeIsPrototypeOf(
+          GPUSupportedLimitsPrototype,
+          this,
+        ),
+        keys: [
+          "maxTextureDimension1D",
+          "maxTextureDimension2D",
+          "maxTextureDimension3D",
+          "maxTextureArrayLayers",
+          "maxBindGroups",
+          // TODO(@crowlKats): support max_bind_groups_plus_vertex_buffers
+          // "maxBindGroupsPlusVertexBuffers",
+          "maxBindingsPerBindGroup",
+          "maxDynamicUniformBuffersPerPipelineLayout",
+          "maxDynamicStorageBuffersPerPipelineLayout",
+          "maxSampledTexturesPerShaderStage",
+          "maxSamplersPerShaderStage",
+          "maxStorageBuffersPerShaderStage",
+          "maxStorageTexturesPerShaderStage",
+          "maxUniformBuffersPerShaderStage",
+          "maxUniformBufferBindingSize",
+          "maxStorageBufferBindingSize",
+          "minUniformBufferOffsetAlignment",
+          "minStorageBufferOffsetAlignment",
+          "maxVertexBuffers",
+          "maxBufferSize",
+          "maxVertexAttributes",
+          "maxVertexBufferArrayStride",
+          // TODO(@crowlKats): support max_inter_stage_shader_variables
+          // "maxInterStageShaderVariables",
+          "maxColorAttachments",
+          "maxColorAttachmentBytesPerSample",
+          "maxComputeWorkgroupStorageSize",
+          "maxComputeInvocationsPerWorkgroup",
+          "maxComputeWorkgroupSizeX",
+          "maxComputeWorkgroupSizeY",
+          "maxComputeWorkgroupSizeZ",
+          "maxComputeWorkgroupsPerDimension",
+        ],
+      }),
+      inspectOptions,
+    );
+  },
+});
+
+const GPUDeviceLostInfoPrototype = GPUDeviceLostInfo.prototype;
+ObjectDefineProperty(GPUDeviceLostInfoPrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -251,9 +310,11 @@ ObjectDefineProperty(GPUDeviceLostInfo, customInspect, {
     );
   },
 });
-const GPUDeviceLostInfoPrototype = GPUDeviceLostInfo.prototype;
 
-ObjectDefineProperty(GPUDevice, customInspect, {
+const GPUDevicePrototype = GPUDevice.prototype;
+ObjectSetPrototypeOf(GPUDevicePrototype, EventTargetPrototype);
+defineEventHandler(GPUDevicePrototype, "uncapturederror");
+ObjectDefineProperty(GPUDevicePrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -274,11 +335,9 @@ ObjectDefineProperty(GPUDevice, customInspect, {
     );
   },
 });
-const GPUDevicePrototype = GPUDevice.prototype;
-ObjectSetPrototypeOf(GPUDevicePrototype, EventTargetPrototype);
-defineEventHandler(GPUDevice.prototype, "uncapturederror");
 
-ObjectDefineProperty(GPUQueue, customInspect, {
+const GPUQueuePrototype = GPUQueue.prototype;
+ObjectDefineProperty(GPUQueuePrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -293,9 +352,9 @@ ObjectDefineProperty(GPUQueue, customInspect, {
     );
   },
 });
-const GPUQueuePrototype = GPUQueue.prototype;
 
-ObjectDefineProperty(GPUBuffer, customInspect, {
+const GPUBufferPrototype = GPUBuffer.prototype;
+ObjectDefineProperty(GPUBufferPrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -313,7 +372,6 @@ ObjectDefineProperty(GPUBuffer, customInspect, {
     );
   },
 });
-const GPUBufferPrototype = GPUBuffer.prototype;
 
 class GPUBufferUsage {
   constructor() {
@@ -365,7 +423,8 @@ class GPUMapMode {
   }
 }
 
-ObjectDefineProperty(GPUTexture, customInspect, {
+const GPUTexturePrototype = GPUTexture.prototype;
+ObjectDefineProperty(GPUTexturePrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -388,7 +447,6 @@ ObjectDefineProperty(GPUTexture, customInspect, {
     );
   },
 });
-const GPUTexturePrototype = GPUTexture.prototype;
 
 class GPUTextureUsage {
   constructor() {
@@ -412,7 +470,8 @@ class GPUTextureUsage {
   }
 }
 
-ObjectDefineProperty(GPUTextureView, customInspect, {
+const GPUTextureViewPrototype = GPUTextureView.prototype;
+ObjectDefineProperty(GPUTextureViewPrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -427,20 +486,29 @@ ObjectDefineProperty(GPUTextureView, customInspect, {
     );
   },
 });
-const GPUTextureViewPrototype = GPUTextureView.prototype;
 
-ObjectDefineProperty(GPUSampler, customInspect, {
+const GPUSamplerPrototype = GPUSampler.prototype;
+ObjectDefineProperty(GPUSamplerPrototype, privateCustomInspect, {
   __proto__: null,
-  value(inspect) {
-    return `${this.constructor.name} ${
-      inspect({
-        label: this.label,
-      })
-    }`;
+  value(inspect, inspectOptions) {
+    return inspect(
+      createFilteredInspectProxy({
+        object: this,
+        evaluate: ObjectPrototypeIsPrototypeOf(
+          GPUSamplerPrototype,
+          this,
+        ),
+        keys: [
+          "label",
+        ],
+      }),
+      inspectOptions,
+    );
   },
 });
 
-ObjectDefineProperty(GPUBindGroupLayout, customInspect, {
+const GPUBindGroupLayoutPrototype = GPUBindGroupLayout.prototype;
+ObjectDefineProperty(GPUBindGroupLayout, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -458,9 +526,9 @@ ObjectDefineProperty(GPUBindGroupLayout, customInspect, {
     );
   },
 });
-const GPUBindGroupLayoutPrototype = GPUBindGroupLayout.prototype;
 
-ObjectDefineProperty(GPUPipelineLayout, customInspect, {
+const GPUPipelineLayoutPrototype = GPUPipelineLayout.prototype;
+ObjectDefineProperty(GPUPipelineLayoutPrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -478,9 +546,9 @@ ObjectDefineProperty(GPUPipelineLayout, customInspect, {
     );
   },
 });
-const GPUPipelineLayoutPrototype = GPUPipelineLayout.prototype;
 
-ObjectDefineProperty(GPUBindGroup, customInspect, {
+const GPUBindGroupPrototype = GPUBindGroup.prototype;
+ObjectDefineProperty(GPUBindGroupPrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -495,9 +563,9 @@ ObjectDefineProperty(GPUBindGroup, customInspect, {
     );
   },
 });
-const GPUBindGroupPrototype = GPUBindGroup.prototype;
 
-ObjectDefineProperty(GPUShaderModule, customInspect, {
+const GPUShaderModulePrototype = GPUShaderModule.prototype;
+ObjectDefineProperty(GPUShaderModulePrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -512,9 +580,8 @@ ObjectDefineProperty(GPUShaderModule, customInspect, {
     );
   },
 });
-const GPUShaderModulePrototype = GPUShaderModule.prototype;
 
-ObjectDefineProperty(GPUCompilationInfo, customInspect, {
+ObjectDefineProperty(GPUCompilationInfo, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -534,7 +601,7 @@ ObjectDefineProperty(GPUCompilationInfo, customInspect, {
 });
 const GPUCompilationInfoPrototype = GPUCompilationInfo.prototype;
 
-ObjectDefineProperty(GPUCompilationMessage, customInspect, {
+ObjectDefineProperty(GPUCompilationMessage, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -584,7 +651,8 @@ class GPUShaderStage {
   }
 }
 
-ObjectDefineProperty(GPUComputePipeline, customInspect, {
+const GPUComputePipelinePrototype = GPUComputePipeline.prototype;
+ObjectDefineProperty(GPUComputePipelinePrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -602,9 +670,9 @@ ObjectDefineProperty(GPUComputePipeline, customInspect, {
     );
   },
 });
-const GPUComputePipelinePrototype = GPUComputePipeline.prototype;
 
-ObjectDefineProperty(GPURenderPipeline, customInspect, {
+const GPURenderPipelinePrototype = GPURenderPipeline.prototype;
+ObjectDefineProperty(GPURenderPipelinePrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -622,7 +690,6 @@ ObjectDefineProperty(GPURenderPipeline, customInspect, {
     );
   },
 });
-const GPURenderPipelinePrototype = GPURenderPipeline.prototype;
 
 class GPUColorWrite {
   constructor() {
@@ -646,7 +713,8 @@ class GPUColorWrite {
   }
 }
 
-ObjectDefineProperty(GPUCommandEncoder, customInspect, {
+const GPUCommandEncoderPrototype = GPUCommandEncoder.prototype;
+ObjectDefineProperty(GPUCommandEncoderPrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -664,9 +732,9 @@ ObjectDefineProperty(GPUCommandEncoder, customInspect, {
     );
   },
 });
-const GPUCommandEncoderPrototype = GPUCommandEncoder.prototype;
 
-ObjectDefineProperty(GPURenderPassEncoder, customInspect, {
+const GPURenderPassEncoderPrototype = GPURenderPassEncoder.prototype;
+ObjectDefineProperty(GPURenderPassEncoderPrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -684,9 +752,9 @@ ObjectDefineProperty(GPURenderPassEncoder, customInspect, {
     );
   },
 });
-const GPURenderPassEncoderPrototype = GPURenderPassEncoder.prototype;
 
-ObjectDefineProperty(GPUComputePassEncoder, customInspect, {
+const GPUComputePassEncoderPrototype = GPUComputePassEncoder.prototype;
+ObjectDefineProperty(GPUComputePassEncoderPrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -704,9 +772,9 @@ ObjectDefineProperty(GPUComputePassEncoder, customInspect, {
     );
   },
 });
-const GPUComputePassEncoderPrototype = GPUComputePassEncoder.prototype;
 
-ObjectDefineProperty(GPUCommandBuffer, customInspect, {
+const GPUCommandBufferPrototype = GPUCommandBuffer.prototype;
+ObjectDefineProperty(GPUCommandBufferPrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -721,9 +789,9 @@ ObjectDefineProperty(GPUCommandBuffer, customInspect, {
     );
   },
 });
-const GPUCommandBufferPrototype = GPUCommandBuffer.prototype;
 
-ObjectDefineProperty(GPURenderBundleEncoder, customInspect, {
+const GPURenderBundleEncoderPrototype = GPURenderBundleEncoder.prototype;
+ObjectDefineProperty(GPURenderBundleEncoderPrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -741,9 +809,9 @@ ObjectDefineProperty(GPURenderBundleEncoder, customInspect, {
     );
   },
 });
-const GPURenderBundleEncoderPrototype = GPURenderBundleEncoder.prototype;
 
-ObjectDefineProperty(GPURenderBundle, customInspect, {
+const GPURenderBundlePrototype = GPURenderBundle.prototype;
+ObjectDefineProperty(GPURenderBundlePrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -758,9 +826,9 @@ ObjectDefineProperty(GPURenderBundle, customInspect, {
     );
   },
 });
-const GPURenderBundlePrototype = GPURenderBundle.prototype;
 
-ObjectDefineProperty(GPUQuerySet, customInspect, {
+const GPUQuerySetPrototype = GPUQuerySet.prototype;
+ObjectDefineProperty(GPUQuerySetPrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     return inspect(
@@ -777,7 +845,6 @@ ObjectDefineProperty(GPUQuerySet, customInspect, {
     );
   },
 });
-const GPUQuerySetPrototype = GPUQuerySet.prototype;
 // Naming it `type` or `r#type` in Rust does not work.
 // https://github.com/gfx-rs/wgpu/issues/7778
 ObjectDefineProperty(GPUQuerySet.prototype, "type", {
@@ -819,6 +886,19 @@ webidl.converters["GPUUncapturedErrorEventInit"] = webidl
     dictMembersGPUUncapturedErrorEventInit,
   );
 
+function deviceStartCapture(device) {
+  op_webgpu_device_start_capture(device);
+}
+
+function deviceStopCapture(device) {
+  op_webgpu_device_stop_capture(device);
+}
+
+const denoNsWebGPU = {
+  deviceStartCapture,
+  deviceStopCapture,
+};
+
 let gpu;
 function initGPU() {
   if (!gpu) {
@@ -831,6 +911,7 @@ function initGPU() {
 }
 
 export {
+  denoNsWebGPU,
   GPU,
   gpu,
   GPUAdapter,

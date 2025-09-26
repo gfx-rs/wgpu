@@ -1,4 +1,7 @@
-use std::{io::Write, process::Stdio};
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    process::Stdio,
+};
 
 use wgpu::util::DeviceExt;
 use wgpu_test::{
@@ -14,19 +17,19 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
         MESH_DRAW_INDIRECT,
         MESH_MULTI_DRAW_INDIRECT,
         MESH_MULTI_DRAW_INDIRECT_COUNT,
+        MESH_PIPELINE_BASIC_MESH_NO_DRAW,
+        MESH_PIPELINE_BASIC_TASK_MESH_FRAG_NO_DRAW,
     ]);
 }
 
 // Same as in mesh shader example
-fn compile_glsl(
-    device: &wgpu::Device,
-    data: &[u8],
-    shader_stage: &'static str,
-) -> wgpu::ShaderModule {
+fn compile_glsl(device: &wgpu::Device, shader_stage: &'static str) -> wgpu::ShaderModule {
     let cmd = std::process::Command::new("glslc")
         .args([
-            &format!("-fshader-stage={shader_stage}"),
-            "-",
+            &format!(
+                "{}/tests/wgpu-gpu/mesh_shader/basic.{shader_stage}",
+                env!("CARGO_MANIFEST_DIR")
+            ),
             "-o",
             "-",
             "--target-env=vulkan1.2",
@@ -36,8 +39,6 @@ fn compile_glsl(
         .stdout(Stdio::piped())
         .spawn()
         .expect("Failed to call glslc");
-    cmd.stdin.as_ref().unwrap().write_all(data).unwrap();
-    println!("{shader_stage}");
     let output = cmd.wait_with_output().expect("Error waiting for glslc");
     assert!(output.status.success());
     unsafe {
@@ -47,6 +48,70 @@ fn compile_glsl(
             spirv: Some(wgpu::util::make_spirv_raw(&output.stdout)),
             ..Default::default()
         })
+    }
+}
+
+fn compile_hlsl(
+    device: &wgpu::Device,
+    entry: &str,
+    stage_str: &str,
+    test_name: &str,
+) -> wgpu::ShaderModule {
+    // Each test needs its own files
+    let out_path = format!(
+        "{}/tests/wgpu-gpu/mesh_shader/{test_name}.{stage_str}.cso",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let cmd = std::process::Command::new("dxc")
+        .args([
+            "-T",
+            &format!("{stage_str}_6_5"),
+            "-E",
+            entry,
+            &format!(
+                "{}/tests/wgpu-gpu/mesh_shader/basic.hlsl",
+                env!("CARGO_MANIFEST_DIR")
+            ),
+            "-Fo",
+            &out_path,
+        ])
+        .output()
+        .unwrap();
+    if !cmd.status.success() {
+        panic!("DXC failed:\n{}", String::from_utf8(cmd.stderr).unwrap());
+    }
+    let file = std::fs::read(&out_path).unwrap();
+    std::fs::remove_file(out_path).unwrap();
+    unsafe {
+        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
+            entry_point: entry.to_owned(),
+            label: None,
+            num_workgroups: (1, 1, 1),
+            dxil: Some(std::borrow::Cow::Owned(file)),
+            ..Default::default()
+        })
+    }
+}
+
+fn get_shaders(
+    device: &wgpu::Device,
+    backend: wgpu::Backend,
+    test_name: &str,
+) -> (wgpu::ShaderModule, wgpu::ShaderModule, wgpu::ShaderModule) {
+    if backend == wgpu::Backend::Vulkan {
+        (
+            compile_glsl(device, "task"),
+            compile_glsl(device, "mesh"),
+            compile_glsl(device, "frag"),
+        )
+    } else if backend == wgpu::Backend::Dx12 {
+        (
+            compile_hlsl(device, "Task", "as", test_name),
+            compile_hlsl(device, "Mesh", "ms", test_name),
+            compile_hlsl(device, "Frag", "ps", test_name),
+        )
+    } else {
+        unreachable!()
     }
 }
 
@@ -79,18 +144,30 @@ fn create_depth(
     (depth_texture, depth_view, state)
 }
 
-fn mesh_pipeline_build(
-    ctx: &TestingContext,
-    task: Option<&[u8]>,
-    mesh: &[u8],
-    frag: Option<&[u8]>,
+struct MeshPipelineTestInfo {
+    use_task: bool,
+    use_frag: bool,
     draw: bool,
-) {
+}
+
+fn hash_testing_context(ctx: &TestingContext) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    ctx.hash(&mut hasher);
+    hasher.finish()
+}
+
+fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
+    let backend = ctx.adapter.get_info().backend;
+    if backend != wgpu::Backend::Vulkan && backend != wgpu::Backend::Dx12 {
+        return;
+    }
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
-    let task = task.map(|t| compile_glsl(device, t, "task"));
-    let mesh = compile_glsl(device, mesh, "mesh");
-    let frag = frag.map(|f| compile_glsl(device, f, "frag"));
+
+    let test_hash = hash_testing_context(ctx).to_string();
+    let (task, mesh, frag) = get_shaders(device, backend, &test_hash);
+    let task = if info.use_task { Some(task) } else { None };
+    let frag = if info.use_frag { Some(frag) } else { None };
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
@@ -124,7 +201,7 @@ fn mesh_pipeline_build(
         multiview: None,
         cache: None,
     });
-    if draw {
+    if info.draw {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
@@ -160,11 +237,14 @@ pub enum DrawType {
 }
 
 fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
+    let backend = ctx.adapter.get_info().backend;
+    if backend != wgpu::Backend::Vulkan && backend != wgpu::Backend::Dx12 {
+        return;
+    }
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
-    let task = compile_glsl(device, BASIC_TASK, "task");
-    let mesh = compile_glsl(device, BASIC_MESH, "mesh");
-    let frag = compile_glsl(device, NO_WRITE_FRAG, "frag");
+    let test_hash = hash_testing_context(ctx).to_string();
+    let (task, mesh, frag) = get_shaders(device, backend, &test_hash);
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
@@ -256,11 +336,6 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
     ctx.device.poll(wgpu::PollType::Wait).unwrap();
 }
 
-const BASIC_TASK: &[u8] = include_bytes!("basic.task");
-const BASIC_MESH: &[u8] = include_bytes!("basic.mesh");
-//const BASIC_FRAG: &[u8] = include_bytes!("basic.frag.spv");
-const NO_WRITE_FRAG: &[u8] = include_bytes!("no-write.frag");
-
 fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
     GpuTestConfiguration::new().parameters(
         TestParameters::default()
@@ -279,47 +354,92 @@ fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
     )
 }
 
-// Mesh pipeline configs
 #[gpu_test]
-static MESH_PIPELINE_BASIC_MESH: GpuTestConfiguration = default_gpu_test_config(DrawType::Standard)
-    .run_sync(|ctx| {
-        mesh_pipeline_build(&ctx, None, BASIC_MESH, None, true);
-    });
-#[gpu_test]
-static MESH_PIPELINE_BASIC_TASK_MESH: GpuTestConfiguration =
-    default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
-        mesh_pipeline_build(&ctx, Some(BASIC_TASK), BASIC_MESH, None, true);
-    });
-#[gpu_test]
-static MESH_PIPELINE_BASIC_MESH_FRAG: GpuTestConfiguration =
-    default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
-        mesh_pipeline_build(&ctx, None, BASIC_MESH, Some(NO_WRITE_FRAG), true);
-    });
-#[gpu_test]
-static MESH_PIPELINE_BASIC_TASK_MESH_FRAG: GpuTestConfiguration =
+pub static MESH_PIPELINE_BASIC_MESH: GpuTestConfiguration =
     default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
         mesh_pipeline_build(
             &ctx,
-            Some(BASIC_TASK),
-            BASIC_MESH,
-            Some(NO_WRITE_FRAG),
-            true,
+            MeshPipelineTestInfo {
+                use_task: false,
+                use_frag: false,
+                draw: true,
+            },
+        );
+    });
+#[gpu_test]
+pub static MESH_PIPELINE_BASIC_TASK_MESH: GpuTestConfiguration =
+    default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
+        mesh_pipeline_build(
+            &ctx,
+            MeshPipelineTestInfo {
+                use_task: true,
+                use_frag: false,
+                draw: true,
+            },
+        );
+    });
+#[gpu_test]
+pub static MESH_PIPELINE_BASIC_MESH_FRAG: GpuTestConfiguration =
+    default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
+        mesh_pipeline_build(
+            &ctx,
+            MeshPipelineTestInfo {
+                use_task: false,
+                use_frag: true,
+                draw: true,
+            },
+        );
+    });
+#[gpu_test]
+pub static MESH_PIPELINE_BASIC_TASK_MESH_FRAG: GpuTestConfiguration =
+    default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
+        mesh_pipeline_build(
+            &ctx,
+            MeshPipelineTestInfo {
+                use_task: true,
+                use_frag: true,
+                draw: true,
+            },
+        );
+    });
+#[gpu_test]
+pub static MESH_PIPELINE_BASIC_MESH_NO_DRAW: GpuTestConfiguration =
+    default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
+        mesh_pipeline_build(
+            &ctx,
+            MeshPipelineTestInfo {
+                use_task: false,
+                use_frag: false,
+                draw: false,
+            },
+        );
+    });
+#[gpu_test]
+pub static MESH_PIPELINE_BASIC_TASK_MESH_FRAG_NO_DRAW: GpuTestConfiguration =
+    default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
+        mesh_pipeline_build(
+            &ctx,
+            MeshPipelineTestInfo {
+                use_task: true,
+                use_frag: true,
+                draw: false,
+            },
         );
     });
 
 // Mesh draw
 #[gpu_test]
-static MESH_DRAW_INDIRECT: GpuTestConfiguration = default_gpu_test_config(DrawType::Indirect)
+pub static MESH_DRAW_INDIRECT: GpuTestConfiguration = default_gpu_test_config(DrawType::Indirect)
     .run_sync(|ctx| {
         mesh_draw(&ctx, DrawType::Indirect);
     });
 #[gpu_test]
-static MESH_MULTI_DRAW_INDIRECT: GpuTestConfiguration =
+pub static MESH_MULTI_DRAW_INDIRECT: GpuTestConfiguration =
     default_gpu_test_config(DrawType::MultiIndirect).run_sync(|ctx| {
         mesh_draw(&ctx, DrawType::MultiIndirect);
     });
 #[gpu_test]
-static MESH_MULTI_DRAW_INDIRECT_COUNT: GpuTestConfiguration =
+pub static MESH_MULTI_DRAW_INDIRECT_COUNT: GpuTestConfiguration =
     default_gpu_test_config(DrawType::MultiIndirectCount).run_sync(|ctx| {
         mesh_draw(&ctx, DrawType::MultiIndirectCount);
     });
