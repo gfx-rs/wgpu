@@ -3150,7 +3150,7 @@ impl TextureFormat {
         #[rustfmt::skip] // lets make a nice table
         let (
             mut flags,
-            mut allowed_usages,
+            allowed_usages,
         ) = match *self {
             Self::R8Unorm =>              (msaa_resolve, attachment),
             Self::R8Snorm =>              (        none,      basic),
