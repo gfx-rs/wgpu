@@ -2252,7 +2252,9 @@ impl crate::Device for super::Device {
             return Ok(true);
         }
 
-        unsafe { fence.raw.SetEventOnCompletion(value, self.idler.event.0) }
+        let event = Event::create(false, false)?;
+
+        unsafe { fence.raw.SetEventOnCompletion(value, event.0) }
             .into_device_result("Set event")?;
 
         let start_time = Instant::now();
@@ -2288,7 +2290,7 @@ impl crate::Device for super::Device {
 
             match unsafe {
                 Threading::WaitForSingleObject(
-                    self.idler.event.0,
+                    event.0,
                     remaining_wait_duration.as_millis().try_into().unwrap(),
                 )
             } {
