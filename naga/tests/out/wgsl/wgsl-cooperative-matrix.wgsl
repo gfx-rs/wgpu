@@ -8,7 +8,7 @@ fn main() {
     var c: coop_mat8x8<f32,C>;
     var d: coop_mat8x8<f32,C>;
 
-    c = coopLoad((&ext[4]), 8u);
+    c = coopLoad<coop_mat8x8<f32,C>>((&ext[4]), 8u);
     let _e6 = a;
     let _e8 = b;
     let _e9 = c;

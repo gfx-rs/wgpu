@@ -490,6 +490,7 @@ pub enum Expression<'a> {
     Call {
         function: Ident<'a>,
         arguments: Vec<Handle<Expression<'a>>>,
+        result_ty: Option<(Handle<Type<'a>>, Span)>,
     },
     Index {
         base: Handle<Expression<'a>>,

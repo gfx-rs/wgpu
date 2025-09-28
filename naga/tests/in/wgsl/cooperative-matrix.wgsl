@@ -5,7 +5,7 @@ var<storage, read_write> ext: array<f32>;
 
 @compute @workgroup_size(8, 8, 1)
 fn main() {
-    var c = coopLoad(&ext[4]);
+    var c = coopLoad<coop_mat8x8<f32, C>>(&ext[4]);
     var d = coopMultiplyAdd(a, b, c);
     coopStore(d, &ext[0]);
     c = d;

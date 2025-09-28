@@ -19,7 +19,7 @@ var<storage, read_write> ext: array<f32>;
 
 @compute @workgroup_size(8, 8, 1)
 fn main() {
-    var c = coopLoad(&ext[4]);
+    var c = coopLoad<coop_mat8x8<f32, C>>(&ext[4]);
     var d = coopMultiplyAdd(a, b, c);
     coopStore(d, &ext[0]);
     c = d;
@@ -71,7 +71,7 @@ OpMemberDecorate %22 0 Offset 0
 %28 = OpAccessChain  %27  %21 %9
 OpBranch %34
 %34 = OpLabel
-OpLine %3 8 23
+OpLine %3 8 44
 OpLine %3 8 13
 %37 = OpAccessChain  %35  %28 %36
 %38 = OpCooperativeMatrixLoadKHR  %13  %37 %11 %8

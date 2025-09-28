@@ -815,6 +815,11 @@ impl Parser {
             }
             // everything else must be handled later, since they can be hidden by user-defined functions.
             _ => {
+                let result_ty = if lexer.peek().0 == Token::Paren('<') {
+                    Some(self.singular_generic(lexer, ctx)?)
+                } else {
+                    None
+                };
                 let arguments = self.arguments(lexer, ctx)?;
                 ctx.unresolved.insert(ast::Dependency {
                     ident: name,
@@ -826,6 +831,7 @@ impl Parser {
                         span: name_span,
                     },
                     arguments,
+                    result_ty,
                 }
             }
         };
@@ -974,7 +980,7 @@ impl Parser {
                 } else if let Token::Paren('(') = lexer.peek().0 {
                     self.pop_rule_span(lexer);
                     return self.function_call(lexer, word, span, ctx);
-                } else if word == "bitcast" {
+                } else if ["bitcast", "coopLoad"].contains(&word) {
                     self.pop_rule_span(lexer);
                     return self.function_call(lexer, word, span, ctx);
                 } else {

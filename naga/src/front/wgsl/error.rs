@@ -417,6 +417,7 @@ pub(crate) enum Error<'a> {
         span: Span,
     },
     UnderspecifiedCooperativeMatrix,
+    InvalidCooperativeLoadType(Span),
     UnsupportedCooperativeScalar(Span),
 }
 
@@ -1406,6 +1407,11 @@ impl<'a> Error<'a> {
                 message: "cooperative matrix constructor is underspecified".into(),
                 labels: vec![],
                 notes: vec![format!("must be F32")],
+            },
+            Error::InvalidCooperativeLoadType(span) => ParseError {
+                message: "cooperative load should have a generic type for coop_mat".into(),
+                labels: vec![(span, "type needs the coop_mat<...>".into())],
+                notes: vec![format!("must be a valid cooperative type")],
             },
             Error::UnsupportedCooperativeScalar(span) => ParseError {
                 message: "cooperative scalar type is not supported".into(),

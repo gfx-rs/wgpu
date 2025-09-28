@@ -1802,9 +1802,29 @@ impl<W: Write> Writer<W> {
             | Expression::SubgroupBallotResult
             | Expression::SubgroupOperationResult { .. }
             | Expression::WorkGroupUniformLoadResult { .. } => {}
-            Expression::CooperativeLoad { ref data, .. } => {
+            Expression::CooperativeLoad {
+                columns,
+                rows,
+                role,
+                ref data,
+            } => {
                 let suffix = if data.row_major { "T" } else { "" };
-                write!(self.out, "coopLoad{suffix}(")?;
+                let scalar = func_ctx.info[data.pointer]
+                    .ty
+                    .inner_with(&module.types)
+                    .pointer_base_type()
+                    .unwrap()
+                    .inner_with(&module.types)
+                    .scalar()
+                    .unwrap();
+                write!(
+                    self.out,
+                    "coopLoad{suffix}<coop_mat{}x{}<{},{:?}>>(",
+                    columns as u32,
+                    rows as u32,
+                    scalar.try_to_wgsl().unwrap(),
+                    role,
+                )?;
                 self.write_expr(module, data.pointer, func_ctx)?;
                 write!(self.out, ", ")?;
                 self.write_expr(module, data.stride, func_ctx)?;

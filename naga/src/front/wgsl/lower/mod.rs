@@ -2038,6 +2038,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     stmt.span,
                     function,
                     arguments,
+                    None,
                     &mut ctx.as_expression(block, &mut emitter),
                     true,
                 )?;
@@ -2360,9 +2361,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             ast::Expression::Call {
                 ref function,
                 ref arguments,
+                result_ty,
             } => {
                 let handle = self
-                    .call(span, function, arguments, ctx, false)?
+                    .call(span, function, arguments, result_ty, ctx, false)?
                     .ok_or(Error::FunctionReturnsVoid(function.span))?;
                 return Ok(Typed::Plain(handle));
             }
@@ -2703,6 +2705,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         span: Span,
         function: &ast::Ident<'source>,
         arguments: &[Handle<ast::Expression<'source>>],
+        result_ty: Option<(Handle<ast::Type<'source>>, Span)>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
         is_statement: bool,
     ) -> Result<'source, Option<Handle<ir::Expression>>> {
@@ -3424,9 +3427,20 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             let row_major = function.name.ends_with("T");
                             let mut args = ctx.prepare_args(arguments, 1, span);
                             let pointer = self.expression(args.next()?, ctx)?;
-                            //TODO: read from generic argument
-                            let columns = crate::CooperativeSize::Eight;
-                            let rows = crate::CooperativeSize::Eight;
+                            let (matrix_ty, matrix_span) = result_ty.expect("generic argument");
+                            let (columns, rows, role) = match ctx.types[matrix_ty] {
+                                ast::Type::CooperativeMatrix {
+                                    columns,
+                                    rows,
+                                    role,
+                                    ..
+                                } => (columns, rows, role),
+                                _ => {
+                                    return Err(Box::new(Error::InvalidCooperativeLoadType(
+                                        matrix_span,
+                                    )))
+                                }
+                            };
                             let stride = if args.total_args > 1 {
                                 self.expression(args.next()?, ctx)?
                             } else {
@@ -3446,7 +3460,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             crate::Expression::CooperativeLoad {
                                 columns,
                                 rows,
-                                role: crate::CooperativeRole::C, //TODO
+                                role,
                                 data: crate::CooperativeData {
                                     pointer,
                                     stride,
