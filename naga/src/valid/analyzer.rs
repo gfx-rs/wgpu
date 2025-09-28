@@ -844,6 +844,10 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(query),
                 requirements: UniformityRequirements::empty(),
             },
+            E::CooperativeLoad { ref data, .. } => Uniformity {
+                non_uniform_result: self.add_ref(data.pointer).or(self.add_ref(data.stride)),
+                requirements: UniformityRequirements::COOP_OPS,
+            },
             E::CooperativeMultiplyAdd { a, b, c } => Uniformity {
                 non_uniform_result: self.add_ref(a).or(self.add_ref(b).or(self.add_ref(c))),
                 requirements: UniformityRequirements::COOP_OPS,
@@ -1177,29 +1181,16 @@ impl FunctionInfo {
                     }
                     FunctionUniformity::new()
                 }
-                S::CooperativeLoadStore {
-                    store,
-                    target,
-                    pointer,
-                    stride,
-                    row_major: _,
-                } => {
-                    let access = if store {
-                        GlobalUse::WRITE
-                    } else {
-                        GlobalUse::READ
-                    };
-                    FunctionUniformity {
-                        result: Uniformity {
-                            non_uniform_result: self
-                                .add_ref(target)
-                                .or(self.add_ref_impl(pointer, access))
-                                .or(self.add_ref(stride)),
-                            requirements: UniformityRequirements::COOP_OPS,
-                        },
-                        exit: ExitFlags::empty(),
-                    }
-                }
+                S::CooperativeStore { target, ref data } => FunctionUniformity {
+                    result: Uniformity {
+                        non_uniform_result: self
+                            .add_ref(target)
+                            .or(self.add_ref_impl(data.pointer, GlobalUse::WRITE))
+                            .or(self.add_ref(data.stride)),
+                        requirements: UniformityRequirements::COOP_OPS,
+                    },
+                    exit: ExitFlags::empty(),
+                },
             };
 
             disruptor = disruptor.or(uniformity.exit_disruptor());

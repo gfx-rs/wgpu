@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.4
 ; Generator: rspirv
-; Bound: 47
+; Bound: 46
 OpCapability Shader
 OpCapability CooperativeMatrixKHR
 OpCapability VulkanMemoryModel
@@ -19,8 +19,7 @@ var<storage, read_write> ext: array<f32>;
 
 @compute @workgroup_size(8, 8, 1)
 fn main() {
-    var c = coop_mat8x8<f32, C>();
-    coopLoad(c, &ext[4]);
+    var c = coopLoad(&ext[4]);
     var d = coopMultiplyAdd(a, b, c);
     coopStore(d, &ext[0]);
     c = d;
@@ -30,7 +29,7 @@ OpName %15 "a"
 OpName %18 "b"
 OpName %21 "ext"
 OpName %25 "main"
-OpName %30 "c"
+OpName %29 "c"
 OpName %32 "d"
 OpDecorate %12 ArrayStride 4
 OpDecorate %21 DescriptorSet 0
@@ -60,42 +59,41 @@ OpMemberDecorate %22 0 Offset 0
 %21 = OpVariable  %23  StorageBuffer
 %26 = OpTypeFunction %2
 %27 = OpTypePointer StorageBuffer %12
-%29 = OpConstantNull  %13
-%31 = OpTypePointer Function %13
+%30 = OpTypePointer Function %13
+%31 = OpConstantNull  %13
 %33 = OpConstantNull  %13
-%36 = OpTypePointer StorageBuffer %4
-%37 = OpConstant  %7  4
+%35 = OpTypePointer StorageBuffer %4
+%36 = OpConstant  %7  4
 %25 = OpFunction  %2  None %26
 %24 = OpLabel
-%30 = OpVariable  %31  Function %29
-%32 = OpVariable  %31  Function %33
+%29 = OpVariable  %30  Function %31
+%32 = OpVariable  %30  Function %33
 %28 = OpAccessChain  %27  %21 %9
 OpBranch %34
 %34 = OpLabel
-OpLine %3 1 1
-%35 = OpLoad  %13  %30
-OpLine %3 9 18
+OpLine %3 8 23
+OpLine %3 8 13
+%37 = OpAccessChain  %35  %28 %36
+%38 = OpCooperativeMatrixLoadKHR  %13  %37 %11 %8
+OpLine %3 8 5
+OpStore %29 %38
+OpLine %3 9 29
+%39 = OpLoad  %5  %15
+OpLine %3 9 13
+%40 = OpLoad  %10  %18
+%41 = OpLoad  %13  %29
+%42 = OpCooperativeMatrixMulAddKHR  %13  %39 %40 %41
 OpLine %3 9 5
-%38 = OpAccessChain  %36  %28 %37
-%39 = OpCooperativeMatrixLoadKHR  %13  %38 %11 %8
-OpStore %35 %39
-OpLine %3 10 29
-%40 = OpLoad  %5  %15
-OpLine %3 10 13
-%41 = OpLoad  %10  %18
-%42 = OpLoad  %13  %30
-%43 = OpCooperativeMatrixMulAddKHR  %13  %40 %41 %42
+OpStore %32 %42
+OpLine %3 1 1
+%43 = OpLoad  %13  %32
+OpLine %3 10 19
 OpLine %3 10 5
-OpStore %32 %43
+%44 = OpAccessChain  %35  %28 %9
+OpCooperativeMatrixStoreKHR %44 %43 %11 %8
 OpLine %3 1 1
-%44 = OpLoad  %13  %32
-OpLine %3 11 19
+%45 = OpLoad  %13  %32
 OpLine %3 11 5
-%45 = OpAccessChain  %36  %28 %9
-OpCooperativeMatrixStoreKHR %45 %44 %11 %8
-OpLine %3 1 1
-%46 = OpLoad  %13  %32
-OpLine %3 12 5
-OpStore %30 %46
+OpStore %29 %45
 OpReturn
 OpFunctionEnd

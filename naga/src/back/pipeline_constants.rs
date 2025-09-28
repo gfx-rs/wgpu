@@ -658,6 +658,10 @@ fn adjust_expr(new_pos: &HandleVec<Expression, Handle<Expression>>, expr: &mut E
         } => {
             adjust(query);
         }
+        Expression::CooperativeLoad { ref mut data, .. } => {
+            adjust(&mut data.pointer);
+            adjust(&mut data.stride);
+        }
         Expression::CooperativeMultiplyAdd {
             ref mut a,
             ref mut b,
@@ -869,16 +873,13 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 crate::RayQueryFunction::Terminate => {}
             }
         }
-        Statement::CooperativeLoadStore {
-            store: _,
+        Statement::CooperativeStore {
             ref mut target,
-            ref mut pointer,
-            ref mut stride,
-            row_major: _,
+            ref mut data,
         } => {
             adjust(target);
-            adjust(pointer);
-            adjust(stride);
+            adjust(&mut data.pointer);
+            adjust(&mut data.stride);
         }
         Statement::Break
         | Statement::Continue

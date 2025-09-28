@@ -3420,8 +3420,41 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             );
                             return Ok(Some(result));
                         }
-                        "coopLoad" | "coopLoadT" | "coopStore" | "coopStoreT" => {
-                            let store = function.name.contains("Store");
+                        "coopLoad" | "coopLoadT" => {
+                            let row_major = function.name.ends_with("T");
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+                            let pointer = self.expression(args.next()?, ctx)?;
+                            //TODO: read from generic argument
+                            let columns = crate::CooperativeSize::Eight;
+                            let rows = crate::CooperativeSize::Eight;
+                            let stride = if args.total_args > 1 {
+                                self.expression(args.next()?, ctx)?
+                            } else {
+                                // Infer the stride from the matrix type
+                                let stride = if row_major {
+                                    columns as u32
+                                } else {
+                                    rows as u32
+                                };
+                                ctx.append_expression(
+                                    ir::Expression::Literal(ir::Literal::U32(stride)),
+                                    Span::UNDEFINED,
+                                )?
+                            };
+                            args.finish()?;
+
+                            crate::Expression::CooperativeLoad {
+                                columns,
+                                rows,
+                                role: crate::CooperativeRole::C, //TODO
+                                data: crate::CooperativeData {
+                                    pointer,
+                                    stride,
+                                    row_major,
+                                },
+                            }
+                        }
+                        "coopStore" | "coopStoreT" => {
                             let row_major = function.name.ends_with("T");
 
                             let mut args = ctx.prepare_args(arguments, 2, span);
@@ -3450,12 +3483,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                             let rctx = ctx.runtime_expression_ctx(span)?;
                             rctx.block.push(
-                                crate::Statement::CooperativeLoadStore {
-                                    store,
+                                crate::Statement::CooperativeStore {
                                     target,
-                                    pointer,
-                                    stride,
-                                    row_major,
+                                    data: crate::CooperativeData {
+                                        pointer,
+                                        stride,
+                                        row_major,
+                                    },
                                 },
                                 span,
                             );

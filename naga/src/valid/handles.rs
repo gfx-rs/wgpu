@@ -663,6 +663,9 @@ impl super::Validator {
             } => {
                 handle.check_dep(query)?;
             }
+            crate::Expression::CooperativeLoad { ref data, .. } => {
+                handle.check_dep(data.pointer)?.check_dep(data.stride)?;
+            }
             crate::Expression::CooperativeMultiplyAdd { a, b, c } => {
                 handle.check_dep(a)?.check_dep(b)?.check_dep(c)?;
             }
@@ -854,16 +857,10 @@ impl super::Validator {
                 validate_expr(result)?;
                 Ok(())
             }
-            crate::Statement::CooperativeLoadStore {
-                store: _,
-                target,
-                pointer,
-                stride,
-                row_major: _,
-            } => {
+            crate::Statement::CooperativeStore { target, ref data } => {
                 validate_expr(target)?;
-                validate_expr(pointer)?;
-                validate_expr(stride)?;
+                validate_expr(data.pointer)?;
+                validate_expr(data.stride)?;
                 Ok(())
             }
             crate::Statement::Break

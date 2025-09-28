@@ -1498,6 +1498,16 @@ bitflags::bitflags! {
     }
 }
 
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub struct CooperativeData {
+    pub pointer: Handle<Expression>,
+    pub stride: Handle<Expression>,
+    pub row_major: bool,
+}
+
 /// An expression that can be evaluated to obtain a value.
 ///
 /// This is a Single Static Assignment (SSA) scheme similar to SPIR-V.
@@ -1843,6 +1853,13 @@ pub enum Expression {
     /// [`SubgroupGather`]: Statement::SubgroupGather
     SubgroupOperationResult { ty: Handle<Type> },
 
+    /// Load a cooperative primitive from memory.
+    CooperativeLoad {
+        columns: CooperativeSize,
+        rows: CooperativeSize,
+        role: CooperativeRole,
+        data: CooperativeData,
+    },
     /// Compute `a * b + c`
     CooperativeMultiplyAdd {
         a: Handle<Expression>,
@@ -2290,13 +2307,10 @@ pub enum Statement {
         /// [`SubgroupOperationResult`]: Expression::SubgroupOperationResult
         result: Handle<Expression>,
     },
-    /// Load from or store into a cooperative primitive.
-    CooperativeLoadStore {
-        store: bool,
+    /// Store a cooperative primitive into memory.
+    CooperativeStore {
         target: Handle<Expression>,
-        pointer: Handle<Expression>,
-        stride: Handle<Expression>,
-        row_major: bool,
+        data: CooperativeData,
     },
 }
 

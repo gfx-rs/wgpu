@@ -1255,6 +1255,16 @@ impl super::Validator {
                 }
             },
             E::SubgroupBallotResult | E::SubgroupOperationResult { .. } => self.subgroup_stages,
+            E::CooperativeLoad { ref data, .. } => {
+                if resolver[data.pointer]
+                    .pointer_base_type()
+                    .and_then(|tr| tr.inner_with(&module.types).scalar())
+                    .is_none()
+                {
+                    return Err(ExpressionError::InvalidPointerType(data.pointer));
+                }
+                ShaderStages::COMPUTE
+            }
             E::CooperativeMultiplyAdd { a, b, c } => {
                 let roles = [
                     crate::CooperativeRole::A,

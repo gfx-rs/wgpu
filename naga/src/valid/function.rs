@@ -808,6 +808,7 @@ impl super::Validator {
                             | Ex::ArrayLength(_)
                             | Ex::RayQueryGetIntersection { .. }
                             | Ex::RayQueryVertexPositions { .. }
+                            | Ex::CooperativeLoad { .. }
                             | Ex::CooperativeMultiplyAdd { .. } => {
                                 self.emit_expression(handle, context)?
                             }
@@ -1630,13 +1631,7 @@ impl super::Validator {
                     }
                     self.validate_subgroup_gather(mode, argument, result, context)?;
                 }
-                S::CooperativeLoadStore {
-                    store,
-                    target,
-                    pointer,
-                    stride: _,
-                    row_major: _,
-                } => {
+                S::CooperativeStore { target, ref data } => {
                     stages &= super::ShaderStages::COMPUTE;
 
                     let target_scalar =
@@ -1649,30 +1644,22 @@ impl super::Validator {
                             }
                         };
 
-                    let ty_inner = context.resolve_pointer_type(pointer);
-                    //TODO: validate stride
-                    let (pty_scalar, space) = match *ty_inner {
-                        crate::TypeInner::Pointer { base, space } => (base, space),
-                        _ => {
-                            return Err(FunctionError::InvalidCooperativeDataPointer(pointer)
-                                .with_span_handle(pointer, context.expressions));
-                        }
-                    };
-                    let space = match context.types[pty_scalar].inner {
-                        crate::TypeInner::Scalar(s) if s == target_scalar => space,
-                        _ => {
-                            return Err(FunctionError::InvalidCooperativeDataPointer(pointer)
-                                .with_span_handle(pointer, context.expressions));
-                        }
-                    };
+                    let ptr_ty = context.resolve_pointer_type(data.pointer);
+                    let ptr_scalar = ptr_ty
+                        .pointer_base_type()
+                        .and_then(|tr| tr.inner_with(context.types).scalar());
+                    if ptr_scalar != Some(target_scalar) {
+                        return Err(FunctionError::InvalidCooperativeDataPointer(data.pointer)
+                            .with_span_handle(data.pointer, context.expressions));
+                    }
 
-                    if store && !space.access().contains(crate::StorageAccess::STORE) {
-                        return Err(
-                            FunctionError::InvalidStorePointer(pointer).with_span_static(
-                                context.expressions.get_span(pointer),
+                    let ptr_space = ptr_ty.pointer_space().unwrap_or(AddressSpace::Handle);
+                    if !ptr_space.access().contains(crate::StorageAccess::STORE) {
+                        return Err(FunctionError::InvalidStorePointer(data.pointer)
+                            .with_span_static(
+                                context.expressions.get_span(data.pointer),
                                 "writing to this location is not permitted",
-                            ),
-                        );
+                            ));
                     }
                 }
             }

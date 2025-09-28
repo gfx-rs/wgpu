@@ -2756,7 +2756,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
                 writeln!(self.out, ");")?;
             }
-            Statement::CooperativeLoadStore { .. } => unimplemented!(),
+            Statement::CooperativeStore { .. } => unimplemented!(),
         }
 
         Ok(())
@@ -4287,6 +4287,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
             // Not supported yet
             Expression::RayQueryVertexPositions { .. }
+            | Expression::CooperativeLoad { .. }
             | Expression::CooperativeMultiplyAdd { .. } => {
                 unreachable!()
             }

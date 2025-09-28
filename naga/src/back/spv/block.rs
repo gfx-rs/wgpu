@@ -1840,6 +1840,39 @@ impl BlockContext<'_> {
                 )?;
                 self.write_ray_query_return_vertex_position(query, block, committed)
             }
+            crate::Expression::CooperativeLoad { ref data, .. } => {
+                self.writer.require_any(
+                    "CooperativeMatrix",
+                    &[spirv::Capability::CooperativeMatrixKHR],
+                )?;
+                let pointer_id = match self.write_access_chain(
+                    data.pointer,
+                    block,
+                    AccessTypeAdjustment::None,
+                )? {
+                    ExpressionPointer::Ready { pointer_id } => pointer_id,
+                    ExpressionPointer::Conditional { .. } => {
+                        return Err(Error::FeatureNotImplemented(
+                            "Copperative load/store out-of-bounds handling",
+                        ));
+                    }
+                };
+                let layout = if data.row_major {
+                    spirv::CooperativeMatrixLayout::RowMajorKHR
+                } else {
+                    spirv::CooperativeMatrixLayout::ColumnMajorKHR
+                };
+                let layout_id = self.get_index_constant(layout as u32);
+                let id = self.gen_id();
+                block.body.push(Instruction::coop_load(
+                    result_type_id,
+                    id,
+                    pointer_id,
+                    layout_id,
+                    self.cached[data.stride],
+                ));
+                id
+            }
             crate::Expression::CooperativeMultiplyAdd { a, b, c } => {
                 self.writer.require_any(
                     "CooperativeMatrix",
@@ -3729,15 +3762,9 @@ impl BlockContext<'_> {
                 } => {
                     self.write_subgroup_gather(mode, argument, result, &mut block)?;
                 }
-                Statement::CooperativeLoadStore {
-                    store,
-                    target,
-                    pointer,
-                    stride,
-                    row_major,
-                } => {
+                Statement::CooperativeStore { target, ref data } => {
                     let pointer_id = match self.write_access_chain(
-                        pointer,
+                        data.pointer,
                         &mut block,
                         AccessTypeAdjustment::None,
                     )? {
@@ -3748,44 +3775,18 @@ impl BlockContext<'_> {
                             ));
                         }
                     };
-                    let layout = if row_major {
+                    let layout = if data.row_major {
                         spirv::CooperativeMatrixLayout::RowMajorKHR
                     } else {
                         spirv::CooperativeMatrixLayout::ColumnMajorKHR
                     };
                     let layout_id = self.get_index_constant(layout as u32);
-                    if store {
-                        block.body.push(Instruction::coop_store(
-                            self.cached[target],
-                            pointer_id,
-                            layout_id,
-                            self.cached[stride],
-                        ));
-                    } else {
-                        let result_type_id = self.get_expression_type_id(&self.fun_info[target].ty);
-                        let id = self.gen_id();
-                        block.body.push(Instruction::coop_load(
-                            result_type_id,
-                            id,
-                            pointer_id,
-                            layout_id,
-                            self.cached[stride],
-                        ));
-                        match self.write_access_chain(
-                            target,
-                            &mut block,
-                            AccessTypeAdjustment::None,
-                        )? {
-                            ExpressionPointer::Ready {
-                                pointer_id: target_id,
-                            } => {
-                                block.body.push(Instruction::store(target_id, id, None));
-                            }
-                            ExpressionPointer::Conditional { .. } => {
-                                unimplemented!()
-                            }
-                        };
-                    }
+                    block.body.push(Instruction::coop_store(
+                        self.cached[target],
+                        pointer_id,
+                        layout_id,
+                        self.cached[data.stride],
+                    ));
                 }
             }
         }

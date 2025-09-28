@@ -107,7 +107,7 @@
                     (
                         name: Some("c"),
                         ty: 4,
-                        init: Some(0),
+                        init: None,
                     ),
                     (
                         name: Some("d"),
@@ -116,98 +116,102 @@
                     ),
                 ],
                 expressions: [
-                    ZeroValue(4),
-                    LocalVariable(0),
-                    Load(
-                        pointer: 1,
-                    ),
                     GlobalVariable(2),
                     AccessIndex(
-                        base: 3,
+                        base: 0,
                         index: 4,
                     ),
                     Literal(U32(8)),
+                    CooperativeLoad(
+                        columns: Eight,
+                        rows: Eight,
+                        role: C,
+                        data: (
+                            pointer: 1,
+                            stride: 2,
+                            row_major: false,
+                        ),
+                    ),
+                    LocalVariable(0),
                     GlobalVariable(0),
                     Load(
-                        pointer: 6,
+                        pointer: 5,
                     ),
                     GlobalVariable(1),
                     Load(
-                        pointer: 8,
+                        pointer: 7,
                     ),
                     Load(
-                        pointer: 1,
+                        pointer: 4,
                     ),
                     CooperativeMultiplyAdd(
-                        a: 7,
-                        b: 9,
-                        c: 10,
+                        a: 6,
+                        b: 8,
+                        c: 9,
                     ),
                     LocalVariable(1),
                     Load(
-                        pointer: 12,
+                        pointer: 11,
                     ),
                     GlobalVariable(2),
                     AccessIndex(
-                        base: 14,
+                        base: 13,
                         index: 0,
                     ),
                     Literal(U32(8)),
                     Load(
-                        pointer: 12,
+                        pointer: 11,
                     ),
                 ],
                 named_expressions: {},
                 body: [
                     Emit((
-                        start: 2,
-                        end: 3,
+                        start: 1,
+                        end: 2,
                     )),
                     Emit((
-                        start: 4,
-                        end: 5,
+                        start: 3,
+                        end: 4,
                     )),
-                    CooperativeLoadStore(
-                        store: false,
-                        target: 2,
+                    Store(
                         pointer: 4,
-                        stride: 5,
-                        row_major: false,
+                        value: 3,
                     ),
                     Emit((
-                        start: 7,
-                        end: 8,
+                        start: 6,
+                        end: 7,
                     )),
                     Emit((
-                        start: 9,
-                        end: 12,
+                        start: 8,
+                        end: 11,
                     )),
                     Store(
-                        pointer: 12,
-                        value: 11,
+                        pointer: 11,
+                        value: 10,
                     ),
                     Emit((
-                        start: 13,
-                        end: 14,
+                        start: 12,
+                        end: 13,
                     )),
                     Emit((
-                        start: 15,
-                        end: 16,
+                        start: 14,
+                        end: 15,
                     )),
-                    CooperativeLoadStore(
-                        store: true,
-                        target: 13,
-                        pointer: 15,
-                        stride: 16,
-                        row_major: false,
+                    CooperativeStore(
+                        target: 12,
+                        data: (
+                            pointer: 14,
+                            stride: 15,
+                            row_major: false,
+                        ),
                     ),
                     Emit((
-                        start: 17,
-                        end: 18,
+                        start: 16,
+                        end: 17,
                     )),
                     Store(
-                        pointer: 1,
-                        value: 17,
+                        pointer: 4,
+                        value: 16,
                     ),
                     Return(
                         value: None,

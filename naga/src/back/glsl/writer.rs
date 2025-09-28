@@ -2229,7 +2229,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
                 writeln!(self.out, ");")?;
             }
-            Statement::CooperativeLoadStore { .. } => unimplemented!(),
+            Statement::CooperativeStore { .. } => unimplemented!(),
         }
 
         Ok(())
@@ -3767,6 +3767,7 @@ impl<'a, W: Write> Writer<'a, W> {
             // not supported yet
             Expression::RayQueryGetIntersection { .. }
             | Expression::RayQueryVertexPositions { .. }
+            | Expression::CooperativeLoad { .. }
             | Expression::CooperativeMultiplyAdd { .. } => unreachable!(),
         }
 

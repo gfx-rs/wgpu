@@ -1069,21 +1069,14 @@ impl<W: Write> Writer<W> {
                 }
                 writeln!(self.out, ");")?;
             }
-            Statement::CooperativeLoadStore {
-                store,
-                target,
-                pointer,
-                stride,
-                row_major,
-            } => {
-                let op_str = if store { "Store" } else { "Load" };
-                let suffix = if row_major { "T" } else { "" };
-                write!(self.out, "{level}coop{op_str}{suffix}(")?;
+            Statement::CooperativeStore { target, ref data } => {
+                let suffix = if data.row_major { "T" } else { "" };
+                write!(self.out, "{level}coopStore{suffix}(")?;
                 self.write_expr(module, target, func_ctx)?;
                 write!(self.out, ", ")?;
-                self.write_expr(module, pointer, func_ctx)?;
+                self.write_expr(module, data.pointer, func_ctx)?;
                 write!(self.out, ", ")?;
-                self.write_expr(module, stride, func_ctx)?;
+                self.write_expr(module, data.stride, func_ctx)?;
                 writeln!(self.out, ");")?
             }
         }
@@ -1809,6 +1802,14 @@ impl<W: Write> Writer<W> {
             | Expression::SubgroupBallotResult
             | Expression::SubgroupOperationResult { .. }
             | Expression::WorkGroupUniformLoadResult { .. } => {}
+            Expression::CooperativeLoad { ref data, .. } => {
+                let suffix = if data.row_major { "T" } else { "" };
+                write!(self.out, "coopLoad{suffix}(")?;
+                self.write_expr(module, data.pointer, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, data.stride, func_ctx)?;
+                write!(self.out, ")")?;
+            }
             Expression::CooperativeMultiplyAdd { a, b, c } => {
                 write!(self.out, "coopMultiplyAdd(")?;
                 self.write_expr(module, a, func_ctx)?;

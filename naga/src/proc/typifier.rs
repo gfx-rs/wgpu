@@ -801,6 +801,24 @@ impl<'a> ResolveContext<'a> {
                 scalar: crate::Scalar::U32,
                 size: crate::VectorSize::Quad,
             }),
+            crate::Expression::CooperativeLoad {
+                columns,
+                rows,
+                role,
+                ref data,
+            } => {
+                let scalar = past(data.pointer)?
+                    .inner_with(types)
+                    .pointer_base_type()
+                    .and_then(|tr| tr.inner_with(types).scalar())
+                    .ok_or(ResolveError::InvalidPointer(data.pointer))?;
+                TypeResolution::Value(Ti::CooperativeMatrix {
+                    columns,
+                    rows,
+                    scalar,
+                    role,
+                })
+            }
             crate::Expression::CooperativeMultiplyAdd { a: _, b: _, c } => past(c)?.clone(),
         })
     }
