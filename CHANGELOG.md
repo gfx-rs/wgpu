@@ -214,6 +214,7 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 
 #### DX12
 
+- Create an event per wait to prevent 60 second hangs in certain multithreaded scenarios. By @Vecvec in [#8273](https://github.com/gfx-rs/wgpu/pull/8273).
 - Fixed a bug where access to matrices with 2 rows would not work in some cases. By @andyleiserson in [#7438](https://github.com/gfx-rs/wgpu/pull/7438).
 
 ##### EGL
