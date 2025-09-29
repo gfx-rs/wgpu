@@ -13,20 +13,15 @@
 extern crate wgpu_core as wgc;
 extern crate wgpu_types as wgt;
 
-use player::GlobalPlay;
+use player::Player;
 use std::{
     fs::{read_to_string, File},
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     slice,
+    sync::Arc,
 };
-use wgc::{command::IdReferences, identity::IdentityManager};
-
-#[derive(serde::Deserialize)]
-struct RawId {
-    index: u32,
-    epoch: u32,
-}
+use wgc::command::PointerReferences;
 
 #[derive(serde::Deserialize)]
 enum ExpectedData {
@@ -48,7 +43,7 @@ impl ExpectedData {
 #[derive(serde::Deserialize)]
 struct Expectation {
     name: String,
-    buffer: RawId,
+    buffer: wgc::id::PointerId<wgc::id::markers::Buffer>,
     offset: wgt::BufferAddress,
     data: ExpectedData,
 }
@@ -57,7 +52,7 @@ struct Expectation {
 struct Test<'a> {
     features: wgt::Features,
     expectations: Vec<Expectation>,
-    actions: Vec<wgc::device::trace::Action<'a, IdReferences>>,
+    actions: Vec<wgc::device::trace::Action<'a, PointerReferences>>,
 }
 
 fn map_callback(status: Result<(), wgc::resource::BufferAccessError>) {
@@ -82,48 +77,34 @@ impl Test<'_> {
     fn run(
         self,
         dir: &Path,
-        global: &wgc::global::Global,
-        adapter: wgc::id::AdapterId,
-        test_num: u32,
+        instance_desc: &wgt::InstanceDescriptor,
+        adapter: Arc<wgc::instance::Adapter>,
     ) {
-        let device_id = wgc::id::Id::zip(test_num, 1);
-        let queue_id = wgc::id::Id::zip(test_num, 1);
-        let res = global.adapter_request_device(
-            adapter,
-            &wgt::DeviceDescriptor {
-                label: None,
-                required_features: self.features,
-                required_limits: wgt::Limits::default(),
-                experimental_features: unsafe { wgt::ExperimentalFeatures::enabled() },
-                memory_hints: wgt::MemoryHints::default(),
-                trace: wgt::Trace::Off,
-            },
-            Some(device_id),
-            Some(queue_id),
-        );
-        if let Err(e) = res {
-            panic!("{e:?}");
-        }
+        let (device, queue) = adapter
+            .create_device_and_queue(
+                &wgt::DeviceDescriptor {
+                    label: None,
+                    required_features: self.features,
+                    required_limits: wgt::Limits::default(),
+                    experimental_features: unsafe { wgt::ExperimentalFeatures::enabled() },
+                    memory_hints: wgt::MemoryHints::default(),
+                    trace: wgt::Trace::Off,
+                },
+                instance_desc.flags,
+            )
+            .unwrap();
 
-        let mut command_encoder_id_manager = IdentityManager::new();
-        let mut command_buffer_id_manager = IdentityManager::new();
+        let mut player = Player::default();
+
         println!("\t\t\tRunning...");
         for action in self.actions {
-            global.process(
-                device_id,
-                queue_id,
-                action,
-                dir,
-                &mut command_encoder_id_manager,
-                &mut command_buffer_id_manager,
-            );
+            player.process(&device, &queue, action, dir);
         }
         println!("\t\t\tMapping...");
         for expect in &self.expectations {
-            let buffer = wgc::id::Id::zip(expect.buffer.index, expect.buffer.epoch);
-            global
-                .buffer_map_async(
-                    buffer,
+            player
+                .get_buffer(expect.buffer)
+                .map_async(
                     expect.offset,
                     Some(expect.data.len() as u64),
                     wgc::resource::BufferMapOperation {
@@ -135,25 +116,18 @@ impl Test<'_> {
         }
 
         println!("\t\t\tWaiting...");
-        global
-            .device_poll(
-                device_id,
-                wgt::PollType::Wait {
-                    submission_index: None,
-                    timeout: Some(std::time::Duration::from_secs(1)), // Tests really shouldn't need longer than that!
-                },
-            )
-            .unwrap();
+        let (user_closures, result) = device.poll(wgt::PollType::Wait {
+            submission_index: None,
+            timeout: Some(std::time::Duration::from_secs(1)), // Tests really shouldn't need longer than that!
+        });
+        user_closures.fire();
+        result.unwrap();
 
         for expect in self.expectations {
             println!("\t\t\tChecking {}", expect.name);
-            let buffer = wgc::id::Id::zip(expect.buffer.index, expect.buffer.epoch);
-            let (ptr, size) = global
-                .buffer_get_mapped_range(
-                    buffer,
-                    expect.offset,
-                    Some(expect.data.len() as wgt::BufferAddress),
-                )
+            let (ptr, size) = player
+                .get_buffer(expect.buffer)
+                .get_mapped_range(expect.offset, Some(expect.data.len() as wgt::BufferAddress))
                 .unwrap();
             let contents = unsafe { slice::from_raw_parts(ptr.as_ptr(), size as usize) };
             let expected_data = match expect.data {
@@ -204,30 +178,26 @@ impl Corpus {
             if !corpus.backends.contains(backend.into()) {
                 continue;
             }
-            let mut test_num = 0;
             for test_path in &corpus.tests {
                 println!("\t\tTest '{test_path:?}'");
 
-                let global = wgc::global::Global::new(
-                    "test",
-                    &wgt::InstanceDescriptor::from_env_or_default(),
-                );
-                let adapter = match global.request_adapter(
-                    &wgc::instance::RequestAdapterOptions {
+                let instance_desc = wgt::InstanceDescriptor::from_env_or_default();
+                let instance = wgc::instance::Instance::new("test", &instance_desc);
+                let adapter = match instance.request_adapter(
+                    &wgt::RequestAdapterOptions {
                         power_preference: wgt::PowerPreference::None,
                         force_fallback_adapter: false,
                         compatible_surface: None,
                     },
                     wgt::Backends::from(backend),
-                    Some(wgc::id::Id::zip(0, 1)),
                 ) {
-                    Ok(adapter) => adapter,
+                    Ok(adapter) => Arc::new(adapter),
                     Err(_) => continue,
                 };
 
                 println!("\tBackend {backend:?}");
-                let supported_features = global.adapter_features(adapter);
-                let downlevel_caps = global.adapter_downlevel_capabilities(adapter);
+                let supported_features = adapter.features();
+                let downlevel_caps = adapter.downlevel_capabilities();
 
                 let test = Test::load(dir.join(test_path), backend);
                 if !supported_features.contains(test.features) {
@@ -244,8 +214,7 @@ impl Corpus {
                     println!("\t\tSkipped due to missing compute shader capability");
                     continue;
                 }
-                test.run(dir, &global, adapter, test_num);
-                test_num += 1;
+                test.run(dir, &instance_desc, adapter);
             }
         }
     }

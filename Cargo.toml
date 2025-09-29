@@ -3,7 +3,6 @@ resolver = "2"
 members = [
     "cts_runner",
     "deno_webgpu",
-    "player",
 
     # default members
     "benches",
@@ -16,6 +15,7 @@ members = [
     "naga/fuzz",
     "naga/hlsl-snapshots",
     "naga/xtask",
+    "player",
     "tests",
     "wgpu-core",
     "wgpu-core/platform-deps/*",
@@ -38,6 +38,7 @@ default-members = [
     "naga/fuzz",
     "naga/hlsl-snapshots",
     "naga/xtask",
+    "player",
     "tests",
     "wgpu-core",
     "wgpu-core/platform-deps/*",

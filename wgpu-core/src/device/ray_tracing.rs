@@ -25,7 +25,7 @@ use hal::AccelerationStructureTriangleIndices;
 use wgt::Features;
 
 impl Device {
-    fn create_blas(
+    pub fn create_blas(
         self: &Arc<Self>,
         blas_desc: &resource::BlasDescriptor,
         sizes: wgt::BlasGeometrySizeDescriptors,
@@ -172,7 +172,7 @@ impl Device {
         }))
     }
 
-    fn create_tlas(
+    pub fn create_tlas(
         self: &Arc<Self>,
         desc: &resource::TlasDescriptor,
     ) -> Result<Arc<resource::Tlas>, CreateTlasError> {

@@ -573,7 +573,7 @@ impl Buffer {
 
     /// Returns the mapping callback in case of error so that the callback can be fired outside
     /// of the locks that are held in this function.
-    pub(crate) fn map_async(
+    pub fn map_async(
         self: &Arc<Self>,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
@@ -797,7 +797,7 @@ impl Buffer {
     }
 
     // Note: This must not be called while holding a lock.
-    pub(crate) fn unmap(self: &Arc<Self>) -> Result<(), BufferAccessError> {
+    pub fn unmap(self: &Arc<Self>) -> Result<(), BufferAccessError> {
         if let Some((mut operation, status)) = self.unmap_inner()? {
             if let Some(callback) = operation.callback.take() {
                 callback(status);
@@ -902,7 +902,7 @@ impl Buffer {
         Ok(None)
     }
 
-    pub(crate) fn destroy(self: &Arc<Self>) {
+    pub fn destroy(self: &Arc<Self>) {
         let device = &self.device;
 
         let temp = {
@@ -1404,7 +1404,7 @@ impl Texture {
         }
     }
 
-    pub(crate) fn destroy(self: &Arc<Self>) {
+    pub fn destroy(self: &Arc<Self>) {
         let device = &self.device;
 
         let temp = {
@@ -1904,7 +1904,7 @@ impl Drop for ExternalTexture {
 }
 
 impl ExternalTexture {
-    pub(crate) fn destroy(self: &Arc<Self>) {
+    pub fn destroy(self: &Arc<Self>) {
         self.params.destroy();
     }
 }

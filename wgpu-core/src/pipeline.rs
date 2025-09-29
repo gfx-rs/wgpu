@@ -425,6 +425,14 @@ pub struct MeshState<'a, SM = ShaderModuleId> {
 
 pub type ResolvedMeshState<'a> = MeshState<'a, Arc<ShaderModule>>;
 
+/// Describes a vertex processor for either a conventional or mesh shading
+/// pipeline architecture.
+///
+/// This is not a public API. It is for use by `player` only. The public APIs
+/// are [`VertexState`], [`TaskState`], and [`MeshState`].
+///
+/// cbindgen:ignore
+#[doc(hidden)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RenderPipelineVertexProcessor<'a, SM = ShaderModuleId> {
@@ -497,7 +505,14 @@ pub struct MeshPipelineDescriptor<
     pub cache: Option<PLC>,
 }
 
-/// Describes a render (graphics) pipeline.
+/// Describes a render (graphics) pipeline, with either conventional or mesh
+/// shading architecture.
+///
+/// This is not a public API. It is for use by `player` only. The public APIs
+/// are [`RenderPipelineDescriptor`] and [`MeshPipelineDescriptor`].
+///
+/// cbindgen:ignore
+#[doc(hidden)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct GeneralRenderPipelineDescriptor<
@@ -563,8 +578,10 @@ impl<'a, PLL, SM, PLC> From<MeshPipelineDescriptor<'a, PLL, SM, PLC>>
     }
 }
 
+/// Not a public API. For use by `player` only.
+///
 /// cbindgen:ignore
-pub(crate) type ResolvedGeneralRenderPipelineDescriptor<'a> =
+pub type ResolvedGeneralRenderPipelineDescriptor<'a> =
     GeneralRenderPipelineDescriptor<'a, Arc<PipelineLayout>, Arc<ShaderModule>, Arc<PipelineCache>>;
 
 #[derive(Clone, Debug)]

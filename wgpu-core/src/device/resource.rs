@@ -712,6 +712,23 @@ impl Device {
         assert!(self.queue.set(Arc::downgrade(queue)).is_ok());
     }
 
+    pub fn poll(
+        &self,
+        poll_type: wgt::PollType<crate::SubmissionIndex>,
+    ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
+        let snatch_guard = self.snatchable_lock.read();
+        let fence = self.fence.read();
+        let maintain_result = self.maintain(fence, poll_type, snatch_guard);
+
+        self.lose_if_oom();
+
+        // Some deferred destroys are scheduled in maintain so run this right after
+        // to avoid holding on to them until the next device poll.
+        self.deferred_resource_destruction();
+
+        maintain_result
+    }
+
     /// Check the current status of the GPU and process any submissions that have
     /// finished.
     ///
@@ -881,7 +898,7 @@ impl Device {
         (user_closures, result)
     }
 
-    pub(crate) fn create_buffer(
+    pub fn create_buffer(
         self: &Arc<Self>,
         desc: &resource::BufferDescriptor,
     ) -> Result<Arc<Buffer>, resource::CreateBufferError> {
@@ -1239,7 +1256,7 @@ impl Device {
         }
     }
 
-    pub(crate) fn create_texture(
+    pub fn create_texture(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
@@ -1560,7 +1577,7 @@ impl Device {
         Ok(texture)
     }
 
-    pub(crate) fn create_texture_view(
+    pub fn create_texture_view(
         self: &Arc<Self>,
         texture: &Arc<Texture>,
         desc: &resource::TextureViewDescriptor,
@@ -1896,7 +1913,7 @@ impl Device {
         Ok(view)
     }
 
-    pub(crate) fn create_external_texture(
+    pub fn create_external_texture(
         self: &Arc<Self>,
         desc: &resource::ExternalTextureDescriptor,
         planes: &[Arc<TextureView>],
@@ -1991,7 +2008,7 @@ impl Device {
         Ok(external_texture)
     }
 
-    pub(crate) fn create_sampler(
+    pub fn create_sampler(
         self: &Arc<Self>,
         desc: &resource::SamplerDescriptor,
     ) -> Result<Arc<Sampler>, resource::CreateSamplerError> {
@@ -2102,7 +2119,7 @@ impl Device {
         Ok(sampler)
     }
 
-    pub(crate) fn create_shader_module<'a>(
+    pub fn create_shader_module<'a>(
         self: &Arc<Self>,
         desc: &pipeline::ShaderModuleDescriptor<'a>,
         source: pipeline::ShaderModuleSource<'a>,
@@ -2230,8 +2247,10 @@ impl Device {
         Ok(module)
     }
 
+    /// Not a public API. For use by `player` only.
     #[allow(unused_unsafe)]
-    pub(crate) unsafe fn create_shader_module_passthrough<'a>(
+    #[doc(hidden)]
+    pub unsafe fn create_shader_module_passthrough<'a>(
         self: &Arc<Self>,
         descriptor: &pipeline::ShaderModuleDescriptorPassthrough<'a>,
     ) -> Result<Arc<pipeline::ShaderModule>, pipeline::CreateShaderModuleError> {
@@ -3017,7 +3036,7 @@ impl Device {
 
     // This function expects the provided bind group layout to be resolved
     // (not passing a duplicate) beforehand.
-    pub(crate) fn create_bind_group(
+    pub fn create_bind_group(
         self: &Arc<Self>,
         desc: binding_model::ResolvedBindGroupDescriptor,
     ) -> Result<Arc<BindGroup>, binding_model::CreateBindGroupError> {
@@ -3472,7 +3491,7 @@ impl Device {
         }
     }
 
-    pub(crate) fn create_pipeline_layout(
+    pub fn create_pipeline_layout(
         self: &Arc<Self>,
         desc: &binding_model::ResolvedPipelineLayoutDescriptor,
     ) -> Result<Arc<binding_model::PipelineLayout>, binding_model::CreatePipelineLayoutError> {
@@ -3629,7 +3648,7 @@ impl Device {
         Ok(layout)
     }
 
-    pub(crate) fn create_compute_pipeline(
+    pub fn create_compute_pipeline(
         self: &Arc<Self>,
         desc: pipeline::ResolvedComputePipelineDescriptor,
     ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
@@ -3762,7 +3781,7 @@ impl Device {
         Ok(pipeline)
     }
 
-    pub(crate) fn create_render_pipeline(
+    pub fn create_render_pipeline(
         self: &Arc<Self>,
         desc: pipeline::ResolvedGeneralRenderPipelineDescriptor,
     ) -> Result<Arc<pipeline::RenderPipeline>, pipeline::CreateRenderPipelineError> {
@@ -4657,7 +4676,7 @@ impl Device {
         Ok(())
     }
 
-    pub(crate) fn create_query_set(
+    pub fn create_query_set(
         self: &Arc<Self>,
         desc: &resource::QuerySetDescriptor,
     ) -> Result<Arc<QuerySet>, resource::CreateQuerySetError> {

@@ -215,18 +215,6 @@ impl Global {
         fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
     }
 
-    #[cfg(feature = "replay")]
-    pub fn device_set_buffer_data(
-        &self,
-        buffer_id: id::BufferId,
-        offset: BufferAddress,
-        data: &[u8],
-    ) -> BufferAccessResult {
-        let buffer = self.hub.buffers.get(buffer_id).get()?;
-        let device = &buffer.device;
-        device.set_buffer_data(&buffer, offset, data)
-    }
-
     pub fn buffer_destroy(&self, buffer_id: id::BufferId) {
         profiling::scope!("Buffer::destroy");
         api_log!("Buffer::destroy {buffer_id:?}");
@@ -1184,7 +1172,7 @@ impl Global {
     ) {
         profiling::scope!("Device::create_render_bundle_encoder");
         api_log!("Device::device_create_render_bundle_encoder");
-        let (encoder, error) = match command::RenderBundleEncoder::new(desc, device_id, None) {
+        let (encoder, error) = match command::RenderBundleEncoder::new(desc, device_id) {
             Ok(encoder) => (encoder, None),
             Err(e) => (command::RenderBundleEncoder::dummy(device_id), Some(e)),
         };
@@ -1804,28 +1792,11 @@ impl Global {
 
         let device = self.hub.devices.get(device_id);
 
-        let (closures, result) = Self::poll_single_device(&device, poll_type);
+        let (closures, result) = device.poll(poll_type);
 
         closures.fire();
 
         result
-    }
-
-    fn poll_single_device(
-        device: &crate::device::Device,
-        poll_type: wgt::PollType<crate::SubmissionIndex>,
-    ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
-        let snatch_guard = device.snatchable_lock.read();
-        let fence = device.fence.read();
-        let maintain_result = device.maintain(fence, poll_type, snatch_guard);
-
-        device.lose_if_oom();
-
-        // Some deferred destroys are scheduled in maintain so run this right after
-        // to avoid holding on to them until the next device poll.
-        device.deferred_resource_destruction();
-
-        maintain_result
     }
 
     /// Poll all devices belonging to the specified backend.
@@ -1854,7 +1825,7 @@ impl Global {
                     wgt::PollType::Poll
                 };
 
-                let (closures, result) = Self::poll_single_device(device, poll_type);
+                let (closures, result) = device.poll(poll_type);
 
                 let is_queue_empty = matches!(result, Ok(wgt::PollStatus::QueueEmpty));
 

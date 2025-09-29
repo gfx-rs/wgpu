@@ -31,13 +31,14 @@ mod transition_resources;
 use alloc::{borrow::ToOwned as _, boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::convert::Infallible;
 use core::mem::{self, ManuallyDrop};
-use core::ops;
+use core::{ops, panic};
 
 pub(crate) use self::clear::clear_texture;
 #[cfg(feature = "serde")]
 pub(crate) use self::encoder_command::serde_object_reference_struct;
-#[cfg(feature = "trace")]
-pub(crate) use self::encoder_command::PointerReferences;
+#[cfg(any(feature = "trace", feature = "replay"))]
+#[doc(hidden)]
+pub use self::encoder_command::PointerReferences;
 pub use self::{
     bundle::*,
     clear::ClearError,
@@ -152,6 +153,14 @@ pub(crate) enum CommandEncoderStatus {
 }
 
 impl CommandEncoderStatus {
+    #[doc(hidden)]
+    fn replay(&mut self, commands: Vec<Command<ArcReferences>>) {
+        let Self::Recording(cmd_buf_data) = self else {
+            panic!("encoder should be in the recording state");
+        };
+        cmd_buf_data.commands.extend(commands);
+    }
+
     /// Push a command provided by a closure onto the encoder.
     ///
     /// If the encoder is in the [`Self::Recording`] state, calls the closure to
@@ -1187,6 +1196,26 @@ impl CommandEncoder {
 }
 
 impl CommandBuffer {
+    /// Replay commands from a trace.
+    ///
+    /// This is exposed for the `player` crate only. It is not a public API.
+    /// It is not guaranteed to apply all of the validation that the original
+    /// entrypoints provide.
+    #[doc(hidden)]
+    pub fn from_trace(device: &Arc<Device>, commands: Vec<Command<ArcReferences>>) -> Arc<Self> {
+        let encoder = device.create_command_encoder(&None).unwrap();
+        let mut cmd_enc_status = encoder.data.lock();
+        cmd_enc_status.replay(commands);
+        drop(cmd_enc_status);
+
+        let (cmd_buf, error) = encoder.finish(&wgt::CommandBufferDescriptor { label: None });
+        if let Some(err) = error {
+            panic!("CommandEncoder::finish failed: {err}");
+        }
+
+        cmd_buf
+    }
+
     pub fn take_finished(&self) -> Result<CommandBufferMutable, CommandEncoderError> {
         use CommandEncoderStatus as St;
         match mem::replace(
@@ -1569,7 +1598,6 @@ impl Global {
         profiling::scope!("CommandEncoder::finish");
 
         let hub = &self.hub;
-
         let cmd_enc = hub.command_encoders.get(encoder_id);
 
         let (cmd_buf, error) = cmd_enc.finish(desc);
