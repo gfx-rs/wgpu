@@ -2,8 +2,10 @@ use alloc::sync::Arc;
 use core::{ffi, ptr};
 
 use once_cell::sync::Lazy;
-use windows::Win32::{Foundation::HWND, Graphics::DirectComposition};
-use windows_core::Interface;
+use windows::{
+    core::Interface as _,
+    Win32::{Foundation::HWND, Graphics::DirectComposition},
+};
 
 use super::DynLib;
 
