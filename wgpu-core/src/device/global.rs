@@ -11,7 +11,7 @@ use crate::{
     },
     command::{self, CommandEncoder},
     conv,
-    device::{bgl, life::WaitIdleError, DeviceError, DeviceLostClosure},
+    device::{life::WaitIdleError, DeviceError, DeviceLostClosure},
     global::Global,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     instance::{self, Adapter, Surface},
@@ -222,51 +222,9 @@ impl Global {
         offset: BufferAddress,
         data: &[u8],
     ) -> BufferAccessResult {
-        use crate::resource::RawResourceAccess;
-
-        let hub = &self.hub;
-
-        let buffer = hub.buffers.get(buffer_id).get()?;
-
+        let buffer = self.hub.buffers.get(buffer_id).get()?;
         let device = &buffer.device;
-
-        device.check_is_valid()?;
-        buffer.check_usage(wgt::BufferUsages::MAP_WRITE)?;
-
-        let last_submission = device.get_queue().and_then(|queue| {
-            queue
-                .lock_life()
-                .get_buffer_latest_submission_index(&buffer)
-        });
-
-        if let Some(last_submission) = last_submission {
-            device.wait_for_submit(last_submission)?;
-        }
-
-        let snatch_guard = device.snatchable_lock.read();
-        let raw_buf = buffer.try_raw(&snatch_guard)?;
-
-        let mapping = unsafe {
-            device
-                .raw()
-                .map_buffer(raw_buf, offset..offset + data.len() as u64)
-        }
-        .map_err(|e| device.handle_hal_error(e))?;
-
-        unsafe { core::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len()) };
-
-        if !mapping.is_coherent {
-            #[allow(clippy::single_range_in_vec_init)]
-            unsafe {
-                device
-                    .raw()
-                    .flush_mapped_ranges(raw_buf, &[offset..offset + data.len() as u64])
-            };
-        }
-
-        unsafe { device.raw().unmap_buffer(raw_buf) };
-
-        Ok(())
+        device.set_buffer_data(&buffer, offset, data)
     }
 
     pub fn buffer_destroy(&self, buffer_id: id::BufferId) {
@@ -693,21 +651,7 @@ impl Global {
                 break 'error e.into();
             }
 
-            let entry_map = match bgl::EntryMap::from_entries(&desc.entries) {
-                Ok(map) => map,
-                Err(e) => break 'error e,
-            };
-
-            let bgl_result = device.bgl_pool.get_or_init(entry_map, |entry_map| {
-                let bgl =
-                    device.create_bind_group_layout(&desc.label, entry_map, bgl::Origin::Pool)?;
-                bgl.exclusive_pipeline
-                    .set(binding_model::ExclusivePipeline::None)
-                    .unwrap();
-                Ok(bgl)
-            });
-
-            let layout = match bgl_result {
+            let layout = match device.create_bind_group_layout(desc) {
                 Ok(layout) => layout,
                 Err(e) => break 'error e,
             };

@@ -1029,6 +1029,54 @@ impl Device {
         Ok(buffer)
     }
 
+    #[cfg(feature = "replay")]
+    pub fn set_buffer_data(
+        self: &Arc<Self>,
+        buffer: &Arc<Buffer>,
+        offset: wgt::BufferAddress,
+        data: &[u8],
+    ) -> resource::BufferAccessResult {
+        use crate::resource::RawResourceAccess;
+
+        let device = &buffer.device;
+
+        device.check_is_valid()?;
+        buffer.check_usage(wgt::BufferUsages::MAP_WRITE)?;
+
+        let last_submission = device
+            .get_queue()
+            .and_then(|queue| queue.lock_life().get_buffer_latest_submission_index(buffer));
+
+        if let Some(last_submission) = last_submission {
+            device.wait_for_submit(last_submission)?;
+        }
+
+        let snatch_guard = device.snatchable_lock.read();
+        let raw_buf = buffer.try_raw(&snatch_guard)?;
+
+        let mapping = unsafe {
+            device
+                .raw()
+                .map_buffer(raw_buf, offset..offset + data.len() as u64)
+        }
+        .map_err(|e| device.handle_hal_error(e))?;
+
+        unsafe { core::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len()) };
+
+        if !mapping.is_coherent {
+            #[allow(clippy::single_range_in_vec_init)]
+            unsafe {
+                device
+                    .raw()
+                    .flush_mapped_ranges(raw_buf, &[offset..offset + data.len() as u64])
+            };
+        }
+
+        unsafe { device.raw().unmap_buffer(raw_buf) };
+
+        Ok(())
+    }
+
     pub(crate) fn create_texture_from_hal(
         self: &Arc<Self>,
         hal_texture: Box<dyn hal::DynTexture>,
@@ -2296,7 +2344,33 @@ impl Device {
             .collect()
     }
 
-    pub(crate) fn create_bind_group_layout(
+    pub fn create_bind_group_layout(
+        self: &Arc<Self>,
+        desc: &binding_model::BindGroupLayoutDescriptor,
+    ) -> Result<Arc<BindGroupLayout>, binding_model::CreateBindGroupLayoutError> {
+        // this check can't go in the body of `create_bind_group_layout_internal` since the closure might not get called
+        self.check_is_valid()?;
+
+        let entry_map = bgl::EntryMap::from_entries(&desc.entries)?;
+
+        let bgl_result = self.bgl_pool.get_or_init(entry_map, |entry_map| {
+            let bgl =
+                self.create_bind_group_layout_internal(&desc.label, entry_map, bgl::Origin::Pool)?;
+            bgl.exclusive_pipeline
+                .set(binding_model::ExclusivePipeline::None)
+                .unwrap();
+            Ok(bgl)
+        });
+
+        match bgl_result {
+            Ok(layout) => Ok(layout),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Internal function exposed for use by `player` crate only.
+    #[doc(hidden)]
+    pub fn create_bind_group_layout_internal(
         self: &Arc<Self>,
         label: &crate::Label,
         entry_map: bgl::EntryMap,
@@ -3499,7 +3573,7 @@ impl Device {
                 match unique_bind_group_layouts.entry(bgl_entry_map) {
                     hashbrown::hash_map::Entry::Occupied(v) => Ok(Arc::clone(v.get())),
                     hashbrown::hash_map::Entry::Vacant(e) => {
-                        match self.create_bind_group_layout(
+                        match self.create_bind_group_layout_internal(
                             &None,
                             e.key().clone(),
                             bgl::Origin::Derived,

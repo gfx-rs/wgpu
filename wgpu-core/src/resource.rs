@@ -677,6 +677,72 @@ impl Buffer {
         Ok(submit_index)
     }
 
+    pub fn get_mapped_range(
+        self: &Arc<Self>,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferAddress>,
+    ) -> Result<(NonNull<u8>, u64), BufferAccessError> {
+        {
+            let snatch_guard = self.device.snatchable_lock.read();
+            self.check_destroyed(&snatch_guard)?;
+        }
+
+        let range_size = if let Some(size) = size {
+            size
+        } else {
+            self.size.saturating_sub(offset)
+        };
+
+        if offset % wgt::MAP_ALIGNMENT != 0 {
+            return Err(BufferAccessError::UnalignedOffset { offset });
+        }
+        if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            return Err(BufferAccessError::UnalignedRangeSize { range_size });
+        }
+        let map_state = &*self.map_state.lock();
+        match *map_state {
+            BufferMapState::Init { ref staging_buffer } => {
+                // offset (u64) can not be < 0, so no need to validate the lower bound
+                if offset + range_size > self.size {
+                    return Err(BufferAccessError::OutOfBoundsOverrun {
+                        index: offset + range_size - 1,
+                        max: self.size,
+                    });
+                }
+                let ptr = unsafe { staging_buffer.ptr() };
+                let ptr = unsafe { NonNull::new_unchecked(ptr.as_ptr().offset(offset as isize)) };
+                Ok((ptr, range_size))
+            }
+            BufferMapState::Active {
+                ref mapping,
+                ref range,
+                ..
+            } => {
+                if offset < range.start {
+                    return Err(BufferAccessError::OutOfBoundsUnderrun {
+                        index: offset,
+                        min: range.start,
+                    });
+                }
+                if offset + range_size > range.end {
+                    return Err(BufferAccessError::OutOfBoundsOverrun {
+                        index: offset + range_size - 1,
+                        max: range.end,
+                    });
+                }
+                // ptr points to the beginning of the range we mapped in map_async
+                // rather than the beginning of the buffer.
+                let relative_offset = (offset - range.start) as isize;
+                unsafe {
+                    Ok((
+                        NonNull::new_unchecked(mapping.ptr.as_ptr().offset(relative_offset)),
+                        range_size,
+                    ))
+                }
+            }
+            BufferMapState::Idle | BufferMapState::Waiting(_) => Err(BufferAccessError::NotMapped),
+        }
+    }
     /// This function returns [`None`] only if [`Self::map_state`] is not [`BufferMapState::Waiting`].
     #[must_use]
     pub(crate) fn map(&self, snatch_guard: &SnatchGuard) -> Option<BufferMapPendingClosure> {
