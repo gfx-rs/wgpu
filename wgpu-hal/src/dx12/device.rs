@@ -23,7 +23,7 @@ use super::{conv, descriptor, D3D12Lib};
 use crate::{
     auxil::{
         self,
-        dxgi::{name::ObjectExt, result::HResult},
+        dxgi::{name::ObjectExt as _, result::HResult as _},
     },
     dx12::{
         borrow_optional_interface_temporarily, shader_compilation, suballocation, DCompLib,

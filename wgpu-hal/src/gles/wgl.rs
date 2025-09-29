@@ -128,7 +128,7 @@ impl WglContext {
         if unsafe { OpenGL::wglGetCurrentContext() }.is_invalid() {
             return Ok(());
         }
-        unsafe { OpenGL::wglMakeCurrent(None, None) }
+        unsafe { OpenGL::wglMakeCurrent(Default::default(), Default::default()) }
     }
 }
 
@@ -382,7 +382,7 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
                         1,
                         None,
                         None,
-                        instance,
+                        Some(instance.into()),
                         None,
                     )
                 }
@@ -394,7 +394,7 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
                 })?;
                 let window = Window { window };
 
-                let dc = unsafe { Gdi::GetDC(window.window) };
+                let dc = unsafe { Gdi::GetDC(Some(window.window)) };
                 if dc.is_invalid() {
                     return Err(crate::InstanceError::with_source(
                         String::from("unable to create memory device"),
@@ -636,7 +636,7 @@ struct DeviceContextHandle {
 impl Drop for DeviceContextHandle {
     fn drop(&mut self) {
         unsafe {
-            Gdi::ReleaseDC(self.window, self.device);
+            Gdi::ReleaseDC(Some(self.window), self.device);
         };
     }
 }
@@ -672,7 +672,7 @@ impl Surface {
     ) -> Result<(), crate::SurfaceError> {
         let swapchain = self.swapchain.read();
         let sc = swapchain.as_ref().unwrap();
-        let dc = unsafe { Gdi::GetDC(self.window) };
+        let dc = unsafe { Gdi::GetDC(Some(self.window)) };
         if dc.is_invalid() {
             log::error!(
                 "unable to get the device context from window: {}",
@@ -750,7 +750,7 @@ impl crate::Surface for Surface {
         // Remove the old configuration.
         unsafe { self.unconfigure(device) };
 
-        let dc = unsafe { Gdi::GetDC(self.window) };
+        let dc = unsafe { Gdi::GetDC(Some(self.window)) };
         if dc.is_invalid() {
             log::error!(
                 "unable to get the device context from window: {}",
