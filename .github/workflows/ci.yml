@@ -746,6 +746,7 @@ jobs:
         with:
           command: check advisories
           arguments: --all-features --workspace
+          command-arguments: -Dwarnings
           rust-version: ${{ env.REPO_MSRV }}
 
   cargo-deny-check-rest:

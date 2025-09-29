@@ -22,13 +22,11 @@ skip = [
     # Deno uses an old version
     { name = "which", version = "6.0.3" },
 
-    # Loom uses a new windows version
-    { name = "windows", version = "0.61.1" },
-    { name = "windows-core", version = "0.61.2" },
-    { name = "windows-implement", version = "0.60.0" },
-    { name = "windows-interface", version = "0.59.1" },
-    { name = "windows-result", version = "0.3.4" },
-    { name = "windows-strings", version = "0.4.2" },
+    # Temporarily allow older Windows version until updates make it through
+    { name = "windows", version = "0.59" },
+    { name = "windows-core", version = "0.59" },
+    { name = "windows-implement", version = "0.59" },
+    { name = "windows-strings", version = "0.3" },
 
     # cargo-metadata uses old version. Only used for infrastructure.
     { name = "toml", version = "0.8.23" },
@@ -76,6 +74,3 @@ allow-git = [
 unknown-registry = "deny"
 unknown-git = "deny"
 required-git-spec = "rev"
-
-[sources.allow-org]
-github = ["gfx-rs"]
