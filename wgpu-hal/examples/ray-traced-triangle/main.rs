@@ -816,7 +816,7 @@ impl<A: hal::Api> Example<A> {
             queue
                 .submit(&[&init_cmd], &[], (&mut fence, init_fence_value))
                 .unwrap();
-            device.wait(&fence, init_fence_value, !0).unwrap();
+            device.wait(&fence, init_fence_value, None).unwrap();
             cmd_encoder.reset_all(iter::once(init_cmd));
             fence
         };
