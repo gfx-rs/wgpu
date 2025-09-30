@@ -989,7 +989,7 @@ pub trait Device: WasmNotSendSync {
         &self,
         fence: &<Self::A as Api>::Fence,
         value: FenceValue,
-        timeout_ms: u32,
+        timeout: Option<core::time::Duration>,
     ) -> Result<bool, DeviceError>;
 
     /// Start a graphics debugger capture.

@@ -2237,9 +2237,9 @@ impl crate::Device for super::Device {
         &self,
         fence: &super::Fence,
         value: crate::FenceValue,
-        timeout_ms: u32,
+        timeout: Option<Duration>,
     ) -> Result<bool, crate::DeviceError> {
-        let timeout_duration = Duration::from_millis(timeout_ms as u64);
+        let timeout = timeout.unwrap_or(Duration::MAX);
 
         // We first check if the fence has already reached the value we're waiting for.
         let mut fence_value = unsafe { fence.raw.GetCompletedValue() };
@@ -2273,7 +2273,7 @@ impl crate::Device for super::Device {
             //
             // This happens when a previous iteration WaitForSingleObject succeeded with a previous fence value,
             // right before the timeout would have been hit.
-            let remaining_wait_duration = match timeout_duration.checked_sub(elapsed) {
+            let remaining_wait_duration = match timeout.checked_sub(elapsed) {
                 Some(remaining) => remaining,
                 None => {
                     log::trace!("Timeout elapsed in between waits!");
@@ -2286,7 +2286,7 @@ impl crate::Device for super::Device {
             match unsafe {
                 Threading::WaitForSingleObject(
                     event.0,
-                    remaining_wait_duration.as_millis().try_into().unwrap(),
+                    remaining_wait_duration.as_millis().min(u32::MAX as u128) as u32,
                 )
             } {
                 Foundation::WAIT_OBJECT_0 => {}

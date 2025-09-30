@@ -4,6 +4,7 @@ use core::{
     mem::{self, MaybeUninit},
     num::NonZeroU32,
     ptr,
+    time::Duration,
 };
 
 use arrayvec::ArrayVec;
@@ -2443,9 +2444,12 @@ impl crate::Device for super::Device {
         &self,
         fence: &super::Fence,
         wait_value: crate::FenceValue,
-        timeout_ms: u32,
+        timeout: Option<Duration>,
     ) -> Result<bool, crate::DeviceError> {
-        let timeout_ns = timeout_ms as u64 * super::MILLIS_TO_NANOS;
+        let timeout_ns = timeout
+            .unwrap_or(Duration::MAX)
+            .as_nanos()
+            .min(u64::MAX as _) as u64;
         self.shared.wait_for_fence(fence, wait_value, timeout_ns)
     }
 

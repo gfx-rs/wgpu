@@ -183,9 +183,9 @@ impl Drop for Queue {
                     fence.as_ref(),
                     last_successful_submission_index,
                     #[cfg(not(target_arch = "wasm32"))]
-                    timeout_ms,
+                    Some(core::time::Duration::from_millis(timeout_ms)),
                     #[cfg(target_arch = "wasm32")]
-                    0, // WebKit and Chromium don't support a non-0 timeout
+                    Some(core::time::Duration::ZERO), // WebKit and Chromium don't support a non-0 timeout
                 )
             };
             // Note: If we don't panic below we are in UB land (destroying resources while they are still in use by the GPU).

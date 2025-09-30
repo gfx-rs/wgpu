@@ -16,13 +16,14 @@ extern crate alloc;
 
 use alloc::borrow::Cow;
 use alloc::{string::String, vec, vec::Vec};
-use core::cmp::Ordering;
 use core::{
+    cmp::Ordering,
     fmt,
     hash::{Hash, Hasher},
     mem,
     num::NonZeroU32,
     ops::Range,
+    time::Duration,
 };
 
 use bytemuck::{Pod, Zeroable};
@@ -4503,8 +4504,26 @@ pub enum PollType<T> {
     /// On WebGPU, this has no effect. Callbacks are invoked from the
     /// window event loop.
     WaitForSubmissionIndex(T),
-    /// Same as `WaitForSubmissionIndex` but waits for the most recent submission.
+
+    /// Same as [`Self::WaitForSubmissionIndex`] but with a timeout.
+    WaitForSubmissionIndexWithTimeout {
+        /// Submission index to wait for.
+        submission_index: T,
+
+        /// Max time to wait for the submission to complete.
+        ///
+        /// If waiting for the GPU device takes this long or longer, the poll will return [`PollError::Timeout`].
+        timeout: Duration,
+    },
+
+    /// Same as [`Self::WaitForSubmissionIndex`] but waits for the most recent submission.
     Wait,
+
+    /// Same as [`Self::Wait`], but with a timeout.
+    ///
+    /// If waiting for the GPU device takes this long or longer, the poll will return [`PollError::Timeout`].
+    WaitWithTimeout(Duration),
+
     /// Check the device for a single time without blocking.
     Poll,
 }
@@ -4532,7 +4551,10 @@ impl<T> PollType<T> {
     #[must_use]
     pub fn is_wait(&self) -> bool {
         match *self {
-            Self::WaitForSubmissionIndex(..) | Self::Wait => true,
+            Self::WaitForSubmissionIndex(..)
+            | Self::Wait
+            | Self::WaitForSubmissionIndexWithTimeout { .. }
+            | Self::WaitWithTimeout { .. } => true,
             Self::Poll => false,
         }
     }
@@ -4546,7 +4568,25 @@ impl<T> PollType<T> {
         match self {
             Self::WaitForSubmissionIndex(i) => PollType::WaitForSubmissionIndex(func(i)),
             Self::Wait => PollType::Wait,
+            Self::WaitForSubmissionIndexWithTimeout {
+                submission_index,
+                timeout,
+            } => PollType::WaitForSubmissionIndexWithTimeout {
+                submission_index: func(submission_index),
+                timeout,
+            },
+            Self::WaitWithTimeout(timeout) => PollType::WaitWithTimeout(timeout),
             Self::Poll => PollType::Poll,
+        }
+    }
+
+    /// Returns the timeout in milliseconds if the poll type has a timeout.
+    #[must_use]
+    pub fn timeout(&self) -> Option<Duration> {
+        match self {
+            Self::WaitForSubmissionIndexWithTimeout { timeout, .. }
+            | Self::WaitWithTimeout(timeout) => Some(*timeout),
+            _ => None,
         }
     }
 }

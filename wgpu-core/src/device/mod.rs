@@ -35,10 +35,6 @@ pub const SHADER_STAGE_COUNT: usize = hal::MAX_CONCURRENT_SHADER_STAGES;
 // value is enough for a 16k texture with float4 format.
 pub(crate) const ZERO_BUFFER_SIZE: BufferAddress = 512 << 10;
 
-// If a submission is not completed within this time, we go off into UB land.
-// See https://github.com/gfx-rs/wgpu/issues/4589. 60s to reduce the chances of this.
-const CLEANUP_WAIT_MS: u32 = 60000;
-
 pub(crate) const ENTRYPOINT_FAILURE_ERROR: &str = "The given EntryPoint is Invalid";
 
 pub type DeviceDescriptor<'a> = wgt::DeviceDescriptor<Label<'a>>;

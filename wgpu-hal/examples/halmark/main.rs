@@ -54,7 +54,7 @@ struct ExecutionContext<A: hal::Api> {
 
 impl<A: hal::Api> ExecutionContext<A> {
     unsafe fn wait_and_clear(&mut self, device: &A::Device) {
-        device.wait(&self.fence, self.fence_value, !0).unwrap();
+        device.wait(&self.fence, self.fence_value, None).unwrap();
         self.encoder.reset_all(self.used_cmd_bufs.drain(..));
         for view in self.used_views.drain(..) {
             device.destroy_texture_view(view);
