@@ -165,7 +165,7 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 - Added mesh shader support to `wgpu`, with examples. Requires passthrough. By @SupaMaggie70Incorporated in [#7345](https://github.com/gfx-rs/wgpu/pull/7345)
 
 - Added support for external textures based on WebGPU's [`GPUExternalTexture`](https://www.w3.org/TR/webgpu/#gpuexternaltexture). These allow shaders to transparently operate on potentially multiplanar source texture data in either RGB or YCbCr formats via WGSL's `texture_external` type. This is gated behind the `Features::EXTERNAL_TEXTURE` feature, which is currently only supported on DX12. By @jamienicol in [#4386](https://github.com/gfx-rs/wgpu/issues/4386).
-- `wgpu::Device::poll` can now specify a timeout via `wgpu::PollType::WaitWithTimeout`/`wgpu::PollType::WaitForSubmissionIndexWithTimeout`. By @wumpf in [#????](https://github.com/gfx-rs/wgpu/pull/????)
+- `wgpu::Device::poll` can now specify a timeout via `wgpu::PollType::WaitWithTimeout`/`wgpu::PollType::WaitForSubmissionIndexWithTimeout`. By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282)
 
 ### Changes
 
