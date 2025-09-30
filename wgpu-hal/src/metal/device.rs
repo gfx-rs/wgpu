@@ -1603,10 +1603,10 @@ impl crate::Device for super::Device {
             if let MTLCommandBufferStatus::Completed = cmd_buf.status() {
                 return Ok(true);
             }
-            if let Some(timeout) = timeout
-                && start.elapsed() >= timeout
-            {
-                return Ok(false);
+            if let Some(timeout) = timeout {
+                if start.elapsed() >= timeout {
+                    return Ok(false);
+                }
             }
             thread::sleep(core::time::Duration::from_millis(1));
         }
