@@ -265,12 +265,11 @@ impl Blas {
     /// ### Interaction with other functions
     /// On native, `queue.submit(..)` and polling devices (that is calling `instance.poll_all` or
     /// `device.poll`) with [`PollType::Poll`] may call the callback. On native, polling devices with
-    /// [`PollType::Wait`] (or [`PollType::WaitForSubmissionIndex`] with a submission index greater
+    /// [`PollType::Wait`] (optionally with a submission index greater
     /// than the last submit the BLAS was used in) will guarantee callback is called.
     ///
     /// [`PollType::Poll`]: wgpu_types::PollType::Poll
     /// [`PollType::Wait`]: wgpu_types::PollType::Wait
-    /// [`PollType::WaitForSubmissionIndex`]: wgpu_types::PollType::WaitForSubmissionIndex
     pub fn prepare_compaction_async(
         &self,
         callback: impl FnOnce(Result<(), BlasAsyncError>) + WasmNotSend + 'static,
