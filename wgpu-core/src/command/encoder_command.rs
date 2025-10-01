@@ -16,6 +16,7 @@ pub trait ReferenceType {
     type Surface: Clone; // Surface does not implement Debug, although it probably could.
     type Texture: Clone + core::fmt::Debug;
     type TextureView: Clone + core::fmt::Debug;
+    type ExternalTexture: Clone + core::fmt::Debug;
     type QuerySet: Clone + core::fmt::Debug;
     type BindGroup: Clone + core::fmt::Debug;
     type RenderPipeline: Clone + core::fmt::Debug;
@@ -47,6 +48,7 @@ impl ReferenceType for IdReferences {
     type Surface = id::SurfaceId;
     type Texture = id::TextureId;
     type TextureView = id::TextureViewId;
+    type ExternalTexture = id::ExternalTextureId;
     type QuerySet = id::QuerySetId;
     type BindGroup = id::BindGroupId;
     type RenderPipeline = id::RenderPipelineId;
@@ -61,6 +63,7 @@ impl ReferenceType for PointerReferences {
     type Surface = id::PointerId<id::markers::Surface>;
     type Texture = id::PointerId<id::markers::Texture>;
     type TextureView = id::PointerId<id::markers::TextureView>;
+    type ExternalTexture = id::PointerId<id::markers::ExternalTexture>;
     type QuerySet = id::PointerId<id::markers::QuerySet>;
     type BindGroup = id::PointerId<id::markers::BindGroup>;
     type RenderPipeline = id::PointerId<id::markers::RenderPipeline>;
@@ -75,6 +78,7 @@ impl ReferenceType for ArcReferences {
     type Surface = Arc<Surface>;
     type Texture = Arc<Texture>;
     type TextureView = Arc<crate::resource::TextureView>;
+    type ExternalTexture = Arc<crate::resource::ExternalTexture>;
     type QuerySet = Arc<QuerySet>;
     type BindGroup = Arc<crate::binding_model::BindGroup>;
     type RenderPipeline = Arc<crate::pipeline::RenderPipeline>;
@@ -93,6 +97,7 @@ attribute_alias! {
           R::Surface: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           R::Texture: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           R::TextureView: serde::Serialize + for<'d> serde::Deserialize<'d>,\
+          R::ExternalTexture: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           R::QuerySet: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           R::BindGroup: serde::Serialize + for<'d> serde::Deserialize<'d>,\
           R::RenderPipeline: serde::Serialize + for<'d> serde::Deserialize<'d>,\

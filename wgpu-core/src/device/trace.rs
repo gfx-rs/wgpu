@@ -8,7 +8,8 @@ use macro_rules_attribute::apply;
 
 use crate::{
     command::{serde_object_reference_struct, BasePass, Command, ReferenceType, RenderCommand},
-    id,
+    id::{markers, PointerId},
+    pipeline::GeneralRenderPipelineDescriptor,
 };
 
 #[cfg(feature = "trace")]
@@ -43,14 +44,17 @@ pub enum Action<'a, R: ReferenceType> {
     },
     DestroyTextureView(R::TextureView),
     CreateExternalTexture {
-        id: id::ExternalTextureId,
+        id: R::ExternalTexture,
         desc: crate::resource::ExternalTextureDescriptor<'a>,
-        planes: alloc::boxed::Box<[id::TextureViewId]>,
+        planes: alloc::boxed::Box<[R::TextureView]>,
     },
-    FreeExternalTexture(id::ExternalTextureId),
-    DestroyExternalTexture(id::ExternalTextureId),
-    CreateSampler(id::SamplerId, crate::resource::SamplerDescriptor<'a>),
-    DestroySampler(id::SamplerId),
+    FreeExternalTexture(R::ExternalTexture),
+    DestroyExternalTexture(R::ExternalTexture),
+    CreateSampler(
+        PointerId<markers::Sampler>,
+        crate::resource::SamplerDescriptor<'a>,
+    ),
+    DestroySampler(PointerId<markers::Sampler>),
     GetSurfaceTexture {
         id: R::Texture,
         parent: R::Surface,
@@ -58,27 +62,27 @@ pub enum Action<'a, R: ReferenceType> {
     Present(R::Surface),
     DiscardSurfaceTexture(R::Surface),
     CreateBindGroupLayout(
-        id::BindGroupLayoutId,
+        PointerId<markers::BindGroupLayout>,
         crate::binding_model::BindGroupLayoutDescriptor<'a>,
     ),
-    DestroyBindGroupLayout(id::BindGroupLayoutId),
+    DestroyBindGroupLayout(PointerId<markers::BindGroupLayout>),
     CreatePipelineLayout(
-        id::PipelineLayoutId,
-        crate::binding_model::PipelineLayoutDescriptor<'a>,
+        PointerId<markers::PipelineLayout>,
+        crate::binding_model::ResolvedPipelineLayoutDescriptor<
+            'a,
+            PointerId<markers::BindGroupLayout>,
+        >,
     ),
-    DestroyPipelineLayout(id::PipelineLayoutId),
-    CreateBindGroup(
-        id::BindGroupId,
-        crate::binding_model::BindGroupDescriptor<'a>,
-    ),
-    DestroyBindGroup(id::BindGroupId),
+    DestroyPipelineLayout(PointerId<markers::PipelineLayout>),
+    CreateBindGroup(PointerId<markers::BindGroup>, TraceBindGroupDescriptor<'a>),
+    DestroyBindGroup(PointerId<markers::BindGroup>),
     CreateShaderModule {
-        id: id::ShaderModuleId,
+        id: PointerId<markers::ShaderModule>,
         desc: crate::pipeline::ShaderModuleDescriptor<'a>,
         data: FileName,
     },
     CreateShaderModulePassthrough {
-        id: id::ShaderModuleId,
+        id: PointerId<markers::ShaderModule>,
         data: Vec<FileName>,
 
         entry_point: String,
@@ -86,37 +90,33 @@ pub enum Action<'a, R: ReferenceType> {
         num_workgroups: (u32, u32, u32),
         runtime_checks: wgt::ShaderRuntimeChecks,
     },
-    DestroyShaderModule(id::ShaderModuleId),
+    DestroyShaderModule(PointerId<markers::ShaderModule>),
     CreateComputePipeline {
-        id: id::ComputePipelineId,
-        desc: crate::pipeline::ComputePipelineDescriptor<'a>,
+        id: PointerId<markers::ComputePipeline>,
+        desc: TraceComputePipelineDescriptor<'a>,
     },
-    DestroyComputePipeline(id::ComputePipelineId),
-    CreateRenderPipeline {
-        id: id::RenderPipelineId,
-        desc: crate::pipeline::RenderPipelineDescriptor<'a>,
+    DestroyComputePipeline(PointerId<markers::ComputePipeline>),
+    CreateGeneralRenderPipeline {
+        id: PointerId<markers::RenderPipeline>,
+        desc: TraceGeneralRenderPipelineDescriptor<'a>,
     },
-    CreateMeshPipeline {
-        id: id::RenderPipelineId,
-        desc: crate::pipeline::MeshPipelineDescriptor<'a>,
-    },
-    DestroyRenderPipeline(id::RenderPipelineId),
+    DestroyRenderPipeline(PointerId<markers::RenderPipeline>),
     CreatePipelineCache {
-        id: id::PipelineCacheId,
+        id: PointerId<markers::PipelineCache>,
         desc: crate::pipeline::PipelineCacheDescriptor<'a>,
     },
-    DestroyPipelineCache(id::PipelineCacheId),
+    DestroyPipelineCache(PointerId<markers::PipelineCache>),
     CreateRenderBundle {
         id: R::RenderBundle,
         desc: crate::command::RenderBundleEncoderDescriptor<'a>,
         base: BasePass<RenderCommand<R>, Infallible>,
     },
-    DestroyRenderBundle(id::RenderBundleId),
+    DestroyRenderBundle(PointerId<markers::RenderBundle>),
     CreateQuerySet {
-        id: id::QuerySetId,
+        id: PointerId<markers::QuerySet>,
         desc: crate::resource::QuerySetDescriptor<'a>,
     },
-    DestroyQuerySet(id::QuerySetId),
+    DestroyQuerySet(PointerId<markers::QuerySet>),
     WriteBuffer {
         id: R::Buffer,
         data: FileName,
@@ -131,14 +131,47 @@ pub enum Action<'a, R: ReferenceType> {
     },
     Submit(crate::SubmissionIndex, Vec<Command<R>>),
     CreateBlas {
-        id: id::BlasId,
+        id: R::Blas,
         desc: crate::resource::BlasDescriptor<'a>,
         sizes: wgt::BlasGeometrySizeDescriptors,
     },
-    DestroyBlas(id::BlasId),
+    DestroyBlas(R::Blas),
     CreateTlas {
-        id: id::TlasId,
+        id: R::Tlas,
         desc: crate::resource::TlasDescriptor<'a>,
     },
-    DestroyTlas(id::TlasId),
+    DestroyTlas(R::Tlas),
 }
+
+/// cbindgen:ignore
+pub type TraceBindGroupDescriptor<'a> = crate::binding_model::BindGroupDescriptor<
+    'a,
+    PointerId<markers::BindGroupLayout>,
+    PointerId<markers::Buffer>,
+    PointerId<markers::Sampler>,
+    PointerId<markers::TextureView>,
+    PointerId<markers::Tlas>,
+    PointerId<markers::ExternalTexture>,
+>;
+
+/// Not a public API. For use by `player` only.
+///
+/// cbindgen:ignore
+#[doc(hidden)]
+pub type TraceGeneralRenderPipelineDescriptor<'a> = GeneralRenderPipelineDescriptor<
+    'a,
+    PointerId<markers::PipelineLayout>,
+    PointerId<markers::ShaderModule>,
+    PointerId<markers::PipelineCache>,
+>;
+
+/// Not a public API. For use by `player` only.
+///
+/// cbindgen:ignore
+#[doc(hidden)]
+pub type TraceComputePipelineDescriptor<'a> = crate::pipeline::ComputePipelineDescriptor<
+    'a,
+    PointerId<markers::PipelineLayout>,
+    PointerId<markers::ShaderModule>,
+    PointerId<markers::PipelineCache>,
+>;

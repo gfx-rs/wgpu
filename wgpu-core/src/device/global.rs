@@ -510,16 +510,6 @@ impl Global {
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
 
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                let planes = Box::from(planes);
-                trace.add(trace::Action::CreateExternalTexture {
-                    id: fid.id(),
-                    desc: desc.clone(),
-                    planes,
-                });
-            }
-
             let planes = planes
                 .iter()
                 .map(|plane_id| self.hub.texture_views.get(*plane_id).get())
@@ -533,6 +523,21 @@ impl Global {
                 Ok(external_texture) => external_texture,
                 Err(error) => break 'error error,
             };
+
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                let planes = Box::from(
+                    planes
+                        .into_iter()
+                        .map(|plane| plane.to_trace())
+                        .collect::<Vec<_>>(),
+                );
+                trace.add(trace::Action::CreateExternalTexture {
+                    id: external_texture.to_trace(),
+                    desc: desc.clone(),
+                    planes,
+                });
+            }
 
             let id = fid.assign(Fallible::Valid(external_texture));
             api_log!("Device::create_external_texture({desc:?}) -> {id:?}");
@@ -557,7 +562,9 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(trace) = external_texture.device.trace.lock().as_mut() {
-            trace.add(trace::Action::FreeExternalTexture(external_texture_id));
+            trace.add(trace::Action::FreeExternalTexture(
+                external_texture.to_trace(),
+            ));
         }
 
         external_texture.destroy();
@@ -574,7 +581,9 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(external_texture) = _external_texture.get() {
             if let Some(t) = external_texture.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyExternalTexture(external_texture_id));
+                t.add(trace::Action::DestroyExternalTexture(
+                    external_texture.to_trace(),
+                ));
             }
         }
     }
@@ -593,15 +602,18 @@ impl Global {
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
 
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateSampler(fid.id(), desc.clone()));
-            }
-
             let sampler = match device.create_sampler(desc) {
                 Ok(sampler) => sampler,
                 Err(e) => break 'error e,
             };
+
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                trace.add(trace::Action::CreateSampler(
+                    sampler.to_trace(),
+                    desc.clone(),
+                ));
+            }
 
             let id = fid.assign(Fallible::Valid(sampler));
             api_log!("Device::create_sampler -> {id:?}");
@@ -624,7 +636,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(sampler) = _sampler.get() {
             if let Some(t) = sampler.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroySampler(sampler_id));
+                t.add(trace::Action::DestroySampler(sampler.to_trace()));
             }
         }
     }
@@ -646,11 +658,6 @@ impl Global {
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
 
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateBindGroupLayout(fid.id(), desc.clone()));
-            }
-
             // this check can't go in the body of `create_bind_group_layout` since the closure might not get called
             if let Err(e) = device.check_is_valid() {
                 break 'error e.into();
@@ -660,6 +667,14 @@ impl Global {
                 Ok(layout) => layout,
                 Err(e) => break 'error e,
             };
+
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                trace.add(trace::Action::CreateBindGroupLayout(
+                    layout.to_trace(),
+                    desc.clone(),
+                ));
+            }
 
             let id = fid.assign(Fallible::Valid(layout.clone()));
 
@@ -682,7 +697,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(layout) = _layout.get() {
             if let Some(t) = layout.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyBindGroupLayout(bind_group_layout_id));
+                t.add(trace::Action::DestroyBindGroupLayout(layout.to_trace()));
             }
         }
     }
@@ -703,11 +718,6 @@ impl Global {
 
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
-
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreatePipelineLayout(fid.id(), desc.clone()));
-            }
 
             if let Err(e) = device.check_is_valid() {
                 break 'error e.into();
@@ -737,6 +747,14 @@ impl Global {
                 Err(e) => break 'error e,
             };
 
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                trace.add(trace::Action::CreatePipelineLayout(
+                    layout.to_trace(),
+                    desc.to_trace(),
+                ));
+            }
+
             let id = fid.assign(Fallible::Valid(layout));
             api_log!("Device::create_pipeline_layout -> {id:?}");
             return (id, None);
@@ -757,7 +775,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(layout) = _layout.get() {
             if let Some(t) = layout.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyPipelineLayout(pipeline_layout_id));
+                t.add(trace::Action::DestroyPipelineLayout(layout.to_trace()));
             }
         }
     }
@@ -775,11 +793,6 @@ impl Global {
 
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
-
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateBindGroup(fid.id(), desc.clone()));
-            }
 
             if let Err(e) = device.check_is_valid() {
                 break 'error e.into();
@@ -908,11 +921,21 @@ impl Global {
                 layout,
                 entries,
             };
+            #[cfg(feature = "trace")]
+            let trace_desc = (&desc).to_trace();
 
             let bind_group = match device.create_bind_group(desc) {
                 Ok(bind_group) => bind_group,
                 Err(e) => break 'error e,
             };
+
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                trace.add(trace::Action::CreateBindGroup(
+                    bind_group.to_trace(),
+                    trace_desc,
+                ));
+            }
 
             let id = fid.assign(Fallible::Valid(bind_group));
 
@@ -934,9 +957,9 @@ impl Global {
         let _bind_group = hub.bind_groups.remove(bind_group_id);
 
         #[cfg(feature = "trace")]
-        if let Ok(_bind_group) = _bind_group.get() {
-            if let Some(t) = _bind_group.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyBindGroup(bind_group_id));
+        if let Ok(bind_group) = _bind_group.get() {
+            if let Some(t) = bind_group.device.trace.lock().as_mut() {
+                t.add(trace::Action::DestroyBindGroup(bind_group.to_trace()));
             }
         }
     }
@@ -974,40 +997,48 @@ impl Global {
             let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                let data = match source {
-                    #[cfg(feature = "wgsl")]
-                    pipeline::ShaderModuleSource::Wgsl(ref code) => {
-                        trace.make_binary("wgsl", code.as_bytes())
-                    }
-                    #[cfg(feature = "glsl")]
-                    pipeline::ShaderModuleSource::Glsl(ref code, _) => {
-                        trace.make_binary("glsl", code.as_bytes())
-                    }
-                    #[cfg(feature = "spirv")]
-                    pipeline::ShaderModuleSource::SpirV(ref code, _) => {
-                        trace.make_binary("spirv", bytemuck::cast_slice::<u32, u8>(code))
-                    }
-                    pipeline::ShaderModuleSource::Naga(ref module) => {
-                        let string =
-                            ron::ser::to_string_pretty(module, ron::ser::PrettyConfig::default())
-                                .unwrap();
-                        trace.make_binary("ron", string.as_bytes())
-                    }
-                    pipeline::ShaderModuleSource::Dummy(_) => {
-                        panic!("found `ShaderModuleSource::Dummy`")
-                    }
-                };
-                trace.add(trace::Action::CreateShaderModule {
-                    id: fid.id(),
-                    desc: desc.clone(),
-                    data,
-                });
-            };
+            let data = device.trace.lock().as_mut().map(|trace| match source {
+                #[cfg(feature = "wgsl")]
+                pipeline::ShaderModuleSource::Wgsl(ref code) => {
+                    trace.make_binary("wgsl", code.as_bytes())
+                }
+                #[cfg(feature = "glsl")]
+                pipeline::ShaderModuleSource::Glsl(ref code, _) => {
+                    trace.make_binary("glsl", code.as_bytes())
+                }
+                #[cfg(feature = "spirv")]
+                pipeline::ShaderModuleSource::SpirV(ref code, _) => {
+                    trace.make_binary("spirv", bytemuck::cast_slice::<u32, u8>(code))
+                }
+                pipeline::ShaderModuleSource::Naga(ref module) => {
+                    let string =
+                        ron::ser::to_string_pretty(module, ron::ser::PrettyConfig::default())
+                            .unwrap();
+                    trace.make_binary("ron", string.as_bytes())
+                }
+                pipeline::ShaderModuleSource::Dummy(_) => {
+                    panic!("found `ShaderModuleSource::Dummy`")
+                }
+            });
 
             let shader = match device.create_shader_module(desc, source) {
                 Ok(shader) => shader,
                 Err(e) => break 'error e,
+            };
+
+            #[cfg(feature = "trace")]
+            if let Some(data) = data {
+                // We don't need these two operations with the trace to be atomic.
+                device
+                    .trace
+                    .lock()
+                    .as_mut()
+                    .expect("trace went away during create_shader_module?")
+                    .add(trace::Action::CreateShaderModule {
+                        id: shader.to_trace(),
+                        desc: desc.clone(),
+                        data,
+                    });
             };
 
             let id = fid.assign(Fallible::Valid(shader));
@@ -1041,6 +1072,13 @@ impl Global {
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
 
+            let result = unsafe { device.create_shader_module_passthrough(desc) };
+
+            let shader = match result {
+                Ok(shader) => shader,
+                Err(e) => break 'error e,
+            };
+
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
                 let mut file_names = Vec::new();
@@ -1057,7 +1095,7 @@ impl Global {
                     }
                 }
                 trace.add(trace::Action::CreateShaderModulePassthrough {
-                    id: fid.id(),
+                    id: shader.to_trace(),
                     data: file_names,
 
                     entry_point: desc.entry_point.clone(),
@@ -1067,12 +1105,6 @@ impl Global {
                 });
             };
 
-            let result = unsafe { device.create_shader_module_passthrough(desc) };
-
-            let shader = match result {
-                Ok(shader) => shader,
-                Err(e) => break 'error e,
-            };
             let id = fid.assign(Fallible::Valid(shader));
             api_log!("Device::create_shader_module_spirv -> {id:?}");
             return (id, None);
@@ -1093,7 +1125,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(shader_module) = _shader_module.get() {
             if let Some(t) = shader_module.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyShaderModule(shader_module_id));
+                t.add(trace::Action::DestroyShaderModule(shader_module.to_trace()));
             }
         }
     }
@@ -1217,7 +1249,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(bundle) = _bundle.get() {
             if let Some(t) = bundle.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyRenderBundle(render_bundle_id));
+                t.add(trace::Action::DestroyRenderBundle(bundle.to_trace()));
             }
         }
     }
@@ -1236,18 +1268,18 @@ impl Global {
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
 
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateQuerySet {
-                    id: fid.id(),
-                    desc: desc.clone(),
-                });
-            }
-
             let query_set = match device.create_query_set(desc) {
                 Ok(query_set) => query_set,
                 Err(err) => break 'error err,
             };
+
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                trace.add(trace::Action::CreateQuerySet {
+                    id: query_set.to_trace(),
+                    desc: desc.clone(),
+                });
+            }
 
             let id = fid.assign(Fallible::Valid(query_set));
             api_log!("Device::create_query_set -> {id:?}");
@@ -1270,7 +1302,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(query_set) = _query_set.get() {
             if let Some(trace) = query_set.device.trace.lock().as_mut() {
-                trace.add(trace::Action::DestroyQuerySet(query_set_id));
+                trace.add(trace::Action::DestroyQuerySet(query_set.to_trace()));
             }
         }
     }
@@ -1291,13 +1323,7 @@ impl Global {
         let fid = hub.render_pipelines.prepare(id_in);
 
         let device = self.hub.devices.get(device_id);
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *device.trace.lock() {
-            trace.add(trace::Action::CreateRenderPipeline {
-                id: fid.id(),
-                desc: desc.clone(),
-            });
-        }
+
         self.device_create_general_render_pipeline(desc.clone().into(), device, fid)
     }
 
@@ -1315,13 +1341,6 @@ impl Global {
         let fid = hub.render_pipelines.prepare(id_in);
 
         let device = self.hub.devices.get(device_id);
-        #[cfg(feature = "trace")]
-        if let Some(ref mut trace) = *device.trace.lock() {
-            trace.add(trace::Action::CreateMeshPipeline {
-                id: fid.id(),
-                desc: desc.clone(),
-            });
-        }
         self.device_create_general_render_pipeline(desc.clone().into(), device, fid)
     }
 
@@ -1480,10 +1499,21 @@ impl Global {
                 cache,
             };
 
+            #[cfg(feature = "trace")]
+            let trace_desc = desc.clone().into_trace();
+
             let pipeline = match device.create_render_pipeline(desc) {
                 Ok(pair) => pair,
                 Err(e) => break 'error e,
             };
+
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                trace.add(trace::Action::CreateGeneralRenderPipeline {
+                    id: pipeline.to_trace(),
+                    desc: trace_desc,
+                });
+            }
 
             let id = fid.assign(Fallible::Valid(pipeline));
             api_log!("Device::create_render_pipeline -> {id:?}");
@@ -1540,7 +1570,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(pipeline) = _pipeline.get() {
             if let Some(t) = pipeline.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyRenderPipeline(render_pipeline_id));
+                t.add(trace::Action::DestroyRenderPipeline(pipeline.to_trace()));
             }
         }
     }
@@ -1562,14 +1592,6 @@ impl Global {
 
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
-
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreateComputePipeline {
-                    id: fid.id(),
-                    desc: desc.clone(),
-                });
-            }
 
             if let Err(e) = device.check_is_valid() {
                 break 'error e.into();
@@ -1612,10 +1634,21 @@ impl Global {
                 cache,
             };
 
+            #[cfg(feature = "trace")]
+            let trace_desc = desc.clone().into_trace();
+
             let pipeline = match device.create_compute_pipeline(desc) {
                 Ok(pair) => pair,
                 Err(e) => break 'error e,
             };
+
+            #[cfg(feature = "trace")]
+            if let Some(ref mut trace) = *device.trace.lock() {
+                trace.add(trace::Action::CreateComputePipeline {
+                    id: pipeline.to_trace(),
+                    desc: trace_desc,
+                });
+            }
 
             let id = fid.assign(Fallible::Valid(pipeline));
             api_log!("Device::create_compute_pipeline -> {id:?}");
@@ -1674,7 +1707,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(pipeline) = _pipeline.get() {
             if let Some(t) = pipeline.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyComputePipeline(compute_pipeline_id));
+                t.add(trace::Action::DestroyComputePipeline(pipeline.to_trace()));
             }
         }
     }
@@ -1699,17 +1732,17 @@ impl Global {
         let error: pipeline::CreatePipelineCacheError = 'error: {
             let device = self.hub.devices.get(device_id);
 
-            #[cfg(feature = "trace")]
-            if let Some(ref mut trace) = *device.trace.lock() {
-                trace.add(trace::Action::CreatePipelineCache {
-                    id: fid.id(),
-                    desc: desc.clone(),
-                });
-            }
-
             let cache = unsafe { device.create_pipeline_cache(desc) };
             match cache {
                 Ok(cache) => {
+                    #[cfg(feature = "trace")]
+                    if let Some(ref mut trace) = *device.trace.lock() {
+                        trace.add(trace::Action::CreatePipelineCache {
+                            id: cache.to_trace(),
+                            desc: desc.clone(),
+                        });
+                    }
+
                     let id = fid.assign(Fallible::Valid(cache));
                     api_log!("Device::create_pipeline_cache -> {id:?}");
                     return (id, None);
@@ -1734,7 +1767,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(cache) = _cache.get() {
             if let Some(t) = cache.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyPipelineCache(pipeline_cache_id));
+                t.add(trace::Action::DestroyPipelineCache(cache.to_trace()));
             }
         }
     }

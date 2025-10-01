@@ -427,7 +427,7 @@ pub type ResolvedMeshState<'a> = MeshState<'a, Arc<ShaderModule>>;
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub(crate) enum RenderPipelineVertexProcessor<'a, SM = ShaderModuleId> {
+pub enum RenderPipelineVertexProcessor<'a, SM = ShaderModuleId> {
     Vertex(VertexState<'a, SM>),
     Mesh(Option<TaskState<'a, SM>>, MeshState<'a, SM>),
 }
@@ -500,7 +500,7 @@ pub struct MeshPipelineDescriptor<
 /// Describes a render (graphics) pipeline.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub(crate) struct GeneralRenderPipelineDescriptor<
+pub struct GeneralRenderPipelineDescriptor<
     'a,
     PLL = PipelineLayoutId,
     SM = ShaderModuleId,

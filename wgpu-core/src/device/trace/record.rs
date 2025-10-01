@@ -2,6 +2,7 @@ use alloc::{
     borrow::Cow,
     string::{String, ToString},
     sync::Arc,
+    vec::Vec,
 };
 use core::convert::Infallible;
 use std::io::Write as _;
@@ -12,11 +13,14 @@ use crate::{
         BasePass, ColorAttachments, Command, ComputeCommand, PointerReferences, RenderCommand,
         RenderPassColorAttachment, ResolvedRenderPassDepthStencilAttachment,
     },
-    id,
+    id::{markers, PointerId},
     storage::StorageItem,
 };
 
-use super::{Action, FILE_NAME};
+use super::{
+    Action, TraceBindGroupDescriptor, TraceComputePipelineDescriptor,
+    TraceGeneralRenderPipelineDescriptor, FILE_NAME,
+};
 
 pub(crate) fn new_render_bundle_encoder_descriptor(
     label: crate::Label<'_>,
@@ -101,13 +105,13 @@ pub(crate) trait IntoTrace {
 }
 
 impl<T: StorageItem> IntoTrace for Arc<T> {
-    type Output = id::PointerId<T::Marker>;
+    type Output = PointerId<T::Marker>;
     fn into_trace(self) -> Self::Output {
         self.to_trace()
     }
 
     fn to_trace(&self) -> Self::Output {
-        id::PointerId::from(self)
+        PointerId::from(self)
     }
 }
 
@@ -239,7 +243,7 @@ impl<T: IntoTrace> IntoTrace for wgt::TexelCopyTextureInfo<T> {
 }
 
 impl IntoTrace for ArcPassTimestampWrites {
-    type Output = crate::command::PassTimestampWrites<id::PointerId<id::markers::QuerySet>>;
+    type Output = crate::command::PassTimestampWrites<PointerId<markers::QuerySet>>;
     fn into_trace(self) -> Self::Output {
         crate::command::PassTimestampWrites {
             query_set: self.query_set.into_trace(),
@@ -250,7 +254,7 @@ impl IntoTrace for ArcPassTimestampWrites {
 }
 
 impl IntoTrace for ColorAttachments {
-    type Output = ColorAttachments<id::PointerId<id::markers::TextureView>>;
+    type Output = ColorAttachments<PointerId<markers::TextureView>>;
     fn into_trace(self) -> Self::Output {
         self.into_iter()
             .map(|opt| {
@@ -558,5 +562,197 @@ impl IntoTrace for ArcRenderCommand {
             C::EndPipelineStatisticsQuery => C::EndPipelineStatisticsQuery,
             C::ExecuteBundle(bundle) => C::ExecuteBundle(bundle.into_trace()),
         }
+    }
+}
+
+impl<'a> IntoTrace for crate::binding_model::ResolvedPipelineLayoutDescriptor<'a> {
+    type Output =
+        crate::binding_model::PipelineLayoutDescriptor<'a, PointerId<markers::BindGroupLayout>>;
+    fn into_trace(self) -> Self::Output {
+        crate::binding_model::PipelineLayoutDescriptor {
+            label: self.label.map(|l| Cow::Owned(l.into_owned())),
+            bind_group_layouts: self
+                .bind_group_layouts
+                .iter()
+                .map(|bgl| bgl.to_trace())
+                .collect(),
+            push_constant_ranges: self.push_constant_ranges.clone(),
+        }
+    }
+}
+
+impl<'a> IntoTrace for &'_ crate::binding_model::ResolvedBindGroupDescriptor<'a> {
+    type Output = TraceBindGroupDescriptor<'a>;
+
+    fn into_trace(self) -> Self::Output {
+        use crate::binding_model::{
+            BindGroupEntry, BindingResource, BufferBinding, ResolvedBindingResource,
+        };
+        TraceBindGroupDescriptor {
+            label: self.label.clone(),
+            layout: self.layout.to_trace(),
+            entries: Cow::Owned(
+                self.entries
+                    .iter()
+                    .map(|entry| {
+                        let resource = match &entry.resource {
+                            ResolvedBindingResource::Buffer(buffer_binding) => {
+                                BindingResource::Buffer(BufferBinding {
+                                    buffer: buffer_binding.buffer.to_trace(),
+                                    offset: buffer_binding.offset,
+                                    size: buffer_binding.size,
+                                })
+                            }
+                            ResolvedBindingResource::BufferArray(buffer_bindings) => {
+                                let resolved_buffers: Vec<_> = buffer_bindings
+                                    .iter()
+                                    .map(|bb| BufferBinding {
+                                        buffer: bb.buffer.to_trace(),
+                                        offset: bb.offset,
+                                        size: bb.size,
+                                    })
+                                    .collect();
+                                BindingResource::BufferArray(Cow::Owned(resolved_buffers))
+                            }
+                            ResolvedBindingResource::Sampler(sampler_id) => {
+                                BindingResource::Sampler(sampler_id.to_trace())
+                            }
+                            ResolvedBindingResource::SamplerArray(sampler_ids) => {
+                                let resolved: Vec<_> =
+                                    sampler_ids.iter().map(|id| id.to_trace()).collect();
+                                BindingResource::SamplerArray(Cow::Owned(resolved))
+                            }
+                            ResolvedBindingResource::TextureView(texture_view_id) => {
+                                BindingResource::TextureView(texture_view_id.to_trace())
+                            }
+                            ResolvedBindingResource::TextureViewArray(texture_view_ids) => {
+                                let resolved: Vec<_> =
+                                    texture_view_ids.iter().map(|id| id.to_trace()).collect();
+                                BindingResource::TextureViewArray(Cow::Owned(resolved))
+                            }
+                            ResolvedBindingResource::AccelerationStructure(tlas_id) => {
+                                BindingResource::AccelerationStructure(tlas_id.to_trace())
+                            }
+                            ResolvedBindingResource::ExternalTexture(external_texture_id) => {
+                                BindingResource::ExternalTexture(external_texture_id.to_trace())
+                            }
+                        };
+                        BindGroupEntry {
+                            binding: entry.binding,
+                            resource,
+                        }
+                    })
+                    .collect(),
+            ),
+        }
+    }
+}
+
+impl<'a> IntoTrace for crate::pipeline::ResolvedGeneralRenderPipelineDescriptor<'a> {
+    type Output = TraceGeneralRenderPipelineDescriptor<'a>;
+
+    fn into_trace(self) -> Self::Output {
+        TraceGeneralRenderPipelineDescriptor {
+            label: self.label,
+            layout: self.layout.into_trace(),
+            vertex: self.vertex.into_trace(),
+            primitive: self.primitive,
+            depth_stencil: self.depth_stencil,
+            multisample: self.multisample,
+            fragment: self.fragment.map(|f| f.into_trace()),
+            multiview: self.multiview,
+            cache: self.cache.map(|c| c.into_trace()),
+        }
+    }
+}
+
+impl<'a> IntoTrace for crate::pipeline::ResolvedComputePipelineDescriptor<'a> {
+    type Output = TraceComputePipelineDescriptor<'a>;
+
+    fn into_trace(self) -> Self::Output {
+        TraceComputePipelineDescriptor {
+            label: self.label,
+            layout: self.layout.into_trace(),
+            stage: self.stage.into_trace(),
+            cache: self.cache.map(|c| c.into_trace()),
+        }
+    }
+}
+
+impl<'a> IntoTrace for crate::pipeline::ResolvedProgrammableStageDescriptor<'a> {
+    type Output =
+        crate::pipeline::ProgrammableStageDescriptor<'a, PointerId<markers::ShaderModule>>;
+    fn into_trace(self) -> Self::Output {
+        crate::pipeline::ProgrammableStageDescriptor {
+            module: self.module.into_trace(),
+            entry_point: self.entry_point,
+            constants: self.constants,
+            zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
+        }
+    }
+}
+
+impl<'a> IntoTrace
+    for crate::pipeline::RenderPipelineVertexProcessor<'a, Arc<crate::pipeline::ShaderModule>>
+{
+    type Output =
+        crate::pipeline::RenderPipelineVertexProcessor<'a, PointerId<markers::ShaderModule>>;
+    fn into_trace(self) -> Self::Output {
+        match self {
+            crate::pipeline::RenderPipelineVertexProcessor::Vertex(vertex) => {
+                crate::pipeline::RenderPipelineVertexProcessor::Vertex(vertex.into_trace())
+            }
+            crate::pipeline::RenderPipelineVertexProcessor::Mesh(task, mesh) => {
+                crate::pipeline::RenderPipelineVertexProcessor::Mesh(
+                    task.map(|t| t.into_trace()),
+                    mesh.into_trace(),
+                )
+            }
+        }
+    }
+}
+
+impl<'a> IntoTrace for crate::pipeline::ResolvedTaskState<'a> {
+    type Output = crate::pipeline::TaskState<'a, PointerId<markers::ShaderModule>>;
+    fn into_trace(self) -> Self::Output {
+        crate::pipeline::TaskState {
+            stage: self.stage.into_trace(),
+        }
+    }
+}
+
+impl<'a> IntoTrace for crate::pipeline::ResolvedMeshState<'a> {
+    type Output = crate::pipeline::MeshState<'a, PointerId<markers::ShaderModule>>;
+    fn into_trace(self) -> Self::Output {
+        crate::pipeline::MeshState {
+            stage: self.stage.into_trace(),
+        }
+    }
+}
+
+impl<'a> IntoTrace for crate::pipeline::ResolvedVertexState<'a> {
+    type Output = crate::pipeline::VertexState<'a, PointerId<markers::ShaderModule>>;
+    fn into_trace(self) -> Self::Output {
+        crate::pipeline::VertexState {
+            stage: self.stage.into_trace(),
+            buffers: self.buffers,
+        }
+    }
+}
+
+impl<'a> IntoTrace for crate::pipeline::ResolvedFragmentState<'a> {
+    type Output = crate::pipeline::FragmentState<'a, PointerId<markers::ShaderModule>>;
+    fn into_trace(self) -> Self::Output {
+        crate::pipeline::FragmentState {
+            stage: self.stage.into_trace(),
+            targets: self.targets,
+        }
+    }
+}
+
+impl<T: IntoTrace> IntoTrace for Option<T> {
+    type Output = Option<T::Output>;
+    fn into_trace(self) -> Self::Output {
+        self.map(|v| v.into_trace())
     }
 }
