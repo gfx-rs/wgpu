@@ -1987,8 +1987,12 @@ impl crate::Device for super::Device {
             vk::DynamicState::BLEND_CONSTANTS,
             vk::DynamicState::STENCIL_REFERENCE,
         ];
+        let multiview_mask = desc
+            .multiview
+            .map(|v| NonZeroU32::new((1u32 << v.get()) - 1).unwrap());
         let mut compatible_rp_key = super::RenderPassKey {
             sample_count: desc.multisample.count,
+            multiview_mask,
             ..Default::default()
         };
         let mut stages = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
