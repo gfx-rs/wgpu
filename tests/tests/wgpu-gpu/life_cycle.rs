@@ -1,7 +1,5 @@
-use wgpu::{util::DeviceExt, Backends};
-use wgpu_test::{
-    fail, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
-};
+use wgpu::util::DeviceExt;
+use wgpu_test::{fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
@@ -118,12 +116,7 @@ static TEXTURE_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
 // submission fails gracefully.
 #[gpu_test]
 static BUFFER_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        // https://github.com/gfx-rs/wgpu/issues/7854
-        TestParameters::default()
-            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe"))
-            .enable_noop(),
-    )
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let buffer_source = ctx
             .device
@@ -160,12 +153,7 @@ static BUFFER_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration
 // submission fails gracefully.
 #[gpu_test]
 static TEXTURE_DESTROY_BEFORE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        // https://github.com/gfx-rs/wgpu/issues/7854
-        TestParameters::default()
-            .skip(FailureCase::backend_adapter(Backends::VULKAN, "llvmpipe"))
-            .enable_noop(),
-    )
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let descriptor = wgpu::TextureDescriptor {
             label: None,

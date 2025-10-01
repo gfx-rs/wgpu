@@ -116,7 +116,6 @@ pub mod front;
 pub mod ir;
 pub mod keywords;
 mod non_max_u32;
-mod path_like;
 pub mod proc;
 mod racy_lock;
 mod span;

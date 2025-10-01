@@ -76,8 +76,7 @@ impl Test<'_> {
             _ => unreachable!(),
         };
         let string = read_to_string(&path).unwrap().replace("Noop", backend_name);
-        ron::de::from_str(&string)
-            .unwrap_or_else(|e| panic!("{path:?}:{} {}", e.position.line, e.code))
+        ron::de::from_str(&string).unwrap_or_else(|e| panic!("{path:?}:{} {}", e.span, e.code))
     }
 
     fn run(

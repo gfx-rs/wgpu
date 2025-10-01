@@ -14,7 +14,6 @@ use super::{
 use crate::{
     arena::{Handle, HandleVec, UniqueArena},
     back::spv::{BindingInfo, WrappedFunction},
-    path_like::PathLike,
     proc::{Alignment, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
 };
@@ -87,6 +86,7 @@ impl Writer {
             constant_ids: HandleVec::new(),
             cached_constants: crate::FastHashMap::default(),
             global_variables: HandleVec::new(),
+            fake_missing_bindings: options.fake_missing_bindings,
             binding_map: options.binding_map.clone(),
             saved_cached: CachedExpressions::default(),
             gl450_ext_inst_id,
@@ -149,6 +149,7 @@ impl Writer {
             force_loop_bounding: self.force_loop_bounding,
             use_storage_input_output_16: self.use_storage_input_output_16,
             capabilities_available: take(&mut self.capabilities_available),
+            fake_missing_bindings: self.fake_missing_bindings,
             binding_map: take(&mut self.binding_map),
 
             // Initialized afresh:
@@ -467,6 +468,26 @@ impl Writer {
             | crate::TypeInner::Struct { .. }
             | crate::TypeInner::BindingArray { .. } => return None,
         })
+    }
+
+    /// Resolve the [`BindingInfo`] for a [`crate::ResourceBinding`] from the
+    /// provided [`Writer::binding_map`].
+    ///
+    /// If the specified resource is not present in the binding map this will
+    /// return an error, unless [`Writer::fake_missing_bindings`] is set.
+    fn resolve_resource_binding(
+        &self,
+        res_binding: &crate::ResourceBinding,
+    ) -> Result<BindingInfo, Error> {
+        match self.binding_map.get(res_binding) {
+            Some(target) => Ok(*target),
+            None if self.fake_missing_bindings => Ok(BindingInfo {
+                descriptor_set: res_binding.group,
+                binding: res_binding.binding,
+                binding_array_size: None,
+            }),
+            None => Err(Error::MissingBinding(*res_binding)),
+        }
     }
 
     /// Emits code for any wrapper functions required by the expressions in ir_function.
@@ -2241,13 +2262,11 @@ impl Writer {
         // and it is failing on 0.
         let mut substitute_inner_type_lookup = None;
         if let Some(ref res_binding) = global_variable.binding {
-            self.decorate(id, Decoration::DescriptorSet, &[res_binding.group]);
-            self.decorate(id, Decoration::Binding, &[res_binding.binding]);
+            let bind_target = self.resolve_resource_binding(res_binding)?;
+            self.decorate(id, Decoration::DescriptorSet, &[bind_target.descriptor_set]);
+            self.decorate(id, Decoration::Binding, &[bind_target.binding]);
 
-            if let Some(&BindingInfo {
-                binding_array_size: Some(remapped_binding_array_size),
-            }) = self.binding_map.get(res_binding)
-            {
+            if let Some(remapped_binding_array_size) = bind_target.binding_array_size {
                 if let crate::TypeInner::BindingArray { base, .. } =
                     ir_module.types[global_variable.ty].inner
                 {
@@ -2499,10 +2518,8 @@ impl Writer {
         if self.flags.contains(WriterFlags::DEBUG) {
             if let Some(debug_info) = debug_info.as_ref() {
                 let source_file_id = self.id_gen.next();
-                self.debugs.push(Instruction::string(
-                    &debug_info.file_name.to_string_lossy(),
-                    source_file_id,
-                ));
+                self.debugs
+                    .push(Instruction::string(debug_info.file_name, source_file_id));
 
                 debug_info_inner = Some(DebugInfoInner {
                     source_code: debug_info.source_code,

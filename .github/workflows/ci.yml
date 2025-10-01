@@ -691,7 +691,7 @@ jobs:
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.36.2
+        uses: crate-ci/typos@v1.36.3
 
   check-cts-runner:
     # runtime is normally 2 minutes
@@ -746,6 +746,7 @@ jobs:
         with:
           command: check advisories
           arguments: --all-features --workspace
+          command-arguments: -Dwarnings -Aunmatched-organization
           rust-version: ${{ env.REPO_MSRV }}
 
   cargo-deny-check-rest:
@@ -763,4 +764,5 @@ jobs:
         with:
           command: check bans licenses sources
           arguments: --all-features --workspace
+          command-arguments: -Dwarnings -Aunmatched-organization
           rust-version: ${{ env.REPO_MSRV }}
