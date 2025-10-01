@@ -679,7 +679,7 @@ impl super::Adapter {
                     max_task_workgroups_per_dimension:
                         Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
                     // Multiview not supported by WGPU yet
-                    max_mesh_multiview_count: 0,
+                    max_mesh_multiview_view_count: 0,
                     // This seems to be right, and I can't find anything to suggest it would be less than the 2048 provided here
                     max_mesh_output_layers: Direct3D12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION,
 
