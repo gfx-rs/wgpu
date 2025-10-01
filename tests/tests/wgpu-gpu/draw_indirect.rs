@@ -322,7 +322,9 @@ async fn run_test(ctx: TestingContext, test_data: TestData, expect_noop: bool) {
     let slice = readback_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
 
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     let data = slice.get_mapped_range();
     let succeeded = if expect_noop {
@@ -782,7 +784,9 @@ async fn indirect_buffer_offsets(ctx: TestingContext) {
     let slice = readback_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
 
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     let data = slice.get_mapped_range();
     let half = data.len() / 2;

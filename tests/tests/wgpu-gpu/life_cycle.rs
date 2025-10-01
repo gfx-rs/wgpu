@@ -25,7 +25,9 @@ static BUFFER_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
 
         buffer.destroy();
 
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
 
         fail(
             &ctx.device,
@@ -39,7 +41,9 @@ static BUFFER_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
 
         buffer.destroy();
 
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
 
         buffer.destroy();
 
@@ -61,7 +65,9 @@ static BUFFER_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
         }
         let buffer = ctx.device.create_buffer(&descriptor);
         buffer.destroy();
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
         let buffer = ctx.device.create_buffer(&descriptor);
         buffer.destroy();
         {
@@ -70,12 +76,16 @@ static BUFFER_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
             let buffer = ctx.device.create_buffer(&descriptor);
             buffer.destroy();
             let buffer = ctx.device.create_buffer(&descriptor);
-            ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+            ctx.async_poll(wgpu::PollType::wait_indefinitely())
+                .await
+                .unwrap();
             buffer.destroy();
         }
         let buffer = ctx.device.create_buffer(&descriptor);
         buffer.destroy();
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
     });
 
 #[gpu_test]
@@ -101,11 +111,15 @@ static TEXTURE_DESTROY: GpuTestConfiguration = GpuTestConfiguration::new()
 
         texture.destroy();
 
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
 
         texture.destroy();
 
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
 
         texture.destroy();
 

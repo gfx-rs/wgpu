@@ -685,7 +685,7 @@ impl GPUDevice {
   fn stop_capture(&self) {
     self
       .instance
-      .device_poll(self.id, wgpu_types::PollType::wait())
+      .device_poll(self.id, wgpu_types::PollType::wait_indefinitely())
       .unwrap();
     unsafe { self.instance.device_stop_graphics_debugger_capture(self.id) };
   }

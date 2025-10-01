@@ -239,7 +239,9 @@ async fn run_test(
     let slice = readback_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
 
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     let data = slice.get_mapped_range();
     let succeeded = data.iter().all(|b| *b == u8::MAX);
@@ -420,7 +422,9 @@ async fn run_test_3d(ctx: TestingContext) {
     let slice = readback_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
 
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     let data = slice.get_mapped_range();
     let succeeded = data.iter().all(|b| *b == u8::MAX);

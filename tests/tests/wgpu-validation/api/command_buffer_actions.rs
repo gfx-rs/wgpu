@@ -37,7 +37,7 @@ fn encoder_map_buffer_on_submit_defers_until_submit() {
 
     // Submit and wait; callback should fire.
     queue.submit([encoder.finish()]);
-    _ = device.poll(wgpu::PollType::Wait);
+    _ = device.poll(wgpu::PollType::wait_indefinitely());
     assert!(fired.load(SeqCst));
 }
 
@@ -115,7 +115,7 @@ fn encoder_on_submitted_work_done_defers_until_submit() {
     assert!(!fired.load(SeqCst));
 
     queue.submit([encoder.finish()]);
-    _ = device.poll(wgpu::PollType::Wait);
+    _ = device.poll(wgpu::PollType::wait_indefinitely());
     assert!(fired.load(SeqCst));
 }
 
@@ -141,7 +141,7 @@ fn encoder_both_callbacks_fire_after_submit() {
     encoder.clear_buffer(&buffer, 0, None);
 
     queue.submit([encoder.finish()]);
-    _ = device.poll(wgpu::PollType::Wait);
+    _ = device.poll(wgpu::PollType::wait_indefinitely());
 
     assert!(map_fired.load(SeqCst));
     assert!(queue_fired.load(SeqCst));
@@ -169,7 +169,7 @@ fn encoder_multiple_map_buffer_on_submit_callbacks_fire() {
     encoder.clear_buffer(&buffer1, 0, None);
 
     queue.submit([encoder.finish()]);
-    _ = device.poll(wgpu::PollType::Wait);
+    _ = device.poll(wgpu::PollType::wait_indefinitely());
 
     assert_eq!(counter.load(SeqCst), 2);
 }
@@ -227,7 +227,7 @@ fn encoder_deferred_map_runs_before_on_submitted_work_done() {
     encoder.clear_buffer(&buffer, 0, None);
 
     queue.submit([encoder.finish()]);
-    _ = device.poll(wgpu::PollType::Wait);
+    _ = device.poll(wgpu::PollType::wait_indefinitely());
 
     assert_eq!(order.counter.load(SeqCst), 2);
     assert_eq!(order.map_order.load(SeqCst), 0);
@@ -255,7 +255,7 @@ fn encoder_multiple_on_submitted_callbacks_fire() {
     encoder.clear_buffer(&buffer, 0, None);
 
     queue.submit([encoder.finish()]);
-    _ = device.poll(wgpu::PollType::Wait);
+    _ = device.poll(wgpu::PollType::wait_indefinitely());
 
     assert_eq!(counter.load(SeqCst), 2);
 }
