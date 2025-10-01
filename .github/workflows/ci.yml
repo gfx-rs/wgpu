@@ -746,6 +746,7 @@ jobs:
         with:
           command: check advisories
           arguments: --all-features --workspace
+          command-arguments: -Dwarnings -Aunmatched-organization
           rust-version: ${{ env.REPO_MSRV }}
 
   cargo-deny-check-rest:
@@ -763,4 +764,5 @@ jobs:
         with:
           command: check bans licenses sources
           arguments: --all-features --workspace
+          command-arguments: -Dwarnings -Aunmatched-organization
           rust-version: ${{ env.REPO_MSRV }}
