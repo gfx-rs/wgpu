@@ -4507,12 +4507,12 @@ pub enum PollType<T> {
         /// Submission index to wait for.
         ///
         /// If not specified, will wait for the most recent submission at the time of the poll.
-        /// (by the time the method returns, more submissions may have taken place)
+        /// By the time the method returns, more submissions may have taken place.
         submission_index: Option<T>,
 
         /// Max time to wait for the submission to complete.
         ///
-        /// It not specified, will indefinitely (or until an error is detected).
+        /// If not specified, will wait indefinitely (or until an error is detected).
         /// If waiting for the GPU device takes this long or longer, the poll will return [`PollError::Timeout`].
         timeout: Option<Duration>,
     },
@@ -4525,7 +4525,7 @@ impl<T> PollType<T> {
     /// Wait indefinitely until for the most recent submission to complete.
     ///
     /// This is a convenience function that creates a [`Self::Wait`] variant with
-    /// no timeout (== wait indefinitely) and no submission index.
+    /// no timeout and no submission index.
     #[must_use]
     pub fn wait_indefinitely() -> Self {
         Self::Wait {
