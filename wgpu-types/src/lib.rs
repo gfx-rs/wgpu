@@ -4527,7 +4527,7 @@ impl<T> PollType<T> {
     /// This is a convenience function that creates a [`Self::Wait`] variant with
     /// no timeout and no submission index.
     #[must_use]
-    pub fn wait_indefinitely() -> Self {
+    pub const fn wait_indefinitely() -> Self {
         Self::Wait {
             submission_index: None,
             timeout: None,
