@@ -674,6 +674,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     }
                 }
                 encoder.set_vertex_amplification_count(mv.count_ones() as u64, Some(&maps));
+                descriptor.set_render_target_array_length(32 - mv.leading_zeros() as u64);
             }
             if let Some(label) = desc.label {
                 encoder.set_label(label);
