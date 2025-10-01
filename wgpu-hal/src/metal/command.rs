@@ -654,7 +654,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 descriptor
                     .set_visibility_result_buffer(Some(occlusion_query_set.raw_buffer.as_ref()))
             }
-
             let raw = self.raw_cmd_buf.as_ref().unwrap();
             let encoder = raw.new_render_command_encoder(descriptor);
             if let Some(mv) = desc.multiview_mask {
@@ -674,7 +673,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     }
                 }
                 encoder.set_vertex_amplification_count(mv.count_ones() as u64, Some(&maps));
-                descriptor.set_render_target_array_length(32 - mv.leading_zeros() as u64);
             }
             if let Some(label) = desc.label {
                 encoder.set_label(label);
