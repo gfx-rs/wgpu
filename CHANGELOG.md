@@ -158,6 +158,44 @@ by if the `Feature::MULTI_DRAW_INDIRECT_COUNT` feature is available on the devic
 
 By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 
+
+#### `wgpu::PollType::Wait` has now an optional timeout
+
+We removed `wgpu::PollType::WaitForSubmissionIndex` and added fields to `wgpu::PollType::Wait` in order to express timeouts.
+
+Before/after for `wgpu::PollType::Wait`:
+
+```diff
+-device.poll(wgpu::PollType::Wait).unwrap();
+-device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
++device.poll(wgpu::PollType::Wait {
++      submission_index: None, // Wait for most recent submission
++      timeout: Some(std::time::Duration::from_secs(60)), // Previous behavior, but more likely you want `None` instead.
++  })
++  .unwrap();
+```
+
+Before/after for `wgpu::PollType::WaitForSubmissionIndex`:
+
+```diff
+-device.poll(wgpu::PollType::WaitForSubmissionIndex(index_to_wait_on))
++device.poll(wgpu::PollType::Wait {
++      submission_index: Some(index_to_wait_on),
++      timeout: Some(std::time::Duration::from_secs(60)), // Previous behavior, but more likely you want `None` instead.
++  })
++  .unwrap();
+```
+
+⚠️ Previously, both `wgpu::PollType::WaitForSubmissionIndex` and `wgpu::PollType::Wait` had a hard-coded timeout of 60 seconds.
+
+
+To wait indefinitely on the latest submission, you can also use the `wait_indefinitely` convenience function:
+```rust
+device.poll(wgpu::PollType::wait_indefinitely());
+```
+
+By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282) & [#????](https://github.com/gfx-rs/wgpu/pull/????)
+
 ### New Features
 
 #### General
@@ -165,7 +203,7 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 - Added mesh shader support to `wgpu`, with examples. Requires passthrough. By @SupaMaggie70Incorporated in [#7345](https://github.com/gfx-rs/wgpu/pull/7345).
 
 - Added support for external textures based on WebGPU's [`GPUExternalTexture`](https://www.w3.org/TR/webgpu/#gpuexternaltexture). These allow shaders to transparently operate on potentially multiplanar source texture data in either RGB or YCbCr formats via WGSL's `texture_external` type. This is gated behind the `Features::EXTERNAL_TEXTURE` feature, which is currently only supported on DX12. By @jamienicol in [#4386](https://github.com/gfx-rs/wgpu/issues/4386).
-- `wgpu::Device::poll` can now specify a timeout via `wgpu::PollType::WaitWithTimeout`/`wgpu::PollType::WaitForSubmissionIndexWithTimeout`. By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282)
+- `wgpu::Device::poll` can now specify a timeout via `wgpu::PollType::Wait`. By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282) & [#????](https://github.com/gfx-rs/wgpu/pull/????)
 
 #### naga
 
@@ -195,7 +233,6 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 - Require new `F16_IN_F32` downlevel flag for `quantizeToF16`, `pack2x16float`, and `unpack2x16float` in WGSL input. By @aleiserson in [#8130](https://github.com/gfx-rs/wgpu/pull/8130).
 - The error message for non-copyable depth/stencil formats no longer mentions the aspect when it is not relevant. By @reima in [#8156](https://github.com/gfx-rs/wgpu/pull/8156).
 - Track the initialization status of buffer memory correctly when `copy_texture_to_buffer` skips over padding space between rows or layers, or when the start/end of a texture-buffer transfer is not 4B aligned. By @andyleiserson in [#8099](https://github.com/gfx-rs/wgpu/pull/8099).
-- `wgpu::PollType::Wait`/`wgpu::PollType::WaitForSubmissionIndex` will no longer timeout after 60 seconds, but instead wait indefinitely or (depending on backend implementation) until an error is encountered. Use `wgpu::PollType::WaitWithTimeout`/`wgpu::PollType::WaitForSubmissionIndexWithTimeout` if you need a timeout. By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282)
 
 #### naga
 
