@@ -50,7 +50,7 @@ async fn run_test(ctx: TestingContext) {
 
             @fragment
             fn fs_main(@builtin(view_index) view_index: u32) -> @location(0) vec4f {
-                return vec4f(f32(view_index) * 0.5);
+                return vec4f(f32(view_index) * 0.25 + 0.125);
             }
         ";
 
@@ -179,9 +179,10 @@ async fn run_test(ctx: TestingContext) {
     let data = slice.get_mapped_range();
     let each_texture_size = (TEXTURE_SIZE * TEXTURE_SIZE) as usize;
     assert!(data.len() == each_texture_size * 2);
+    eprintln!("View values: {}, {}", data[0], data[each_texture_size]);
     for view_idx in 0..2 {
         // Some metal devices automatically initialize stuff to 255, so I decided to use 128 instead of that
-        let target_value = view_idx as u8 * 128;
+        let target_value = 32 + view_idx as u8 * 64;
         let failed_value = data[each_texture_size * view_idx..each_texture_size * (view_idx + 1)]
             .iter()
             .copied()
