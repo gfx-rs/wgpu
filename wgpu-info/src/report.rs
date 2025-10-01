@@ -7,8 +7,7 @@ use wgpu::{
     TextureFormatFeatures,
 };
 
-use futures_lite::future;
-
+use pollster;
 use crate::texture;
 
 /// Report specifying the capabilities of the GPUs on the system.
@@ -28,7 +27,7 @@ impl GpuReport {
             desc.with_env()
         });
 
-        let adapters = future::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
+        let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
 
         let mut devices = Vec::with_capacity(adapters.len());
         for adapter in adapters {
