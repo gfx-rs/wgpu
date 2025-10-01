@@ -106,7 +106,7 @@ bytemuck = { version = "1.22", features = [
     "extern_crate_alloc",
     "min_const_generics",
 ] }
-cargo_metadata = "0.22"
+cargo_metadata = "0.23"
 cfg_aliases = "0.2.1"
 cfg-if = "1"
 criterion = "0.7"
