@@ -1685,6 +1685,8 @@ impl Global {
                     None
                 };
 
+            arc_desc.multiview_mask = desc.multiview_mask;
+
             Ok(())
         }
 

@@ -186,6 +186,6 @@ async fn run_test(ctx: TestingContext) {
             .iter()
             .copied()
             .find(|b| *b != target_value);
-        assert_eq!(failed_value, None);
+        assert_eq!(failed_value, None, "Expected {target_value}");
     }
 }
