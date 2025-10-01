@@ -44,7 +44,6 @@ use petgraph::graphmap::GraphMap;
 use super::atomic_upgrade::Upgrades;
 use crate::{
     arena::{Arena, Handle, UniqueArena},
-    path_like::PathLikeOwned,
     proc::{Alignment, Layouter},
     FastHashMap, FastHashSet, FastIndexMap,
 };
@@ -384,7 +383,7 @@ pub struct Options {
     pub adjust_coordinate_space: bool,
     /// Only allow shaders with the known set of capabilities.
     pub strict_capabilities: bool,
-    pub block_ctx_dump_prefix: Option<PathLikeOwned>,
+    pub block_ctx_dump_prefix: Option<String>,
 }
 
 impl Default for Options {

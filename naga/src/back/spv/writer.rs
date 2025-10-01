@@ -14,7 +14,6 @@ use super::{
 use crate::{
     arena::{Handle, HandleVec, UniqueArena},
     back::spv::{BindingInfo, WrappedFunction},
-    path_like::PathLike,
     proc::{Alignment, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
 };
@@ -2519,10 +2518,8 @@ impl Writer {
         if self.flags.contains(WriterFlags::DEBUG) {
             if let Some(debug_info) = debug_info.as_ref() {
                 let source_file_id = self.id_gen.next();
-                self.debugs.push(Instruction::string(
-                    &debug_info.file_name.to_string_lossy(),
-                    source_file_id,
-                ));
+                self.debugs
+                    .push(Instruction::string(debug_info.file_name, source_file_id));
 
                 debug_info_inner = Some(DebugInfoInner {
                     source_code: debug_info.source_code,
