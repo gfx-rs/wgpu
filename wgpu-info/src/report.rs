@@ -7,7 +7,6 @@ use wgpu::{
     TextureFormatFeatures,
 };
 
-use pollster;
 use crate::texture;
 
 /// Report specifying the capabilities of the GPUs on the system.
