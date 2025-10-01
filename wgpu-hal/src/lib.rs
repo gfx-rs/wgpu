@@ -981,6 +981,9 @@ pub trait Device: WasmNotSendSync {
     /// Calling `wait` with a lower [`FenceValue`] than `fence`'s current value
     /// returns immediately.
     ///
+    /// If `timeout` is provided, the function will block indefinitely or until
+    /// an error is encountered.
+    ///
     /// Returns `Ok(true)` on success and `Ok(false)` on timeout.
     ///
     /// [`Fence`]: Api::Fence
