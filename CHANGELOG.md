@@ -194,7 +194,7 @@ To wait indefinitely on the latest submission, you can also use the `wait_indefi
 device.poll(wgpu::PollType::wait_indefinitely());
 ```
 
-By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282) & [#8285](https://github.com/gfx-rs/wgpu/pull/8285)
+By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282), [#8285](https://github.com/gfx-rs/wgpu/pull/8285)
 
 ### New Features
 
