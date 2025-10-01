@@ -1865,6 +1865,7 @@ impl Global {
                 depth_stencil_attachment: pass.depth_stencil_attachment.take(),
                 timestamp_writes: pass.timestamp_writes.take(),
                 occlusion_query_set: pass.occlusion_query_set.take(),
+                multiview_mask: pass.multiview_mask,
             })
         })
     }

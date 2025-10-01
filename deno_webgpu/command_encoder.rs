@@ -143,7 +143,7 @@ impl GPUCommandEncoder {
       occlusion_query_set: descriptor
         .occlusion_query_set
         .map(|query_set| query_set.id),
-      multiview_mask: NonZer::new(descriptor.multiview_mask),
+      multiview_mask: NonZero::new(descriptor.multiview_mask),
     };
 
     let (render_pass, err) = self

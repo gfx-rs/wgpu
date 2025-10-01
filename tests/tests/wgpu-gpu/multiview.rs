@@ -179,7 +179,6 @@ async fn run_test(ctx: TestingContext) {
     let data = slice.get_mapped_range();
     for view_idx in 0..2 {
         let each_texture_size = (TEXTURE_SIZE * TEXTURE_SIZE) as usize;
-        panic!("{}, {}", data[0], data[each_texture_size]);
         let target_value = view_idx as u8 * u8::MAX;
         let succeeded = data[each_texture_size * view_idx..each_texture_size * (view_idx + 1)]
             .iter()

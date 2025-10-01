@@ -1329,6 +1329,7 @@ impl Global {
                             depth_stencil_attachment,
                             timestamp_writes,
                             occlusion_query_set,
+                            multiview_mask,
                         } => {
                             encode_render_pass(
                                 &mut state,
@@ -1337,6 +1338,7 @@ impl Global {
                                 depth_stencil_attachment,
                                 timestamp_writes,
                                 occlusion_query_set,
+                                multiview_mask,
                             )?;
                         }
                         ArcCommand::RunComputePass {

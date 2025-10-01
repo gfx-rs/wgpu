@@ -130,6 +130,7 @@ pub enum ArcCommand {
         depth_stencil_attachment: Option<super::ArcRenderPassDepthStencilAttachment>,
         timestamp_writes: Option<super::ArcPassTimestampWrites>,
         occlusion_query_set: Option<Arc<QuerySet>>,
+        multiview_mask: Option<NonZero<u32>>,
     },
     BuildAccelerationStructures {
         blas: Vec<crate::ray_tracing::ArcBlasBuildEntry>,
