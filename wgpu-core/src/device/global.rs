@@ -2121,7 +2121,7 @@ impl Global {
 
             for (_id, device) in device_guard.iter() {
                 let poll_type = if force_wait {
-                    // TODO: Should expose timeout to poll_all.
+                    // TODO(#8286): Should expose timeout to poll_all.
                     wgt::PollType::wait_indefinitely()
                 } else {
                     wgt::PollType::Poll
