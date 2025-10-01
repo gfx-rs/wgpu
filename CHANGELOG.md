@@ -40,6 +40,8 @@ Bottom level categories:
 
 ## Unreleased
 
+## v27.0.0 (2025-10-01)
+
 ### Major Changes
 
 #### Deferred command buffer actions: `map_buffer_on_submit` and `on_submitted_work_done`
@@ -132,6 +134,7 @@ makes it significantly easier to store these types in structs, which is useful f
 ```
 
 By @sagudev in [#8046](https://github.com/gfx-rs/wgpu/pull/8046) and @cwfitzgerald in [#8070](https://github.com/gfx-rs/wgpu/pull/8161).
+
 #### `EXPERIMENTAL_*` features now require unsafe code to enable
 
 We want to be able to expose potentially experimental features to our users before we have ensured that they are fully sound to use.
@@ -201,7 +204,6 @@ By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282), [#8285](https://
 #### General
 
 - Added mesh shader support to `wgpu`, with examples. Requires passthrough. By @SupaMaggie70Incorporated in [#7345](https://github.com/gfx-rs/wgpu/pull/7345).
-
 - Added support for external textures based on WebGPU's [`GPUExternalTexture`](https://www.w3.org/TR/webgpu/#gpuexternaltexture). These allow shaders to transparently operate on potentially multiplanar source texture data in either RGB or YCbCr formats via WGSL's `texture_external` type. This is gated behind the `Features::EXTERNAL_TEXTURE` feature, which is currently only supported on DX12. By @jamienicol in [#4386](https://github.com/gfx-rs/wgpu/issues/4386).
 - `wgpu::Device::poll` can now specify a timeout via `wgpu::PollType::Wait`. By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282) & [#8285](https://github.com/gfx-rs/wgpu/pull/8285)
 
