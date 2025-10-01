@@ -1,4 +1,4 @@
-use std::num::NonZeroU64;
+use std::{num::NonZeroU64, time::Duration};
 
 use wgpu::{
     BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
@@ -13,8 +13,10 @@ use wgpu_test::{
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
         WAIT,
+        WAIT_WITH_TIMEOUT,
         DOUBLE_WAIT,
         WAIT_ON_SUBMISSION,
+        WAIT_ON_SUBMISSION_WITH_TIMEOUT,
         DOUBLE_WAIT_ON_SUBMISSION,
         WAIT_OUT_OF_ORDER,
         WAIT_AFTER_BAD_SUBMISSION,
@@ -76,6 +78,18 @@ static WAIT: GpuTestConfiguration = GpuTestConfiguration::new()
     });
 
 #[gpu_test]
+static WAIT_WITH_TIMEOUT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_async(|ctx| async move {
+        let cmd_buf = generate_dummy_work(&ctx);
+
+        ctx.queue.submit(Some(cmd_buf));
+        ctx.async_poll(PollType::WaitWithTimeout(Duration::from_secs(1)))
+            .await
+            .unwrap();
+    });
+
+#[gpu_test]
 static DOUBLE_WAIT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
@@ -94,6 +108,21 @@ static WAIT_ON_SUBMISSION: GpuTestConfiguration = GpuTestConfiguration::new()
 
         let index = ctx.queue.submit(Some(cmd_buf));
         ctx.async_poll(PollType::wait_for(index)).await.unwrap();
+    });
+
+#[gpu_test]
+static WAIT_ON_SUBMISSION_WITH_TIMEOUT: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_async(|ctx| async move {
+        let cmd_buf = generate_dummy_work(&ctx);
+
+        let index = ctx.queue.submit(Some(cmd_buf));
+        ctx.async_poll(PollType::WaitForSubmissionIndexWithTimeout {
+            submission_index: index,
+            timeout: Duration::from_secs(1),
+        })
+        .await
+        .unwrap();
     });
 
 #[gpu_test]

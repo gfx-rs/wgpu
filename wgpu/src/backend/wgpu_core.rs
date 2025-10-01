@@ -397,8 +397,8 @@ fn map_buffer_copy_view(
 
 fn map_texture_copy_view(
     view: crate::TexelCopyTextureInfo<'_>,
-) -> wgc::command::TexelCopyTextureInfo {
-    wgc::command::TexelCopyTextureInfo {
+) -> wgt::TexelCopyTextureInfo<wgc::id::TextureId> {
+    wgt::TexelCopyTextureInfo {
         texture: view.texture.inner.as_core().id,
         mip_level: view.mip_level,
         origin: view.origin,

@@ -198,11 +198,7 @@ impl core::fmt::Display for ParseErrors {
     }
 }
 
-impl core::error::Error for ParseErrors {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-        None
-    }
-}
+impl core::error::Error for ParseErrors {}
 
 impl From<Vec<Error>> for ParseErrors {
     fn from(errors: Vec<Error>) -> Self {

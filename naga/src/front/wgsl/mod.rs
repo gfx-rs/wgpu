@@ -11,7 +11,9 @@ mod parse;
 #[cfg(test)]
 mod tests;
 
-pub use parse::directive::enable_extension::{EnableExtension, ImplementedEnableExtension};
+pub use parse::directive::enable_extension::{
+    EnableExtension, ImplementedEnableExtension, UnimplementedEnableExtension,
+};
 
 pub use crate::front::wgsl::error::ParseError;
 pub use crate::front::wgsl::parse::directive::language_extension::{

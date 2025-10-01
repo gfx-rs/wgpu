@@ -1154,7 +1154,15 @@ impl crate::Device for super::Device {
                                 .try_into()
                                 .unwrap()
                         },
-                        indexed_by_vertex: (vbl.step_mode == wgt::VertexStepMode::Vertex {}),
+                        step_mode: match (vbl.array_stride == 0, vbl.step_mode) {
+                            (true, _) => naga::back::msl::VertexBufferStepMode::Constant,
+                            (false, wgt::VertexStepMode::Vertex) => {
+                                naga::back::msl::VertexBufferStepMode::ByVertex
+                            }
+                            (false, wgt::VertexStepMode::Instance) => {
+                                naga::back::msl::VertexBufferStepMode::ByInstance
+                            }
+                        },
                         attributes,
                     });
                 }
@@ -1572,7 +1580,7 @@ impl crate::Device for super::Device {
         &self,
         fence: &super::Fence,
         wait_value: crate::FenceValue,
-        timeout_ms: u32,
+        timeout: Option<core::time::Duration>,
     ) -> DeviceResult<bool> {
         if wait_value <= fence.completed_value.load(atomic::Ordering::Acquire) {
             return Ok(true);
@@ -1595,8 +1603,10 @@ impl crate::Device for super::Device {
             if let MTLCommandBufferStatus::Completed = cmd_buf.status() {
                 return Ok(true);
             }
-            if start.elapsed().as_millis() >= timeout_ms as u128 {
-                return Ok(false);
+            if let Some(timeout) = timeout {
+                if start.elapsed() >= timeout {
+                    return Ok(false);
+                }
             }
             thread::sleep(core::time::Duration::from_millis(1));
         }

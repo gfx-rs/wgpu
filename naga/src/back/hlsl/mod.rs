@@ -283,7 +283,7 @@ impl crate::ShaderStage {
             Self::Vertex => "vs",
             Self::Fragment => "ps",
             Self::Compute => "cs",
-            Self::Task => "ts",
+            Self::Task => "as",
             Self::Mesh => "ms",
         }
     }

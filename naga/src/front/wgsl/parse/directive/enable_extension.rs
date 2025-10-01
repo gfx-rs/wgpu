@@ -71,6 +71,7 @@ impl EnableExtension {
     const CLIP_DISTANCES: &'static str = "clip_distances";
     const DUAL_SOURCE_BLENDING: &'static str = "dual_source_blending";
     const SUBGROUPS: &'static str = "subgroups";
+    const PRIMITIVE_INDEX: &'static str = "primitive_index";
 
     /// Convert from a sentinel word in WGSL into its associated [`EnableExtension`], if possible.
     pub(crate) fn from_ident(word: &str, span: Span) -> Result<'_, Self> {
@@ -81,6 +82,9 @@ impl EnableExtension {
                 Self::Implemented(ImplementedEnableExtension::DualSourceBlending)
             }
             Self::SUBGROUPS => Self::Unimplemented(UnimplementedEnableExtension::Subgroups),
+            Self::PRIMITIVE_INDEX => {
+                Self::Unimplemented(UnimplementedEnableExtension::PrimitiveIndex)
+            }
             _ => return Err(Box::new(Error::UnknownEnableExtension(span, word))),
         })
     }
@@ -95,6 +99,7 @@ impl EnableExtension {
             },
             Self::Unimplemented(kind) => match kind {
                 UnimplementedEnableExtension::Subgroups => Self::SUBGROUPS,
+                UnimplementedEnableExtension::PrimitiveIndex => Self::PRIMITIVE_INDEX,
             },
         }
     }
@@ -132,12 +137,19 @@ pub enum UnimplementedEnableExtension {
     ///
     /// [`enable subgroups;`]: https://www.w3.org/TR/WGSL/#extension-subgroups
     Subgroups,
+    /// Enables the `@builtin(primitive_index)` attribute in WGSL.
+    ///
+    /// In the WGSL standard, this corresponds to [`enable primitive-index;`].
+    ///
+    /// [`enable primitive-index;`]: https://www.w3.org/TR/WGSL/#extension-primitive_index
+    PrimitiveIndex,
 }
 
 impl UnimplementedEnableExtension {
     pub(crate) const fn tracking_issue_num(self) -> u16 {
         match self {
             Self::Subgroups => 5555,
+            Self::PrimitiveIndex => 8236,
         }
     }
 }

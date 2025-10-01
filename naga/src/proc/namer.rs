@@ -118,20 +118,37 @@ impl Namer {
         {
             Cow::Borrowed(string)
         } else {
-            let mut filtered = string
-                .chars()
-                .filter(|&c| c.is_ascii_alphanumeric() || c == '_')
-                .fold(String::new(), |mut s, c| {
-                    if s.ends_with('_') && c == '_' {
-                        return s;
-                    }
+            let mut filtered = string.chars().fold(String::new(), |mut s, c| {
+                let c = match c {
+                    // Make several common characters in C++-ish types become snake case
+                    // separators.
+                    ':' | '<' | '>' | ',' => '_',
+                    c => c,
+                };
+                let had_underscore_at_end = s.ends_with('_');
+                if had_underscore_at_end && c == '_' {
+                    return s;
+                }
+                if c.is_ascii_alphanumeric() || c == '_' {
                     s.push(c);
-                    s
-                });
+                } else {
+                    use core::fmt::Write as _;
+                    if !s.is_empty() && !had_underscore_at_end {
+                        s.push('_');
+                    }
+                    write!(s, "u{:04x}_", c as u32).unwrap();
+                }
+                s
+            });
             let stripped_len = filtered.trim_end_matches(SEPARATOR).len();
             filtered.truncate(stripped_len);
             if filtered.is_empty() {
                 filtered.push_str("unnamed");
+            } else if filtered.starts_with(|c: char| c.is_ascii_digit()) {
+                unreachable!(
+                    "internal error: invalid identifier starting with ASCII digit {:?}",
+                    filtered.chars().nth(0)
+                )
             }
             Cow::Owned(filtered)
         };

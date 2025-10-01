@@ -49,7 +49,6 @@ use wgt::InternalCounter;
 
 use semaphore_list::SemaphoreList;
 
-const MILLIS_TO_NANOS: u64 = 1_000_000;
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
 
 #[derive(Clone, Debug)]
@@ -462,6 +461,10 @@ pub struct Surface {
 }
 
 impl Surface {
+    pub unsafe fn raw_handle(&self) -> vk::SurfaceKHR {
+        self.raw
+    }
+
     /// Get the raw Vulkan swapchain associated with this surface.
     ///
     /// Returns [`None`] if the surface is not configured.
@@ -958,6 +961,13 @@ impl Texture {
     /// - The image handle must not be manually destroyed
     pub unsafe fn raw_handle(&self) -> vk::Image {
         self.raw
+    }
+
+    /// # Safety
+    ///
+    /// - The external memory must not be manually freed
+    pub unsafe fn external_memory(&self) -> Option<vk::DeviceMemory> {
+        self.external_memory
     }
 }
 

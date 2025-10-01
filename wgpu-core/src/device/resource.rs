@@ -29,7 +29,6 @@ use crate::{
     device::{
         bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
         DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures, RenderPassContext,
-        CLEANUP_WAIT_MS,
     },
     hal_label,
     init_tracker::{
@@ -712,7 +711,10 @@ impl Device {
 
         // If a wait was requested, determine which submission index to wait for.
         let wait_submission_index = match poll_type {
-            wgt::PollType::WaitForSubmissionIndex(submission_index) => {
+            wgt::PollType::WaitForSubmissionIndex(submission_index)
+            | wgt::PollType::WaitForSubmissionIndexWithTimeout {
+                submission_index, ..
+            } => {
                 let last_successful_submission_index = self
                     .last_successful_submission_index
                     .load(Ordering::Acquire);
@@ -728,7 +730,7 @@ impl Device {
 
                 Some(submission_index)
             }
-            wgt::PollType::Wait => Some(
+            wgt::PollType::Wait | wgt::PollType::WaitWithTimeout { .. } => Some(
                 self.last_successful_submission_index
                     .load(Ordering::Acquire),
             ),
@@ -741,7 +743,7 @@ impl Device {
 
             let wait_result = unsafe {
                 self.raw()
-                    .wait(fence.as_ref(), target_submission_index, CLEANUP_WAIT_MS)
+                    .wait(fence.as_ref(), target_submission_index, poll_type.timeout())
             };
 
             // This error match is only about `DeviceErrors`. At this stage we do not care if
@@ -4499,7 +4501,7 @@ impl Device {
         let last_done_index = unsafe { self.raw().get_fence_value(fence.as_ref()) }
             .map_err(|e| self.handle_hal_error(e))?;
         if last_done_index < submission_index {
-            unsafe { self.raw().wait(fence.as_ref(), submission_index, !0) }
+            unsafe { self.raw().wait(fence.as_ref(), submission_index, None) }
                 .map_err(|e| self.handle_hal_error(e))?;
             drop(fence);
             if let Some(queue) = self.get_queue() {

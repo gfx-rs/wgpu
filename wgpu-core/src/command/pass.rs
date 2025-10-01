@@ -4,8 +4,8 @@ use crate::binding_model::{BindError, BindGroup, PushConstantUploadError};
 use crate::command::bind::Binder;
 use crate::command::encoder::EncodingState;
 use crate::command::memory_init::SurfacesInDiscardState;
-use crate::command::{CommandEncoder, DebugGroupError, QueryResetMap, QueryUseError};
-use crate::device::{DeviceError, MissingFeatures};
+use crate::command::{DebugGroupError, QueryResetMap, QueryUseError};
+use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::pipeline::LateSizedBufferGroup;
 use crate::ray_tracing::AsAction;
 use crate::resource::{DestroyedResourceError, Labeled, ParentDevice, QuerySet};
@@ -41,8 +41,8 @@ impl WebGpuError for InvalidValuesOffset {
     }
 }
 
-pub(crate) struct PassState<'scope, 'snatch_guard, 'cmd_enc, 'raw_encoder> {
-    pub(crate) base: EncodingState<'snatch_guard, 'cmd_enc, 'raw_encoder>,
+pub(crate) struct PassState<'scope, 'snatch_guard, 'cmd_enc> {
+    pub(crate) base: EncodingState<'snatch_guard, 'cmd_enc>,
 
     /// Immediate texture inits required because of prior discards. Need to
     /// be inserted before texture reads.
@@ -61,7 +61,7 @@ pub(crate) struct PassState<'scope, 'snatch_guard, 'cmd_enc, 'raw_encoder> {
 
 pub(crate) fn set_bind_group<E>(
     state: &mut PassState,
-    cmd_enc: &CommandEncoder,
+    device: &Arc<Device>,
     dynamic_offsets: &[DynamicOffset],
     index: u32,
     num_dynamic_offsets: usize,
@@ -108,7 +108,7 @@ where
     let bind_group = bind_group.unwrap();
     let bind_group = state.base.tracker.bind_groups.insert_single(bind_group);
 
-    bind_group.same_device_as(cmd_enc)?;
+    bind_group.same_device(device)?;
 
     bind_group.validate_dynamic_bindings(index, &state.temp_offsets)?;
 
@@ -271,7 +271,7 @@ where
 
 pub(crate) fn write_timestamp<E>(
     state: &mut PassState,
-    cmd_enc: &CommandEncoder,
+    device: &Arc<Device>,
     pending_query_resets: Option<&mut QueryResetMap>,
     query_set: Arc<QuerySet>,
     query_index: u32,
@@ -284,7 +284,7 @@ where
         query_set.error_ident()
     );
 
-    query_set.same_device_as(cmd_enc)?;
+    query_set.same_device(device)?;
 
     state
         .base

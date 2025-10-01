@@ -75,6 +75,6 @@ fn function() {
 }
 
 @compute @workgroup_size(32, 1, 1) 
-fn stagetest_atomic_exchange() {
+fn stage_test_atomic_exchange() {
     function();
 }

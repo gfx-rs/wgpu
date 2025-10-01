@@ -86,7 +86,7 @@ mod types;
 mod view;
 
 use alloc::{borrow::ToOwned as _, string::String, sync::Arc, vec::Vec};
-use core::{ffi, fmt, mem, num::NonZeroU32, ops::Deref};
+use core::{ffi, fmt, mem, ops::Deref};
 
 use arrayvec::ArrayVec;
 use hashbrown::HashMap;
@@ -653,13 +653,13 @@ impl Drop for Event {
 /// Helper structure for waiting for GPU.
 struct Idler {
     fence: Direct3D12::ID3D12Fence,
-    event: Event,
 }
 
 #[derive(Debug, Clone)]
 struct CommandSignatures {
     draw: Direct3D12::ID3D12CommandSignature,
     draw_indexed: Direct3D12::ID3D12CommandSignature,
+    draw_mesh: Direct3D12::ID3D12CommandSignature,
     dispatch: Direct3D12::ID3D12CommandSignature,
 }
 
@@ -1168,7 +1168,7 @@ pub struct RenderPipeline {
     raw: Direct3D12::ID3D12PipelineState,
     layout: PipelineLayoutShared,
     topology: Direct3D::D3D_PRIMITIVE_TOPOLOGY,
-    vertex_strides: [Option<NonZeroU32>; crate::MAX_VERTEX_BUFFERS],
+    vertex_strides: [Option<u32>; crate::MAX_VERTEX_BUFFERS],
 }
 
 impl crate::DynRenderPipeline for RenderPipeline {}
@@ -1599,4 +1599,117 @@ pub enum ShaderModuleSource {
     Naga(crate::NagaShader),
     DxilPassthrough(DxilPassthroughShader),
     HlslPassthrough(HlslPassthroughShader),
+}
+
+#[repr(C)]
+#[derive(Debug)]
+struct MeshShaderPipelineStateStream {
+    root_signature: *mut Direct3D12::ID3D12RootSignature,
+    task_shader: Direct3D12::D3D12_SHADER_BYTECODE,
+    mesh_shader: Direct3D12::D3D12_SHADER_BYTECODE,
+    pixel_shader: Direct3D12::D3D12_SHADER_BYTECODE,
+    blend_state: Direct3D12::D3D12_BLEND_DESC,
+    sample_mask: u32,
+    rasterizer_state: Direct3D12::D3D12_RASTERIZER_DESC,
+    depth_stencil_state: Direct3D12::D3D12_DEPTH_STENCIL_DESC,
+    primitive_topology_type: Direct3D12::D3D12_PRIMITIVE_TOPOLOGY_TYPE,
+    rtv_formats: Direct3D12::D3D12_RT_FORMAT_ARRAY,
+    dsv_format: Dxgi::Common::DXGI_FORMAT,
+    sample_desc: Dxgi::Common::DXGI_SAMPLE_DESC,
+    node_mask: u32,
+    cached_pso: Direct3D12::D3D12_CACHED_PIPELINE_STATE,
+    flags: Direct3D12::D3D12_PIPELINE_STATE_FLAGS,
+}
+impl MeshShaderPipelineStateStream {
+    /// # Safety
+    ///
+    /// Returned bytes contain pointers into this struct, for them to be valid,
+    /// this struct may be at the same location. As if `as_bytes<'a>(&'a self) -> Vec<u8> + 'a`
+    pub unsafe fn to_bytes(&self) -> Vec<u8> {
+        use Direct3D12::*;
+        let mut bytes = Vec::new();
+
+        macro_rules! push_subobject {
+            ($subobject_type:expr, $data:expr) => {{
+                // Ensure 8-byte alignment for the subobject start
+                let alignment = 8;
+                let aligned_length = bytes.len().next_multiple_of(alignment);
+                bytes.resize(aligned_length, 0);
+
+                // Append the type tag (u32)
+                let tag: u32 = $subobject_type.0 as u32;
+                bytes.extend_from_slice(&tag.to_ne_bytes());
+
+                // Align the data
+                let obj_align = align_of_val(&$data);
+                let data_start = bytes.len().next_multiple_of(obj_align);
+                bytes.resize(data_start, 0);
+
+                // Append the data itself
+                #[allow(clippy::ptr_as_ptr, trivial_casts)]
+                let data_ptr = &$data as *const _ as *const u8;
+                let data_size = size_of_val(&$data);
+                let slice = unsafe { core::slice::from_raw_parts(data_ptr, data_size) };
+                bytes.extend_from_slice(slice);
+            }};
+        }
+        push_subobject!(
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE,
+            self.root_signature
+        );
+        if !self.task_shader.pShaderBytecode.is_null() {
+            push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS, self.task_shader);
+        }
+        push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS, self.mesh_shader);
+        if !self.pixel_shader.pShaderBytecode.is_null() {
+            push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS, self.pixel_shader);
+        }
+        push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND, self.blend_state);
+        push_subobject!(
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK,
+            self.sample_mask
+        );
+        push_subobject!(
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER,
+            self.rasterizer_state
+        );
+        push_subobject!(
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL,
+            self.depth_stencil_state
+        );
+        push_subobject!(
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY,
+            self.primitive_topology_type
+        );
+        if self.rtv_formats.NumRenderTargets != 0 {
+            push_subobject!(
+                D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS,
+                self.rtv_formats
+            );
+        }
+        if self.dsv_format != Dxgi::Common::DXGI_FORMAT_UNKNOWN {
+            push_subobject!(
+                D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT,
+                self.dsv_format
+            );
+        }
+        push_subobject!(
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC,
+            self.sample_desc
+        );
+        if self.node_mask != 0 {
+            push_subobject!(
+                D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK,
+                self.node_mask
+            );
+        }
+        if !self.cached_pso.pCachedBlob.is_null() {
+            push_subobject!(
+                D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CACHED_PSO,
+                self.cached_pso
+            );
+        }
+        push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS, self.flags);
+        bytes
+    }
 }
