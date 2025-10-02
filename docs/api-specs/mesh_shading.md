@@ -138,9 +138,9 @@ A function with the `@task` attribute is a **task shader entry point**. A mesh s
 
 A task shader entry point must have a `@workgroup_size` attribute, meeting the same requirements as one appearing on a compute shader entry point.
 
-A task shader entry point must return a `vec3<u32>` value. The return value of each workgroup's first invocation (that is, the one whose `local_invocation_index` is `0`) is taken as the size of a **mesh shader grid** to dispatch, measured in workgroups. (If the task shader entry point returns `vec3(0, 0, 0)`, then no mesh shaders are dispatched.) Mesh shader grids are described in the next section.
+A task shader entry point must also have a `@payload(G)` property, where `G` is the name of a global variable in the `task_payload` address space. Each task shader workgroup has its own instance of this variable, visible to all invocations in the workgroup. Whatever value the workgroup collectively stores in that global variable becomes the **task payload**, and is provided to all invocations in the mesh shader grid dispatched for the workgroup.
 
-If a task shader entry point has a `@payload(G)` property, then `G` must be the name of a global variable in the `task_payload` address space. Each task shader workgroup has its own instance of this variable, visible to all invocations in the workgroup. Whatever value the workgroup collectively stores in that global variable becomes the **task payload**, and is provided to all invocations in the mesh shader grid dispatched for the workgroup.
+A task shader entry point must return a `vec3<u32>` value. The return value of each workgroup's first invocation (that is, the one whose `local_invocation_index` is `0`) is taken as the size of a **mesh shader grid** to dispatch, measured in workgroups. (If the task shader entry point returns `vec3(0, 0, 0)`, then no mesh shaders are dispatched.) Mesh shader grids are described in the next section.
 
 Each task shader workgroup dispatches an independent mesh shader grid: in mesh shader invocations, `@builtin` values like `workgroup_id` and `global_invocation_id` describe the position of the workgroup and invocation within that grid;
 and `@builtin(num_workgroups)` matches the task shader workgroup's return value. Mesh shaders dispatched for other task shader workgroups are not included in the count. If it is necessary for a mesh shader to know which task shader workgroup dispatched it, the task shader can include its own workgroup id in the task payload.
@@ -151,9 +151,9 @@ A function with the `@mesh` attribute is a **mesh shader entry point**. Mesh sha
 
 Like compute shaders, mesh shaders are invoked in a grid of workgroups, called a **mesh shader grid**. If the mesh shader pipeline has a task shader, then each task shader workgroup determines the size of a mesh shader grid to be dispatched, as described above. Otherwise, the three-component size passed to `draw_mesh_tasks`, or drawn from the indirect buffer for its indirect variants, specifies the size of the mesh shader grid directly, as the number of workgroups along each of the grid's three axes.
 
-If the mesh shader pipeline has a task shader entry point with a `@payload(G)` attribute, then the pipeline's mesh shader entry point must also have a `@payload(G)` attribute, naming the same variable. Mesh shader invocations can read, but not write, this variable, which is initialized to whatever value was written to it by the task shader workgroup that dispatched this mesh shader grid.
+If the mesh shader pipeline has a task shader entry point, then the pipeline's mesh shader entry point must also have a `@payload(G)` attribute, naming the same variable, and the sizes must match. Mesh shader invocations can read, but not write, this variable, which is initialized to whatever value was written to it by the task shader workgroup that dispatched this mesh shader grid.
 
-If the mesh shader pipeline does not have a task shader entry point, or the task shader entry point does not have a `@payload(G)` attribute, then the mesh shader entry point must not have any `@payload` attribute.
+If the mesh shader pipeline does not have a task shader entry point, then the mesh shader entry point must not have any `@payload` attribute.
 
 A mesh shader entry point must have the following attributes:
 
@@ -167,7 +167,7 @@ Before generating any results, each mesh shader entry point invocation must call
 
 The `numVertices` and `numPrimitives` arguments must be no greater than `NV` and `NP` from the `@vertex_output` and `@primitive_output` attributes.
 
-To produce vertex data, the workgroup as a whole must make `numVertices` calls to the `setVertex(i: u32, vertex: V)` builtin function. This establishes `vertex` as the value of the `i`'th vertex. `V` is the type given in the `@vertex_output` attribute. `V` must meet the same requirements as a struct type returned by a `@vertex` entry point: all members must have either `@builtin` or `@location` attributes, there must be a '@builtin(position)`, and so on. An invocation may only call `setVertex` after its call to `setMeshOutputs`.
+To produce vertex data, the workgroup as a whole must make `numVertices` calls to the `setVertex(i: u32, vertex: V)` builtin function. This establishes `vertex` as the value of the `i`'th vertex. `V` is the type given in the `@vertex_output` attribute. `V` must meet the same requirements as a struct type returned by a `@vertex` entry point: all members must have either `@builtin` or `@location` attributes, there must be a `@builtin(position)`, and so on. An invocation may only call `setVertex` after its call to `setMeshOutputs`.
 
 To produce primitives, the workgroup as a whole must make `numPrimitives` calls to the `setPrimitive(i: u32, primitive: P)` builtin function. This establishes `primitive` as the value of the `i`'th primitive. `P` is the type given in the `@primitive_output` attribute. `P` must be a struct type, every member of which either has a `@location` or `@builtin` attribute. The following `@builtin` attributes are allowed:
 
