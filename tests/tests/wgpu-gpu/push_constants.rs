@@ -150,7 +150,9 @@ async fn partial_update_test(ctx: TestingContext) {
     encoder.copy_buffer_to_buffer(&gpu_buffer, 0, &cpu_buffer, 0, 32);
     ctx.queue.submit([encoder.finish()]);
     cpu_buffer.slice(..).map_async(wgpu::MapMode::Read, |_| ());
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     let data = cpu_buffer.slice(..).get_mapped_range();
 
@@ -368,7 +370,9 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
     let command_buffer = command_encoder.finish();
     ctx.queue.submit([command_buffer]);
     cpu_buffer.slice(..).map_async(MapMode::Read, |_| ());
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
     let mapped_data = cpu_buffer.slice(..).get_mapped_range();
     let result = bytemuck::cast_slice::<u8, i32>(&mapped_data).to_vec();
     drop(mapped_data);

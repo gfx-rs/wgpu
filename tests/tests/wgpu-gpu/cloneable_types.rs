@@ -40,7 +40,9 @@ fn cloneable_buffers(ctx: TestingContext) {
         assert_eq!(&*data, &cloned_buffer_contents);
     });
 
-    ctx.device.poll(wgpu::PollType::Wait).unwrap();
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
 
     let data = buffer.slice(..).get_mapped_range();
 

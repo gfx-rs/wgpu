@@ -16,13 +16,14 @@ extern crate alloc;
 
 use alloc::borrow::Cow;
 use alloc::{string::String, vec, vec::Vec};
-use core::cmp::Ordering;
 use core::{
+    cmp::Ordering,
     fmt,
     hash::{Hash, Hasher},
     mem,
     num::NonZeroU32,
     ops::Range,
+    time::Duration,
 };
 
 use bytemuck::{Pod, Zeroable};
@@ -4515,37 +4516,42 @@ pub enum PollType<T> {
     ///
     /// On WebGPU, this has no effect. Callbacks are invoked from the
     /// window event loop.
-    WaitForSubmissionIndex(T),
-    /// Same as `WaitForSubmissionIndex` but waits for the most recent submission.
-    Wait,
+    Wait {
+        /// Submission index to wait for.
+        ///
+        /// If not specified, will wait for the most recent submission at the time of the poll.
+        /// By the time the method returns, more submissions may have taken place.
+        submission_index: Option<T>,
+
+        /// Max time to wait for the submission to complete.
+        ///
+        /// If not specified, will wait indefinitely (or until an error is detected).
+        /// If waiting for the GPU device takes this long or longer, the poll will return [`PollError::Timeout`].
+        timeout: Option<Duration>,
+    },
+
     /// Check the device for a single time without blocking.
     Poll,
 }
 
 impl<T> PollType<T> {
-    /// Construct a [`Self::Wait`] variant
+    /// Wait indefinitely until for the most recent submission to complete.
+    ///
+    /// This is a convenience function that creates a [`Self::Wait`] variant with
+    /// no timeout and no submission index.
     #[must_use]
-    pub fn wait() -> Self {
-        // This function seems a little silly, but it is useful to allow
-        // <https://github.com/gfx-rs/wgpu/pull/5012> to be split up, as
-        // it has meaning in that PR.
-        Self::Wait
-    }
-
-    /// Construct a [`Self::WaitForSubmissionIndex`] variant
-    #[must_use]
-    pub fn wait_for(submission_index: T) -> Self {
-        // This function seems a little silly, but it is useful to allow
-        // <https://github.com/gfx-rs/wgpu/pull/5012> to be split up, as
-        // it has meaning in that PR.
-        Self::WaitForSubmissionIndex(submission_index)
+    pub const fn wait_indefinitely() -> Self {
+        Self::Wait {
+            submission_index: None,
+            timeout: None,
+        }
     }
 
     /// This `PollType` represents a wait of some kind.
     #[must_use]
     pub fn is_wait(&self) -> bool {
         match *self {
-            Self::WaitForSubmissionIndex(..) | Self::Wait => true,
+            Self::Wait { .. } => true,
             Self::Poll => false,
         }
     }
@@ -4557,8 +4563,13 @@ impl<T> PollType<T> {
         F: FnOnce(T) -> U,
     {
         match self {
-            Self::WaitForSubmissionIndex(i) => PollType::WaitForSubmissionIndex(func(i)),
-            Self::Wait => PollType::Wait,
+            Self::Wait {
+                submission_index,
+                timeout,
+            } => PollType::Wait {
+                submission_index: submission_index.map(func),
+                timeout,
+            },
             Self::Poll => PollType::Poll,
         }
     }
@@ -5378,7 +5389,7 @@ bitflags::bitflags! {
 }
 
 /// A buffer transition for use with `CommandEncoder::transition_resources`.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BufferTransition<T> {
     /// The buffer to transition.
     pub buffer: T,
@@ -5681,7 +5692,7 @@ bitflags::bitflags! {
 }
 
 /// A texture transition for use with `CommandEncoder::transition_resources`.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct TextureTransition<T> {
     /// The texture to transition.
     pub texture: T,

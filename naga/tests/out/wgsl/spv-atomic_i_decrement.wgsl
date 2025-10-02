@@ -32,6 +32,6 @@ fn function() {
 }
 
 @compute @workgroup_size(32, 1, 1) 
-fn stagetest_atomic_i_decrement() {
+fn stage_test_atomic_i_decrement() {
     function();
 }

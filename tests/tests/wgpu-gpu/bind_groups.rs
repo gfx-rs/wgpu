@@ -125,7 +125,7 @@ fn multiple_bindings_with_differing_sizes(ctx: TestingContext) {
     ctx.queue.write_buffer(&buffer, 0, &data);
     ctx.queue.submit(Some(encoder.finish()));
 
-    ctx.device.poll(PollType::Wait).unwrap();
+    ctx.device.poll(PollType::wait_indefinitely()).unwrap();
 }
 
 /// Test `descriptor` against a bind group layout that requires non-filtering sampler.

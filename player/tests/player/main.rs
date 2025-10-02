@@ -76,8 +76,7 @@ impl Test<'_> {
             _ => unreachable!(),
         };
         let string = read_to_string(&path).unwrap().replace("Noop", backend_name);
-        ron::de::from_str(&string)
-            .unwrap_or_else(|e| panic!("{path:?}:{} {}", e.position.line, e.code))
+        ron::de::from_str(&string).unwrap_or_else(|e| panic!("{path:?}:{} {}", e.span, e.code))
     }
 
     fn run(
@@ -137,7 +136,13 @@ impl Test<'_> {
 
         println!("\t\t\tWaiting...");
         global
-            .device_poll(device_id, wgt::PollType::wait())
+            .device_poll(
+                device_id,
+                wgt::PollType::Wait {
+                    submission_index: None,
+                    timeout: Some(std::time::Duration::from_secs(1)), // Tests really shouldn't need longer than that!
+                },
+            )
             .unwrap();
 
         for expect in self.expectations {

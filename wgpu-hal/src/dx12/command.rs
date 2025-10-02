@@ -1121,8 +1121,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .enumerate()
         {
             if let Some(stride) = stride {
-                if vb.StrideInBytes != stride.get() {
-                    vb.StrideInBytes = stride.get();
+                if vb.StrideInBytes != stride {
+                    vb.StrideInBytes = stride;
                     self.pass.dirty_vertex_buffers |= 1 << index;
                 }
             }
@@ -1228,11 +1228,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
     unsafe fn draw_mesh_tasks(
         &mut self,
-        _group_count_x: u32,
-        _group_count_y: u32,
-        _group_count_z: u32,
+        group_count_x: u32,
+        group_count_y: u32,
+        group_count_z: u32,
     ) {
-        unreachable!()
+        self.prepare_dispatch([group_count_x, group_count_y, group_count_z]);
+        let cmd_list6: Direct3D12::ID3D12GraphicsCommandList6 =
+            self.list.as_ref().unwrap().cast().unwrap();
+        unsafe {
+            cmd_list6.DispatchMesh(group_count_x, group_count_y, group_count_z);
+        }
     }
     unsafe fn draw_indirect(
         &mut self,
@@ -1314,11 +1319,36 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
     unsafe fn draw_mesh_tasks_indirect(
         &mut self,
-        _buffer: &<Self::A as crate::Api>::Buffer,
-        _offset: wgt::BufferAddress,
-        _draw_count: u32,
+        buffer: &<Self::A as crate::Api>::Buffer,
+        offset: wgt::BufferAddress,
+        draw_count: u32,
     ) {
-        unreachable!()
+        if self
+            .pass
+            .layout
+            .special_constants
+            .as_ref()
+            .and_then(|sc| sc.indirect_cmd_signatures.as_ref())
+            .is_some()
+        {
+            self.update_root_elements();
+        } else {
+            self.prepare_dispatch([0; 3]);
+        }
+
+        let cmd_list6: Direct3D12::ID3D12GraphicsCommandList6 =
+            self.list.as_ref().unwrap().cast().unwrap();
+        let cmd_signature = &self
+            .pass
+            .layout
+            .special_constants
+            .as_ref()
+            .and_then(|sc| sc.indirect_cmd_signatures.as_ref())
+            .unwrap_or_else(|| &self.shared.cmd_signatures)
+            .draw_mesh;
+        unsafe {
+            cmd_list6.ExecuteIndirect(cmd_signature, draw_count, &buffer.resource, offset, None, 0);
+        }
     }
     unsafe fn draw_indirect_count(
         &mut self,
@@ -1362,13 +1392,25 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
     unsafe fn draw_mesh_tasks_indirect_count(
         &mut self,
-        _buffer: &<Self::A as crate::Api>::Buffer,
-        _offset: wgt::BufferAddress,
-        _count_buffer: &<Self::A as crate::Api>::Buffer,
-        _count_offset: wgt::BufferAddress,
-        _max_count: u32,
+        buffer: &<Self::A as crate::Api>::Buffer,
+        offset: wgt::BufferAddress,
+        count_buffer: &<Self::A as crate::Api>::Buffer,
+        count_offset: wgt::BufferAddress,
+        max_count: u32,
     ) {
-        unreachable!()
+        self.prepare_dispatch([0; 3]);
+        let cmd_list6: Direct3D12::ID3D12GraphicsCommandList6 =
+            self.list.as_ref().unwrap().cast().unwrap();
+        unsafe {
+            cmd_list6.ExecuteIndirect(
+                &self.shared.cmd_signatures.draw_mesh,
+                max_count,
+                &buffer.resource,
+                offset,
+                &count_buffer.resource,
+                count_offset,
+            );
+        }
     }
 
     // compute

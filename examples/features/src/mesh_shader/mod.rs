@@ -1,15 +1,13 @@
-use std::{io::Write, process::Stdio};
+use std::process::Stdio;
 
 // Same as in mesh shader tests
-fn compile_glsl(
-    device: &wgpu::Device,
-    data: &[u8],
-    shader_stage: &'static str,
-) -> wgpu::ShaderModule {
+fn compile_glsl(device: &wgpu::Device, shader_stage: &'static str) -> wgpu::ShaderModule {
     let cmd = std::process::Command::new("glslc")
         .args([
-            &format!("-fshader-stage={shader_stage}"),
-            "-",
+            &format!(
+                "{}/src/mesh_shader/shader.{shader_stage}",
+                env!("CARGO_MANIFEST_DIR")
+            ),
             "-o",
             "-",
             "--target-env=vulkan1.2",
@@ -19,8 +17,6 @@ fn compile_glsl(
         .stdout(Stdio::piped())
         .spawn()
         .expect("Failed to call glslc");
-    cmd.stdin.as_ref().unwrap().write_all(data).unwrap();
-    println!("{shader_stage}");
     let output = cmd.wait_with_output().expect("Error waiting for glslc");
     assert!(output.status.success());
     unsafe {
@@ -32,6 +28,38 @@ fn compile_glsl(
         })
     }
 }
+fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::ShaderModule {
+    let out_path = format!(
+        "{}/src/mesh_shader/shader.{stage_str}.cso",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let cmd = std::process::Command::new("dxc")
+        .args([
+            "-T",
+            &format!("{stage_str}_6_5"),
+            "-E",
+            entry,
+            &format!("{}/src/mesh_shader/shader.hlsl", env!("CARGO_MANIFEST_DIR")),
+            "-Fo",
+            &out_path,
+        ])
+        .output()
+        .unwrap();
+    if !cmd.status.success() {
+        panic!("DXC failed:\n{}", String::from_utf8(cmd.stderr).unwrap());
+    }
+    let file = std::fs::read(&out_path).unwrap();
+    std::fs::remove_file(out_path).unwrap();
+    unsafe {
+        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
+            entry_point: entry.to_owned(),
+            label: None,
+            num_workgroups: (1, 1, 1),
+            dxil: Some(std::borrow::Cow::Owned(file)),
+            ..Default::default()
+        })
+    }
+}
 
 pub struct Example {
     pipeline: wgpu::RenderPipeline,
@@ -39,20 +67,30 @@ pub struct Example {
 impl crate::framework::Example for Example {
     fn init(
         config: &wgpu::SurfaceConfiguration,
-        _adapter: &wgpu::Adapter,
+        adapter: &wgpu::Adapter,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
+        let (ts, ms, fs) = if adapter.get_info().backend == wgpu::Backend::Vulkan {
+            (
+                compile_glsl(device, "task"),
+                compile_glsl(device, "mesh"),
+                compile_glsl(device, "frag"),
+            )
+        } else if adapter.get_info().backend == wgpu::Backend::Dx12 {
+            (
+                compile_hlsl(device, "Task", "as"),
+                compile_hlsl(device, "Mesh", "ms"),
+                compile_hlsl(device, "Frag", "ps"),
+            )
+        } else {
+            panic!("Example can only run on vulkan or dx12");
+        };
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
             push_constant_ranges: &[],
         });
-        let (ts, ms, fs) = (
-            compile_glsl(device, include_bytes!("shader.task"), "task"),
-            compile_glsl(device, include_bytes!("shader.mesh"), "mesh"),
-            compile_glsl(device, include_bytes!("shader.frag"), "frag"),
-        );
         let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),

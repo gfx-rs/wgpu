@@ -20,18 +20,18 @@ vertexOutput[];
 layout(location = 1) perprimitiveEXT out PrimitiveOutput { vec4 colorMask; }
 primitiveOutput[];
 
-shared uint sharedData;
-
 layout(triangles, max_vertices = 3, max_primitives = 1) out;
 void main() {
-  sharedData = 5;
   SetMeshOutputsEXT(3, 1);
+
   gl_MeshVerticesEXT[0].gl_Position = positions[0];
   gl_MeshVerticesEXT[1].gl_Position = positions[1];
   gl_MeshVerticesEXT[2].gl_Position = positions[2];
+
   vertexOutput[0].color = colors[0] * payloadData.colorMask;
   vertexOutput[1].color = colors[1] * payloadData.colorMask;
   vertexOutput[2].color = colors[2] * payloadData.colorMask;
+  
   gl_PrimitiveTriangleIndicesEXT[gl_LocalInvocationIndex] = uvec3(0, 1, 2);
   primitiveOutput[0].colorMask = vec4(1.0, 0.0, 1.0, 1.0);
   gl_MeshPrimitivesEXT[0].gl_CullPrimitiveEXT = !payloadData.visible;

@@ -144,7 +144,7 @@ async fn array_size_overrides(
     ctx.queue.submit(Some(encoder.finish()));
 
     mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
-    ctx.async_poll(PollType::wait()).await.unwrap();
+    ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
 
     let mapped = mapping_buffer.slice(..).get_mapped_range();
 

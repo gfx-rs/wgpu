@@ -138,10 +138,6 @@ class Navigator {
   constructor() {
     webidl.illegalConstructor();
   }
-
-  [Symbol.for("Deno.customInspect")](inspect) {
-    return `${this.constructor.name} ${inspect({})}`;
-  }
 }
 const NavigatorPrototype = Navigator.prototype;
 
