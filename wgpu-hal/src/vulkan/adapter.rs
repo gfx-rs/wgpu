@@ -1695,7 +1695,8 @@ impl super::Instance {
                 } else {
                     None
                 }
-            }),
+            })
+                .unwrap_or("".to_owned()),
             device_uuid: phd_capabilities.device_id.and_then(|id| {
                 if id.device_uuid != [0u8; 16] {
                     let uuid = id.device_uuid;
@@ -1710,7 +1711,9 @@ impl super::Instance {
                 } else {
                     None
                 }
-            }),
+            })
+                .unwrap_or("".to_owned())
+            ,
             driver: {
                 phd_capabilities
                     .driver
