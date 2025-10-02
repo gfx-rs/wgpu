@@ -1,9 +1,8 @@
 use alloc::{
     borrow::ToOwned, format, string::String, string::ToString as _, sync::Arc, vec, vec::Vec,
 };
-use core::{cmp::max, convert::TryInto, num::NonZeroU32, ptr, sync::atomic::Ordering};
-use std::hash::Hash;
 use arrayvec::ArrayVec;
+use core::{cmp::max, convert::TryInto, num::NonZeroU32, ptr, sync::atomic::Ordering};
 use glow::HasContext;
 use naga::FastHashMap;
 
@@ -321,7 +320,11 @@ impl super::Device {
                 shader_id: stage.module.id,
                 entry_point: stage.entry_point.to_owned(),
                 zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
-                constant_hash: stage.constants.iter().map(|(key, value)| format!("{}:{}", key, value)).collect(),
+                constant_hash: stage
+                    .constants
+                    .iter()
+                    .map(|(key, value)| format!("{}:{}", key, value))
+                    .collect(),
             });
         }
         let mut guard = self
