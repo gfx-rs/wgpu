@@ -1408,6 +1408,19 @@ pub struct AdapterInfo {
     pub device: u32,
     /// Type of device
     pub device_type: DeviceType,
+    /// [`Backend`]-specific PCI bus ID of the adapter.
+    ///
+    /// * For [`Backend::Vulkan`], [`VkPhysicalDevicePCIBusInfoPropertiesEXT`] is used,
+    ///   if available, in the form `bus:device.function`, e.g. `0000:01:00.0`.
+    ///
+    /// [`VkPhysicalDevicePCIBusInfoPropertiesEXT`]: https://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDevicePCIBusInfoPropertiesEXT.html
+    pub device_pci_bus_id: Option<String>,
+    /// [`Backend`]-specific unique device identifier of the adapter.
+    ///
+    /// * For [`Backend::Vulkan`], [`VkPhysicalDeviceIDProperties`] is used, if available.
+    ///
+    /// [`VkPhysicalDeviceIDProperties`]: hhttps://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDeviceIDProperties.html
+    pub device_uuid: Option<String>,
     /// Driver name
     pub driver: String,
     /// Driver info

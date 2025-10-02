@@ -958,6 +958,14 @@ pub struct PhysicalDeviceProperties {
     /// `VK_EXT_mesh_shader` extension.
     mesh_shader: Option<vk::PhysicalDeviceMeshShaderPropertiesEXT<'static>>,
 
+    /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_EXT_pci_bus_info` extension.
+    pci_bus_info: Option<vk::PhysicalDevicePCIBusInfoPropertiesEXT<'static>>,
+
+    /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_EXT_physical_device_id` extension.
+    device_id: Option<vk::PhysicalDeviceIDProperties<'static>>,
+
     /// The device API version.
     ///
     /// Which is the version of Vulkan supported for device-level functionality.
@@ -1388,6 +1396,9 @@ impl super::InstanceShared {
                     >= vk::API_VERSION_1_3
                     || capabilities.supports_extension(ext::subgroup_size_control::NAME);
                 let supports_robustness2 = capabilities.supports_extension(ext::robustness2::NAME);
+                let supports_pci_bus_info =
+                    capabilities.supports_extension(ext::pci_bus_info::NAME);
+                let supports_device_id = capabilities.device_api_version >= vk::API_VERSION_1_1;
 
                 let supports_acceleration_structure =
                     capabilities.supports_extension(khr::acceleration_structure::NAME);
@@ -1441,6 +1452,20 @@ impl super::InstanceShared {
                     let next = capabilities
                         .robustness2
                         .insert(vk::PhysicalDeviceRobustness2PropertiesEXT::default());
+                    properties2 = properties2.push_next(next);
+                }
+
+                if supports_pci_bus_info {
+                    let next = capabilities
+                        .pci_bus_info
+                        .insert(vk::PhysicalDevicePCIBusInfoPropertiesEXT::default());
+                    properties2 = properties2.push_next(next);
+                }
+
+                if supports_device_id {
+                    let next = capabilities
+                        .device_id
+                        .insert(vk::PhysicalDeviceIDProperties::default());
                     properties2 = properties2.push_next(next);
                 }
 
@@ -1658,6 +1683,34 @@ impl super::Instance {
                 vk::PhysicalDeviceType::CPU => wgt::DeviceType::Cpu,
                 _ => wgt::DeviceType::Other,
             },
+            device_pci_bus_id: phd_capabilities.pci_bus_info.and_then(|info| {
+                if info.pci_bus != 0 || info.pci_device != 0 {
+                    Some(format!(
+                        "{:04x}:{:02x}:{:02x}.{}",
+                        info.pci_domain,
+                        info.pci_bus,
+                        info.pci_device,
+                        info.pci_function
+                    ))
+                } else {
+                    None
+                }
+            }),
+            device_uuid: phd_capabilities.device_id.and_then(|id| {
+                if id.device_uuid != [0u8; 16] {
+                    let uuid = id.device_uuid;
+                    Some(format!(
+                        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
+                        uuid[0], uuid[1], uuid[2], uuid[3],
+                        uuid[4], uuid[5],
+                        uuid[6], uuid[7],
+                        uuid[8], uuid[9],
+                        uuid[10], uuid[11], uuid[12], uuid[13], uuid[14], uuid[15]
+                    ))
+                } else {
+                    None
+                }
+            }),
             driver: {
                 phd_capabilities
                     .driver
