@@ -151,19 +151,19 @@ A function with the `@mesh` attribute is a **mesh shader entry point**. Mesh sha
 
 Like compute shaders, mesh shaders are invoked in a grid of workgroups, called a **mesh shader grid**. If the mesh shader pipeline has a task shader, then each task shader workgroup determines the size of a mesh shader grid to be dispatched, as described above. Otherwise, the three-component size passed to `draw_mesh_tasks`, or drawn from the indirect buffer for its indirect variants, specifies the size of the mesh shader grid directly, as the number of workgroups along each of the grid's three axes.
 
-A mesh shader entry point must have a `@workgroup_size` attribute, meeting the same requirements as one appearing on a compute shader entry point.
-
 If the mesh shader pipeline has a task shader entry point with a `@payload(G)` attribute, then the pipeline's mesh shader entry point must also have a `@payload(G)` attribute, naming the same variable. Mesh shader invocations can read, but not write, this variable, which is initialized to whatever value was written to it by the task shader workgroup that dispatched this mesh shader grid.
 
 If the mesh shader pipeline does not have a task shader entry point, or the task shader entry point does not have a `@payload(G)` attribute, then the mesh shader entry point must not have any `@payload` attribute.
 
 A mesh shader entry point must have the following attributes:
 
+- `@workgroup_size`: this has the same meaning as when it appears on a compute shader entry point.
+
 - `@vertex_output(V, NV)`: This indicates that the mesh shader workgroup will generate at most `NV` vertex values, each of type `V`.
 
 - `@primitive_output(P, NP)`: This indicates that the mesh shader workgroup will generate at most `NP` primitives, each of type `P`.
 
-Each mesh shader entry point invocation must call the `setMeshOutputs(numVertices: u32, numPrimitives: u32)` builtin function exactly once, in uniform control flow. The values passed by each workgroup's first invocation (that is, the one whose `local_invocation_index` is `0`) determine how many vertices (values of type `V`) and primitives (values of type `P`) the workgroup must produce. This call essentially establishes two implicit arrays of vertex and primitive values, shared across the workgroup, for invocations to populate.
+Before generating any results, each mesh shader entry point invocation must call the `setMeshOutputs(numVertices: u32, numPrimitives: u32)` builtin function exactly once, in uniform control flow. The values passed by each workgroup's first invocation (that is, the one whose `local_invocation_index` is `0`) determine how many vertices (values of type `V`) and primitives (values of type `P`) the workgroup must produce. This call essentially establishes two implicit arrays of vertex and primitive values, shared across the workgroup, for invocations to populate.
 
 The `numVertices` and `numPrimitives` arguments must be no greater than `NV` and `NP` from the `@vertex_output` and `@primitive_output` attributes.
 
