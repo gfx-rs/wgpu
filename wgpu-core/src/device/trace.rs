@@ -1,43 +1,22 @@
+#[cfg(feature = "trace")]
+mod record;
+
 use core::{convert::Infallible, ops::Range};
 
 use alloc::{string::String, vec::Vec};
 use macro_rules_attribute::apply;
 
-#[cfg(feature = "trace")]
-use {alloc::borrow::Cow, std::io::Write as _};
-
-#[cfg(feature = "trace")]
-use crate::command::IdReferences;
 use crate::{
     command::{serde_object_reference_struct, BasePass, Command, ReferenceType, RenderCommand},
     id,
 };
 
+#[cfg(feature = "trace")]
+pub use record::*;
+
 type FileName = String;
 
 pub const FILE_NAME: &str = "trace.ron";
-
-#[cfg(feature = "trace")]
-pub(crate) fn new_render_bundle_encoder_descriptor<'a>(
-    label: crate::Label<'a>,
-    context: &'a super::RenderPassContext,
-    depth_read_only: bool,
-    stencil_read_only: bool,
-) -> crate::command::RenderBundleEncoderDescriptor<'a> {
-    crate::command::RenderBundleEncoderDescriptor {
-        label,
-        color_formats: Cow::Borrowed(&context.attachments.colors),
-        depth_stencil: context.attachments.depth_stencil.map(|format| {
-            wgt::RenderBundleDepthStencil {
-                format,
-                depth_read_only,
-                stencil_read_only,
-            }
-        }),
-        sample_count: context.sample_count,
-        multiview: context.multiview,
-    }
-}
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
@@ -162,56 +141,4 @@ pub enum Action<'a, R: ReferenceType> {
         desc: crate::resource::TlasDescriptor<'a>,
     },
     DestroyTlas(id::TlasId),
-}
-
-#[cfg(feature = "trace")]
-#[derive(Debug)]
-pub struct Trace {
-    path: std::path::PathBuf,
-    file: std::fs::File,
-    config: ron::ser::PrettyConfig,
-    binary_id: usize,
-}
-
-#[cfg(feature = "trace")]
-impl Trace {
-    pub fn new(path: std::path::PathBuf) -> Result<Self, std::io::Error> {
-        log::info!("Tracing into '{path:?}'");
-        let mut file = std::fs::File::create(path.join(FILE_NAME))?;
-        file.write_all(b"[\n")?;
-        Ok(Self {
-            path,
-            file,
-            config: ron::ser::PrettyConfig::default(),
-            binary_id: 0,
-        })
-    }
-
-    pub fn make_binary(&mut self, kind: &str, data: &[u8]) -> String {
-        self.binary_id += 1;
-        let name = std::format!("data{}.{}", self.binary_id, kind);
-        let _ = std::fs::write(self.path.join(&name), data);
-        name
-    }
-
-    pub(crate) fn add(&mut self, action: Action<'_, IdReferences>)
-    where
-        for<'a> Action<'a, IdReferences>: serde::Serialize,
-    {
-        match ron::ser::to_string_pretty(&action, self.config.clone()) {
-            Ok(string) => {
-                let _ = writeln!(self.file, "{string},");
-            }
-            Err(e) => {
-                log::warn!("RON serialization failure: {e:?}");
-            }
-        }
-    }
-}
-
-#[cfg(feature = "trace")]
-impl Drop for Trace {
-    fn drop(&mut self) {
-        let _ = self.file.write_all(b"]");
-    }
 }
