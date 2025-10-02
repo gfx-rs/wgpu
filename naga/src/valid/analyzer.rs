@@ -1150,10 +1150,10 @@ impl FunctionInfo {
                     | &crate::MeshFunction::SetPrimitive { index, value } => {
                         let _ = self.add_ref(index);
                         let _ = self.add_ref(value);
-                        let ty =
-                            self.expressions[value.index()].ty.handle().ok_or(
-                                FunctionError::InvalidMeshShaderOutputType(value).with_span(),
-                            )?;
+                        let ty = self.expressions[value.index()]
+                            .ty
+                            .handle()
+                            .ok_or(FunctionError::InvalidMeshShaderOutputType(value).with_span())?;
 
                         if matches!(func, crate::MeshFunction::SetVertex { .. }) {
                             self.try_update_mesh_vertex_type(ty, value)?;
