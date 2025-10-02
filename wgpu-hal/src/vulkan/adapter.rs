@@ -1683,37 +1683,27 @@ impl super::Instance {
                 vk::PhysicalDeviceType::CPU => wgt::DeviceType::Cpu,
                 _ => wgt::DeviceType::Other,
             },
-            device_pci_bus_id: phd_capabilities.pci_bus_info.and_then(|info| {
-                if info.pci_bus != 0 || info.pci_device != 0 {
-                    Some(format!(
-                        "{:04x}:{:02x}:{:02x}.{}",
-                        info.pci_domain,
-                        info.pci_bus,
-                        info.pci_device,
-                        info.pci_function
-                    ))
-                } else {
-                    None
-                }
-            })
-                .unwrap_or("".to_owned()),
-            device_uuid: phd_capabilities.device_id.and_then(|id| {
-                if id.device_uuid != [0u8; 16] {
-                    let uuid = id.device_uuid;
-                    Some(format!(
+            device_pci_bus_id: phd_capabilities.pci_bus_info
+                .filter(|info| info.pci_bus != 0 || info.pci_device != 0)
+                .map(|info| format!(
+                    "{:04x}:{:02x}:{:02x}.{}",
+                    info.pci_domain,
+                    info.pci_bus,
+                    info.pci_device,
+                    info.pci_function
+                ))
+                .unwrap_or_default(),
+            device_uuid: phd_capabilities.device_id
+                .filter(|id| id.device_uuid != [0u8; 16])
+                .map(|id| {
+                    let u = id.device_uuid;
+                    format!(
                         "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-                        uuid[0], uuid[1], uuid[2], uuid[3],
-                        uuid[4], uuid[5],
-                        uuid[6], uuid[7],
-                        uuid[8], uuid[9],
-                        uuid[10], uuid[11], uuid[12], uuid[13], uuid[14], uuid[15]
-                    ))
-                } else {
-                    None
-                }
-            })
-                .unwrap_or("".to_owned())
-            ,
+                        u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7],
+                        u[8], u[9], u[10], u[11], u[12], u[13], u[14], u[15]
+                    )
+                })
+                .unwrap_or_default(),
             driver: {
                 phd_capabilities
                     .driver
