@@ -338,6 +338,34 @@ impl Device {
             Err(MissingDownlevelFlags(flags))
         }
     }
+
+    /// # Safety
+    ///
+    /// - See [wgpu::Device::start_graphics_debugger_capture][api] for details the safety.
+    ///
+    /// [api]: ../../wgpu/struct.Device.html#method.start_graphics_debugger_capture
+    pub unsafe fn start_graphics_debugger_capture(&self) {
+        api_log!("Device::start_graphics_debugger_capture");
+
+        if !self.is_valid() {
+            return;
+        }
+        unsafe { self.raw().start_graphics_debugger_capture() };
+    }
+
+    /// # Safety
+    ///
+    /// - See [wgpu::Device::stop_graphics_debugger_capture][api] for details the safety.
+    ///
+    /// [api]: ../../wgpu/struct.Device.html#method.stop_graphics_debugger_capture
+    pub unsafe fn stop_graphics_debugger_capture(&self) {
+        api_log!("Device::stop_graphics_debugger_capture");
+
+        if !self.is_valid() {
+            return;
+        }
+        unsafe { self.raw().stop_graphics_debugger_capture() };
+    }
 }
 
 impl Device {
