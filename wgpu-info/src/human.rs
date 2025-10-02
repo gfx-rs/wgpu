@@ -99,6 +99,9 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t            Name: {}", info.name)?;
     writeln!(output, "\t        VendorID: {:#X?}", info.vendor)?;
     writeln!(output, "\t        DeviceID: {:#X?}", info.device)?;
+    writeln!(output, "\t      DeviceUUID: {}", print_empty_string(&info.device_uuid))?;
+    writeln!(output, "\t  DevicePCIBusId: {}", print_empty_string(&info.device_pci_bus_id))?;
+    writeln!(output, "\t      DriverUUID: {}", print_empty_string(&info.driver))?;
     writeln!(output, "\t            Type: {:?}", info.device_type)?;
     writeln!(output, "\t          Driver: {}", print_empty_string(&info.driver))?;
     writeln!(output, "\t      DriverInfo: {}", print_empty_string(&info.driver_info))?;

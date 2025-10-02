@@ -187,8 +187,8 @@ impl super::Adapter {
             device: 0,
             device_type: inferred_device_type,
             driver: "".to_owned(),
-            device_pci_bus_id: None,
-            device_uuid: None,
+            device_pci_bus_id: String::new(),
+            device_uuid: String::new(),
             driver_info: version,
             backend: wgt::Backend::Gl,
         }
