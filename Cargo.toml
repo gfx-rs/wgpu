@@ -61,13 +61,13 @@ keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "26.0.0"
+version = "27.0.0"
 authors = ["gfx-rs developers"]
 
 [workspace.dependencies]
-naga = { version = "26.0.0", path = "./naga" }
-naga-test = { version = "26.0.0", path = "./naga-test" }
-wgpu = { version = "26.0.0", path = "./wgpu", default-features = false, features = [
+naga = { version = "27.0.0", path = "./naga" }
+naga-test = { path = "./naga-test" }
+wgpu = { version = "27.0.0", path = "./wgpu", default-features = false, features = [
     "serde",
     "wgsl",
     "vulkan",
@@ -77,21 +77,21 @@ wgpu = { version = "26.0.0", path = "./wgpu", default-features = false, features
     "static-dxc",
     "noop",       # This should be removed if we ever have non-test crates that depend on wgpu
 ] }
-wgpu-core = { version = "26.0.0", path = "./wgpu-core" }
-wgpu-hal = { version = "26.0.0", path = "./wgpu-hal" }
-wgpu-macros = { version = "26.0.0", path = "./wgpu-macros" }
-wgpu-test = { version = "26.0.0", path = "./tests" }
-wgpu-types = { version = "26.0.0", path = "./wgpu-types", default-features = false }
+wgpu-core = { version = "27.0.0", path = "./wgpu-core" }
+wgpu-hal = { version = "27.0.0", path = "./wgpu-hal" }
+wgpu-macros = { version = "27.0.0", path = "./wgpu-macros" }
+wgpu-test = { version = "27.0.0", path = "./tests" }
+wgpu-types = { version = "27.0.0", path = "./wgpu-types", default-features = false }
 
 # These _cannot_ have a version specified. If it does, crates.io will look
 # for a version of the package on crates when we publish naga. Path dependencies
 # are allowed through though.
 hlsl-snapshots = { path = "naga/hlsl-snapshots" }
 
-wgpu-core-deps-windows-linux-android = { version = "26.0.0", path = "./wgpu-core/platform-deps/windows-linux-android" }
-wgpu-core-deps-apple = { version = "26.0.0", path = "./wgpu-core/platform-deps/apple" }
-wgpu-core-deps-wasm = { version = "26.0.0", path = "./wgpu-core/platform-deps/wasm" }
-wgpu-core-deps-emscripten = { version = "26.0.0", path = "./wgpu-core/platform-deps/emscripten" }
+wgpu-core-deps-windows-linux-android = { version = "27.0.0", path = "./wgpu-core/platform-deps/windows-linux-android" }
+wgpu-core-deps-apple = { version = "27.0.0", path = "./wgpu-core/platform-deps/apple" }
+wgpu-core-deps-wasm = { version = "27.0.0", path = "./wgpu-core/platform-deps/wasm" }
+wgpu-core-deps-emscripten = { version = "27.0.0", path = "./wgpu-core/platform-deps/emscripten" }
 
 anyhow = { version = "1.0.87", default-features = false }
 approx = "0.5"
@@ -106,7 +106,7 @@ bytemuck = { version = "1.22", features = [
     "extern_crate_alloc",
     "min_const_generics",
 ] }
-cargo_metadata = "0.22"
+cargo_metadata = "0.23"
 cfg_aliases = "0.2.1"
 cfg-if = "1"
 criterion = "0.7"

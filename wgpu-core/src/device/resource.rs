@@ -711,9 +711,9 @@ impl Device {
 
         // If a wait was requested, determine which submission index to wait for.
         let wait_submission_index = match poll_type {
-            wgt::PollType::WaitForSubmissionIndex(submission_index)
-            | wgt::PollType::WaitForSubmissionIndexWithTimeout {
-                submission_index, ..
+            wgt::PollType::Wait {
+                submission_index: Some(submission_index),
+                ..
             } => {
                 let last_successful_submission_index = self
                     .last_successful_submission_index
@@ -730,7 +730,10 @@ impl Device {
 
                 Some(submission_index)
             }
-            wgt::PollType::Wait | wgt::PollType::WaitWithTimeout { .. } => Some(
+            wgt::PollType::Wait {
+                submission_index: None,
+                ..
+            } => Some(
                 self.last_successful_submission_index
                     .load(Ordering::Acquire),
             ),
@@ -741,9 +744,16 @@ impl Device {
         if let Some(target_submission_index) = wait_submission_index {
             log::trace!("Device::maintain: waiting for submission index {target_submission_index}");
 
+            let wait_timeout = match poll_type {
+                wgt::PollType::Wait { timeout, .. } => timeout,
+                wgt::PollType::Poll => unreachable!(
+                    "`wait_submission_index` index for poll type `Poll` should be None"
+                ),
+            };
+
             let wait_result = unsafe {
                 self.raw()
-                    .wait(fence.as_ref(), target_submission_index, poll_type.timeout())
+                    .wait(fence.as_ref(), target_submission_index, wait_timeout)
             };
 
             // This error match is only about `DeviceErrors`. At this stage we do not care if

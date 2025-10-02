@@ -224,7 +224,9 @@ fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
             pass.draw_mesh_tasks(1, 1, 1);
         }
         ctx.queue.submit(Some(encoder.finish()));
-        ctx.device.poll(wgpu::PollType::Wait).unwrap();
+        ctx.device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .unwrap();
     }
 }
 
@@ -335,7 +337,9 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
         pass.draw_mesh_tasks_indirect(buffer.as_ref().unwrap(), 0);
     }
     ctx.queue.submit(Some(encoder.finish()));
-    ctx.device.poll(wgpu::PollType::Wait).unwrap();
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
 }
 
 fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {

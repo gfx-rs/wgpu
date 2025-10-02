@@ -161,7 +161,7 @@ impl Queries {
         self.destination_buffer
             .slice(..)
             .map_async(wgpu::MapMode::Read, |_| ());
-        device.poll(wgpu::PollType::wait()).unwrap();
+        device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
         let timestamps = {
             let timestamp_view = self

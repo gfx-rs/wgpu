@@ -36,17 +36,7 @@ Day of Release:
 - Checkout `trunk` with the merged PR.
 - Publish! These commands can be pasted directly into your terminal in a single command, and they will publish everything.
   ```bash
-    cargo publish -p naga
-    cargo publish -p naga-cli
-    cargo publish -p wgpu-types
-    cargo publish -p wgpu-hal --all-features
-    cargo publish -p wgpu-core-deps-apple
-    cargo publish -p wgpu-core-deps-emscripten
-    cargo publish -p wgpu-core-deps-wasm
-    cargo publish -p wgpu-core-deps-windows-linux-android
-    cargo publish -p wgpu-core --all-features
-    cargo publish -p wgpu
-    cargo publish -p wgpu-info
+    cargo +stable publish --workspace --exclude deno_webgpu
   ```
 - If there were any newly published crates, ensure `github:gfx-rs/wgpu` is added as an owner of that crate.
 - Create a new tag called `vX.Y.Z` and push it to the repo.
