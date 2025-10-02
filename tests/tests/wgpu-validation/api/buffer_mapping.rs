@@ -17,7 +17,7 @@ fn full_immutable_binding() {
     });
 
     buffer.map_async(wgpu::MapMode::Read, .., |_| {});
-    device.poll(wgpu::PollType::Wait).unwrap();
+    device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
     let mapping = buffer.slice(..).get_mapped_range();
 
@@ -62,7 +62,7 @@ fn split_immutable_binding() {
     });
 
     buffer.map_async(wgpu::MapMode::Read, .., |_| {});
-    device.poll(wgpu::PollType::Wait).unwrap();
+    device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
     let mapping0 = buffer.slice(0..512).get_mapped_range();
     let mapping1 = buffer.slice(512..1024).get_mapped_range();
@@ -167,7 +167,7 @@ fn partially_mapped() {
     });
 
     buffer.map_async(wgpu::MapMode::Write, 0..512, |_| {});
-    device.poll(wgpu::PollType::Wait).unwrap();
+    device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
     let _mapping0 = buffer.slice(0..512).get_mapped_range_mut();
     let _mapping1 = buffer.slice(512..1024).get_mapped_range_mut();

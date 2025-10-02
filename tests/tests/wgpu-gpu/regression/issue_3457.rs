@@ -172,7 +172,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration = GpuTestConfiguration::ne
         drop(vertex_buffer2);
 
         // Make sure the buffers are actually deleted.
-        ctx.async_poll(PollType::wait()).await.unwrap();
+        ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
 
         let mut encoder2 = ctx
             .device

@@ -123,7 +123,9 @@ async fn clip_distances(ctx: TestingContext) {
     ctx.queue.submit([encoder.finish()]);
     let slice = readback_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
     let data: &[u8] = &slice.get_mapped_range();
 
     // We should have filled the upper sector of the texture. Verify that this is the case.

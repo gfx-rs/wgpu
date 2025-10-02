@@ -4503,58 +4503,42 @@ pub enum PollType<T> {
     ///
     /// On WebGPU, this has no effect. Callbacks are invoked from the
     /// window event loop.
-    WaitForSubmissionIndex(T),
-
-    /// Same as [`Self::WaitForSubmissionIndex`] but with a timeout.
-    WaitForSubmissionIndexWithTimeout {
+    Wait {
         /// Submission index to wait for.
-        submission_index: T,
+        ///
+        /// If not specified, will wait for the most recent submission at the time of the poll.
+        /// By the time the method returns, more submissions may have taken place.
+        submission_index: Option<T>,
 
         /// Max time to wait for the submission to complete.
         ///
+        /// If not specified, will wait indefinitely (or until an error is detected).
         /// If waiting for the GPU device takes this long or longer, the poll will return [`PollError::Timeout`].
-        timeout: Duration,
+        timeout: Option<Duration>,
     },
-
-    /// Same as [`Self::WaitForSubmissionIndex`] but waits for the most recent submission.
-    Wait,
-
-    /// Same as [`Self::Wait`], but with a timeout.
-    ///
-    /// If waiting for the GPU device takes this long or longer, the poll will return [`PollError::Timeout`].
-    WaitWithTimeout(Duration),
 
     /// Check the device for a single time without blocking.
     Poll,
 }
 
 impl<T> PollType<T> {
-    /// Construct a [`Self::Wait`] variant
+    /// Wait indefinitely until for the most recent submission to complete.
+    ///
+    /// This is a convenience function that creates a [`Self::Wait`] variant with
+    /// no timeout and no submission index.
     #[must_use]
-    pub fn wait() -> Self {
-        // This function seems a little silly, but it is useful to allow
-        // <https://github.com/gfx-rs/wgpu/pull/5012> to be split up, as
-        // it has meaning in that PR.
-        Self::Wait
-    }
-
-    /// Construct a [`Self::WaitForSubmissionIndex`] variant
-    #[must_use]
-    pub fn wait_for(submission_index: T) -> Self {
-        // This function seems a little silly, but it is useful to allow
-        // <https://github.com/gfx-rs/wgpu/pull/5012> to be split up, as
-        // it has meaning in that PR.
-        Self::WaitForSubmissionIndex(submission_index)
+    pub const fn wait_indefinitely() -> Self {
+        Self::Wait {
+            submission_index: None,
+            timeout: None,
+        }
     }
 
     /// This `PollType` represents a wait of some kind.
     #[must_use]
     pub fn is_wait(&self) -> bool {
         match *self {
-            Self::WaitForSubmissionIndex(..)
-            | Self::Wait
-            | Self::WaitForSubmissionIndexWithTimeout { .. }
-            | Self::WaitWithTimeout { .. } => true,
+            Self::Wait { .. } => true,
             Self::Poll => false,
         }
     }
@@ -4566,27 +4550,14 @@ impl<T> PollType<T> {
         F: FnOnce(T) -> U,
     {
         match self {
-            Self::WaitForSubmissionIndex(i) => PollType::WaitForSubmissionIndex(func(i)),
-            Self::Wait => PollType::Wait,
-            Self::WaitForSubmissionIndexWithTimeout {
+            Self::Wait {
                 submission_index,
                 timeout,
-            } => PollType::WaitForSubmissionIndexWithTimeout {
-                submission_index: func(submission_index),
+            } => PollType::Wait {
+                submission_index: submission_index.map(func),
                 timeout,
             },
-            Self::WaitWithTimeout(timeout) => PollType::WaitWithTimeout(timeout),
             Self::Poll => PollType::Poll,
-        }
-    }
-
-    /// Returns the timeout in milliseconds if the poll type has a timeout.
-    #[must_use]
-    pub fn timeout(&self) -> Option<Duration> {
-        match self {
-            Self::WaitForSubmissionIndexWithTimeout { timeout, .. }
-            | Self::WaitWithTimeout(timeout) => Some(*timeout),
-            _ => None,
         }
     }
 }

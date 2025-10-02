@@ -1995,7 +1995,7 @@ impl Global {
 
                 let maintain_result;
                 (user_callbacks, maintain_result) =
-                    device.maintain(fence, wgt::PollType::Wait, snatch_guard);
+                    device.maintain(fence, wgt::PollType::wait_indefinitely(), snatch_guard);
 
                 match maintain_result {
                     // We're happy
@@ -2121,7 +2121,8 @@ impl Global {
 
             for (_id, device) in device_guard.iter() {
                 let poll_type = if force_wait {
-                    wgt::PollType::Wait
+                    // TODO(#8286): Should expose timeout to poll_all.
+                    wgt::PollType::wait_indefinitely()
                 } else {
                     wgt::PollType::Poll
                 };

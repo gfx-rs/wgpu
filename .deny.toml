@@ -15,6 +15,9 @@ skip = [
     # Deno uses an old version
     { name = "which", version = "6.0.3" },
 
+    # Winit uses an old version
+    { name = "windows-sys", version = "0.52.0" },
+
     # Loom uses a new windows version
     { name = "windows", version = "0.61.1" },
     { name = "windows-core", version = "0.61.2" },
@@ -23,9 +26,6 @@ skip = [
     { name = "windows-result", version = "0.3.4" },
     { name = "windows-strings", version = "0.4.2" },
 
-    # cargo-metadata uses old version. Only used for infrastructure.
-    { name = "toml", version = "0.8.23" },
-    { name = "ordered-float", version = "2.10.1" },
     # bindgen (used by deno) uses old version
     { name = "itertools", version = "0.13.0" },
     # Deno uses an old version
@@ -53,7 +53,6 @@ allow = [
     "MPL-2.0",
     "MIT",
     "MIT-0",
-    "Unicode-DFS-2016",
     "Unicode-3.0",
     "Zlib",
 ]
@@ -68,4 +67,4 @@ unknown-git = "deny"
 required-git-spec = "rev"
 
 [sources.allow-org]
-github = ["gfx-rs"]
+github = []
