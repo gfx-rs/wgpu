@@ -129,7 +129,10 @@ impl TryFrom<SerialId> for RawId {
 #[allow(dead_code)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug)]
-pub struct PointerId<T: Marker>(usize, #[serde(skip)] PhantomData<T>);
+pub enum PointerId<T: Marker> {
+    // The only variant forces RON to not ignore "Id"
+    PointerId(usize, #[serde(skip)] PhantomData<T>),
+}
 
 impl<T: Marker> Copy for PointerId<T> {}
 
@@ -141,7 +144,9 @@ impl<T: Marker> Clone for PointerId<T> {
 
 impl<T: Marker> PartialEq for PointerId<T> {
     fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+        let PointerId::PointerId(this, _) = self;
+        let PointerId::PointerId(other, _) = other;
+        this == other
     }
 }
 
@@ -149,7 +154,8 @@ impl<T: Marker> Eq for PointerId<T> {}
 
 impl<T: Marker> Hash for PointerId<T> {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
+        let PointerId::PointerId(this, _) = self;
+        this.hash(state);
     }
 }
 
@@ -161,7 +167,7 @@ impl<T: StorageItem> From<&Arc<T>> for PointerId<T::Marker> {
         // Unfortunately, because `Arc::as_ptr` returns a pointer to the
         // contained data, and `Arc` stores reference counts before the data,
         // we are adding an offset to the pointer here.
-        Self(Arc::as_ptr(arc) as usize, PhantomData)
+        PointerId::PointerId(Arc::as_ptr(arc) as usize, PhantomData)
     }
 }
 
