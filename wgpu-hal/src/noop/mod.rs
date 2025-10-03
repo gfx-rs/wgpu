@@ -429,7 +429,7 @@ impl crate::Device for Context {
         &self,
         fence: &Fence,
         value: crate::FenceValue,
-        timeout_ms: u32,
+        timeout: Option<Duration>,
     ) -> DeviceResult<bool> {
         // The relevant commands must have already been submitted, and noop-backend commands are
         // executed synchronously, so there is no waiting — either it is already done,

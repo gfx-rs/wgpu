@@ -625,13 +625,6 @@ ObjectDefineProperty(GPUCompilationMessage, privateCustomInspect, {
   },
 });
 const GPUCompilationMessagePrototype = GPUCompilationMessage.prototype;
-// Naming it `type` or `r#type` in Rust does not work.
-// https://github.com/gfx-rs/wgpu/issues/7778
-ObjectDefineProperty(GPUCompilationMessage.prototype, "type", {
-  get() {
-    return this.ty;
-  }
-});
 
 class GPUShaderStage {
   constructor() {
@@ -844,13 +837,6 @@ ObjectDefineProperty(GPUQuerySetPrototype, privateCustomInspect, {
       inspectOptions,
     );
   },
-});
-// Naming it `type` or `r#type` in Rust does not work.
-// https://github.com/gfx-rs/wgpu/issues/7778
-ObjectDefineProperty(GPUQuerySet.prototype, "type", {
-  get() {
-    return this.ty;
-  }
 });
 
 // Converters

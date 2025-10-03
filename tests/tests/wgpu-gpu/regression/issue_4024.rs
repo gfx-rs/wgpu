@@ -41,7 +41,7 @@ static QUEUE_SUBMITTED_CALLBACK_ORDERING: GpuTestConfiguration = GpuTestConfigur
         // Submit the work.
         ctx.queue.submit(Some(encoder.finish()));
         // Ensure the work is finished.
-        ctx.async_poll(PollType::wait()).await.unwrap();
+        ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
 
         #[derive(Debug)]
         struct OrderingContext {

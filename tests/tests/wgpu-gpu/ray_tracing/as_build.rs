@@ -186,7 +186,7 @@ fn blas_compaction(ctx: TestingContext) {
     });
 
     // On native this will trigger the callback.
-    ctx.device.poll(PollType::Wait).unwrap();
+    ctx.device.poll(PollType::wait_indefinitely()).unwrap();
     // Check that the callback actually gets called (this test will timeout if it doesn't).
     recv.recv().unwrap();
     // This should return true because the callback has been called, and we haven't rebuilt the BLAS

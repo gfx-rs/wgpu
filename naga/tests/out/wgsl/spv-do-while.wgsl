@@ -1,4 +1,4 @@
-fn fb1_(cond: ptr<function, bool>) {
+fn f_u0028_b1_u003b(cond: ptr<function, bool>) {
     loop {
         continue;
         continuing {
@@ -13,7 +13,7 @@ fn main_1() {
     var param: bool;
 
     param = false;
-    fb1_((&param));
+    f_u0028_b1_u003b((&param));
     return;
 }
 

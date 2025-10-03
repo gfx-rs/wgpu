@@ -1,4 +1,4 @@
-void fb1_(inout bool cond)
+void f_u0028_b1_u003b(inout bool cond)
 {
     uint2 loop_bound = uint2(4294967295u, 4294967295u);
     bool loop_init = true;
@@ -22,7 +22,7 @@ void main_1()
     bool param = (bool)0;
 
     param = false;
-    fb1_(param);
+    f_u0028_b1_u003b(param);
     return;
 }
 

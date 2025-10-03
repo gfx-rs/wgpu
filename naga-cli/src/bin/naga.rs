@@ -452,7 +452,7 @@ fn run() -> anyhow::Result<()> {
     params.spv_in = naga::front::spv::Options {
         adjust_coordinate_space: !args.keep_coordinate_space,
         strict_capabilities: false,
-        block_ctx_dump_prefix: args.block_ctx_dir.clone().map(Into::into),
+        block_ctx_dump_prefix: args.block_ctx_dir.clone(),
     };
 
     params.entry_point.clone_from(&args.entry_point);
@@ -482,7 +482,7 @@ fn run() -> anyhow::Result<()> {
     params.compact = args.compact;
 
     if args.bulk_validate {
-        return bulk_validate(args, &params);
+        return bulk_validate(&args, &params);
     }
 
     let mut files = args.files.iter();
@@ -497,6 +497,8 @@ fn run() -> anyhow::Result<()> {
     } else {
         return Err(CliError("Input file path is not specified").into());
     };
+
+    let file_name = input_path.to_string_lossy();
 
     params.input_kind = args.input_kind;
     params.shader_stage = args.shader_stage;
@@ -516,7 +518,7 @@ fn run() -> anyhow::Result<()> {
                 .set(naga::back::spv::WriterFlags::DEBUG, true);
             params.spv_out.debug_info = Some(naga::back::spv::DebugInfo {
                 source_code: input_text,
-                file_name: input_path.into(),
+                file_name: &file_name,
                 language,
             })
         } else {
@@ -913,9 +915,9 @@ fn write_output(
     Ok(())
 }
 
-fn bulk_validate(args: Args, params: &Parameters) -> anyhow::Result<()> {
+fn bulk_validate(args: &Args, params: &Parameters) -> anyhow::Result<()> {
     let mut invalid = vec![];
-    for input_path in args.files {
+    for input_path in &args.files {
         let path = Path::new(&input_path);
         let input = fs::read(path)?;
 

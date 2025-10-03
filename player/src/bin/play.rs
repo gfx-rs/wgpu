@@ -134,7 +134,9 @@ fn main() {
         }
 
         unsafe { global.device_stop_graphics_debugger_capture(device) };
-        global.device_poll(device, wgt::PollType::wait()).unwrap();
+        global
+            .device_poll(device, wgt::PollType::wait_indefinitely())
+            .unwrap();
     }
     #[cfg(feature = "winit")]
     {
@@ -227,7 +229,9 @@ fn main() {
                     },
                     Event::LoopExiting => {
                         log::info!("Closing");
-                        global.device_poll(device, wgt::PollType::wait()).unwrap();
+                        global
+                            .device_poll(device, wgt::PollType::wait_indefinitely())
+                            .unwrap();
                     }
                     _ => {}
                 }

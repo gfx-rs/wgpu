@@ -185,7 +185,9 @@ async fn set_array_stride_to_0(ctx: TestingContext) {
     let slice = readback_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
 
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     let data = slice.get_mapped_range();
     let succeeded = data.iter().all(|b| *b == u8::MAX);

@@ -103,7 +103,7 @@ impl GPUQueue {
         {
           self
             .instance
-            .device_poll(self.device, wgpu_types::PollType::wait())
+            .device_poll(self.device, wgpu_types::PollType::wait_indefinitely())
             .unwrap();
         }
         tokio::time::sleep(Duration::from_millis(10)).await;

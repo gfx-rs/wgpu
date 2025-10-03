@@ -242,7 +242,7 @@ fn main() {
 
     // Wait for the GPU to finish working on the submitted work. This doesn't work on WebGPU, so we would need
     // to rely on the callback to know when the buffer is mapped.
-    device.poll(wgpu::PollType::Wait).unwrap();
+    device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
     // We can now read the data from the buffer.
     let data = buffer_slice.get_mapped_range();

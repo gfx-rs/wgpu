@@ -14,7 +14,7 @@
 //! <https://sotrh.github.io/learn-wgpu/> and <https://webgpufundamentals.org/>. The latter is a WebGPU
 //! tutorial, but the concepts are nearly identical to `wgpu`.
 //!
-//! There are examples for this version [available on GitHub](https://github.com/gfx-rs/wgpu/tree/v26/examples#readme)..
+//! There are examples for this version [available on GitHub](https://github.com/gfx-rs/wgpu/tree/v27/examples#readme).
 //!
 //! The API is refcounted, so all handles are cloneable, and if you create a resource which references another,
 //! it will automatically keep dependent resources alive.

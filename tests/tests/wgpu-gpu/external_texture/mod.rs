@@ -223,7 +223,9 @@ fn get_dimensions(ctx: &TestingContext, texture_resource: wgpu::BindingResource)
     ctx.queue.submit(Some(encoder.finish()));
     let buffer_slice = download_buffer.slice(..);
     buffer_slice.map_async(wgpu::MapMode::Read, |_| {});
-    ctx.device.poll(wgpu::PollType::Wait).unwrap();
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
 
     let data = buffer_slice.get_mapped_range();
     let size: &[u32] = bytemuck::cast_slice(&data);
@@ -306,7 +308,9 @@ fn get_loads(
     ctx.queue.submit(Some(encoder.finish()));
     let buffer_slice = download_buffer.slice(..);
     buffer_slice.map_async(wgpu::MapMode::Read, |_| {});
-    ctx.device.poll(wgpu::PollType::Wait).unwrap();
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
 
     let data = buffer_slice.get_mapped_range();
     let values: &[[f32; 4]] = bytemuck::cast_slice(&data);
@@ -397,7 +401,9 @@ fn get_samples(
     ctx.queue.submit(Some(encoder.finish()));
     let buffer_slice = download_buffer.slice(..);
     buffer_slice.map_async(wgpu::MapMode::Read, |_| {});
-    ctx.device.poll(wgpu::PollType::Wait).unwrap();
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
 
     let data = buffer_slice.get_mapped_range();
     let values: &[[f32; 4]] = bytemuck::cast_slice(&data);

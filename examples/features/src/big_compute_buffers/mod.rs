@@ -80,7 +80,7 @@ pub async fn execute_gpu_inner(
         slice.map_async(wgpu::MapMode::Read, |_| {});
     }
 
-    device.poll(wgpu::PollType::Wait).unwrap();
+    device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
     let mut data = Vec::new();
     for staging_buffer in &staging_buffers {
