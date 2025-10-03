@@ -118,13 +118,13 @@ fn main() {
     log::info!("Executing actions");
     #[cfg(not(feature = "winit"))]
     {
-        unsafe { global.device_start_graphics_debugger_capture(device) };
+        unsafe { device.start_graphics_debugger_capture() };
 
         while let Some(action) = actions.pop() {
             player.process(&device, &queue, action, &dir);
         }
 
-        unsafe { global.device_stop_graphics_debugger_capture(device) };
+        unsafe { device.stop_graphics_debugger_capture() };
         device.poll(wgt::PollType::wait_indefinitely()).unwrap();
     }
     #[cfg(feature = "winit")]
