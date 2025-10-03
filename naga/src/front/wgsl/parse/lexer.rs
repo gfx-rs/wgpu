@@ -243,7 +243,6 @@ fn is_word_part(c: char) -> bool {
     unicode_ident::is_xid_continue(c)
 }
 
-#[derive(Clone)]
 pub(in crate::front::wgsl) struct Lexer<'a> {
     /// The remaining unconsumed input.
     input: &'a str,
@@ -328,13 +327,6 @@ impl<'a> Lexer<'a> {
                 return self.current_byte_offset();
             }
         }
-    }
-
-    fn peek_token_and_rest(&mut self) -> (TokenSpan<'a>, &'a str) {
-        let mut cloned = self.clone();
-        let token = cloned.next();
-        let rest = cloned.input;
-        (token, rest)
     }
 
     /// Collect all module doc comments until a non doc token is found.
@@ -426,8 +418,26 @@ impl<'a> Lexer<'a> {
 
     #[must_use]
     pub(in crate::front::wgsl) fn peek(&mut self) -> TokenSpan<'a> {
-        let (token, _) = self.peek_token_and_rest();
+        let input = self.input;
+        let last_end_offset = self.last_end_offset;
+        let token = self.next();
+        self.input = input;
+        self.last_end_offset = last_end_offset;
         token
+    }
+
+    /// If the next token matches it's consumed and true is returned
+    pub(in crate::front::wgsl) fn next_if(&mut self, what: Token<'_>) -> bool {
+        let input = self.input;
+        let last_end_offset = self.last_end_offset;
+        let token = self.next();
+        if token.0 == what {
+            true
+        } else {
+            self.input = input;
+            self.last_end_offset = last_end_offset;
+            false
+        }
     }
 
     pub(in crate::front::wgsl) fn expect_span(&mut self, expected: Token<'a>) -> Result<'a, Span> {
@@ -464,17 +474,6 @@ impl<'a> Lexer<'a> {
 
     pub(in crate::front::wgsl) fn end_of_generic_arguments(&mut self) -> bool {
         self.next_if(Token::Separator(',')) && self.peek().0 != Token::Paren('>')
-    }
-
-    /// If the next token matches it's consumed and true is returned
-    pub(in crate::front::wgsl) fn next_if(&mut self, what: Token<'_>) -> bool {
-        let (peeked_token, rest) = self.peek_token_and_rest();
-        if peeked_token.0 == what {
-            self.input = rest;
-            true
-        } else {
-            false
-        }
     }
 
     pub(in crate::front::wgsl) fn next_ident_with_span(&mut self) -> Result<'a, (&'a str, Span)> {

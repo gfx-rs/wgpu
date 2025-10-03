@@ -2933,7 +2933,7 @@ fn use_me(a: i32) {
 2 │ @must_use
   │  ^^^^^^^^
 3 │ fn use_me(a: i32) {
-  │    ^^^^^^^^^^^^^
+  │    ^^^^^^^^^^^^^^
   │
   = note: declare a return type or remove the attribute
 
@@ -3753,7 +3753,7 @@ fn inconsistent_type() {
   ┌─ wgsl:2:20
   │
 2 │             return dot(vec4<f32>(), vec3<f32>());
-  │                    ^^^ ^^^^^^^^^^   ^^^^^^^^^^ argument #2 has type vec3<f32>
+  │                    ^^^ ^^^^^^^^^^^  ^^^^^^^^^^^ argument #2 has type vec3<f32>
   │                        │\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20
   │                        this argument has type vec4<f32>, which constrains subsequent arguments
   │
@@ -4301,7 +4301,8 @@ fn max_type_size_two_arrays_in_struct() {
 2 │ ╭             struct TwoArrays {
 3 │ │                 arr1: array<u32, 1 << 27>,
 4 │ │                 arr2: array<u32, (1 << 27) + 1>,
-  │ ╰───────────────────────────────────────────────^ this type exceeds the maximum size
+5 │ │             }
+  │ ╰─────────────^ this type exceeds the maximum size
   │\x20\x20
   = note: the maximum size is 1073741824 bytes
 
