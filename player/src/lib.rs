@@ -112,8 +112,9 @@ impl Player {
                 self.buffers.insert(id, buffer);
             }
             Action::FreeBuffer(id) => {
-                let buffer = self.buffers.remove(&id).expect("invalid buffer");
-                let _ = buffer.unmap();
+                // Note: buffer remains in the HashMap. "Free" and "Destroy"
+                // mean the opposite from WebGPU.
+                let buffer = self.buffers.get(&id).expect("invalid buffer");
                 buffer.destroy();
             }
             Action::DestroyBuffer(id) => {
@@ -125,7 +126,9 @@ impl Player {
                 self.textures.insert(id, texture);
             }
             Action::FreeTexture(id) => {
-                let texture = self.textures.remove(&id).expect("invalid texture");
+                // Note: texture remains in the HashMap. "Free" and "Destroy"
+                // mean the opposite from WebGPU.
+                let texture = self.textures.get(&id).expect("invalid texture");
                 texture.destroy();
             }
             Action::DestroyTexture(id) => {
@@ -154,9 +157,11 @@ impl Player {
                 self.external_textures.insert(id, external_texture);
             }
             Action::FreeExternalTexture(id) => {
+                // Note: external texture remains in the HashMap. "Free" and "Destroy"
+                // mean the opposite from WebGPU.
                 let external_texture = self
                     .external_textures
-                    .remove(&id)
+                    .get(&id)
                     .expect("invalid external texture");
                 external_texture.destroy();
             }
