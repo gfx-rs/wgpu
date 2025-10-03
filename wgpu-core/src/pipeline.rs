@@ -14,7 +14,10 @@ use wgt::error::{ErrorType, WebGpuError};
 
 pub use crate::pipeline_cache::PipelineCacheValidationError;
 use crate::{
-    binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError, PipelineLayout},
+    binding_model::{
+        BindGroupLayout, CreateBindGroupLayoutError, CreatePipelineLayoutError,
+        GetBindGroupLayoutError, PipelineLayout,
+    },
     command::ColorAttachmentError,
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
@@ -300,6 +303,17 @@ crate::impl_trackable!(ComputePipeline);
 impl ComputePipeline {
     pub(crate) fn raw(&self) -> &dyn hal::DynComputePipeline {
         self.raw.as_ref()
+    }
+
+    pub fn get_bind_group_layout(
+        self: &Arc<Self>,
+        index: u32,
+    ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
+        self.layout
+            .bind_group_layouts
+            .get(index as usize)
+            .cloned()
+            .ok_or(GetBindGroupLayoutError::InvalidGroupIndex(index))
     }
 }
 
@@ -824,5 +838,16 @@ crate::impl_trackable!(RenderPipeline);
 impl RenderPipeline {
     pub(crate) fn raw(&self) -> &dyn hal::DynRenderPipeline {
         self.raw.as_ref()
+    }
+
+    pub fn get_bind_group_layout(
+        self: &Arc<Self>,
+        index: u32,
+    ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
+        self.layout
+            .bind_group_layouts
+            .get(index as usize)
+            .cloned()
+            .ok_or(GetBindGroupLayoutError::InvalidGroupIndex(index))
     }
 }
