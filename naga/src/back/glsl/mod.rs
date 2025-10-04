@@ -959,7 +959,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     // The trailing space is important
                     write!(self.out, "uniform ")?;
 
-                    if self.needs_depth_fix(ep_info, handle, &mut class) {
+                    if self.needs_depth_fix(ep_info, handle, &class) {
                         class = crate::ImageClass::Sampled {
                             kind: crate::ScalarKind::Float,
                             multi: false,
@@ -1047,7 +1047,7 @@ impl<'a, W: Write> Writer<'a, W> {
         handle: Handle<crate::GlobalVariable>,
         class: &crate::ImageClass,
     ) -> bool {
-        if let crate::ImageClass::Depth { multi: false } = class {
+        if let crate::ImageClass::Depth { multi: false } = *class {
             // if any sampler uses the comparison sampler, a fix is not needed. Otherwise, we need to actually sample a regular texture as far as glsl is concerned
             !ep_info.sampling_set.iter().all(|key| {
                 let data = &self.module.global_variables[key.sampler];
