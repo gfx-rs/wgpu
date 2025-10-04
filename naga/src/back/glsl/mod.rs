@@ -960,7 +960,10 @@ impl<'a, W: Write> Writer<'a, W> {
                     write!(self.out, "uniform ")?;
 
                     if self.needs_depth_fix(ep_info, handle, &mut class) {
-                        class = crate::ImageClass::Sampled { kind: crate::ScalarKind::Float, multi: false };
+                        class = crate::ImageClass::Sampled {
+                            kind: crate::ScalarKind::Float,
+                            multi: false,
+                        };
                     }
 
                     // write the type
@@ -1038,7 +1041,12 @@ impl<'a, W: Write> Writer<'a, W> {
         self.collect_reflection_info()
     }
 
-    fn needs_depth_fix(&mut self, ep_info: &valid::FunctionInfo, handle: Handle<crate::GlobalVariable>, class: &crate::ImageClass) -> bool {
+    fn needs_depth_fix(
+        &mut self,
+        ep_info: &valid::FunctionInfo,
+        handle: Handle<crate::GlobalVariable>,
+        class: &crate::ImageClass,
+    ) -> bool {
         if let crate::ImageClass::Depth { multi: false } = class {
             // if any sampler uses the comparison sampler, a fix is not needed. Otherwise, we need to actually sample a regular texture as far as glsl is concerned
             !ep_info.sampling_set.iter().all(|key| {
@@ -1047,10 +1055,12 @@ impl<'a, W: Write> Writer<'a, W> {
                     return false;
                 }
 
-                matches!(self.module.types[data.ty].inner, TypeInner::Sampler { comparison: true })
+                matches!(
+                    self.module.types[data.ty].inner,
+                    TypeInner::Sampler { comparison: true }
+                )
             })
-        }
-        else {
+        } else {
             false
         }
     }
@@ -3183,13 +3193,13 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.write_expr(expr, ctx)?;
                 }
 
-                let needs_depth_fix = if let Expression::GlobalVariable(global_handle) = ctx.expressions[image] {
-                    let ep_info = self.info.get_entry_point(self.entry_point_idx as usize);
-                    self.needs_depth_fix(ep_info, global_handle, &class)
-                }
-                else {
-                    false
-                };
+                let needs_depth_fix =
+                    if let Expression::GlobalVariable(global_handle) = ctx.expressions[image] {
+                        let ep_info = self.info.get_entry_point(self.entry_point_idx as usize);
+                        self.needs_depth_fix(ep_info, global_handle, &class)
+                    } else {
+                        false
+                    };
 
                 match level {
                     // Auto needs no more arguments
@@ -3270,9 +3280,6 @@ impl<'a, W: Write> Writer<'a, W> {
                     // parser thinks it will yield f32, but in reality it yields vec4f
                     write!(self.out, ".x")?;
                 }
-
-
-                // TODO: if depth texture but not comparison sampler, add ".x"
             }
             Expression::ImageLoad {
                 image,
