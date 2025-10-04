@@ -40,11 +40,19 @@ Bottom level categories:
 
 ## Unreleased
 
+## v27.0.2 (2025-10-03)
+
 ### Bug Fixes
 
 #### DX12
 
 - Fix device creation failures for devices that do not support mesh shaders. By @vorporeal in [#8297](https://github.com/gfx-rs/wgpu/pull/8297).
+
+## v27.0.1 (2025-10-02)
+
+### Bug Fixes
+
+- Fixed the build on docs.rs. By @cwfitzgerald in [#8292](https://github.com/gfx-rs/wgpu/pull/8292).
 
 ## v27.0.0 (2025-10-01)
 
