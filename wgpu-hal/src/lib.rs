@@ -1623,8 +1623,6 @@ bitflags!(
         /// D3D12: Add support for the builtins that the other flags enable for
         /// indirect execution.
         const INDIRECT_BUILTIN_UPDATE = 1 << 2;
-        /// D3D12: Add support for mesh shaders.
-        const MESH_SHADER = 1 << 3;
     }
 );
 

@@ -3420,17 +3420,11 @@ impl Device {
             .map(|bgl| bgl.raw())
             .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
 
-        let mut additional_flags = hal::PipelineLayoutFlags::empty();
-        if self.indirect_validation.is_some() {
-            additional_flags |= hal::PipelineLayoutFlags::INDIRECT_BUILTIN_UPDATE;
-        }
-        if self
-            .features
-            .features_wgpu
-            .contains(wgt::FeaturesWGPU::EXPERIMENTAL_MESH_SHADER)
-        {
-            additional_flags |= hal::PipelineLayoutFlags::MESH_SHADER;
-        }
+        let additional_flags = if self.indirect_validation.is_some() {
+            hal::PipelineLayoutFlags::INDIRECT_BUILTIN_UPDATE
+        } else {
+            hal::PipelineLayoutFlags::empty()
+        };
 
         let hal_desc = hal::PipelineLayoutDescriptor {
             label: desc.label.to_hal(self.instance_flags),

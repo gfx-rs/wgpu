@@ -1381,7 +1381,11 @@ impl crate::Device for super::Device {
                     size_of_val(&first_vertex) + size_of_val(&first_instance) + size_of_val(&other)
                 };
 
-                let draw_mesh = if desc.flags.contains(crate::PipelineLayoutFlags::MESH_SHADER) {
+                let draw_mesh = if self
+                    .features
+                    .features_wgpu
+                    .contains(wgt::FeaturesWGPU::EXPERIMENTAL_MESH_SHADER)
+                {
                     Some(Self::create_command_signature(
                         &self.raw,
                         Some(&raw),
