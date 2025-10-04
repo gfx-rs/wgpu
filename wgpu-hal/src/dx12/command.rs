@@ -1404,7 +1404,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.prepare_dispatch([0; 3]);
         let cmd_list6: Direct3D12::ID3D12GraphicsCommandList6 =
             self.list.as_ref().unwrap().cast().unwrap();
-        let Some(command_signature) = self.shared.cmd_signatures.draw_mesh.as_ref() else {
+        let Some(ref command_signature) = self.shared.cmd_signatures.draw_mesh else {
             panic!("Feature `MESH_SHADING` not enabled");
         };
         unsafe {
