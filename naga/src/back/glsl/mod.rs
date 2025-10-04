@@ -1040,19 +1040,15 @@ impl<'a, W: Write> Writer<'a, W> {
 
     fn needs_depth_fix(&mut self, ep_info: &valid::FunctionInfo, handle: Handle<crate::GlobalVariable>, class: &crate::ImageClass) -> bool {
         if let crate::ImageClass::Depth { multi: false } = class {
-            let has_shadow_sampler = ep_info.sampling_set.iter().all(|key| {
+            // if any sampler uses the comparison sampler, a fix is not needed. Otherwise, we need to actually sample a regular texture as far as glsl is concerned
+            !ep_info.sampling_set.iter().all(|key| {
                 let data = &self.module.global_variables[key.sampler];
                 if key.image != handle {
                     return false;
                 }
-                return if let TypeInner::Sampler { comparison: true } = &self.module.types[data.ty].inner {
-                    true
-                } else {
-                    false
-                }
-            });
 
-            !has_shadow_sampler
+                matches!(self.module.types[data.ty].inner, TypeInner::Sampler { comparison: true })
+            })
         }
         else {
             false
