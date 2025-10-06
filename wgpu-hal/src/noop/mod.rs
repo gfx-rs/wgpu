@@ -140,7 +140,7 @@ pub fn adapter_info() -> wgt::AdapterInfo {
         driver: String::from("wgpu"),
         driver_info: String::new(),
         backend: wgt::Backend::Noop,
-        transient_saves_memory: true,
+        transient_saves_memory: false,
     }
 }
 
