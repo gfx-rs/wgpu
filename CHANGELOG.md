@@ -73,6 +73,12 @@ SamplerDescriptor {
 }
 ```
 
+### Bug Fixes
+
+#### General
+
+- Reject fragment shader output `location`s > `max_color_attachments` limit. By @ErichDonGubler in [#8316](https://github.com/gfx-rs/wgpu/pull/8316).
+
 ## v27.0.2 (2025-10-03)
 
 ### Bug Fixes
