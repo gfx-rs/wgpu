@@ -1415,7 +1415,7 @@ pub struct AdapterInfo {
     /// Backend used for device
     pub backend: Backend,
     /// If true, adding [`TextureUsages::TRANSIENT`] will decrease memory usage.
-    pub supports_transient: bool,
+    pub transient_saves_memory: bool,
 }
 
 /// Hints to the device about the memory allocation strategy.

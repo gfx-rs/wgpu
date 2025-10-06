@@ -1691,7 +1691,7 @@ impl super::Instance {
                     .to_owned()
             },
             backend: wgt::Backend::Vulkan,
-            supports_transient: supports_lazily_allocated,
+            transient_saves_memory: supports_lazily_allocated,
         };
         let (available_features, mut downlevel_flags) =
             phd_features.to_wgpu(&self.shared.raw, phd, &phd_capabilities);
