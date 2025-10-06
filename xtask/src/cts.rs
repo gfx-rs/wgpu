@@ -36,16 +36,19 @@ use regex_lite::{Regex, RegexBuilder};
 use std::{ffi::OsString, sync::LazyLock};
 use xshell::Shell;
 
-use crate::util::git_version_at_least;
+use crate::util::{git_version_at_least, looks_like_git_sha};
 
 /// Path within the repository where the CTS will be checked out.
 const CTS_CHECKOUT_PATH: &str = "cts";
+
+/// Path to git's `shallow` file.
+const GIT_SHALLOW_PATH: &str = ".git/shallow";
 
 /// Path within the repository to a file containing the git revision of the CTS to check out.
 const CTS_REVISION_PATH: &str = "cts_runner/revision.txt";
 
 /// URL of the CTS git repository.
-const CTS_GIT_URL: &str = "https://github.com/gpuweb/cts.git";
+const CTS_GITHUB_PATH: &str = "gpuweb/cts";
 
 /// Path to default CTS test list.
 const CTS_DEFAULT_TEST_LIST: &str = "cts_runner/test.lst";
@@ -54,6 +57,100 @@ const CTS_DEFAULT_TEST_LIST: &str = "cts_runner/test.lst";
 struct TestLine {
     pub selector: OsString,
     pub fails_if: Vec<String>,
+}
+
+fn have_git_sha(shell: &Shell, sha: &str) -> bool {
+    shell
+        .cmd("git")
+        .args(["cat-file", "commit", sha])
+        .quiet()
+        .ignore_stdout()
+        .ignore_stderr()
+        .run()
+        .is_ok()
+}
+
+fn maybe_deepen_git_repo(shell: &Shell, desired: &str) -> anyhow::Result<()> {
+    if shell
+        .cmd("curl")
+        .args([
+            "-f",
+            "-L",
+            "-I",
+            "-H",
+            "Accept: application/vnd.github+json",
+            "-H",
+            "X-GitHub-Api-Version: 2022-11-28",
+        ])
+        .arg(format!(
+            "https://api.github.com/repos/{CTS_GITHUB_PATH}/commits/{desired}"
+        ))
+        .quiet()
+        .ignore_stdout()
+        .ignore_stderr()
+        .run()
+        .is_err()
+    {
+        log::warn!("Not deepening repo because the desired CTS SHA was not found on GitHub.");
+        return Ok(());
+    }
+
+    if !shell.path_exists(GIT_SHALLOW_PATH) {
+        log::warn!("Not deepening repo because it is not a shallow clone.");
+        return Ok(());
+    }
+
+    let shallow = shell
+        .read_file(GIT_SHALLOW_PATH)
+        .context(format!(
+            "Failed to read git shallow SHA from {GIT_SHALLOW_PATH}"
+        ))?
+        .trim()
+        .to_string();
+
+    if !looks_like_git_sha(&shallow) {
+        log::warn!(
+            "Automatic deepening of git repo requires a shallow clone with a single graft point"
+        );
+        return Ok(());
+    }
+
+    let output = shell
+        .cmd("curl")
+        .args([
+            "-f",
+            "-L",
+            "-H",
+            "Accept: application/vnd.github+json",
+            "-H",
+            "X-GitHub-Api-Version: 2022-11-28",
+        ])
+        .arg(format!(
+            "https://api.github.com/repos/{CTS_GITHUB_PATH}/compare/{desired}...{shallow}"
+        ))
+        .output()
+        .context("Error calling GitHub API")?;
+
+    let gh_json: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&output.stdout).context("Failed parsing GitHub API JSON")?;
+
+    let Some(deepen_count) = gh_json
+        .get("total_commits")
+        .and_then(serde_json::Value::as_u64)
+    else {
+        bail!("missing or invalid total_commits");
+    };
+
+    log::info!("Fetching CTS with --deepen {deepen_count}");
+
+    shell
+        .cmd("git")
+        .args(["fetch", "--deepen", &deepen_count.to_string()])
+        .quiet()
+        .run()
+        .context("Failed to deepen git repo")?;
+
+    Ok(())
 }
 
 pub fn run_cts(
@@ -142,7 +239,11 @@ pub fn run_cts(
         }
         let mut cmd = shell
             .cmd("git")
-            .args(["clone", CTS_GIT_URL, CTS_CHECKOUT_PATH])
+            .args([
+                "clone",
+                &format!("https://github.com/{CTS_GITHUB_PATH}.git"),
+                CTS_CHECKOUT_PATH,
+            ])
             .quiet();
 
         if git_version_at_least(&shell, [2, 49, 0])? {
@@ -187,22 +288,24 @@ pub fn run_cts(
         }
 
         // If we don't have the CTS commit we want, try to fetch it.
-        if shell
-            .cmd("git")
-            .args(["cat-file", "commit", &cts_revision])
-            .quiet()
-            .ignore_stdout()
-            .ignore_stderr()
-            .run()
-            .is_err()
-        {
-            log::info!("Fetching CTS");
+        if !have_git_sha(&shell, &cts_revision) {
+            log::info!("Desired SHA not found, fetching CTS");
             shell
                 .cmd("git")
                 .args(["fetch", "--quiet"])
                 .quiet()
                 .run()
                 .context("Failed to fetch CTS")?;
+        }
+
+        // If we still don't have the commit we want, maybe we need more history.
+        if !have_git_sha(&shell, &cts_revision) {
+            log::info!("Desired SHA still not found, checking if missing from shallow clone");
+            maybe_deepen_git_repo(&shell, &cts_revision)?;
+        }
+
+        if !have_git_sha(&shell, &cts_revision) {
+            bail!("Unable to obtain the desired CTS revision {cts_revision}");
         }
     } else {
         shell.change_dir(CTS_CHECKOUT_PATH);
