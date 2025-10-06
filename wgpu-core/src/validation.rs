@@ -313,6 +313,14 @@ pub enum StageError {
     MultipleEntryPointsFound,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+    #[error(
+        "Location[{location}] {var}'s index exceeds the `max_color_attachments` limit ({limit})"
+    )]
+    ColorAttachmentLocationTooLarge {
+        location: u32,
+        var: InterfaceVar,
+        limit: u32,
+    },
 }
 
 impl WebGpuError for StageError {
@@ -334,7 +342,8 @@ impl WebGpuError for StageError {
             | Self::TooManyVaryings { .. }
             | Self::MissingEntryPoint(..)
             | Self::NoEntryPointFound
-            | Self::MultipleEntryPointsFound => return ErrorType::Validation,
+            | Self::MultipleEntryPointsFound
+            | Self::ColorAttachmentLocationTooLarge { .. } => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
@@ -1317,7 +1326,6 @@ impl Interface {
             }
         }
 
-        #[expect(clippy::single_match)]
         match shader_stage {
             naga::ShaderStage::Vertex => {
                 for output in entry_point.outputs.iter() {
@@ -1352,6 +1360,20 @@ impl Interface {
                     }
                 }
             }
+            naga::ShaderStage::Fragment => {
+                for output in &entry_point.outputs {
+                    let &Varying::Local { location, ref iv } = output else {
+                        continue;
+                    };
+                    if location >= self.limits.max_color_attachments {
+                        return Err(StageError::ColorAttachmentLocationTooLarge {
+                            location,
+                            var: iv.clone(),
+                            limit: self.limits.max_color_attachments,
+                        });
+                    }
+                }
+            }
             _ => (),
         }
 
@@ -1370,6 +1392,7 @@ impl Interface {
                 Varying::BuiltIn(_) => None,
             })
             .collect();
+
         Ok(outputs)
     }
 
