@@ -116,6 +116,24 @@ impl super::Device {
         // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
         let capacity_views = limits.max_non_sampler_bindings as u64;
 
+        let draw_mesh = if features
+            .features_wgpu
+            .contains(wgt::FeaturesWGPU::EXPERIMENTAL_MESH_SHADER)
+        {
+            Some(Self::create_command_signature(
+                &raw,
+                None,
+                size_of::<wgt::DispatchIndirectArgs>(),
+                &[Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                    Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH,
+                    ..Default::default()
+                }],
+                0,
+            )?)
+        } else {
+            None
+        };
+
         let shared = super::DeviceShared {
             adapter,
             zero_buffer,
@@ -140,16 +158,7 @@ impl super::Device {
                     }],
                     0,
                 )?,
-                draw_mesh: Self::create_command_signature(
-                    &raw,
-                    None,
-                    size_of::<wgt::DispatchIndirectArgs>(),
-                    &[Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
-                        Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH,
-                        ..Default::default()
-                    }],
-                    0,
-                )?,
+                draw_mesh,
                 dispatch: Self::create_command_signature(
                     &raw,
                     None,
@@ -1371,6 +1380,29 @@ impl crate::Device for super::Device {
                     };
                     size_of_val(&first_vertex) + size_of_val(&first_instance) + size_of_val(&other)
                 };
+
+                let draw_mesh = if self
+                    .features
+                    .features_wgpu
+                    .contains(wgt::FeaturesWGPU::EXPERIMENTAL_MESH_SHADER)
+                {
+                    Some(Self::create_command_signature(
+                        &self.raw,
+                        Some(&raw),
+                        special_constant_buffer_args_len + size_of::<wgt::DispatchIndirectArgs>(),
+                        &[
+                            constant_indirect_argument_desc,
+                            Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
+                                Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH,
+                                ..Default::default()
+                            },
+                        ],
+                        0,
+                    )?)
+                } else {
+                    None
+                };
+
                 Some(super::CommandSignatures {
                     draw: Self::create_command_signature(
                         &self.raw,
@@ -1399,19 +1431,7 @@ impl crate::Device for super::Device {
                         ],
                         0,
                     )?,
-                    draw_mesh: Self::create_command_signature(
-                        &self.raw,
-                        Some(&raw),
-                        special_constant_buffer_args_len + size_of::<wgt::DispatchIndirectArgs>(),
-                        &[
-                            constant_indirect_argument_desc,
-                            Direct3D12::D3D12_INDIRECT_ARGUMENT_DESC {
-                                Type: Direct3D12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_MESH,
-                                ..Default::default()
-                            },
-                        ],
-                        0,
-                    )?,
+                    draw_mesh,
                     dispatch: Self::create_command_signature(
                         &self.raw,
                         Some(&raw),

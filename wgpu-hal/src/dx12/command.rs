@@ -1338,14 +1338,17 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         let cmd_list6: Direct3D12::ID3D12GraphicsCommandList6 =
             self.list.as_ref().unwrap().cast().unwrap();
-        let cmd_signature = &self
+        let Some(cmd_signature) = &self
             .pass
             .layout
             .special_constants
             .as_ref()
             .and_then(|sc| sc.indirect_cmd_signatures.as_ref())
             .unwrap_or_else(|| &self.shared.cmd_signatures)
-            .draw_mesh;
+            .draw_mesh
+        else {
+            panic!("Feature `MESH_SHADING` not enabled");
+        };
         unsafe {
             cmd_list6.ExecuteIndirect(cmd_signature, draw_count, &buffer.resource, offset, None, 0);
         }
@@ -1401,9 +1404,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.prepare_dispatch([0; 3]);
         let cmd_list6: Direct3D12::ID3D12GraphicsCommandList6 =
             self.list.as_ref().unwrap().cast().unwrap();
+        let Some(ref command_signature) = self.shared.cmd_signatures.draw_mesh else {
+            panic!("Feature `MESH_SHADING` not enabled");
+        };
         unsafe {
             cmd_list6.ExecuteIndirect(
-                &self.shared.cmd_signatures.draw_mesh,
+                command_signature,
                 max_count,
                 &buffer.resource,
                 offset,

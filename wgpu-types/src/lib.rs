@@ -7835,7 +7835,7 @@ pub struct ShaderRuntimeChecks {
 impl ShaderRuntimeChecks {
     /// Creates a new configuration where the shader is fully checked.
     #[must_use]
-    pub fn checked() -> Self {
+    pub const fn checked() -> Self {
         unsafe { Self::all(true) }
     }
 
@@ -7846,7 +7846,7 @@ impl ShaderRuntimeChecks {
     /// See the documentation for the `set_*` methods for the safety requirements
     /// of each sub-configuration.
     #[must_use]
-    pub fn unchecked() -> Self {
+    pub const fn unchecked() -> Self {
         unsafe { Self::all(false) }
     }
 
@@ -7858,7 +7858,7 @@ impl ShaderRuntimeChecks {
     /// See the documentation for the `set_*` methods for the safety requirements
     /// of each sub-configuration.
     #[must_use]
-    pub unsafe fn all(all_checks: bool) -> Self {
+    pub const unsafe fn all(all_checks: bool) -> Self {
         Self {
             bounds_checks: all_checks,
             force_loop_bounding: all_checks,
