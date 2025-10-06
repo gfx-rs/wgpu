@@ -1317,37 +1317,42 @@ impl Interface {
             }
         }
 
-        if shader_stage == naga::ShaderStage::Vertex {
-            for output in entry_point.outputs.iter() {
-                //TODO: count builtins towards the limit?
-                inter_stage_components += match *output {
-                    Varying::Local { ref iv, .. } => iv.ty.dim.num_components(),
-                    Varying::BuiltIn(_) => 0,
-                };
+        #[expect(clippy::single_match)]
+        match shader_stage {
+            naga::ShaderStage::Vertex => {
+                for output in entry_point.outputs.iter() {
+                    //TODO: count builtins towards the limit?
+                    inter_stage_components += match *output {
+                        Varying::Local { ref iv, .. } => iv.ty.dim.num_components(),
+                        Varying::BuiltIn(_) => 0,
+                    };
 
-                if let Some(
-                    cmp @ wgt::CompareFunction::Equal | cmp @ wgt::CompareFunction::NotEqual,
-                ) = compare_function
-                {
-                    if let Varying::BuiltIn(naga::BuiltIn::Position { invariant: false }) = *output
+                    if let Some(
+                        cmp @ wgt::CompareFunction::Equal | cmp @ wgt::CompareFunction::NotEqual,
+                    ) = compare_function
                     {
-                        log::warn!(
-                            concat!(
-                                "Vertex shader with entry point {} outputs a ",
-                                "@builtin(position) without the @invariant attribute and ",
-                                "is used in a pipeline with {cmp:?}. On some machines, ",
-                                "this can cause bad artifacting as {cmp:?} assumes the ",
-                                "values output from the vertex shader exactly match the ",
-                                "value in the depth buffer. The @invariant attribute on the ",
-                                "@builtin(position) vertex output ensures that the exact ",
-                                "same pixel depths are used every render."
-                            ),
-                            entry_point_name,
-                            cmp = cmp
-                        );
+                        if let Varying::BuiltIn(naga::BuiltIn::Position { invariant: false }) =
+                            *output
+                        {
+                            log::warn!(
+                                concat!(
+                                    "Vertex shader with entry point {} outputs a ",
+                                    "@builtin(position) without the @invariant attribute and ",
+                                    "is used in a pipeline with {cmp:?}. On some machines, ",
+                                    "this can cause bad artifacting as {cmp:?} assumes the ",
+                                    "values output from the vertex shader exactly match the ",
+                                    "value in the depth buffer. The @invariant attribute on the ",
+                                    "@builtin(position) vertex output ensures that the exact ",
+                                    "same pixel depths are used every render."
+                                ),
+                                entry_point_name,
+                                cmp = cmp
+                            );
+                        }
                     }
                 }
             }
+            _ => (),
         }
 
         if inter_stage_components > self.limits.max_inter_stage_shader_components {
