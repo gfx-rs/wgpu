@@ -920,7 +920,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     Flags: Direct3D12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
                     Anonymous: Direct3D12::D3D12_RESOURCE_BARRIER_0 {
                         // Note: this assumes `D3D12_RESOURCE_STATE_RENDER_TARGET`.
-                        // If it's not the case, we can include the `TextureUses` in `PassResove`.
+                        // If it's not the case, we can include the `TextureUses` in `PassResolve`.
                         Transition: mem::ManuallyDrop::new(
                             Direct3D12::D3D12_RESOURCE_TRANSITION_BARRIER {
                                 pResource: unsafe { borrow_interface_temporarily(&resolve.src.0) },
