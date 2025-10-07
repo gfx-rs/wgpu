@@ -1332,10 +1332,18 @@ impl Interface {
                     if let Varying::BuiltIn(naga::BuiltIn::Position { invariant: false }) = *output
                     {
                         log::warn!(
-                            "Vertex shader with entry point {entry_point_name} outputs a @builtin(position) without the @invariant \
-                            attribute and is used in a pipeline with {cmp:?}. On some machines, this can cause bad artifacting as {cmp:?} assumes \
-                            the values output from the vertex shader exactly match the value in the depth buffer. The @invariant attribute on the \
-                            @builtin(position) vertex output ensures that the exact same pixel depths are used every render."
+                            concat!(
+                                "Vertex shader with entry point {} outputs a ",
+                                "@builtin(position) without the @invariant attribute and ",
+                                "is used in a pipeline with {cmp:?}. On some machines, ",
+                                "this can cause bad artifacting as {cmp:?} assumes the ",
+                                "values output from the vertex shader exactly match the ",
+                                "value in the depth buffer. The @invariant attribute on the ",
+                                "@builtin(position) vertex output ensures that the exact ",
+                                "same pixel depths are used every render."
+                            ),
+                            entry_point_name,
+                            cmp = cmp
                         );
                     }
                 }
