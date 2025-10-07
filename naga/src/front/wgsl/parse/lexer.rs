@@ -35,6 +35,93 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
     input.split_at(pos)
 }
 
+struct UnclosedCandidate {
+    index: usize,
+    depth: usize,
+}
+
+fn consume_tokens<'a>(
+    tokens: &mut Vec<(TokenSpan<'a>, &'a str)>,
+    source: &'a str,
+    mut input: &'a str,
+    ignore_doc_comments: bool,
+) {
+    assert!(tokens.is_empty());
+
+    let mut looking_for_template_start = false;
+    let mut pending: Vec<UnclosedCandidate> = Vec::new();
+    let mut depth = 0;
+
+    fn pop_until(pending: &mut Vec<UnclosedCandidate>, depth: usize) {
+        while pending
+            .last()
+            .map(|candidate| candidate.depth >= depth)
+            .unwrap_or(false)
+        {
+            pending.pop();
+        }
+    }
+
+    loop {
+        let waiting_for_template_end = pending
+            .last()
+            .map(|candidate| candidate.depth == depth)
+            .unwrap_or(false);
+
+        let (token, rest) = consume_token(input, waiting_for_template_end, ignore_doc_comments);
+        let span = Span::from(source.len() - input.len()..source.len() - rest.len());
+        tokens.push(((token, span), rest));
+        input = rest;
+
+        match token {
+            Token::Word(_) => {
+                looking_for_template_start = true;
+                continue;
+            }
+            Token::Trivia | Token::DocComment(_) | Token::ModuleDocComment(_)
+                if looking_for_template_start =>
+            {
+                continue;
+            }
+            Token::Paren('<') if looking_for_template_start => {
+                pending.push(UnclosedCandidate {
+                    index: tokens.len() - 1,
+                    depth,
+                });
+            }
+            Token::Paren('>') if waiting_for_template_end => {
+                let candidate = pending.pop().unwrap();
+                let token = tokens.get_mut(candidate.index).unwrap();
+                // TODO: -- mark it as template start
+            }
+            Token::Paren('(' | '[') => {
+                depth += 1;
+            }
+            Token::Paren(')' | ']') => {
+                pop_until(&mut pending, depth);
+                depth = depth.saturating_sub(1);
+            }
+            Token::Operation('=') | Token::Separator(':' | ';') | Token::Paren('{') => {
+                pending.clear();
+                depth = 0;
+            }
+            Token::LogicalOperation('&') | Token::LogicalOperation('|') => {
+                pop_until(&mut pending, depth);
+            }
+            Token::End => break,
+            _ => {}
+        }
+
+        looking_for_template_start = false;
+
+        if pending.is_empty() {
+            break;
+        }
+    }
+
+    tokens.reverse();
+}
+
 /// Return the token at the start of `input`.
 ///
 /// If `generic` is `false`, then the bit shift operators `>>` or `<<`
@@ -52,7 +139,11 @@ fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
 /// If `ignore_doc_comments` is true, doc comments are treated as [`Token::Trivia`].
 ///
 /// [§3.1 Parsing]: https://gpuweb.github.io/gpuweb/wgsl/#parsing
-fn consume_token(input: &str, generic: bool, ignore_doc_comments: bool) -> (Token<'_>, &str) {
+fn consume_token(
+    input: &str,
+    waiting_for_template_end: bool,
+    ignore_doc_comments: bool,
+) -> (Token<'_>, &str) {
     let mut chars = input.chars();
     let cur = match chars.next() {
         Some(c) => c,
@@ -71,9 +162,13 @@ fn consume_token(input: &str, generic: bool, ignore_doc_comments: bool) -> (Toke
         '(' | ')' | '{' | '}' | '[' | ']' => (Token::Paren(cur), chars.as_str()),
         '<' | '>' => {
             let og_chars = chars.as_str();
+            if cur == '>' && waiting_for_template_end {
+                // TODO: -- mark it as template end
+                return (Token::Paren(cur), og_chars);
+            }
             match chars.next() {
-                Some('=') if !generic => (Token::LogicalOperation(cur), chars.as_str()),
-                Some(c) if c == cur && !generic => {
+                Some('=') => (Token::LogicalOperation(cur), chars.as_str()),
+                Some(c) if c == cur => {
                     let og_chars = chars.as_str();
                     match chars.next() {
                         Some('=') => (Token::AssignmentOperation(cur), chars.as_str()),
@@ -261,6 +356,8 @@ pub(in crate::front::wgsl) struct Lexer<'a> {
     /// statements.
     last_end_offset: usize,
 
+    tokens: Vec<(TokenSpan<'a>, &'a str)>,
+
     /// Whether or not to ignore doc comments.
     /// If `true`, doc comments are treated as [`Token::Trivia`].
     ignore_doc_comments: bool,
@@ -277,6 +374,7 @@ impl<'a> Lexer<'a> {
             input,
             source: input,
             last_end_offset: 0,
+            tokens: Vec::new(),
             enable_extensions: EnableExtensions::empty(),
             ignore_doc_comments,
         }
@@ -380,41 +478,36 @@ impl<'a> Lexer<'a> {
     /// occur, but not angle brackets.
     #[must_use]
     pub(in crate::front::wgsl) fn next(&mut self) -> TokenSpan<'a> {
-        self.next_impl(false, true)
-    }
-
-    /// Return the next non-whitespace token from `self`.
-    ///
-    /// Assume we are in a parse state where angle brackets may occur,
-    /// but not bit shift operators.
-    #[must_use]
-    pub(in crate::front::wgsl) fn next_generic(&mut self) -> TokenSpan<'a> {
-        self.next_impl(true, true)
+        self.next_impl(true)
     }
 
     #[cfg(test)]
     pub fn next_with_unignored_doc_comments(&mut self) -> TokenSpan<'a> {
-        self.next_impl(false, false)
+        self.next_impl(false)
     }
 
     /// Return the next non-whitespace token from `self`, with a span.
     ///
     /// See [`consume_token`] for the meaning of `generic`.
-    fn next_impl(&mut self, generic: bool, ignore_doc_comments: bool) -> TokenSpan<'a> {
-        let mut start_byte_offset = self.current_byte_offset();
+    fn next_impl(&mut self, ignore_doc_comments: bool) -> TokenSpan<'a> {
         loop {
-            let (token, rest) = consume_token(
-                self.input,
-                generic,
-                ignore_doc_comments || self.ignore_doc_comments,
-            );
+            if self.tokens.is_empty() {
+                consume_tokens(
+                    &mut self.tokens,
+                    self.source,
+                    self.input,
+                    ignore_doc_comments || self.ignore_doc_comments,
+                );
+            }
+            assert!(!self.tokens.is_empty());
+            let (token, rest) = self.tokens.pop().unwrap();
+
             self.input = rest;
-            match token {
-                Token::Trivia => start_byte_offset = self.current_byte_offset(),
-                _ => {
-                    self.last_end_offset = self.current_byte_offset();
-                    return (token, self.span_from(start_byte_offset));
-                }
+            self.last_end_offset = self.current_byte_offset();
+
+            match token.0 {
+                Token::Trivia => {}
+                _ => return token,
             }
         }
     }
@@ -424,6 +517,7 @@ impl<'a> Lexer<'a> {
         let input = self.input;
         let last_end_offset = self.last_end_offset;
         let token = self.next();
+        self.tokens.push((token, self.input));
         self.input = input;
         self.last_end_offset = last_end_offset;
         token
@@ -437,6 +531,7 @@ impl<'a> Lexer<'a> {
         if token.0 == what {
             true
         } else {
+            self.tokens.push((token, self.input));
             self.input = input;
             self.last_end_offset = last_end_offset;
             false
@@ -464,7 +559,7 @@ impl<'a> Lexer<'a> {
         &mut self,
         expected: char,
     ) -> Result<'a, ()> {
-        let next = self.next_generic();
+        let next = self.next();
         if next.0 == Token::Paren(expected) {
             Ok(())
         } else {
@@ -1050,6 +1145,7 @@ fn test_doc_comments_module() {
             Token::ModuleDocComment("/*! Different module comment again */"),
             Token::ModuleDocComment("//! After a break is supported."),
             Token::Word("const"),
+            Token::ModuleDocComment("//! After anything else is not."),
         ],
     );
 }
