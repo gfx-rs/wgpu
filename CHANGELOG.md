@@ -72,6 +72,11 @@ SamplerDescriptor {
 ...
 }
 ```
+### Changes
+
+#### General
+
+- Texture now has `from_custom`. By @R-Cramer4 in [#8315](https://github.com/gfx-rs/wgpu/pull/8315).
 
 ### Bug Fixes
 
