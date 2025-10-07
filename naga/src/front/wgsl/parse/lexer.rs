@@ -370,6 +370,9 @@ impl<'a> Lexer<'a> {
     pub(in crate::front::wgsl) fn span_from(&self, offset: usize) -> Span {
         Span::from(offset..self.last_end_offset)
     }
+    pub(in crate::front::wgsl) fn span_with_start(&self, span: Span) -> Span {
+        span.until(&Span::from(0..self.last_end_offset))
+    }
 
     /// Return the next non-whitespace token from `self`.
     ///
