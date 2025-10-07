@@ -10,11 +10,11 @@ attributes = [
     { offset = 4, shader_location = 1, format = "Float32x4" },
 ]
 id = 1
-indexed_by_vertex = true
+step_mode = "ByVertex"
 stride = 20
 
 [[msl_pipeline.vertex_buffer_mappings]]
 attributes = [{ offset = 0, shader_location = 2, format = "Float32x2" }]
 id = 2
-indexed_by_vertex = false
+step_mode = "ByInstance"
 stride = 16

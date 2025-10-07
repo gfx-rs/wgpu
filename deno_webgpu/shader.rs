@@ -96,11 +96,10 @@ impl GPUCompilationMessage {
     self.message.clone()
   }
 
-  // Naming this `type` or `r#type` does not work.
-  // https://github.com/gfx-rs/wgpu/issues/7778
   #[getter]
   #[string]
-  fn ty(&self) -> &'static str {
+  #[rename("type")]
+  fn r#type(&self) -> &'static str {
     self.r#type.as_str()
   }
 

@@ -5,7 +5,7 @@
 using metal::uint;
 
 
-void fb1_(
+void f_u0028_b1_u003b(
     thread bool& cond
 ) {
     uint2 loop_bound = uint2(4294967295u);
@@ -29,7 +29,7 @@ void main_1(
 ) {
     bool param = {};
     param = false;
-    fb1_(param);
+    f_u0028_b1_u003b(param);
     return;
 }
 

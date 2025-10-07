@@ -75,9 +75,11 @@ impl GPUCommandEncoder {
         .map(|attachment| {
           attachment.into_option().map(|attachment| {
             wgpu_core::command::RenderPassColorAttachment {
-              view: attachment.view.id,
+              view: attachment.view.to_view_id(),
               depth_slice: attachment.depth_slice,
-              resolve_target: attachment.resolve_target.map(|target| target.id),
+              resolve_target: attachment
+                .resolve_target
+                .map(|target| target.to_view_id()),
               load_op: attachment
                 .load_op
                 .with_default_value(attachment.clear_value.map(Into::into)),
@@ -103,7 +105,7 @@ impl GPUCommandEncoder {
                 }
 
                 Ok(wgpu_core::command::RenderPassDepthStencilAttachment {
-                    view: attachment.view.id,
+                    view: attachment.view.to_view_id(),
                     depth: PassChannel {
                         load_op: attachment
                             .depth_load_op
@@ -191,6 +193,7 @@ impl GPUCommandEncoder {
   }
 
   #[required(2)]
+  #[undefined]
   fn copy_buffer_to_buffer<'a>(
     &self,
     scope: &mut v8::HandleScope<'a>,
@@ -280,6 +283,7 @@ impl GPUCommandEncoder {
   }
 
   #[required(3)]
+  #[undefined]
   fn copy_buffer_to_texture(
     &self,
     #[webidl] source: GPUTexelCopyBufferInfo,
@@ -315,6 +319,7 @@ impl GPUCommandEncoder {
   }
 
   #[required(3)]
+  #[undefined]
   fn copy_texture_to_buffer(
     &self,
     #[webidl] source: GPUTexelCopyTextureInfo,
@@ -350,6 +355,7 @@ impl GPUCommandEncoder {
   }
 
   #[required(3)]
+  #[undefined]
   fn copy_texture_to_texture(
     &self,
     #[webidl] source: GPUTexelCopyTextureInfo,
@@ -383,6 +389,7 @@ impl GPUCommandEncoder {
   }
 
   #[required(1)]
+  #[undefined]
   fn clear_buffer(
     &self,
     #[webidl] buffer: Ptr<GPUBuffer>,
@@ -397,6 +404,7 @@ impl GPUCommandEncoder {
   }
 
   #[required(5)]
+  #[undefined]
   fn resolve_query_set(
     &self,
     #[webidl] query_set: Ptr<super::query_set::GPUQuerySet>,

@@ -135,7 +135,7 @@ pub trait DynDevice: DynResource {
         &self,
         fence: &dyn DynFence,
         value: FenceValue,
-        timeout_ms: u32,
+        timeout: Option<core::time::Duration>,
     ) -> Result<bool, DeviceError>;
 
     unsafe fn start_graphics_debugger_capture(&self) -> bool;
@@ -486,10 +486,10 @@ impl<D: Device + DynResource> DynDevice for D {
         &self,
         fence: &dyn DynFence,
         value: FenceValue,
-        timeout_ms: u32,
+        timeout: Option<core::time::Duration>,
     ) -> Result<bool, DeviceError> {
         let fence = fence.expect_downcast_ref();
-        unsafe { D::wait(self, fence, value, timeout_ms) }
+        unsafe { D::wait(self, fence, value, timeout) }
     }
 
     unsafe fn start_graphics_debugger_capture(&self) -> bool {

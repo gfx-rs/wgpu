@@ -3,7 +3,7 @@ use wgpu::{
     vertex_attr_array,
 };
 use wgpu_test::{
-    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
@@ -12,11 +12,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 
 #[gpu_test]
 static SET_ARRAY_STRIDE_TO_0: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .limits(wgpu::Limits::downlevel_defaults())
-            .expect_fail(FailureCase::backend(wgpu::Backends::METAL)),
-    )
+    .parameters(TestParameters::default().limits(wgpu::Limits::downlevel_defaults()))
     .run_async(set_array_stride_to_0);
 
 /// Tests that draws using a vertex buffer with stride of 0 works correctly (especially on the
@@ -189,7 +185,9 @@ async fn set_array_stride_to_0(ctx: TestingContext) {
     let slice = readback_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
 
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     let data = slice.get_mapped_range();
     let succeeded = data.iter().all(|b| *b == u8::MAX);

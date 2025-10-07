@@ -1,0 +1,50 @@
+; SPIR-V
+; Version: 1.5
+; Generator: Khronos Slang Compiler; 0
+; Bound: 28
+; Schema: 0
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Fragment %main "main" %texture %linear_sampler %entryPointParam_main %input_texture_coordinates
+               OpExecutionMode %main OriginUpperLeft
+               OpSource Slang 1
+               OpName %input_texture_coordinates "input.texture_coordinates"
+               OpName %texture "texture"
+               OpName %linear_sampler "linear_sampler"
+               OpName %sampledImage "sampledImage"
+               OpName %entryPointParam_main "entryPointParam_main"
+               OpName %main "main"
+               OpDecorate %input_texture_coordinates Location 0
+               OpDecorate %texture Binding 0
+               OpDecorate %texture DescriptorSet 0
+               OpDecorate %linear_sampler Binding 1
+               OpDecorate %linear_sampler DescriptorSet 0
+               OpDecorate %entryPointParam_main Location 0
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+      %float = OpTypeFloat 32
+    %v2float = OpTypeVector %float 2
+%_ptr_Input_v2float = OpTypePointer Input %v2float
+         %10 = OpTypeImage %float 2D 2 0 0 1 Unknown
+%_ptr_UniformConstant_10 = OpTypePointer UniformConstant %10
+         %14 = OpTypeSampler
+%_ptr_UniformConstant_14 = OpTypePointer UniformConstant %14
+         %18 = OpTypeSampledImage %10
+    %v4float = OpTypeVector %float 4
+        %int = OpTypeInt 32 1
+      %int_1 = OpConstant %int 1
+%_ptr_Output_v4float = OpTypePointer Output %v4float
+%input_texture_coordinates = OpVariable %_ptr_Input_v2float Input
+    %texture = OpVariable %_ptr_UniformConstant_10 UniformConstant
+%linear_sampler = OpVariable %_ptr_UniformConstant_14 UniformConstant
+%entryPointParam_main = OpVariable %_ptr_Output_v4float Output
+       %main = OpFunction %void None %3
+          %4 = OpLabel
+          %7 = OpLoad %v2float %input_texture_coordinates
+         %11 = OpLoad %10 %texture
+         %15 = OpLoad %14 %linear_sampler
+%sampledImage = OpSampledImage %18 %11 %15
+         %21 = OpImageGather %v4float %sampledImage %7 %int_1
+               OpStore %entryPointParam_main %21
+               OpReturn
+               OpFunctionEnd

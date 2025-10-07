@@ -53,6 +53,7 @@ impl GPUQuerySet {
   }
 
   #[fast]
+  #[undefined]
   fn destroy(&self) -> Result<(), JsErrorBox> {
     // TODO(https://github.com/gfx-rs/wgpu/issues/6495): Destroy the query
     // set. Until that is supported, it is okay to do nothing here, the
@@ -60,11 +61,10 @@ impl GPUQuerySet {
     Ok(())
   }
 
-  // Naming this `type` or `r#type` does not work.
-  // https://github.com/gfx-rs/wgpu/issues/7778
   #[getter]
   #[string]
-  fn ty(&self) -> &'static str {
+  #[rename("type")]
+  fn r#type(&self) -> &'static str {
     self.r#type.as_str()
   }
 

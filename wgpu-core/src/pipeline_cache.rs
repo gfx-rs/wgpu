@@ -130,7 +130,7 @@ const ABI: u32 = size_of::<*const ()>() as u32;
 ///
 /// Note that wgpu does not protect against malicious writes to e.g. a file used
 /// to store a pipeline cache.
-/// That is the resonsibility of the end application, such as by using a
+/// That is the responsibility of the end application, such as by using a
 /// private space.
 const HASH_SPACE_VALUE: u64 = 0xFEDCBA9_876543210;
 

@@ -142,6 +142,7 @@ impl GPUDevice {
   }
 
   #[fast]
+  #[undefined]
   fn destroy(&self) {
     self.instance.device_destroy(self.id);
     self
@@ -230,6 +231,7 @@ impl GPUDevice {
       instance: self.instance.clone(),
       error_handler: self.error_handler.clone(),
       id,
+      default_view_id: Default::default(),
       label: descriptor.label,
       size: wgpu_descriptor.size,
       mip_level_count: wgpu_descriptor.mip_level_count,
@@ -403,8 +405,18 @@ impl GPUDevice {
           GPUBindingResource::Sampler(sampler) => {
             BindingResource::Sampler(sampler.id)
           }
+          GPUBindingResource::Texture(texture) => {
+            BindingResource::TextureView(texture.default_view_id())
+          }
           GPUBindingResource::TextureView(texture_view) => {
             BindingResource::TextureView(texture_view.id)
+          }
+          GPUBindingResource::Buffer(buffer) => {
+            BindingResource::Buffer(wgpu_core::binding_model::BufferBinding {
+              buffer: buffer.id,
+              offset: 0,
+              size: NonZeroU64::new(buffer.size),
+            })
           }
           GPUBindingResource::BufferBinding(buffer_binding) => {
             BindingResource::Buffer(wgpu_core::binding_model::BufferBinding {
@@ -623,6 +635,7 @@ impl GPUDevice {
   }
 
   #[required(1)]
+  #[undefined]
   fn push_error_scope(&self, #[webidl] filter: super::error::GPUErrorFilter) {
     self
       .error_handler
@@ -672,7 +685,7 @@ impl GPUDevice {
   fn stop_capture(&self) {
     self
       .instance
-      .device_poll(self.id, wgpu_types::PollType::wait())
+      .device_poll(self.id, wgpu_types::PollType::wait_indefinitely())
       .unwrap();
     unsafe { self.instance.device_stop_graphics_debugger_capture(self.id) };
   }

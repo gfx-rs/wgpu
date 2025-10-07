@@ -68,6 +68,7 @@ impl GPUCanvasContext {
     self.canvas.clone()
   }
 
+  #[undefined]
   fn configure(
     &self,
     #[webidl] configuration: GPUCanvasConfiguration,
@@ -113,6 +114,7 @@ impl GPUCanvasContext {
   }
 
   #[fast]
+  #[undefined]
   fn unconfigure(&self) {
     *self.config.borrow_mut() = None;
   }
@@ -146,6 +148,7 @@ impl GPUCanvasContext {
           instance: config.device.instance.clone(),
           error_handler: config.device.error_handler.clone(),
           id,
+          default_view_id: Default::default(),
           label: "".to_string(),
           size: wgpu_types::Extent3d {
             width: *self.width.borrow(),

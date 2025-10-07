@@ -87,6 +87,7 @@ impl GPURenderBundleEncoder {
     }
   }
 
+  #[undefined]
   fn push_debug_group(
     &self,
     #[webidl] group_label: String,
@@ -110,6 +111,7 @@ impl GPURenderBundleEncoder {
   }
 
   #[fast]
+  #[undefined]
   fn pop_debug_group(&self) -> Result<(), JsErrorBox> {
     let mut encoder = self.encoder.borrow_mut();
     let encoder = encoder.as_mut().ok_or_else(|| {
@@ -119,6 +121,7 @@ impl GPURenderBundleEncoder {
     Ok(())
   }
 
+  #[undefined]
   fn insert_debug_marker(
     &self,
     #[webidl] marker_label: String,
@@ -140,6 +143,7 @@ impl GPURenderBundleEncoder {
     Ok(())
   }
 
+  #[undefined]
   fn set_bind_group<'a>(
     &self,
     scope: &mut v8::HandleScope<'a>,
@@ -226,6 +230,7 @@ impl GPURenderBundleEncoder {
     Ok(())
   }
 
+  #[undefined]
   fn set_pipeline(
     &self,
     #[webidl] pipeline: Ptr<crate::render_pipeline::GPURenderPipeline>,
@@ -243,6 +248,7 @@ impl GPURenderBundleEncoder {
   }
 
   #[required(2)]
+  #[undefined]
   fn set_index_buffer(
     &self,
     #[webidl] buffer: Ptr<GPUBuffer>,
@@ -265,6 +271,7 @@ impl GPURenderBundleEncoder {
   }
 
   #[required(2)]
+  #[undefined]
   fn set_vertex_buffer(
     &self,
     #[webidl(options(enforce_range = true))] slot: u32,
@@ -288,6 +295,7 @@ impl GPURenderBundleEncoder {
   }
 
   #[required(1)]
+  #[undefined]
   fn draw(
     &self,
     #[webidl(options(enforce_range = true))] vertex_count: u32,
@@ -311,6 +319,7 @@ impl GPURenderBundleEncoder {
   }
 
   #[required(1)]
+  #[undefined]
   fn draw_indexed(
     &self,
     #[webidl(options(enforce_range = true))] index_count: u32,
@@ -336,6 +345,7 @@ impl GPURenderBundleEncoder {
   }
 
   #[required(2)]
+  #[undefined]
   fn draw_indirect(
     &self,
     #[webidl] indirect_buffer: Ptr<GPUBuffer>,
@@ -355,6 +365,7 @@ impl GPURenderBundleEncoder {
   }
 
   #[required(2)]
+  #[undefined]
   fn draw_indexed_indirect(
     &self,
     #[webidl] indirect_buffer: Ptr<GPUBuffer>,

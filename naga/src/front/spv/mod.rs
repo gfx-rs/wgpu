@@ -44,7 +44,6 @@ use petgraph::graphmap::GraphMap;
 use super::atomic_upgrade::Upgrades;
 use crate::{
     arena::{Arena, Handle, UniqueArena},
-    path_like::PathLikeOwned,
     proc::{Alignment, Layouter},
     FastHashMap, FastHashSet, FastIndexMap,
 };
@@ -83,6 +82,7 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::GroupNonUniformShuffle,
     spirv::Capability::GroupNonUniformShuffleRelative,
     spirv::Capability::RuntimeDescriptorArray,
+    spirv::Capability::StorageImageMultisample,
     // tricky ones
     spirv::Capability::UniformBufferArrayDynamicIndexing,
     spirv::Capability::StorageBufferArrayDynamicIndexing,
@@ -383,7 +383,7 @@ pub struct Options {
     pub adjust_coordinate_space: bool,
     /// Only allow shaders with the known set of capabilities.
     pub strict_capabilities: bool,
-    pub block_ctx_dump_prefix: Option<PathLikeOwned>,
+    pub block_ctx_dump_prefix: Option<String>,
 }
 
 impl Default for Options {
@@ -2801,6 +2801,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let options = image::SamplingOptions {
                         compare: false,
                         project: false,
+                        gather: false,
                     };
                     self.parse_image_sample(
                         extra,
@@ -2817,6 +2818,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let options = image::SamplingOptions {
                         compare: false,
                         project: true,
+                        gather: false,
                     };
                     self.parse_image_sample(
                         extra,
@@ -2833,6 +2835,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let options = image::SamplingOptions {
                         compare: true,
                         project: false,
+                        gather: false,
                     };
                     self.parse_image_sample(
                         extra,
@@ -2849,6 +2852,41 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let options = image::SamplingOptions {
                         compare: true,
                         project: true,
+                        gather: false,
+                    };
+                    self.parse_image_sample(
+                        extra,
+                        options,
+                        ctx,
+                        &mut emitter,
+                        &mut block,
+                        block_id,
+                        body_idx,
+                    )?;
+                }
+                Op::ImageGather => {
+                    let extra = inst.expect_at_least(6)?;
+                    let options = image::SamplingOptions {
+                        compare: false,
+                        project: false,
+                        gather: true,
+                    };
+                    self.parse_image_sample(
+                        extra,
+                        options,
+                        ctx,
+                        &mut emitter,
+                        &mut block,
+                        block_id,
+                        body_idx,
+                    )?;
+                }
+                Op::ImageDrefGather => {
+                    let extra = inst.expect_at_least(6)?;
+                    let options = image::SamplingOptions {
+                        compare: true,
+                        project: false,
+                        gather: true,
                     };
                     self.parse_image_sample(
                         extra,
@@ -5597,7 +5635,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let is_depth = self.next()?;
         let is_array = self.next()? != 0;
         let is_msaa = self.next()? != 0;
-        let _is_sampled = self.next()?;
+        let is_sampled = self.next()?;
         let format = self.next()?;
 
         let dim = map_image_dim(dim)?;
@@ -5632,6 +5670,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     format: map_image_format(format)?,
                     access: crate::StorageAccess::default(),
                 }
+            } else if is_sampled == 2 {
+                return Err(Error::InvalidImageWriteType);
             } else {
                 crate::ImageClass::Sampled {
                     kind,

@@ -411,7 +411,7 @@ impl crate::framework::Example for Example {
                 .slice(..)
                 .map_async(wgpu::MapMode::Read, |_| ());
             // Wait for device to be done rendering mipmaps
-            device.poll(wgpu::PollType::wait()).unwrap();
+            device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
             // This is guaranteed to be ready.
             let timestamp_view = query_sets
                 .mapping_buffer

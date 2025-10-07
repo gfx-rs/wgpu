@@ -49,6 +49,7 @@ impl GPUComputePassEncoder {
     // TODO(@crowlKats): no-op, needs wpgu to implement changing the label
   }
 
+  #[undefined]
   fn set_pipeline(
     &self,
     #[webidl] pipeline: Ptr<crate::compute_pipeline::GPUComputePipeline>,
@@ -63,6 +64,7 @@ impl GPUComputePassEncoder {
     self.error_handler.push_error(err);
   }
 
+  #[undefined]
   fn dispatch_workgroups(
     &self,
     #[webidl(options(enforce_range = true))] work_group_count_x: u32,
@@ -83,6 +85,7 @@ impl GPUComputePassEncoder {
     self.error_handler.push_error(err);
   }
 
+  #[undefined]
   fn dispatch_workgroups_indirect(
     &self,
     #[webidl] indirect_buffer: Ptr<crate::buffer::GPUBuffer>,
@@ -100,6 +103,7 @@ impl GPUComputePassEncoder {
   }
 
   #[fast]
+  #[undefined]
   fn end(&self) {
     let err = self
       .instance
@@ -108,6 +112,7 @@ impl GPUComputePassEncoder {
     self.error_handler.push_error(err);
   }
 
+  #[undefined]
   fn push_debug_group(&self, #[webidl] group_label: String) {
     let err = self
       .instance
@@ -121,6 +126,7 @@ impl GPUComputePassEncoder {
   }
 
   #[fast]
+  #[undefined]
   fn pop_debug_group(&self) {
     let err = self
       .instance
@@ -129,6 +135,7 @@ impl GPUComputePassEncoder {
     self.error_handler.push_error(err);
   }
 
+  #[undefined]
   fn insert_debug_marker(&self, #[webidl] marker_label: String) {
     let err = self
       .instance
@@ -141,6 +148,7 @@ impl GPUComputePassEncoder {
     self.error_handler.push_error(err);
   }
 
+  #[undefined]
   fn set_bind_group<'a>(
     &self,
     scope: &mut v8::HandleScope<'a>,

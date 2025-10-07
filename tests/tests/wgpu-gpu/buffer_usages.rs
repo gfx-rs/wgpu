@@ -155,7 +155,9 @@ async fn map_test(
         buffer.destroy();
     }
 
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     if !before_unmap && !before_destroy {
         {

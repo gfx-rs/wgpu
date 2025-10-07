@@ -105,7 +105,10 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     // One of those can be calling `Device::poll`. This isn't necessary on the web as devices
     // are polled automatically but natively, we need to make sure this happens manually.
     // `PollType::Wait` will cause the thread to wait on native but not on WebGpu.
-    context.device.poll(wgpu::PollType::wait()).unwrap();
+    context
+        .device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
     log::info!("Device polled.");
     // Now we await the receiving and panic if anything went wrong because we're lazy.
     receiver.recv_async().await.unwrap().unwrap();
