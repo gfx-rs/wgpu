@@ -900,3 +900,79 @@ error: found conflicting `diagnostic(…)` rule(s)
         }
     }
 }
+
+mod template {
+    use crate::front::wgsl::assert_parse_err;
+
+    #[test]
+    fn missing_template_end() {
+        assert_parse_err(
+            "
+fn storage() {}
+var<storage
+",
+            "\
+error: expected identifier, found \"<\"
+  ┌─ wgsl:3:4
+  │
+3 │ var<storage
+  │    ^ expected identifier
+
+",
+        );
+    }
+
+    #[test]
+    fn enumerant_shadowing() {
+        assert_parse_err(
+            "
+fn storage() {}
+var<storage> s: u32;
+",
+            "\
+error: identifier `storage` resolves to a declaration
+  ┌─ wgsl:3:5
+  │
+3 │ var<storage> s: u32;
+  │     ^^^^^^^ needs to resolve to a predeclared enumerant
+
+",
+        );
+    }
+
+    #[test]
+    fn unexpected_expr_as_enumerant() {
+        assert_parse_err(
+            "
+var<1 + 1> s: u32;
+",
+            "\
+error: unexpected expression
+  ┌─ wgsl:2:5
+  │
+2 │ var<1 + 1> s: u32;
+  │     ^^^^^ needs to be an identifier resolving to a predeclared enumerant
+
+",
+        );
+    }
+
+    #[test]
+    fn unused_exprs_for_template() {
+        assert_parse_err(
+            "
+var<storage, read_write, extra0, extra1> s: u32;
+",
+            "\
+error: unused expressions for template
+  ┌─ wgsl:2:26
+  │
+2 │ var<storage, read_write, extra0, extra1> s: u32;
+  │                          ^^^^^^  ^^^^^^ unused
+  │                          │\x20\x20\x20\x20\x20\x20\x20\x20
+  │                          unused
+
+",
+        );
+    }
+}

@@ -34,6 +34,18 @@ pub fn map_address_space<'a>(
     }
 }
 
+pub fn map_access_mode(word: &str, span: Span) -> Result<'_, crate::StorageAccess> {
+    match word {
+        "read" => Ok(crate::StorageAccess::LOAD),
+        "write" => Ok(crate::StorageAccess::STORE),
+        "read_write" => Ok(crate::StorageAccess::LOAD | crate::StorageAccess::STORE),
+        "atomic" => Ok(crate::StorageAccess::ATOMIC
+            | crate::StorageAccess::LOAD
+            | crate::StorageAccess::STORE),
+        _ => Err(Box::new(Error::UnknownAccess(span))),
+    }
+}
+
 pub fn map_built_in(
     enable_extensions: &EnableExtensions,
     word: &str,

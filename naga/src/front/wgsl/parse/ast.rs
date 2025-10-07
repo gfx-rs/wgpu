@@ -167,7 +167,7 @@ pub struct ResourceBinding<'a> {
 #[derive(Debug)]
 pub struct GlobalVariable<'a> {
     pub name: Ident<'a>,
-    pub space: crate::AddressSpace,
+    pub template_list: Option<Vec<Handle<Expression<'a>>>>,
     pub binding: Option<ResourceBinding<'a>>,
     pub ty: Option<Handle<Type<'a>>>,
     pub init: Option<Handle<Expression<'a>>>,

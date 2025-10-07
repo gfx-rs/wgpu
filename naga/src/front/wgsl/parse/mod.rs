@@ -1330,24 +1330,7 @@ impl Parser {
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<'a, ast::GlobalVariable<'a>> {
         self.push_rule_span(Rule::VariableDecl, lexer);
-        let mut space = crate::AddressSpace::Handle;
-
-        if lexer.next_if(Token::TemplateArgsStart) {
-            let (class_str, span) = lexer.next_ident_with_span()?;
-            space = match class_str {
-                "storage" => {
-                    let access = if lexer.next_if(Token::Separator(',')) {
-                        lexer.next_storage_access()?
-                    } else {
-                        // defaulting to `read`
-                        crate::StorageAccess::LOAD
-                    };
-                    crate::AddressSpace::Storage { access }
-                }
-                _ => conv::map_address_space(class_str, span, &lexer.enable_extensions)?,
-            };
-            lexer.expect(Token::TemplateArgsEnd)?;
-        }
+        let template_list = self.maybe_template_list(lexer, ctx)?;
         let (name, ty) = self.optionally_typed_ident(lexer, ctx)?;
 
         let init = if lexer.next_if(Token::Operation('=')) {
@@ -1361,7 +1344,7 @@ impl Parser {
 
         Ok(ast::GlobalVariable {
             name,
-            space,
+            template_list,
             binding: None,
             ty,
             init,
@@ -1440,6 +1423,24 @@ impl Parser {
         }
 
         Ok(members)
+    }
+
+    fn maybe_template_list<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        ctx: &mut ExpressionContext<'a, '_, '_>,
+    ) -> Result<'a, Option<Vec<Handle<ast::Expression<'a>>>>> {
+        if lexer.next_if(Token::TemplateArgsStart) {
+            let mut args = Vec::new();
+            args.push(self.expression(lexer, ctx)?);
+            while lexer.next_if(Token::Separator(',')) && lexer.peek().0 != Token::TemplateArgsEnd {
+                args.push(self.expression(lexer, ctx)?);
+            }
+            lexer.expect(Token::TemplateArgsEnd)?;
+            Ok(Some(args))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Parses `<T>`, returning T and span of T
@@ -1773,9 +1774,10 @@ impl Parser {
                 let base = self.type_specifier(lexer, ctx)?;
                 if let crate::AddressSpace::Storage { ref mut access } = space {
                     *access = if lexer.end_of_generic_arguments() {
-                        let result = lexer.next_storage_access()?;
+                        let (ident, span) = lexer.next_ident_with_span()?;
+                        let access = conv::map_access_mode(ident, span)?;
                         lexer.next_if(Token::Separator(','));
-                        result
+                        access
                     } else {
                         crate::StorageAccess::LOAD
                     };

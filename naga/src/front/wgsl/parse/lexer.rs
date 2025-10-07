@@ -607,21 +607,6 @@ impl<'a> Lexer<'a> {
         Ok((scalar, span))
     }
 
-    pub(in crate::front::wgsl) fn next_storage_access(
-        &mut self,
-    ) -> Result<'a, crate::StorageAccess> {
-        let (ident, span) = self.next_ident_with_span()?;
-        match ident {
-            "read" => Ok(crate::StorageAccess::LOAD),
-            "write" => Ok(crate::StorageAccess::STORE),
-            "read_write" => Ok(crate::StorageAccess::LOAD | crate::StorageAccess::STORE),
-            "atomic" => Ok(crate::StorageAccess::ATOMIC
-                | crate::StorageAccess::LOAD
-                | crate::StorageAccess::STORE),
-            _ => Err(Box::new(Error::UnknownAccess(span))),
-        }
-    }
-
     pub(in crate::front::wgsl) fn next_format_generic(
         &mut self,
     ) -> Result<'a, (crate::StorageFormat, crate::StorageAccess)> {
@@ -629,7 +614,8 @@ impl<'a> Lexer<'a> {
         let (ident, ident_span) = self.next_ident_with_span()?;
         let format = conv::map_storage_format(ident, ident_span)?;
         self.expect(Token::Separator(','))?;
-        let access = self.next_storage_access()?;
+        let (ident, ident_span) = self.next_ident_with_span()?;
+        let access = conv::map_access_mode(ident, ident_span)?;
         self.expect(Token::TemplateArgsEnd)?;
         Ok((format, access))
     }

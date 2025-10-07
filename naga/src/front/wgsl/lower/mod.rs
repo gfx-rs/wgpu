@@ -7,11 +7,14 @@ use alloc::{
 };
 use core::num::NonZeroU32;
 
-use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::parse::{ast, conv};
 use crate::front::wgsl::Result;
+use crate::front::wgsl::{
+    error::{Error, ExpectedToken, InvalidAssignmentType},
+    parse::directive::enable_extension::EnableExtensions,
+};
 use crate::front::Typifier;
 use crate::{
     common::wgsl::{TryToWgsl, TypeContext},
@@ -1266,10 +1269,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         None
                     };
 
+                    let space = Self::var_address_space(
+                        &v.template_list,
+                        &ctx.as_const(),
+                        &tu.enable_extensions,
+                    )?;
+
                     let handle = ctx.module.global_variables.append(
                         ir::GlobalVariable {
                             name: Some(v.name.name.to_string()),
-                            space: v.space,
+                            space,
                             binding,
                             ty,
                             init: initializer,
@@ -2574,6 +2583,66 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Ok(Typed::Plain(crate::Expression::Binary { op, left, right }))
             }
         }
+    }
+
+    fn enumerant(
+        expr: Handle<ast::Expression<'source>>,
+        ctx: &ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, (&'source str, Span)> {
+        let span = ctx.ast_expressions.get_span(expr);
+        let expr = &ctx.ast_expressions[expr];
+
+        match *expr {
+            ast::Expression::Ident(ast::IdentExpr::Local(_)) => {
+                Err(Box::new(Error::UnexpectedIdentForEnumerant(span)))
+            }
+            ast::Expression::Ident(ast::IdentExpr::Unresolved(name)) => {
+                if ctx.globals.get(name).is_some() {
+                    Err(Box::new(Error::UnexpectedIdentForEnumerant(span)))
+                } else {
+                    Ok((name, span))
+                }
+            }
+            _ => Err(Box::new(Error::UnexpectedExprForEnumerant(span))),
+        }
+    }
+
+    fn var_address_space(
+        template_list: &Option<Vec<Handle<ast::Expression<'source>>>>,
+        ctx: &ExpressionContext<'source, '_, '_>,
+        enable_extensions: &EnableExtensions,
+    ) -> Result<'source, ir::AddressSpace> {
+        let mut address_space = ir::AddressSpace::Handle;
+
+        if let &Some(ref template_list) = template_list {
+            let mut template_list_args = template_list.iter();
+            let address_space_expr = template_list_args.next().unwrap();
+
+            let (enumerant, span) = Self::enumerant(*address_space_expr, ctx)?;
+            address_space = conv::map_address_space(enumerant, span, enable_extensions)?;
+
+            match address_space {
+                ir::AddressSpace::Storage { ref mut access } => {
+                    if let Some(access_mode_expr) = template_list_args.next() {
+                        let (enumerant, span) = Self::enumerant(*access_mode_expr, ctx)?;
+                        let access_mode = conv::map_access_mode(enumerant, span)?;
+                        *access = access_mode;
+                    } else {
+                        // defaulting to `read`
+                        *access = ir::StorageAccess::LOAD
+                    }
+                }
+                _ => {}
+            }
+
+            let unused_args: Vec<Span> = template_list_args
+                .map(|expr| ctx.ast_expressions.get_span(*expr))
+                .collect();
+            if !unused_args.is_empty() {
+                return Err(Box::new(Error::UnusedArgsForTemplate(unused_args)));
+            }
+        }
+        Ok(address_space)
     }
 
     fn binary(

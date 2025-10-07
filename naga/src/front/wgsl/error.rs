@@ -419,6 +419,9 @@ pub(crate) enum Error<'a> {
     UnderspecifiedCooperativeMatrix,
     InvalidCooperativeLoadType(Span),
     UnsupportedCooperativeScalar(Span),
+    UnexpectedIdentForEnumerant(Span),
+    UnexpectedExprForEnumerant(Span),
+    UnusedArgsForTemplate(Vec<Span>),
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -1412,6 +1415,24 @@ impl<'a> Error<'a> {
                 message: "cooperative scalar type is not supported".into(),
                 labels: vec![(span, "type needs the scalar type specified".into())],
                 notes: vec![format!("must be F32")],
+            },
+            Error::UnexpectedIdentForEnumerant(ident_span) => ParseError {
+                message: format!(
+                    "identifier `{}` resolves to a declaration",
+                    &source[ident_span]
+                ),
+                labels: vec![(ident_span, "needs to resolve to a predeclared enumerant".into())],
+                notes: vec![],
+            },
+            Error::UnexpectedExprForEnumerant(expr_span) => ParseError {
+                message: "unexpected expression".to_string(),
+                labels: vec![(expr_span, "needs to be an identifier resolving to a predeclared enumerant".into())],
+                notes: vec![],
+            },
+            Error::UnusedArgsForTemplate(ref expr_spans) => ParseError {
+                message: "unused expressions for template".to_string(),
+                labels: expr_spans.iter().cloned().map(|span| -> (_, _){ (span, "unused".into()) }).collect(),
+                notes: vec![],
             },
         }
     }
