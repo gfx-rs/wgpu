@@ -23,6 +23,8 @@ pub enum Token<'a> {
     IncrementOperation,
     DecrementOperation,
     Arrow,
+    TemplateArgsStart,
+    TemplateArgsEnd,
     Unknown(char),
     Trivia,
     DocComment(&'a str),
@@ -89,10 +91,10 @@ fn consume_tokens<'a>(
                     depth,
                 });
             }
-            Token::Paren('>') if waiting_for_template_end => {
+            Token::TemplateArgsEnd => {
                 let candidate = pending.pop().unwrap();
-                let token = tokens.get_mut(candidate.index).unwrap();
-                // TODO: -- mark it as template start
+                let &mut ((ref mut token, _), _) = tokens.get_mut(candidate.index).unwrap();
+                *token = Token::TemplateArgsStart;
             }
             Token::Paren('(' | '[') => {
                 depth += 1;
@@ -163,8 +165,7 @@ fn consume_token(
         '<' | '>' => {
             let og_chars = chars.as_str();
             if cur == '>' && waiting_for_template_end {
-                // TODO: -- mark it as template end
-                return (Token::Paren(cur), og_chars);
+                return (Token::TemplateArgsEnd, og_chars);
             }
             match chars.next() {
                 Some('=') => (Token::LogicalOperation(cur), chars.as_str()),
@@ -487,8 +488,6 @@ impl<'a> Lexer<'a> {
     }
 
     /// Return the next non-whitespace token from `self`, with a span.
-    ///
-    /// See [`consume_token`] for the meaning of `generic`.
     fn next_impl(&mut self, ignore_doc_comments: bool) -> TokenSpan<'a> {
         loop {
             if self.tokens.is_empty() {
@@ -555,23 +554,8 @@ impl<'a> Lexer<'a> {
         Ok(())
     }
 
-    pub(in crate::front::wgsl) fn expect_generic_paren(
-        &mut self,
-        expected: char,
-    ) -> Result<'a, ()> {
-        let next = self.next();
-        if next.0 == Token::Paren(expected) {
-            Ok(())
-        } else {
-            Err(Box::new(Error::Unexpected(
-                next.1,
-                ExpectedToken::Token(Token::Paren(expected)),
-            )))
-        }
-    }
-
     pub(in crate::front::wgsl) fn end_of_generic_arguments(&mut self) -> bool {
-        self.next_if(Token::Separator(',')) && self.peek().0 != Token::Paren('>')
+        self.next_if(Token::Separator(',')) && self.peek().0 != Token::TemplateArgsEnd
     }
 
     pub(in crate::front::wgsl) fn next_ident_with_span(&mut self) -> Result<'a, (&'a str, Span)> {
@@ -608,7 +592,7 @@ impl<'a> Lexer<'a> {
     pub(in crate::front::wgsl) fn next_scalar_generic_with_span(
         &mut self,
     ) -> Result<'a, (Scalar, Span)> {
-        self.expect_generic_paren('<')?;
+        self.expect(Token::TemplateArgsStart)?;
 
         let (scalar, span) = match self.next() {
             (Token::Word(word), span) => {
@@ -619,7 +603,7 @@ impl<'a> Lexer<'a> {
             (_, span) => return Err(Box::new(Error::UnknownScalarType(span))),
         };
 
-        self.expect_generic_paren('>')?;
+        self.expect(Token::TemplateArgsEnd)?;
         Ok((scalar, span))
     }
 
@@ -641,18 +625,18 @@ impl<'a> Lexer<'a> {
     pub(in crate::front::wgsl) fn next_format_generic(
         &mut self,
     ) -> Result<'a, (crate::StorageFormat, crate::StorageAccess)> {
-        self.expect(Token::Paren('<'))?;
+        self.expect(Token::TemplateArgsStart)?;
         let (ident, ident_span) = self.next_ident_with_span()?;
         let format = conv::map_storage_format(ident, ident_span)?;
         self.expect(Token::Separator(','))?;
         let access = self.next_storage_access()?;
-        self.expect(Token::Paren('>'))?;
+        self.expect(Token::TemplateArgsEnd)?;
         Ok((format, access))
     }
 
     pub(in crate::front::wgsl) fn next_acceleration_structure_flags(&mut self) -> Result<'a, bool> {
-        Ok(if self.next_if(Token::Paren('<')) {
-            if !self.next_if(Token::Paren('>')) {
+        Ok(if self.next_if(Token::TemplateArgsStart) {
+            if !self.next_if(Token::TemplateArgsEnd) {
                 let (name, span) = self.next_ident_with_span()?;
                 let ret = if name == "vertex_return" {
                     true
@@ -660,7 +644,7 @@ impl<'a> Lexer<'a> {
                     return Err(Box::new(Error::UnknownAttribute(span)));
                 };
                 self.next_if(Token::Separator(','));
-                self.expect(Token::Paren('>'))?;
+                self.expect(Token::TemplateArgsEnd)?;
                 ret
             } else {
                 false
@@ -988,15 +972,15 @@ fn test_variable_decl() {
             Token::Number(Ok(Number::AbstractInt(0))),
             Token::Paren(')'),
             Token::Word("var"),
-            Token::Paren('<'),
+            Token::TemplateArgsStart,
             Token::Word("uniform"),
-            Token::Paren('>'),
+            Token::TemplateArgsEnd,
             Token::Word("texture"),
             Token::Separator(':'),
             Token::Word("texture_multisampled_2d"),
-            Token::Paren('<'),
+            Token::TemplateArgsStart,
             Token::Word("f32"),
-            Token::Paren('>'),
+            Token::TemplateArgsEnd,
             Token::Separator(';'),
         ],
     );
@@ -1004,17 +988,17 @@ fn test_variable_decl() {
         "var<storage,read_write> buffer: array<u32>;",
         &[
             Token::Word("var"),
-            Token::Paren('<'),
+            Token::TemplateArgsStart,
             Token::Word("storage"),
             Token::Separator(','),
             Token::Word("read_write"),
-            Token::Paren('>'),
+            Token::TemplateArgsEnd,
             Token::Word("buffer"),
             Token::Separator(':'),
             Token::Word("array"),
-            Token::Paren('<'),
+            Token::TemplateArgsStart,
             Token::Word("u32"),
-            Token::Paren('>'),
+            Token::TemplateArgsEnd,
             Token::Separator(';'),
         ],
     );

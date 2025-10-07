@@ -712,11 +712,11 @@ impl Parser {
 
         // parse component type if present
         match (lexer.peek().0, partial) {
-            (Token::Paren('<'), ast::ConstructorType::PartialVector { size }) => {
+            (Token::TemplateArgsStart, ast::ConstructorType::PartialVector { size }) => {
                 let (ty, ty_span) = self.singular_generic(lexer, ctx)?;
                 Ok(Some(ast::ConstructorType::Vector { size, ty, ty_span }))
             }
-            (Token::Paren('<'), ast::ConstructorType::PartialMatrix { columns, rows }) => {
+            (Token::TemplateArgsStart, ast::ConstructorType::PartialMatrix { columns, rows }) => {
                 let (ty, ty_span) = self.singular_generic(lexer, ctx)?;
                 Ok(Some(ast::ConstructorType::Matrix {
                     columns,
@@ -726,7 +726,7 @@ impl Parser {
                 }))
             }
             (
-                Token::Paren('<'),
+                Token::TemplateArgsStart,
                 ast::ConstructorType::PartialCooperativeMatrix { columns, rows },
             ) => {
                 let (ty, ty_span, role) = self.cooperative_scalar_and_role(lexer, ctx)?;
@@ -738,8 +738,8 @@ impl Parser {
                     role,
                 }))
             }
-            (Token::Paren('<'), ast::ConstructorType::PartialArray) => {
-                lexer.expect_generic_paren('<')?;
+            (Token::TemplateArgsStart, ast::ConstructorType::PartialArray) => {
+                lexer.expect(Token::TemplateArgsStart)?;
                 let base = self.type_specifier(lexer, ctx)?;
                 let size = if lexer.end_of_generic_arguments() {
                     let expr = self.const_generic_expression(lexer, ctx)?;
@@ -748,7 +748,7 @@ impl Parser {
                 } else {
                     ast::ArraySize::Dynamic
                 };
-                lexer.expect_generic_paren('>')?;
+                lexer.expect(Token::TemplateArgsEnd)?;
 
                 Ok(Some(ast::ConstructorType::Array { base, size }))
             }
@@ -817,7 +817,7 @@ impl Parser {
             }
             // everything else must be handled later, since they can be hidden by user-defined functions.
             _ => {
-                let result_ty = if lexer.peek().0 == Token::Paren('<') {
+                let result_ty = if lexer.peek().0 == Token::TemplateArgsStart {
                     Some(self.singular_generic(lexer, ctx)?)
                 } else {
                     None
@@ -1332,7 +1332,7 @@ impl Parser {
         self.push_rule_span(Rule::VariableDecl, lexer);
         let mut space = crate::AddressSpace::Handle;
 
-        if lexer.next_if(Token::Paren('<')) {
+        if lexer.next_if(Token::TemplateArgsStart) {
             let (class_str, span) = lexer.next_ident_with_span()?;
             space = match class_str {
                 "storage" => {
@@ -1346,7 +1346,7 @@ impl Parser {
                 }
                 _ => conv::map_address_space(class_str, span, &lexer.enable_extensions)?,
             };
-            lexer.expect(Token::Paren('>'))?;
+            lexer.expect(Token::TemplateArgsEnd)?;
         }
         let (name, ty) = self.optionally_typed_ident(lexer, ctx)?;
 
@@ -1448,12 +1448,12 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<'a, (Handle<ast::Type<'a>>, Span)> {
-        lexer.expect_generic_paren('<')?;
+        lexer.expect(Token::TemplateArgsStart)?;
         let start = lexer.start_byte_offset();
         let ty = self.type_specifier(lexer, ctx)?;
         let span = lexer.span_from(start);
         lexer.next_if(Token::Separator(','));
-        lexer.expect_generic_paren('>')?;
+        lexer.expect(Token::TemplateArgsEnd)?;
         Ok((ty, span))
     }
 
@@ -1463,13 +1463,13 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<'a, (Handle<ast::Type<'a>>, Span, crate::CooperativeRole)> {
-        lexer.expect_generic_paren('<')?;
+        lexer.expect(Token::TemplateArgsStart)?;
         let start = lexer.start_byte_offset();
         let ty = self.type_specifier(lexer, ctx)?;
         let ty_span = lexer.span_from(start);
         lexer.expect(Token::Separator(','))?;
         let role = lexer.next_cooperative_role()?;
-        lexer.expect_generic_paren('>')?;
+        lexer.expect(Token::TemplateArgsEnd)?;
         Ok((ty, ty_span, role))
     }
 
@@ -1766,7 +1766,7 @@ impl Parser {
                 ast::Type::Atomic(scalar)
             }
             "ptr" => {
-                lexer.expect_generic_paren('<')?;
+                lexer.expect(Token::TemplateArgsStart)?;
                 let (ident, span) = lexer.next_ident_with_span()?;
                 let mut space = conv::map_address_space(ident, span, &lexer.enable_extensions)?;
                 lexer.expect(Token::Separator(','))?;
@@ -1780,11 +1780,11 @@ impl Parser {
                         crate::StorageAccess::LOAD
                     };
                 }
-                lexer.expect_generic_paren('>')?;
+                lexer.expect(Token::TemplateArgsEnd)?;
                 ast::Type::Pointer { base, space }
             }
             "array" => {
-                lexer.expect_generic_paren('<')?;
+                lexer.expect(Token::TemplateArgsStart)?;
                 let base = self.type_specifier(lexer, ctx)?;
                 let size = if lexer.end_of_generic_arguments() {
                     let size = self.const_generic_expression(lexer, ctx)?;
@@ -1793,12 +1793,12 @@ impl Parser {
                 } else {
                     ast::ArraySize::Dynamic
                 };
-                lexer.expect_generic_paren('>')?;
+                lexer.expect(Token::TemplateArgsEnd)?;
 
                 ast::Type::Array { base, size }
             }
             "binding_array" => {
-                lexer.expect_generic_paren('<')?;
+                lexer.expect(Token::TemplateArgsStart)?;
                 let base = self.type_specifier(lexer, ctx)?;
                 let size = if lexer.end_of_generic_arguments() {
                     let size = self.unary_expression(lexer, ctx)?;
@@ -1807,7 +1807,7 @@ impl Parser {
                 } else {
                     ast::ArraySize::Dynamic
                 };
-                lexer.expect_generic_paren('>')?;
+                lexer.expect(Token::TemplateArgsEnd)?;
 
                 ast::Type::BindingArray { base, size }
             }
@@ -2235,12 +2235,12 @@ impl Parser {
                 })
             }
             (Token::Word("var"), _) => {
-                if lexer.next_if(Token::Paren('<')) {
+                if lexer.next_if(Token::TemplateArgsStart) {
                     let (class_str, span) = lexer.next_ident_with_span()?;
                     if class_str != "function" {
                         return Err(Box::new(Error::InvalidLocalVariableAddressSpace(span)));
                     }
-                    lexer.expect(Token::Paren('>'))?;
+                    lexer.expect(Token::TemplateArgsEnd)?;
                 }
 
                 let (name, ty) = self.optionally_typed_ident(lexer, ctx)?;

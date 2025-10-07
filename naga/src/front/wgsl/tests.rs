@@ -415,7 +415,7 @@ fn parse_postfix() {
 fn parse_expressions() {
     parse_str("fn foo() {
         let x: f32 = select(0.0, 1.0, true);
-        let y: vec2<f32> = select(vec2<f32>(1.0, 1.0), vec2<f32>(x, x), vec2<bool>(x < 0.5, x > 0.5));
+        let y: vec2<f32> = select(vec2<f32>(1.0, 1.0), vec2<f32>(x, x), vec2<bool>((x < 0.5), (x > 0.5)));
         let z: bool = !(0.0 == 1.0);
     }").unwrap();
 }

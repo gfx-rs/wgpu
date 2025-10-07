@@ -487,6 +487,8 @@ impl<'a> Error<'a> {
                         Token::IncrementOperation => "increment operation".to_string(),
                         Token::DecrementOperation => "decrement operation".to_string(),
                         Token::Arrow => "->".to_string(),
+                        Token::TemplateArgsStart => "template args start".to_string(),
+                        Token::TemplateArgsEnd => "template args end".to_string(),
                         Token::Unknown(c) => format!("unknown (`{c}`)"),
                         Token::Trivia => "trivia".to_string(),
                         Token::DocComment(s) => format!("doc comment ('{s}')"),
