@@ -726,7 +726,7 @@ impl crate::Device for super::Device {
         let mut filter = Direct3D12::D3D12_FILTER(
             (conv::map_filter_mode(desc.min_filter).0 << Direct3D12::D3D12_MIN_FILTER_SHIFT)
                 | (conv::map_filter_mode(desc.mag_filter).0 << Direct3D12::D3D12_MAG_FILTER_SHIFT)
-                | (conv::map_filter_mode(desc.mipmap_filter).0
+                | (conv::map_mipmap_filter_mode(desc.mipmap_filter).0
                     << Direct3D12::D3D12_MIP_FILTER_SHIFT)
                 | (reduction.0 << Direct3D12::D3D12_FILTER_REDUCTION_TYPE_SHIFT),
         );
