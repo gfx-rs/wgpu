@@ -697,10 +697,10 @@ pub fn map_filter_mode(mode: wgt::FilterMode) -> vk::Filter {
     }
 }
 
-pub fn map_mip_filter_mode(mode: wgt::FilterMode) -> vk::SamplerMipmapMode {
+pub fn map_mip_filter_mode(mode: wgt::MipmapFilterMode) -> vk::SamplerMipmapMode {
     match mode {
-        wgt::FilterMode::Nearest => vk::SamplerMipmapMode::NEAREST,
-        wgt::FilterMode::Linear => vk::SamplerMipmapMode::LINEAR,
+        wgt::MipmapFilterMode::Nearest => vk::SamplerMipmapMode::NEAREST,
+        wgt::MipmapFilterMode::Linear => vk::SamplerMipmapMode::LINEAR,
     }
 }
 

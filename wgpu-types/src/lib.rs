@@ -6587,7 +6587,7 @@ pub struct SamplerDescriptor<L> {
     /// How to filter the texture when it needs to be minified (made smaller)
     pub min_filter: FilterMode,
     /// How to filter between mip map levels
-    pub mipmap_filter: FilterMode,
+    pub mipmap_filter: MipmapFilterMode,
     /// Minimum level of detail (i.e. mip level) to use
     pub lod_min_clamp: f32,
     /// Maximum level of detail (i.e. mip level) to use
@@ -6692,12 +6692,32 @@ pub enum AddressMode {
 pub enum FilterMode {
     /// Nearest neighbor sampling.
     ///
-    /// This creates a pixelated effect when used as a mag filter
+    /// This creates a pixelated effect.
     #[default]
     Nearest = 0,
     /// Linear Interpolation
     ///
-    /// This makes textures smooth but blurry when used as a mag filter.
+    /// This makes textures smooth but blurry.
+    Linear = 1,
+}
+
+/// Texel mixing mode when sampling between texels.
+///
+/// Corresponds to [WebGPU `GPUMipmapFilterMode`](
+/// https://gpuweb.github.io/gpuweb/#enumdef-gpumipmapfiltermode).
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
+pub enum MipmapFilterMode {
+    /// Nearest neighbor sampling.
+    ///
+    /// Return the value of the texel nearest to the texture coordinates.
+    #[default]
+    Nearest = 0,
+    /// Linear Interpolation
+    ///
+    /// Select two texels in each dimension and return a linear interpolation between their values.
     Linear = 1,
 }
 
