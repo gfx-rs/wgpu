@@ -1,8 +1,8 @@
+use alloc::borrow::Cow;
 use alloc::{
     format,
     string::{String, ToString},
 };
-
 use codespan_reporting::diagnostic::Diagnostic;
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
@@ -13,6 +13,8 @@ use crate::{
     error::{replace_control_chars, ErrorWrite},
     front::atomic_upgrade,
 };
+
+use crate::proc::ConstantEvaluatorError;
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum Error {
@@ -30,6 +32,8 @@ pub enum Error {
     UnsupportedSpecConstantOp(spirv::Op),
     #[error("invalid opcode in specialization constant operation {0:?}")]
     InvalidSpecConstantOp(spirv::Op),
+    #[error("{0}")]
+    SemanticError(Cow<'static, str>),
     #[error("unsupported capability {0:?}")]
     UnsupportedCapability(spirv::Capability),
     #[error("unsupported extension {0}")]
@@ -155,9 +159,14 @@ pub enum Error {
     NonBindingArrayOfImageOrSamplers,
     #[error("naga only supports specialization constant IDs up to 65535 but was given {0}")]
     SpecIdTooHigh(u32),
-
     #[error("atomic upgrade error: {0}")]
     AtomicUpgradeError(atomic_upgrade::Error),
+}
+
+impl From<ConstantEvaluatorError> for Error {
+    fn from(err: ConstantEvaluatorError) -> Self {
+        Error::SemanticError(err.to_string().into())
+    }
 }
 
 impl Error {

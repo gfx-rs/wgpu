@@ -312,6 +312,13 @@ impl Constant {
             Self::Override(o) => crate::Expression::Override(o),
         }
     }
+
+    const fn to_expr_kind(&self) -> crate::proc::ExpressionKind {
+        match *self {
+            Self::Constant(_) => crate::proc::ExpressionKind::Const,
+            Self::Override(_) => crate::proc::ExpressionKind::Override,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -4763,6 +4770,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         self.lookup_function.clear();
         self.function_call_graph.clear();
 
+        let mut global_expression_kind_tracker = crate::proc::ExpressionKindTracker::new();
+
         loop {
             use spirv::Op;
 
@@ -4802,19 +4811,74 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 Op::TypeImage => self.parse_type_image(inst, &mut module),
                 Op::TypeSampledImage => self.parse_type_sampled_image(inst),
                 Op::TypeSampler => self.parse_type_sampler(inst, &mut module),
-                Op::Constant | Op::SpecConstant => self.parse_constant(inst, &mut module),
-                Op::ConstantComposite | Op::SpecConstantComposite => {
-                    self.parse_composite_constant(inst, &mut module)
-                }
-                Op::ConstantNull | Op::Undef => self.parse_null_constant(inst, &mut module),
-                Op::ConstantTrue | Op::SpecConstantTrue => {
-                    self.parse_bool_constant(inst, true, &mut module)
-                }
-                Op::ConstantFalse | Op::SpecConstantFalse => {
-                    self.parse_bool_constant(inst, false, &mut module)
-                }
-                Op::SpecConstantOp => self.parse_spec_constant_op(inst, &mut module),
-                Op::Variable => self.parse_global_variable(inst, &mut module),
+                Op::Constant => self.parse_constant(
+                    inst,
+                    &mut module,
+                    &mut global_expression_kind_tracker,
+                    crate::proc::ExpressionKind::Const,
+                ),
+                Op::SpecConstant => self.parse_constant(
+                    inst,
+                    &mut module,
+                    &mut global_expression_kind_tracker,
+                    crate::proc::ExpressionKind::Override,
+                ),
+                Op::ConstantComposite => self.parse_composite_constant(
+                    inst,
+                    &mut module,
+                    &mut global_expression_kind_tracker,
+                    crate::proc::ExpressionKind::Const,
+                ),
+                Op::SpecConstantComposite => self.parse_composite_constant(
+                    inst,
+                    &mut module,
+                    &mut global_expression_kind_tracker,
+                    crate::proc::ExpressionKind::Override,
+                ),
+                Op::ConstantNull | Op::Undef => self.parse_null_constant(
+                    inst,
+                    &mut module,
+                    &mut global_expression_kind_tracker,
+                    crate::proc::ExpressionKind::Const,
+                ),
+                Op::ConstantTrue => self.parse_bool_constant(
+                    inst,
+                    true,
+                    &mut module,
+                    &mut global_expression_kind_tracker,
+                    crate::proc::ExpressionKind::Const,
+                ),
+                Op::SpecConstantTrue => self.parse_bool_constant(
+                    inst,
+                    true,
+                    &mut module,
+                    &mut global_expression_kind_tracker,
+                    crate::proc::ExpressionKind::Override,
+                ),
+                Op::ConstantFalse => self.parse_bool_constant(
+                    inst,
+                    false,
+                    &mut module,
+                    &mut global_expression_kind_tracker,
+                    crate::proc::ExpressionKind::Const,
+                ),
+                Op::SpecConstantFalse => self.parse_bool_constant(
+                    inst,
+                    false,
+                    &mut module,
+                    &mut global_expression_kind_tracker,
+                    crate::proc::ExpressionKind::Override,
+                ),
+                Op::SpecConstantOp => self.parse_spec_constant_op(
+                    inst,
+                    &mut module,
+                    &mut global_expression_kind_tracker,
+                ),
+                Op::Variable => self.parse_global_variable(
+                    inst,
+                    &mut module,
+                    &mut global_expression_kind_tracker,
+                ),
                 Op::Function => {
                     self.switch(ModuleState::Function, inst.op)?;
                     inst.expect(5)?;
@@ -5759,6 +5823,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         &mut self,
         inst: Instruction,
         module: &mut crate::Module,
+        global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
+        expr_kind: crate::proc::ExpressionKind,
     ) -> Result<(), Error> {
         let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
@@ -5824,9 +5890,13 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
         let span = self.span_from_with_op(start);
 
-        let init = module
-            .global_expressions
-            .append(crate::Expression::Literal(literal), span);
+        let init = append_global_expression(
+            module,
+            global_expression_kind_tracker,
+            crate::Expression::Literal(literal),
+            expr_kind,
+            span,
+        );
 
         self.insert_parsed_constant(module, id, type_id, ty, init, span)
     }
@@ -5835,6 +5905,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         &mut self,
         inst: Instruction,
         module: &mut crate::Module,
+        global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
+        expr_kind: crate::proc::ExpressionKind,
     ) -> Result<(), Error> {
         let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
@@ -5851,17 +5923,25 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             let component_id = self.next()?;
             let span = self.span_from_with_op(start);
             let constant = self.lookup_constant.lookup(component_id)?;
-            let expr = module
-                .global_expressions
-                .append(constant.inner.to_expr(), span);
+            let expr = append_global_expression(
+                module,
+                global_expression_kind_tracker,
+                constant.inner.to_expr(),
+                constant.inner.to_expr_kind(),
+                span,
+            );
             components.push(expr);
         }
 
         let span = self.span_from_with_op(start);
 
-        let init = module
-            .global_expressions
-            .append(crate::Expression::Compose { ty, components }, span);
+        let init = append_global_expression(
+            module,
+            global_expression_kind_tracker,
+            crate::Expression::Compose { ty, components },
+            expr_kind,
+            span,
+        );
 
         self.insert_parsed_constant(module, id, type_id, ty, init, span)
     }
@@ -5870,6 +5950,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         &mut self,
         inst: Instruction,
         module: &mut crate::Module,
+        global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
+        expr_kind: crate::proc::ExpressionKind,
     ) -> Result<(), Error> {
         let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
@@ -5881,9 +5963,13 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let type_lookup = self.lookup_type.lookup(type_id)?;
         let ty = type_lookup.handle;
 
-        let init = module
-            .global_expressions
-            .append(crate::Expression::ZeroValue(ty), span);
+        let init = append_global_expression(
+            module,
+            global_expression_kind_tracker,
+            crate::Expression::ZeroValue(ty),
+            expr_kind,
+            span,
+        );
 
         self.insert_parsed_constant(module, id, type_id, ty, init, span)
     }
@@ -5893,6 +5979,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         inst: Instruction,
         value: bool,
         module: &mut crate::Module,
+        global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
+        expr_kind: crate::proc::ExpressionKind,
     ) -> Result<(), Error> {
         let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
@@ -5904,18 +5992,40 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         let type_lookup = self.lookup_type.lookup(type_id)?;
         let ty = type_lookup.handle;
 
-        let init = module.global_expressions.append(
+        let init = append_global_expression(
+            module,
+            global_expression_kind_tracker,
             crate::Expression::Literal(crate::Literal::Bool(value)),
+            expr_kind,
             span,
         );
 
         self.insert_parsed_constant(module, id, type_id, ty, init, span)
     }
 
+    fn eval_and_append_expression(
+        &mut self,
+        module: &mut crate::Module,
+        global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
+        expr: crate::Expression,
+        span: crate::Span,
+    ) -> Result<Handle<crate::Expression>, Error> {
+        let mut evaluator = crate::proc::ConstantEvaluator::for_wgsl_module(
+            module,
+            global_expression_kind_tracker,
+            &mut self.layouter,
+            true,
+        );
+        evaluator
+            .try_eval_and_append(expr, span)
+            .map_err(|error| error.into())
+    }
+
     fn parse_spec_constant_op(
         &mut self,
         inst: Instruction,
         module: &mut crate::Module,
+        global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
     ) -> Result<(), Error> {
         use spirv::Op;
 
@@ -5936,41 +6046,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             Op::SpecConstantOp,
         ))?;
 
-        let mut get_const_expr =
-            |frontend: &Self, const_id: spirv::Word| -> Result<Handle<crate::Expression>, Error> {
-                let lookup = frontend.lookup_constant.lookup(const_id)?;
-                match lookup.inner {
-                    // Wrap regular constants in overrides to avoid creating Expression::Constant
-                    // nodes, which would mark the entire expression tree as Const and fail
-                    // validation for complex operations (Binary, As, Math) in override
-                    // initializers.
-                    //
-                    // The downside is, that unused intermediate constants will get created, which
-                    // I would like to avoid.
-                    Constant::Constant(const_handle) => {
-                        let const_init = module.constants[const_handle].init;
-                        let const_ty = module.constants[const_handle].ty;
-                        let wrapper_override = crate::Override {
-                            name: Some(format!("_spec_const_op_const_{const_id}")),
-                            id: None,
-                            ty: const_ty,
-                            init: Some(const_init),
-                        };
-                        let override_handle = module.overrides.append(wrapper_override, span);
-                        Ok(module
-                            .global_expressions
-                            .append(crate::Expression::Override(override_handle), span))
-                    }
-                    Constant::Override(_) => Ok(module
-                        .global_expressions
-                        .append(lookup.inner.to_expr(), span)),
-                }
-            };
-
         let init = match opcode {
             Op::SConvert | Op::UConvert | Op::FConvert => {
                 let value_id = self.next()?;
-                let value_expr = get_const_expr(self, value_id)?;
 
                 let scalar = match module.types[ty].inner {
                     crate::TypeInner::Scalar(scalar)
@@ -5979,19 +6057,28 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     _ => return Err(Error::InvalidAsType(ty)),
                 };
 
-                module.global_expressions.append(
+                let value_expr_inner = self.lookup_constant.lookup(value_id)?.inner.to_expr();
+                let value_expr = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
+                    value_expr_inner,
+                    span,
+                )?;
+
+                self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
                     crate::Expression::As {
                         expr: value_expr,
                         kind: scalar.kind,
                         convert: Some(scalar.width),
                     },
                     span,
-                )
+                )?
             }
 
             Op::SNegate | Op::Not | Op::LogicalNot => {
                 let value_id = self.next()?;
-                let value_expr = get_const_expr(self, value_id)?;
 
                 let op = match opcode {
                     Op::SNegate => crate::UnaryOperator::Negate,
@@ -6000,13 +6087,23 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     _ => unreachable!(),
                 };
 
-                module.global_expressions.append(
+                let value_expr_inner = self.lookup_constant.lookup(value_id)?.inner.to_expr();
+                let value_expr = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
+                    value_expr_inner,
+                    span,
+                )?;
+
+                self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
                     crate::Expression::Unary {
                         op,
                         expr: value_expr,
                     },
                     span,
-                )
+                )?
             }
 
             Op::IAdd
@@ -6038,8 +6135,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             | Op::SGreaterThanEqual => {
                 let left_id = self.next()?;
                 let right_id = self.next()?;
-                let left_expr = get_const_expr(self, left_id)?;
-                let right_expr = get_const_expr(self, right_id)?;
 
                 let op = match opcode {
                     Op::IAdd => crate::BinaryOperator::Add,
@@ -6069,14 +6164,31 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     _ => unreachable!(),
                 };
 
-                module.global_expressions.append(
+                let left_expr_inner = self.lookup_constant.lookup(left_id)?.inner.to_expr();
+                let right_expr_inner = self.lookup_constant.lookup(right_id)?.inner.to_expr();
+                let left_expr = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
+                    left_expr_inner,
+                    span,
+                )?;
+                let right_expr = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
+                    right_expr_inner,
+                    span,
+                )?;
+
+                self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
                     crate::Expression::Binary {
                         op,
                         left: left_expr,
                         right: right_expr,
                     },
                     span,
-                )
+                )?
             }
 
             Op::SMod => {
@@ -6084,40 +6196,62 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
 
                 let left_id = self.next()?;
                 let right_id = self.next()?;
-                let left = get_const_expr(self, left_id)?;
-                let right = get_const_expr(self, right_id)?;
 
                 let scalar = match module.types[ty].inner {
-                    crate::TypeInner::Scalar(scalar) => scalar,
-                    crate::TypeInner::Vector { scalar, .. } => scalar,
+                    crate::TypeInner::Scalar(scalar) | crate::TypeInner::Vector { scalar, .. } => {
+                        scalar
+                    }
                     _ => return Err(Error::InvalidAsType(ty)),
                 };
 
-                let left_cast = module.global_expressions.append(
+                let left_inner = self.lookup_constant.lookup(left_id)?.inner.to_expr();
+                let right_inner = self.lookup_constant.lookup(right_id)?.inner.to_expr();
+                let left = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
+                    left_inner,
+                    span,
+                )?;
+                let right = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
+                    right_inner,
+                    span,
+                )?;
+
+                let left_cast = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
                     crate::Expression::As {
                         expr: left,
                         kind: crate::ScalarKind::Float,
                         convert: Some(scalar.width),
                     },
                     span,
-                );
-                let right_cast = module.global_expressions.append(
+                )?;
+                let right_cast = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
                     crate::Expression::As {
                         expr: right,
                         kind: crate::ScalarKind::Float,
                         convert: Some(scalar.width),
                     },
                     span,
-                );
-                let div = module.global_expressions.append(
+                )?;
+                let div = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
                     crate::Expression::Binary {
                         op: crate::BinaryOperator::Divide,
                         left: left_cast,
                         right: right_cast,
                     },
                     span,
-                );
-                let floor = module.global_expressions.append(
+                )?;
+                let floor = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
                     crate::Expression::Math {
                         fun: crate::MathFunction::Floor,
                         arg: div,
@@ -6126,31 +6260,37 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         arg3: None,
                     },
                     span,
-                );
-                let cast = module.global_expressions.append(
+                )?;
+                let cast = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
                     crate::Expression::As {
                         expr: floor,
                         kind: scalar.kind,
                         convert: Some(scalar.width),
                     },
                     span,
-                );
-                let mult = module.global_expressions.append(
+                )?;
+                let mult = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
                     crate::Expression::Binary {
                         op: crate::BinaryOperator::Multiply,
                         left: cast,
                         right,
                     },
                     span,
-                );
-                module.global_expressions.append(
+                )?;
+                self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
                     crate::Expression::Binary {
                         op: crate::BinaryOperator::Subtract,
                         left,
                         right: mult,
                     },
                     span,
-                )
+                )?
             }
 
             Op::Select => {
@@ -6158,18 +6298,38 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 let o1_id = self.next()?;
                 let o2_id = self.next()?;
 
-                let cond = get_const_expr(self, condition_id)?;
-                let o1 = get_const_expr(self, o1_id)?;
-                let o2 = get_const_expr(self, o2_id)?;
+                let cond_expr = self.lookup_constant.lookup(condition_id)?.inner.to_expr();
+                let o1_expr = self.lookup_constant.lookup(o1_id)?.inner.to_expr();
+                let o2_expr = self.lookup_constant.lookup(o2_id)?.inner.to_expr();
+                let cond = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
+                    cond_expr,
+                    span,
+                )?;
+                let o1 = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
+                    o1_expr,
+                    span,
+                )?;
+                let o2 = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
+                    o2_expr,
+                    span,
+                )?;
 
-                module.global_expressions.append(
+                self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
                     crate::Expression::Select {
                         condition: cond,
                         accept: o1,
                         reject: o2,
                     },
                     span,
-                )
+                )?
             }
 
             Op::VectorShuffle | Op::CompositeExtract | Op::CompositeInsert | Op::QuantizeToF16 => {
@@ -6239,6 +6399,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         &mut self,
         inst: Instruction,
         module: &mut crate::Module,
+        global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
     ) -> Result<(), Error> {
         let start = self.data_offset;
         self.switch(ModuleState::Type, inst.op)?;
@@ -6252,9 +6413,13 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             let init_id = self.next()?;
             let span = self.span_from_with_op(start);
             let lconst = self.lookup_constant.lookup(init_id)?;
-            let expr = module
-                .global_expressions
-                .append(lconst.inner.to_expr(), span);
+            let expr = append_global_expression(
+                module,
+                global_expression_kind_tracker,
+                lconst.inner.to_expr(),
+                lconst.inner.to_expr_kind(),
+                span,
+            );
             Some(expr)
         } else {
             None
@@ -6377,9 +6542,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 let init = match binding {
                     Some(crate::Binding::BuiltIn(built_in)) => {
                         match null::generate_default_built_in(
+                            module,
+                            global_expression_kind_tracker,
                             Some(built_in),
                             ty,
-                            &mut module.global_expressions,
                             span,
                         ) {
                             Ok(handle) => Some(handle),
@@ -6392,25 +6558,36 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     Some(crate::Binding::Location { .. }) => None,
                     None => match module.types[ty].inner {
                         crate::TypeInner::Struct { ref members, .. } => {
-                            let mut components = Vec::with_capacity(members.len());
-                            for member in members.iter() {
-                                let built_in = match member.binding {
-                                    Some(crate::Binding::BuiltIn(built_in)) => Some(built_in),
-                                    _ => None,
-                                };
+                            // Collect member information first to avoid borrow conflicts
+                            let member_info: Vec<_> = members
+                                .iter()
+                                .map(|member| {
+                                    let built_in = match member.binding {
+                                        Some(crate::Binding::BuiltIn(built_in)) => Some(built_in),
+                                        _ => None,
+                                    };
+                                    (built_in, member.ty)
+                                })
+                                .collect();
+
+                            let mut components = Vec::with_capacity(member_info.len());
+                            for (built_in, member_ty) in member_info {
                                 let handle = null::generate_default_built_in(
+                                    module,
+                                    global_expression_kind_tracker,
                                     built_in,
-                                    member.ty,
-                                    &mut module.global_expressions,
+                                    member_ty,
                                     span,
                                 )?;
                                 components.push(handle);
                             }
-                            Some(
-                                module
-                                    .global_expressions
-                                    .append(crate::Expression::Compose { ty, components }, span),
-                            )
+                            Some(append_global_expression(
+                                module,
+                                global_expression_kind_tracker,
+                                crate::Expression::Compose { ty, components },
+                                crate::proc::ExpressionKind::Const,
+                                span,
+                            ))
                         }
                         _ => None,
                     },
@@ -6500,6 +6677,18 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             )),
         }
     }
+}
+
+fn append_global_expression(
+    module: &mut crate::Module,
+    global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
+    expr: crate::Expression,
+    expr_kind: crate::proc::ExpressionKind,
+    span: crate::Span,
+) -> Handle<crate::Expression> {
+    let handle = module.global_expressions.append(expr, span);
+    global_expression_kind_tracker.insert(handle, expr_kind);
+    handle
 }
 
 fn make_index_literal(

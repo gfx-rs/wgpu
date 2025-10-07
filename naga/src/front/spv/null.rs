@@ -1,21 +1,32 @@
 use alloc::vec;
 
 use super::Error;
-use crate::arena::{Arena, Handle};
+use crate::arena::Handle;
 
 /// Create a default value for an output built-in.
 pub fn generate_default_built_in(
+    module: &mut crate::Module,
+    global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
     built_in: Option<crate::BuiltIn>,
     ty: Handle<crate::Type>,
-    global_expressions: &mut Arena<crate::Expression>,
     span: crate::Span,
 ) -> Result<Handle<crate::Expression>, Error> {
     let expr = match built_in {
         Some(crate::BuiltIn::Position { .. }) => {
-            let zero = global_expressions
-                .append(crate::Expression::Literal(crate::Literal::F32(0.0)), span);
-            let one = global_expressions
-                .append(crate::Expression::Literal(crate::Literal::F32(1.0)), span);
+            let zero = super::append_global_expression(
+                module,
+                global_expression_kind_tracker,
+                crate::Expression::Literal(crate::Literal::F32(0.0)),
+                crate::proc::ExpressionKind::Const,
+                span,
+            );
+            let one = super::append_global_expression(
+                module,
+                global_expression_kind_tracker,
+                crate::Expression::Literal(crate::Literal::F32(1.0)),
+                crate::proc::ExpressionKind::Const,
+                span,
+            );
             crate::Expression::Compose {
                 ty,
                 components: vec![zero, zero, zero, one],
@@ -29,5 +40,11 @@ pub fn generate_default_built_in(
         // Note: `crate::BuiltIn::ClipDistance` is intentionally left for the default path
         _ => crate::Expression::ZeroValue(ty),
     };
-    Ok(global_expressions.append(expr, span))
+    Ok(super::append_global_expression(
+        module,
+        global_expression_kind_tracker,
+        expr,
+        crate::proc::ExpressionKind::Const,
+        span,
+    ))
 }
