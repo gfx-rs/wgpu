@@ -51,12 +51,14 @@ BREAKING CHANGE: `enumerate_adapters` is now `async`:
 + pub fn enumerate_adapters(&self, backends: Backends) -> impl Future<Output = Vec<Adapter>> {
 ```
 
-This yields two benefits:
+This yields ([kek]) two benefits:
 
 - This method is now implemented on non-native using the standard `Adapter::request_adapter(…)`, making `enumerate_adapters` a portable surface. This was previous a nontrivial pain point when an application wanted to do some of its own filtering of adapters.
 - This method can now be implemented in custom backends.
 
 By @R-Cramer4 in [#8230](https://github.com/gfx-rs/wgpu/pull/8230)
+
+[kek]: https://web.archive.org/web/20250923122958/https://knowyourmeme.com/memes/kek
 
 #### `MipmapFilterMode` is split from `FilterMode`
 
