@@ -1,0 +1,74 @@
+; SPIR-V
+; Version: 1.4
+; Generator: Manual
+; Bound: 50
+; Schema: 0
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main" %output_buffer
+               OpExecutionMode %main LocalSize 1 1 1
+
+; Decorations for spec constants
+               OpDecorate %spec_a SpecId 0
+               OpDecorate %spec_b SpecId 1
+
+; Decorations for storage buffer
+               OpDecorate %OutputStruct Block
+               OpMemberDecorate %OutputStruct 0 Offset 0
+               OpMemberDecorate %OutputStruct 1 Offset 4
+               OpMemberDecorate %OutputStruct 2 Offset 8
+               OpDecorate %output_buffer DescriptorSet 0
+               OpDecorate %output_buffer Binding 0
+
+; Types
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+        %int = OpTypeInt 32 1
+       %uint = OpTypeInt 32 0
+
+; Storage buffer types
+%OutputStruct = OpTypeStruct %uint %uint %uint
+%_ptr_StorageBuffer_OutputStruct = OpTypePointer StorageBuffer %OutputStruct
+%output_buffer = OpVariable %_ptr_StorageBuffer_OutputStruct StorageBuffer
+%_ptr_StorageBuffer_uint = OpTypePointer StorageBuffer %uint
+
+; Base spec constants
+%spec_a = OpSpecConstant %int 0
+%spec_b = OpSpecConstant %int 0
+
+; Basic chaining
+%add_result = OpSpecConstantOp %int IAdd %spec_a %spec_b          ; 10 + 3 = 13
+%mul_result = OpSpecConstantOp %int IMul %add_result %spec_b      ; 13 * 3 = 39
+%sub_result = OpSpecConstantOp %int ISub %mul_result %add_result  ; 39 - 13 = 26
+
+; Deeper chaining
+%step1 = OpSpecConstantOp %int IAdd %spec_a %spec_b               ; 10 + 3 = 13
+%step2 = OpSpecConstantOp %int IMul %step1 %spec_a                ; 13 * 10 = 130
+%const_one = OpConstant %int 1
+%step3 = OpSpecConstantOp %int ISub %step2 %const_one             ; 130 - 1 = 129
+%step4 = OpSpecConstantOp %int IMul %step3 %spec_b                ; 129 * 3 = 387
+
+; Constants for indices
+      %idx_0 = OpConstant %uint 0
+      %idx_1 = OpConstant %uint 1
+      %idx_2 = OpConstant %uint 2
+
+; Main function
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+
+; Store results
+  %mul_uint = OpBitcast %uint %mul_result
+     %ptr_0 = OpAccessChain %_ptr_StorageBuffer_uint %output_buffer %idx_0
+               OpStore %ptr_0 %mul_uint
+
+  %sub_uint = OpBitcast %uint %sub_result
+     %ptr_1 = OpAccessChain %_ptr_StorageBuffer_uint %output_buffer %idx_1
+               OpStore %ptr_1 %sub_uint
+
+ %step4_uint = OpBitcast %uint %step4
+     %ptr_2 = OpAccessChain %_ptr_StorageBuffer_uint %output_buffer %idx_2
+               OpStore %ptr_2 %step4_uint
+
+               OpReturn
+               OpFunctionEnd

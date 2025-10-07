@@ -26,6 +26,10 @@ pub enum Error {
     UnknownCapability(spirv::Word),
     #[error("unsupported instruction {1:?} at {0:?}")]
     UnsupportedInstruction(ModuleState, spirv::Op),
+    #[error("unsupported opcode in specialization constant operation {0:?}")]
+    UnsupportedSpecConstantOp(spirv::Op),
+    #[error("invalid opcode in specialization constant operation {0:?}")]
+    InvalidSpecConstantOp(spirv::Op),
     #[error("unsupported capability {0:?}")]
     UnsupportedCapability(spirv::Capability),
     #[error("unsupported extension {0}")]

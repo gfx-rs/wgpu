@@ -1,0 +1,8 @@
+pipeline_constants = { 0 = 10, 1 = 3 }
+targets = "HLSL"
+
+[spv-in]
+adjust_coordinate_space = false
+
+[spv]
+separate_entry_points = true

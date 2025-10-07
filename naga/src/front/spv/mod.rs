@@ -4813,6 +4813,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 Op::ConstantFalse | Op::SpecConstantFalse => {
                     self.parse_bool_constant(inst, false, &mut module)
                 }
+                Op::SpecConstantOp => self.parse_spec_constant_op(inst, &mut module),
                 Op::Variable => self.parse_global_variable(inst, &mut module),
                 Op::Function => {
                     self.switch(ModuleState::Function, inst.op)?;
@@ -5909,6 +5910,296 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         );
 
         self.insert_parsed_constant(module, id, type_id, ty, init, span)
+    }
+
+    fn parse_spec_constant_op(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        use spirv::Op;
+
+        let start = self.data_offset;
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect_at_least(4)?;
+
+        let result_type_id = self.next()?;
+        let result_id = self.next()?;
+        let opcode_word = self.next()?;
+
+        let type_lookup = self.lookup_type.lookup(result_type_id)?;
+        let ty = type_lookup.handle;
+        let span = self.span_from_with_op(start);
+
+        let opcode = Op::from_u32(opcode_word).ok_or(Error::UnsupportedInstruction(
+            self.state,
+            Op::SpecConstantOp,
+        ))?;
+
+        let mut get_const_expr =
+            |frontend: &Self, const_id: spirv::Word| -> Result<Handle<crate::Expression>, Error> {
+                let lookup = frontend.lookup_constant.lookup(const_id)?;
+                match lookup.inner {
+                    // Wrap regular constants in overrides to avoid creating Expression::Constant
+                    // nodes, which would mark the entire expression tree as Const and fail
+                    // validation for complex operations (Binary, As, Math) in override
+                    // initializers.
+                    //
+                    // The downside is, that unused intermediate constants will get created, which
+                    // I would like to avoid.
+                    Constant::Constant(const_handle) => {
+                        let const_init = module.constants[const_handle].init;
+                        let const_ty = module.constants[const_handle].ty;
+                        let wrapper_override = crate::Override {
+                            name: Some(format!("_spec_const_op_const_{const_id}")),
+                            id: None,
+                            ty: const_ty,
+                            init: Some(const_init),
+                        };
+                        let override_handle = module.overrides.append(wrapper_override, span);
+                        Ok(module
+                            .global_expressions
+                            .append(crate::Expression::Override(override_handle), span))
+                    }
+                    Constant::Override(_) => Ok(module
+                        .global_expressions
+                        .append(lookup.inner.to_expr(), span)),
+                }
+            };
+
+        let init = match opcode {
+            Op::SConvert | Op::UConvert | Op::FConvert => {
+                let value_id = self.next()?;
+                let value_expr = get_const_expr(self, value_id)?;
+
+                let scalar = match module.types[ty].inner {
+                    crate::TypeInner::Scalar(scalar)
+                    | crate::TypeInner::Vector { scalar, .. }
+                    | crate::TypeInner::Matrix { scalar, .. } => scalar,
+                    _ => return Err(Error::InvalidAsType(ty)),
+                };
+
+                module.global_expressions.append(
+                    crate::Expression::As {
+                        expr: value_expr,
+                        kind: scalar.kind,
+                        convert: Some(scalar.width),
+                    },
+                    span,
+                )
+            }
+
+            Op::SNegate | Op::Not | Op::LogicalNot => {
+                let value_id = self.next()?;
+                let value_expr = get_const_expr(self, value_id)?;
+
+                let op = match opcode {
+                    Op::SNegate => crate::UnaryOperator::Negate,
+                    Op::Not => crate::UnaryOperator::BitwiseNot,
+                    Op::LogicalNot => crate::UnaryOperator::LogicalNot,
+                    _ => unreachable!(),
+                };
+
+                module.global_expressions.append(
+                    crate::Expression::Unary {
+                        op,
+                        expr: value_expr,
+                    },
+                    span,
+                )
+            }
+
+            Op::IAdd
+            | Op::ISub
+            | Op::IMul
+            | Op::UDiv
+            | Op::SDiv
+            | Op::SRem
+            | Op::UMod
+            | Op::BitwiseOr
+            | Op::BitwiseXor
+            | Op::BitwiseAnd
+            | Op::ShiftLeftLogical
+            | Op::ShiftRightLogical
+            | Op::ShiftRightArithmetic
+            | Op::LogicalOr
+            | Op::LogicalAnd
+            | Op::LogicalEqual
+            | Op::LogicalNotEqual
+            | Op::IEqual
+            | Op::INotEqual
+            | Op::ULessThan
+            | Op::SLessThan
+            | Op::UGreaterThan
+            | Op::SGreaterThan
+            | Op::ULessThanEqual
+            | Op::SLessThanEqual
+            | Op::UGreaterThanEqual
+            | Op::SGreaterThanEqual => {
+                let left_id = self.next()?;
+                let right_id = self.next()?;
+                let left_expr = get_const_expr(self, left_id)?;
+                let right_expr = get_const_expr(self, right_id)?;
+
+                let op = match opcode {
+                    Op::IAdd => crate::BinaryOperator::Add,
+                    Op::ISub => crate::BinaryOperator::Subtract,
+                    Op::IMul => crate::BinaryOperator::Multiply,
+                    Op::UDiv | Op::SDiv => crate::BinaryOperator::Divide,
+                    Op::SRem | Op::UMod => crate::BinaryOperator::Modulo,
+                    Op::BitwiseOr => crate::BinaryOperator::InclusiveOr,
+                    Op::BitwiseXor => crate::BinaryOperator::ExclusiveOr,
+                    Op::BitwiseAnd => crate::BinaryOperator::And,
+                    Op::ShiftLeftLogical => crate::BinaryOperator::ShiftLeft,
+                    Op::ShiftRightLogical | Op::ShiftRightArithmetic => {
+                        crate::BinaryOperator::ShiftRight
+                    }
+                    Op::LogicalOr => crate::BinaryOperator::LogicalOr,
+                    Op::LogicalAnd => crate::BinaryOperator::LogicalAnd,
+                    Op::LogicalEqual => crate::BinaryOperator::Equal,
+                    Op::LogicalNotEqual => crate::BinaryOperator::NotEqual,
+                    Op::IEqual => crate::BinaryOperator::Equal,
+                    Op::INotEqual => crate::BinaryOperator::NotEqual,
+                    Op::ULessThan | Op::SLessThan => crate::BinaryOperator::Less,
+                    Op::UGreaterThan | Op::SGreaterThan => crate::BinaryOperator::Greater,
+                    Op::ULessThanEqual | Op::SLessThanEqual => crate::BinaryOperator::LessEqual,
+                    Op::UGreaterThanEqual | Op::SGreaterThanEqual => {
+                        crate::BinaryOperator::GreaterEqual
+                    }
+                    _ => unreachable!(),
+                };
+
+                module.global_expressions.append(
+                    crate::Expression::Binary {
+                        op,
+                        left: left_expr,
+                        right: right_expr,
+                    },
+                    span,
+                )
+            }
+
+            Op::SMod => {
+                // x - y * int(floor(float(x) / float(y)))
+
+                let left_id = self.next()?;
+                let right_id = self.next()?;
+                let left = get_const_expr(self, left_id)?;
+                let right = get_const_expr(self, right_id)?;
+
+                let scalar = match module.types[ty].inner {
+                    crate::TypeInner::Scalar(scalar) => scalar,
+                    crate::TypeInner::Vector { scalar, .. } => scalar,
+                    _ => return Err(Error::InvalidAsType(ty)),
+                };
+
+                let left_cast = module.global_expressions.append(
+                    crate::Expression::As {
+                        expr: left,
+                        kind: crate::ScalarKind::Float,
+                        convert: Some(scalar.width),
+                    },
+                    span,
+                );
+                let right_cast = module.global_expressions.append(
+                    crate::Expression::As {
+                        expr: right,
+                        kind: crate::ScalarKind::Float,
+                        convert: Some(scalar.width),
+                    },
+                    span,
+                );
+                let div = module.global_expressions.append(
+                    crate::Expression::Binary {
+                        op: crate::BinaryOperator::Divide,
+                        left: left_cast,
+                        right: right_cast,
+                    },
+                    span,
+                );
+                let floor = module.global_expressions.append(
+                    crate::Expression::Math {
+                        fun: crate::MathFunction::Floor,
+                        arg: div,
+                        arg1: None,
+                        arg2: None,
+                        arg3: None,
+                    },
+                    span,
+                );
+                let cast = module.global_expressions.append(
+                    crate::Expression::As {
+                        expr: floor,
+                        kind: scalar.kind,
+                        convert: Some(scalar.width),
+                    },
+                    span,
+                );
+                let mult = module.global_expressions.append(
+                    crate::Expression::Binary {
+                        op: crate::BinaryOperator::Multiply,
+                        left: cast,
+                        right,
+                    },
+                    span,
+                );
+                module.global_expressions.append(
+                    crate::Expression::Binary {
+                        op: crate::BinaryOperator::Subtract,
+                        left,
+                        right: mult,
+                    },
+                    span,
+                )
+            }
+
+            Op::Select => {
+                let condition_id = self.next()?;
+                let o1_id = self.next()?;
+                let o2_id = self.next()?;
+
+                let cond = get_const_expr(self, condition_id)?;
+                let o1 = get_const_expr(self, o1_id)?;
+                let o2 = get_const_expr(self, o2_id)?;
+
+                module.global_expressions.append(
+                    crate::Expression::Select {
+                        condition: cond,
+                        accept: o1,
+                        reject: o2,
+                    },
+                    span,
+                )
+            }
+
+            Op::VectorShuffle | Op::CompositeExtract | Op::CompositeInsert | Op::QuantizeToF16 => {
+                // Nothing stops us from implementing these cases in general.
+                // I just couldn't get them to work properly.
+                return Err(Error::UnsupportedSpecConstantOp(opcode));
+            }
+
+            _ => return Err(Error::InvalidSpecConstantOp(opcode)),
+        };
+
+        // IMPORTANT: Overrides must have either a name or an id to be processed correctly
+        // by process_overrides(). OpSpecConstantOp results don't have a SpecId (they're
+        // not user-overridable), so we assign them a name based on the result_id.
+        let op_override = crate::Override {
+            name: Some(format!("_spec_const_op_{result_id}")),
+            id: None,
+            ty,
+            init: Some(init),
+        };
+
+        self.lookup_constant.insert(
+            result_id,
+            LookupConstant {
+                inner: Constant::Override(module.overrides.append(op_override, span)),
+                type_id: result_type_id,
+            },
+        );
+
+        Ok(())
     }
 
     fn insert_parsed_constant(
