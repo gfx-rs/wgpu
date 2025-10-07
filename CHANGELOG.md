@@ -54,6 +54,19 @@ This is a breaking change
 
 By @R-Cramer4 in [#8230](https://github.com/gfx-rs/wgpu/pull/8230)
 
+#### `MipmapFilterMode` is split from `FilterMode`
+
+This is a breaking change that aligns wgpu with spec.
+
+```diff
+SamplerDescriptor {
+...
+-     mipmap_filter: FilterMode::Nearest
++     mipmap_filter: MipmapFilterMode::Nearest
+...
+}
+```
+
 ## v27.0.2 (2025-10-03)
 
 ### Bug Fixes
