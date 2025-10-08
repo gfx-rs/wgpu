@@ -2279,6 +2279,7 @@ impl super::Adapter {
                     spv::ZeroInitializeWorkgroupMemoryMode::Polyfill
                 },
                 force_loop_bounding: true,
+                ray_query_initialization_tracking: true,
                 use_storage_input_output_16: features.contains(wgt::Features::SHADER_F16)
                     && self.phd_features.supports_storage_input_output_16(),
                 fake_missing_bindings: false,

@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.4
 ; Generator: rspirv
-; Bound: 243
+; Bound: 244
 OpCapability Shader
 OpCapability RayQueryKHR
 OpExtension "SPV_KHR_ray_query"
@@ -84,7 +84,7 @@ OpDecorate %13 Binding 0
 %173 = OpConstant  %7  7
 %175 = OpConstant  %7  8
 %184 = OpTypeFunction %2 %32 %33 %5 %36
-%224 = OpTypeFunction %2 %32 %33
+%225 = OpTypeFunction %2 %32 %33
 %41 = OpFunction  %2  None %40
 %42 = OpFunctionParameter  %32
 %43 = OpFunctionParameter  %4
@@ -240,71 +240,72 @@ OpFunctionEnd
 %189 = OpFunctionParameter  %36
 %190 = OpLabel
 %191 = OpVariable  %36  Function
-%192 = OpLoad  %7  %187
-%193 = OpBitwiseAnd  %7  %192 %90
-%194 = OpINotEqual  %10  %193 %35
-%195 = OpBitwiseAnd  %7  %192 %23
-%196 = OpINotEqual  %10  %195 %35
-%197 = OpLogicalNot  %10  %196
-%198 = OpLogicalAnd  %10  %197 %194
-OpSelectionMerge %200 None
-OpBranchConditional %198 %199 %200
-%199 = OpLabel
-%201 = OpRayQueryGetIntersectionTypeKHR  %7  %186 %35
-%202 = OpIEqual  %10  %201 %30
-%203 = OpRayQueryGetRayTMinKHR  %5  %186
-%204 = OpRayQueryGetIntersectionTypeKHR  %7  %186 %30
-%205 = OpIEqual  %10  %204 %35
-OpSelectionMerge %206 None
-OpBranchConditional %205 %207 %208
-%207 = OpLabel
-%209 = OpLoad  %5  %189
-OpStore %191 %209
-OpBranch %206
+%192 = OpVariable  %36  Function
+%195 = OpLoad  %7  %187
+%196 = OpBitwiseAnd  %7  %195 %90
+%197 = OpINotEqual  %10  %196 %35
+%198 = OpBitwiseAnd  %7  %195 %23
+%199 = OpINotEqual  %10  %198 %35
+%200 = OpLogicalNot  %10  %199
+%201 = OpLogicalAnd  %10  %200 %197
+OpSelectionMerge %194 None
+OpBranchConditional %201 %193 %194
+%193 = OpLabel
+%202 = OpRayQueryGetIntersectionTypeKHR  %7  %186 %35
+%203 = OpIEqual  %10  %202 %30
+%204 = OpRayQueryGetRayTMinKHR  %5  %186
+%205 = OpRayQueryGetIntersectionTypeKHR  %7  %186 %30
+%206 = OpIEqual  %10  %205 %35
+OpSelectionMerge %207 None
+OpBranchConditional %206 %208 %209
 %208 = OpLabel
-%210 = OpRayQueryGetIntersectionTKHR  %5  %186 %35
-OpStore %191 %210
-OpBranch %206
-%206 = OpLabel
-%211 = OpFOrdGreaterThanEqual  %10  %188 %203
-%212 = OpLoad  %5  %191
-%213 = OpFOrdLessThanEqual  %10  %188 %212
-%214 = OpLogicalAnd  %10  %211 %213
-%215 = OpLogicalAnd  %10  %214 %202
-OpSelectionMerge %217 None
-OpBranchConditional %215 %216 %217
-%216 = OpLabel
-OpRayQueryGenerateIntersectionKHR %186 %188
-OpBranch %217
+%210 = OpLoad  %5  %189
+OpStore %192 %210
+OpBranch %207
+%209 = OpLabel
+%211 = OpRayQueryGetIntersectionTKHR  %5  %186 %35
+OpStore %192 %211
+OpBranch %207
+%207 = OpLabel
+%212 = OpFOrdGreaterThanEqual  %10  %188 %204
+%213 = OpLoad  %5  %192
+%214 = OpFOrdLessThanEqual  %10  %188 %213
+%215 = OpLogicalAnd  %10  %212 %214
+%216 = OpLogicalAnd  %10  %215 %203
+OpSelectionMerge %218 None
+OpBranchConditional %216 %217 %218
 %217 = OpLabel
-OpBranch %200
-%200 = OpLabel
+OpRayQueryGenerateIntersectionKHR %186 %188
+OpBranch %218
+%218 = OpLabel
+OpBranch %194
+%194 = OpLabel
 OpReturn
 OpFunctionEnd
-%225 = OpFunction  %2  None %224
-%226 = OpFunctionParameter  %32
-%227 = OpFunctionParameter  %33
-%228 = OpLabel
-%229 = OpLoad  %7  %227
-%230 = OpBitwiseAnd  %7  %229 %90
-%231 = OpINotEqual  %10  %230 %35
-%232 = OpBitwiseAnd  %7  %229 %23
-%233 = OpINotEqual  %10  %232 %35
-%234 = OpLogicalNot  %10  %233
-%235 = OpLogicalAnd  %10  %234 %231
-OpSelectionMerge %237 None
-OpBranchConditional %235 %236 %237
-%236 = OpLabel
-%238 = OpRayQueryGetIntersectionTypeKHR  %7  %226 %35
-%239 = OpIEqual  %10  %238 %35
-OpSelectionMerge %241 None
-OpBranchConditional %239 %240 %241
-%240 = OpLabel
-OpRayQueryConfirmIntersectionKHR %226
-OpBranch %241
+%226 = OpFunction  %2  None %225
+%227 = OpFunctionParameter  %32
+%228 = OpFunctionParameter  %33
+%229 = OpLabel
+%232 = OpLoad  %7  %228
+%233 = OpBitwiseAnd  %7  %232 %90
+%234 = OpINotEqual  %10  %233 %35
+%235 = OpBitwiseAnd  %7  %232 %23
+%236 = OpINotEqual  %10  %235 %35
+%237 = OpLogicalNot  %10  %236
+%238 = OpLogicalAnd  %10  %237 %234
+OpSelectionMerge %231 None
+OpBranchConditional %238 %230 %231
+%230 = OpLabel
+%239 = OpRayQueryGetIntersectionTypeKHR  %7  %227 %35
+%240 = OpIEqual  %10  %239 %35
+OpSelectionMerge %242 None
+OpBranchConditional %240 %241 %242
 %241 = OpLabel
-OpBranch %237
-%237 = OpLabel
+OpRayQueryConfirmIntersectionKHR %227
+OpBranch %242
+%242 = OpLabel
+OpBranch %231
+%231 = OpLabel
 OpReturn
 OpFunctionEnd
 %16 = OpFunction  %2  None %17
@@ -322,19 +323,19 @@ OpBranch %38
 OpSelectionMerge %181 None
 OpBranchConditional %180 %182 %183
 %182 = OpLabel
-%218 = OpFunctionCall  %2  %185 %31 %34 %29 %37
+%219 = OpFunctionCall  %2  %185 %31 %34 %29 %37
 OpReturn
 %183 = OpLabel
-%219 = OpCompositeExtract  %7  %178 0
-%220 = OpIEqual  %10  %219 %30
-OpSelectionMerge %221 None
-OpBranchConditional %220 %222 %223
-%222 = OpLabel
-%242 = OpFunctionCall  %2  %225 %31 %34
-OpReturn
+%220 = OpCompositeExtract  %7  %178 0
+%221 = OpIEqual  %10  %220 %30
+OpSelectionMerge %222 None
+OpBranchConditional %221 %223 %224
 %223 = OpLabel
+%243 = OpFunctionCall  %2  %226 %31 %34
 OpReturn
-%221 = OpLabel
+%224 = OpLabel
+OpReturn
+%222 = OpLabel
 OpBranch %181
 %181 = OpLabel
 OpReturn

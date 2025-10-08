@@ -813,6 +813,7 @@ pub struct Writer {
 
     /// Non semantic debug printf extension `OpExtInstImport`
     debug_printf: Option<Word>,
+    pub(crate) ray_query_initialization_tracking: bool,
 }
 
 bitflags::bitflags! {
@@ -848,7 +849,8 @@ bitflags::bitflags! {
         /// Instead of silently failing if the arguments to generate a ray query are
         /// invalid, uses debug printf extension to print to the command line
         ///
-        /// Note: VK_KHR_shader_non_semantic_info must be enabled.
+        /// Note: VK_KHR_shader_non_semantic_info must be enabled. This will have no
+        /// effect if `options.ray_query_initialization_tracking` is set to false.
         const PRINT_ON_RAY_QUERY_INITIALIZATION_FAIL = 0x20;
     }
 }
@@ -920,6 +922,10 @@ pub struct Options<'a> {
     /// to think the number of iterations is bounded.
     pub force_loop_bounding: bool,
 
+    /// if set, ray queries will get a variable to track their state to prevent
+    /// misuse.
+    pub ray_query_initialization_tracking: bool,
+
     /// Whether to use the `StorageInputOutput16` capability for `f16` shader I/O.
     /// When false, `f16` I/O is polyfilled using `f32` types with conversions.
     pub use_storage_input_output_16: bool,
@@ -944,6 +950,7 @@ impl Default for Options<'_> {
             bounds_check_policies: BoundsCheckPolicies::default(),
             zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode::Polyfill,
             force_loop_bounding: true,
+            ray_query_initialization_tracking: true,
             use_storage_input_output_16: true,
             debug_info: None,
         }

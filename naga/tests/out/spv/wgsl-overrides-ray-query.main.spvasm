@@ -152,18 +152,18 @@ OpFunctionEnd
 %147 = OpLabel
 %148 = OpVariable  %142  Function %149
 %150 = OpLoad  %6  %146
-%151 = OpBitwiseAnd  %6  %150 %86
-%152 = OpINotEqual  %36  %151 %31
-OpSelectionMerge %153 None
-OpBranchConditional %152 %154 %153
-%154 = OpLabel
+%153 = OpBitwiseAnd  %6  %150 %86
+%154 = OpINotEqual  %36  %153 %31
+OpSelectionMerge %151 None
+OpBranchConditional %154 %152 %151
+%152 = OpLabel
 %155 = OpRayQueryProceedKHR  %36  %145
 OpStore %148 %155
 %157 = OpSelect  %6  %155 %89 %156
 %158 = OpBitwiseOr  %6  %150 %157
 OpStore %146 %158
-OpBranch %153
-%153 = OpLabel
+OpBranch %151
+%151 = OpLabel
 %159 = OpLoad  %36  %148
 OpReturnValue %159
 OpFunctionEnd
