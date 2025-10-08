@@ -320,7 +320,6 @@ mod tests {
         device: 0xFEFE_FEFE,
         device_type: wgt::DeviceType::Other,
         device_pci_bus_id: String::new(),
-        device_uuid: String::new(),
         driver: String::new(),
         driver_info: String::new(),
         backend: wgt::Backend::Vulkan,
