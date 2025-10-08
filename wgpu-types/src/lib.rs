@@ -5630,7 +5630,7 @@ bitflags::bitflags! {
         /// No-op on platforms on platforms that do not benefit from transient textures.
         /// Generally mobile and Apple chips care about this.
         ///
-        /// Incompatible with ALL other usages except [`TextureUsages::RENDER_ATTACHMENT`].
+        /// Incompatible with ALL other usages except [`TextureUsages::RENDER_ATTACHMENT`] and requires it.
         ///
         /// Requires [`StoreOp::Discard`].
         const TRANSIENT = 1 << 17;
