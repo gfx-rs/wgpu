@@ -1675,15 +1675,15 @@ impl super::Instance {
                 vk::PhysicalDeviceType::CPU => wgt::DeviceType::Cpu,
                 _ => wgt::DeviceType::Other,
             },
-            device_pci_bus_id: phd_capabilities.pci_bus_info
+            device_pci_bus_id: phd_capabilities
+                .pci_bus_info
                 .filter(|info| info.pci_bus != 0 || info.pci_device != 0)
-                .map(|info| format!(
-                    "{:04x}:{:02x}:{:02x}.{}",
-                    info.pci_domain,
-                    info.pci_bus,
-                    info.pci_device,
-                    info.pci_function
-                ))
+                .map(|info| {
+                    format!(
+                        "{:04x}:{:02x}:{:02x}.{}",
+                        info.pci_domain, info.pci_bus, info.pci_device, info.pci_function
+                    )
+                })
                 .unwrap_or_default(),
             driver: {
                 phd_capabilities

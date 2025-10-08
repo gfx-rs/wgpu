@@ -1702,6 +1702,7 @@ impl dispatch::AdapterInterface for WebAdapter {
             vendor: 0,
             device: 0,
             device_type: wgt::DeviceType::Other,
+            device_pci_bus_id: String::new(),
             driver: String::new(),
             driver_info: String::new(),
             backend: wgt::Backend::BrowserWebGpu,
