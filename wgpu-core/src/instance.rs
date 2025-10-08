@@ -699,14 +699,13 @@ impl Adapter {
             ),
         );
         allowed_usages.set(
-            wgt::TextureUsages::RENDER_ATTACHMENT,
+            wgt::TextureUsages::RENDER_ATTACHMENT | wgt::TextureUsages::TRANSIENT,
             caps.intersects(Tfc::COLOR_ATTACHMENT | Tfc::DEPTH_STENCIL_ATTACHMENT),
         );
         allowed_usages.set(
             wgt::TextureUsages::STORAGE_ATOMIC,
             caps.contains(Tfc::STORAGE_ATOMIC),
         );
-        allowed_usages |= wgt::TextureUsages::TRANSIENT;
 
         let mut flags = wgt::TextureFormatFeatureFlags::empty();
         flags.set(
