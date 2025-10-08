@@ -5,10 +5,10 @@
 // Based on this test of glslang: https://github.com/KhronosGroup/glslang/blob/main/Test/spv.specConstantOperations.vert
 #version 450
 
-layout(constant_id = 0) const float sp_float = 3.1415926;
-layout(constant_id = 1) const int sp_int = 10;
-layout(constant_id = 2) const uint sp_uint = 100;
-layout(constant_id = 3) const int sp_sint = -10;
+layout(constant_id = 0) const float sp_float = 0.0;
+layout(constant_id = 1) const int sp_int = 0;
+layout(constant_id = 2) const uint sp_uint = 0;
+layout(constant_id = 3) const int sp_sint = 0;
 
 //
 // Scalars
@@ -20,6 +20,10 @@ const bool bool_from_uint = bool(sp_uint);           // bool(20) = true
 const int int_from_bool = int(bool_from_int);        // int(true) = 1
 const uint uint_from_bool = uint(bool_from_int);     // uint(true) = 1
 
+// uint <-> int conversion
+const uint sp_uint_from_sint = uint(sp_sint);        // uint(4) = 4
+const int sp_sint_from_uint = int(sp_uint);          // int(20) = 20
+
 // Negate and Not
 const int negate_int = -sp_int;                      // -3 = -3
 const int not_int = ~sp_int;                         // ~3 = -4
@@ -28,6 +32,12 @@ const int not_int = ~sp_int;                         // ~3 = -4
 const int sp_int_add_two = sp_int + 2;                          // 3 + 2 = 5
 const int sp_int_add_two_sub_three = sp_int + 2 - 3;            // 3 + 2 - 3 = 2
 const int sp_int_add_two_sub_four = sp_int_add_two - 4;         // 5 - 4 = 1
+
+// Mixed-type arithmetic operations
+const uint mixed_sint_add_uint = sp_sint + sp_uint;             // 4 + 20 = 24
+const uint mixed_uint_sub_sint = sp_uint - sp_sint;             // 20 - 4 = 16
+const uint mixed_spec_sint_add_const_uint = sp_sint + 10u;      // 4 + 10 = 14
+const uint mixed_const_sint_mul_spec_uint = 3 * sp_uint;        // 3 * 20 = 60
 
 // Mul, Div
 const int sp_sint_mul_two = sp_sint * 2;                        // 4 * 2 = 8
@@ -40,16 +50,29 @@ const int sp_sint_mul_three_div_five = sp_sint * 3 / 5;         // 4 * 3 / 5 = 2
 const int sp_sint_rem_four = sp_sint % 4;                       // 4 % 4 = 0
 const uint sp_uint_rem_four = sp_uint % 4;                      // 20 % 4 = 0
 
-// Shift (the shift value must be an unsigned integer)
-const int sp_sint_shift_right_arithmetic = sp_sint >> 10u;      // 4 >> 10 = 0
+// Mixed-type modulo operations
+const uint mixed_sint_mod_uint = sp_sint % sp_uint;             // 4 % 20 = 4
+const uint mixed_uint_mod_sint = sp_uint % sp_sint;             // 20 % 4 = 0
+const int mixed_sint_smod_const_int = sp_sint % 3;              // 4 % 3 = 1
+const uint mixed_uint_mod_const_uint = sp_uint % 7u;            // 20 % 7 = 6
+
+// Shift
+const int sp_sint_shift_right_arithmetic = sp_sint >> 10;       // 4 >> 10 = 0
 const uint sp_uint_shift_right_arithmetic = sp_uint >> 20u;     // 20 >> 20 = 0
 const int sp_sint_shift_left = sp_sint << 1u;                   // 4 << 1 = 8
-const uint sp_uint_shift_left = sp_uint << 2u;                  // 20 << 2 = 80
+const uint sp_uint_shift_left = sp_uint << 2;                   // 20 << 2 = 80
 
 // Bitwise And, Or, Xor
 const int sp_sint_and_3 = sp_sint & 3;                          // 4 & 3 = 0
 const int sp_sint_or_256 = sp_sint | 0x100;                     // 4 | 256 = 260
 const uint sp_uint_xor_512 = sp_uint ^ 0x200;                   // 20 ^ 512 = 532
+
+// Mixed-type bitwise operations
+const uint mixed_sint_and_uint = sp_sint & sp_uint;             // 4 & 20 = 4
+const uint mixed_uint_or_sint = sp_uint | sp_sint;              // 20 | 4 = 20
+const uint mixed_sint_xor_uint = sp_sint ^ sp_uint;             // 4 ^ 20 = 16
+const uint mixed_spec_uint_and_const_sint = sp_uint & 15;       // 20 & 15 = 4
+const uint mixed_const_uint_or_spec_sint = 0x80u | sp_sint;     // 128 | 4 = 132
 
 // Scalar comparison
 const bool sp_int_lt_sp_sint = sp_int < sp_sint;                // 3 < 4 = true
@@ -59,6 +82,11 @@ const bool sp_uint_not_equal_sp_uint = sp_uint != sp_uint;      // 20 != 20 = fa
 const bool sp_int_gt_sp_sint = sp_int > sp_sint;                // 3 > 4 = false
 const bool sp_int_ge_sp_sint = sp_int >= sp_sint;               // 3 >= 4 = false
 
+// Mixed-type comparisons
+const bool mixed_sint_lt_uint = sp_sint < sp_uint;              // 4 < 20 = true
+const bool mixed_uint_ge_sint = sp_uint >= sp_sint;             // 20 >= 4 = true
+const bool mixed_sint_eq_uint = sp_sint == sp_uint;             // 4 == 20 = false
+
 // Logical operations
 const bool logical_and = bool_from_int && bool_from_uint;       // true && true = true
 const bool logical_or = bool_from_int || bool_from_uint;        // true || true = true
@@ -66,9 +94,9 @@ const bool logical_equal = bool_from_int == bool_from_uint;     // true == true 
 const bool logical_not_equal = bool_from_int != bool_from_uint; // true != true = false
 
 // ternary
-layout(constant_id = 4) const int a = 4;
-layout(constant_id = 5) const int b = 6;
-layout(constant_id = 6) const bool c = true;
+layout(constant_id = 4) const int a = 0;
+layout(constant_id = 5) const int b = 0;
+layout(constant_id = 6) const bool c = false;
 const int t1 = c ? 13 : 17;             // true ? 13 : 17 = 13
 const int t2 = c ? a : 17;              // true ? 1 : 17 = 1
 const int t3 = true ? a : 17;           // true ? 1 : 17 = 1
@@ -79,11 +107,17 @@ layout(set = 0, binding = 0) buffer OutputBuffer {
     uint bool_from_uint_val;
     int int_from_bool_val;
     uint uint_from_bool_val;
+    uint sp_uint_from_sint_val;
+    int sp_sint_from_uint_val;
     int negate_int_val;
     int not_int_val;
     int sp_int_add_two_val;
     int sp_int_add_two_sub_three_val;
     int sp_int_add_two_sub_four_val;
+    uint mixed_sint_add_uint_val;
+    uint mixed_uint_sub_sint_val;
+    uint mixed_spec_sint_add_const_uint_val;
+    uint mixed_const_sint_mul_spec_uint_val;
     int sp_sint_mul_two_val;
     uint sp_uint_mul_two_val;
     int sp_sint_mul_two_div_five_val;
@@ -91,6 +125,10 @@ layout(set = 0, binding = 0) buffer OutputBuffer {
     int sp_sint_mul_three_div_five_val;
     int sp_sint_rem_four_val;
     uint sp_uint_rem_four_val;
+    uint mixed_sint_mod_uint_val;
+    uint mixed_uint_mod_sint_val;
+    int mixed_sint_smod_const_int_val;
+    uint mixed_uint_mod_const_uint_val;
     int sp_sint_shift_right_arithmetic_val;
     uint sp_uint_shift_right_arithmetic_val;
     int sp_sint_shift_left_val;
@@ -98,12 +136,20 @@ layout(set = 0, binding = 0) buffer OutputBuffer {
     int sp_sint_and_3_val;
     int sp_sint_or_256_val;
     uint sp_uint_xor_512_val;
+    uint mixed_sint_and_uint_val;
+    uint mixed_uint_or_sint_val;
+    uint mixed_sint_xor_uint_val;
+    uint mixed_spec_uint_and_const_sint_val;
+    uint mixed_const_uint_or_spec_sint_val;
     uint sp_int_lt_sp_sint_val;
     uint sp_int_le_sp_sint_val;
     uint sp_uint_equal_sp_uint_val;
     uint sp_uint_not_equal_sp_uint_val;
     uint sp_int_gt_sp_sint_val;
     uint sp_int_ge_sp_sint_val;
+    uint mixed_sint_lt_uint_val;
+    uint mixed_uint_ge_sint_val;
+    uint mixed_sint_eq_uint_val;
     uint logical_and_val;
     uint logical_or_val;
     uint logical_equal_val;
@@ -119,11 +165,17 @@ void main() {
     output_buffer.bool_from_uint_val = uint(bool_from_uint);
     output_buffer.int_from_bool_val = int_from_bool;
     output_buffer.uint_from_bool_val = uint_from_bool;
+    output_buffer.sp_uint_from_sint_val = sp_uint_from_sint;
+    output_buffer.sp_sint_from_uint_val = sp_sint_from_uint;
     output_buffer.negate_int_val = negate_int;
     output_buffer.not_int_val = not_int;
     output_buffer.sp_int_add_two_val = sp_int_add_two;
     output_buffer.sp_int_add_two_sub_three_val = sp_int_add_two_sub_three;
     output_buffer.sp_int_add_two_sub_four_val = sp_int_add_two_sub_four;
+    output_buffer.mixed_sint_add_uint_val = mixed_sint_add_uint;
+    output_buffer.mixed_uint_sub_sint_val = mixed_uint_sub_sint;
+    output_buffer.mixed_spec_sint_add_const_uint_val = mixed_spec_sint_add_const_uint;
+    output_buffer.mixed_const_sint_mul_spec_uint_val = mixed_const_sint_mul_spec_uint;
     output_buffer.sp_sint_mul_two_val = sp_sint_mul_two;
     output_buffer.sp_uint_mul_two_val = sp_uint_mul_two;
     output_buffer.sp_sint_mul_two_div_five_val = sp_sint_mul_two_div_five;
@@ -131,6 +183,10 @@ void main() {
     output_buffer.sp_sint_mul_three_div_five_val = sp_sint_mul_three_div_five;
     output_buffer.sp_sint_rem_four_val = sp_sint_rem_four;
     output_buffer.sp_uint_rem_four_val = sp_uint_rem_four;
+    output_buffer.mixed_sint_mod_uint_val = mixed_sint_mod_uint;
+    output_buffer.mixed_uint_mod_sint_val = mixed_uint_mod_sint;
+    output_buffer.mixed_sint_smod_const_int_val = mixed_sint_smod_const_int;
+    output_buffer.mixed_uint_mod_const_uint_val = mixed_uint_mod_const_uint;
     output_buffer.sp_sint_shift_right_arithmetic_val = sp_sint_shift_right_arithmetic;
     output_buffer.sp_uint_shift_right_arithmetic_val = sp_uint_shift_right_arithmetic;
     output_buffer.sp_sint_shift_left_val = sp_sint_shift_left;
@@ -138,12 +194,20 @@ void main() {
     output_buffer.sp_sint_and_3_val = sp_sint_and_3;
     output_buffer.sp_sint_or_256_val = sp_sint_or_256;
     output_buffer.sp_uint_xor_512_val = sp_uint_xor_512;
+    output_buffer.mixed_sint_and_uint_val = mixed_sint_and_uint;
+    output_buffer.mixed_uint_or_sint_val = mixed_uint_or_sint;
+    output_buffer.mixed_sint_xor_uint_val = mixed_sint_xor_uint;
+    output_buffer.mixed_spec_uint_and_const_sint_val = mixed_spec_uint_and_const_sint;
+    output_buffer.mixed_const_uint_or_spec_sint_val = mixed_const_uint_or_spec_sint;
     output_buffer.sp_int_lt_sp_sint_val = uint(sp_int_lt_sp_sint);
     output_buffer.sp_int_le_sp_sint_val = uint(sp_int_le_sp_sint);
     output_buffer.sp_uint_equal_sp_uint_val = uint(sp_uint_equal_sp_uint);
     output_buffer.sp_uint_not_equal_sp_uint_val = uint(sp_uint_not_equal_sp_uint);
     output_buffer.sp_int_gt_sp_sint_val = uint(sp_int_gt_sp_sint);
     output_buffer.sp_int_ge_sp_sint_val = uint(sp_int_ge_sp_sint);
+    output_buffer.mixed_sint_lt_uint_val = uint(mixed_sint_lt_uint);
+    output_buffer.mixed_uint_ge_sint_val = uint(mixed_uint_ge_sint);
+    output_buffer.mixed_sint_eq_uint_val = uint(mixed_sint_eq_uint);
     output_buffer.logical_and_val = uint(logical_and);
     output_buffer.logical_or_val = uint(logical_or);
     output_buffer.logical_equal_val = uint(logical_equal);

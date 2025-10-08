@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.0
 ; Generator: Khronos Glslang Reference Front End; 11
-; Bound: 160
+; Bound: 233
 ; Schema: 0
                OpCapability Shader
           %1 = OpExtInstImport "GLSL.std.450"
@@ -15,39 +15,57 @@
                OpMemberName %OutputBuffer 1 "bool_from_uint_val"
                OpMemberName %OutputBuffer 2 "int_from_bool_val"
                OpMemberName %OutputBuffer 3 "uint_from_bool_val"
-               OpMemberName %OutputBuffer 4 "negate_int_val"
-               OpMemberName %OutputBuffer 5 "not_int_val"
-               OpMemberName %OutputBuffer 6 "sp_int_add_two_val"
-               OpMemberName %OutputBuffer 7 "sp_int_add_two_sub_three_val"
-               OpMemberName %OutputBuffer 8 "sp_int_add_two_sub_four_val"
-               OpMemberName %OutputBuffer 9 "sp_sint_mul_two_val"
-               OpMemberName %OutputBuffer 10 "sp_uint_mul_two_val"
-               OpMemberName %OutputBuffer 11 "sp_sint_mul_two_div_five_val"
-               OpMemberName %OutputBuffer 12 "sp_uint_mul_two_div_five_val"
-               OpMemberName %OutputBuffer 13 "sp_sint_mul_three_div_five_val"
-               OpMemberName %OutputBuffer 14 "sp_sint_rem_four_val"
-               OpMemberName %OutputBuffer 15 "sp_uint_rem_four_val"
-               OpMemberName %OutputBuffer 16 "sp_sint_shift_right_arithmetic_val"
-               OpMemberName %OutputBuffer 17 "sp_uint_shift_right_arithmetic_val"
-               OpMemberName %OutputBuffer 18 "sp_sint_shift_left_val"
-               OpMemberName %OutputBuffer 19 "sp_uint_shift_left_val"
-               OpMemberName %OutputBuffer 20 "sp_sint_and_3_val"
-               OpMemberName %OutputBuffer 21 "sp_sint_or_256_val"
-               OpMemberName %OutputBuffer 22 "sp_uint_xor_512_val"
-               OpMemberName %OutputBuffer 23 "sp_int_lt_sp_sint_val"
-               OpMemberName %OutputBuffer 24 "sp_int_le_sp_sint_val"
-               OpMemberName %OutputBuffer 25 "sp_uint_equal_sp_uint_val"
-               OpMemberName %OutputBuffer 26 "sp_uint_not_equal_sp_uint_val"
-               OpMemberName %OutputBuffer 27 "sp_int_gt_sp_sint_val"
-               OpMemberName %OutputBuffer 28 "sp_int_ge_sp_sint_val"
-               OpMemberName %OutputBuffer 29 "logical_and_val"
-               OpMemberName %OutputBuffer 30 "logical_or_val"
-               OpMemberName %OutputBuffer 31 "logical_equal_val"
-               OpMemberName %OutputBuffer 32 "logical_not_equal_val"
-               OpMemberName %OutputBuffer 33 "t1_val"
-               OpMemberName %OutputBuffer 34 "t2_val"
-               OpMemberName %OutputBuffer 35 "t3_val"
-               OpMemberName %OutputBuffer 36 "t4_val"
+               OpMemberName %OutputBuffer 4 "sp_uint_from_sint_val"
+               OpMemberName %OutputBuffer 5 "sp_sint_from_uint_val"
+               OpMemberName %OutputBuffer 6 "negate_int_val"
+               OpMemberName %OutputBuffer 7 "not_int_val"
+               OpMemberName %OutputBuffer 8 "sp_int_add_two_val"
+               OpMemberName %OutputBuffer 9 "sp_int_add_two_sub_three_val"
+               OpMemberName %OutputBuffer 10 "sp_int_add_two_sub_four_val"
+               OpMemberName %OutputBuffer 11 "mixed_sint_add_uint_val"
+               OpMemberName %OutputBuffer 12 "mixed_uint_sub_sint_val"
+               OpMemberName %OutputBuffer 13 "mixed_spec_sint_add_const_uint_val"
+               OpMemberName %OutputBuffer 14 "mixed_const_sint_mul_spec_uint_val"
+               OpMemberName %OutputBuffer 15 "sp_sint_mul_two_val"
+               OpMemberName %OutputBuffer 16 "sp_uint_mul_two_val"
+               OpMemberName %OutputBuffer 17 "sp_sint_mul_two_div_five_val"
+               OpMemberName %OutputBuffer 18 "sp_uint_mul_two_div_five_val"
+               OpMemberName %OutputBuffer 19 "sp_sint_mul_three_div_five_val"
+               OpMemberName %OutputBuffer 20 "sp_sint_rem_four_val"
+               OpMemberName %OutputBuffer 21 "sp_uint_rem_four_val"
+               OpMemberName %OutputBuffer 22 "mixed_sint_mod_uint_val"
+               OpMemberName %OutputBuffer 23 "mixed_uint_mod_sint_val"
+               OpMemberName %OutputBuffer 24 "mixed_sint_smod_const_int_val"
+               OpMemberName %OutputBuffer 25 "mixed_uint_mod_const_uint_val"
+               OpMemberName %OutputBuffer 26 "sp_sint_shift_right_arithmetic_val"
+               OpMemberName %OutputBuffer 27 "sp_uint_shift_right_arithmetic_val"
+               OpMemberName %OutputBuffer 28 "sp_sint_shift_left_val"
+               OpMemberName %OutputBuffer 29 "sp_uint_shift_left_val"
+               OpMemberName %OutputBuffer 30 "sp_sint_and_3_val"
+               OpMemberName %OutputBuffer 31 "sp_sint_or_256_val"
+               OpMemberName %OutputBuffer 32 "sp_uint_xor_512_val"
+               OpMemberName %OutputBuffer 33 "mixed_sint_and_uint_val"
+               OpMemberName %OutputBuffer 34 "mixed_uint_or_sint_val"
+               OpMemberName %OutputBuffer 35 "mixed_sint_xor_uint_val"
+               OpMemberName %OutputBuffer 36 "mixed_spec_uint_and_const_sint_val"
+               OpMemberName %OutputBuffer 37 "mixed_const_uint_or_spec_sint_val"
+               OpMemberName %OutputBuffer 38 "sp_int_lt_sp_sint_val"
+               OpMemberName %OutputBuffer 39 "sp_int_le_sp_sint_val"
+               OpMemberName %OutputBuffer 40 "sp_uint_equal_sp_uint_val"
+               OpMemberName %OutputBuffer 41 "sp_uint_not_equal_sp_uint_val"
+               OpMemberName %OutputBuffer 42 "sp_int_gt_sp_sint_val"
+               OpMemberName %OutputBuffer 43 "sp_int_ge_sp_sint_val"
+               OpMemberName %OutputBuffer 44 "mixed_sint_lt_uint_val"
+               OpMemberName %OutputBuffer 45 "mixed_uint_ge_sint_val"
+               OpMemberName %OutputBuffer 46 "mixed_sint_eq_uint_val"
+               OpMemberName %OutputBuffer 47 "logical_and_val"
+               OpMemberName %OutputBuffer 48 "logical_or_val"
+               OpMemberName %OutputBuffer 49 "logical_equal_val"
+               OpMemberName %OutputBuffer 50 "logical_not_equal_val"
+               OpMemberName %OutputBuffer 51 "t1_val"
+               OpMemberName %OutputBuffer 52 "t2_val"
+               OpMemberName %OutputBuffer 53 "t3_val"
+               OpMemberName %OutputBuffer 54 "t4_val"
                OpName %output_buffer "output_buffer"
                OpName %sp_int "sp_int"
                OpName %bool_from_int "bool_from_int"
@@ -55,12 +73,18 @@
                OpName %bool_from_uint "bool_from_uint"
                OpName %int_from_bool "int_from_bool"
                OpName %uint_from_bool "uint_from_bool"
+               OpName %sp_sint "sp_sint"
+               OpName %sp_uint_from_sint "sp_uint_from_sint"
+               OpName %sp_sint_from_uint "sp_sint_from_uint"
                OpName %negate_int "negate_int"
                OpName %not_int "not_int"
                OpName %sp_int_add_two "sp_int_add_two"
                OpName %sp_int_add_two_sub_three "sp_int_add_two_sub_three"
                OpName %sp_int_add_two_sub_four "sp_int_add_two_sub_four"
-               OpName %sp_sint "sp_sint"
+               OpName %mixed_sint_add_uint "mixed_sint_add_uint"
+               OpName %mixed_uint_sub_sint "mixed_uint_sub_sint"
+               OpName %mixed_spec_sint_add_const_uint "mixed_spec_sint_add_const_uint"
+               OpName %mixed_const_sint_mul_spec_uint "mixed_const_sint_mul_spec_uint"
                OpName %sp_sint_mul_two "sp_sint_mul_two"
                OpName %sp_uint_mul_two "sp_uint_mul_two"
                OpName %sp_sint_mul_two_div_five "sp_sint_mul_two_div_five"
@@ -68,6 +92,10 @@
                OpName %sp_sint_mul_three_div_five "sp_sint_mul_three_div_five"
                OpName %sp_sint_rem_four "sp_sint_rem_four"
                OpName %sp_uint_rem_four "sp_uint_rem_four"
+               OpName %mixed_sint_mod_uint "mixed_sint_mod_uint"
+               OpName %mixed_uint_mod_sint "mixed_uint_mod_sint"
+               OpName %mixed_sint_smod_const_int "mixed_sint_smod_const_int"
+               OpName %mixed_uint_mod_const_uint "mixed_uint_mod_const_uint"
                OpName %sp_sint_shift_right_arithmetic "sp_sint_shift_right_arithmetic"
                OpName %sp_uint_shift_right_arithmetic "sp_uint_shift_right_arithmetic"
                OpName %sp_sint_shift_left "sp_sint_shift_left"
@@ -75,12 +103,20 @@
                OpName %sp_sint_and_3 "sp_sint_and_3"
                OpName %sp_sint_or_256 "sp_sint_or_256"
                OpName %sp_uint_xor_512 "sp_uint_xor_512"
+               OpName %mixed_sint_and_uint "mixed_sint_and_uint"
+               OpName %mixed_uint_or_sint "mixed_uint_or_sint"
+               OpName %mixed_sint_xor_uint "mixed_sint_xor_uint"
+               OpName %mixed_spec_uint_and_const_sint "mixed_spec_uint_and_const_sint"
+               OpName %mixed_const_uint_or_spec_sint "mixed_const_uint_or_spec_sint"
                OpName %sp_int_lt_sp_sint "sp_int_lt_sp_sint"
                OpName %sp_int_le_sp_sint "sp_int_le_sp_sint"
                OpName %sp_uint_equal_sp_uint "sp_uint_equal_sp_uint"
                OpName %sp_uint_not_equal_sp_uint "sp_uint_not_equal_sp_uint"
                OpName %sp_int_gt_sp_sint "sp_int_gt_sp_sint"
                OpName %sp_int_ge_sp_sint "sp_int_ge_sp_sint"
+               OpName %mixed_sint_lt_uint "mixed_sint_lt_uint"
+               OpName %mixed_uint_ge_sint "mixed_uint_ge_sint"
+               OpName %mixed_sint_eq_uint "mixed_sint_eq_uint"
                OpName %logical_and "logical_and"
                OpName %logical_or "logical_or"
                OpName %logical_equal "logical_equal"
@@ -131,6 +167,24 @@
                OpMemberDecorate %OutputBuffer 34 Offset 136
                OpMemberDecorate %OutputBuffer 35 Offset 140
                OpMemberDecorate %OutputBuffer 36 Offset 144
+               OpMemberDecorate %OutputBuffer 37 Offset 148
+               OpMemberDecorate %OutputBuffer 38 Offset 152
+               OpMemberDecorate %OutputBuffer 39 Offset 156
+               OpMemberDecorate %OutputBuffer 40 Offset 160
+               OpMemberDecorate %OutputBuffer 41 Offset 164
+               OpMemberDecorate %OutputBuffer 42 Offset 168
+               OpMemberDecorate %OutputBuffer 43 Offset 172
+               OpMemberDecorate %OutputBuffer 44 Offset 176
+               OpMemberDecorate %OutputBuffer 45 Offset 180
+               OpMemberDecorate %OutputBuffer 46 Offset 184
+               OpMemberDecorate %OutputBuffer 47 Offset 188
+               OpMemberDecorate %OutputBuffer 48 Offset 192
+               OpMemberDecorate %OutputBuffer 49 Offset 196
+               OpMemberDecorate %OutputBuffer 50 Offset 200
+               OpMemberDecorate %OutputBuffer 51 Offset 204
+               OpMemberDecorate %OutputBuffer 52 Offset 208
+               OpMemberDecorate %OutputBuffer 53 Offset 212
+               OpMemberDecorate %OutputBuffer 54 Offset 216
                OpDecorate %output_buffer Binding 0
                OpDecorate %output_buffer DescriptorSet 0
                OpDecorate %sp_int SpecId 1
@@ -144,11 +198,11 @@
           %3 = OpTypeFunction %void
        %uint = OpTypeInt 32 0
         %int = OpTypeInt 32 1
-%OutputBuffer = OpTypeStruct %uint %uint %int %uint %int %int %int %int %int %int %uint %int %uint %int %int %uint %int %uint %int %uint %int %int %uint %uint %uint %uint %uint %uint %uint %uint %uint %uint %uint %int %int %int %int
+%OutputBuffer = OpTypeStruct %uint %uint %int %uint %uint %int %int %int %int %int %int %uint %uint %uint %uint %int %uint %int %uint %int %int %uint %uint %uint %int %uint %int %uint %int %uint %int %int %uint %uint %uint %uint %uint %uint %uint %uint %uint %uint %uint %uint %uint %uint %uint %uint %uint %uint %uint %int %int %int %int
 %_ptr_Uniform_OutputBuffer = OpTypePointer Uniform %OutputBuffer
 %output_buffer = OpVariable %_ptr_Uniform_OutputBuffer Uniform
       %int_0 = OpConstant %int 0
-     %sp_int = OpSpecConstant %int 10
+     %sp_int = OpSpecConstant %int 0
        %bool = OpTypeBool
      %uint_0 = OpConstant %uint 0
 %bool_from_int = OpSpecConstantOp %bool INotEqual %sp_int %uint_0
@@ -156,7 +210,7 @@
          %17 = OpSpecConstantOp %uint Select %bool_from_int %uint_1 %uint_0
 %_ptr_Uniform_uint = OpTypePointer Uniform %uint
       %int_1 = OpConstant %int 1
-    %sp_uint = OpSpecConstant %uint 100
+    %sp_uint = OpSpecConstant %uint 0
 %bool_from_uint = OpSpecConstantOp %bool INotEqual %sp_uint %uint_0
          %23 = OpSpecConstantOp %uint Select %bool_from_uint %uint_1 %uint_0
       %int_2 = OpConstant %int 2
@@ -165,100 +219,155 @@
       %int_3 = OpConstant %int 3
 %uint_from_bool = OpSpecConstantOp %uint Select %bool_from_int %uint_1 %uint_0
       %int_4 = OpConstant %int 4
- %negate_int = OpSpecConstantOp %int SNegate %sp_int
+    %sp_sint = OpSpecConstant %int 0
+%sp_uint_from_sint = OpSpecConstantOp %uint IAdd %sp_sint %uint_0
       %int_5 = OpConstant %int 5
-    %not_int = OpSpecConstantOp %int Not %sp_int
+%sp_sint_from_uint = OpSpecConstantOp %int IAdd %sp_uint %uint_0
       %int_6 = OpConstant %int 6
-%sp_int_add_two = OpSpecConstantOp %int IAdd %sp_int %int_2
+ %negate_int = OpSpecConstantOp %int SNegate %sp_int
       %int_7 = OpConstant %int 7
-         %42 = OpSpecConstantOp %int IAdd %sp_int %int_2
-%sp_int_add_two_sub_three = OpSpecConstantOp %int ISub %42 %int_3
+    %not_int = OpSpecConstantOp %int Not %sp_int
       %int_8 = OpConstant %int 8
-%sp_int_add_two_sub_four = OpSpecConstantOp %int ISub %sp_int_add_two %int_4
+%sp_int_add_two = OpSpecConstantOp %int IAdd %sp_int %int_2
       %int_9 = OpConstant %int 9
-    %sp_sint = OpSpecConstant %int -10
-%sp_sint_mul_two = OpSpecConstantOp %int IMul %sp_sint %int_2
+         %49 = OpSpecConstantOp %int IAdd %sp_int %int_2
+%sp_int_add_two_sub_three = OpSpecConstantOp %int ISub %49 %int_3
      %int_10 = OpConstant %int 10
+%sp_int_add_two_sub_four = OpSpecConstantOp %int ISub %sp_int_add_two %int_4
+     %int_11 = OpConstant %int 11
+         %56 = OpSpecConstantOp %uint IAdd %sp_sint %uint_0
+%mixed_sint_add_uint = OpSpecConstantOp %uint IAdd %56 %sp_uint
+     %int_12 = OpConstant %int 12
+         %60 = OpSpecConstantOp %uint IAdd %sp_sint %uint_0
+%mixed_uint_sub_sint = OpSpecConstantOp %uint ISub %sp_uint %60
+     %int_13 = OpConstant %int 13
+         %64 = OpSpecConstantOp %uint IAdd %sp_sint %uint_0
+    %uint_10 = OpConstant %uint 10
+%mixed_spec_sint_add_const_uint = OpSpecConstantOp %uint IAdd %64 %uint_10
+     %int_14 = OpConstant %int 14
+     %uint_3 = OpConstant %uint 3
+%mixed_const_sint_mul_spec_uint = OpSpecConstantOp %uint IMul %uint_3 %sp_uint
+     %int_15 = OpConstant %int 15
+%sp_sint_mul_two = OpSpecConstantOp %int IMul %sp_sint %int_2
+     %int_16 = OpConstant %int 16
      %uint_2 = OpConstant %uint 2
 %sp_uint_mul_two = OpSpecConstantOp %uint IMul %sp_uint %uint_2
-     %int_11 = OpConstant %int 11
+     %int_17 = OpConstant %int 17
 %sp_sint_mul_two_div_five = OpSpecConstantOp %int SDiv %sp_sint_mul_two %int_5
-     %int_12 = OpConstant %int 12
+     %int_18 = OpConstant %int 18
      %uint_5 = OpConstant %uint 5
 %sp_uint_mul_two_div_five = OpSpecConstantOp %uint UDiv %sp_uint_mul_two %uint_5
-     %int_13 = OpConstant %int 13
-         %64 = OpSpecConstantOp %int IMul %sp_sint %int_3
-%sp_sint_mul_three_div_five = OpSpecConstantOp %int SDiv %64 %int_5
-     %int_14 = OpConstant %int 14
+     %int_19 = OpConstant %int 19
+         %87 = OpSpecConstantOp %int IMul %sp_sint %int_3
+%sp_sint_mul_three_div_five = OpSpecConstantOp %int SDiv %87 %int_5
+     %int_20 = OpConstant %int 20
 %sp_sint_rem_four = OpSpecConstantOp %int SMod %sp_sint %int_4
-     %int_15 = OpConstant %int 15
+     %int_21 = OpConstant %int 21
      %uint_4 = OpConstant %uint 4
 %sp_uint_rem_four = OpSpecConstantOp %uint UMod %sp_uint %uint_4
-     %int_16 = OpConstant %int 16
-    %uint_10 = OpConstant %uint 10
-%sp_sint_shift_right_arithmetic = OpSpecConstantOp %int ShiftRightArithmetic %sp_sint %uint_10
-     %int_17 = OpConstant %int 17
+     %int_22 = OpConstant %int 22
+         %98 = OpSpecConstantOp %uint IAdd %sp_sint %uint_0
+%mixed_sint_mod_uint = OpSpecConstantOp %uint UMod %98 %sp_uint
+     %int_23 = OpConstant %int 23
+        %102 = OpSpecConstantOp %uint IAdd %sp_sint %uint_0
+%mixed_uint_mod_sint = OpSpecConstantOp %uint UMod %sp_uint %102
+     %int_24 = OpConstant %int 24
+%mixed_sint_smod_const_int = OpSpecConstantOp %int SMod %sp_sint %int_3
+     %int_25 = OpConstant %int 25
+     %uint_7 = OpConstant %uint 7
+%mixed_uint_mod_const_uint = OpSpecConstantOp %uint UMod %sp_uint %uint_7
+     %int_26 = OpConstant %int 26
+%sp_sint_shift_right_arithmetic = OpSpecConstantOp %int ShiftRightArithmetic %sp_sint %int_10
+     %int_27 = OpConstant %int 27
     %uint_20 = OpConstant %uint 20
 %sp_uint_shift_right_arithmetic = OpSpecConstantOp %uint ShiftRightLogical %sp_uint %uint_20
-     %int_18 = OpConstant %int 18
+     %int_28 = OpConstant %int 28
 %sp_sint_shift_left = OpSpecConstantOp %int ShiftLeftLogical %sp_sint %uint_1
-     %int_19 = OpConstant %int 19
-%sp_uint_shift_left = OpSpecConstantOp %uint ShiftLeftLogical %sp_uint %uint_2
-     %int_20 = OpConstant %int 20
+     %int_29 = OpConstant %int 29
+%sp_uint_shift_left = OpSpecConstantOp %uint ShiftLeftLogical %sp_uint %int_2
+     %int_30 = OpConstant %int 30
 %sp_sint_and_3 = OpSpecConstantOp %int BitwiseAnd %sp_sint %int_3
-     %int_21 = OpConstant %int 21
+     %int_31 = OpConstant %int 31
     %int_256 = OpConstant %int 256
 %sp_sint_or_256 = OpSpecConstantOp %int BitwiseOr %sp_sint %int_256
-     %int_22 = OpConstant %int 22
+     %int_32 = OpConstant %int 32
    %uint_512 = OpConstant %uint 512
 %sp_uint_xor_512 = OpSpecConstantOp %uint BitwiseXor %sp_uint %uint_512
-     %int_23 = OpConstant %int 23
-%sp_int_lt_sp_sint = OpSpecConstantOp %bool SLessThan %sp_int %sp_sint
-        %101 = OpSpecConstantOp %uint Select %sp_int_lt_sp_sint %uint_1 %uint_0
-     %int_24 = OpConstant %int 24
-%sp_int_le_sp_sint = OpSpecConstantOp %bool SLessThanEqual %sp_int %sp_sint
-        %105 = OpSpecConstantOp %uint Select %sp_int_le_sp_sint %uint_1 %uint_0
-     %int_25 = OpConstant %int 25
-%sp_uint_equal_sp_uint = OpSpecConstantOp %bool IEqual %sp_uint %sp_uint
-        %109 = OpSpecConstantOp %uint Select %sp_uint_equal_sp_uint %uint_1 %uint_0
-     %int_26 = OpConstant %int 26
-%sp_uint_not_equal_sp_uint = OpSpecConstantOp %bool INotEqual %sp_uint %sp_uint
-        %113 = OpSpecConstantOp %uint Select %sp_uint_not_equal_sp_uint %uint_1 %uint_0
-     %int_27 = OpConstant %int 27
-%sp_int_gt_sp_sint = OpSpecConstantOp %bool SGreaterThan %sp_int %sp_sint
-        %117 = OpSpecConstantOp %uint Select %sp_int_gt_sp_sint %uint_1 %uint_0
-     %int_28 = OpConstant %int 28
-%sp_int_ge_sp_sint = OpSpecConstantOp %bool SGreaterThanEqual %sp_int %sp_sint
-        %121 = OpSpecConstantOp %uint Select %sp_int_ge_sp_sint %uint_1 %uint_0
-     %int_29 = OpConstant %int 29
-%logical_and = OpSpecConstantOp %bool LogicalAnd %bool_from_int %bool_from_uint
-        %125 = OpSpecConstantOp %uint Select %logical_and %uint_1 %uint_0
-     %int_30 = OpConstant %int 30
- %logical_or = OpSpecConstantOp %bool LogicalOr %bool_from_int %bool_from_uint
-        %129 = OpSpecConstantOp %uint Select %logical_or %uint_1 %uint_0
-     %int_31 = OpConstant %int 31
-%logical_equal = OpSpecConstantOp %bool LogicalEqual %bool_from_int %bool_from_uint
-        %133 = OpSpecConstantOp %uint Select %logical_equal %uint_1 %uint_0
-     %int_32 = OpConstant %int 32
-%logical_not_equal = OpSpecConstantOp %bool LogicalNotEqual %bool_from_int %bool_from_uint
-        %137 = OpSpecConstantOp %uint Select %logical_not_equal %uint_1 %uint_0
      %int_33 = OpConstant %int 33
-          %c = OpSpecConstantTrue %bool
-         %t1 = OpSpecConstantOp %int Select %c %int_13 %int_17
+        %137 = OpSpecConstantOp %uint IAdd %sp_sint %uint_0
+%mixed_sint_and_uint = OpSpecConstantOp %uint BitwiseAnd %137 %sp_uint
      %int_34 = OpConstant %int 34
-          %a = OpSpecConstant %int 4
-         %t2 = OpSpecConstantOp %int Select %c %a %int_17
+        %141 = OpSpecConstantOp %uint IAdd %sp_sint %uint_0
+%mixed_uint_or_sint = OpSpecConstantOp %uint BitwiseOr %sp_uint %141
      %int_35 = OpConstant %int 35
+        %145 = OpSpecConstantOp %uint IAdd %sp_sint %uint_0
+%mixed_sint_xor_uint = OpSpecConstantOp %uint BitwiseXor %145 %sp_uint
+     %int_36 = OpConstant %int 36
+    %uint_15 = OpConstant %uint 15
+%mixed_spec_uint_and_const_sint = OpSpecConstantOp %uint BitwiseAnd %sp_uint %uint_15
+     %int_37 = OpConstant %int 37
+   %uint_128 = OpConstant %uint 128
+        %154 = OpSpecConstantOp %uint IAdd %sp_sint %uint_0
+%mixed_const_uint_or_spec_sint = OpSpecConstantOp %uint BitwiseOr %uint_128 %154
+     %int_38 = OpConstant %int 38
+%sp_int_lt_sp_sint = OpSpecConstantOp %bool SLessThan %sp_int %sp_sint
+        %159 = OpSpecConstantOp %uint Select %sp_int_lt_sp_sint %uint_1 %uint_0
+     %int_39 = OpConstant %int 39
+%sp_int_le_sp_sint = OpSpecConstantOp %bool SLessThanEqual %sp_int %sp_sint
+        %163 = OpSpecConstantOp %uint Select %sp_int_le_sp_sint %uint_1 %uint_0
+     %int_40 = OpConstant %int 40
+%sp_uint_equal_sp_uint = OpSpecConstantOp %bool IEqual %sp_uint %sp_uint
+        %167 = OpSpecConstantOp %uint Select %sp_uint_equal_sp_uint %uint_1 %uint_0
+     %int_41 = OpConstant %int 41
+%sp_uint_not_equal_sp_uint = OpSpecConstantOp %bool INotEqual %sp_uint %sp_uint
+        %171 = OpSpecConstantOp %uint Select %sp_uint_not_equal_sp_uint %uint_1 %uint_0
+     %int_42 = OpConstant %int 42
+%sp_int_gt_sp_sint = OpSpecConstantOp %bool SGreaterThan %sp_int %sp_sint
+        %175 = OpSpecConstantOp %uint Select %sp_int_gt_sp_sint %uint_1 %uint_0
+     %int_43 = OpConstant %int 43
+%sp_int_ge_sp_sint = OpSpecConstantOp %bool SGreaterThanEqual %sp_int %sp_sint
+        %179 = OpSpecConstantOp %uint Select %sp_int_ge_sp_sint %uint_1 %uint_0
+     %int_44 = OpConstant %int 44
+        %182 = OpSpecConstantOp %uint IAdd %sp_sint %uint_0
+%mixed_sint_lt_uint = OpSpecConstantOp %bool ULessThan %182 %sp_uint
+        %184 = OpSpecConstantOp %uint Select %mixed_sint_lt_uint %uint_1 %uint_0
+     %int_45 = OpConstant %int 45
+        %187 = OpSpecConstantOp %uint IAdd %sp_sint %uint_0
+%mixed_uint_ge_sint = OpSpecConstantOp %bool UGreaterThanEqual %sp_uint %187
+        %189 = OpSpecConstantOp %uint Select %mixed_uint_ge_sint %uint_1 %uint_0
+     %int_46 = OpConstant %int 46
+        %192 = OpSpecConstantOp %uint IAdd %sp_sint %uint_0
+%mixed_sint_eq_uint = OpSpecConstantOp %bool IEqual %192 %sp_uint
+        %194 = OpSpecConstantOp %uint Select %mixed_sint_eq_uint %uint_1 %uint_0
+     %int_47 = OpConstant %int 47
+%logical_and = OpSpecConstantOp %bool LogicalAnd %bool_from_int %bool_from_uint
+        %198 = OpSpecConstantOp %uint Select %logical_and %uint_1 %uint_0
+     %int_48 = OpConstant %int 48
+ %logical_or = OpSpecConstantOp %bool LogicalOr %bool_from_int %bool_from_uint
+        %202 = OpSpecConstantOp %uint Select %logical_or %uint_1 %uint_0
+     %int_49 = OpConstant %int 49
+%logical_equal = OpSpecConstantOp %bool LogicalEqual %bool_from_int %bool_from_uint
+        %206 = OpSpecConstantOp %uint Select %logical_equal %uint_1 %uint_0
+     %int_50 = OpConstant %int 50
+%logical_not_equal = OpSpecConstantOp %bool LogicalNotEqual %bool_from_int %bool_from_uint
+        %210 = OpSpecConstantOp %uint Select %logical_not_equal %uint_1 %uint_0
+     %int_51 = OpConstant %int 51
+          %c = OpSpecConstantFalse %bool
+         %t1 = OpSpecConstantOp %int Select %c %int_13 %int_17
+     %int_52 = OpConstant %int 52
+          %a = OpSpecConstant %int 0
+         %t2 = OpSpecConstantOp %int Select %c %a %int_17
+     %int_53 = OpConstant %int 53
        %true = OpConstantTrue %bool
          %t3 = OpSpecConstantOp %int Select %true %a %int_17
-     %int_36 = OpConstant %int 36
-          %b = OpSpecConstant %int 6
-        %153 = OpSpecConstantOp %bool SGreaterThan %a %b
-        %154 = OpSpecConstantOp %int IAdd %int_13 %a
-        %155 = OpSpecConstantOp %int IMul %int_17 %b
-         %t4 = OpSpecConstantOp %int Select %153 %154 %155
+     %int_54 = OpConstant %int 54
+          %b = OpSpecConstant %int 0
+        %226 = OpSpecConstantOp %bool SGreaterThan %a %b
+        %227 = OpSpecConstantOp %int IAdd %int_13 %a
+        %228 = OpSpecConstantOp %int IMul %int_17 %b
+         %t4 = OpSpecConstantOp %int Select %226 %227 %228
       %float = OpTypeFloat 32
-   %sp_float = OpSpecConstant %float 3.1415925
+   %sp_float = OpSpecConstant %float 0
        %main = OpFunction %void None %3
           %5 = OpLabel
          %19 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_0
@@ -269,71 +378,107 @@
                OpStore %28 %int_from_bool
          %31 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_3
                OpStore %31 %uint_from_bool
-         %34 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_4
-               OpStore %34 %negate_int
-         %37 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_5
-               OpStore %37 %not_int
-         %40 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_6
-               OpStore %40 %sp_int_add_two
+         %35 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_4
+               OpStore %35 %sp_uint_from_sint
+         %38 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_5
+               OpStore %38 %sp_sint_from_uint
+         %41 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_6
+               OpStore %41 %negate_int
          %44 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_7
-               OpStore %44 %sp_int_add_two_sub_three
+               OpStore %44 %not_int
          %47 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_8
-               OpStore %47 %sp_int_add_two_sub_four
+               OpStore %47 %sp_int_add_two
          %51 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_9
-               OpStore %51 %sp_sint_mul_two
-         %55 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_10
-               OpStore %55 %sp_uint_mul_two
-         %58 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_11
-               OpStore %58 %sp_sint_mul_two_div_five
+               OpStore %51 %sp_int_add_two_sub_three
+         %54 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_10
+               OpStore %54 %sp_int_add_two_sub_four
+         %58 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_11
+               OpStore %58 %mixed_sint_add_uint
          %62 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_12
-               OpStore %62 %sp_uint_mul_two_div_five
-         %66 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_13
-               OpStore %66 %sp_sint_mul_three_div_five
-         %69 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_14
-               OpStore %69 %sp_sint_rem_four
-         %73 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_15
-               OpStore %73 %sp_uint_rem_four
-         %77 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_16
-               OpStore %77 %sp_sint_shift_right_arithmetic
-         %81 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_17
-               OpStore %81 %sp_uint_shift_right_arithmetic
-         %84 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_18
-               OpStore %84 %sp_sint_shift_left
-         %87 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_19
-               OpStore %87 %sp_uint_shift_left
-         %90 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_20
-               OpStore %90 %sp_sint_and_3
-         %94 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_21
-               OpStore %94 %sp_sint_or_256
-         %98 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_22
-               OpStore %98 %sp_uint_xor_512
-        %102 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_23
-               OpStore %102 %101
-        %106 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_24
-               OpStore %106 %105
-        %110 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_25
-               OpStore %110 %109
-        %114 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_26
-               OpStore %114 %113
+               OpStore %62 %mixed_uint_sub_sint
+         %67 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_13
+               OpStore %67 %mixed_spec_sint_add_const_uint
+         %71 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_14
+               OpStore %71 %mixed_const_sint_mul_spec_uint
+         %74 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_15
+               OpStore %74 %sp_sint_mul_two
+         %78 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_16
+               OpStore %78 %sp_uint_mul_two
+         %81 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_17
+               OpStore %81 %sp_sint_mul_two_div_five
+         %85 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_18
+               OpStore %85 %sp_uint_mul_two_div_five
+         %89 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_19
+               OpStore %89 %sp_sint_mul_three_div_five
+         %92 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_20
+               OpStore %92 %sp_sint_rem_four
+         %96 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_21
+               OpStore %96 %sp_uint_rem_four
+        %100 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_22
+               OpStore %100 %mixed_sint_mod_uint
+        %104 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_23
+               OpStore %104 %mixed_uint_mod_sint
+        %107 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_24
+               OpStore %107 %mixed_sint_smod_const_int
+        %111 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_25
+               OpStore %111 %mixed_uint_mod_const_uint
+        %114 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_26
+               OpStore %114 %sp_sint_shift_right_arithmetic
         %118 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_27
-               OpStore %118 %117
-        %122 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_28
-               OpStore %122 %121
-        %126 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_29
-               OpStore %126 %125
-        %130 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_30
-               OpStore %130 %129
-        %134 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_31
-               OpStore %134 %133
-        %138 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_32
-               OpStore %138 %137
-        %142 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_33
-               OpStore %142 %t1
-        %146 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_34
-               OpStore %146 %t2
-        %150 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_35
-               OpStore %150 %t3
-        %157 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_36
-               OpStore %157 %t4
+               OpStore %118 %sp_uint_shift_right_arithmetic
+        %121 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_28
+               OpStore %121 %sp_sint_shift_left
+        %124 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_29
+               OpStore %124 %sp_uint_shift_left
+        %127 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_30
+               OpStore %127 %sp_sint_and_3
+        %131 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_31
+               OpStore %131 %sp_sint_or_256
+        %135 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_32
+               OpStore %135 %sp_uint_xor_512
+        %139 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_33
+               OpStore %139 %mixed_sint_and_uint
+        %143 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_34
+               OpStore %143 %mixed_uint_or_sint
+        %147 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_35
+               OpStore %147 %mixed_sint_xor_uint
+        %151 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_36
+               OpStore %151 %mixed_spec_uint_and_const_sint
+        %156 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_37
+               OpStore %156 %mixed_const_uint_or_spec_sint
+        %160 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_38
+               OpStore %160 %159
+        %164 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_39
+               OpStore %164 %163
+        %168 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_40
+               OpStore %168 %167
+        %172 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_41
+               OpStore %172 %171
+        %176 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_42
+               OpStore %176 %175
+        %180 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_43
+               OpStore %180 %179
+        %185 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_44
+               OpStore %185 %184
+        %190 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_45
+               OpStore %190 %189
+        %195 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_46
+               OpStore %195 %194
+        %199 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_47
+               OpStore %199 %198
+        %203 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_48
+               OpStore %203 %202
+        %207 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_49
+               OpStore %207 %206
+        %211 = OpAccessChain %_ptr_Uniform_uint %output_buffer %int_50
+               OpStore %211 %210
+        %215 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_51
+               OpStore %215 %t1
+        %219 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_52
+               OpStore %219 %t2
+        %223 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_53
+               OpStore %223 %t3
+        %230 = OpAccessChain %_ptr_Uniform_int %output_buffer %int_54
+               OpStore %230 %t4
                OpReturn
                OpFunctionEnd

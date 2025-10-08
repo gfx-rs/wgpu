@@ -486,6 +486,8 @@ enum MergeBlockInformation {
     SwitchMerge,
 }
 
+type OptimizationResult = Result<Option<(Handle<crate::Expression>, Option<String>)>, Error>;
+
 /// Fragments of Naga IR, to be assembled into `Statements` once data flow is
 /// resolved.
 ///
@@ -6021,6 +6023,367 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             .map_err(|error| error.into())
     }
 
+    fn get_expr_scalar(
+        &self,
+        module: &crate::Module,
+        expr_handle: Handle<crate::Expression>,
+    ) -> Option<crate::Scalar> {
+        match module.global_expressions[expr_handle] {
+            crate::Expression::Literal(ref literal) => Some(literal.scalar()),
+            crate::Expression::Constant(const_handle) => {
+                let ty = module.constants[const_handle].ty;
+                match module.types[ty].inner {
+                    crate::TypeInner::Scalar(scalar) | crate::TypeInner::Vector { scalar, .. } => {
+                        Some(scalar)
+                    }
+                    _ => None,
+                }
+            }
+            crate::Expression::Override(override_handle) => {
+                let ty = module.overrides[override_handle].ty;
+                match module.types[ty].inner {
+                    crate::TypeInner::Scalar(scalar) | crate::TypeInner::Vector { scalar, .. } => {
+                        Some(scalar)
+                    }
+                    _ => None,
+                }
+            }
+            crate::Expression::As { kind, convert, .. } => {
+                convert.map(|width| crate::Scalar { kind, width })
+            }
+            // We don't have enough information to determine the scalar type.
+            _ => None,
+        }
+    }
+
+    fn convert_expr_to_target_scalar(
+        &mut self,
+        module: &mut crate::Module,
+        global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
+        expr: &mut Handle<crate::Expression>,
+        target_scalar: crate::Scalar,
+        span: crate::Span,
+    ) -> Result<(), Error> {
+        *expr = self.eval_and_append_expression(
+            module,
+            global_expression_kind_tracker,
+            crate::Expression::As {
+                expr: *expr,
+                kind: target_scalar.kind,
+                convert: Some(target_scalar.width),
+            },
+            span,
+        )?;
+        Ok(())
+    }
+
+    /// Apply implicit type conversions for binary operations to ensure SPIR-V -> WGSL compatibility.
+    #[allow(clippy::too_many_arguments)]
+    fn implicit_cast_operators(
+        &mut self,
+        module: &mut crate::Module,
+        global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
+        op: crate::BinaryOperator,
+        ty: Handle<crate::Type>,
+        left_expr: &mut Handle<crate::Expression>,
+        right_expr: &mut Handle<crate::Expression>,
+        span: crate::Span,
+    ) -> Result<(), Error> {
+        match op {
+            crate::BinaryOperator::ShiftLeft | crate::BinaryOperator::ShiftRight => {
+                // Shift operations: convert right operand (shift amount) to u32.
+                if let Some(current_scalar) = self.get_expr_scalar(module, *right_expr) {
+                    if current_scalar != crate::Scalar::U32 {
+                        self.convert_expr_to_target_scalar(
+                            module,
+                            global_expression_kind_tracker,
+                            right_expr,
+                            crate::Scalar::U32,
+                            span,
+                        )?;
+                    }
+                }
+            }
+            // Comparison operators: convert operands to the same type.
+            crate::BinaryOperator::Equal
+            | crate::BinaryOperator::NotEqual
+            | crate::BinaryOperator::Less
+            | crate::BinaryOperator::LessEqual
+            | crate::BinaryOperator::Greater
+            | crate::BinaryOperator::GreaterEqual => {
+                let left_scalar = self.get_expr_scalar(module, *left_expr);
+                let right_scalar = self.get_expr_scalar(module, *right_expr);
+
+                if let (Some(left), Some(right)) = (left_scalar, right_scalar) {
+                    if left != right {
+                        let target_scalar = if left.kind != right.kind {
+                            // Different signedness: use unsigned.
+                            crate::Scalar {
+                                kind: crate::ScalarKind::Uint,
+                                width: left.width.max(right.width),
+                            }
+                        } else {
+                            // Same signedness: use the wider type.
+                            if left.width > right.width {
+                                left
+                            } else {
+                                right
+                            }
+                        };
+
+                        if left != target_scalar {
+                            self.convert_expr_to_target_scalar(
+                                module,
+                                global_expression_kind_tracker,
+                                left_expr,
+                                target_scalar,
+                                span,
+                            )?;
+                        }
+
+                        if right != target_scalar {
+                            self.convert_expr_to_target_scalar(
+                                module,
+                                global_expression_kind_tracker,
+                                right_expr,
+                                target_scalar,
+                                span,
+                            )?;
+                        }
+                    }
+                }
+            }
+            // Logical operators: no change needed.
+            crate::BinaryOperator::LogicalAnd | crate::BinaryOperator::LogicalOr => {}
+            // All other operators: convert operands to match the result type.
+            _ => {
+                if let crate::TypeInner::Scalar(target_scalar)
+                | crate::TypeInner::Vector {
+                    scalar: target_scalar,
+                    ..
+                } = module.types[ty].inner
+                {
+                    if let Some(left_scalar) = self.get_expr_scalar(module, *left_expr) {
+                        if left_scalar != target_scalar {
+                            self.convert_expr_to_target_scalar(
+                                module,
+                                global_expression_kind_tracker,
+                                left_expr,
+                                target_scalar,
+                                span,
+                            )?;
+                        }
+                    }
+
+                    if let Some(right_scalar) = self.get_expr_scalar(module, *right_expr) {
+                        if right_scalar != target_scalar {
+                            self.convert_expr_to_target_scalar(
+                                module,
+                                global_expression_kind_tracker,
+                                right_expr,
+                                target_scalar,
+                                span,
+                            )?;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn is_constant_zero(
+        &self,
+        module: &crate::Module,
+        const_id: spirv::Word,
+    ) -> Result<bool, Error> {
+        let lookup = self.lookup_constant.lookup(const_id)?;
+        match lookup.inner {
+            Constant::Constant(const_handle) => {
+                let init = module.constants[const_handle].init;
+                match module.global_expressions[init] {
+                    crate::Expression::Literal(literal) => Ok(match literal {
+                        crate::Literal::I32(v) => v == 0,
+                        crate::Literal::U32(v) => v == 0,
+                        crate::Literal::I64(v) => v == 0,
+                        crate::Literal::U64(v) => v == 0,
+                        _ => false,
+                    }),
+                    _ => Ok(false),
+                }
+            }
+            Constant::Override(_) => Ok(false),
+        }
+    }
+
+    fn is_constant_one(
+        &self,
+        module: &crate::Module,
+        const_id: spirv::Word,
+    ) -> Result<bool, Error> {
+        let lookup = self.lookup_constant.lookup(const_id)?;
+        match lookup.inner {
+            Constant::Constant(const_handle) => {
+                let init = module.constants[const_handle].init;
+                match module.global_expressions[init] {
+                    crate::Expression::Literal(literal) => Ok(match literal {
+                        crate::Literal::I32(v) => v == 1,
+                        crate::Literal::U32(v) => v == 1,
+                        crate::Literal::I64(v) => v == 1,
+                        crate::Literal::U64(v) => v == 1,
+                        _ => false,
+                    }),
+                    _ => Ok(false),
+                }
+            }
+            Constant::Override(_) => Ok(false),
+        }
+    }
+
+    fn get_constant_name(&self, module: &crate::Module, const_id: spirv::Word) -> Option<String> {
+        let lookup = self.lookup_constant.lookup(const_id).ok()?;
+        match lookup.inner {
+            Constant::Override(override_handle) => module.overrides[override_handle].name.clone(),
+            Constant::Constant(_) => None,
+        }
+    }
+
+    fn format_target_type(&self, module: &crate::Module, ty: Handle<crate::Type>) -> String {
+        match module.types[ty].inner {
+            crate::TypeInner::Scalar(scalar) | crate::TypeInner::Vector { scalar, .. } => {
+                match scalar.kind {
+                    crate::ScalarKind::Sint => String::from("int"),
+                    crate::ScalarKind::Uint => String::from("uint"),
+                    crate::ScalarKind::Float => String::from("float"),
+                    crate::ScalarKind::Bool => String::from("bool"),
+                    crate::ScalarKind::AbstractInt => String::from("abstract_int"),
+                    crate::ScalarKind::AbstractFloat => String::from("abstract_float"),
+                }
+            }
+            _ => String::from("unknown"),
+        }
+    }
+
+    /// Try to optimize common SPIR-V type conversion patterns to simpler `As` expressions.
+    ///
+    /// Example: IAdd %a_value %zero
+    #[allow(clippy::too_many_arguments)]
+    fn try_optimize_type_conversion_pattern(
+        &mut self,
+        module: &mut crate::Module,
+        global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
+        opcode: spirv::Op,
+        ty: Handle<crate::Type>,
+        left_id: spirv::Word,
+        right_id: spirv::Word,
+        span: crate::Span,
+    ) -> OptimizationResult {
+        if matches!(opcode, spirv::Op::IAdd | spirv::Op::BitwiseOr) {
+            let left_is_zero = self.is_constant_zero(module, left_id)?;
+            let right_is_zero = self.is_constant_zero(module, right_id)?;
+
+            let (value_id, source_name) = if left_is_zero && !right_is_zero {
+                (right_id, self.get_constant_name(module, right_id))
+            } else if right_is_zero && !left_is_zero {
+                (left_id, self.get_constant_name(module, left_id))
+            } else {
+                return Ok(None);
+            };
+
+            let scalar = match module.types[ty].inner {
+                crate::TypeInner::Scalar(scalar)
+                | crate::TypeInner::Vector { scalar, .. }
+                | crate::TypeInner::Matrix { scalar, .. } => scalar,
+                _ => return Ok(None),
+            };
+
+            let value_expr_inner = self.lookup_constant.lookup(value_id)?.inner.to_expr();
+            let value_expr = self.eval_and_append_expression(
+                module,
+                global_expression_kind_tracker,
+                value_expr_inner,
+                span,
+            )?;
+
+            let as_expr = self.eval_and_append_expression(
+                module,
+                global_expression_kind_tracker,
+                crate::Expression::As {
+                    expr: value_expr,
+                    kind: scalar.kind,
+                    convert: Some(scalar.width),
+                },
+                span,
+            )?;
+
+            let derived_name = source_name.map(|name| {
+                let target_type = self.format_target_type(module, ty);
+                format!("{name}_as_{target_type}")
+            });
+
+            return Ok(Some((as_expr, derived_name)));
+        }
+
+        Ok(None)
+    }
+
+    /// Try to optimize `select` pattern used for bool to int/uint conversion to simpler `As` expressions.
+    ///
+    /// Example: Select %bool_value %one %zero
+    #[allow(clippy::too_many_arguments)]
+    fn try_optimize_select_conversion(
+        &mut self,
+        module: &mut crate::Module,
+        global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
+        ty: Handle<crate::Type>,
+        condition_id: spirv::Word,
+        o1_id: spirv::Word,
+        o2_id: spirv::Word,
+        span: crate::Span,
+    ) -> OptimizationResult {
+        let o1_is_one = self.is_constant_one(module, o1_id)?;
+        let o2_is_zero = self.is_constant_zero(module, o2_id)?;
+
+        if !o1_is_one || !o2_is_zero {
+            return Ok(None);
+        }
+
+        let scalar = match module.types[ty].inner {
+            crate::TypeInner::Scalar(scalar)
+            | crate::TypeInner::Vector { scalar, .. }
+            | crate::TypeInner::Matrix { scalar, .. } => scalar,
+            _ => return Ok(None),
+        };
+
+        let condition_expr_inner = self.lookup_constant.lookup(condition_id)?.inner.to_expr();
+        let condition_expr = self.eval_and_append_expression(
+            module,
+            global_expression_kind_tracker,
+            condition_expr_inner,
+            span,
+        )?;
+
+        let as_expr = self.eval_and_append_expression(
+            module,
+            global_expression_kind_tracker,
+            crate::Expression::As {
+                expr: condition_expr,
+                kind: scalar.kind,
+                convert: Some(scalar.width),
+            },
+            span,
+        )?;
+
+        let source_name = self.get_constant_name(module, condition_id);
+        let derived_name = source_name.map(|name| {
+            let target_type = self.format_target_type(module, ty);
+            format!("{name}_as_{target_type}")
+        });
+
+        Ok(Some((as_expr, derived_name)))
+    }
+
     fn parse_spec_constant_op(
         &mut self,
         inst: Instruction,
@@ -6046,9 +6409,16 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             Op::SpecConstantOp,
         ))?;
 
+        let mut derived_name: Option<String> = None;
+
         let init = match opcode {
             Op::SConvert | Op::UConvert | Op::FConvert => {
                 let value_id = self.next()?;
+
+                if let Some(source_name) = self.get_constant_name(module, value_id) {
+                    let target_type = self.format_target_type(module, ty);
+                    derived_name = Some(format!("{source_name}_as_{target_type}"));
+                }
 
                 let scalar = match module.types[ty].inner {
                     crate::TypeInner::Scalar(scalar)
@@ -6136,59 +6506,88 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 let left_id = self.next()?;
                 let right_id = self.next()?;
 
-                let op = match opcode {
-                    Op::IAdd => crate::BinaryOperator::Add,
-                    Op::ISub => crate::BinaryOperator::Subtract,
-                    Op::IMul => crate::BinaryOperator::Multiply,
-                    Op::UDiv | Op::SDiv => crate::BinaryOperator::Divide,
-                    Op::SRem | Op::UMod => crate::BinaryOperator::Modulo,
-                    Op::BitwiseOr => crate::BinaryOperator::InclusiveOr,
-                    Op::BitwiseXor => crate::BinaryOperator::ExclusiveOr,
-                    Op::BitwiseAnd => crate::BinaryOperator::And,
-                    Op::ShiftLeftLogical => crate::BinaryOperator::ShiftLeft,
-                    Op::ShiftRightLogical | Op::ShiftRightArithmetic => {
-                        crate::BinaryOperator::ShiftRight
+                match self.try_optimize_type_conversion_pattern(
+                    module,
+                    global_expression_kind_tracker,
+                    opcode,
+                    ty,
+                    left_id,
+                    right_id,
+                    span,
+                )? {
+                    Some((optimized_expr, name)) => {
+                        derived_name = name;
+                        optimized_expr
                     }
-                    Op::LogicalOr => crate::BinaryOperator::LogicalOr,
-                    Op::LogicalAnd => crate::BinaryOperator::LogicalAnd,
-                    Op::LogicalEqual => crate::BinaryOperator::Equal,
-                    Op::LogicalNotEqual => crate::BinaryOperator::NotEqual,
-                    Op::IEqual => crate::BinaryOperator::Equal,
-                    Op::INotEqual => crate::BinaryOperator::NotEqual,
-                    Op::ULessThan | Op::SLessThan => crate::BinaryOperator::Less,
-                    Op::UGreaterThan | Op::SGreaterThan => crate::BinaryOperator::Greater,
-                    Op::ULessThanEqual | Op::SLessThanEqual => crate::BinaryOperator::LessEqual,
-                    Op::UGreaterThanEqual | Op::SGreaterThanEqual => {
-                        crate::BinaryOperator::GreaterEqual
+                    None => {
+                        let op = match opcode {
+                            Op::IAdd => crate::BinaryOperator::Add,
+                            Op::ISub => crate::BinaryOperator::Subtract,
+                            Op::IMul => crate::BinaryOperator::Multiply,
+                            Op::UDiv | Op::SDiv => crate::BinaryOperator::Divide,
+                            Op::SRem | Op::UMod => crate::BinaryOperator::Modulo,
+                            Op::BitwiseOr => crate::BinaryOperator::InclusiveOr,
+                            Op::BitwiseXor => crate::BinaryOperator::ExclusiveOr,
+                            Op::BitwiseAnd => crate::BinaryOperator::And,
+                            Op::ShiftLeftLogical => crate::BinaryOperator::ShiftLeft,
+                            Op::ShiftRightLogical | Op::ShiftRightArithmetic => {
+                                crate::BinaryOperator::ShiftRight
+                            }
+                            Op::LogicalOr => crate::BinaryOperator::LogicalOr,
+                            Op::LogicalAnd => crate::BinaryOperator::LogicalAnd,
+                            Op::LogicalEqual => crate::BinaryOperator::Equal,
+                            Op::LogicalNotEqual => crate::BinaryOperator::NotEqual,
+                            Op::IEqual => crate::BinaryOperator::Equal,
+                            Op::INotEqual => crate::BinaryOperator::NotEqual,
+                            Op::ULessThan | Op::SLessThan => crate::BinaryOperator::Less,
+                            Op::UGreaterThan | Op::SGreaterThan => crate::BinaryOperator::Greater,
+                            Op::ULessThanEqual | Op::SLessThanEqual => {
+                                crate::BinaryOperator::LessEqual
+                            }
+                            Op::UGreaterThanEqual | Op::SGreaterThanEqual => {
+                                crate::BinaryOperator::GreaterEqual
+                            }
+                            _ => unreachable!(),
+                        };
+
+                        let left_expr_inner = self.lookup_constant.lookup(left_id)?.inner.to_expr();
+                        let right_expr_inner =
+                            self.lookup_constant.lookup(right_id)?.inner.to_expr();
+                        let mut left_expr = self.eval_and_append_expression(
+                            module,
+                            global_expression_kind_tracker,
+                            left_expr_inner,
+                            span,
+                        )?;
+                        let mut right_expr = self.eval_and_append_expression(
+                            module,
+                            global_expression_kind_tracker,
+                            right_expr_inner,
+                            span,
+                        )?;
+
+                        self.implicit_cast_operators(
+                            module,
+                            global_expression_kind_tracker,
+                            op,
+                            ty,
+                            &mut left_expr,
+                            &mut right_expr,
+                            span,
+                        )?;
+
+                        self.eval_and_append_expression(
+                            module,
+                            global_expression_kind_tracker,
+                            crate::Expression::Binary {
+                                op,
+                                left: left_expr,
+                                right: right_expr,
+                            },
+                            span,
+                        )?
                     }
-                    _ => unreachable!(),
-                };
-
-                let left_expr_inner = self.lookup_constant.lookup(left_id)?.inner.to_expr();
-                let right_expr_inner = self.lookup_constant.lookup(right_id)?.inner.to_expr();
-                let left_expr = self.eval_and_append_expression(
-                    module,
-                    global_expression_kind_tracker,
-                    left_expr_inner,
-                    span,
-                )?;
-                let right_expr = self.eval_and_append_expression(
-                    module,
-                    global_expression_kind_tracker,
-                    right_expr_inner,
-                    span,
-                )?;
-
-                self.eval_and_append_expression(
-                    module,
-                    global_expression_kind_tracker,
-                    crate::Expression::Binary {
-                        op,
-                        left: left_expr,
-                        right: right_expr,
-                    },
-                    span,
-                )?
+                }
             }
 
             Op::SMod => {
@@ -6298,38 +6697,54 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 let o1_id = self.next()?;
                 let o2_id = self.next()?;
 
-                let cond_expr = self.lookup_constant.lookup(condition_id)?.inner.to_expr();
-                let o1_expr = self.lookup_constant.lookup(o1_id)?.inner.to_expr();
-                let o2_expr = self.lookup_constant.lookup(o2_id)?.inner.to_expr();
-                let cond = self.eval_and_append_expression(
+                match self.try_optimize_select_conversion(
                     module,
                     global_expression_kind_tracker,
-                    cond_expr,
+                    ty,
+                    condition_id,
+                    o1_id,
+                    o2_id,
                     span,
-                )?;
-                let o1 = self.eval_and_append_expression(
-                    module,
-                    global_expression_kind_tracker,
-                    o1_expr,
-                    span,
-                )?;
-                let o2 = self.eval_and_append_expression(
-                    module,
-                    global_expression_kind_tracker,
-                    o2_expr,
-                    span,
-                )?;
+                )? {
+                    Some((optimized_expr, name)) => {
+                        derived_name = name;
+                        optimized_expr
+                    }
+                    None => {
+                        let cond_expr = self.lookup_constant.lookup(condition_id)?.inner.to_expr();
+                        let o1_expr = self.lookup_constant.lookup(o1_id)?.inner.to_expr();
+                        let o2_expr = self.lookup_constant.lookup(o2_id)?.inner.to_expr();
+                        let cond = self.eval_and_append_expression(
+                            module,
+                            global_expression_kind_tracker,
+                            cond_expr,
+                            span,
+                        )?;
+                        let o1 = self.eval_and_append_expression(
+                            module,
+                            global_expression_kind_tracker,
+                            o1_expr,
+                            span,
+                        )?;
+                        let o2 = self.eval_and_append_expression(
+                            module,
+                            global_expression_kind_tracker,
+                            o2_expr,
+                            span,
+                        )?;
 
-                self.eval_and_append_expression(
-                    module,
-                    global_expression_kind_tracker,
-                    crate::Expression::Select {
-                        condition: cond,
-                        accept: o1,
-                        reject: o2,
-                    },
-                    span,
-                )?
+                        self.eval_and_append_expression(
+                            module,
+                            global_expression_kind_tracker,
+                            crate::Expression::Select {
+                                condition: cond,
+                                accept: o1,
+                                reject: o2,
+                            },
+                            span,
+                        )?
+                    }
+                }
             }
 
             Op::VectorShuffle | Op::CompositeExtract | Op::CompositeInsert | Op::QuantizeToF16 => {
@@ -6341,11 +6756,13 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             _ => return Err(Error::InvalidSpecConstantOp(opcode)),
         };
 
-        // IMPORTANT: Overrides must have either a name or an id to be processed correctly
-        // by process_overrides(). OpSpecConstantOp results don't have a SpecId (they're
-        // not user-overridable), so we assign them a name based on the result_id.
+        let decor = self.future_decor.remove(&result_id).unwrap_or_default();
+        let name = decor
+            .name
+            .or(derived_name)
+            .or_else(|| Some(format!("_spec_const_op_{result_id}")));
         let op_override = crate::Override {
-            name: Some(format!("_spec_const_op_{result_id}")),
+            name,
             id: None,
             ty,
             init: Some(init),
