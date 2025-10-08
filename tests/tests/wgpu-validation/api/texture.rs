@@ -533,7 +533,7 @@ fn transient_invalid_usage() {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::TRANSIENT | usage,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT | usage,
             view_formats: &[],
         };
         fail(
@@ -544,6 +544,24 @@ fn transient_invalid_usage() {
             Some(&format!("Texture usage TextureUsages(TRANSIENT) is not compatible with texture usage {usage:?}")),
         );
     }
+
+    let invalid_texture_descriptor = wgpu::TextureDescriptor {
+        label: None,
+        size,
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::TRANSIENT,
+        view_formats: &[],
+    };
+    fail(
+        &device,
+        || {
+            device.create_texture(&invalid_texture_descriptor)
+        },
+        Some("Invalid usage flags TextureUsages(TRANSIENT)"),
+    );
 }
 
 /// Ensures that attempting to use a texture of [`wgpu::TextureUsages::TRANSIENT`]
