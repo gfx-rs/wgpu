@@ -1416,12 +1416,6 @@ pub struct AdapterInfo {
     ///
     /// [`VkPhysicalDevicePCIBusInfoPropertiesEXT`]: https://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDevicePCIBusInfoPropertiesEXT.html
     pub device_pci_bus_id: String,
-    /// [`Backend`]-specific unique device identifier of the adapter.
-    ///
-    /// * For [`Backend::Vulkan`], [`VkPhysicalDeviceIDProperties`] is used, if available.
-    ///
-    /// [`VkPhysicalDeviceIDProperties`]: hhttps://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDeviceIDProperties.html
-    pub device_uuid: String,
     /// Driver name
     pub driver: String,
     /// Driver info

@@ -966,10 +966,6 @@ pub struct PhysicalDeviceProperties {
     /// `VK_EXT_pci_bus_info` extension.
     pci_bus_info: Option<vk::PhysicalDevicePCIBusInfoPropertiesEXT<'static>>,
 
-    /// Additional `vk::PhysicalDevice` properties from the
-    /// `VK_EXT_physical_device_id` extension.
-    device_id: Option<vk::PhysicalDeviceIDProperties<'static>>,
-
     /// The device API version.
     ///
     /// Which is the version of Vulkan supported for device-level functionality.
@@ -1402,7 +1398,6 @@ impl super::InstanceShared {
                 let supports_robustness2 = capabilities.supports_extension(ext::robustness2::NAME);
                 let supports_pci_bus_info =
                     capabilities.supports_extension(ext::pci_bus_info::NAME);
-                let supports_device_id = capabilities.device_api_version >= vk::API_VERSION_1_1;
 
                 let supports_acceleration_structure =
                     capabilities.supports_extension(khr::acceleration_structure::NAME);
@@ -1463,13 +1458,6 @@ impl super::InstanceShared {
                     let next = capabilities
                         .pci_bus_info
                         .insert(vk::PhysicalDevicePCIBusInfoPropertiesEXT::default());
-                    properties2 = properties2.push_next(next);
-                }
-
-                if supports_device_id {
-                    let next = capabilities
-                        .device_id
-                        .insert(vk::PhysicalDeviceIDProperties::default());
                     properties2 = properties2.push_next(next);
                 }
 
@@ -1696,17 +1684,6 @@ impl super::Instance {
                     info.pci_device,
                     info.pci_function
                 ))
-                .unwrap_or_default(),
-            device_uuid: phd_capabilities.device_id
-                .filter(|id| id.device_uuid != [0u8; 16])
-                .map(|id| {
-                    let u = id.device_uuid;
-                    format!(
-                        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-                        u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7],
-                        u[8], u[9], u[10], u[11], u[12], u[13], u[14], u[15]
-                    )
-                })
                 .unwrap_or_default(),
             driver: {
                 phd_capabilities

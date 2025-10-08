@@ -157,7 +157,6 @@ impl crate::Instance for Instance {
                         device: 0,
                         device_type: shared.private_caps.device_type(),
                         device_pci_bus_id: String::new(),
-                        device_uuid: String::new(),
                         driver: String::new(),
                         driver_info: String::new(),
                         backend: wgt::Backend::Metal,

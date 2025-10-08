@@ -138,7 +138,6 @@ pub fn adapter_info() -> wgt::AdapterInfo {
         device: 0,
         device_type: wgt::DeviceType::Cpu,
         device_pci_bus_id: String::new(),
-        device_uuid: String::new(),
         driver: String::from("wgpu"),
         driver_info: String::new(),
         backend: wgt::Backend::Noop,
