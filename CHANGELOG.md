@@ -42,7 +42,7 @@ Bottom level categories:
 
 #### 'wgpu::Instance::enumerate_adapters` is now `async` & available on WebGPU
 
-Making `enumerate_adapters` async allows custom backends to use it along with elimnating some native/non-native distinctions
+Making `enumerate_adapters` async allows custom backends to use it along with eliminating some native/non-native distinctions
 
 This is a breaking change
 
