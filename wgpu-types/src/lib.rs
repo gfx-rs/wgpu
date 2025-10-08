@@ -1,7 +1,7 @@
 //! This library describes the API surface of WebGPU that is agnostic of the backend.
 //! This API is used for targeting both Web and Native.
 
-#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![allow(
     // We don't use syntax sugar where it's not necessary.
     clippy::match_like_matches_macro,
@@ -7856,7 +7856,7 @@ pub struct ShaderRuntimeChecks {
 impl ShaderRuntimeChecks {
     /// Creates a new configuration where the shader is fully checked.
     #[must_use]
-    pub fn checked() -> Self {
+    pub const fn checked() -> Self {
         unsafe { Self::all(true) }
     }
 
@@ -7867,7 +7867,7 @@ impl ShaderRuntimeChecks {
     /// See the documentation for the `set_*` methods for the safety requirements
     /// of each sub-configuration.
     #[must_use]
-    pub fn unchecked() -> Self {
+    pub const fn unchecked() -> Self {
         unsafe { Self::all(false) }
     }
 
@@ -7879,7 +7879,7 @@ impl ShaderRuntimeChecks {
     /// See the documentation for the `set_*` methods for the safety requirements
     /// of each sub-configuration.
     #[must_use]
-    pub unsafe fn all(all_checks: bool) -> Self {
+    pub const unsafe fn all(all_checks: bool) -> Self {
         Self {
             bounds_checks: all_checks,
             force_loop_bounding: all_checks,

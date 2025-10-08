@@ -45,7 +45,7 @@ Bottom level categories:
 #### Multiview on all major platforms and support for multiview bitmasks
 
 Multiview has been reworked, adding support for DX12 and Metal, and adding testing and validation to wgpu itself.
-This change also introduces a view bitmask, a new field in `RenderPassDescriptor` that allows a render pass to render multiple to non-adjacent layers. Note that this also influences apps that don't use multiview, as they have to set this field to `None`.
+This change also introduces a view bitmask, a new field in `RenderPassDescriptor` that allows a render pass to render to multiple non-adjacent layers. Note that this also influences apps that don't use multiview, as they have to set this field to `None`.
 ```diff
 - wgpu::RenderPassDescriptor {
 -     label: None,
@@ -66,6 +66,34 @@ This change also introduces a view bitmask, a new field in `RenderPassDescriptor
 One other breaking change worth noting is that `@builtin(view_index)` now requires a type of `u32`, where previously it required `i32`.
 
 By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206).
+
+#### 'wgpu::Instance::enumerate_adapters` is now `async` & available on WebGPU
+
+Making `enumerate_adapters` async allows custom backends to use it along with eliminating some native/non-native distinctions
+
+This is a breaking change
+
+```diff
+- pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
++ pub fn enumerate_adapters(&self, backends: Backends) -> impl Future<Output = Vec<Adapter>> {
+
+```
+
+By @R-Cramer4 in [#8230](https://github.com/gfx-rs/wgpu/pull/8230)
+
+## v27.0.2 (2025-10-03)
+
+### Bug Fixes
+
+#### DX12
+
+- Fix device creation failures for devices that do not support mesh shaders. By @vorporeal in [#8297](https://github.com/gfx-rs/wgpu/pull/8297).
+
+## v27.0.1 (2025-10-02)
+
+### Bug Fixes
+
+- Fixed the build on docs.rs. By @cwfitzgerald in [#8292](https://github.com/gfx-rs/wgpu/pull/8292).
 
 ## v27.0.0 (2025-10-01)
 
@@ -261,6 +289,7 @@ By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282), [#8285](https://
 - Require new `F16_IN_F32` downlevel flag for `quantizeToF16`, `pack2x16float`, and `unpack2x16float` in WGSL input. By @aleiserson in [#8130](https://github.com/gfx-rs/wgpu/pull/8130).
 - The error message for non-copyable depth/stencil formats no longer mentions the aspect when it is not relevant. By @reima in [#8156](https://github.com/gfx-rs/wgpu/pull/8156).
 - Track the initialization status of buffer memory correctly when `copy_texture_to_buffer` skips over padding space between rows or layers, or when the start/end of a texture-buffer transfer is not 4B aligned. By @andyleiserson in [#8099](https://github.com/gfx-rs/wgpu/pull/8099).
+- Allow `include_spirv!` and `include_spirv_raw!` macros to be used in constants and statics. By @clarfonthey in [#8250](https://github.com/gfx-rs/wgpu/pull/8250).
 
 #### naga
 
@@ -3942,7 +3971,7 @@ DeviceDescriptor {
 
 - Explicitly set Vulkan debug message types instead of !empty() by @victorvde in [#2321](https://github.com/gfx-rs/wgpu/pull/2321)
 - Use stencil read/write masks by @kvark in [#2382](https://github.com/gfx-rs/wgpu/pull/2382)
-- Vulkan: correctly set INDEPENDENT_BLEND，make runable on Android 8.x by @jinleili in [#2498](https://github.com/gfx-rs/wgpu/pull/2498)
+- Vulkan: correctly set INDEPENDENT_BLEND，make runnable on Android 8.x by @jinleili in [#2498](https://github.com/gfx-rs/wgpu/pull/2498)
 - Fix ASTC format mapping by @kvark in [#2476](https://github.com/gfx-rs/wgpu/pull/2476)
 - Support flipped Y on VK 1.1 devices by @cwfitzgerald in [#2512](https://github.com/gfx-rs/wgpu/pull/2512)
 - Fixed builtin(primitive_index) for vulkan backend by @kwillemsen in [#2716](https://github.com/gfx-rs/wgpu/pull/2716)

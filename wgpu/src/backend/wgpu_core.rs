@@ -28,7 +28,6 @@ use wgt::{
     WasmNotSendSync,
 };
 
-use crate::util::Mutex;
 use crate::{
     api,
     dispatch::{self, BlasCompactCallback, BufferMappedRangeInterface},
@@ -36,6 +35,7 @@ use crate::{
     CompilationMessageType, ErrorSource, Features, Label, LoadOp, MapMode, Operations,
     ShaderSource, SurfaceTargetUnsafe, TextureDescriptor, Tlas,
 };
+use crate::{dispatch::DispatchAdapter, util::Mutex};
 
 #[derive(Clone)]
 pub struct ContextWgpuCore(Arc<wgc::global::Global>);
@@ -901,6 +901,24 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                 }
             },
         )
+    }
+
+    fn enumerate_adapters(
+        &self,
+        backends: crate::Backends,
+    ) -> Pin<Box<dyn dispatch::EnumerateAdapterFuture>> {
+        let adapters: Vec<DispatchAdapter> = self
+            .enumerate_adapters(backends)
+            .into_iter()
+            .map(|adapter| {
+                let core = crate::backend::wgpu_core::CoreAdapter {
+                    context: self.clone(),
+                    id: adapter,
+                };
+                core.into()
+            })
+            .collect();
+        Box::pin(ready(adapters))
     }
 }
 

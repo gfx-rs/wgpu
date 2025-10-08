@@ -4063,6 +4063,8 @@ impl Device {
                 };
             }
             pipeline::RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
+                self.require_features(wgt::Features::EXPERIMENTAL_MESH_SHADER)?;
+
                 task_stage = if let Some(task) = task {
                     let stage_desc = &task.stage;
                     let stage = wgt::ShaderStages::TASK;
