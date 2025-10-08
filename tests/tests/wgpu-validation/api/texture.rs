@@ -538,9 +538,7 @@ fn transient_invalid_usage() {
         };
         fail(
             &device,
-            || {
-                device.create_texture(&invalid_texture_descriptor)
-            },
+            || device.create_texture(&invalid_texture_descriptor),
             Some(&format!("Texture usage TextureUsages(TRANSIENT) is not compatible with texture usage {usage:?}")),
         );
     }
@@ -557,9 +555,7 @@ fn transient_invalid_usage() {
     };
     fail(
         &device,
-        || {
-            device.create_texture(&invalid_texture_descriptor)
-        },
+        || device.create_texture(&invalid_texture_descriptor),
         Some("Invalid usage flags TextureUsages(TRANSIENT)"),
     );
 }
