@@ -1275,6 +1275,11 @@ impl Device {
         }
 
         if desc.usage.contains(wgt::TextureUsages::TRANSIENT) {
+            if !desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+                return Err(CreateTextureError::InvalidUsage(
+                    wgt::TextureUsages::TRANSIENT,
+                ));
+            }
             let extra_usage =
                 desc.usage - wgt::TextureUsages::TRANSIENT - wgt::TextureUsages::RENDER_ATTACHMENT;
             if !extra_usage.is_empty() {
