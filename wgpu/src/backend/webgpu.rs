@@ -675,10 +675,10 @@ fn map_filter_mode(mode: wgt::FilterMode) -> webgpu_sys::GpuFilterMode {
     }
 }
 
-fn map_mipmap_filter_mode(mode: wgt::FilterMode) -> webgpu_sys::GpuMipmapFilterMode {
+fn map_mipmap_filter_mode(mode: wgt::MipmapFilterMode) -> webgpu_sys::GpuMipmapFilterMode {
     match mode {
-        wgt::FilterMode::Nearest => webgpu_sys::GpuMipmapFilterMode::Nearest,
-        wgt::FilterMode::Linear => webgpu_sys::GpuMipmapFilterMode::Linear,
+        wgt::MipmapFilterMode::Nearest => webgpu_sys::GpuMipmapFilterMode::Nearest,
+        wgt::MipmapFilterMode::Linear => webgpu_sys::GpuMipmapFilterMode::Linear,
     }
 }
 
@@ -1568,6 +1568,20 @@ impl dispatch::InstanceInterface for ContextWebGpu {
                 requested_backends,
             ))))
         }
+    }
+    fn enumerate_adapters(
+        &self,
+        _backends: crate::Backends,
+    ) -> Pin<Box<dyn dispatch::EnumerateAdapterFuture>> {
+        let future = self.request_adapter(&crate::RequestAdapterOptions::default());
+        let enumerate_future = async move {
+            let adapter = future.await;
+            match adapter {
+                Ok(a) => vec![a],
+                Err(_) => vec![],
+            }
+        };
+        Box::pin(enumerate_future)
     }
 
     fn poll_all_devices(&self, _force_wait: bool) -> bool {

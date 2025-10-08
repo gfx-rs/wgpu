@@ -6,7 +6,7 @@ use crate::Backends;
 /// Initialize the adapter obeying the `WGPU_ADAPTER_NAME` environment variable.
 #[cfg(wgpu_core)]
 #[cfg_attr(not(std), expect(unused_variables, unreachable_code))]
-pub fn initialize_adapter_from_env(
+pub async fn initialize_adapter_from_env(
     instance: &Instance,
     compatible_surface: Option<&Surface<'_>>,
 ) -> Result<Adapter, wgt::RequestAdapterError> {
@@ -23,7 +23,7 @@ pub fn initialize_adapter_from_env(
         }
     };
 
-    let adapters = instance.enumerate_adapters(crate::Backends::all());
+    let adapters = instance.enumerate_adapters(crate::Backends::all()).await;
 
     let mut chosen_adapter = None;
     for adapter in adapters {
@@ -46,7 +46,7 @@ pub fn initialize_adapter_from_env(
 
 /// Initialize the adapter obeying the `WGPU_ADAPTER_NAME` environment variable.
 #[cfg(not(wgpu_core))]
-pub fn initialize_adapter_from_env(
+pub async fn initialize_adapter_from_env(
     _instance: &Instance,
     _compatible_surface: Option<&Surface<'_>>,
 ) -> Result<Adapter, wgt::RequestAdapterError> {
@@ -58,7 +58,7 @@ pub async fn initialize_adapter_from_env_or_default(
     instance: &Instance,
     compatible_surface: Option<&Surface<'_>>,
 ) -> Result<Adapter, wgt::RequestAdapterError> {
-    match initialize_adapter_from_env(instance, compatible_surface) {
+    match initialize_adapter_from_env(instance, compatible_surface).await {
         Ok(a) => Ok(a),
         Err(_) => {
             instance

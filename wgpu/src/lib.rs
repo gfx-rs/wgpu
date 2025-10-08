@@ -32,7 +32,7 @@
 //!
 
 #![no_std]
-#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/trunk/logo.png")]
 #![warn(
     clippy::alloc_instead_of_core,
@@ -98,17 +98,17 @@ pub use wgt::{
     ExternalTextureTransferFunction, Face, Features, FeaturesWGPU, FeaturesWebGPU, FilterMode,
     FrontFace, GlBackendOptions, GlFenceBehavior, Gles3MinorVersion, HalCounters,
     ImageSubresourceRange, IndexFormat, InstanceDescriptor, InstanceFlags, InternalCounters,
-    Limits, MemoryBudgetThresholds, MemoryHints, MultisampleState, NoopBackendOptions, Origin2d,
-    Origin3d, PipelineStatisticsTypes, PollError, PollStatus, PolygonMode, PowerPreference,
-    PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology,
-    PushConstantRange, QueryType, RenderBundleDepthStencil, RequestAdapterError,
-    SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel, ShaderRuntimeChecks,
-    ShaderStages, StencilFaceState, StencilOperation, StencilState, StorageTextureAccess,
-    SurfaceCapabilities, SurfaceStatus, TexelCopyBufferLayout, TextureAspect, TextureDimension,
-    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
-    TextureTransition, TextureUsages, TextureUses, TextureViewDimension, Trace, VertexAttribute,
-    VertexFormat, VertexStepMode, WasmNotSend, WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT,
-    COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    Limits, MemoryBudgetThresholds, MemoryHints, MipmapFilterMode, MultisampleState,
+    NoopBackendOptions, Origin2d, Origin3d, PipelineStatisticsTypes, PollError, PollStatus,
+    PolygonMode, PowerPreference, PredefinedColorSpace, PresentMode, PresentationTimestamp,
+    PrimitiveState, PrimitiveTopology, PushConstantRange, QueryType, RenderBundleDepthStencil,
+    RequestAdapterError, SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel,
+    ShaderRuntimeChecks, ShaderStages, StencilFaceState, StencilOperation, StencilState,
+    StorageTextureAccess, SurfaceCapabilities, SurfaceStatus, TexelCopyBufferLayout, TextureAspect,
+    TextureDimension, TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures,
+    TextureSampleType, TextureTransition, TextureUsages, TextureUses, TextureViewDimension, Trace,
+    VertexAttribute, VertexFormat, VertexStepMode, WasmNotSend, WasmNotSendSync, WasmNotSync,
+    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, MAP_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
     QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_ALIGNMENT,
 };
 

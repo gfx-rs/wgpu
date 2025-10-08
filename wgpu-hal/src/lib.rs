@@ -203,7 +203,7 @@
 //! [wiki-debug]: https://github.com/gfx-rs/wgpu/wiki/Debugging-wgpu-Applications
 
 #![no_std]
-#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![allow(
     // this happens on the GL backend, where it is both thread safe and non-thread safe in the same code.
     clippy::arc_with_non_send_sync,
@@ -1948,7 +1948,7 @@ pub struct SamplerDescriptor<'a> {
     pub address_modes: [wgt::AddressMode; 3],
     pub mag_filter: wgt::FilterMode,
     pub min_filter: wgt::FilterMode,
-    pub mipmap_filter: wgt::FilterMode,
+    pub mipmap_filter: wgt::MipmapFilterMode,
     pub lod_clamp: Range<f32>,
     pub compare: Option<wgt::CompareFunction>,
     // Must in the range [1, 16].
