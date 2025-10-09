@@ -126,6 +126,9 @@ pub struct PhysicalDeviceFeatures {
     /// Features provided by `VK_KHR_shader_integer_dot_product`, promoted to Vulkan 1.3.
     shader_integer_dot_product:
         Option<vk::PhysicalDeviceShaderIntegerDotProductFeaturesKHR<'static>>,
+
+    /// Features provided by `VK_KHR_fragment_shader_barycentric`
+    shader_barycentrics: Option<vk::PhysicalDeviceFragmentShaderBarycentricFeaturesKHR<'static>>,
 }
 
 impl PhysicalDeviceFeatures {
@@ -197,6 +200,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.shader_integer_dot_product {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.shader_barycentrics {
             info = info.push_next(feature);
         }
         info
@@ -533,6 +539,17 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            shader_barycentrics: if enabled_extensions
+                .contains(&khr::fragment_shader_barycentric::NAME)
+            {
+                let needed = requested_features.intersects(wgt::Features::SHADER_BARYCENTRICS);
+                Some(
+                    vk::PhysicalDeviceFragmentShaderBarycentricFeaturesKHR::default()
+                        .fragment_shader_barycentric(needed),
+                )
+            } else {
+                None
+            },
         }
     }
 
@@ -664,6 +681,13 @@ impl PhysicalDeviceFeatures {
                 F::SHADER_FLOAT32_ATOMIC,
                 shader_atomic_float.shader_buffer_float32_atomics != 0
                     && shader_atomic_float.shader_buffer_float32_atomic_add != 0,
+            );
+        }
+
+        if let Some(ref shader_barycentrics) = self.shader_barycentrics {
+            features.set(
+                F::SHADER_BARYCENTRICS,
+                shader_barycentrics.fragment_shader_barycentric != 0,
             );
         }
 
@@ -1178,6 +1202,11 @@ impl PhysicalDeviceProperties {
             extensions.push(ext::mesh_shader::NAME);
         }
 
+        // Require `VK_KHR_fragment_shader_barycentric` if the associated feature was requested
+        if requested_features.intersects(wgt::Features::SHADER_BARYCENTRICS) {
+            extensions.push(khr::fragment_shader_barycentric::NAME);
+        }
+
         extensions
     }
 
@@ -1620,6 +1649,13 @@ impl super::InstanceShared {
                 let next = features
                     .shader_integer_dot_product
                     .insert(vk::PhysicalDeviceShaderIntegerDotProductFeatures::default());
+                features2 = features2.push_next(next);
+            }
+
+            if capabilities.supports_extension(khr::fragment_shader_barycentric::NAME) {
+                let next = features
+                    .shader_barycentrics
+                    .insert(vk::PhysicalDeviceFragmentShaderBarycentricFeaturesKHR::default());
                 features2 = features2.push_next(next);
             }
 
@@ -2099,6 +2135,10 @@ impl super::Adapter {
 
             if features.contains(wgt::Features::CLIP_DISTANCES) {
                 capabilities.push(spv::Capability::ClipDistance);
+            }
+
+            if features.intersects(wgt::Features::SHADER_BARYCENTRICS) {
+                capabilities.push(spv::Capability::FragmentBarycentricKHR);
             }
 
             let mut flags = spv::WriterFlags::empty();

@@ -530,6 +530,11 @@ impl Options {
                     crate::BuiltIn::PrimitiveIndex if self.lang_version < (2, 2) => {
                         return Err(Error::UnsupportedAttribute("primitive_id".to_string()));
                     }
+                    // macOS: Since Metal 2.2
+                    // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/naga/issues/2164)
+                    crate::BuiltIn::Barycentric if self.lang_version < (2, 2) => {
+                        return Err(Error::UnsupportedAttribute("barycentric_coord".to_string()));
+                    }
                     _ => {}
                 }
 
@@ -680,6 +685,7 @@ impl ResolvedBinding {
                     Bi::PointCoord => "point_coord",
                     Bi::FrontFacing => "front_facing",
                     Bi::PrimitiveIndex => "primitive_id",
+                    Bi::Barycentric => "barycentric_coord",
                     Bi::SampleIndex => "sample_id",
                     Bi::SampleMask => "sample_mask",
                     // compute

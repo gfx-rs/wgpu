@@ -73,6 +73,12 @@ SamplerDescriptor {
 }
 ```
 
+### Added/New Features
+
+## General
+
+- Implement shader triangle barycentric coordinate builtins. By @atlv24 in [#8320](https://github.com/gfx-rs/wgpu/pull/8320).
+
 ### Bug Fixes
 
 #### General
