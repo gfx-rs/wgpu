@@ -1102,7 +1102,7 @@ fn get_adapter_pci_info(vendor_id: u32, device_id: u32) -> String {
             .collect();
 
         // https://learn.microsoft.com/en-us/windows-hardware/drivers/install/identifiers-for-pci-devices
-        let expected_id = format!("PCI\\VEN_{:04X}&DEV_{:04X}", vendor_id, device_id);
+        let expected_id = format!("PCI\\VEN_{vendor_id:04X}&DEV_{device_id:04X}");
         if !hardware_ids.iter().any(|id| id.contains(&expected_id)) {
             device_index += 1;
             continue;
