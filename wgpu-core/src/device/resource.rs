@@ -1651,7 +1651,8 @@ impl Device {
         let level_end = texture.desc.mip_level_count;
         if mip_level_end > level_end {
             return Err(resource::CreateTextureViewError::TooManyMipLevels {
-                requested: mip_level_end,
+                base_mip_level: desc.range.base_mip_level,
+                mip_level_count: resolved_mip_level_count,
                 total: level_end,
             });
         }
@@ -1668,7 +1669,8 @@ impl Device {
         let layer_end = texture.desc.array_layer_count();
         if array_layer_end > layer_end {
             return Err(resource::CreateTextureViewError::TooManyArrayLayers {
-                requested: array_layer_end,
+                base_array_layer: desc.range.base_array_layer,
+                array_layer_count: resolved_array_layer_count,
                 total: layer_end,
             });
         };
