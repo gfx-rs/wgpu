@@ -40,19 +40,49 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major changes
+
 #### 'wgpu::Instance::enumerate_adapters` is now `async` & available on WebGPU
 
-Making `enumerate_adapters` async allows custom backends to use it along with eliminating some native/non-native distinctions
-
-This is a breaking change
+BREAKING CHANGE: `enumerate_adapters` is now `async`:
 
 ```diff
 - pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
 + pub fn enumerate_adapters(&self, backends: Backends) -> impl Future<Output = Vec<Adapter>> {
-
 ```
 
+This yields ([kek]) two benefits:
+
+- This method is now implemented on non-native using the standard `Adapter::request_adapter(…)`, making `enumerate_adapters` a portable surface. This was previous a nontrivial pain point when an application wanted to do some of its own filtering of adapters.
+- This method can now be implemented in custom backends.
+
 By @R-Cramer4 in [#8230](https://github.com/gfx-rs/wgpu/pull/8230)
+
+[kek]: https://web.archive.org/web/20250923122958/https://knowyourmeme.com/memes/kek
+
+#### `MipmapFilterMode` is split from `FilterMode`
+
+This is a breaking change that aligns wgpu with spec.
+
+```diff
+SamplerDescriptor {
+...
+-     mipmap_filter: FilterMode::Nearest
++     mipmap_filter: MipmapFilterMode::Nearest
+...
+}
+```
+### Changes
+
+#### General
+
+- Texture now has `from_custom`. By @R-Cramer4 in [#8315](https://github.com/gfx-rs/wgpu/pull/8315).
+
+### Bug Fixes
+
+#### General
+
+- Reject fragment shader output `location`s > `max_color_attachments` limit. By @ErichDonGubler in [#8316](https://github.com/gfx-rs/wgpu/pull/8316).
 
 ## v27.0.2 (2025-10-03)
 

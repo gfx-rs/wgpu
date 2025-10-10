@@ -238,9 +238,10 @@ pub(super) fn describe_vertex_format(vertex_format: wgt::VertexFormat) -> super:
 pub fn map_filter_modes(
     min: wgt::FilterMode,
     mag: wgt::FilterMode,
-    mip: wgt::FilterMode,
+    mip: wgt::MipmapFilterMode,
 ) -> (u32, u32) {
     use wgt::FilterMode as Fm;
+    use wgt::MipmapFilterMode as Mfm;
 
     let mag_filter = match mag {
         Fm::Nearest => glow::NEAREST,
@@ -248,10 +249,10 @@ pub fn map_filter_modes(
     };
 
     let min_filter = match (min, mip) {
-        (Fm::Nearest, Fm::Nearest) => glow::NEAREST_MIPMAP_NEAREST,
-        (Fm::Nearest, Fm::Linear) => glow::NEAREST_MIPMAP_LINEAR,
-        (Fm::Linear, Fm::Nearest) => glow::LINEAR_MIPMAP_NEAREST,
-        (Fm::Linear, Fm::Linear) => glow::LINEAR_MIPMAP_LINEAR,
+        (Fm::Nearest, Mfm::Nearest) => glow::NEAREST_MIPMAP_NEAREST,
+        (Fm::Nearest, Mfm::Linear) => glow::NEAREST_MIPMAP_LINEAR,
+        (Fm::Linear, Mfm::Nearest) => glow::LINEAR_MIPMAP_NEAREST,
+        (Fm::Linear, Mfm::Linear) => glow::LINEAR_MIPMAP_LINEAR,
     };
 
     (min_filter, mag_filter)
