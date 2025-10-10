@@ -2280,6 +2280,15 @@ impl Device {
         }
 
         for entry in entry_map.values() {
+            if entry.binding >= self.limits.max_bindings_per_bind_group {
+                return Err(
+                    binding_model::CreateBindGroupLayoutError::InvalidBindingIndex {
+                        binding: entry.binding,
+                        maximum: self.limits.max_bindings_per_bind_group,
+                    },
+                );
+            }
+
             use wgt::BindingType as Bt;
 
             let mut required_features = wgt::Features::empty();

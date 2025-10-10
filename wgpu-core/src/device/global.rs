@@ -693,7 +693,7 @@ impl Global {
                 break 'error e.into();
             }
 
-            let entry_map = match bgl::EntryMap::from_entries(&device.limits, &desc.entries) {
+            let entry_map = match bgl::EntryMap::from_entries(&desc.entries) {
                 Ok(map) => map,
                 Err(e) => break 'error e,
             };
