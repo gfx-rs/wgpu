@@ -26,6 +26,9 @@ static DRAW_MULTIVIEW: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(run_test);
 
 async fn run_test(ctx: TestingContext) {
+    unsafe {
+        ctx.device.start_graphics_debugger_capture();
+    }
     let vertex_buffer_content: &[f32; 12] = &[
         // Triangle 1
         -1.0, -1.0, // Bottom left
@@ -180,6 +183,9 @@ async fn run_test(ctx: TestingContext) {
     })
     .await
     .unwrap();
+    unsafe {
+        ctx.device.stop_graphics_debugger_capture();
+    }
 
     let data = slice.get_mapped_range();
     let each_texture_size = (TEXTURE_SIZE * TEXTURE_SIZE) as usize;
