@@ -170,7 +170,7 @@ impl crate::framework::Example for Example {
             rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             rpass.draw(0..6, 0..1);
         }
-        if (Instant::now() - self.start_time)
+        if !(Instant::now() - self.start_time)
             .as_secs()
             .is_multiple_of(2)
         {
