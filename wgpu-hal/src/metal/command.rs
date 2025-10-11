@@ -1029,7 +1029,33 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 );
             }
         }
-        if pipeline.ms_info.is_some() {
+        if let Some(_ms_info) = &pipeline.ms_info {
+            // TODO:
+            // https://developer.apple.com/documentation/metal/mtlrendercommandencoder/setthreadgroupmemorylength(_:offset:index:)
+            // doesn't exist in current metal-rs version for some reason. Maybe put it off until objc2 arrives?
+            // Also, this will need to be added to the task stage
+            /*
+            // update the threadgroup memory sizes
+            while self.state.stage_infos.ms.work_group_memory_sizes.len()
+                < ms_info.work_group_memory_sizes.len()
+            {
+                self.state.stage_infos.ms.work_group_memory_sizes.push(0);
+            }
+            for (index, (cur_size, pipeline_size)) in self
+                .state
+                .stage_infos
+                .ms
+                .work_group_memory_sizes
+                .iter_mut()
+                .zip(ms_info.work_group_memory_sizes.iter())
+                .enumerate()
+            {
+                let size = pipeline_size.next_multiple_of(16);
+                if *cur_size != size {
+                    *cur_size = size;
+                    encoder.set_threadgroup_memory_length(index as _, size as _);
+                }
+            }*/
             if let Some((index, sizes)) = self
                 .state
                 .make_sizes_buffer_update(naga::ShaderStage::Mesh, &mut self.temp.binding_sizes)
