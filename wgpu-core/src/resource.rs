@@ -1908,7 +1908,7 @@ pub struct SamplerDescriptor<'a> {
     /// How to filter the texture when it needs to be minified (made smaller)
     pub min_filter: wgt::FilterMode,
     /// How to filter between mip map levels
-    pub mipmap_filter: wgt::FilterMode,
+    pub mipmap_filter: wgt::MipmapFilterMode,
     /// Minimum level of detail (i.e. mip level) to use
     pub lod_min_clamp: f32,
     /// Maximum level of detail (i.e. mip level) to use
@@ -1989,6 +1989,12 @@ pub enum CreateSamplerError {
         filter_mode: wgt::FilterMode,
         anisotropic_clamp: u16,
     },
+    #[error("Invalid filter mode for {filter_type:?}: {filter_mode:?}. When anistropic clamp is not 1 (it is {anisotropic_clamp}), all filter modes must be linear.")]
+    InvalidMipmapFilterModeWithAnisotropy {
+        filter_type: SamplerFilterErrorType,
+        filter_mode: wgt::MipmapFilterMode,
+        anisotropic_clamp: u16,
+    },
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
 }
@@ -2008,7 +2014,8 @@ impl WebGpuError for CreateSamplerError {
             Self::InvalidLodMinClamp(_)
             | Self::InvalidLodMaxClamp { .. }
             | Self::InvalidAnisotropy(_)
-            | Self::InvalidFilterModeWithAnisotropy { .. } => return ErrorType::Validation,
+            | Self::InvalidFilterModeWithAnisotropy { .. }
+            | Self::InvalidMipmapFilterModeWithAnisotropy { .. } => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }

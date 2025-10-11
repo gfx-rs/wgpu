@@ -1951,9 +1951,9 @@ impl Device {
                     },
                 );
             }
-            if !matches!(desc.mipmap_filter, wgt::FilterMode::Linear) {
+            if !matches!(desc.mipmap_filter, wgt::MipmapFilterMode::Linear) {
                 return Err(
-                    resource::CreateSamplerError::InvalidFilterModeWithAnisotropy {
+                    resource::CreateSamplerError::InvalidMipmapFilterModeWithAnisotropy {
                         filter_type: resource::SamplerFilterErrorType::MipmapFilter,
                         filter_mode: desc.mipmap_filter,
                         anisotropic_clamp: desc.anisotropy_clamp,
@@ -1999,7 +1999,7 @@ impl Device {
             comparison: desc.compare.is_some(),
             filtering: desc.min_filter == wgt::FilterMode::Linear
                 || desc.mag_filter == wgt::FilterMode::Linear
-                || desc.mipmap_filter == wgt::FilterMode::Linear,
+                || desc.mipmap_filter == wgt::MipmapFilterMode::Linear,
         };
 
         let sampler = Arc::new(sampler);
@@ -2292,6 +2292,15 @@ impl Device {
         }
 
         for entry in entry_map.values() {
+            if entry.binding >= self.limits.max_bindings_per_bind_group {
+                return Err(
+                    binding_model::CreateBindGroupLayoutError::InvalidBindingIndex {
+                        binding: entry.binding,
+                        maximum: self.limits.max_bindings_per_bind_group,
+                    },
+                );
+            }
+
             use wgt::BindingType as Bt;
 
             let mut required_features = wgt::Features::empty();
@@ -4063,6 +4072,8 @@ impl Device {
                 };
             }
             pipeline::RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
+                self.require_features(wgt::Features::EXPERIMENTAL_MESH_SHADER)?;
+
                 task_stage = if let Some(task) = task {
                     let stage_desc = &task.stage;
                     let stage = wgt::ShaderStages::TASK;

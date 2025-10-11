@@ -25,7 +25,8 @@ impl GpuReport {
             desc.flags = wgpu::InstanceFlags::debugging();
             desc.with_env()
         });
-        let adapters = instance.enumerate_adapters(wgpu::Backends::all());
+
+        let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));
 
         let mut devices = Vec::with_capacity(adapters.len());
         for adapter in adapters {
