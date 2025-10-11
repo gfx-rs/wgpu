@@ -837,7 +837,6 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
             .max_acceleration_structures_per_shader_stage,
 
         max_multiview_view_count: wgt::Limits::default().max_multiview_view_count,
-        max_multiview_instance_index: wgt::Limits::default().max_multiview_instance_index,
     }
 }
 

@@ -44,13 +44,6 @@ pub enum DrawError {
         instance_limit: u64,
         slot: u32,
     },
-    #[error(
-        "Instance {last_instance} extends beyond limit {instance_limit} imposed by multiview restrictions on the render pass."
-    )]
-    InstanceBeyondMultiviewLimit {
-        last_instance: u64,
-        instance_limit: u64,
-    },
     #[error("Index {last_index} extends beyond limit {index_limit}. Did you bind the correct index buffer?")]
     IndexBeyondLimit { last_index: u64, index_limit: u64 },
     #[error(

@@ -19,7 +19,6 @@ static DRAW_MULTIVIEW: GpuTestConfiguration = GpuTestConfiguration::new()
             .features(Features::MULTIVIEW)
             .limits(Limits {
                 max_multiview_view_count: 2,
-                max_multiview_instance_index: 1,
                 ..Limits::defaults()
             }),
     )

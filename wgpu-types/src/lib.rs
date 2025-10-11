@@ -527,7 +527,6 @@ macro_rules! with_limits {
         $macro_name!(max_tlas_instance_count, Ordering::Less);
 
         $macro_name!(max_multiview_view_count, Ordering::Less);
-        $macro_name!(max_multiview_instance_index, Ordering::Less);
     };
 }
 
@@ -719,10 +718,6 @@ pub struct Limits {
 
     /// The maximum number of views that can be used in multiview rendering
     pub max_multiview_view_count: u32,
-    /// For an instanced draw call using multiview, the maximum instance index. For example,
-    /// if draw is called with instances a..b, then b must be <= this limit + 1.
-    /// Note that this is NOT just the maximum total number of instances.
-    pub max_multiview_instance_index: u32,
 }
 
 impl Default for Limits {
@@ -784,7 +779,6 @@ impl Limits {
     ///     max_tlas_instance_count: 0,
     ///     max_acceleration_structures_per_shader_stage: 0,
     ///     max_multiview_view_count: 0,
-    ///     max_multiview_instance_index: 0,
     /// });
     /// ```
     ///
@@ -841,7 +835,6 @@ impl Limits {
             max_acceleration_structures_per_shader_stage: 0,
 
             max_multiview_view_count: 0,
-            max_multiview_instance_index: 0,
         }
     }
 
@@ -899,7 +892,6 @@ impl Limits {
     ///     max_acceleration_structures_per_shader_stage: 0,
     ///
     ///     max_multiview_view_count: 0,
-    ///     max_multiview_instance_index: 0,
     /// });
     /// ```
     #[must_use]
@@ -977,7 +969,6 @@ impl Limits {
     ///     max_acceleration_structures_per_shader_stage: 0,
     ///
     ///     max_multiview_view_count: 0,
-    ///     max_multiview_instance_index: 0,
     /// });
     /// ```
     #[must_use]

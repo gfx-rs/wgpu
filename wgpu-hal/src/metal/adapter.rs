@@ -1113,11 +1113,6 @@ impl super::PrivateCapabilities {
                 } else {
                     0
                 },
-                max_multiview_instance_index: if self.supported_vertex_amplification_factor > 1 {
-                    u32::MAX
-                } else {
-                    0
-                },
             },
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),

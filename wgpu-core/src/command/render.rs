@@ -2671,16 +2671,6 @@ fn draw_indexed(
         .limits
         .validate_instance_limit(first_instance, instance_count)?;
 
-    if state.info.multiview.is_some()
-        && first_instance + instance_count
-            > state.pass.base.device.limits.max_multiview_instance_index + 1
-    {
-        return Err(DrawError::InstanceBeyondMultiviewLimit {
-            last_instance: (first_instance + instance_count) as u64,
-            instance_limit: (state.pass.base.device.limits.max_multiview_instance_index + 1) as u64,
-        });
-    }
-
     unsafe {
         if instance_count > 0 && index_count > 0 {
             state.pass.base.raw_encoder.draw_indexed(
