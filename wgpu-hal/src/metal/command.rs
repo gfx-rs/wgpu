@@ -681,7 +681,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let mut update_stage =
             |stage: naga::ShaderStage,
              render_encoder: Option<&metal::RenderCommandEncoder>,
-             compute_encoder: Option<&metal::ComputeCommandEncoder>| {
+             compute_encoder: Option<&metal::ComputeCommandEncoder>,
+             index_base: super::ResourceData<u32>| {
+                let resource_indices = match stage {
+                    naga::ShaderStage::Vertex => &bg_info.base_resource_indices.vs,
+                    naga::ShaderStage::Fragment => &bg_info.base_resource_indices.fs,
+                    naga::ShaderStage::Task => &bg_info.base_resource_indices.ts,
+                    naga::ShaderStage::Mesh => &bg_info.base_resource_indices.ms,
+                    naga::ShaderStage::Compute => &bg_info.base_resource_indices.cs,
+                };
                 let buffers = match stage {
                     naga::ShaderStage::Vertex => group.counters.vs.buffers,
                     naga::ShaderStage::Fragment => group.counters.fs.buffers,
@@ -691,12 +699,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 };
                 let mut changes_sizes_buffer = false;
                 for index in 0..buffers {
-                    let buf = &group.buffers[index as usize];
+                    let buf = &group.buffers[(index_base.buffers + index) as usize];
                     let mut offset = buf.offset;
                     if let Some(dyn_index) = buf.dynamic_index {
                         offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
                     }
-                    let a1 = (bg_info.base_resource_indices.vs.buffers + index) as u64;
+                    let a1 = (resource_indices.buffers + index) as u64;
                     let a2 = Some(buf.ptr.as_native());
                     let a3 = offset;
                     match stage {
@@ -760,8 +768,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     naga::ShaderStage::Compute => group.counters.cs.samplers,
                 };
                 for index in 0..samplers {
-                    let res = group.samplers[(group.counters.vs.samplers + index) as usize];
-                    let a1 = (bg_info.base_resource_indices.fs.samplers + index) as u64;
+                    let res = group.samplers[(index_base.samplers + index) as usize];
+                    let a1 = (resource_indices.samplers + index) as u64;
                     let a2 = Some(res.as_native());
                     match stage {
                         naga::ShaderStage::Vertex => {
@@ -790,8 +798,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     naga::ShaderStage::Compute => group.counters.cs.textures,
                 };
                 for index in 0..textures {
-                    let res = group.textures[index as usize];
-                    let a1 = (bg_info.base_resource_indices.vs.textures + index) as u64;
+                    let res = group.textures[(index_base.textures + index) as usize];
+                    let a1 = (resource_indices.textures + index) as u64;
                     let a2 = Some(res.as_native());
                     match stage {
                         naga::ShaderStage::Vertex => {
@@ -809,17 +817,67 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 }
             };
         if let Some(encoder) = render_encoder {
-            update_stage(naga::ShaderStage::Vertex, Some(&encoder), None);
-            update_stage(naga::ShaderStage::Fragment, Some(&encoder), None);
-            update_stage(naga::ShaderStage::Task, Some(&encoder), None);
-            update_stage(naga::ShaderStage::Mesh, Some(&encoder), None);
+            update_stage(
+                naga::ShaderStage::Vertex,
+                Some(&encoder),
+                None,
+                // All zeros, as vs comes first
+                super::ResourceData::default(),
+            );
+            update_stage(
+                naga::ShaderStage::Task,
+                Some(&encoder),
+                None,
+                // All zeros, as ts comes first
+                super::ResourceData::default(),
+            );
+            update_stage(
+                naga::ShaderStage::Mesh,
+                Some(&encoder),
+                None,
+                group.counters.ts.clone(),
+            );
+            update_stage(
+                naga::ShaderStage::Fragment,
+                Some(&encoder),
+                None,
+                super::ResourceData {
+                    buffers: group.counters.vs.buffers
+                        + group.counters.ts.buffers
+                        + group.counters.ms.buffers,
+                    textures: group.counters.vs.textures
+                        + group.counters.ts.textures
+                        + group.counters.ms.textures,
+                    samplers: group.counters.vs.samplers
+                        + group.counters.ts.samplers
+                        + group.counters.ms.samplers,
+                },
+            );
             // Call useResource on all textures and buffers used indirectly so they are alive
             for (resource, use_info) in group.resources_to_use.iter() {
                 encoder.use_resource_at(resource.as_native(), use_info.uses, use_info.stages);
             }
         }
         if let Some(encoder) = compute_encoder {
-            update_stage(naga::ShaderStage::Compute, None, Some(&encoder));
+            update_stage(
+                naga::ShaderStage::Compute,
+                None,
+                Some(&encoder),
+                super::ResourceData {
+                    buffers: group.counters.vs.buffers
+                        + group.counters.ts.buffers
+                        + group.counters.ms.buffers
+                        + group.counters.fs.buffers,
+                    textures: group.counters.vs.textures
+                        + group.counters.ts.textures
+                        + group.counters.ms.textures
+                        + group.counters.fs.textures,
+                    samplers: group.counters.vs.samplers
+                        + group.counters.ts.samplers
+                        + group.counters.ms.samplers
+                        + group.counters.fs.samplers,
+                },
+            );
             // Call useResource on all textures and buffers used indirectly so they are alive
             for (resource, use_info) in group.resources_to_use.iter() {
                 if !use_info.visible_in_compute {
