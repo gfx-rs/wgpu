@@ -654,6 +654,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 descriptor
                     .set_visibility_result_buffer(Some(occlusion_query_set.raw_buffer.as_ref()))
             }
+            // This strangely isn't mentioned in https://developer.apple.com/documentation/metal/improving-rendering-performance-with-vertex-amplification.
+            // The docs for [`renderTargetArrayLength`](https://developer.apple.com/documentation/metal/mtlrenderpassdescriptor/rendertargetarraylength)
+            // also say "The number of active layers that all attachments must have for layered rendering," implying it is only for layered rendering.
+            // However, when I don't set this, I get undefined behavior in nonzero layers, so I think it is required.
             if let Some(mv) = desc.multiview_mask {
                 descriptor.set_render_target_array_length(32 - mv.leading_zeros() as u64);
             }
@@ -671,7 +675,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     if (mv & (1 << i)) != 0 {
                         maps.push(metal::VertexAmplificationViewMapping {
                             renderTargetArrayIndexOffset: i,
-                            // WGPU doesn't allow rendering to multiple viewports in a single pass
                             viewportArrayIndexOffset: 0,
                         });
                     }

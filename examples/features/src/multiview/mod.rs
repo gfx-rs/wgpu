@@ -157,7 +157,10 @@ impl crate::framework::Example for Example {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.02,
+                            ..wgpu::Color::RED
+                        }),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
