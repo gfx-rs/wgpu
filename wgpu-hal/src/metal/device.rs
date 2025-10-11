@@ -1258,7 +1258,7 @@ impl crate::Device for super::Device {
                             primitive_class,
                             naga::ShaderStage::Task,
                         )?;
-                        descriptor.set_mesh_function(Some(&ts.function));
+                        descriptor.set_object_function(Some(&ts.function));
                         if self.shared.private_caps.supports_mutability {
                             Self::set_buffers_mutability(
                                 descriptor.mesh_buffers().unwrap(),
