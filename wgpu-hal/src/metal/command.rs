@@ -1420,11 +1420,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
 
         // update the threadgroup memory sizes
-        while self.state.stage_infos.cs.work_group_memory_sizes.len()
-            < pipeline.cs_info.work_group_memory_sizes.len()
-        {
-            self.state.stage_infos.cs.work_group_memory_sizes.push(0);
-        }
         for (index, (cur_size, pipeline_size)) in self
             .state
             .stage_infos

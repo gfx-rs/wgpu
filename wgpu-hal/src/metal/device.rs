@@ -1272,7 +1272,7 @@ impl crate::Device for super::Device {
                             vertex_buffer_mappings: vec![],
                             library: Some(ts.library),
                             raw_wg_size: ts.wg_size,
-                            work_group_memory_sizes: vec![],
+                            work_group_memory_sizes: ts.wg_memory_sizes,
                         });
                     } else {
                         ts_info = None;
@@ -1299,7 +1299,7 @@ impl crate::Device for super::Device {
                             vertex_buffer_mappings: vec![],
                             library: Some(ms.library),
                             raw_wg_size: ms.wg_size,
-                            work_group_memory_sizes: vec![],
+                            work_group_memory_sizes: ms.wg_memory_sizes,
                         });
                     }
                     MetalGenericRenderPipelineDescriptor::Mesh(descriptor)
