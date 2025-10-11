@@ -78,6 +78,9 @@ SamplerDescriptor {
 
 - Texture now has `from_custom`. By @R-Cramer4 in [#8315](https://github.com/gfx-rs/wgpu/pull/8315).
 
+#### Metal
+- Add support for mesh shaders. By @SupaMaggie70Incorporated in [#8139](https://github.com/gfx-rs/wgpu/pull/8139)
+
 ### Bug Fixes
 
 #### General
@@ -312,9 +315,6 @@ By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282), [#8285](https://
 
 - Allow disabling waiting for latency waitable object. By @marcpabst in [#7400](https://github.com/gfx-rs/wgpu/pull/7400)
 - Add mesh shader support, including to the example. By @SupaMaggie70Incorporated in [#8110](https://github.com/gfx-rs/wgpu/issues/8110)
-
-#### Metal
-- Add support for mesh shaders. By @SupaMaggie70Incorporated in [#8139](https://github.com/gfx-rs/wgpu/pull/8139)
 
 ### Bug Fixes
 
