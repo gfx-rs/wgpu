@@ -1111,7 +1111,7 @@ impl crate::Device for super::Device {
         >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         objc::rc::autoreleasepool(|| {
-            let (primitive_class, _raw_primitive_type) =
+            let (primitive_class, raw_primitive_type) =
                 conv::map_primitive_topology(desc.primitive.topology);
 
             let vs_info;
@@ -1323,9 +1323,6 @@ impl crate::Device for super::Device {
                 ),
             };
 
-            let (primitive_class, raw_primitive_type) =
-                conv::map_primitive_topology(desc.primitive.topology);
-
             // Fragment shader
             let fs_info = match desc.fragment_stage {
                 Some(ref stage) => {
@@ -1461,7 +1458,7 @@ impl crate::Device for super::Device {
                             wgt::ShaderStages::TASK
                                 | wgt::ShaderStages::MESH
                                 | wgt::ShaderStages::FRAGMENT,
-                            format!("new_render_pipeline_state: {e:?}"),
+                            format!("new_mesh_render_pipeline_state: {e:?}"),
                         )
                     })?,
             };
