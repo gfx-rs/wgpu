@@ -1,4 +1,3 @@
-#[cfg(wgpu_core)]
 use alloc::vec::Vec;
 use core::future::Future;
 
@@ -142,23 +141,18 @@ impl Instance {
     /// # Arguments
     ///
     /// - `backends` - Backends from which to enumerate adapters.
-    #[cfg(wgpu_core)]
-    pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
-        let Some(core_instance) = self.inner.as_core_opt() else {
-            return Vec::new();
-        };
+    pub fn enumerate_adapters(&self, backends: Backends) -> impl Future<Output = Vec<Adapter>> {
+        let future = self.inner.enumerate_adapters(backends);
 
-        core_instance
-            .enumerate_adapters(backends)
-            .into_iter()
-            .map(|adapter| {
-                let core = backend::wgpu_core::CoreAdapter {
-                    context: core_instance.clone(),
-                    id: adapter,
-                };
-                crate::Adapter { inner: core.into() }
-            })
-            .collect()
+        async move {
+            future
+                .await
+                .iter()
+                .map(|adapter| Adapter {
+                    inner: adapter.clone(),
+                })
+                .collect()
+        }
     }
 
     /// Retrieves an [`Adapter`] which matches the given [`RequestAdapterOptions`].

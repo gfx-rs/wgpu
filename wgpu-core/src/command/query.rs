@@ -4,14 +4,14 @@ use core::{iter, mem};
 #[cfg(feature = "trace")]
 use crate::command::Command as TraceCommand;
 use crate::{
-    command::{CommandBufferMutable, CommandEncoder, EncoderStateError},
-    device::{DeviceError, MissingFeatures},
+    command::{encoder::EncodingState, ArcCommand, EncoderStateError},
+    device::{Device, DeviceError, MissingFeatures},
     global::Global,
     id,
     init_tracker::MemoryInitKind,
     resource::{
-        DestroyedResourceError, InvalidResourceError, MissingBufferUsageError, ParentDevice,
-        QuerySet, RawResourceAccess, Trackable,
+        Buffer, DestroyedResourceError, InvalidResourceError, MissingBufferUsageError,
+        ParentDevice, QuerySet, RawResourceAccess, Trackable,
     },
     track::{StatelessTracker, TrackerIndex},
     FastHashMap,
@@ -307,12 +307,12 @@ pub(super) fn validate_and_begin_pipeline_statistics_query(
     query_set: Arc<QuerySet>,
     raw_encoder: &mut dyn hal::DynCommandEncoder,
     tracker: &mut StatelessTracker<QuerySet>,
-    cmd_enc: &CommandEncoder,
+    device: &Arc<Device>,
     query_index: u32,
     reset_state: Option<&mut QueryResetMap>,
     active_query: &mut Option<(Arc<QuerySet>, u32)>,
 ) -> Result<(), QueryUseError> {
-    query_set.same_device_as(cmd_enc)?;
+    query_set.same_device(device)?;
 
     let needs_reset = reset_state.is_none();
     query_set.validate_query(
@@ -365,8 +365,20 @@ impl Global {
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-        cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), QueryError> {
-            write_timestamp(cmd_buf_data, hub, &cmd_enc, query_set_id, query_index)
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut list) = cmd_buf_data.trace() {
+            list.push(TraceCommand::WriteTimestamp {
+                query_set_id,
+                query_index,
+            });
+        }
+
+        cmd_buf_data.push_with(|| -> Result<_, QueryError> {
+            Ok(ArcCommand::WriteTimestamp {
+                query_set: self.resolve_query_set(query_set_id)?,
+                query_index,
+            })
         })
     }
 
@@ -383,97 +395,70 @@ impl Global {
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-        cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), QueryError> {
-            resolve_query_set(
-                cmd_buf_data,
-                hub,
-                &cmd_enc,
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut list) = cmd_buf_data.trace() {
+            list.push(TraceCommand::ResolveQuerySet {
                 query_set_id,
                 start_query,
                 query_count,
                 destination,
                 destination_offset,
-            )
+            });
+        }
+
+        cmd_buf_data.push_with(|| -> Result<_, QueryError> {
+            Ok(ArcCommand::ResolveQuerySet {
+                query_set: self.resolve_query_set(query_set_id)?,
+                start_query,
+                query_count,
+                destination: self.resolve_buffer_id(destination)?,
+                destination_offset,
+            })
         })
     }
 }
 
 pub(super) fn write_timestamp(
-    cmd_buf_data: &mut CommandBufferMutable,
-    hub: &crate::hub::Hub,
-    cmd_enc: &Arc<CommandEncoder>,
-    query_set_id: id::QuerySetId,
+    state: &mut EncodingState,
+    query_set: Arc<QuerySet>,
     query_index: u32,
 ) -> Result<(), QueryError> {
-    #[cfg(feature = "trace")]
-    if let Some(ref mut list) = cmd_buf_data.trace_commands {
-        list.push(TraceCommand::WriteTimestamp {
-            query_set_id,
-            query_index,
-        });
-    }
-
-    cmd_enc.device.check_is_valid()?;
-
-    cmd_enc
+    state
         .device
         .require_features(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS)?;
 
-    let raw_encoder = cmd_buf_data.encoder.open()?;
+    query_set.same_device(state.device)?;
 
-    let query_set = hub.query_sets.get(query_set_id).get()?;
-    query_set.same_device_as(cmd_enc.as_ref())?;
+    query_set.validate_and_write_timestamp(state.raw_encoder, query_index, None)?;
 
-    query_set.validate_and_write_timestamp(raw_encoder, query_index, None)?;
-
-    cmd_buf_data.trackers.query_sets.insert_single(query_set);
+    state.tracker.query_sets.insert_single(query_set);
 
     Ok(())
 }
 
 pub(super) fn resolve_query_set(
-    cmd_buf_data: &mut CommandBufferMutable,
-    hub: &crate::hub::Hub,
-    cmd_enc: &Arc<CommandEncoder>,
-    query_set_id: id::QuerySetId,
+    state: &mut EncodingState,
+    query_set: Arc<QuerySet>,
     start_query: u32,
     query_count: u32,
-    destination: id::BufferId,
+    dst_buffer: Arc<Buffer>,
     destination_offset: BufferAddress,
 ) -> Result<(), QueryError> {
-    #[cfg(feature = "trace")]
-    if let Some(ref mut list) = cmd_buf_data.trace_commands {
-        list.push(TraceCommand::ResolveQuerySet {
-            query_set_id,
-            start_query,
-            query_count,
-            destination,
-            destination_offset,
-        });
-    }
-
-    cmd_enc.device.check_is_valid()?;
-
     if destination_offset % wgt::QUERY_RESOLVE_BUFFER_ALIGNMENT != 0 {
         return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));
     }
 
-    let query_set = hub.query_sets.get(query_set_id).get()?;
+    query_set.same_device(state.device)?;
+    dst_buffer.same_device(state.device)?;
 
-    query_set.same_device_as(cmd_enc.as_ref())?;
+    dst_buffer.check_destroyed(state.snatch_guard)?;
 
-    let dst_buffer = hub.buffers.get(destination).get()?;
-
-    dst_buffer.same_device_as(cmd_enc.as_ref())?;
-
-    let snatch_guard = dst_buffer.device.snatchable_lock.read();
-    dst_buffer.check_destroyed(&snatch_guard)?;
-
-    let dst_pending = cmd_buf_data
-        .trackers
+    let dst_pending = state
+        .tracker
         .buffers
         .set_single(&dst_buffer, wgt::BufferUses::COPY_DST);
-    let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
+    let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, state.snatch_guard));
 
     dst_buffer
         .check_usage(wgt::BufferUsages::QUERY_RESOLVE)
@@ -517,19 +502,18 @@ pub(super) fn resolve_query_set(
         })?;
 
     // TODO(https://github.com/gfx-rs/wgpu/issues/3993): Need to track initialization state.
-    cmd_buf_data.buffer_memory_init_actions.extend(
-        dst_buffer.initialization_status.read().create_action(
+    state
+        .buffer_memory_init_actions
+        .extend(dst_buffer.initialization_status.read().create_action(
             &dst_buffer,
             buffer_start_offset..buffer_end_offset,
             MemoryInitKind::ImplicitlyInitialized,
-        ),
-    );
+        ));
 
-    let raw_dst_buffer = dst_buffer.try_raw(&snatch_guard)?;
-    let raw_encoder = cmd_buf_data.encoder.open()?;
+    let raw_dst_buffer = dst_buffer.try_raw(state.snatch_guard)?;
     unsafe {
-        raw_encoder.transition_buffers(dst_barrier.as_slice());
-        raw_encoder.copy_query_results(
+        state.raw_encoder.transition_buffers(dst_barrier.as_slice());
+        state.raw_encoder.copy_query_results(
             query_set.raw(),
             start_query..end_query,
             raw_dst_buffer,
@@ -540,26 +524,21 @@ pub(super) fn resolve_query_set(
 
     if matches!(query_set.desc.ty, wgt::QueryType::Timestamp) {
         // Timestamp normalization is only needed for timestamps.
-        cmd_enc
-            .device
-            .timestamp_normalizer
-            .get()
-            .unwrap()
-            .normalize(
-                &snatch_guard,
-                raw_encoder,
-                &mut cmd_buf_data.trackers.buffers,
-                dst_buffer
-                    .timestamp_normalization_bind_group
-                    .get(&snatch_guard)
-                    .unwrap(),
-                &dst_buffer,
-                destination_offset,
-                query_count,
-            );
+        state.device.timestamp_normalizer.get().unwrap().normalize(
+            state.snatch_guard,
+            state.raw_encoder,
+            &mut state.tracker.buffers,
+            dst_buffer
+                .timestamp_normalization_bind_group
+                .get(state.snatch_guard)
+                .unwrap(),
+            &dst_buffer,
+            destination_offset,
+            query_count,
+        );
     }
 
-    cmd_buf_data.trackers.query_sets.insert_single(query_set);
+    state.tracker.query_sets.insert_single(query_set);
 
     Ok(())
 }

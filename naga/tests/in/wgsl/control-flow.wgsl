@@ -58,6 +58,25 @@ fn control_flow() {
             pos = 3;
         }
     }
+
+    // trailing commas
+    switch pos {
+        case 1, {
+            pos = 0;
+        }
+        case 2,: {
+            pos = 1;
+        }
+        case 3, 4, {
+            pos = 2;
+        }
+        case 5, 6,: {
+            pos = 3;
+        }
+        default {
+            pos = 4;
+        }
+    }
 }
 
 fn switch_default_break(i: i32) {

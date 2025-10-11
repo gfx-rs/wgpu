@@ -58,7 +58,7 @@ static QUEUE_WRITE_TEXTURE_THEN_DESTROY: GpuTestConfiguration = GpuTestConfigura
         texture.destroy();
 
         ctx.queue.submit([]);
-        ctx.device.poll(PollType::wait()).unwrap();
+        ctx.device.poll(PollType::wait_indefinitely()).unwrap();
     });
 
 #[gpu_test]

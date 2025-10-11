@@ -122,7 +122,7 @@ pub async fn initialize_adapter(
 
     cfg_if::cfg_if! {
         if #[cfg(not(target_arch = "wasm32"))] {
-            let adapter_iter = instance.enumerate_adapters(backends);
+            let adapter_iter = instance.enumerate_adapters(backends).await;
             let adapter = adapter_iter.into_iter()
                 // If we have a report, we only want to match the adapter with the same info.
                 //
@@ -136,7 +136,7 @@ pub async fn initialize_adapter(
                 panic!(
                     "Could not find adapter with info {:#?} in {:#?}",
                     adapter_report.map(|r| &r.info),
-                    instance.enumerate_adapters(backends).into_iter().map(|a| a.get_info()).collect::<Vec<_>>(),
+                    instance.enumerate_adapters(backends).await.into_iter().map(|a| a.get_info()).collect::<Vec<_>>(),
                 );
             };
         } else {

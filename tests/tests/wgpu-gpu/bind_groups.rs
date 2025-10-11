@@ -125,7 +125,7 @@ fn multiple_bindings_with_differing_sizes(ctx: TestingContext) {
     ctx.queue.write_buffer(&buffer, 0, &data);
     ctx.queue.submit(Some(encoder.finish()));
 
-    ctx.device.poll(PollType::Wait).unwrap();
+    ctx.device.poll(PollType::wait_indefinitely()).unwrap();
 }
 
 /// Test `descriptor` against a bind group layout that requires non-filtering sampler.
@@ -192,7 +192,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_NONFILTERING_SAMPLER: GpuTestConfiguration
                     label: Some("bind_group_non_filtering_layout_nonfiltering_sampler"),
                     min_filter: wgpu::FilterMode::Nearest,
                     mag_filter: wgpu::FilterMode::Nearest,
-                    mipmap_filter: wgpu::FilterMode::Nearest,
+                    mipmap_filter: wgpu::MipmapFilterMode::Nearest,
                     ..wgpu::SamplerDescriptor::default()
                 },
                 true,
@@ -210,7 +210,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_MIN_SAMPLER: GpuTestConfiguration =
                     label: Some("bind_group_non_filtering_layout_min_sampler"),
                     min_filter: wgpu::FilterMode::Linear,
                     mag_filter: wgpu::FilterMode::Nearest,
-                    mipmap_filter: wgpu::FilterMode::Nearest,
+                    mipmap_filter: wgpu::MipmapFilterMode::Nearest,
                     ..wgpu::SamplerDescriptor::default()
                 },
                 false,
@@ -228,7 +228,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_MAG_SAMPLER: GpuTestConfiguration =
                     label: Some("bind_group_non_filtering_layout_mag_sampler"),
                     min_filter: wgpu::FilterMode::Nearest,
                     mag_filter: wgpu::FilterMode::Linear,
-                    mipmap_filter: wgpu::FilterMode::Nearest,
+                    mipmap_filter: wgpu::MipmapFilterMode::Nearest,
                     ..wgpu::SamplerDescriptor::default()
                 },
                 false,
@@ -246,7 +246,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_MIPMAP_SAMPLER: GpuTestConfiguration =
                     label: Some("bind_group_non_filtering_layout_mipmap_sampler"),
                     min_filter: wgpu::FilterMode::Nearest,
                     mag_filter: wgpu::FilterMode::Nearest,
-                    mipmap_filter: wgpu::FilterMode::Linear,
+                    mipmap_filter: wgpu::MipmapFilterMode::Linear,
                     ..wgpu::SamplerDescriptor::default()
                 },
                 false,

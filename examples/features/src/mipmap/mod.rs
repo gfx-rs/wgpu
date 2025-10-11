@@ -117,7 +117,7 @@ impl Example {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
 
@@ -268,7 +268,7 @@ impl crate::framework::Example for Example {
             address_mode_w: wgpu::AddressMode::Repeat,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
             ..Default::default()
         });
         let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
@@ -411,7 +411,7 @@ impl crate::framework::Example for Example {
                 .slice(..)
                 .map_async(wgpu::MapMode::Read, |_| ());
             // Wait for device to be done rendering mipmaps
-            device.poll(wgpu::PollType::wait()).unwrap();
+            device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
             // This is guaranteed to be ready.
             let timestamp_view = query_sets
                 .mapping_buffer

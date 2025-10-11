@@ -63,19 +63,10 @@ impl EntryMap {
     /// Errors if there are duplicate bindings or if any binding index is greater than
     /// the device's limits.
     pub fn from_entries(
-        device_limits: &wgt::Limits,
         entries: &[wgt::BindGroupLayoutEntry],
     ) -> Result<Self, binding_model::CreateBindGroupLayoutError> {
         let mut inner = FastIndexMap::with_capacity_and_hasher(entries.len(), Default::default());
         for entry in entries {
-            if entry.binding >= device_limits.max_bindings_per_bind_group {
-                return Err(
-                    binding_model::CreateBindGroupLayoutError::InvalidBindingIndex {
-                        binding: entry.binding,
-                        maximum: device_limits.max_bindings_per_bind_group,
-                    },
-                );
-            }
             if inner.insert(entry.binding, *entry).is_some() {
                 return Err(binding_model::CreateBindGroupLayoutError::ConflictBinding(
                     entry.binding,

@@ -40,6 +40,68 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major changes
+
+#### 'wgpu::Instance::enumerate_adapters` is now `async` & available on WebGPU
+
+BREAKING CHANGE: `enumerate_adapters` is now `async`:
+
+```diff
+- pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
++ pub fn enumerate_adapters(&self, backends: Backends) -> impl Future<Output = Vec<Adapter>> {
+```
+
+This yields ([kek]) two benefits:
+
+- This method is now implemented on non-native using the standard `Adapter::request_adapter(…)`, making `enumerate_adapters` a portable surface. This was previous a nontrivial pain point when an application wanted to do some of its own filtering of adapters.
+- This method can now be implemented in custom backends.
+
+By @R-Cramer4 in [#8230](https://github.com/gfx-rs/wgpu/pull/8230)
+
+[kek]: https://web.archive.org/web/20250923122958/https://knowyourmeme.com/memes/kek
+
+#### `MipmapFilterMode` is split from `FilterMode`
+
+This is a breaking change that aligns wgpu with spec.
+
+```diff
+SamplerDescriptor {
+...
+-     mipmap_filter: FilterMode::Nearest
++     mipmap_filter: MipmapFilterMode::Nearest
+...
+}
+```
+### Changes
+
+#### General
+
+- Texture now has `from_custom`. By @R-Cramer4 in [#8315](https://github.com/gfx-rs/wgpu/pull/8315).
+
+### Bug Fixes
+
+#### General
+
+- Reject fragment shader output `location`s > `max_color_attachments` limit. By @ErichDonGubler in [#8316](https://github.com/gfx-rs/wgpu/pull/8316).
+- WebGPU device requests now support the required limits `maxColorAttachments` and `maxColorAttachmentBytesPerSample`. By @evilpie in [#8328](https://github.com/gfx-rs/wgpu/pull/8328)
+- Reject binding indices that exceed `wgpu_types::Limits::max_bindings_per_bind_group` when deriving a bind group layout for a pipeline. By @jimblandy in [#8325](https://github.com/gfx-rs/wgpu/pull/8325).
+
+## v27.0.2 (2025-10-03)
+
+### Bug Fixes
+
+#### DX12
+
+- Fix device creation failures for devices that do not support mesh shaders. By @vorporeal in [#8297](https://github.com/gfx-rs/wgpu/pull/8297).
+
+## v27.0.1 (2025-10-02)
+
+### Bug Fixes
+
+- Fixed the build on docs.rs. By @cwfitzgerald in [#8292](https://github.com/gfx-rs/wgpu/pull/8292).
+
+## v27.0.0 (2025-10-01)
+
 ### Major Changes
 
 #### Deferred command buffer actions: `map_buffer_on_submit` and `on_submitted_work_done`
@@ -132,6 +194,7 @@ makes it significantly easier to store these types in structs, which is useful f
 ```
 
 By @sagudev in [#8046](https://github.com/gfx-rs/wgpu/pull/8046) and @cwfitzgerald in [#8070](https://github.com/gfx-rs/wgpu/pull/8161).
+
 #### `EXPERIMENTAL_*` features now require unsafe code to enable
 
 We want to be able to expose potentially experimental features to our users before we have ensured that they are fully sound to use.
@@ -158,18 +221,60 @@ by if the `Feature::MULTI_DRAW_INDIRECT_COUNT` feature is available on the devic
 
 By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 
+#### `wgpu::PollType::Wait` has now an optional timeout
+
+We removed `wgpu::PollType::WaitForSubmissionIndex` and added fields to `wgpu::PollType::Wait` in order to express timeouts.
+
+Before/after for `wgpu::PollType::Wait`:
+
+```diff
+-device.poll(wgpu::PollType::Wait).unwrap();
+-device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
++device.poll(wgpu::PollType::Wait {
++      submission_index: None, // Wait for most recent submission
++      timeout: Some(std::time::Duration::from_secs(60)), // Previous behavior, but more likely you want `None` instead.
++  })
++  .unwrap();
+```
+
+Before/after for `wgpu::PollType::WaitForSubmissionIndex`:
+
+```diff
+-device.poll(wgpu::PollType::WaitForSubmissionIndex(index_to_wait_on))
++device.poll(wgpu::PollType::Wait {
++      submission_index: Some(index_to_wait_on),
++      timeout: Some(std::time::Duration::from_secs(60)), // Previous behavior, but more likely you want `None` instead.
++  })
++  .unwrap();
+```
+
+⚠️ Previously, both `wgpu::PollType::WaitForSubmissionIndex` and `wgpu::PollType::Wait` had a hard-coded timeout of 60 seconds.
+
+
+To wait indefinitely on the latest submission, you can also use the `wait_indefinitely` convenience function:
+```rust
+device.poll(wgpu::PollType::wait_indefinitely());
+```
+
+By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282), [#8285](https://github.com/gfx-rs/wgpu/pull/8285)
+
 ### New Features
 
 #### General
 
 - Added mesh shader support to `wgpu`, with examples. Requires passthrough. By @SupaMaggie70Incorporated in [#7345](https://github.com/gfx-rs/wgpu/pull/7345).
-
 - Added support for external textures based on WebGPU's [`GPUExternalTexture`](https://www.w3.org/TR/webgpu/#gpuexternaltexture). These allow shaders to transparently operate on potentially multiplanar source texture data in either RGB or YCbCr formats via WGSL's `texture_external` type. This is gated behind the `Features::EXTERNAL_TEXTURE` feature, which is currently only supported on DX12. By @jamienicol in [#4386](https://github.com/gfx-rs/wgpu/issues/4386).
+- `wgpu::Device::poll` can now specify a timeout via `wgpu::PollType::Wait`. By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282) & [#8285](https://github.com/gfx-rs/wgpu/pull/8285)
+
+#### naga
+
+- Expose `naga::front::wgsl::UnimplementedEnableExtension`. By @ErichDonGubler in [#8237](https://github.com/gfx-rs/wgpu/pull/8237).
 
 ### Changes
 
 #### General
 
+- Command encoding now happens when `CommandEncoder::finish` is called, not when the individual operations are requested. This does not affect the API, but may affect performance characteristics. By @andyleiserson in [#8220](https://github.com/gfx-rs/wgpu/pull/8220).
 - Prevent resources for acceleration structures being created if acceleration structures are not enabled. By @Vecvec in [#8036](https://github.com/gfx-rs/wgpu/pull/8036).
 - Validate that each `push_debug_group` pairs with exactly one `pop_debug_group`. By @andyleiserson in [#8048](https://github.com/gfx-rs/wgpu/pull/8048).
 - `set_viewport` now requires that the supplied minimum depth value is less than the maximum depth value. By @andyleiserson in [#8040](https://github.com/gfx-rs/wgpu/pull/8040).
@@ -189,6 +294,7 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 - Require new `F16_IN_F32` downlevel flag for `quantizeToF16`, `pack2x16float`, and `unpack2x16float` in WGSL input. By @aleiserson in [#8130](https://github.com/gfx-rs/wgpu/pull/8130).
 - The error message for non-copyable depth/stencil formats no longer mentions the aspect when it is not relevant. By @reima in [#8156](https://github.com/gfx-rs/wgpu/pull/8156).
 - Track the initialization status of buffer memory correctly when `copy_texture_to_buffer` skips over padding space between rows or layers, or when the start/end of a texture-buffer transfer is not 4B aligned. By @andyleiserson in [#8099](https://github.com/gfx-rs/wgpu/pull/8099).
+- Allow `include_spirv!` and `include_spirv_raw!` macros to be used in constants and statics. By @clarfonthey in [#8250](https://github.com/gfx-rs/wgpu/pull/8250).
 
 #### naga
 
@@ -196,10 +302,16 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 - If the shader source contains control characters, naga now replaces them with U+FFFD ("replacement character") in diagnostic output. By @andyleiserson in [#8049](https://github.com/gfx-rs/wgpu/pull/8049).
 - Add f16 IO polyfill on Vulkan backend to enable SHADER_F16 use without requiring `storageInputOutput16`. By @cryvosh in [#7884](https://github.com/gfx-rs/wgpu/pull/7884).
 - For custom Naga backend authors: `naga::proc::Namer` now accepts reserved keywords using two new dedicated types, `proc::{KeywordSet, CaseInsensitiveKeywordSet}`. By @kpreid in [#8136](https://github.com/gfx-rs/wgpu/pull/8136).
+- **BREAKING**: Previously the WGSL storage-texture format `rg11b10float` was incorrectly accepted and generated by naga, but now only accepts the the correct name `rg11b10ufloat` instead. By @ErikWDev in [#8219](https://github.com/gfx-rs/wgpu/pull/8219).
+- The [`source()`](https://doc.rust-lang.org/std/error/trait.Error.html#method.source) method of `ShaderError` no longer reports the error as its own source. By @andyleiserson in [#8258](https://github.com/gfx-rs/wgpu/pull/8258).
+- naga correctly ingests SPIR-V that use descriptor runtime indexing, which in turn is correctly converted into WGSLs binding array. By @hasenbanck in [8256](https://github.com/gfx-rs/wgpu/pull/8256).
+- naga correctly ingests SPIR-V that loads from multi-sampled textures, which in turn is correctly converted into WGSLs texture_multisampled_2d and load operations. By @hasenbanck in [8270](https://github.com/gfx-rs/wgpu/pull/8270).
+- naga implement OpImageGather and OpImageDrefGather operations when ingesting SPIR-V. By @hasenbanck in [8280](https://github.com/gfx-rs/wgpu/pull/8280).
 
 #### DX12
 
 - Allow disabling waiting for latency waitable object. By @marcpabst in [#7400](https://github.com/gfx-rs/wgpu/pull/7400)
+- Add mesh shader support, including to the example. By @SupaMaggie70Incorporated in [#8110](https://github.com/gfx-rs/wgpu/issues/8110)
 
 #### Metal
 - Add support for mesh shaders. By @SupaMaggie70Incorporated in [#8139](https://github.com/gfx-rs/wgpu/pull/8139)
@@ -212,15 +324,22 @@ By @cwfitzgerald in [#8162](https://github.com/gfx-rs/wgpu/pull/8162).
 
 #### DX12
 
+- Create an event per wait to prevent 60 second hangs in certain multithreaded scenarios. By @Vecvec in [#8273](https://github.com/gfx-rs/wgpu/pull/8273).
 - Fixed a bug where access to matrices with 2 rows would not work in some cases. By @andyleiserson in [#7438](https://github.com/gfx-rs/wgpu/pull/7438).
 
 ##### EGL
 
 - Fixed unwrap failed in context creation for some Android devices. By @uael in [#8024](https://github.com/gfx-rs/wgpu/pull/8024).
 
+##### Vulkan
+
+- Fixed wrong color format+space being reported versus what is hardcoded in `create_swapchain()`. By @MarijnS95 in [#8226](https://github.com/gfx-rs/wgpu/pull/8226).
+
 #### naga
 
 - [wgsl-in] Allow a trailing comma in `@blend_src(…)` attributes. By @ErichDonGubler in [#8137](https://github.com/gfx-rs/wgpu/pull/8137).
+- [wgsl-in] Allow a trailing comma in the list of `case` values inside a `switch`. By @reima in [#8165](https://github.com/gfx-rs/wgpu/pull/8165).
+- Escape, rather than strip, identifiers with Unicode. By @ErichDonGubler in [7995](https://github.com/gfx-rs/wgpu/pull/7995).
 
 ### Documentation
 
@@ -3860,7 +3979,7 @@ DeviceDescriptor {
 
 - Explicitly set Vulkan debug message types instead of !empty() by @victorvde in [#2321](https://github.com/gfx-rs/wgpu/pull/2321)
 - Use stencil read/write masks by @kvark in [#2382](https://github.com/gfx-rs/wgpu/pull/2382)
-- Vulkan: correctly set INDEPENDENT_BLEND，make runable on Android 8.x by @jinleili in [#2498](https://github.com/gfx-rs/wgpu/pull/2498)
+- Vulkan: correctly set INDEPENDENT_BLEND，make runnable on Android 8.x by @jinleili in [#2498](https://github.com/gfx-rs/wgpu/pull/2498)
 - Fix ASTC format mapping by @kvark in [#2476](https://github.com/gfx-rs/wgpu/pull/2476)
 - Support flipped Y on VK 1.1 devices by @cwfitzgerald in [#2512](https://github.com/gfx-rs/wgpu/pull/2512)
 - Fixed builtin(primitive_index) for vulkan backend by @kwillemsen in [#2716](https://github.com/gfx-rs/wgpu/pull/2716)

@@ -17,7 +17,7 @@ use crate::{
         self,
         dxgi::{factory::DxgiAdapter, result::HResult},
     },
-    dx12::{shader_compilation, SurfaceTarget},
+    dx12::{dcomp::DCompLib, shader_compilation, SurfaceTarget},
 };
 
 impl Drop for super::Adapter {
@@ -55,6 +55,7 @@ impl super::Adapter {
     pub(super) fn expose(
         adapter: DxgiAdapter,
         library: &Arc<D3D12Lib>,
+        dcomp_lib: &Arc<DCompLib>,
         instance_flags: wgt::InstanceFlags,
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
         compiler_container: Arc<shader_compilation::CompilerContainer>,
@@ -527,6 +528,22 @@ impl super::Adapter {
             wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
             atomic_int64_on_typed_resource_supported,
         );
+        let mesh_shader_supported = {
+            let mut features7 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS7::default();
+            unsafe {
+                device.CheckFeatureSupport(
+                    Direct3D12::D3D12_FEATURE_D3D12_OPTIONS7,
+                    <*mut _>::cast(&mut features7),
+                    size_of_val(&features7) as u32,
+                )
+            }
+            .is_ok()
+                && features7.MeshShaderTier != Direct3D12::D3D12_MESH_SHADER_TIER_NOT_SUPPORTED
+        };
+        features.set(
+            wgt::Features::EXPERIMENTAL_MESH_SHADER,
+            mesh_shader_supported,
+        );
 
         // TODO: Determine if IPresentationManager is supported
         let presentation_timer = auxil::dxgi::time::PresentationTimer::new_dxgi();
@@ -559,6 +576,7 @@ impl super::Adapter {
                 raw: adapter,
                 device,
                 library: Arc::clone(library),
+                dcomp_lib: Arc::clone(dcomp_lib),
                 private_caps,
                 presentation_timer,
                 workarounds,
@@ -646,10 +664,15 @@ impl super::Adapter {
                     max_buffer_size: i32::MAX as u64,
                     max_non_sampler_bindings: 1_000_000,
 
-                    max_task_workgroup_total_count: 0,
-                    max_task_workgroups_per_dimension: 0,
+                    // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#dispatchmesh-api
+                    max_task_workgroup_total_count: 2u32.pow(22),
+                    // Technically it says "64k" but I highly doubt they want 65536 for compute and exactly 64,000 for task workgroups
+                    max_task_workgroups_per_dimension:
+                        Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                    // Multiview not supported by WGPU yet
                     max_mesh_multiview_count: 0,
-                    max_mesh_output_layers: 0,
+                    // This seems to be right, and I can't find anything to suggest it would be less than the 2048 provided here
+                    max_mesh_output_layers: Direct3D12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION,
 
                     max_blas_primitive_count: if supports_ray_tracing {
                         1 << 29 // 2^29
@@ -726,6 +749,7 @@ impl crate::Adapter for super::Adapter {
             memory_hints,
             self.private_caps,
             &self.library,
+            &self.dcomp_lib,
             self.memory_budget_thresholds,
             self.compiler_container.clone(),
             self.options.clone(),

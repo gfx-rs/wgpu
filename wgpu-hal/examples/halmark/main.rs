@@ -54,7 +54,7 @@ struct ExecutionContext<A: hal::Api> {
 
 impl<A: hal::Api> ExecutionContext<A> {
     unsafe fn wait_and_clear(&mut self, device: &A::Device) {
-        device.wait(&self.fence, self.fence_value, !0).unwrap();
+        device.wait(&self.fence, self.fence_value, None).unwrap();
         self.encoder.reset_all(self.used_cmd_bufs.drain(..));
         for view in self.used_views.drain(..) {
             device.destroy_texture_view(view);
@@ -385,7 +385,7 @@ impl<A: hal::Api> Example<A> {
             address_modes: [wgpu_types::AddressMode::ClampToEdge; 3],
             mag_filter: wgpu_types::FilterMode::Linear,
             min_filter: wgpu_types::FilterMode::Nearest,
-            mipmap_filter: wgpu_types::FilterMode::Nearest,
+            mipmap_filter: wgpu_types::MipmapFilterMode::Nearest,
             lod_clamp: 0.0..32.0,
             compare: None,
             anisotropy_clamp: 1,
@@ -519,7 +519,7 @@ impl<A: hal::Api> Example<A> {
             queue
                 .submit(&[&init_cmd], &[], (&mut fence, init_fence_value))
                 .unwrap();
-            device.wait(&fence, init_fence_value, !0).unwrap();
+            device.wait(&fence, init_fence_value, None).unwrap();
             device.destroy_buffer(staging_buffer);
             cmd_encoder.reset_all(iter::once(init_cmd));
             fence

@@ -4,7 +4,7 @@ precision highp float;
 precision highp int;
 
 
-void fb1_(inout bool cond) {
+void f_u0028_b1_u003b(inout bool cond) {
     bool loop_init = true;
     while(true) {
         if (!loop_init) {
@@ -22,7 +22,7 @@ void fb1_(inout bool cond) {
 void main_1() {
     bool param = false;
     param = false;
-    fb1_(param);
+    f_u0028_b1_u003b(param);
     return;
 }
 

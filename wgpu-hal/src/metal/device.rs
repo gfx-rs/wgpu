@@ -571,11 +571,11 @@ impl crate::Device for super::Device {
             descriptor.set_min_filter(conv::map_filter_mode(desc.min_filter));
             descriptor.set_mag_filter(conv::map_filter_mode(desc.mag_filter));
             descriptor.set_mip_filter(match desc.mipmap_filter {
-                wgt::FilterMode::Nearest if desc.lod_clamp == (0.0..0.0) => {
+                wgt::MipmapFilterMode::Nearest if desc.lod_clamp == (0.0..0.0) => {
                     MTLSamplerMipFilter::NotMipmapped
                 }
-                wgt::FilterMode::Nearest => MTLSamplerMipFilter::Nearest,
-                wgt::FilterMode::Linear => MTLSamplerMipFilter::Linear,
+                wgt::MipmapFilterMode::Nearest => MTLSamplerMipFilter::Nearest,
+                wgt::MipmapFilterMode::Linear => MTLSamplerMipFilter::Linear,
             });
 
             let [s, t, r] = desc.address_modes;
@@ -1111,7 +1111,7 @@ impl crate::Device for super::Device {
         >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         objc::rc::autoreleasepool(|| {
-            let (primitive_class, raw_primitive_type) =
+            let (primitive_class, _raw_primitive_type) =
                 conv::map_primitive_topology(desc.primitive.topology);
 
             let vs_info;
@@ -1151,8 +1151,15 @@ impl crate::Device for super::Device {
                                         .try_into()
                                         .unwrap()
                                 },
-                                indexed_by_vertex: (vbl.step_mode
-                                    == wgt::VertexStepMode::Vertex {}),
+                                step_mode: match (vbl.array_stride == 0, vbl.step_mode) {
+                                    (true, _) => naga::back::msl::VertexBufferStepMode::Constant,
+                                    (false, wgt::VertexStepMode::Vertex) => {
+                                        naga::back::msl::VertexBufferStepMode::ByVertex
+                                    }
+                                    (false, wgt::VertexStepMode::Instance) => {
+                                        naga::back::msl::VertexBufferStepMode::ByInstance
+                                    }
+                                },
                                 attributes,
                             });
                         }
@@ -1315,6 +1322,9 @@ impl crate::Device for super::Device {
                     wgt::Features::POLYGON_MODE_POINT
                 ),
             };
+
+            let (primitive_class, raw_primitive_type) =
+                conv::map_primitive_topology(desc.primitive.topology);
 
             // Fragment shader
             let fs_info = match desc.fragment_stage {
@@ -1676,7 +1686,7 @@ impl crate::Device for super::Device {
         &self,
         fence: &super::Fence,
         wait_value: crate::FenceValue,
-        timeout_ms: u32,
+        timeout: Option<core::time::Duration>,
     ) -> DeviceResult<bool> {
         if wait_value <= fence.completed_value.load(atomic::Ordering::Acquire) {
             return Ok(true);
@@ -1699,8 +1709,10 @@ impl crate::Device for super::Device {
             if let MTLCommandBufferStatus::Completed = cmd_buf.status() {
                 return Ok(true);
             }
-            if start.elapsed().as_millis() >= timeout_ms as u128 {
-                return Ok(false);
+            if let Some(timeout) = timeout {
+                if start.elapsed() >= timeout {
+                    return Ok(false);
+                }
             }
             thread::sleep(core::time::Duration::from_millis(1));
         }

@@ -268,9 +268,9 @@ impl ExampleContext {
     async fn init_async<E: Example>(surface: &mut SurfaceWrapper, window: Arc<Window>) -> Self {
         log::info!("Initializing wgpu...");
 
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::from_env_or_default());
+        let instance_descriptor = wgpu::InstanceDescriptor::from_env_or_default();
+        let instance = wgpu::Instance::new(&instance_descriptor);
         surface.pre_adapter(&instance, window);
-
         let adapter = get_adapter_with_capabilities_or_from_env(
             &instance,
             &E::required_features(),
@@ -597,7 +597,9 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
 
                 let dst_buffer_slice = dst_buffer.slice(..);
                 dst_buffer_slice.map_async(wgpu::MapMode::Read, |_| ());
-                ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+                ctx.async_poll(wgpu::PollType::wait_indefinitely())
+                    .await
+                    .unwrap();
                 let bytes = dst_buffer_slice.get_mapped_range().to_vec();
 
                 wgpu_test::image::compare_image_output(

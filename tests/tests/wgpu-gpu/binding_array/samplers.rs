@@ -120,7 +120,7 @@ async fn binding_array_samplers(ctx: TestingContext, partially_bound: bool) {
             address_mode_w: AddressMode::ClampToEdge,
             mag_filter: FilterMode::Linear,
             min_filter: FilterMode::Linear,
-            mipmap_filter: FilterMode::Linear,
+            mipmap_filter: MipmapFilterMode::Linear,
             lod_min_clamp: 0.0,
             lod_max_clamp: 1000.0,
             compare: None,
@@ -134,7 +134,7 @@ async fn binding_array_samplers(ctx: TestingContext, partially_bound: bool) {
             address_mode_w: AddressMode::ClampToEdge,
             mag_filter: FilterMode::Nearest,
             min_filter: FilterMode::Nearest,
-            mipmap_filter: FilterMode::Nearest,
+            mipmap_filter: MipmapFilterMode::Nearest,
             lod_min_clamp: 0.0,
             lod_max_clamp: 1000.0,
             compare: None,
@@ -251,7 +251,7 @@ async fn binding_array_samplers(ctx: TestingContext, partially_bound: bool) {
     ctx.queue.submit(Some(encoder.finish()));
 
     readback_buffer.slice(..).map_async(MapMode::Read, |_| {});
-    ctx.device.poll(PollType::Wait).unwrap();
+    ctx.device.poll(PollType::wait_indefinitely()).unwrap();
 
     let readback_buffer_slice = readback_buffer.slice(..).get_mapped_range();
 

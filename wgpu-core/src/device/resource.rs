@@ -29,7 +29,6 @@ use crate::{
     device::{
         bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
         DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures, RenderPassContext,
-        CLEANUP_WAIT_MS,
     },
     hal_label,
     init_tracker::{
@@ -712,7 +711,10 @@ impl Device {
 
         // If a wait was requested, determine which submission index to wait for.
         let wait_submission_index = match poll_type {
-            wgt::PollType::WaitForSubmissionIndex(submission_index) => {
+            wgt::PollType::Wait {
+                submission_index: Some(submission_index),
+                ..
+            } => {
                 let last_successful_submission_index = self
                     .last_successful_submission_index
                     .load(Ordering::Acquire);
@@ -728,7 +730,10 @@ impl Device {
 
                 Some(submission_index)
             }
-            wgt::PollType::Wait => Some(
+            wgt::PollType::Wait {
+                submission_index: None,
+                ..
+            } => Some(
                 self.last_successful_submission_index
                     .load(Ordering::Acquire),
             ),
@@ -739,9 +744,16 @@ impl Device {
         if let Some(target_submission_index) = wait_submission_index {
             log::trace!("Device::maintain: waiting for submission index {target_submission_index}");
 
+            let wait_timeout = match poll_type {
+                wgt::PollType::Wait { timeout, .. } => timeout,
+                wgt::PollType::Poll => unreachable!(
+                    "`wait_submission_index` index for poll type `Poll` should be None"
+                ),
+            };
+
             let wait_result = unsafe {
                 self.raw()
-                    .wait(fence.as_ref(), target_submission_index, CLEANUP_WAIT_MS)
+                    .wait(fence.as_ref(), target_submission_index, wait_timeout)
             };
 
             // This error match is only about `DeviceErrors`. At this stage we do not care if
@@ -1939,9 +1951,9 @@ impl Device {
                     },
                 );
             }
-            if !matches!(desc.mipmap_filter, wgt::FilterMode::Linear) {
+            if !matches!(desc.mipmap_filter, wgt::MipmapFilterMode::Linear) {
                 return Err(
-                    resource::CreateSamplerError::InvalidFilterModeWithAnisotropy {
+                    resource::CreateSamplerError::InvalidMipmapFilterModeWithAnisotropy {
                         filter_type: resource::SamplerFilterErrorType::MipmapFilter,
                         filter_mode: desc.mipmap_filter,
                         anisotropic_clamp: desc.anisotropy_clamp,
@@ -1987,7 +1999,7 @@ impl Device {
             comparison: desc.compare.is_some(),
             filtering: desc.min_filter == wgt::FilterMode::Linear
                 || desc.mag_filter == wgt::FilterMode::Linear
-                || desc.mipmap_filter == wgt::FilterMode::Linear,
+                || desc.mipmap_filter == wgt::MipmapFilterMode::Linear,
         };
 
         let sampler = Arc::new(sampler);
@@ -2280,6 +2292,15 @@ impl Device {
         }
 
         for entry in entry_map.values() {
+            if entry.binding >= self.limits.max_bindings_per_bind_group {
+                return Err(
+                    binding_model::CreateBindGroupLayoutError::InvalidBindingIndex {
+                        binding: entry.binding,
+                        maximum: self.limits.max_bindings_per_bind_group,
+                    },
+                );
+            }
+
             use wgt::BindingType as Bt;
 
             let mut required_features = wgt::Features::empty();
@@ -4051,6 +4072,8 @@ impl Device {
                 };
             }
             pipeline::RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
+                self.require_features(wgt::Features::EXPERIMENTAL_MESH_SHADER)?;
+
                 task_stage = if let Some(task) = task {
                     let stage_desc = &task.stage;
                     let stage = wgt::ShaderStages::TASK;
@@ -4499,7 +4522,7 @@ impl Device {
         let last_done_index = unsafe { self.raw().get_fence_value(fence.as_ref()) }
             .map_err(|e| self.handle_hal_error(e))?;
         if last_done_index < submission_index {
-            unsafe { self.raw().wait(fence.as_ref(), submission_index, !0) }
+            unsafe { self.raw().wait(fence.as_ref(), submission_index, None) }
                 .map_err(|e| self.handle_hal_error(e))?;
             drop(fence);
             if let Some(queue) = self.get_queue() {

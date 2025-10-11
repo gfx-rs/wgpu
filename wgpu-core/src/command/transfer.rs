@@ -12,10 +12,12 @@ use wgt::{
 use crate::command::Command as TraceCommand;
 use crate::{
     api_log,
-    command::{clear_texture, CommandEncoderError, EncoderStateError},
-    device::{Device, MissingDownlevelFlags},
+    command::{
+        clear_texture, encoder::EncodingState, ArcCommand, CommandEncoderError, EncoderStateError,
+    },
+    device::MissingDownlevelFlags,
     global::Global,
-    id::{BufferId, CommandEncoderId},
+    id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{
         has_copy_partial_init_tracker_coverage, MemoryInitKind, TextureInitRange,
         TextureInitTrackerAction,
@@ -24,13 +26,12 @@ use crate::{
         Buffer, MissingBufferUsageError, MissingTextureUsageError, ParentDevice, RawResourceAccess,
         Texture, TextureErrorDimension,
     },
-    snatch::SnatchGuard,
 };
 
-use super::{ClearError, CommandBufferMutable};
+use super::ClearError;
 
-use super::TexelCopyBufferInfo;
-use super::TexelCopyTextureInfo;
+type TexelCopyBufferInfo = wgt::TexelCopyBufferInfo<BufferId>;
+type TexelCopyTextureInfo = wgt::TexelCopyTextureInfo<Arc<Texture>>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum CopySide {
@@ -629,13 +630,11 @@ pub(crate) fn validate_copy_within_same_texture<T>(
 }
 
 fn handle_texture_init(
+    state: &mut EncodingState,
     init_kind: MemoryInitKind,
-    cmd_buf_data: &mut CommandBufferMutable,
-    device: &Device,
     copy_texture: &TexelCopyTextureInfo,
     copy_size: &Extent3d,
     texture: &Arc<Texture>,
-    snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), ClearError> {
     let init_action = TextureInitTrackerAction {
         texture: texture.clone(),
@@ -648,13 +647,12 @@ fn handle_texture_init(
     };
 
     // Register the init action.
-    let immediate_inits = cmd_buf_data
+    let immediate_inits = state
         .texture_memory_actions
         .register_init_action(&{ init_action });
 
     // In rare cases we may need to insert an init operation immediately onto the command buffer.
     if !immediate_inits.is_empty() {
-        let cmd_buf_raw = cmd_buf_data.encoder.open()?;
         for init in immediate_inits {
             clear_texture(
                 &init.texture,
@@ -662,12 +660,12 @@ fn handle_texture_init(
                     mip_range: init.mip_level..(init.mip_level + 1),
                     layer_range: init.layer..(init.layer + 1),
                 },
-                cmd_buf_raw,
-                &mut cmd_buf_data.trackers.textures,
-                &device.alignments,
-                device.zero_buffer.as_ref(),
-                snatch_guard,
-                device.instance_flags,
+                state.raw_encoder,
+                &mut state.tracker.textures,
+                &state.device.alignments,
+                state.device.zero_buffer.as_ref(),
+                state.snatch_guard,
+                state.device.instance_flags,
             )?;
         }
     }
@@ -680,21 +678,17 @@ fn handle_texture_init(
 /// Ensure the source texture of a transfer is in the right initialization
 /// state, and record the state for after the transfer operation.
 fn handle_src_texture_init(
-    cmd_buf_data: &mut CommandBufferMutable,
-    device: &Device,
+    state: &mut EncodingState,
     source: &TexelCopyTextureInfo,
     copy_size: &Extent3d,
     texture: &Arc<Texture>,
-    snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), TransferError> {
     handle_texture_init(
+        state,
         MemoryInitKind::NeedsInitializedMemory,
-        cmd_buf_data,
-        device,
         source,
         copy_size,
         texture,
-        snatch_guard,
     )?;
     Ok(())
 }
@@ -704,12 +698,10 @@ fn handle_src_texture_init(
 /// Ensure the destination texture of a transfer is in the right initialization
 /// state, and record the state for after the transfer operation.
 fn handle_dst_texture_init(
-    cmd_buf_data: &mut CommandBufferMutable,
-    device: &Device,
-    destination: &TexelCopyTextureInfo,
+    state: &mut EncodingState,
+    destination: &wgt::TexelCopyTextureInfo<Arc<Texture>>,
     copy_size: &Extent3d,
     texture: &Arc<Texture>,
-    snatch_guard: &SnatchGuard<'_>,
 ) -> Result<(), TransferError> {
     // Attention: If we don't write full texture subresources, we need to a full
     // clear first since we don't track subrects. This means that in rare cases
@@ -725,15 +717,7 @@ fn handle_dst_texture_init(
         MemoryInitKind::ImplicitlyInitialized
     };
 
-    handle_texture_init(
-        dst_init_kind,
-        cmd_buf_data,
-        device,
-        destination,
-        copy_size,
-        texture,
-        snatch_guard,
-    )?;
+    handle_texture_init(state, dst_init_kind, destination, copy_size, texture)?;
     Ok(())
 }
 
@@ -742,9 +726,8 @@ fn handle_dst_texture_init(
 /// Ensures that the transfer will not read from uninitialized memory, and updates
 /// the initialization state information to reflect the transfer.
 fn handle_buffer_init(
-    cmd_buf_data: &mut CommandBufferMutable,
-    info: &TexelCopyBufferInfo,
-    buffer: &Arc<Buffer>,
+    state: &mut EncodingState,
+    info: &wgt::TexelCopyBufferInfo<Arc<Buffer>>,
     direction: CopySide,
     required_buffer_bytes_in_copy: BufferAddress,
     is_contiguous: bool,
@@ -752,6 +735,7 @@ fn handle_buffer_init(
     const ALIGN_SIZE: BufferAddress = wgt::COPY_BUFFER_ALIGNMENT;
     const ALIGN_MASK: BufferAddress = wgt::COPY_BUFFER_ALIGNMENT - 1;
 
+    let buffer = &info.buffer;
     let start = info.layout.offset;
     let end = info.layout.offset + required_buffer_bytes_in_copy;
     if !is_contiguous || direction == CopySide::Source {
@@ -767,13 +751,13 @@ fn handle_buffer_init(
         // Adjust the start/end outwards to 4B alignment.
         let aligned_start = start & !ALIGN_MASK;
         let aligned_end = (end + ALIGN_MASK) & !ALIGN_MASK;
-        cmd_buf_data.buffer_memory_init_actions.extend(
-            buffer.initialization_status.read().create_action(
+        state
+            .buffer_memory_init_actions
+            .extend(buffer.initialization_status.read().create_action(
                 buffer,
                 aligned_start..aligned_end,
                 MemoryInitKind::NeedsInitializedMemory,
-            ),
-        );
+            ));
     } else {
         // If the transfer will write a contiguous region of the buffer, then we
         // don't need to initialize that region.
@@ -787,7 +771,7 @@ fn handle_buffer_init(
         let aligned_start = (start + ALIGN_MASK) & !ALIGN_MASK;
         let aligned_end = end & !ALIGN_MASK;
         if aligned_start != start {
-            cmd_buf_data.buffer_memory_init_actions.extend(
+            state.buffer_memory_init_actions.extend(
                 buffer.initialization_status.read().create_action(
                     buffer,
                     aligned_start - ALIGN_SIZE..aligned_start,
@@ -796,7 +780,7 @@ fn handle_buffer_init(
             );
         }
         if aligned_start != aligned_end {
-            cmd_buf_data.buffer_memory_init_actions.extend(
+            state.buffer_memory_init_actions.extend(
                 buffer.initialization_status.read().create_action(
                     buffer,
                     aligned_start..aligned_end,
@@ -810,7 +794,7 @@ fn handle_buffer_init(
             // final size of the buffer. The final size of the buffer is not
             // readily available, but was rounded up to COPY_BUFFER_ALIGNMENT,
             // so no overrun is possible.
-            cmd_buf_data.buffer_memory_init_actions.extend(
+            state.buffer_memory_init_actions.extend(
                 buffer.initialization_status.read().create_action(
                     buffer,
                     aligned_end..aligned_end + ALIGN_SIZE,
@@ -840,17 +824,26 @@ impl Global {
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-        cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
-            copy_buffer_to_buffer(
-                cmd_buf_data,
-                hub,
-                &cmd_enc,
-                source,
-                source_offset,
-                destination,
-                destination_offset,
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut list) = cmd_buf_data.trace() {
+            list.push(TraceCommand::CopyBufferToBuffer {
+                src: source,
+                src_offset: source_offset,
+                dst: destination,
+                dst_offset: destination_offset,
                 size,
-            )
+            });
+        }
+
+        cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
+            Ok(ArcCommand::CopyBufferToBuffer {
+                src: self.resolve_buffer_id(source)?,
+                src_offset: source_offset,
+                dst: self.resolve_buffer_id(destination)?,
+                dst_offset: destination_offset,
+                size,
+            })
         })
     }
 
@@ -858,7 +851,7 @@ impl Global {
         &self,
         command_encoder_id: CommandEncoderId,
         source: &TexelCopyBufferInfo,
-        destination: &TexelCopyTextureInfo,
+        destination: &wgt::TexelCopyTextureInfo<TextureId>,
         copy_size: &Extent3d,
     ) -> Result<(), EncoderStateError> {
         profiling::scope!("CommandEncoder::copy_buffer_to_texture");
@@ -868,19 +861,39 @@ impl Global {
             destination.texture
         );
 
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
+        let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-        cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
-            copy_buffer_to_texture(cmd_buf_data, hub, &cmd_enc, source, destination, copy_size)
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut list) = cmd_buf_data.trace() {
+            list.push(TraceCommand::CopyBufferToTexture {
+                src: *source,
+                dst: *destination,
+                size: *copy_size,
+            });
+        }
+
+        cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
+            Ok(ArcCommand::CopyBufferToTexture {
+                src: wgt::TexelCopyBufferInfo::<Arc<Buffer>> {
+                    buffer: self.resolve_buffer_id(source.buffer)?,
+                    layout: source.layout,
+                },
+                dst: wgt::TexelCopyTextureInfo::<Arc<Texture>> {
+                    texture: self.resolve_texture_id(destination.texture)?,
+                    mip_level: destination.mip_level,
+                    origin: destination.origin,
+                    aspect: destination.aspect,
+                },
+                size: *copy_size,
+            })
         })
     }
 
     pub fn command_encoder_copy_texture_to_buffer(
         &self,
         command_encoder_id: CommandEncoderId,
-        source: &TexelCopyTextureInfo,
+        source: &wgt::TexelCopyTextureInfo<TextureId>,
         destination: &TexelCopyBufferInfo,
         copy_size: &Extent3d,
     ) -> Result<(), EncoderStateError> {
@@ -891,20 +904,40 @@ impl Global {
             destination.buffer
         );
 
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
+        let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-        cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
-            copy_texture_to_buffer(cmd_buf_data, hub, &cmd_enc, source, destination, copy_size)
+
+        #[cfg(feature = "trace")]
+        if let Some(list) = cmd_buf_data.trace() {
+            list.push(TraceCommand::CopyTextureToBuffer {
+                src: *source,
+                dst: *destination,
+                size: *copy_size,
+            });
+        }
+
+        cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
+            Ok(ArcCommand::CopyTextureToBuffer {
+                src: wgt::TexelCopyTextureInfo::<Arc<Texture>> {
+                    texture: self.resolve_texture_id(source.texture)?,
+                    mip_level: source.mip_level,
+                    origin: source.origin,
+                    aspect: source.aspect,
+                },
+                dst: wgt::TexelCopyBufferInfo::<Arc<Buffer>> {
+                    buffer: self.resolve_buffer_id(destination.buffer)?,
+                    layout: destination.layout,
+                },
+                size: *copy_size,
+            })
         })
     }
 
     pub fn command_encoder_copy_texture_to_texture(
         &self,
         command_encoder_id: CommandEncoderId,
-        source: &TexelCopyTextureInfo,
-        destination: &TexelCopyTextureInfo,
+        source: &wgt::TexelCopyTextureInfo<TextureId>,
+        destination: &wgt::TexelCopyTextureInfo<TextureId>,
         copy_size: &Extent3d,
     ) -> Result<(), EncoderStateError> {
         profiling::scope!("CommandEncoder::copy_texture_to_texture");
@@ -914,76 +947,76 @@ impl Global {
             destination.texture
         );
 
-        let hub = &self.hub;
-
-        let cmd_enc = hub.command_encoders.get(command_encoder_id);
+        let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-        cmd_buf_data.record_with(|cmd_buf_data| -> Result<(), CommandEncoderError> {
-            copy_texture_to_texture(cmd_buf_data, hub, &cmd_enc, source, destination, copy_size)
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut list) = cmd_buf_data.trace() {
+            list.push(TraceCommand::CopyTextureToTexture {
+                src: *source,
+                dst: *destination,
+                size: *copy_size,
+            });
+        }
+
+        cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
+            Ok(ArcCommand::CopyTextureToTexture {
+                src: wgt::TexelCopyTextureInfo {
+                    texture: self.resolve_texture_id(source.texture)?,
+                    mip_level: source.mip_level,
+                    origin: source.origin,
+                    aspect: source.aspect,
+                },
+                dst: wgt::TexelCopyTextureInfo {
+                    texture: self.resolve_texture_id(destination.texture)?,
+                    mip_level: destination.mip_level,
+                    origin: destination.origin,
+                    aspect: destination.aspect,
+                },
+                size: *copy_size,
+            })
         })
     }
 }
 
-fn copy_buffer_to_buffer(
-    cmd_buf_data: &mut CommandBufferMutable,
-    hub: &crate::hub::Hub,
-    cmd_enc: &Arc<super::CommandEncoder>,
-    source: BufferId,
+pub(super) fn copy_buffer_to_buffer(
+    state: &mut EncodingState,
+    src_buffer: &Arc<Buffer>,
     source_offset: BufferAddress,
-    destination: BufferId,
+    dst_buffer: &Arc<Buffer>,
     destination_offset: BufferAddress,
     size: Option<BufferAddress>,
 ) -> Result<(), CommandEncoderError> {
-    let device = &cmd_enc.device;
-    device.check_is_valid()?;
-
-    if source == destination {
+    if src_buffer.is_equal(dst_buffer) {
         return Err(TransferError::SameSourceDestinationBuffer.into());
     }
 
-    #[cfg(feature = "trace")]
-    if let Some(ref mut list) = cmd_buf_data.trace_commands {
-        list.push(TraceCommand::CopyBufferToBuffer {
-            src: source,
-            src_offset: source_offset,
-            dst: destination,
-            dst_offset: destination_offset,
-            size,
-        });
-    }
+    src_buffer.same_device(state.device)?;
 
-    let snatch_guard = device.snatchable_lock.read();
-
-    let src_buffer = hub.buffers.get(source).get()?;
-
-    src_buffer.same_device_as(cmd_enc.as_ref())?;
-
-    let src_pending = cmd_buf_data
-        .trackers
+    let src_pending = state
+        .tracker
         .buffers
-        .set_single(&src_buffer, wgt::BufferUses::COPY_SRC);
+        .set_single(src_buffer, wgt::BufferUses::COPY_SRC);
 
-    let src_raw = src_buffer.try_raw(&snatch_guard)?;
+    let src_raw = src_buffer.try_raw(state.snatch_guard)?;
     src_buffer
         .check_usage(BufferUsages::COPY_SRC)
         .map_err(TransferError::MissingBufferUsage)?;
     // expecting only a single barrier
-    let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer, &snatch_guard));
+    let src_barrier = src_pending.map(|pending| pending.into_hal(src_buffer, state.snatch_guard));
 
-    let dst_buffer = hub.buffers.get(destination).get()?;
+    dst_buffer.same_device(state.device)?;
 
-    dst_buffer.same_device_as(cmd_enc.as_ref())?;
-
-    let dst_pending = cmd_buf_data
-        .trackers
+    let dst_pending = state
+        .tracker
         .buffers
-        .set_single(&dst_buffer, wgt::BufferUses::COPY_DST);
+        .set_single(dst_buffer, wgt::BufferUses::COPY_DST);
 
-    let dst_raw = dst_buffer.try_raw(&snatch_guard)?;
+    let dst_raw = dst_buffer.try_raw(state.snatch_guard)?;
     dst_buffer
         .check_usage(BufferUsages::COPY_DST)
         .map_err(TransferError::MissingBufferUsage)?;
-    let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
+    let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer, state.snatch_guard));
 
     let (size, source_end_offset) = match size {
         Some(size) => (size, source_offset + size),
@@ -999,7 +1032,8 @@ fn copy_buffer_to_buffer(
     if destination_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
         return Err(TransferError::UnalignedBufferOffset(destination_offset).into());
     }
-    if !device
+    if !state
+        .device
         .downlevel
         .flags
         .contains(wgt::DownlevelFlags::UNRESTRICTED_INDEX_BUFFER)
@@ -1046,64 +1080,51 @@ fn copy_buffer_to_buffer(
     }
 
     // Make sure source is initialized memory and mark dest as initialized.
-    cmd_buf_data.buffer_memory_init_actions.extend(
-        dst_buffer.initialization_status.read().create_action(
-            &dst_buffer,
+    state
+        .buffer_memory_init_actions
+        .extend(dst_buffer.initialization_status.read().create_action(
+            dst_buffer,
             destination_offset..(destination_offset + size),
             MemoryInitKind::ImplicitlyInitialized,
-        ),
-    );
-    cmd_buf_data.buffer_memory_init_actions.extend(
-        src_buffer.initialization_status.read().create_action(
-            &src_buffer,
+        ));
+    state
+        .buffer_memory_init_actions
+        .extend(src_buffer.initialization_status.read().create_action(
+            src_buffer,
             source_offset..(source_offset + size),
             MemoryInitKind::NeedsInitializedMemory,
-        ),
-    );
+        ));
 
     let region = hal::BufferCopy {
         src_offset: source_offset,
         dst_offset: destination_offset,
         size: wgt::BufferSize::new(size).unwrap(),
     };
-    let cmd_buf_raw = cmd_buf_data.encoder.open()?;
     let barriers = src_barrier
         .into_iter()
         .chain(dst_barrier)
         .collect::<Vec<_>>();
     unsafe {
-        cmd_buf_raw.transition_buffers(&barriers);
-        cmd_buf_raw.copy_buffer_to_buffer(src_raw, dst_raw, &[region]);
+        state.raw_encoder.transition_buffers(&barriers);
+        state
+            .raw_encoder
+            .copy_buffer_to_buffer(src_raw, dst_raw, &[region]);
     }
 
     Ok(())
 }
 
-fn copy_buffer_to_texture(
-    cmd_buf_data: &mut CommandBufferMutable,
-    hub: &crate::hub::Hub,
-    cmd_enc: &Arc<super::CommandEncoder>,
-    source: &TexelCopyBufferInfo,
-    destination: &TexelCopyTextureInfo,
+pub(super) fn copy_buffer_to_texture(
+    state: &mut EncodingState,
+    source: &wgt::TexelCopyBufferInfo<Arc<Buffer>>,
+    destination: &wgt::TexelCopyTextureInfo<Arc<Texture>>,
     copy_size: &Extent3d,
 ) -> Result<(), CommandEncoderError> {
-    let device = &cmd_enc.device;
-    device.check_is_valid()?;
+    let dst_texture = &destination.texture;
+    let src_buffer = &source.buffer;
 
-    #[cfg(feature = "trace")]
-    if let Some(ref mut list) = cmd_buf_data.trace_commands {
-        list.push(TraceCommand::CopyBufferToTexture {
-            src: *source,
-            dst: *destination,
-            size: *copy_size,
-        });
-    }
-
-    let dst_texture = hub.textures.get(destination.texture).get()?;
-    let src_buffer = hub.buffers.get(source.buffer).get()?;
-
-    dst_texture.same_device_as(cmd_enc.as_ref())?;
-    src_buffer.same_device_as(cmd_enc.as_ref())?;
+    dst_texture.same_device(state.device)?;
+    src_buffer.same_device(state.device)?;
 
     let (hal_copy_size, array_layer_count) = validate_texture_copy_range(
         destination,
@@ -1112,12 +1133,10 @@ fn copy_buffer_to_texture(
         copy_size,
     )?;
 
-    let (dst_range, dst_base) = extract_texture_selector(destination, copy_size, &dst_texture)?;
+    let (dst_range, dst_base) = extract_texture_selector(destination, copy_size, dst_texture)?;
 
-    let snatch_guard = device.snatchable_lock.read();
-
-    let src_raw = src_buffer.try_raw(&snatch_guard)?;
-    let dst_raw = dst_texture.try_raw(&snatch_guard)?;
+    let src_raw = src_buffer.try_raw(state.snatch_guard)?;
+    let dst_raw = dst_texture.try_raw(state.snatch_guard)?;
 
     if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
         log::trace!("Ignoring copy_buffer_to_texture of size 0");
@@ -1127,30 +1146,23 @@ fn copy_buffer_to_texture(
     // Handle texture init *before* dealing with barrier transitions so we
     // have an easier time inserting "immediate-inits" that may be required
     // by prior discards in rare cases.
-    handle_dst_texture_init(
-        cmd_buf_data,
-        device,
-        destination,
-        copy_size,
-        &dst_texture,
-        &snatch_guard,
-    )?;
+    handle_dst_texture_init(state, destination, copy_size, dst_texture)?;
 
-    let src_pending = cmd_buf_data
-        .trackers
+    let src_pending = state
+        .tracker
         .buffers
-        .set_single(&src_buffer, wgt::BufferUses::COPY_SRC);
+        .set_single(src_buffer, wgt::BufferUses::COPY_SRC);
 
     src_buffer
         .check_usage(BufferUsages::COPY_SRC)
         .map_err(TransferError::MissingBufferUsage)?;
-    let src_barrier = src_pending.map(|pending| pending.into_hal(&src_buffer, &snatch_guard));
+    let src_barrier = src_pending.map(|pending| pending.into_hal(src_buffer, state.snatch_guard));
 
-    let dst_pending = cmd_buf_data.trackers.textures.set_single(
-        &dst_texture,
-        dst_range,
-        wgt::TextureUses::COPY_DST,
-    );
+    let dst_pending =
+        state
+            .tracker
+            .textures
+            .set_single(dst_texture, dst_range, wgt::TextureUses::COPY_DST);
     dst_texture
         .check_usage(TextureUsages::COPY_DST)
         .map_err(TransferError::MissingTextureUsage)?;
@@ -1179,15 +1191,15 @@ fn copy_buffer_to_texture(
         )?;
 
     if dst_texture.desc.format.is_depth_stencil_format() {
-        device
+        state
+            .device
             .require_downlevel_flags(wgt::DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES)
             .map_err(TransferError::from)?;
     }
 
     handle_buffer_init(
-        cmd_buf_data,
+        state,
         source,
-        &src_buffer,
         CopySide::Source,
         required_buffer_bytes_in_copy,
         is_contiguous,
@@ -1207,50 +1219,35 @@ fn copy_buffer_to_texture(
         })
         .collect::<Vec<_>>();
 
-    let cmd_buf_raw = cmd_buf_data.encoder.open()?;
     unsafe {
-        cmd_buf_raw.transition_textures(&dst_barrier);
-        cmd_buf_raw.transition_buffers(src_barrier.as_slice());
-        cmd_buf_raw.copy_buffer_to_texture(src_raw, dst_raw, &regions);
+        state.raw_encoder.transition_textures(&dst_barrier);
+        state.raw_encoder.transition_buffers(src_barrier.as_slice());
+        state
+            .raw_encoder
+            .copy_buffer_to_texture(src_raw, dst_raw, &regions);
     }
 
     Ok(())
 }
 
-fn copy_texture_to_buffer(
-    cmd_buf_data: &mut CommandBufferMutable,
-    hub: &crate::hub::Hub,
-    cmd_enc: &Arc<super::CommandEncoder>,
+pub(super) fn copy_texture_to_buffer(
+    state: &mut EncodingState,
     source: &TexelCopyTextureInfo,
-    destination: &TexelCopyBufferInfo,
+    destination: &wgt::TexelCopyBufferInfo<Arc<Buffer>>,
     copy_size: &Extent3d,
 ) -> Result<(), CommandEncoderError> {
-    let device = &cmd_enc.device;
-    device.check_is_valid()?;
+    let src_texture = &source.texture;
+    let dst_buffer = &destination.buffer;
 
-    #[cfg(feature = "trace")]
-    if let Some(list) = cmd_buf_data.trace_commands.as_mut() {
-        list.push(TraceCommand::CopyTextureToBuffer {
-            src: *source,
-            dst: *destination,
-            size: *copy_size,
-        });
-    }
-
-    let src_texture = hub.textures.get(source.texture).get()?;
-    let dst_buffer = hub.buffers.get(destination.buffer).get()?;
-
-    src_texture.same_device_as(cmd_enc.as_ref())?;
-    dst_buffer.same_device_as(cmd_enc.as_ref())?;
+    src_texture.same_device(state.device)?;
+    dst_buffer.same_device(state.device)?;
 
     let (hal_copy_size, array_layer_count) =
         validate_texture_copy_range(source, &src_texture.desc, CopySide::Source, copy_size)?;
 
-    let (src_range, src_base) = extract_texture_selector(source, copy_size, &src_texture)?;
+    let (src_range, src_base) = extract_texture_selector(source, copy_size, src_texture)?;
 
-    let snatch_guard = device.snatchable_lock.read();
-
-    let src_raw = src_texture.try_raw(&snatch_guard)?;
+    let src_raw = src_texture.try_raw(state.snatch_guard)?;
     src_texture
         .check_usage(TextureUsages::COPY_SRC)
         .map_err(TransferError::MissingTextureUsage)?;
@@ -1284,12 +1281,13 @@ fn copy_texture_to_buffer(
         )?;
 
     if src_texture.desc.format.is_depth_stencil_format() {
-        device
+        state
+            .device
             .require_downlevel_flags(wgt::DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES)
             .map_err(TransferError::from)?;
     }
 
-    let dst_raw = dst_buffer.try_raw(&snatch_guard)?;
+    let dst_raw = dst_buffer.try_raw(state.snatch_guard)?;
     dst_buffer
         .check_usage(BufferUsages::COPY_DST)
         .map_err(TransferError::MissingBufferUsage)?;
@@ -1302,35 +1300,27 @@ fn copy_texture_to_buffer(
     // Handle texture init *before* dealing with barrier transitions so we
     // have an easier time inserting "immediate-inits" that may be required
     // by prior discards in rare cases.
-    handle_src_texture_init(
-        cmd_buf_data,
-        device,
-        source,
-        copy_size,
-        &src_texture,
-        &snatch_guard,
-    )?;
+    handle_src_texture_init(state, source, copy_size, src_texture)?;
 
-    let src_pending = cmd_buf_data.trackers.textures.set_single(
-        &src_texture,
-        src_range,
-        wgt::TextureUses::COPY_SRC,
-    );
+    let src_pending =
+        state
+            .tracker
+            .textures
+            .set_single(src_texture, src_range, wgt::TextureUses::COPY_SRC);
     let src_barrier = src_pending
         .map(|pending| pending.into_hal(src_raw))
         .collect::<Vec<_>>();
 
-    let dst_pending = cmd_buf_data
-        .trackers
+    let dst_pending = state
+        .tracker
         .buffers
-        .set_single(&dst_buffer, wgt::BufferUses::COPY_DST);
+        .set_single(dst_buffer, wgt::BufferUses::COPY_DST);
 
-    let dst_barrier = dst_pending.map(|pending| pending.into_hal(&dst_buffer, &snatch_guard));
+    let dst_barrier = dst_pending.map(|pending| pending.into_hal(dst_buffer, state.snatch_guard));
 
     handle_buffer_init(
-        cmd_buf_data,
+        state,
         destination,
-        &dst_buffer,
         CopySide::Destination,
         required_buffer_bytes_in_copy,
         is_contiguous,
@@ -1349,43 +1339,31 @@ fn copy_texture_to_buffer(
             }
         })
         .collect::<Vec<_>>();
-    let cmd_buf_raw = cmd_buf_data.encoder.open()?;
     unsafe {
-        cmd_buf_raw.transition_buffers(dst_barrier.as_slice());
-        cmd_buf_raw.transition_textures(&src_barrier);
-        cmd_buf_raw.copy_texture_to_buffer(src_raw, wgt::TextureUses::COPY_SRC, dst_raw, &regions);
+        state.raw_encoder.transition_buffers(dst_barrier.as_slice());
+        state.raw_encoder.transition_textures(&src_barrier);
+        state.raw_encoder.copy_texture_to_buffer(
+            src_raw,
+            wgt::TextureUses::COPY_SRC,
+            dst_raw,
+            &regions,
+        );
     }
 
     Ok(())
 }
 
-fn copy_texture_to_texture(
-    cmd_buf_data: &mut CommandBufferMutable,
-    hub: &crate::hub::Hub,
-    cmd_enc: &Arc<super::CommandEncoder>,
+pub(super) fn copy_texture_to_texture(
+    state: &mut EncodingState,
     source: &TexelCopyTextureInfo,
     destination: &TexelCopyTextureInfo,
     copy_size: &Extent3d,
 ) -> Result<(), CommandEncoderError> {
-    let device = &cmd_enc.device;
-    device.check_is_valid()?;
+    let src_texture = &source.texture;
+    let dst_texture = &destination.texture;
 
-    let snatch_guard = device.snatchable_lock.read();
-
-    #[cfg(feature = "trace")]
-    if let Some(ref mut list) = cmd_buf_data.trace_commands {
-        list.push(TraceCommand::CopyTextureToTexture {
-            src: *source,
-            dst: *destination,
-            size: *copy_size,
-        });
-    }
-
-    let src_texture = hub.textures.get(source.texture).get()?;
-    let dst_texture = hub.textures.get(destination.texture).get()?;
-
-    src_texture.same_device_as(cmd_enc.as_ref())?;
-    dst_texture.same_device_as(cmd_enc.as_ref())?;
+    src_texture.same_device(state.device)?;
+    dst_texture.same_device(state.device)?;
 
     // src and dst texture format must be copy-compatible
     // https://gpuweb.github.io/gpuweb/#copy-compatible
@@ -1407,7 +1385,7 @@ fn copy_texture_to_texture(
         copy_size,
     )?;
 
-    if Arc::as_ptr(&src_texture) == Arc::as_ptr(&dst_texture) {
+    if Arc::as_ptr(src_texture) == Arc::as_ptr(dst_texture) {
         validate_copy_within_same_texture(
             source,
             destination,
@@ -1416,8 +1394,8 @@ fn copy_texture_to_texture(
         )?;
     }
 
-    let (src_range, src_tex_base) = extract_texture_selector(source, copy_size, &src_texture)?;
-    let (dst_range, dst_tex_base) = extract_texture_selector(destination, copy_size, &dst_texture)?;
+    let (src_range, src_tex_base) = extract_texture_selector(source, copy_size, src_texture)?;
+    let (dst_range, dst_tex_base) = extract_texture_selector(destination, copy_size, dst_texture)?;
     let src_texture_aspects = hal::FormatAspects::from(src_texture.desc.format);
     let dst_texture_aspects = hal::FormatAspects::from(dst_texture.desc.format);
     if src_tex_base.aspect != src_texture_aspects {
@@ -1438,28 +1416,14 @@ fn copy_texture_to_texture(
     // Handle texture init *before* dealing with barrier transitions so we
     // have an easier time inserting "immediate-inits" that may be required
     // by prior discards in rare cases.
-    handle_src_texture_init(
-        cmd_buf_data,
-        device,
-        source,
-        copy_size,
-        &src_texture,
-        &snatch_guard,
-    )?;
-    handle_dst_texture_init(
-        cmd_buf_data,
-        device,
-        destination,
-        copy_size,
-        &dst_texture,
-        &snatch_guard,
-    )?;
+    handle_src_texture_init(state, source, copy_size, src_texture)?;
+    handle_dst_texture_init(state, destination, copy_size, dst_texture)?;
 
-    let src_raw = src_texture.try_raw(&snatch_guard)?;
+    let src_raw = src_texture.try_raw(state.snatch_guard)?;
     src_texture
         .check_usage(TextureUsages::COPY_SRC)
         .map_err(TransferError::MissingTextureUsage)?;
-    let dst_raw = dst_texture.try_raw(&snatch_guard)?;
+    let dst_raw = dst_texture.try_raw(state.snatch_guard)?;
     dst_texture
         .check_usage(TextureUsages::COPY_DST)
         .map_err(TransferError::MissingTextureUsage)?;
@@ -1469,11 +1433,11 @@ fn copy_texture_to_texture(
         return Ok(());
     }
 
-    let src_pending = cmd_buf_data.trackers.textures.set_single(
-        &src_texture,
-        src_range,
-        wgt::TextureUses::COPY_SRC,
-    );
+    let src_pending =
+        state
+            .tracker
+            .textures
+            .set_single(src_texture, src_range, wgt::TextureUses::COPY_SRC);
 
     //TODO: try to avoid this the collection. It's needed because both
     // `src_pending` and `dst_pending` try to hold `trackers.textures` mutably.
@@ -1481,11 +1445,11 @@ fn copy_texture_to_texture(
         .map(|pending| pending.into_hal(src_raw))
         .collect();
 
-    let dst_pending = cmd_buf_data.trackers.textures.set_single(
-        &dst_texture,
-        dst_range,
-        wgt::TextureUses::COPY_DST,
-    );
+    let dst_pending =
+        state
+            .tracker
+            .textures
+            .set_single(dst_texture, dst_range, wgt::TextureUses::COPY_DST);
     barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_raw)));
 
     let hal_copy_size = hal::CopyExtent {
@@ -1520,10 +1484,14 @@ fn copy_texture_to_texture(
     } else {
         regions.collect::<Vec<_>>()
     };
-    let cmd_buf_raw = cmd_buf_data.encoder.open()?;
     unsafe {
-        cmd_buf_raw.transition_textures(&barriers);
-        cmd_buf_raw.copy_texture_to_texture(src_raw, wgt::TextureUses::COPY_SRC, dst_raw, &regions);
+        state.raw_encoder.transition_textures(&barriers);
+        state.raw_encoder.copy_texture_to_texture(
+            src_raw,
+            wgt::TextureUses::COPY_SRC,
+            dst_raw,
+            &regions,
+        );
     }
 
     Ok(())

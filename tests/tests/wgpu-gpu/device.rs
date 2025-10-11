@@ -504,7 +504,7 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
         // Make sure the device queues are empty, which ensures that the closure
         // has been called.
         assert!(ctx
-            .async_poll(wgpu::PollType::wait())
+            .async_poll(wgpu::PollType::wait_indefinitely())
             .await
             .unwrap()
             .is_queue_empty());

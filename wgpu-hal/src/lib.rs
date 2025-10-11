@@ -203,7 +203,7 @@
 //! [wiki-debug]: https://github.com/gfx-rs/wgpu/wiki/Debugging-wgpu-Applications
 
 #![no_std]
-#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![allow(
     // this happens on the GL backend, where it is both thread safe and non-thread safe in the same code.
     clippy::arc_with_non_send_sync,
@@ -981,6 +981,9 @@ pub trait Device: WasmNotSendSync {
     /// Calling `wait` with a lower [`FenceValue`] than `fence`'s current value
     /// returns immediately.
     ///
+    /// If `timeout` is provided, the function will block indefinitely or until
+    /// an error is encountered.
+    ///
     /// Returns `Ok(true)` on success and `Ok(false)` on timeout.
     ///
     /// [`Fence`]: Api::Fence
@@ -989,7 +992,7 @@ pub trait Device: WasmNotSendSync {
         &self,
         fence: &<Self::A as Api>::Fence,
         value: FenceValue,
-        timeout_ms: u32,
+        timeout: Option<core::time::Duration>,
     ) -> Result<bool, DeviceError>;
 
     /// Start a graphics debugger capture.
@@ -1945,7 +1948,7 @@ pub struct SamplerDescriptor<'a> {
     pub address_modes: [wgt::AddressMode; 3],
     pub mag_filter: wgt::FilterMode,
     pub min_filter: wgt::FilterMode,
-    pub mipmap_filter: wgt::FilterMode,
+    pub mipmap_filter: wgt::MipmapFilterMode,
     pub lod_clamp: Range<f32>,
     pub compare: Option<wgt::CompareFunction>,
     // Must in the range [1, 16].

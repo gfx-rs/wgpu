@@ -244,7 +244,7 @@ impl ToWgsl for crate::StorageFormat {
             Sf::Bgra8Unorm => "bgra8unorm",
             Sf::Rgb10a2Uint => "rgb10a2uint",
             Sf::Rgb10a2Unorm => "rgb10a2unorm",
-            Sf::Rg11b10Ufloat => "rg11b10float",
+            Sf::Rg11b10Ufloat => "rg11b10ufloat",
             Sf::R64Uint => "r64uint",
             Sf::Rg32Uint => "rg32uint",
             Sf::Rg32Sint => "rg32sint",

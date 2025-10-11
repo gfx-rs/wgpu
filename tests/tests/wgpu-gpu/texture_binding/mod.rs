@@ -181,7 +181,7 @@ fn single_scalar_load(ctx: TestingContext) {
         send.send(()).expect("Thread should wait for receive");
     });
     // Poll to run map.
-    ctx.device.poll(PollType::Wait).unwrap();
+    ctx.device.poll(PollType::wait_indefinitely()).unwrap();
     recv.recv_timeout(Duration::from_secs(10))
         .expect("mapping should not take this long");
     let val = *bytemuck::from_bytes::<[f32; 4]>(&buffer.slice(..).get_mapped_range());

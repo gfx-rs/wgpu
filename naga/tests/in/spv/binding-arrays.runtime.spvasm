@@ -1,0 +1,60 @@
+; SPIR-V
+; Version: 1.5
+; Generator: Khronos Slang Compiler; 0
+; Bound: 33
+; Schema: 0
+               OpCapability RuntimeDescriptorArray
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Fragment %main "main" %textures %linear_sampler %entryPointParam_main %input_texture_coordinates %input_texture_index
+               OpExecutionMode %main OriginUpperLeft
+               OpSource Slang 1
+               OpName %input_texture_coordinates "input.texture_coordinates"
+               OpName %input_texture_index "input.texture_index"
+               OpName %textures "textures"
+               OpName %linear_sampler "linear_sampler"
+               OpName %sampledImage "sampledImage"
+               OpName %sampled "sampled"
+               OpName %entryPointParam_main "entryPointParam_main"
+               OpName %main "main"
+               OpDecorate %input_texture_coordinates Location 0
+               OpDecorate %input_texture_index Location 1
+               OpDecorate %input_texture_index Flat
+               OpDecorate %textures Binding 0
+               OpDecorate %textures DescriptorSet 0
+               OpDecorate %linear_sampler Binding 1
+               OpDecorate %linear_sampler DescriptorSet 0
+               OpDecorate %entryPointParam_main Location 0
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+      %float = OpTypeFloat 32
+    %v2float = OpTypeVector %float 2
+%_ptr_Input_v2float = OpTypePointer Input %v2float
+       %uint = OpTypeInt 32 0
+%_ptr_Input_uint = OpTypePointer Input %uint
+         %15 = OpTypeImage %float 2D 2 0 0 1 Unknown
+%_runtimearr_15 = OpTypeRuntimeArray %15
+%_ptr_UniformConstant__runtimearr_15 = OpTypePointer UniformConstant %_runtimearr_15
+%_ptr_UniformConstant_15 = OpTypePointer UniformConstant %15
+         %22 = OpTypeSampler
+%_ptr_UniformConstant_22 = OpTypePointer UniformConstant %22
+         %26 = OpTypeSampledImage %15
+    %v4float = OpTypeVector %float 4
+%_ptr_Output_v4float = OpTypePointer Output %v4float
+%input_texture_coordinates = OpVariable %_ptr_Input_v2float Input
+%input_texture_index = OpVariable %_ptr_Input_uint Input
+   %textures = OpVariable %_ptr_UniformConstant__runtimearr_15 UniformConstant
+%linear_sampler = OpVariable %_ptr_UniformConstant_22 UniformConstant
+%entryPointParam_main = OpVariable %_ptr_Output_v4float Output
+       %main = OpFunction %void None %3
+          %4 = OpLabel
+          %7 = OpLoad %v2float %input_texture_coordinates
+         %11 = OpLoad %uint %input_texture_index
+         %19 = OpAccessChain %_ptr_UniformConstant_15 %textures %11
+         %21 = OpLoad %15 %19
+         %23 = OpLoad %22 %linear_sampler
+%sampledImage = OpSampledImage %26 %21 %23
+    %sampled = OpImageSampleImplicitLod %v4float %sampledImage %7 None
+               OpStore %entryPointParam_main %sampled
+               OpReturn
+               OpFunctionEnd

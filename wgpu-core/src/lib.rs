@@ -17,7 +17,7 @@
     ),
     allow(unused, clippy::let_and_return)
 )]
-#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![allow(
     // It is much clearer to assert negative conditions with eq! false
     clippy::bool_assert_comparison,

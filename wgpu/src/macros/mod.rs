@@ -77,6 +77,35 @@ fn test_vertex_attr_array() {
     assert_eq!(attrs[1].shader_location, 3);
 }
 
+#[macro_export]
+#[doc(hidden)]
+macro_rules! include_spirv_source {
+    ($($token:tt)*) => {
+        {
+            // FIXME(MSRV): when bumping to 1.89, use [u8; _] here
+            const SPIRV_SOURCE: [
+                u8;
+                $crate::__macro_helpers::include_bytes!($($token)*).len()
+            ] = *$crate::__macro_helpers::include_bytes!($($token)*);
+            const SPIRV_LEN: usize = SPIRV_SOURCE.len() / 4;
+            const SPIRV_WORDS: [u32; SPIRV_LEN] = $crate::util::make_spirv_const(SPIRV_SOURCE);
+            &SPIRV_WORDS
+        }
+    }
+}
+
+#[test]
+fn make_spirv_le_pass() {
+    static SPIRV: &[u32] = include_spirv_source!("le-aligned.spv");
+    assert_eq!(SPIRV, &[0x07230203, 0x11223344]);
+}
+
+#[test]
+fn make_spirv_be_pass() {
+    static SPIRV: &[u32] = include_spirv_source!("be-aligned.spv");
+    assert_eq!(SPIRV, &[0x07230203, 0x11223344]);
+}
+
 /// Macro to load a SPIR-V module statically.
 ///
 /// It ensures the word alignment as well as the magic number.
@@ -90,11 +119,17 @@ macro_rules! include_spirv {
             //log::info!("including '{}'", $($token)*);
             $crate::ShaderModuleDescriptor {
                 label: Some($($token)*),
-                source: $crate::util::make_spirv(include_bytes!($($token)*)),
+                source: $crate::ShaderSource::SpirV(
+                    $crate::__macro_helpers::Cow::Borrowed($crate::include_spirv_source!($($token)*))
+                ),
             }
         }
     };
 }
+
+#[cfg(all(feature = "spirv", test))]
+#[expect(dead_code)]
+static SPIRV: crate::ShaderModuleDescriptor<'_> = include_spirv!("le-aligned.spv");
 
 /// Macro to load raw SPIR-V data statically, for use with [`Features::EXPERIMENTAL_PASSTHROUGH_SHADERS`].
 ///
@@ -108,13 +143,11 @@ macro_rules! include_spirv_raw {
             //log::info!("including '{}'", $($token)*);
             $crate::ShaderModuleDescriptorPassthrough {
                 label: $crate::__macro_helpers::Some($($token)*),
-                spirv: Some($crate::util::make_spirv_raw($crate::__macro_helpers::include_bytes!($($token)*))),
-
-                entry_point: "".to_owned(),
+                spirv: Some($crate::__macro_helpers::Cow::Borrowed($crate::include_spirv_source!($($token)*))),
+                entry_point: $crate::__macro_helpers::String::new(),
                 // This is unused for SPIR-V
                 num_workgroups: (0, 0, 0),
-                reflection: None,
-                shader_runtime_checks: $crate::ShaderRuntimeChecks::unchecked(),
+                runtime_checks: $crate::ShaderRuntimeChecks::unchecked(),
                 dxil: None,
                 msl: None,
                 hlsl: None,
@@ -124,6 +157,11 @@ macro_rules! include_spirv_raw {
         }
     };
 }
+
+#[cfg(test)]
+#[expect(dead_code)]
+static SPIRV_RAW: crate::ShaderModuleDescriptorPassthrough<'_> =
+    include_spirv_raw!("le-aligned.spv");
 
 /// Load WGSL source code from a file at compile time.
 ///
@@ -232,7 +270,7 @@ macro_rules! hal_type_gles {
 
 #[doc(hidden)]
 pub mod helpers {
-    pub use alloc::borrow::Cow;
+    pub use alloc::{borrow::Cow, string::String};
     pub use core::{include_bytes, include_str};
     pub use Some;
 }

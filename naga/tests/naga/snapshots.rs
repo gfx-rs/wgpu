@@ -7,7 +7,7 @@ const DIR_OUT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/out");
 #[allow(unused_variables)]
 fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&str>) {
     let params = input.read_parameters(DIR_IN);
-    let name = &input.file_name;
+    let name = input.file_name.display().to_string();
 
     let targets = params.targets.unwrap();
 
@@ -44,11 +44,7 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
         .subgroup_operations(subgroup_operations)
         .validate(module)
         .unwrap_or_else(|err| {
-            panic!(
-                "Naga module validation failed on test `{}`:\n{:?}",
-                name.display(),
-                err
-            );
+            panic!("Naga module validation failed on test `{name}`:\n{err:?}");
         });
 
     let info = {
@@ -73,11 +69,7 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
             .subgroup_operations(subgroup_operations)
             .validate(module)
             .unwrap_or_else(|err| {
-                panic!(
-                    "Post-compaction module validation failed on test '{}':\n<{:?}",
-                    name.display(),
-                    err,
-                )
+                panic!("Post-compaction module validation failed on test '{name}':\n<{err:?}")
             })
     };
 
@@ -94,7 +86,7 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
         if let Some(source_code) = source_code {
             debug_info = Some(naga::back::spv::DebugInfo {
                 source_code,
-                file_name: name.as_path().into(),
+                file_name: &name,
                 // wgpu#6266: we technically know all the information here to
                 // produce the valid language but it's not too important for
                 // validation purposes

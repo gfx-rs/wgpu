@@ -313,6 +313,14 @@ pub enum StageError {
     MultipleEntryPointsFound,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+    #[error(
+        "Location[{location}] {var}'s index exceeds the `max_color_attachments` limit ({limit})"
+    )]
+    ColorAttachmentLocationTooLarge {
+        location: u32,
+        var: InterfaceVar,
+        limit: u32,
+    },
 }
 
 impl WebGpuError for StageError {
@@ -334,7 +342,8 @@ impl WebGpuError for StageError {
             | Self::TooManyVaryings { .. }
             | Self::MissingEntryPoint(..)
             | Self::NoEntryPointFound
-            | Self::MultipleEntryPointsFound => return ErrorType::Validation,
+            | Self::MultipleEntryPointsFound
+            | Self::ColorAttachmentLocationTooLarge { .. } => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
@@ -1317,29 +1326,55 @@ impl Interface {
             }
         }
 
-        if shader_stage == naga::ShaderStage::Vertex {
-            for output in entry_point.outputs.iter() {
-                //TODO: count builtins towards the limit?
-                inter_stage_components += match *output {
-                    Varying::Local { ref iv, .. } => iv.ty.dim.num_components(),
-                    Varying::BuiltIn(_) => 0,
-                };
+        match shader_stage {
+            naga::ShaderStage::Vertex => {
+                for output in entry_point.outputs.iter() {
+                    //TODO: count builtins towards the limit?
+                    inter_stage_components += match *output {
+                        Varying::Local { ref iv, .. } => iv.ty.dim.num_components(),
+                        Varying::BuiltIn(_) => 0,
+                    };
 
-                if let Some(
-                    cmp @ wgt::CompareFunction::Equal | cmp @ wgt::CompareFunction::NotEqual,
-                ) = compare_function
-                {
-                    if let Varying::BuiltIn(naga::BuiltIn::Position { invariant: false }) = *output
+                    if let Some(
+                        cmp @ wgt::CompareFunction::Equal | cmp @ wgt::CompareFunction::NotEqual,
+                    ) = compare_function
                     {
-                        log::warn!(
-                            "Vertex shader with entry point {entry_point_name} outputs a @builtin(position) without the @invariant \
-                            attribute and is used in a pipeline with {cmp:?}. On some machines, this can cause bad artifacting as {cmp:?} assumes \
-                            the values output from the vertex shader exactly match the value in the depth buffer. The @invariant attribute on the \
-                            @builtin(position) vertex output ensures that the exact same pixel depths are used every render."
-                        );
+                        if let Varying::BuiltIn(naga::BuiltIn::Position { invariant: false }) =
+                            *output
+                        {
+                            log::warn!(
+                                concat!(
+                                    "Vertex shader with entry point {} outputs a ",
+                                    "@builtin(position) without the @invariant attribute and ",
+                                    "is used in a pipeline with {cmp:?}. On some machines, ",
+                                    "this can cause bad artifacting as {cmp:?} assumes the ",
+                                    "values output from the vertex shader exactly match the ",
+                                    "value in the depth buffer. The @invariant attribute on the ",
+                                    "@builtin(position) vertex output ensures that the exact ",
+                                    "same pixel depths are used every render."
+                                ),
+                                entry_point_name,
+                                cmp = cmp
+                            );
+                        }
                     }
                 }
             }
+            naga::ShaderStage::Fragment => {
+                for output in &entry_point.outputs {
+                    let &Varying::Local { location, ref iv } = output else {
+                        continue;
+                    };
+                    if location >= self.limits.max_color_attachments {
+                        return Err(StageError::ColorAttachmentLocationTooLarge {
+                            location,
+                            var: iv.clone(),
+                            limit: self.limits.max_color_attachments,
+                        });
+                    }
+                }
+            }
+            _ => (),
         }
 
         if inter_stage_components > self.limits.max_inter_stage_shader_components {
@@ -1357,6 +1392,7 @@ impl Interface {
                 Varying::BuiltIn(_) => None,
             })
             .collect();
+
         Ok(outputs)
     }
 

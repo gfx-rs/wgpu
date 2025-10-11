@@ -267,9 +267,12 @@ async fn draw_test_with_reports(
     let report = global_report.hub_report();
     assert_eq!(report.command_buffers.num_allocated, 0);
 
-    ctx.async_poll(wgpu::PollType::wait_for(submit_index))
-        .await
-        .unwrap();
+    ctx.async_poll(wgpu::PollType::Wait {
+        submission_index: Some(submit_index),
+        timeout: None,
+    })
+    .await
+    .unwrap();
 
     let global_report = ctx.instance.generate_report().unwrap();
     let report = global_report.hub_report();

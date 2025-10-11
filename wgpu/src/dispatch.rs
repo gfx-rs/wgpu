@@ -39,6 +39,7 @@ trait_alias!(RequestAdapterFuture: Future<Output = Result<DispatchAdapter, wgt::
 trait_alias!(RequestDeviceFuture: Future<Output = Result<(DispatchDevice, DispatchQueue), crate::RequestDeviceError>> + WasmNotSend + 'static);
 trait_alias!(PopErrorScopeFuture: Future<Output = Option<crate::Error>> + WasmNotSend + 'static);
 trait_alias!(ShaderCompilationInfoFuture: Future<Output = crate::CompilationInfo> + WasmNotSend + 'static);
+trait_alias!(EnumerateAdapterFuture: Future<Output = Vec<DispatchAdapter>> + WasmNotSend + 'static);
 
 // We can't use trait aliases here, as you can't convert from a dyn Trait to dyn Supertrait _yet_.
 #[cfg(send_sync)]
@@ -93,6 +94,9 @@ pub trait InstanceInterface: CommonTraits {
 
     #[cfg(feature = "wgsl")]
     fn wgsl_language_features(&self) -> crate::WgslLanguageFeatures;
+
+    fn enumerate_adapters(&self, backends: crate::Backends)
+        -> Pin<Box<dyn EnumerateAdapterFuture>>;
 }
 
 pub trait AdapterInterface: CommonTraits {
