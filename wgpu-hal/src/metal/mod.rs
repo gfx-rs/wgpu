@@ -653,11 +653,15 @@ impl<T> MultiStageData<T> {
         iter::once(&self.vs)
             .chain(iter::once(&self.fs))
             .chain(iter::once(&self.cs))
+            .chain(iter::once(&self.ts))
+            .chain(iter::once(&self.ms))
     }
     fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = &'a mut T> {
         iter::once(&mut self.vs)
             .chain(iter::once(&mut self.fs))
             .chain(iter::once(&mut self.cs))
+            .chain(iter::once(&mut self.ts))
+            .chain(iter::once(&mut self.ms))
     }
 }
 
