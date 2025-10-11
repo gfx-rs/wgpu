@@ -679,7 +679,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         });
                     }
                 }
-                encoder.set_vertex_amplification_count(msb as u64, Some(&maps));
+                encoder.set_vertex_amplification_count(mv.count_ones() as u64, Some(&maps));
             }
             if let Some(label) = desc.label {
                 encoder.set_label(label);
