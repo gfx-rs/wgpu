@@ -7,4 +7,5 @@ mod device;
 mod experimental;
 mod external_texture;
 mod instance;
+mod render_pipeline;
 mod texture;

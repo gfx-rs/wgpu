@@ -69,6 +69,22 @@ impl Texture {
         self.inner.as_custom()
     }
 
+    #[cfg(custom)]
+    /// Creates a texture from already created custom implementation with the given description
+    pub fn from_custom<T: custom::TextureInterface>(
+        texture: T,
+        desc: &TextureDescriptor<'_>,
+    ) -> Self {
+        Self {
+            inner: dispatch::DispatchTexture::custom(texture),
+            descriptor: TextureDescriptor {
+                label: None,
+                view_formats: &[],
+                ..desc.clone()
+            },
+        }
+    }
+
     /// Creates a view of this texture, specifying an interpretation of its texels and
     /// possibly a subset of its layers and mip levels.
     ///
