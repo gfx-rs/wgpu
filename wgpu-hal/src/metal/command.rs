@@ -1017,7 +1017,28 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 );
             }
         }
-        if pipeline.ts_info.is_some() {
+        if let Some(ts_info) = &pipeline.ts_info {
+            // update the threadgroup memory sizes
+            while self.state.stage_infos.ms.work_group_memory_sizes.len()
+                < ts_info.work_group_memory_sizes.len()
+            {
+                self.state.stage_infos.ms.work_group_memory_sizes.push(0);
+            }
+            for (index, (cur_size, pipeline_size)) in self
+                .state
+                .stage_infos
+                .ms
+                .work_group_memory_sizes
+                .iter_mut()
+                .zip(ts_info.work_group_memory_sizes.iter())
+                .enumerate()
+            {
+                let size = pipeline_size.next_multiple_of(16);
+                if *cur_size != size {
+                    *cur_size = size;
+                    encoder.set_object_threadgroup_memory_length(index as _, size as _);
+                }
+            }
             if let Some((index, sizes)) = self
                 .state
                 .make_sizes_buffer_update(naga::ShaderStage::Task, &mut self.temp.binding_sizes)
@@ -1030,32 +1051,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
             }
         }
         if let Some(_ms_info) = &pipeline.ms_info {
-            // TODO:
+            // So there isn't an equivalent to
             // https://developer.apple.com/documentation/metal/mtlrendercommandencoder/setthreadgroupmemorylength(_:offset:index:)
-            // doesn't exist in current metal-rs version for some reason. Maybe put it off until objc2 arrives?
-            // Also, this will need to be added to the task stage
-            /*
-            // update the threadgroup memory sizes
-            while self.state.stage_infos.ms.work_group_memory_sizes.len()
-                < ms_info.work_group_memory_sizes.len()
-            {
-                self.state.stage_infos.ms.work_group_memory_sizes.push(0);
-            }
-            for (index, (cur_size, pipeline_size)) in self
-                .state
-                .stage_infos
-                .ms
-                .work_group_memory_sizes
-                .iter_mut()
-                .zip(ms_info.work_group_memory_sizes.iter())
-                .enumerate()
-            {
-                let size = pipeline_size.next_multiple_of(16);
-                if *cur_size != size {
-                    *cur_size = size;
-                    encoder.set_threadgroup_memory_length(index as _, size as _);
-                }
-            }*/
+            // for mesh shaders. This is probably because the CPU has less control over the dispatch sizes and such. Interestingly
+            // it also affects mesh shaders without task/object shaders, even though none of compute, task or fragment shaders
+            // behave this way.
             if let Some((index, sizes)) = self
                 .state
                 .make_sizes_buffer_update(naga::ShaderStage::Mesh, &mut self.temp.binding_sizes)
