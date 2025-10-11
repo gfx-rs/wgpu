@@ -1948,7 +1948,7 @@ pub struct SamplerDescriptor<'a> {
     pub address_modes: [wgt::AddressMode; 3],
     pub mag_filter: wgt::FilterMode,
     pub min_filter: wgt::FilterMode,
-    pub mipmap_filter: wgt::FilterMode,
+    pub mipmap_filter: wgt::MipmapFilterMode,
     pub lod_clamp: Range<f32>,
     pub compare: Option<wgt::CompareFunction>,
     // Must in the range [1, 16].

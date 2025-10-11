@@ -385,7 +385,7 @@ impl<A: hal::Api> Example<A> {
             address_modes: [wgpu_types::AddressMode::ClampToEdge; 3],
             mag_filter: wgpu_types::FilterMode::Linear,
             min_filter: wgpu_types::FilterMode::Nearest,
-            mipmap_filter: wgpu_types::FilterMode::Nearest,
+            mipmap_filter: wgpu_types::MipmapFilterMode::Nearest,
             lod_clamp: 0.0..32.0,
             compare: None,
             anisotropy_clamp: 1,

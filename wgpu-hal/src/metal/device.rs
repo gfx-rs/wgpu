@@ -566,11 +566,11 @@ impl crate::Device for super::Device {
             descriptor.set_min_filter(conv::map_filter_mode(desc.min_filter));
             descriptor.set_mag_filter(conv::map_filter_mode(desc.mag_filter));
             descriptor.set_mip_filter(match desc.mipmap_filter {
-                wgt::FilterMode::Nearest if desc.lod_clamp == (0.0..0.0) => {
+                wgt::MipmapFilterMode::Nearest if desc.lod_clamp == (0.0..0.0) => {
                     MTLSamplerMipFilter::NotMipmapped
                 }
-                wgt::FilterMode::Nearest => MTLSamplerMipFilter::Nearest,
-                wgt::FilterMode::Linear => MTLSamplerMipFilter::Linear,
+                wgt::MipmapFilterMode::Nearest => MTLSamplerMipFilter::Nearest,
+                wgt::MipmapFilterMode::Linear => MTLSamplerMipFilter::Linear,
             });
 
             let [s, t, r] = desc.address_modes;

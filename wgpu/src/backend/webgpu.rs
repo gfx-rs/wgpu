@@ -675,10 +675,10 @@ fn map_filter_mode(mode: wgt::FilterMode) -> webgpu_sys::GpuFilterMode {
     }
 }
 
-fn map_mipmap_filter_mode(mode: wgt::FilterMode) -> webgpu_sys::GpuMipmapFilterMode {
+fn map_mipmap_filter_mode(mode: wgt::MipmapFilterMode) -> webgpu_sys::GpuMipmapFilterMode {
     match mode {
-        wgt::FilterMode::Nearest => webgpu_sys::GpuMipmapFilterMode::Nearest,
-        wgt::FilterMode::Linear => webgpu_sys::GpuMipmapFilterMode::Linear,
+        wgt::MipmapFilterMode::Nearest => webgpu_sys::GpuMipmapFilterMode::Nearest,
+        wgt::MipmapFilterMode::Linear => webgpu_sys::GpuMipmapFilterMode::Linear,
     }
 }
 
@@ -861,6 +861,7 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
         }
     }
 
+    // https://gpuweb.github.io/gpuweb/#gpusupportedlimits
     set_properties![
         (limits) => (object):
         (maxTextureDimension1D, max_texture_dimension_1d),
@@ -868,6 +869,7 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
         (maxTextureDimension3D, max_texture_dimension_3d),
         (maxTextureArrayLayers, max_texture_array_layers),
         (maxBindGroups, max_bind_groups),
+        // TODO: (maxBindGroupsPlusVertexBuffers, max_bind_groups_plus_vertex_buffers),
         (maxBindingsPerBindGroup, max_bindings_per_bind_group),
         (maxDynamicUniformBuffersPerPipelineLayout, max_dynamic_uniform_buffers_per_pipeline_layout),
         (maxDynamicStorageBuffersPerPipelineLayout, max_dynamic_storage_buffers_per_pipeline_layout),
@@ -884,6 +886,9 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
         (maxBufferSize, max_buffer_size),
         (maxVertexAttributes, max_vertex_attributes),
         (maxVertexBufferArrayStride, max_vertex_buffer_array_stride),
+        // TODO: (maxInterStageShaderVariables, max_inter_stage_shader_variables),
+        (maxColorAttachments, max_color_attachments),
+        (maxColorAttachmentBytesPerSample, max_color_attachment_bytes_per_sample),
         (maxComputeWorkgroupStorageSize, max_compute_workgroup_storage_size),
         (maxComputeInvocationsPerWorkgroup, max_compute_invocations_per_workgroup),
         (maxComputeWorkgroupSizeX, max_compute_workgroup_size_x),

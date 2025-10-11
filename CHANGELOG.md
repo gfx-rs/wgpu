@@ -42,6 +42,37 @@ Bottom level categories:
 
 ### Major Changes
 
+#### 'wgpu::Instance::enumerate_adapters` is now `async` & available on WebGPU
+
+BREAKING CHANGE: `enumerate_adapters` is now `async`:
+
+```diff
+- pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
++ pub fn enumerate_adapters(&self, backends: Backends) -> impl Future<Output = Vec<Adapter>> {
+```
+
+This yields ([kek]) two benefits:
+
+- This method is now implemented on non-native using the standard `Adapter::request_adapter(…)`, making `enumerate_adapters` a portable surface. This was previous a nontrivial pain point when an application wanted to do some of its own filtering of adapters.
+- This method can now be implemented in custom backends.
+
+By @R-Cramer4 in [#8230](https://github.com/gfx-rs/wgpu/pull/8230)
+
+[kek]: https://web.archive.org/web/20250923122958/https://knowyourmeme.com/memes/kek
+
+#### `MipmapFilterMode` is split from `FilterMode`
+
+This is a breaking change that aligns wgpu with spec.
+
+```diff
+SamplerDescriptor {
+...
+-     mipmap_filter: FilterMode::Nearest
++     mipmap_filter: MipmapFilterMode::Nearest
+...
+}
+```
+
 #### Multiview on all major platforms and support for multiview bitmasks
 
 Multiview has been reworked, adding support for DX12 and Metal, and adding testing and validation to wgpu itself.
@@ -67,19 +98,19 @@ One other breaking change worth noting is that `@builtin(view_index)` now requir
 
 By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206).
 
-#### 'wgpu::Instance::enumerate_adapters` is now `async` & available on WebGPU
+### Changes
 
-Making `enumerate_adapters` async allows custom backends to use it along with eliminating some native/non-native distinctions
+#### General
 
-This is a breaking change
+- Texture now has `from_custom`. By @R-Cramer4 in [#8315](https://github.com/gfx-rs/wgpu/pull/8315).
 
-```diff
-- pub fn enumerate_adapters(&self, backends: Backends) -> Vec<Adapter> {
-+ pub fn enumerate_adapters(&self, backends: Backends) -> impl Future<Output = Vec<Adapter>> {
+### Bug Fixes
 
-```
+#### General
 
-By @R-Cramer4 in [#8230](https://github.com/gfx-rs/wgpu/pull/8230)
+- Reject fragment shader output `location`s > `max_color_attachments` limit. By @ErichDonGubler in [#8316](https://github.com/gfx-rs/wgpu/pull/8316).
+- WebGPU device requests now support the required limits `maxColorAttachments` and `maxColorAttachmentBytesPerSample`. By @evilpie in [#8328](https://github.com/gfx-rs/wgpu/pull/8328)
+- Reject binding indices that exceed `wgpu_types::Limits::max_bindings_per_bind_group` when deriving a bind group layout for a pipeline. By @jimblandy in [#8325](https://github.com/gfx-rs/wgpu/pull/8325).
 
 ## v27.0.2 (2025-10-03)
 
