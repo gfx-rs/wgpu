@@ -668,10 +668,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 // Most likely the API just wasn't thought about enough. It's not like they ever allow you
                 // to use enough views to overflow a 32-bit bitmask.
                 let mv = mv.get();
-                let msb = 31 - mv.leading_zeros();
+                let msb = 32 - mv.leading_zeros();
                 let mut maps: SmallVec<[metal::VertexAmplificationViewMapping; 32]> =
                     SmallVec::new();
-                for i in 0..=msb {
+                for i in 0..msb {
                     if (mv & (1 << i)) != 0 {
                         maps.push(metal::VertexAmplificationViewMapping {
                             renderTargetArrayIndexOffset: i,
@@ -679,7 +679,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         });
                     }
                 }
-                encoder.set_vertex_amplification_count(mv.count_ones() as u64, Some(&maps));
+                encoder.set_vertex_amplification_count(msb as u64, Some(&maps));
             }
             if let Some(label) = desc.label {
                 encoder.set_label(label);
