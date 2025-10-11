@@ -1403,6 +1403,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {
+        let previous_sizes =
+            core::mem::take(&mut self.state.stage_infos.cs.work_group_memory_sizes);
         self.state.stage_infos.cs.assign_from(&pipeline.cs_info);
 
         let encoder = self.state.compute.as_ref().unwrap();
@@ -1420,19 +1422,23 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
 
         // update the threadgroup memory sizes
-        for (index, (cur_size, pipeline_size)) in self
+        for (i, current_size) in self
             .state
             .stage_infos
             .cs
             .work_group_memory_sizes
             .iter_mut()
-            .zip(pipeline.cs_info.work_group_memory_sizes.iter())
             .enumerate()
         {
-            let size = pipeline_size.next_multiple_of(16);
-            if *cur_size != size {
-                *cur_size = size;
-                encoder.set_threadgroup_memory_length(index as _, size as _);
+            let prev_size = if i < previous_sizes.len() {
+                previous_sizes[i]
+            } else {
+                u32::MAX
+            };
+            let size: u32 = current_size.next_multiple_of(16);
+            *current_size = size;
+            if size != prev_size {
+                encoder.set_threadgroup_memory_length(i as _, size as _);
             }
         }
     }
