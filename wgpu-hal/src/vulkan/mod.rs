@@ -636,6 +636,9 @@ struct PrivateCapabilities {
     /// [`VK_KHR_shader_float16_int8`]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_shader_float16_int8.html
     /// [see spec]: https://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDeviceShaderFloat16Int8Features.html#extension-features-shaderInt8
     shader_int8: bool,
+
+    /// This is done to panic before undefined behavior, and is imperfect.
+    multiview_instance_index_limit: u32,
 }
 
 bitflags::bitflags!(
@@ -1208,6 +1211,8 @@ pub struct CommandEncoder {
     temp_texture_views: FastHashMap<TempTextureViewKey, IdentifiedTextureView>,
 
     counters: Arc<wgt::HalCounters>,
+
+    current_pipeline_is_multiview: bool,
 }
 
 impl Drop for CommandEncoder {

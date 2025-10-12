@@ -1066,6 +1066,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         first_instance: u32,
         instance_count: u32,
     ) {
+        if self.current_pipeline_is_multiview
+            && (first_instance as u64 + instance_count as u64 - 1)
+                > self.device.private_caps.multiview_instance_index_limit as u64
+        {
+            panic!("This vulkan device is affected by [#8333](https://github.com/gfx-rs/wgpu/issues/8333)");
+        }
         unsafe {
             self.device.raw.cmd_draw(
                 self.active,
@@ -1084,6 +1090,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         first_instance: u32,
         instance_count: u32,
     ) {
+        if self.current_pipeline_is_multiview
+            && (first_instance as u64 + instance_count as u64 - 1)
+                > self.device.private_caps.multiview_instance_index_limit as u64
+        {
+            panic!("This vulkan device is affected by [#8333](https://github.com/gfx-rs/wgpu/issues/8333)");
+        }
         unsafe {
             self.device.raw.cmd_draw_indexed(
                 self.active,

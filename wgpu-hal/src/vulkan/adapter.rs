@@ -1857,6 +1857,10 @@ impl super::Instance {
             shader_int8: phd_features
                 .shader_float16_int8
                 .is_some_and(|features| features.shader_int8 != 0),
+            multiview_instance_index_limit: phd_capabilities
+                .multiview
+                .map(|a| a.max_multiview_instance_index)
+                .unwrap_or(0),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
