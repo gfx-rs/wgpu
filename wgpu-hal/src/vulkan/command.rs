@@ -979,6 +979,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         unsafe {
+            self.current_pipeline_is_multiview = pipeline.is_multiview;
             self.device.raw.cmd_bind_pipeline(
                 self.active,
                 vk::PipelineBindPoint::GRAPHICS,

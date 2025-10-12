@@ -1470,6 +1470,7 @@ impl crate::Device for super::Device {
             framebuffers: Default::default(),
             temp_texture_views: Default::default(),
             counters: Arc::clone(&self.counters),
+            current_pipeline_is_multiview: false,
         })
     }
 
@@ -2261,7 +2262,10 @@ impl crate::Device for super::Device {
 
         self.counters.render_pipelines.add(1);
 
-        Ok(super::RenderPipeline { raw })
+        Ok(super::RenderPipeline {
+            raw,
+            is_multiview: desc.multiview.is_some(),
+        })
     }
 
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
