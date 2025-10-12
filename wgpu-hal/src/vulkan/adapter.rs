@@ -17,10 +17,6 @@ const INDEXING_FEATURES: wgt::Features = wgt::Features::TEXTURE_BINDING_ARRAY
     .union(wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING)
     .union(wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS)
     .union(wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY);
-
-/// Pulled out of my ass
-const MULTIVIEW_INSTANCE_MINIMUM: u32 = 256 * 1024 * 1024;
-
 #[expect(rustdoc::private_intra_doc_links)]
 /// Features supported by a [`vk::PhysicalDevice`] and its extensions.
 ///
@@ -724,9 +720,7 @@ impl PhysicalDeviceFeatures {
         features.set(F::CLIP_DISTANCES, self.core.shader_clip_distance != 0);
 
         if let Some(ref multiview) = self.multiview {
-            if caps.multiview.unwrap().max_multiview_instance_index >= MULTIVIEW_INSTANCE_MINIMUM {
-                features.set(F::MULTIVIEW, multiview.multiview != 0);
-            }
+            features.set(F::MULTIVIEW, multiview.multiview != 0);
         }
 
         features.set(
@@ -1262,19 +1256,10 @@ impl PhysicalDeviceProperties {
                 properties.max_per_stage_descriptor_acceleration_structures;
         }
 
-        let (mut max_multiview_view_count, max_multiview_instance_index) =
-            if let Some(properties) = self.multiview {
-                (
-                    // The bitmask only uses 32 bits, so it can't be higher even if the device for some reason claims to support that.
-                    properties.max_multiview_view_count.min(32),
-                    properties.max_multiview_instance_index,
-                )
-            } else {
-                (0, 0)
-            };
-        if max_multiview_instance_index < MULTIVIEW_INSTANCE_MINIMUM {
-            max_multiview_view_count = 0;
-        }
+        let max_multiview_view_count = self
+            .multiview
+            .map(|a| a.max_multiview_view_count.min(32))
+            .unwrap_or(0);
 
         wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
