@@ -37,7 +37,7 @@ impl BindGroupLayout {
 #[derive(Clone, Debug)]
 pub struct BindGroupLayoutDescriptor<'a> {
     /// Debug label of the bind group layout. This will show up in graphics debuggers for easy identification.
-    pub label: Label<'a>,
+    pub label: Label<'a> = None,
 
     /// Array of entries in this BindGroupLayout
     pub entries: &'a [BindGroupLayoutEntry],

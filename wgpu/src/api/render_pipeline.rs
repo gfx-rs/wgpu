@@ -79,7 +79,7 @@ pub struct VertexBufferLayout<'a> {
     /// This must be a multiple of [`VERTEX_ALIGNMENT`].
     pub array_stride: BufferAddress,
     /// How often this vertex buffer is "stepped" forward.
-    pub step_mode: VertexStepMode,
+    pub step_mode: VertexStepMode = VertexStepMode::Vertex,
     /// The list of attributes which comprise a single vertex.
     pub attributes: &'a [VertexAttribute],
 }
@@ -102,17 +102,17 @@ pub struct VertexState<'a> {
     /// selected.
     // NOTE: keep phrasing in sync. with `ComputePipelineDescriptor::entry_point`
     // NOTE: keep phrasing in sync. with `FragmentState::entry_point`
-    pub entry_point: Option<&'a str>,
+    pub entry_point: Option<&'a str> = None,
     /// Advanced options for when this pipeline is compiled
     ///
     /// This implements `Default`, and for most users can be set to `Default::default()`
-    pub compilation_options: PipelineCompilationOptions<'a>,
+    pub compilation_options: PipelineCompilationOptions<'a> =  PipelineCompilationOptions { .. },
     /// The format of any vertex buffers used with this pipeline via
     /// [`RenderPass::set_vertex_buffer()`].
     ///
     /// The attribute locations and types specified in this layout must match the
     /// locations and types of the inputs to the `entry_point` function.
-    pub buffers: &'a [VertexBufferLayout<'a>],
+    pub buffers: &'a [VertexBufferLayout<'a>] = &[],
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(VertexState<'_>: Send, Sync);
@@ -134,11 +134,11 @@ pub struct FragmentState<'a> {
     /// selected.
     // NOTE: keep phrasing in sync. with `ComputePipelineDescriptor::entry_point`
     // NOTE: keep phrasing in sync. with `VertexState::entry_point`
-    pub entry_point: Option<&'a str>,
+    pub entry_point: Option<&'a str> = None,
     /// Advanced options for when this pipeline is compiled
     ///
     /// This implements `Default`, and for most users can be set to `Default::default()`
-    pub compilation_options: PipelineCompilationOptions<'a>,
+    pub compilation_options: PipelineCompilationOptions<'a> = PipelineCompilationOptions { .. },
     /// The color state of the render targets.
     pub targets: &'a [Option<ColorTargetState>],
 }
@@ -198,7 +198,7 @@ static_assertions::assert_impl_all!(MeshState<'_>: Send, Sync);
 #[derive(Clone, Debug)]
 pub struct RenderPipelineDescriptor<'a> {
     /// Debug label of the pipeline. This will show up in graphics debuggers for easy identification.
-    pub label: Label<'a>,
+    pub label: Label<'a> = None,
     /// The layout of bind groups for this pipeline.
     ///
     /// If this is set, then [`Device::create_render_pipeline`] will raise a validation error if
@@ -218,26 +218,26 @@ pub struct RenderPipelineDescriptor<'a> {
     /// convenient for simple pipelines, but using an explicit layout is recommended in most cases.
     ///
     /// [default layout]: https://www.w3.org/TR/webgpu/#default-pipeline-layout
-    pub layout: Option<&'a PipelineLayout>,
+    pub layout: Option<&'a PipelineLayout> = None,
     /// The compiled vertex stage, its entry point, and the input buffers layout.
     pub vertex: VertexState<'a>,
     /// The properties of the pipeline at the primitive assembly and rasterization level.
-    pub primitive: PrimitiveState,
+    pub primitive: PrimitiveState = PrimitiveState { .. },
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
-    pub depth_stencil: Option<DepthStencilState>,
+    pub depth_stencil: Option<DepthStencilState> = None,
     /// The multi-sampling properties of the pipeline.
-    pub multisample: MultisampleState,
+    pub multisample: MultisampleState =  MultisampleState { .. },
     /// The compiled fragment stage, its entry point, and the color targets.
-    pub fragment: Option<FragmentState<'a>>,
+    pub fragment: Option<FragmentState<'a>> = None,
     /// If the pipeline will be used with a multiview render pass, this indicates what multiview
     /// mask the render pass will be used with. The masks must match exactly.
     ///
     /// For example, if you wish to render to the first 2 layers, you would use 3=0b11. If you
     /// wanted to render to only the 2nd layer, you would use 2=0b10. If you aren't using
     /// multiview this should be `None`.
-    pub multiview_mask: Option<NonZeroU32>,
+    pub multiview_mask: Option<NonZeroU32> = None,
     /// The pipeline cache to use when creating this pipeline.
-    pub cache: Option<&'a PipelineCache>,
+    pub cache: Option<&'a PipelineCache> = None,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPipelineDescriptor<'_>: Send, Sync);

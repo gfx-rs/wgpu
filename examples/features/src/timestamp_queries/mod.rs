@@ -127,13 +127,13 @@ impl Queries {
                 label: Some("query resolve buffer"),
                 size: size_of::<u64>() as u64 * num_queries,
                 usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::QUERY_RESOLVE,
-                mapped_at_creation: false,
+                ..
             }),
             destination_buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("query dest buffer"),
                 size: size_of::<u64>() as u64 * num_queries,
                 usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-                mapped_at_creation: false,
+                ..
             }),
             num_queries,
             next_unused_query: 0,
@@ -224,9 +224,8 @@ async fn run() {
             label: None,
             required_features: features,
             required_limits: wgpu::Limits::downlevel_defaults(),
-            experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::MemoryUsage,
-            trace: wgpu::Trace::Off,
+            ..
         })
         .await
         .unwrap();
@@ -241,8 +240,7 @@ fn submit_render_and_compute_pass_with_queries(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
 ) -> Queries {
-    let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
 
     let mut queries = Queries::new(device, QueryResults::NUM_QUERIES);
     let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
@@ -309,21 +307,21 @@ fn compute_pass(
     });
     let bind_group_layout = compute_pipeline.get_bind_group_layout(0);
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: None,
         layout: &bind_group_layout,
         entries: &[wgpu::BindGroupEntry {
             binding: 0,
             resource: storage_buffer.as_entire_binding(),
         }],
+        ..
     });
 
     let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-        label: None,
         timestamp_writes: Some(wgpu::ComputePassTimestampWrites {
             query_set,
             beginning_of_pass_write_index: Some(*next_unused_query),
             end_of_pass_write_index: Some(*next_unused_query + 1),
         }),
+        ..
     });
     *next_unused_query += 2;
     cpass.set_pipeline(&compute_pipeline);
@@ -348,68 +346,52 @@ fn render_pass(
 ) {
     let format = wgpu::TextureFormat::Rgba8Unorm;
 
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: None,
-        bind_group_layouts: &[],
-        immediates_ranges: &[],
-    });
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor::default());
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: None,
         layout: Some(&pipeline_layout),
         vertex: wgpu::VertexState {
             module,
             entry_point: Some("vs_main"),
-            compilation_options: Default::default(),
-            buffers: &[],
+            ..
         },
         fragment: Some(wgpu::FragmentState {
             module,
             entry_point: Some("fs_main"),
-            compilation_options: Default::default(),
             targets: &[Some(format.into())],
+            ..
         }),
-        primitive: wgpu::PrimitiveState::default(),
-        depth_stencil: None,
-        multisample: wgpu::MultisampleState::default(),
-        multiview_mask: None,
-        cache: None,
+        ..
     });
     let render_target = device.create_texture(&wgpu::TextureDescriptor {
         label: Some("rendertarget"),
         size: wgpu::Extent3d {
             width: 512,
             height: 512,
-            depth_or_array_layers: 1,
+            ..
         },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
         format,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[format],
+        ..
     });
     let render_target_view = render_target.create_view(&wgpu::TextureViewDescriptor::default());
 
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-        label: None,
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             view: &render_target_view,
-            depth_slice: None,
-            resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
                 store: wgpu::StoreOp::Store,
             },
+            ..
         })],
-        depth_stencil_attachment: None,
         timestamp_writes: Some(wgpu::RenderPassTimestampWrites {
             query_set,
             beginning_of_pass_write_index: Some(*next_unused_query),
             end_of_pass_write_index: Some(*next_unused_query + 1),
         }),
-        occlusion_query_set: None,
-        multiview_mask: None,
+        ..
     });
     *next_unused_query += 2;
 

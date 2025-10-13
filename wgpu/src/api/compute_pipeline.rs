@@ -44,7 +44,7 @@ impl ComputePipeline {
 #[derive(Clone, Debug)]
 pub struct ComputePipelineDescriptor<'a> {
     /// Debug label of the pipeline. This will show up in graphics debuggers for easy identification.
-    pub label: Label<'a>,
+    pub label: Label<'a> = None,
     /// The layout of bind groups for this pipeline.
     ///
     /// If this is set, then [`Device::create_compute_pipeline`] will raise a validation error if
@@ -65,7 +65,7 @@ pub struct ComputePipelineDescriptor<'a> {
     /// cases.
     ///
     /// [default layout]: https://www.w3.org/TR/webgpu/#default-pipeline-layout
-    pub layout: Option<&'a PipelineLayout>,
+    pub layout: Option<&'a PipelineLayout> = None,
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
     /// The name of the entry point in the compiled shader to use.
@@ -75,13 +75,13 @@ pub struct ComputePipelineDescriptor<'a> {
     /// selected.
     // NOTE: keep phrasing in sync. with `FragmentState::entry_point`
     // NOTE: keep phrasing in sync. with `VertexState::entry_point`
-    pub entry_point: Option<&'a str>,
+    pub entry_point: Option<&'a str> = None,
     /// Advanced options for when this pipeline is compiled
     ///
     /// This implements `Default`, and for most users can be set to `Default::default()`
-    pub compilation_options: PipelineCompilationOptions<'a>,
+    pub compilation_options: PipelineCompilationOptions<'a> = PipelineCompilationOptions { .. },
     /// The pipeline cache to use when creating this pipeline.
-    pub cache: Option<&'a PipelineCache>,
+    pub cache: Option<&'a PipelineCache> = None,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePipelineDescriptor<'_>: Send, Sync);

@@ -489,17 +489,18 @@ pub struct TextureViewDescriptor<L> {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TextureDescriptor<L, V> {
     /// Debug label of the texture. This will show up in graphics debuggers for easy identification.
+    // TODO: make optional to specify
     pub label: L,
     /// Size of the texture. All components must be greater than zero. For a
     /// regular 1D/2D texture, the unused sizes will be 1. For 2DArray textures,
     /// Z is the number of 2D textures in that array.
     pub size: Extent3d,
     /// Mip count of texture. For a texture with no extra mips, this must be 1.
-    pub mip_level_count: u32,
+    pub mip_level_count: u32 = 1,
     /// Sample count of texture. If this is not 1, texture must have [`BindingType::Texture::multisampled`] set to true.
-    pub sample_count: u32,
+    pub sample_count: u32 = 1,
     /// Dimensions of the texture.
-    pub dimension: TextureDimension,
+    pub dimension: TextureDimension = TextureDimension::D2,
     /// Format of the texture.
     pub format: TextureFormat,
     /// Allowed usages of the texture. If used in other ways, the operation will panic.
@@ -509,6 +510,7 @@ pub struct TextureDescriptor<L, V> {
     /// View formats of the same format as the texture are always allowed.
     ///
     /// Note: currently, only the srgb-ness is allowed to change. (ex: `Rgba8Unorm` texture + `Rgba8UnormSrgb` view)
+    // TODO: make optional to specify
     pub view_formats: V,
 }
 
@@ -800,7 +802,7 @@ pub enum SamplerBorderColor {
 pub struct TexelCopyBufferLayout {
     /// Offset into the buffer that is the start of the texture. Must be a multiple of texture block size.
     /// For non-compressed textures, this is 1.
-    pub offset: crate::BufferAddress,
+    pub offset: crate::BufferAddress = 0,
     /// Bytes per "row" in an image.
     ///
     /// A row is one row of pixels or of compressed blocks in the x direction.
@@ -818,7 +820,7 @@ pub struct TexelCopyBufferLayout {
     #[doc = link_to_wgpu_docs!(["CEcbtt"]: "struct.CommandEncoder.html#method.copy_buffer_to_texture")]
     #[doc = link_to_wgpu_docs!(["CEcttb"]: "struct.CommandEncoder.html#method.copy_texture_to_buffer")]
     #[doc = link_to_wgpu_docs!(["Qwt"]: "struct.Queue.html#method.write_texture")]
-    pub bytes_per_row: Option<u32>,
+    pub bytes_per_row: Option<u32> = None,
     /// "Rows" that make up a single "image".
     ///
     /// A row is one row of pixels or of compressed blocks in the x direction.
@@ -828,7 +830,7 @@ pub struct TexelCopyBufferLayout {
     /// The amount of rows per image may be larger than the actual amount of rows of data.
     ///
     /// Required if there are multiple images (i.e. the depth is more than one).
-    pub rows_per_image: Option<u32>,
+    pub rows_per_image: Option<u32> = None,
 }
 
 /// View of a buffer which can be used to copy to/from a texture.
@@ -842,7 +844,7 @@ pub struct TexelCopyBufferInfo<B> {
     /// The buffer to be copied to/from.
     pub buffer: B,
     /// The layout of the texture data in this buffer.
-    pub layout: TexelCopyBufferLayout,
+    pub layout: TexelCopyBufferLayout = TexelCopyBufferLayout { .. },
 }
 
 /// View of a texture which can be used to copy to/from a buffer/texture.
@@ -856,15 +858,15 @@ pub struct TexelCopyTextureInfo<T> {
     /// The texture to be copied to/from.
     pub texture: T,
     /// The target mip level of the texture.
-    pub mip_level: u32,
+    pub mip_level: u32 = 0,
     /// The base texel of the texture in the selected `mip_level`. Together
     /// with the `copy_size` argument to copy functions, defines the
     /// sub-region of the texture to copy.
     #[cfg_attr(feature = "serde", serde(default))]
-    pub origin: Origin3d,
+    pub origin: Origin3d = Origin3d { .. },
     /// The copy aspect.
     #[cfg_attr(feature = "serde", serde(default))]
-    pub aspect: TextureAspect,
+    pub aspect: TextureAspect = TextureAspect::All,
 }
 
 impl<T> TexelCopyTextureInfo<T> {

@@ -631,11 +631,11 @@ pub struct RenderPassColorAttachment<'tex> {
     /// The view to use as an attachment.
     pub view: &'tex TextureView,
     /// The depth slice index of a 3D view. It must not be provided if the view is not 3D.
-    pub depth_slice: Option<u32>,
+    pub depth_slice: Option<u32> = None,
     /// The view that will receive the resolved output if multisampling is used.
     ///
     /// If set, it is always written to, regardless of how [`Self::ops`] is configured.
-    pub resolve_target: Option<&'tex TextureView>,
+    pub resolve_target: Option<&'tex TextureView> = None,
     /// What operations will be performed on this color attachment.
     pub ops: Operations<Color>,
 }
@@ -669,17 +669,17 @@ static_assertions::assert_impl_all!(RenderPassDepthStencilAttachment<'_>: Send, 
 #[derive(Clone, Debug, Default)]
 pub struct RenderPassDescriptor<'a> {
     /// Debug label of the render pass. This will show up in graphics debuggers for easy identification.
-    pub label: Label<'a>,
+    pub label: Label<'a> = None,
     /// The color attachments of the render pass.
     pub color_attachments: &'a [Option<RenderPassColorAttachment<'a>>],
     /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'a>>,
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachment<'a>> = None,
     /// Defines which timestamp values will be written for this pass, and where to write them to.
     ///
     /// Requires [`Features::TIMESTAMP_QUERY`] to be enabled.
-    pub timestamp_writes: Option<RenderPassTimestampWrites<'a>>,
+    pub timestamp_writes: Option<RenderPassTimestampWrites<'a>> = None,
     /// Defines where the occlusion query results will be stored for this pass.
-    pub occlusion_query_set: Option<&'a QuerySet>,
+    pub occlusion_query_set: Option<&'a QuerySet> = None,
     /// The mask of multiview image layers to use for this render pass. For example, if you wish
     /// to render to the first 2 layers, you would use 3=0b11. If you wanted ro render to only the
     /// 2nd layer, you would use 2=0b10. If you aren't using multiview this should be `None`.
@@ -688,7 +688,7 @@ pub struct RenderPassDescriptor<'a> {
     ///
     /// This doesn't influence load/store/clear/etc operations, as those are defined for attachments,
     /// therefore affecting all attachments. Meaning, this affects only any shaders executed on the `RenderPass`.
-    pub multiview_mask: Option<NonZeroU32>,
+    pub multiview_mask: Option<NonZeroU32> = None,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPassDescriptor<'_>: Send, Sync);

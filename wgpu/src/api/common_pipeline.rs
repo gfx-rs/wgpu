@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 /// Advanced options for use when a pipeline is compiled
 ///
 /// This implements `Default`, and for most users can be set to `Default::default()`
@@ -14,21 +14,12 @@ pub struct PipelineCompilationOptions<'a> {
     /// If the given constant is specified more than once, the last value specified is used.
     ///
     /// The value may represent any of WGSL's concrete scalar types.
-    pub constants: &'a [(&'a str, f64)],
+    pub constants: &'a [(&'a str, f64)] = &[],
     /// Whether workgroup scoped memory will be initialized with zero values for this stage.
     ///
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
     /// for cross-platform applications
-    pub zero_initialize_workgroup_memory: bool,
-}
-
-impl Default for PipelineCompilationOptions<'_> {
-    fn default() -> Self {
-        Self {
-            constants: Default::default(),
-            zero_initialize_workgroup_memory: true,
-        }
-    }
+    pub zero_initialize_workgroup_memory: bool = false,
 }
 
 /// Describes a pipeline cache, which allows reusing compilation work

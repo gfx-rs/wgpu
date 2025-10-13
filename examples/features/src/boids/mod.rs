@@ -31,7 +31,7 @@ impl crate::framework::Example for Example {
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
         wgpu::DownlevelCapabilities {
             flags: wgpu::DownlevelFlags::COMPUTE_SHADERS,
-            ..Default::default()
+            ..
         }
     }
 
@@ -101,13 +101,13 @@ impl crate::framework::Example for Example {
                         count: None,
                     },
                 ],
-                label: None,
+                ..
             });
         let compute_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compute"),
                 bind_group_layouts: &[&compute_bind_group_layout],
-                immediates_ranges: &[],
+                ..
             });
 
         // create render pipeline with empty bind group layout
@@ -116,16 +116,14 @@ impl crate::framework::Example for Example {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("render"),
                 bind_group_layouts: &[],
-                immediates_ranges: &[],
+                ..
             });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &draw_shader,
                 entry_point: Some("main_vs"),
-                compilation_options: Default::default(),
                 buffers: &[
                     wgpu::VertexBufferLayout {
                         array_stride: 4 * 4,
@@ -134,22 +132,19 @@ impl crate::framework::Example for Example {
                     },
                     wgpu::VertexBufferLayout {
                         array_stride: 2 * 4,
-                        step_mode: wgpu::VertexStepMode::Vertex,
                         attributes: &wgpu::vertex_attr_array![2 => Float32x2],
+                        ..
                     },
                 ],
+                ..
             },
             fragment: Some(wgpu::FragmentState {
                 module: &draw_shader,
                 entry_point: Some("main_fs"),
-                compilation_options: Default::default(),
                 targets: &[Some(config.view_formats[0].into())],
+                ..
             }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
-            cache: None,
+            ..
         });
 
         // create compute pipeline
@@ -159,8 +154,7 @@ impl crate::framework::Example for Example {
             layout: Some(&compute_pipeline_layout),
             module: &compute_shader,
             entry_point: Some("main"),
-            compilation_options: Default::default(),
-            cache: None,
+            ..
         });
 
         // buffer for the three 2d triangle vertices of each instance
@@ -221,7 +215,7 @@ impl crate::framework::Example for Example {
                         resource: particle_buffers[(i + 1) % 2].as_entire_binding(), // bind to opposite buffer
                     },
                 ],
-                label: None,
+                ..
             }));
         }
 
@@ -270,12 +264,8 @@ impl crate::framework::Example for Example {
             },
         })];
         let render_pass_descriptor = wgpu::RenderPassDescriptor {
-            label: None,
             color_attachments: &color_attachments,
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-            multiview_mask: None,
+            ..
         };
 
         // get command encoder
@@ -285,10 +275,7 @@ impl crate::framework::Example for Example {
         command_encoder.push_debug_group("compute boid movement");
         {
             // compute pass
-            let mut cpass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: None,
-                timestamp_writes: None,
-            });
+            let mut cpass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor { .. });
             cpass.set_pipeline(&self.compute_pipeline);
             cpass.set_bind_group(0, &self.particle_bind_groups[self.frame_num % 2], &[]);
             cpass.dispatch_workgroups(self.work_group_count, 1, 1);

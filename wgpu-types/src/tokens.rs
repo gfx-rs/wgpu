@@ -3,7 +3,7 @@ use crate::link_to_wgpu_item;
 /// Token of the user agreeing to access experimental features.
 #[derive(Debug, Default, Copy, Clone)]
 pub struct ExperimentalFeatures {
-    enabled: bool,
+    enabled: bool = false,
 }
 
 impl ExperimentalFeatures {

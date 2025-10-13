@@ -527,12 +527,10 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
                         height: params.height,
                         depth_or_array_layers: 1,
                     },
-                    mip_level_count: 1,
-                    sample_count: 1,
-                    dimension: wgpu::TextureDimension::D2,
                     format,
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
                     view_formats: &[],
+                    ..
                 });
 
                 let dst_view = dst_texture.create_view(&wgpu::TextureViewDescriptor::default());
@@ -541,7 +539,7 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
                     label: Some("image map buffer"),
                     size: params.width as u64 * params.height as u64 * 4,
                     usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
-                    mapped_at_creation: false,
+                    ..
                 });
 
                 let mut example = E::init(
@@ -569,16 +567,13 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
                 cmd_buf.copy_texture_to_buffer(
                     wgpu::TexelCopyTextureInfo {
                         texture: &dst_texture,
-                        mip_level: 0,
-                        origin: wgpu::Origin3d::ZERO,
-                        aspect: wgpu::TextureAspect::All,
+                        ..
                     },
                     wgpu::TexelCopyBufferInfo {
                         buffer: &dst_buffer,
                         layout: wgpu::TexelCopyBufferLayout {
-                            offset: 0,
                             bytes_per_row: Some(params.width * 4),
-                            rows_per_image: None,
+                            ..
                         },
                     },
                     wgpu::Extent3d {

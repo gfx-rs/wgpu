@@ -3862,8 +3862,7 @@ dependencies = [
 [[package]]
 name = "syn"
 version = "2.0.111"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "390cc9a294ab71bdb1aa2e99d13be9c753cd2d7bd6560c77118597410c4d2e87"
+source = "git+https://github.com/erichdongubler-contrib/syn?rev=146280b69756a0a8882d21ed061752214da94049#146280b69756a0a8882d21ed061752214da94049"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -1,3 +1,5 @@
+#![feature(default_field_values)]
+
 //! This library safely implements WebGPU on native platforms.
 //! It is designed for integration into browsers, as well as wrapping
 //! into other language-specific user-friendly libraries.

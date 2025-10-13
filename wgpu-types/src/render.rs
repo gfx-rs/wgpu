@@ -106,26 +106,22 @@ pub enum BlendOperation {
 /// Corresponds to [WebGPU `GPUBlendComponent`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpublendcomponent).
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct BlendComponent {
     /// Multiplier for the source, which is produced by the fragment shader.
-    pub src_factor: BlendFactor,
+    pub src_factor: BlendFactor = BlendFactor::One,
     /// Multiplier for the destination, which is stored in the target.
-    pub dst_factor: BlendFactor,
+    pub dst_factor: BlendFactor = BlendFactor::Zero,
     /// The binary operation applied to the source and destination,
     /// multiplied by their respective factors.
-    pub operation: BlendOperation,
+    pub operation: BlendOperation = BlendOperation::Add,
 }
 
 impl BlendComponent {
     /// Default blending state that replaces destination with the source.
-    pub const REPLACE: Self = Self {
-        src_factor: BlendFactor::One,
-        dst_factor: BlendFactor::Zero,
-        operation: BlendOperation::Add,
-    };
+    pub const REPLACE: Self = Self { .. };
 
     /// Blend state of `(1 * src) + ((1 - src_alpha) * dst)`.
     pub const OVER: Self = Self {
@@ -145,12 +141,6 @@ impl BlendComponent {
             | (_, BlendFactor::OneMinusConstant) => true,
             (_, _) => false,
         }
-    }
-}
-
-impl Default for BlendComponent {
-    fn default() -> Self {
-        Self::REPLACE
     }
 }
 
@@ -210,10 +200,10 @@ pub struct ColorTargetState {
     pub format: crate::TextureFormat,
     /// The blending that is used for this pipeline.
     #[cfg_attr(feature = "serde", serde(default))]
-    pub blend: Option<BlendState>,
+    pub blend: Option<BlendState> = None,
     /// Mask which enables/disables writes to different color/alpha channel.
     #[cfg_attr(feature = "serde", serde(default))]
-    pub write_mask: ColorWrites,
+    pub write_mask: ColorWrites = ColorWrites::all(),
 }
 
 impl From<crate::TextureFormat> for ColorTargetState {
@@ -361,37 +351,37 @@ pub enum PolygonMode {
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct PrimitiveState {
     /// The primitive topology used to interpret vertices.
-    pub topology: PrimitiveTopology,
+    pub topology: PrimitiveTopology = PrimitiveTopology::TriangleList,
     /// When drawing strip topologies with indices, this is the required format for the index buffer.
     /// This has no effect on non-indexed or non-strip draws.
     ///
     /// Specifying this value enables primitive restart, allowing individual strips to be separated
     /// with the index value `0xFFFF` when using `Uint16`, or `0xFFFFFFFF` when using `Uint32`.
     #[cfg_attr(feature = "serde", serde(default))]
-    pub strip_index_format: Option<IndexFormat>,
+    pub strip_index_format: Option<IndexFormat> = None,
     /// The face to consider the front for the purpose of culling and stencil operations.
     #[cfg_attr(feature = "serde", serde(default))]
-    pub front_face: FrontFace,
+    pub front_face: FrontFace = FrontFace::Ccw,
     /// The face culling mode.
     #[cfg_attr(feature = "serde", serde(default))]
-    pub cull_mode: Option<Face>,
+    pub cull_mode: Option<Face> = None,
     /// If set to true, the polygon depth is not clipped to 0-1 before rasterization.
     ///
     /// Enabling this requires [`Features::DEPTH_CLIP_CONTROL`] to be enabled.
     #[cfg_attr(feature = "serde", serde(default))]
-    pub unclipped_depth: bool,
+    pub unclipped_depth: bool = false,
     /// Controls the way each polygon is rasterized. Can be either `Fill` (default), `Line` or `Point`
     ///
     /// Setting this to `Line` requires [`Features::POLYGON_MODE_LINE`] to be enabled.
     ///
     /// Setting this to `Point` requires [`Features::POLYGON_MODE_POINT`] to be enabled.
     #[cfg_attr(feature = "serde", serde(default))]
-    pub polygon_mode: PolygonMode,
+    pub polygon_mode: PolygonMode = PolygonMode::Fill,
     /// If set to true, the primitives are rendered with conservative overestimation. I.e. any rastered pixel touched by it is filled.
     /// Only valid for `[PolygonMode::Fill`]!
     ///
     /// Enabling this requires [`Features::CONSERVATIVE_RASTERIZATION`] to be enabled.
-    pub conservative: bool,
+    pub conservative: bool = false,
 }
 
 /// Describes the multi-sampling state of a render pipeline.
@@ -399,33 +389,23 @@ pub struct PrimitiveState {
 /// Corresponds to [WebGPU `GPUMultisampleState`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpumultisamplestate).
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct MultisampleState {
     /// The number of samples calculated per pixel (for MSAA). For non-multisampled textures,
     /// this should be `1`
-    pub count: u32,
+    pub count: u32 = 1,
     /// Bitmask that restricts the samples of a pixel modified by this pipeline. All samples
     /// can be enabled using the value `!0`
-    pub mask: u64,
+    pub mask: u64 = !0,
     /// When enabled, produces another sample mask per pixel based on the alpha output value, that
     /// is ANDed with the sample mask and the primitive coverage to restrict the set of samples
     /// affected by a primitive.
     ///
     /// The implicit mask produced for alpha of zero is guaranteed to be zero, and for alpha of one
     /// is guaranteed to be all 1-s.
-    pub alpha_to_coverage_enabled: bool,
-}
-
-impl Default for MultisampleState {
-    fn default() -> Self {
-        MultisampleState {
-            count: 1,
-            mask: !0,
-            alpha_to_coverage_enabled: false,
-        }
-    }
+    pub alpha_to_coverage_enabled: bool = false,
 }
 
 /// Format of indices used with pipeline.
@@ -694,6 +674,7 @@ pub enum LoadOp<V> {
     /// As a result, it is recommended to use "clear" rather than "load" in cases
     /// where the initial value doesn’t matter
     /// (e.g. the render target will be cleared using a skybox).
+    // TODO: make optional to specify, needs `Default`
     Clear(V) = 0,
     /// Loads the existing value for this attachment into the render pass.
     Load = 1,

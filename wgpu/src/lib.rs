@@ -72,6 +72,7 @@
 //! - **`naga`** --- Enabled when target `glsl` or `spirv`` input is enabled, or when `wgpu_core` is enabled.
 //!
 
+#![feature(default_field_values)]
 #![no_std]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu/trunk/logo.png")]

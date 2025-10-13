@@ -228,9 +228,9 @@ pub struct SurfaceConfiguration<V> {
     #[doc = link_to_wgpu_docs!(["`Surface::get_current_texture`"]: "struct.Surface.html#method.get_current_texture")]
     #[doc = link_to_wgpu_docs!(["`Surface::get_default_config`"]: "struct.Surface.html#method.get_default_config")]
     /// [SMFL]: https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_3/nf-dxgi1_3-idxgiswapchain2-setmaximumframelatency
-    pub desired_maximum_frame_latency: u32,
+    pub desired_maximum_frame_latency: u32 = 2,
     /// Specifies how the alpha channel of the textures should be handled during compositing.
-    pub alpha_mode: CompositeAlphaMode,
+    pub alpha_mode: CompositeAlphaMode = CompositeAlphaMode::Auto,
     /// Specifies what view formats will be allowed when calling `Texture::create_view` on the texture returned by `Surface::get_current_texture`.
     ///
     /// View formats of the same format as the texture are always allowed.

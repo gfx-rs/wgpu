@@ -91,7 +91,7 @@ impl crate::framework::Example for Example {
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
         wgpu::DownlevelCapabilities {
             flags: wgpu::DownlevelFlags::COMPUTE_SHADERS,
-            ..Default::default()
+            ..
         }
     }
 
@@ -174,28 +174,18 @@ impl crate::framework::Example for Example {
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
-            layout: None,
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                compilation_options: Default::default(),
-                buffers: &[],
+                ..
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: Some("fs_main"),
-                compilation_options: Default::default(),
                 targets: &[Some(config.format.into())],
+                ..
             }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                ..Default::default()
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
-            cache: None,
+            ..
         });
 
         let bind_group_layout = pipeline.get_bind_group_layout(0);
@@ -318,20 +308,15 @@ impl crate::framework::Example for Example {
 
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
-                    depth_slice: None,
-                    resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
                         store: wgpu::StoreOp::Store,
                     },
+                    ..
                 })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
+                ..
             });
 
             rpass.set_pipeline(&self.pipeline);

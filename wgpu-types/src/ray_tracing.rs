@@ -57,6 +57,7 @@ pub enum AccelerationStructureUpdateMode {
 /// Descriptor for creating a bottom level acceleration structure.
 pub struct CreateBlasDescriptor<L> {
     /// Label for the bottom level acceleration structure.
+    // TODO: make optional to specify
     pub label: L,
     /// Flags for the bottom level acceleration structure.
     pub flags: AccelerationStructureFlags,

@@ -13,6 +13,7 @@ use crate::{DownlevelFlags, COPY_BUFFER_ALIGNMENT};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BufferDescriptor<L> {
     /// Debug label of a buffer. This will show up in graphics debuggers for easy identification.
+    // TODO: make optional to specify
     pub label: L,
     /// Size of a buffer, in bytes.
     pub size: crate::BufferAddress,
@@ -28,7 +29,7 @@ pub struct BufferDescriptor<L> {
     ///
     /// If this is `true`, [`size`](#structfield.size) must be a multiple of
     /// [`COPY_BUFFER_ALIGNMENT`].
-    pub mapped_at_creation: bool,
+    pub mapped_at_creation: bool = false,
 }
 
 impl<L> BufferDescriptor<L> {

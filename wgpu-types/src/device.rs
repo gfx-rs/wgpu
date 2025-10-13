@@ -11,27 +11,28 @@ use serde::{Deserialize, Serialize};
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DeviceDescriptor<L> {
     /// Debug label for the device.
+    // TODO: make optional to specify
     pub label: L,
     /// Specifies the features that are required by the device request.
     /// The request will fail if the adapter cannot provide these features.
     ///
     /// Exactly the specified set of features, and no more or less,
     /// will be allowed in validation of API calls on the resulting device.
-    pub required_features: crate::Features,
+    pub required_features: crate::Features = crate::Features::empty(),
     /// Specifies the limits that are required by the device request.
     /// The request will fail if the adapter cannot provide these limits.
     ///
     /// Exactly the specified limits, and no better or worse,
     /// will be allowed in validation of API calls on the resulting device.
-    pub required_limits: crate::Limits,
+    pub required_limits: crate::Limits = crate::Limits::defaults(),
     /// Specifies whether `self.required_features` is allowed to contain experimental features.
     #[cfg_attr(feature = "serde", serde(skip))]
-    pub experimental_features: crate::ExperimentalFeatures,
+    pub experimental_features: crate::ExperimentalFeatures = crate::ExperimentalFeatures::disabled(),
     /// Hints for memory allocation strategies.
-    pub memory_hints: MemoryHints,
+    pub memory_hints: MemoryHints = MemoryHints::Performance,
     /// Whether API tracing for debugging is enabled,
     /// and where the trace is written if so.
-    pub trace: Trace,
+    pub trace: Trace = Trace::Off,
 }
 
 impl<L> DeviceDescriptor<L> {

@@ -675,37 +675,20 @@ impl Limits {
 
 /// Represents the sets of additional limits on an adapter,
 /// which take place when running on downlevel backends.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DownlevelLimits {}
 
-#[allow(clippy::derivable_impls)]
-impl Default for DownlevelLimits {
-    fn default() -> Self {
-        DownlevelLimits {}
-    }
-}
-
 /// Lists various ways the underlying platform does not conform to the WebGPU standard.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DownlevelCapabilities {
     /// Combined boolean flags.
-    pub flags: DownlevelFlags,
+    pub flags: DownlevelFlags = DownlevelFlags::all(),
     /// Additional limits
-    pub limits: DownlevelLimits,
+    pub limits: DownlevelLimits = DownlevelLimits {},
     /// Which collections of features shaders support. Defined in terms of D3D's shader models.
-    pub shader_model: ShaderModel,
-}
-
-impl Default for DownlevelCapabilities {
-    fn default() -> Self {
-        Self {
-            flags: DownlevelFlags::all(),
-            limits: DownlevelLimits::default(),
-            shader_model: ShaderModel::Sm5,
-        }
-    }
+    pub shader_model: ShaderModel = ShaderModel::Sm5,
 }
 
 impl DownlevelCapabilities {

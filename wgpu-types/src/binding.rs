@@ -29,7 +29,7 @@ pub enum BindingType {
     /// https://gpuweb.github.io/gpuweb/#dictdef-gpubufferbindinglayout).
     Buffer {
         /// Sub-type of the buffer binding.
-        ty: BufferBindingType,
+        ty: BufferBindingType = BufferBindingType::Uniform,
 
         /// Indicates that the binding has a dynamic offset.
         ///
@@ -38,7 +38,7 @@ pub enum BindingType {
         ///
         #[doc = link_to_wgpu_docs!(["RPsbg"]: "struct.RenderPass.html#method.set_bind_group")]
         #[cfg_attr(feature = "serde", serde(default))]
-        has_dynamic_offset: bool,
+        has_dynamic_offset: bool = false,
 
         /// The minimum size for a [`BufferBinding`] matching this entry, in bytes.
         ///
@@ -66,7 +66,7 @@ pub enum BindingType {
         #[doc = link_to_wgpu_docs!(["`create_render_pipeline`"]: "struct.Device.html#method.create_render_pipeline")]
         #[doc = link_to_wgpu_docs!(["`create_compute_pipeline`"]: "struct.Device.html#method.create_compute_pipeline")]
         #[cfg_attr(feature = "serde", serde(default))]
-        min_binding_size: Option<BufferSize>,
+        min_binding_size: Option<BufferSize> = None,
     },
     /// A sampler that can be used to sample a texture.
     ///
@@ -84,6 +84,7 @@ pub enum BindingType {
     ///
     /// Corresponds to [WebGPU `GPUSamplerBindingLayout`](
     /// https://gpuweb.github.io/gpuweb/#dictdef-gpusamplerbindinglayout).
+    // TODO: make optional to specify
     Sampler(SamplerBindingType),
     /// A texture binding.
     ///
@@ -103,13 +104,13 @@ pub enum BindingType {
     /// https://gpuweb.github.io/gpuweb/#dictdef-gputexturebindinglayout).
     Texture {
         /// Sample type of the texture binding.
-        sample_type: crate::TextureSampleType,
+        sample_type: crate::TextureSampleType = crate::TextureSampleType::Float { filterable: true },
         /// Dimension of the texture view that is going to be sampled.
-        view_dimension: crate::TextureViewDimension,
+        view_dimension: crate::TextureViewDimension = crate::TextureViewDimension::D2,
         /// True if the texture has a sample count greater than 1. If this is true,
         /// the texture must be declared as `texture_multisampled_2d` or
         /// `texture_depth_multisampled_2d` in the shader, and read using `textureLoad`.
-        multisampled: bool,
+        multisampled: bool = false,
     },
     /// A storage texture.
     ///
@@ -131,11 +132,11 @@ pub enum BindingType {
     /// https://gpuweb.github.io/gpuweb/#dictdef-gpustoragetexturebindinglayout).
     StorageTexture {
         /// Allowed access to this texture.
-        access: crate::StorageTextureAccess,
+        access: crate::StorageTextureAccess = crate::StorageTextureAccess::WriteOnly,
         /// Format of the texture.
         format: crate::TextureFormat,
         /// Dimension of the texture view that is going to be sampled.
-        view_dimension: crate::TextureViewDimension,
+        view_dimension: crate::TextureViewDimension = crate::TextureViewDimension::D2,
     },
 
     /// A ray-tracing acceleration structure binding.
@@ -162,7 +163,7 @@ pub enum BindingType {
         /// create a ray query that has flag vertex return in the shader
         ///
         /// If enabled requires [`Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN`]
-        vertex_return: bool,
+        vertex_return: bool = false,
     },
 
     /// An external texture binding.
@@ -296,12 +297,13 @@ pub enum BufferBindingType {
 /// Corresponds to [WebGPU `GPUSamplerBindingType`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpusamplerbindingtype).
 #[repr(C)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub enum SamplerBindingType {
     /// The sampling result is produced based on more than a single color sample from a texture,
     /// e.g. when bilinear interpolation is enabled.
+    #[default]
     Filtering,
     /// The sampling result is produced based on a single color sample from a texture.
     NonFiltering,
@@ -337,5 +339,5 @@ pub struct BindGroupLayoutEntry {
     /// - When any binding in the group is an array, no `BindingType::Buffer` in the group may have `ty.ty == BufferBindingType::Uniform`.
     ///
     #[cfg_attr(feature = "serde", serde(default))]
-    pub count: Option<NonZeroU32>,
+    pub count: Option<NonZeroU32> = None,
 }

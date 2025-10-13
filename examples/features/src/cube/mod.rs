@@ -131,15 +131,13 @@ impl crate::framework::Example for Example {
 
         // Create pipeline layout
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: None,
             entries: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::VERTEX,
                     ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
                         min_binding_size: wgpu::BufferSize::new(64),
+                        ..
                     },
                     count: None,
                 },
@@ -147,18 +145,17 @@ impl crate::framework::Example for Example {
                     binding: 1,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Texture {
-                        multisampled: false,
                         sample_type: wgpu::TextureSampleType::Uint,
-                        view_dimension: wgpu::TextureViewDimension::D2,
+                        ..
                     },
                     count: None,
                 },
             ],
+            ..
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
             bind_group_layouts: &[&bind_group_layout],
-            immediates_ranges: &[],
+            ..
         });
 
         // Create the texture
@@ -167,26 +164,23 @@ impl crate::framework::Example for Example {
         let texture_extent = wgpu::Extent3d {
             width: size,
             height: size,
-            depth_or_array_layers: 1,
+            ..
         };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: texture_extent,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::R8Uint,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
+            ..
         });
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         queue.write_texture(
             texture.as_image_copy(),
             &texels,
             wgpu::TexelCopyBufferLayout {
-                offset: 0,
                 bytes_per_row: Some(size),
-                rows_per_image: None,
+                ..
             },
             texture_extent,
         );
@@ -220,7 +214,6 @@ impl crate::framework::Example for Example {
 
         let vertex_buffers = [wgpu::VertexBufferLayout {
             array_stride: vertex_size as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &[
                 wgpu::VertexAttribute {
                     format: wgpu::VertexFormat::Float32x4,
@@ -233,31 +226,28 @@ impl crate::framework::Example for Example {
                     shader_location: 1,
                 },
             ],
+            ..
         }];
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: None,
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                compilation_options: Default::default(),
                 buffers: &vertex_buffers,
+                ..
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
                 entry_point: Some("fs_main"),
-                compilation_options: Default::default(),
                 targets: &[Some(config.view_formats[0].into())],
+                ..
             }),
             primitive: wgpu::PrimitiveState {
                 cull_mode: Some(wgpu::Face::Back),
-                ..Default::default()
+                ..
             },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
-            cache: None,
+            ..
         });
 
         let pipeline_wire = if device
@@ -265,41 +255,36 @@ impl crate::framework::Example for Example {
             .contains(wgpu::Features::POLYGON_MODE_LINE)
         {
             let pipeline_wire = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-                label: None,
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
                     module: &shader,
                     entry_point: Some("vs_main"),
-                    compilation_options: Default::default(),
                     buffers: &vertex_buffers,
+                    ..
                 },
                 fragment: Some(wgpu::FragmentState {
                     module: &shader,
                     entry_point: Some("fs_wire"),
-                    compilation_options: Default::default(),
                     targets: &[Some(wgpu::ColorTargetState {
                         format: config.view_formats[0],
                         blend: Some(wgpu::BlendState {
                             color: wgpu::BlendComponent {
-                                operation: wgpu::BlendOperation::Add,
                                 src_factor: wgpu::BlendFactor::SrcAlpha,
                                 dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                                ..
                             },
                             alpha: wgpu::BlendComponent::REPLACE,
                         }),
-                        write_mask: wgpu::ColorWrites::ALL,
+                        ..
                     })],
+                    ..
                 }),
                 primitive: wgpu::PrimitiveState {
-                    front_face: wgpu::FrontFace::Ccw,
                     cull_mode: Some(wgpu::Face::Back),
                     polygon_mode: wgpu::PolygonMode::Line,
-                    ..Default::default()
+                    ..
                 },
-                depth_stencil: None,
-                multisample: wgpu::MultisampleState::default(),
-                multiview_mask: None,
-                cache: None,
+                ..
             });
             Some(pipeline_wire)
         } else {
@@ -338,11 +323,8 @@ impl crate::framework::Example for Example {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
-                    depth_slice: None,
-                    resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
                             r: 0.1,
@@ -352,11 +334,9 @@ impl crate::framework::Example for Example {
                         }),
                         store: wgpu::StoreOp::Store,
                     },
+                    ..
                 })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
+                ..
             });
             rpass.push_debug_group("Prepare data for draw.");
             rpass.set_pipeline(&self.pipeline);

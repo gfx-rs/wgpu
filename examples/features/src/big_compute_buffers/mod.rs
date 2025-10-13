@@ -27,13 +27,12 @@ pub async fn execute_gpu(numbers: &[f32]) -> Vec<f32> {
             required_features: Features::BUFFER_BINDING_ARRAY
                 | Features::STORAGE_RESOURCE_BINDING_ARRAY
                 | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-            memory_hints: wgpu::MemoryHints::Performance,
             required_limits: wgpu::Limits {
                 max_buffer_size: MAX_BUFFER_SIZE,
                 max_binding_array_elements_per_shader_stage: 8,
                 ..Default::default()
             },
-            ..Default::default()
+            ..
         })
         .await
         .unwrap();
@@ -48,12 +47,11 @@ pub async fn execute_gpu_inner(
 ) -> Vec<f32> {
     let (staging_buffers, storage_buffers, bind_group, compute_pipeline) = setup(device, numbers);
 
-    let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
     {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("compute pass descriptor"),
-            timestamp_writes: None,
+            ..
         });
         cpass.set_pipeline(&compute_pipeline);
         cpass.set_bind_group(0, Some(&bind_group), &[]);
@@ -127,7 +125,7 @@ fn setup_pipeline(
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("Compute Pipeline Layout"),
         bind_group_layouts: &[&bind_group_layout],
-        immediates_ranges: &[],
+        ..
     });
 
     device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -135,8 +133,7 @@ fn setup_pipeline(
         layout: Some(&pipeline_layout),
         module: &cs_module,
         entry_point: Some("main"),
-        compilation_options: Default::default(),
-        cache: None,
+        ..
     })
 }
 
@@ -159,8 +156,8 @@ fn setup_binds(
         visibility: wgpu::ShaderStages::COMPUTE,
         ty: wgpu::BindingType::Buffer {
             ty: wgpu::BufferBindingType::Storage { read_only: false },
-            has_dynamic_offset: false,
             min_binding_size: Some(NonZeroU64::new(4).unwrap()),
+            ..
         },
         count: Some(NonZeroU32::new(buffers.len() as u32).unwrap()),
     };
@@ -213,7 +210,7 @@ fn create_staging_buffers(device: &wgpu::Device, numbers: &[f32]) -> Vec<wgpu::B
                 label: Some(&format!("staging buffer-{e}")),
                 size,
                 usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
+                ..
             })
         })
         .collect()

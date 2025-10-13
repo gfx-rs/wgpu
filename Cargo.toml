@@ -262,6 +262,8 @@ wgpu = { path = "./wgpu" }
 # https://github.com/Xudong-Huang/generator-rs/pull/75
 generator = { git = "https://github.com/Xudong-Huang/generator-rs", rev = "70b89fdabcc0e82fe84ca17f65cc52ff25e8e6de" }
 
+syn = { git = "https://github.com/erichdongubler-contrib/syn", rev = "146280b69756a0a8882d21ed061752214da94049" }
+
 [profile.release]
 lto = "thin"
 debug = true

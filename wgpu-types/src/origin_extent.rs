@@ -13,14 +13,14 @@ use crate::TextureDimension;
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Origin2d {
     #[allow(missing_docs)]
-    pub x: u32,
+    pub x: u32 = 0,
     #[allow(missing_docs)]
-    pub y: u32,
+    pub y: u32 = 0,
 }
 
 impl Origin2d {
     /// Zero origin.
-    pub const ZERO: Self = Self { x: 0, y: 0 };
+    pub const ZERO: Self = Self { .. };
 
     /// Adds the third dimension to this origin
     #[must_use]
@@ -49,16 +49,16 @@ impl core::fmt::Debug for Origin2d {
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub struct Origin3d {
     /// X position of the origin
-    pub x: u32,
+    pub x: u32 = 0,
     /// Y position of the origin
-    pub y: u32,
+    pub y: u32 = 0,
     /// Z position of the origin
-    pub z: u32,
+    pub z: u32 = 0,
 }
 
 impl Origin3d {
     /// Zero origin.
-    pub const ZERO: Self = Self { x: 0, y: 0, z: 0 };
+    pub const ZERO: Self = Self { .. };
 
     /// Removes the third dimension from this origin
     #[must_use]
@@ -94,10 +94,11 @@ pub struct Extent3d {
     /// Width of the extent
     pub width: u32,
     /// Height of the extent
-    pub height: u32,
+    #[cfg_attr(feature = "serde", serde(default = "default_depth"))]
+    pub height: u32 = 1,
     /// The depth of the extent or the number of array layers
     #[cfg_attr(feature = "serde", serde(default = "default_depth"))]
-    pub depth_or_array_layers: u32,
+    pub depth_or_array_layers: u32 = 1,
 }
 
 impl core::fmt::Debug for Extent3d {
@@ -113,11 +114,7 @@ fn default_depth() -> u32 {
 
 impl Default for Extent3d {
     fn default() -> Self {
-        Self {
-            width: 1,
-            height: 1,
-            depth_or_array_layers: 1,
-        }
+        Self { width: 1, .. }
     }
 }
 

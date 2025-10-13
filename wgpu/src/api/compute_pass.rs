@@ -167,9 +167,9 @@ pub struct ComputePassTimestampWrites<'a> {
     /// The query set to write to.
     pub query_set: &'a QuerySet,
     /// The index of the query set at which a start timestamp of this pass is written, if any.
-    pub beginning_of_pass_write_index: Option<u32>,
+    pub beginning_of_pass_write_index: Option<u32> = None,
     /// The index of the query set at which an end timestamp of this pass is written, if any.
-    pub end_of_pass_write_index: Option<u32>,
+    pub end_of_pass_write_index: Option<u32> = None,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePassTimestampWrites<'_>: Send, Sync);
@@ -183,11 +183,11 @@ static_assertions::assert_impl_all!(ComputePassTimestampWrites<'_>: Send, Sync);
 #[derive(Clone, Default, Debug)]
 pub struct ComputePassDescriptor<'a> {
     /// Debug label of the compute pass. This will show up in graphics debuggers for easy identification.
-    pub label: Label<'a>,
+    pub label: Label<'a> = None,
     /// Defines which timestamp values will be written for this pass, and where to write them to.
     ///
     /// Requires [`Features::TIMESTAMP_QUERY`] to be enabled.
-    pub timestamp_writes: Option<ComputePassTimestampWrites<'a>>,
+    pub timestamp_writes: Option<ComputePassTimestampWrites<'a>> = None,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(ComputePassDescriptor<'_>: Send, Sync);

@@ -32,7 +32,7 @@ impl PipelineLayout {
 #[derive(Clone, Debug, Default)]
 pub struct PipelineLayoutDescriptor<'a> {
     /// Debug label of the pipeline layout. This will show up in graphics debuggers for easy identification.
-    pub label: Label<'a>,
+    pub label: Label<'a> = None,
     /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
     /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
     pub bind_group_layouts: &'a [&'a BindGroupLayout],
@@ -41,7 +41,7 @@ pub struct PipelineLayoutDescriptor<'a> {
     /// buffer.
     ///
     /// If this array is non-empty, the [`Features::IMMEDIATES`] must be enabled.
-    pub immediates_ranges: &'a [ImmediateRange],
+    pub immediates_ranges: &'a [ImmediateRange] = &[],
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(PipelineLayoutDescriptor<'_>: Send, Sync);
