@@ -667,9 +667,9 @@ pub struct Limits {
     /// Defaults to 65535. Higher is "better".
     pub max_compute_workgroups_per_dimension: u32,
 
-    /// Minimal number of invocations in a subgroup. Higher is "better".
+    /// Minimal number of invocations in a subgroup. Lower is "better".
     pub min_subgroup_size: u32,
-    /// Maximal number of invocations in a subgroup. Lower is "better".
+    /// Maximal number of invocations in a subgroup. Higher is "better".
     pub max_subgroup_size: u32,
     /// Amount of storage available for push constants in bytes. Defaults to 0. Higher is "better".
     /// Requesting more than 0 during device creation requires [`Features::PUSH_CONSTANTS`] to be enabled.
