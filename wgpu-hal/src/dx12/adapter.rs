@@ -554,6 +554,11 @@ impl super::Adapter {
 
         features.set(wgt::Features::MULTIVIEW, view_instancing);
 
+        features.set(
+            wgt::Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
+            mesh_shader_supported && view_instancing,
+        );
+
         // TODO: Determine if IPresentationManager is supported
         let presentation_timer = auxil::dxgi::time::PresentationTimer::new_dxgi();
 
@@ -579,6 +584,8 @@ impl super::Adapter {
         } else {
             max_srv_count / 2
         };
+
+        let max_multiview_view_count = if view_instancing { 4 } else { 0 };
 
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
@@ -679,7 +686,11 @@ impl super::Adapter {
                     max_task_workgroups_per_dimension:
                         Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
                     // Multiview not supported by WGPU yet
-                    max_mesh_multiview_view_count: 0,
+                    max_mesh_multiview_view_count: if mesh_shader_supported {
+                        max_multiview_view_count
+                    } else {
+                        0
+                    },
                     // This seems to be right, and I can't find anything to suggest it would be less than the 2048 provided here
                     max_mesh_output_layers: Direct3D12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION,
 
@@ -707,7 +718,7 @@ impl super::Adapter {
                     // See https://microsoft.github.io/DirectX-Specs/d3d/ViewInstancing.html#maximum-viewinstancecount
                     // This is really frickin annoying, 6 (probably 8) for cube mapping would be really nice. But they
                     // arbitrarily chose 4, eliminating tons of use cases.
-                    max_multiview_view_count: if view_instancing { 4 } else { 0 },
+                    max_multiview_view_count,
                 },
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(

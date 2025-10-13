@@ -235,6 +235,7 @@ pub struct RenderPassDescriptor<'a> {
     pub timestamp_writes: Option<&'a PassTimestampWrites>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<id::QuerySetId>,
+    /// The multiview array layers that will be used
     pub multiview_mask: Option<NonZeroU32>,
 }
 
