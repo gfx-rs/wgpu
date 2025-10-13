@@ -675,7 +675,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     if (mv & (1 << i)) != 0 {
                         maps.push(metal::VertexAmplificationViewMapping {
                             renderTargetArrayIndexOffset: i,
-                            viewportArrayIndexOffset: 0,
+                            viewportArrayIndexOffset: i,
                         });
                     }
                 }
