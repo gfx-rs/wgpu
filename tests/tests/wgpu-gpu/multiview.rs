@@ -38,9 +38,6 @@ static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration
     .run_async(|ctx| run_test(ctx, 4));
 
 async fn run_test(ctx: TestingContext, num_layers: u32) {
-    unsafe {
-        ctx.device.start_graphics_debugger_capture();
-    }
     let vertex_buffer_content: &[f32; 12] = &[
         // Triangle 1
         -1.0, -1.0, // Bottom left
@@ -203,9 +200,6 @@ async fn run_test(ctx: TestingContext, num_layers: u32) {
     })
     .await
     .unwrap();
-    unsafe {
-        ctx.device.stop_graphics_debugger_capture();
-    }
 
     let data = slice.get_mapped_range();
     let each_texture_size = (TEXTURE_SIZE * TEXTURE_SIZE) as usize;

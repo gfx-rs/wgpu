@@ -149,9 +149,6 @@ impl crate::framework::Example for Example {
         }
     }
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        unsafe {
-            device.start_graphics_debugger_capture();
-        }
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         {
             let multiview_mask = 1 | (1 << (LAYERS - 1));
@@ -187,9 +184,6 @@ impl crate::framework::Example for Example {
             self.blitter.copy(device, &mut encoder, &self.view2, view);
         }
         queue.submit(Some(encoder.finish()));
-        unsafe {
-            device.stop_graphics_debugger_capture();
-        }
     }
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
         Default::default()
