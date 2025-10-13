@@ -7,7 +7,7 @@ use wgt::{
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::{convert::Infallible, fmt, str};
 
-use crate::{binding_model::BindError, resource::RawResourceAccess};
+use crate::{api_log, binding_model::BindError, resource::RawResourceAccess};
 use crate::{
     binding_model::{LateMinBufferBindingSizeMismatch, PushConstantUploadError},
     command::{
@@ -853,6 +853,8 @@ fn set_pipeline(
 }
 
 fn dispatch(state: &mut State, groups: [u32; 3]) -> Result<(), ComputePassErrorInner> {
+    api_log!("ComputePass::dispatch {groups:?}");
+
     state.is_ready()?;
 
     state.flush_states(None)?;
@@ -888,6 +890,8 @@ fn dispatch_indirect(
     buffer: Arc<Buffer>,
     offset: u64,
 ) -> Result<(), ComputePassErrorInner> {
+    api_log!("ComputePass::dispatch_indirect");
+
     buffer.same_device(device)?;
 
     state.is_ready()?;
