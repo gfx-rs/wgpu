@@ -224,7 +224,7 @@ impl RenderpassState {
                         })],
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                     }),
-                    multiview: None,
+                    multiview_mask: None,
                     cache: None,
                 });
 
@@ -322,7 +322,7 @@ impl RenderpassState {
                         })],
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                     }),
-                    multiview: None,
+                    multiview_mask: None,
                     cache: None,
                 },
             ));

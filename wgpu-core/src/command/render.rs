@@ -927,7 +927,6 @@ struct RenderPassInfo {
     extent: wgt::Extent3d,
 
     divergent_discarded_depth_stencil_aspect: Option<(wgt::TextureAspect, Arc<TextureView>)>,
-    multiview: Option<NonZeroU32>,
     multiview_mask: Option<NonZeroU32>,
 }
 
@@ -1373,7 +1372,14 @@ impl RenderPassInfo {
         }
 
         let extent = extent.ok_or(RenderPassErrorInner::MissingAttachments)?;
-        let multiview = detected_multiview.expect("Multiview was not detected, no attachments");
+
+        let detected_multiview =
+            detected_multiview.expect("Multiview was not detected, no attachments");
+        if let Some(mask) = multiview_mask {
+            // 0x01 will have msb 0
+            let mask_msb = 31 - mask.leading_zeros();
+            assert!(mask_msb < detected_multiview.unwrap().get());
+        }
 
         let attachment_formats = AttachmentData {
             colors: color_attachments
@@ -1398,7 +1404,7 @@ impl RenderPassInfo {
         let context = RenderPassContext {
             attachments: attachment_formats,
             sample_count,
-            multiview,
+            multiview_mask,
         };
 
         let timestamp_writes_hal = if let Some(tw) = timestamp_writes.as_ref() {
@@ -1469,7 +1475,6 @@ impl RenderPassInfo {
             is_stencil_read_only,
             extent,
             divergent_discarded_depth_stencil_aspect,
-            multiview,
             multiview_mask,
         })
     }
@@ -2695,7 +2700,7 @@ fn draw_mesh_tasks(
     api_log!("RenderPass::draw_mesh_tasks {group_count_x} {group_count_y} {group_count_z}");
 
     state.is_ready(DrawCommandFamily::DrawMeshTasks)?;
-    if let Some(mv) = state.info.multiview {
+    if let Some(mv) = state.info.multiview_mask {
         if !state
             .pass
             .base

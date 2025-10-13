@@ -314,7 +314,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         };
 

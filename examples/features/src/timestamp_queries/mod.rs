@@ -358,7 +358,7 @@ fn render_pass(
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     });
     let render_target = device.create_texture(&wgpu::TextureDescriptor {

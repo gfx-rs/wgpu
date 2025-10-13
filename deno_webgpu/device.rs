@@ -879,7 +879,7 @@ impl GPUDevice {
       multisample,
       fragment,
       cache: None,
-      multiview: None,
+      multiview_mask: None,
     };
 
     let (id, err) = self.instance.device_create_render_pipeline(

@@ -113,7 +113,7 @@ async fn reinterpret(
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
     let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {

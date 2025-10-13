@@ -99,7 +99,7 @@ async fn set_array_stride_to_0(ctx: TestingContext) {
                 write_mask: wgpu::ColorWrites::ALL,
             })],
         }),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     };
     let mut first_pipeline_desc = pipeline_desc.clone();

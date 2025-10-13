@@ -46,7 +46,7 @@ fn test_planar_texture_creation_sampling(
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 

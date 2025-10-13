@@ -26,7 +26,6 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
-        let layers = 2;
         let shader_src = "
             @vertex
             fn vs_main(@location(0) position: vec2f) -> @builtin(position) vec4f {
@@ -67,7 +66,7 @@ impl crate::framework::Example for Example {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview: NonZero::new(layers),
+            multiview_mask: NonZero::new(1 | (1 << (LAYERS - 1))),
             multisample: Default::default(),
             layout: None,
             depth_stencil: None,
@@ -93,7 +92,7 @@ impl crate::framework::Example for Example {
             size: wgpu::Extent3d {
                 width: TEXTURE_SIZE,
                 height: TEXTURE_SIZE,
-                depth_or_array_layers: layers,
+                depth_or_array_layers: LAYERS,
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -113,7 +112,7 @@ impl crate::framework::Example for Example {
             base_mip_level: 0,
             mip_level_count: None,
             base_array_layer: 0,
-            array_layer_count: Some(layers),
+            array_layer_count: Some(LAYERS),
         });
         let view1 = texture.create_view(&wgpu::TextureViewDescriptor {
             label: None,
@@ -134,7 +133,7 @@ impl crate::framework::Example for Example {
             aspect: wgpu::TextureAspect::All,
             base_mip_level: 0,
             mip_level_count: None,
-            base_array_layer: layers - 1,
+            base_array_layer: LAYERS - 1,
             array_layer_count: Some(1),
         });
         let blitter = wgpu::util::TextureBlitter::new(device, config.format);

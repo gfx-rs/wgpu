@@ -280,7 +280,7 @@ impl<A: hal::Api> Example<A> {
                 blend: Some(wgpu_types::BlendState::ALPHA_BLENDING),
                 write_mask: wgpu_types::ColorWrites::default(),
             })],
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         };
         let pipeline = unsafe { device.create_render_pipeline(&pipeline_desc).unwrap() };

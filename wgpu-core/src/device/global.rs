@@ -1524,7 +1524,7 @@ impl Global {
                 depth_stencil: desc.depth_stencil.clone(),
                 multisample: desc.multisample,
                 fragment,
-                multiview: desc.multiview,
+                multiview_mask: desc.multiview_mask,
                 cache,
             };
 

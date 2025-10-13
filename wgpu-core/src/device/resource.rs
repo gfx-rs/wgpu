@@ -4269,7 +4269,7 @@ impl Device {
         };
 
         // Multiview is only supported if the feature is enabled
-        if desc.multiview.is_some() {
+        if desc.multiview_mask.is_some() {
             self.require_features(wgt::Features::MULTIVIEW)?;
         }
 
@@ -4320,7 +4320,7 @@ impl Device {
                 multisample: desc.multisample,
                 fragment_stage,
                 color_targets,
-                multiview: desc.multiview,
+                multiview_mask: desc.multiview_mask,
                 cache: cache.as_ref().map(|it| it.raw()),
             };
             unsafe { self.raw().create_render_pipeline(&pipeline_desc) }.map_err(
@@ -4354,7 +4354,7 @@ impl Device {
                 depth_stencil: depth_stencil_state.as_ref().map(|state| state.format),
             },
             sample_count: samples,
-            multiview: desc.multiview,
+            multiview_mask: desc.multiview_mask,
         };
 
         let mut flags = pipeline::PipelineFlags::empty();

@@ -30,7 +30,7 @@ pub(crate) fn new_render_bundle_encoder_descriptor<'a>(
             }
         }),
         sample_count: context.sample_count,
-        multiview: context.multiview,
+        multiview: context.multiview_mask,
     }
 }
 

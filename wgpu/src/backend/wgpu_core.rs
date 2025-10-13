@@ -1367,7 +1367,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     targets: Borrowed(frag.targets),
                 }
             }),
-            multiview: desc.multiview,
+            multiview_mask: desc.multiview_mask,
             cache: desc.cache.map(|cache| cache.inner.as_core().id),
         };
 

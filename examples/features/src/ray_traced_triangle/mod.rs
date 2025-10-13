@@ -309,7 +309,7 @@ impl crate::framework::Example for Example {
                     write_mask: Default::default(),
                 })],
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 

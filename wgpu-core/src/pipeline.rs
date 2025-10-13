@@ -459,7 +459,7 @@ pub struct RenderPipelineDescriptor<
     pub fragment: Option<FragmentState<'a, SM>>,
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
-    pub multiview: Option<NonZeroU32>,
+    pub multiview_mask: Option<NonZeroU32>,
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<PLC>,
 }
@@ -524,7 +524,7 @@ pub(crate) struct GeneralRenderPipelineDescriptor<
     pub fragment: Option<FragmentState<'a, SM>>,
     /// If the pipeline will be used with a multiview render pass, this indicates how many array
     /// layers the attachments will have.
-    pub multiview: Option<NonZeroU32>,
+    pub multiview_mask: Option<NonZeroU32>,
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<PLC>,
 }
@@ -540,7 +540,7 @@ impl<'a, PLL, SM, PLC> From<RenderPipelineDescriptor<'a, PLL, SM, PLC>>
             depth_stencil: value.depth_stencil,
             multisample: value.multisample,
             fragment: value.fragment,
-            multiview: value.multiview,
+            multiview_mask: value.multiview_mask,
             cache: value.cache,
         }
     }
@@ -557,7 +557,7 @@ impl<'a, PLL, SM, PLC> From<MeshPipelineDescriptor<'a, PLL, SM, PLC>>
             depth_stencil: value.depth_stencil,
             multisample: value.multisample,
             fragment: value.fragment,
-            multiview: value.multiview,
+            multiview_mask: value.multiview,
             cache: value.cache,
         }
     }

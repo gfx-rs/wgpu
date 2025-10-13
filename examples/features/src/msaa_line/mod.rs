@@ -77,7 +77,7 @@ impl Example {
                 count: sample_count,
                 ..Default::default()
             },
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
         let mut encoder =

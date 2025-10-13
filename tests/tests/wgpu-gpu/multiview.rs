@@ -96,7 +96,7 @@ async fn run_test(ctx: TestingContext, num_layers: u32) {
                 write_mask: wgpu::ColorWrites::ALL,
             })],
         }),
-        multiview: NonZero::new(num_layers),
+        multiview_mask: NonZero::new(1 + (1 << (num_layers - 1))),
         multisample: Default::default(),
         layout: None,
         depth_stencil: None,
