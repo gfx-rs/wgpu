@@ -10,6 +10,7 @@ use wgpu_test::{
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(DRAW_MULTIVIEW);
+    vec.push(DRAW_MULTIVIEW_NONCONTIGUOUS);
 }
 
 #[gpu_test]
@@ -22,9 +23,21 @@ static DRAW_MULTIVIEW: GpuTestConfiguration = GpuTestConfiguration::new()
                 ..Limits::defaults()
             }),
     )
-    .run_async(run_test);
+    .run_async(|ctx| run_test(ctx, 2));
 
-async fn run_test(ctx: TestingContext) {
+#[gpu_test]
+static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::MULTIVIEW)
+            .limits(Limits {
+                max_multiview_view_count: 4,
+                ..Limits::defaults()
+            }),
+    )
+    .run_async(|ctx| run_test(ctx, 4));
+
+async fn run_test(ctx: TestingContext, num_layers: u32) {
     unsafe {
         ctx.device.start_graphics_debugger_capture();
     }
@@ -86,7 +99,7 @@ async fn run_test(ctx: TestingContext) {
                 write_mask: wgpu::ColorWrites::ALL,
             })],
         }),
-        multiview: NonZero::new(2),
+        multiview: NonZero::new(num_layers),
         multisample: Default::default(),
         layout: None,
         depth_stencil: None,
@@ -99,7 +112,7 @@ async fn run_test(ctx: TestingContext) {
         size: wgpu::Extent3d {
             width: TEXTURE_SIZE,
             height: TEXTURE_SIZE,
-            depth_or_array_layers: 2,
+            depth_or_array_layers: num_layers,
         },
         mip_level_count: 1,
         sample_count: 1,
@@ -117,19 +130,22 @@ async fn run_test(ctx: TestingContext) {
         base_mip_level: 0,
         mip_level_count: None,
         base_array_layer: 0,
-        array_layer_count: Some(2),
+        array_layer_count: Some(num_layers),
     });
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-        size: TEXTURE_SIZE as u64 * TEXTURE_SIZE as u64 * 2,
+        size: TEXTURE_SIZE as u64 * TEXTURE_SIZE as u64 * num_layers as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
+
+    let clear_color = 0.0;
 
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
     {
+        let multiview_mask = 1 | (1 << (num_layers - 1));
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -137,14 +153,19 @@ async fn run_test(ctx: TestingContext) {
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: clear_color,
+                        g: clear_color,
+                        b: clear_color,
+                        a: clear_color,
+                    }),
                     store: wgpu::StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-            multiview_mask: NonZero::new(3),
+            multiview_mask: NonZero::new(multiview_mask),
         });
         rpass.set_pipeline(&pipeline);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
@@ -168,7 +189,7 @@ async fn run_test(ctx: TestingContext) {
         wgpu::Extent3d {
             width: TEXTURE_SIZE,
             height: TEXTURE_SIZE,
-            depth_or_array_layers: 2,
+            depth_or_array_layers: num_layers,
         },
     );
     ctx.queue.submit([encoder.finish()]);
@@ -188,11 +209,22 @@ async fn run_test(ctx: TestingContext) {
 
     let data = slice.get_mapped_range();
     let each_texture_size = (TEXTURE_SIZE * TEXTURE_SIZE) as usize;
-    assert!(data.len() == each_texture_size * 2);
-    eprintln!("View values: {}, {}", data[0], data[each_texture_size]);
-    for view_idx in 0..2 {
+    assert!(data.len() == each_texture_size * num_layers as usize);
+    eprintln!(
+        "View values: {}, ({}), {}",
+        data[0],
+        data[each_texture_size],
+        data[each_texture_size * (num_layers as usize - 1)]
+    );
+    for view_idx in 0..num_layers as usize {
+        let target_value = if view_idx == 0 {
+            32
+        } else if view_idx == num_layers as usize - 1 {
+            96
+        } else {
+            (clear_color * 255.0) as u8
+        };
         // Some metal devices automatically initialize stuff to 255, so I decided to use 128 instead of that
-        let target_value = 32 + view_idx as u8 * 64;
         let failed_value = data[each_texture_size * view_idx..each_texture_size * (view_idx + 1)]
             .iter()
             .copied()

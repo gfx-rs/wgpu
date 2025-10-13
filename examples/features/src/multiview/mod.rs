@@ -7,6 +7,9 @@ use wgpu::{
 
 const TEXTURE_SIZE: u32 = 512;
 
+// Change this to demonstrate non-contiguous multiview functionality
+const LAYERS: u32 = 2;
+
 pub struct Example {
     pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
@@ -23,6 +26,7 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
+        let layers = 2;
         let shader_src = "
             @vertex
             fn vs_main(@location(0) position: vec2f) -> @builtin(position) vec4f {
@@ -63,7 +67,7 @@ impl crate::framework::Example for Example {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview: NonZero::new(2),
+            multiview: NonZero::new(layers),
             multisample: Default::default(),
             layout: None,
             depth_stencil: None,
@@ -89,7 +93,7 @@ impl crate::framework::Example for Example {
             size: wgpu::Extent3d {
                 width: TEXTURE_SIZE,
                 height: TEXTURE_SIZE,
-                depth_or_array_layers: 2,
+                depth_or_array_layers: layers,
             },
             mip_level_count: 1,
             sample_count: 1,
@@ -109,7 +113,7 @@ impl crate::framework::Example for Example {
             base_mip_level: 0,
             mip_level_count: None,
             base_array_layer: 0,
-            array_layer_count: Some(2),
+            array_layer_count: Some(layers),
         });
         let view1 = texture.create_view(&wgpu::TextureViewDescriptor {
             label: None,
@@ -130,7 +134,7 @@ impl crate::framework::Example for Example {
             aspect: wgpu::TextureAspect::All,
             base_mip_level: 0,
             mip_level_count: None,
-            base_array_layer: 1,
+            base_array_layer: layers - 1,
             array_layer_count: Some(1),
         });
         let blitter = wgpu::util::TextureBlitter::new(device, config.format);
@@ -150,6 +154,7 @@ impl crate::framework::Example for Example {
         }
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         {
+            let multiview_mask = 1 | (1 << (LAYERS - 1));
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -167,7 +172,7 @@ impl crate::framework::Example for Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-                multiview_mask: NonZero::new(3),
+                multiview_mask: NonZero::new(multiview_mask),
             });
             rpass.set_pipeline(&self.pipeline);
             rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
@@ -194,7 +199,7 @@ impl crate::framework::Example for Example {
     }
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits {
-            max_multiview_view_count: 2,
+            max_multiview_view_count: LAYERS,
             ..Default::default()
         }
     }
