@@ -6,6 +6,7 @@ use std::process::ExitCode;
 use anyhow::Context;
 use pico_args::Arguments;
 
+mod changelog;
 mod cts;
 mod miri;
 mod run_wasm;
@@ -41,6 +42,15 @@ Commands:
     --retries   Number of times to retry failing tests
 
     All extra arguments will be forwarded to cargo-nextest (NOT wgpu-info)
+
+  changelog [from_branch] [to_commit]
+    Audit changes in the `CHANGELOG.md` at the root of the repo. Ensure that:
+
+    1. All changes are in an `Unreleased` section.
+
+        `<from_branch>` is used to determine the base of the diff to be performed. The base is set to fork point between `<to_commit>` and this branch.
+
+        `<to_commit>` is the tip of the `git diff` that will be used for checking (1).
 
   miri
     Run all miri-compatible tests under miri. Requires a nightly toolchain
@@ -101,6 +111,7 @@ fn main() -> anyhow::Result<ExitCode> {
     shell.change_dir(String::from(env!("CARGO_MANIFEST_DIR")) + "/..");
 
     match subcommand.as_deref() {
+        Some("changelog") => changelog::check_changelog(shell, args)?,
         Some("cts") => cts::run_cts(shell, args, passthrough_args)?,
         Some("run-wasm") => run_wasm::run_wasm(shell, args, passthrough_args)?,
         Some("miri") => miri::run_miri(shell, args)?,
