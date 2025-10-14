@@ -4,7 +4,9 @@ use core::{ffi::CStr, marker::PhantomData};
 use ash::{ext, google, khr, vk};
 use parking_lot::Mutex;
 
-use super::conv;
+use crate::vulkan::semaphore_list::SemaphoreList;
+
+use super::semaphore_list::SemaphoreListMode;
 
 fn depth_stencil_required_flags() -> vk::FormatFeatureFlags {
     vk::FormatFeatureFlags::SAMPLED_IMAGE | vk::FormatFeatureFlags::DEPTH_STENCIL_ATTACHMENT
@@ -1990,8 +1992,6 @@ impl super::Adapter {
             }
         });
 
-        let swapchain_fn = khr::swapchain::Device::new(&self.instance.raw, &raw_device);
-
         // Note that VK_EXT_debug_utils is an instance extension (enabled at the instance
         // level) but contains a few functions that can be loaded directly on the Device for a
         // dispatch-table-less pointer.
@@ -2271,11 +2271,10 @@ impl super::Adapter {
 
         let queue = super::Queue {
             raw: raw_queue,
-            swapchain_fn,
             device: Arc::clone(&shared),
             family_index,
             relay_semaphores: Mutex::new(relay_semaphores),
-            signal_semaphores: Default::default(),
+            signal_semaphores: Mutex::new(SemaphoreList::new(SemaphoreListMode::Signal)),
         };
 
         let mem_allocator = {
@@ -2597,113 +2596,7 @@ impl crate::Adapter for super::Adapter {
         &self,
         surface: &super::Surface,
     ) -> Option<crate::SurfaceCapabilities> {
-        if !self.private_caps.can_present {
-            return None;
-        }
-        let queue_family_index = 0; //TODO
-        {
-            profiling::scope!("vkGetPhysicalDeviceSurfaceSupportKHR");
-            match unsafe {
-                surface.functor.get_physical_device_surface_support(
-                    self.raw,
-                    queue_family_index,
-                    surface.raw,
-                )
-            } {
-                Ok(true) => (),
-                Ok(false) => return None,
-                Err(e) => {
-                    log::error!("get_physical_device_surface_support: {e}");
-                    return None;
-                }
-            }
-        }
-
-        let caps = {
-            profiling::scope!("vkGetPhysicalDeviceSurfaceCapabilitiesKHR");
-            match unsafe {
-                surface
-                    .functor
-                    .get_physical_device_surface_capabilities(self.raw, surface.raw)
-            } {
-                Ok(caps) => caps,
-                Err(e) => {
-                    log::error!("get_physical_device_surface_capabilities: {e}");
-                    return None;
-                }
-            }
-        };
-
-        // If image count is 0, the support number of images is unlimited.
-        let max_image_count = if caps.max_image_count == 0 {
-            !0
-        } else {
-            caps.max_image_count
-        };
-
-        // `0xFFFFFFFF` indicates that the extent depends on the created swapchain.
-        let current_extent = if caps.current_extent.width != !0 && caps.current_extent.height != !0
-        {
-            Some(wgt::Extent3d {
-                width: caps.current_extent.width,
-                height: caps.current_extent.height,
-                depth_or_array_layers: 1,
-            })
-        } else {
-            None
-        };
-
-        let raw_present_modes = {
-            profiling::scope!("vkGetPhysicalDeviceSurfacePresentModesKHR");
-            match unsafe {
-                surface
-                    .functor
-                    .get_physical_device_surface_present_modes(self.raw, surface.raw)
-            } {
-                Ok(present_modes) => present_modes,
-                Err(e) => {
-                    log::error!("get_physical_device_surface_present_modes: {e}");
-                    // Per definition of `SurfaceCapabilities`, there must be at least one present mode.
-                    return None;
-                }
-            }
-        };
-
-        let raw_surface_formats = {
-            profiling::scope!("vkGetPhysicalDeviceSurfaceFormatsKHR");
-            match unsafe {
-                surface
-                    .functor
-                    .get_physical_device_surface_formats(self.raw, surface.raw)
-            } {
-                Ok(formats) => formats,
-                Err(e) => {
-                    log::error!("get_physical_device_surface_formats: {e}");
-                    // Per definition of `SurfaceCapabilities`, there must be at least one present format.
-                    return None;
-                }
-            }
-        };
-
-        let formats = raw_surface_formats
-            .into_iter()
-            .filter_map(conv::map_vk_surface_formats)
-            .collect();
-        Some(crate::SurfaceCapabilities {
-            formats,
-            // TODO: Right now we're always trunkating the swap chain
-            // (presumably - we're actually setting the min image count which isn't necessarily the swap chain size)
-            // Instead, we should use extensions when available to wait in present.
-            // See https://github.com/gfx-rs/wgpu/issues/2869
-            maximum_frame_latency: (caps.min_image_count - 1)..=(max_image_count - 1), // Note this can't underflow since both `min_image_count` is at least one and we already patched `max_image_count`.
-            current_extent,
-            usage: conv::map_vk_image_usage(caps.supported_usage_flags),
-            present_modes: raw_present_modes
-                .into_iter()
-                .flat_map(conv::map_vk_present_mode)
-                .collect(),
-            composite_alpha_modes: conv::map_vk_composite_alpha(caps.supported_composite_alpha),
-        })
+        surface.inner.surface_capabilities(self)
     }
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
