@@ -948,20 +948,38 @@ impl CommandEncoder {
                             timestamp_writes,
                             occlusion_query_set,
                         } => {
-                            encode_render_pass(
+                            api_log!(
+                                "Begin encoding render pass with '{}' label",
+                                pass.label.as_deref().unwrap_or("")
+                            );
+                            let res = encode_render_pass(
                                 &mut state,
                                 pass,
                                 color_attachments,
                                 depth_stencil_attachment,
                                 timestamp_writes,
                                 occlusion_query_set,
-                            )?;
+                            );
+                            match res.as_ref() {
+                                Err(err) => api_log!("Finished encoding render pass ({err:?})"),
+                                Ok(_) => api_log!("Finished encoding render pass (success)"),
+                            }
+                            res?;
                         }
                         ArcCommand::RunComputePass {
                             pass,
                             timestamp_writes,
                         } => {
-                            encode_compute_pass(&mut state, pass, timestamp_writes)?;
+                            api_log!(
+                                "Begin encoding compute pass with '{}' label",
+                                pass.label.as_deref().unwrap_or("")
+                            );
+                            let res = encode_compute_pass(&mut state, pass, timestamp_writes);
+                            match res.as_ref() {
+                                Err(err) => api_log!("Finished encoding compute pass ({err:?})"),
+                                Ok(_) => api_log!("Finished encoding compute pass (success)"),
+                            }
+                            res?;
                         }
                         _ => unreachable!(),
                     }

@@ -111,7 +111,7 @@ cfg_aliases = "0.2.1"
 cfg-if = "1"
 criterion = "0.7"
 codespan-reporting = { version = "0.12", default-features = false }
-ctor = "0.5"
+ctor = "0.6"
 diff = "0.1"
 document-features = "0.2.10"
 encase = "0.12"
