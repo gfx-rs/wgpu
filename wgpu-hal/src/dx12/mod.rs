@@ -96,7 +96,11 @@ use windows::{
     core::{Free, Interface},
     Win32::{
         Foundation,
-        Graphics::{Direct3D, Direct3D12, DirectComposition, Dxgi},
+        Graphics::{
+            Direct3D,
+            Direct3D12::{self, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT},
+            DirectComposition, Dxgi,
+        },
         System::Threading,
     },
 };
@@ -601,6 +605,17 @@ struct PrivateCapabilities {
     suballocation_supported: bool,
     shader_model: naga::back::hlsl::ShaderModel,
     max_sampler_descriptor_heap_size: u32,
+    unrestricted_buffer_texture_copy_pitch_supported: bool,
+}
+
+impl PrivateCapabilities {
+    fn texture_data_placement_alignment(&self) -> u64 {
+        if self.unrestricted_buffer_texture_copy_pitch_supported {
+            4
+        } else {
+            D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT.into()
+        }
+    }
 }
 
 #[derive(Default)]
@@ -839,6 +854,8 @@ pub struct CommandEncoder {
 
     rtv_pool: Arc<Mutex<descriptor::CpuPool>>,
     temp_rtv_handles: Vec<descriptor::Handle>,
+
+    intermediate_copy_bufs: Vec<Buffer>,
 
     null_rtv_handle: descriptor::Handle,
     list: Option<Direct3D12::ID3D12GraphicsCommandList>,
