@@ -36,7 +36,8 @@ ignored = ["cfg_aliases"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
-    'cfg(web_sys_unstable_apis)', # web-sys uses this
+    'cfg(feature, values("cargo-clippy"))', # objc's `msg_send` macro injects this in our code https://github.com/SSheldon/rust-objc/issues/125
+    'cfg(web_sys_unstable_apis)',           # web-sys uses this
 ] }
 
 [lib]
@@ -181,14 +182,6 @@ device_lost_panic = []
 internal_error_panic = []
 # Tracks validation errors in a `VALIDATION_CANARY` static.
 validation_canary = ["dep:parking_lot"]
-
-###################
-### Workarounds ###
-###################
-
-# objc's `msg_send` macro injects this in our code https://github.com/SSheldon/rust-objc/issues/125
-# You shouldn't ever enable this feature.
-cargo-clippy = []
 
 [[example]]
 name = "halmark"
