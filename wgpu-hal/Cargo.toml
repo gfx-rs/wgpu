@@ -141,7 +141,7 @@ dx12 = [
     "dep:profiling",
     "dep:range-alloc",
     "dep:windows-core",
-    "gpu-allocator/d3d12",
+    "dep:gpu-allocator",
     "windows/Win32_Graphics_Direct3D_Fxc",
     "windows/Win32_Graphics_Direct3D_Dxc",
     "windows/Win32_Graphics_Direct3D",
@@ -258,7 +258,7 @@ windows-core = { workspace = true, optional = true }
 # Backend: Dx12
 bit-set = { workspace = true, optional = true }
 range-alloc = { workspace = true, optional = true }
-gpu-allocator = { workspace = true, optional = true }
+gpu-allocator = { workspace = true, optional = true, features = ["d3d12"] }
 once_cell = { workspace = true, optional = true }
 # backend: GLES
 glutin_wgl_sys = { workspace = true, optional = true }
