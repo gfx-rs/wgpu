@@ -4981,7 +4981,6 @@ dependencies = [
  "raw-window-handle 0.5.2",
  "raw-window-handle 0.6.2",
  "renderdoc-sys",
- "rustc-hash 1.1.0",
  "smallvec",
  "thiserror 2.0.17",
  "wasm-bindgen",

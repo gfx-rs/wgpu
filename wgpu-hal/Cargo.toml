@@ -219,7 +219,6 @@ hashbrown = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 ordered-float = { workspace = true, optional = true }
 profiling = { workspace = true, optional = true, default-features = false }
-rustc-hash = { workspace = true, optional = true }
 
 # Backend: GLES
 glow = { workspace = true, optional = true }
