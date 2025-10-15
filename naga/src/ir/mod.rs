@@ -337,16 +337,6 @@ pub enum ShaderStage {
     Compute,
 }
 
-impl ShaderStage {
-    // TODO: make more things respect this
-    pub const fn compute_like(self) -> bool {
-        match self {
-            Self::Vertex | Self::Fragment => false,
-            Self::Compute | Self::Task | Self::Mesh => true,
-        }
-    }
-}
-
 /// Addressing space of variables.
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
