@@ -747,6 +747,58 @@ impl super::Validator {
         Ok(())
     }
 
+    /// Validate the mesh shader output type `ty`, used as `mesh_output_type`.
+    fn validate_mesh_output_type(
+        &mut self,
+        ep: &crate::EntryPoint,
+        module: &crate::Module,
+        ty: Handle<crate::Type>,
+        mesh_output_type: MeshOutputType,
+    ) -> Result<(), WithSpan<EntryPointError>> {
+        if !matches!(module.types[ty].inner, crate::TypeInner::Struct { .. }) {
+            return Err(EntryPointError::InvalidMeshOutputType.with_span_handle(ty, &module.types));
+        }
+        let mut result_built_ins = crate::FastHashSet::default();
+        let mut ctx = VaryingContext {
+            stage: ep.stage,
+            output: true,
+            types: &module.types,
+            type_info: &self.types,
+            location_mask: &mut self.location_mask,
+            blend_src_mask: &mut self.blend_src_mask,
+            built_ins: &mut result_built_ins,
+            capabilities: self.capabilities,
+            flags: self.flags,
+            mesh_output_type,
+        };
+        ctx.validate(ep, ty, None)
+            .map_err_inner(|e| EntryPointError::Result(e).with_span())?;
+        if mesh_output_type == MeshOutputType::PrimitiveOutput {
+            let mut num_indices_builtins = 0;
+            if result_built_ins.contains(&crate::BuiltIn::PointIndex) {
+                num_indices_builtins += 1;
+            }
+            if result_built_ins.contains(&crate::BuiltIn::LineIndices) {
+                num_indices_builtins += 1;
+            }
+            if result_built_ins.contains(&crate::BuiltIn::TriangleIndices) {
+                num_indices_builtins += 1;
+            }
+            if num_indices_builtins != 1 {
+                return Err(EntryPointError::InvalidMeshPrimitiveOutputType
+                    .with_span_handle(ty, &module.types));
+            }
+        } else if mesh_output_type == MeshOutputType::VertexOutput
+            && !result_built_ins.contains(&crate::BuiltIn::Position { invariant: false })
+        {
+            return Err(
+                EntryPointError::MissingVertexOutputPosition.with_span_handle(ty, &module.types)
+            );
+        }
+
+        Ok(())
+    }
+
     pub(super) fn validate_entry_point(
         &mut self,
         ep: &crate::EntryPoint,
@@ -986,55 +1038,18 @@ impl super::Validator {
                 }
             }
 
-            for (ty, mesh_output_type) in [
-                (mesh_info.vertex_output_type, MeshOutputType::VertexOutput),
-                (
-                    mesh_info.primitive_output_type,
-                    MeshOutputType::PrimitiveOutput,
-                ),
-            ] {
-                if !matches!(module.types[ty].inner, crate::TypeInner::Struct { .. }) {
-                    return Err(
-                        EntryPointError::InvalidMeshOutputType.with_span_handle(ty, &module.types)
-                    );
-                }
-                let mut result_built_ins = crate::FastHashSet::default();
-                let mut ctx = VaryingContext {
-                    stage: ep.stage,
-                    output: true,
-                    types: &module.types,
-                    type_info: &self.types,
-                    location_mask: &mut self.location_mask,
-                    blend_src_mask: &mut self.blend_src_mask,
-                    built_ins: &mut result_built_ins,
-                    capabilities: self.capabilities,
-                    flags: self.flags,
-                    mesh_output_type,
-                };
-                ctx.validate(ep, ty, None)
-                    .map_err_inner(|e| EntryPointError::Result(e).with_span())?;
-                if mesh_output_type == MeshOutputType::PrimitiveOutput {
-                    let mut num_indices_builtins = 0;
-                    if result_built_ins.contains(&crate::BuiltIn::PointIndex) {
-                        num_indices_builtins += 1;
-                    }
-                    if result_built_ins.contains(&crate::BuiltIn::LineIndices) {
-                        num_indices_builtins += 1;
-                    }
-                    if result_built_ins.contains(&crate::BuiltIn::TriangleIndices) {
-                        num_indices_builtins += 1;
-                    }
-                    if num_indices_builtins != 1 {
-                        return Err(EntryPointError::InvalidMeshPrimitiveOutputType
-                            .with_span_handle(ty, &module.types));
-                    }
-                } else if mesh_output_type == MeshOutputType::VertexOutput
-                    && !result_built_ins.contains(&crate::BuiltIn::Position { invariant: false })
-                {
-                    return Err(EntryPointError::MissingVertexOutputPosition
-                        .with_span_handle(ty, &module.types));
-                }
-            }
+            self.validate_mesh_output_type(
+                ep,
+                module,
+                mesh_info.vertex_output_type,
+                MeshOutputType::VertexOutput,
+            )?;
+            self.validate_mesh_output_type(
+                ep,
+                module,
+                mesh_info.primitive_output_type,
+                MeshOutputType::PrimitiveOutput,
+            )?;
         } else if info.mesh_shader_info.vertex_type.is_some()
             || info.mesh_shader_info.primitive_type.is_some()
         {
