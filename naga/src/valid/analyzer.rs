@@ -91,7 +91,16 @@ struct FunctionUniformity {
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct FunctionMeshShaderInfo {
+    /// The type of value this function passes to [`SetVertex`], and the
+    /// expression that first established it.
+    ///
+    /// [`SetVertex`]: crate::ir::MeshFunction::SetVertex
     pub vertex_type: Option<(Handle<crate::Type>, Handle<crate::Expression>)>,
+
+    /// The type of value this function passes to [`SetPrimitive`], and the
+    /// expression that first established it.
+    ///
+    /// [`SetPrimitive`]: crate::ir::MeshFunction::SetPrimitive
     pub primitive_type: Option<(Handle<crate::Type>, Handle<crate::Expression>)>,
 }
 
@@ -313,6 +322,7 @@ pub struct FunctionInfo {
     /// validation.
     diagnostic_filter_leaf: Option<Handle<DiagnosticFilterNode>>,
 
+    /// Mesh shader info for this function and its callees.
     pub mesh_shader_info: FunctionMeshShaderInfo,
 }
 
@@ -502,6 +512,7 @@ impl FunctionInfo {
             *mine |= *other;
         }
 
+        // Inherit mesh output types from our callees.
         self.try_update_mesh_info(&callee.mesh_shader_info)?;
 
         Ok(FunctionUniformity {
@@ -1210,6 +1221,15 @@ impl FunctionInfo {
         Ok(combined_uniformity)
     }
 
+    /// Note the type of value passed to [`SetVertex`].
+    ///
+    /// Record that this function passed a value of type `ty` as the second
+    /// argument to the [`SetVertex`] builtin function. All calls to
+    /// `SetVertex` must pass the same type, and this must match the
+    /// function's [`vertex_output_type`].
+    ///
+    /// [`SetVertex`]: crate::ir::MeshFunction::SetVertex
+    /// [`vertex_output_type`]: crate::ir::MeshStageInfo::vertex_output_type
     fn try_update_mesh_vertex_type(
         &mut self,
         ty: Handle<crate::Type>,
@@ -1227,6 +1247,15 @@ impl FunctionInfo {
         Ok(())
     }
 
+    /// Note the type of value passed to [`SetPrimitive`].
+    ///
+    /// Record that this function passed a value of type `ty` as the second
+    /// argument to the [`SetPrimitive`] builtin function. All calls to
+    /// `SetPrimitive` must pass the same type, and this must match the
+    /// function's [`primitive_output_type`].
+    ///
+    /// [`SetPrimitive`]: crate::ir::MeshFunction::SetPrimitive
+    /// [`primitive_output_type`]: crate::ir::MeshStageInfo::primitive_output_type
     fn try_update_mesh_primitive_type(
         &mut self,
         ty: Handle<crate::Type>,

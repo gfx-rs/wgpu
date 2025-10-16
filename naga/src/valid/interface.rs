@@ -1021,7 +1021,8 @@ impl super::Validator {
             }
         }
 
-        // If this is a `Mesh` entry point, check the bindings of its vertex and primitive output types.
+        // If this is a `Mesh` entry point, check its vertex and primitive output types.
+        // We verified previously that only mesh shaders can have `mesh_info`.
         if let &Some(ref mesh_info) = &ep.mesh_info {
             // Mesh shaders don't return any value. All their results are supplied through
             // [`SetVertex`] and [`SetPrimitive`] calls.
@@ -1050,10 +1051,14 @@ impl super::Validator {
                 mesh_info.primitive_output_type,
                 MeshOutputType::PrimitiveOutput,
             )?;
-        } else if info.mesh_shader_info.vertex_type.is_some()
-            || info.mesh_shader_info.primitive_type.is_some()
-        {
-            return Err(EntryPointError::UnexpectedMeshShaderOutput.with_span());
+        } else {
+            // This is not a `Mesh` entry point, so ensure that it never tries to produce
+            // vertices or primitives.
+            if info.mesh_shader_info.vertex_type.is_some()
+                || info.mesh_shader_info.primitive_type.is_some()
+            {
+                return Err(EntryPointError::UnexpectedMeshShaderOutput.with_span());
+            }
         }
 
         Ok(info)
