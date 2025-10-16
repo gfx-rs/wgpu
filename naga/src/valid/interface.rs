@@ -473,10 +473,9 @@ impl VaryingContext<'_> {
                     }
                 }
 
-                // TODO: update this to reflect the fact that per-primitive outputs aren't interpolated for fragment and mesh stages
                 let needs_interpolation = match self.stage {
                     crate::ShaderStage::Vertex => self.output,
-                    crate::ShaderStage::Fragment => !self.output,
+                    crate::ShaderStage::Fragment => !self.output && !per_primitive,
                     crate::ShaderStage::Compute | crate::ShaderStage::Task => false,
                     crate::ShaderStage::Mesh => self.output,
                 };
