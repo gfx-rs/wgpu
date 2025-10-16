@@ -414,6 +414,9 @@ pub struct Texture {
     #[allow(unused)]
     pub format_desc: TextureFormatDesc,
     pub copy_size: CopyExtent,
+
+    // The `drop_guard` field must be the last field of this struct so it is dropped last.
+    // Do not add new fields after it.
     pub drop_guard: Option<crate::DropGuard>,
 }
 

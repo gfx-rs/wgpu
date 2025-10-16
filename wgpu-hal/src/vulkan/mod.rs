@@ -170,6 +170,9 @@ pub struct InstanceShared {
     /// It is associated with a `VkInstance` and its children,
     /// except for a `VkPhysicalDevice` and its children.
     instance_api_version: u32,
+
+    // The `drop_guard` field must be the last field of this struct so it is dropped last.
+    // Do not add new fields after it.
     drop_guard: Option<crate::DropGuard>,
 }
 
@@ -736,6 +739,9 @@ struct DeviceShared {
     texture_identity_factory: ResourceIdentityFactory<vk::Image>,
     /// As above, for texture views.
     texture_view_identity_factory: ResourceIdentityFactory<vk::ImageView>,
+
+    // The `drop_guard` field must be the last field of this struct so it is dropped last.
+    // Do not add new fields after it.
     drop_guard: Option<crate::DropGuard>,
 }
 
@@ -950,6 +956,9 @@ pub struct Texture {
     format: wgt::TextureFormat,
     copy_size: crate::CopyExtent,
     identity: ResourceIdentity<vk::Image>,
+
+    // The `drop_guard` field must be the last field of this struct so it is dropped last.
+    // Do not add new fields after it.
     drop_guard: Option<crate::DropGuard>,
 }
 
