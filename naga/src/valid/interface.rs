@@ -393,13 +393,23 @@ impl VaryingContext<'_> {
                 {
                     return Err(VaryingError::NotIOShareableType(ty));
                 }
-                if !per_primitive && self.mesh_output_type == MeshOutputType::PrimitiveOutput {
-                    return Err(VaryingError::MissingPerPrimitive);
-                } else if per_primitive
-                    && ((self.stage != crate::ShaderStage::Fragment || self.output)
-                        && self.mesh_output_type != MeshOutputType::PrimitiveOutput)
-                {
-                    return Err(VaryingError::InvalidPerPrimitive);
+
+                // Check whether `per_primitive` is appropriate for this stage and direction.
+                if self.mesh_output_type == MeshOutputType::PrimitiveOutput {
+                    // All mesh shader `Location` outputs must be `per_primitive`.
+                    if !per_primitive {
+                        return Err(VaryingError::MissingPerPrimitive);
+                    }
+                } else if self.stage == crate::ShaderStage::Fragment && !self.output {
+                    // Fragment stage inputs may be `per_primitive`. We'll only
+                    // know if these are correct when the whole mesh pipeline is
+                    // created and we're paired with a specific mesh or vertex
+                    // shader.
+                } else {
+                    // All other `Location` bindings must not be `per_primitive`.
+                    if per_primitive {
+                        return Err(VaryingError::InvalidPerPrimitive);
+                    }
                 }
 
                 if let Some(blend_src) = blend_src {
@@ -959,18 +969,18 @@ impl super::Validator {
             }
         }
 
-        // If this is a `Mesh` entry point, check its interface.
+        // If this is a `Mesh` entry point, check the bindings of its vertex and primitive output types.
         if let &Some(ref mesh_info) = &ep.mesh_info {
             // Mesh shaders don't return any value. All their results are supplied through
             // [`SetVertex`] and [`SetPrimitive`] calls.
-            if let Some(used_vertex_type) = info.mesh_shader_info.vertex_type {
-                if used_vertex_type.0 != mesh_info.vertex_output_type {
+            if let Some((used_vertex_type, _)) = info.mesh_shader_info.vertex_type {
+                if used_vertex_type != mesh_info.vertex_output_type {
                     return Err(EntryPointError::WrongMeshOutputType
                         .with_span_handle(mesh_info.vertex_output_type, &module.types));
                 }
             }
-            if let Some(used_primitive_type) = info.mesh_shader_info.primitive_type {
-                if used_primitive_type.0 != mesh_info.primitive_output_type {
+            if let Some((used_primitive_type, _)) = info.mesh_shader_info.primitive_type {
+                if used_primitive_type != mesh_info.primitive_output_type {
                     return Err(EntryPointError::WrongMeshOutputType
                         .with_span_handle(mesh_info.primitive_output_type, &module.types));
                 }
