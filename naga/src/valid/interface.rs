@@ -965,7 +965,6 @@ impl super::Validator {
         if let &Some(ref mesh_info) = &ep.mesh_info {
             // Mesh shaders don't return any value. All their results are supplied through
             // [`SetVertex`] and [`SetPrimitive`] calls.
-            // TODO: check that only the allowed builtins are used here
             if let Some(used_vertex_type) = info.mesh_shader_info.vertex_type {
                 if used_vertex_type.0 != mesh_info.vertex_output_type {
                     return Err(EntryPointError::WrongMeshOutputType
