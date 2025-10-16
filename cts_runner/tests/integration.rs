@@ -3,11 +3,14 @@
 // As of June 2025, these tests are not run in CI.
 
 use std::{
-    fmt::{self, Debug, Display},
+    ffi::OsStr,
+    io::Write,
     path::PathBuf,
-    process::Command,
+    process::{Command, Output},
     str,
 };
+
+use tempfile::NamedTempFile;
 
 pub fn target_dir() -> PathBuf {
     let current_exe = std::env::current_exe().unwrap();
@@ -24,38 +27,71 @@ pub fn cts_runner_exe_path() -> PathBuf {
     p
 }
 
-pub struct JsError;
-
-impl Display for JsError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "JavaScript test returned an error")
-    }
-}
-
-impl Debug for JsError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{self}")
-    }
-}
-
-type JsResult = Result<(), JsError>;
-
-fn exec_js_test(script: &str) -> JsResult {
-    let output = Command::new(cts_runner_exe_path())
-        .arg(script)
+fn exec_cts_runner(script_file: impl AsRef<OsStr>) -> Output {
+    Command::new(cts_runner_exe_path())
+        .arg(script_file)
         .output()
-        .unwrap();
+        .unwrap()
+}
+
+fn exec_js_file(script_file: impl AsRef<OsStr>) {
+    let output = exec_cts_runner(script_file);
     println!("{}", str::from_utf8(&output.stdout).unwrap());
     eprintln!("{}", str::from_utf8(&output.stderr).unwrap());
-    output.status.success().then_some(()).ok_or(JsError)
+    assert!(output.status.success());
+}
+
+fn check_js_stderr(script: &str, expected: &str) {
+    let mut tempfile = NamedTempFile::new().unwrap();
+    tempfile.write_all(script.as_bytes()).unwrap();
+    tempfile.flush().unwrap();
+    let output = exec_cts_runner(tempfile.path());
+    assert!(
+        output.stdout.is_empty(),
+        "unexpected output on stdout: {}",
+        str::from_utf8(&output.stdout).unwrap(),
+    );
+    assert_eq!(str::from_utf8(&output.stderr).unwrap(), expected);
+    assert!(output.status.success());
+}
+
+fn exec_js(script: &str) {
+    check_js_stderr(script, "");
 }
 
 #[test]
-fn hello_compute_example() -> JsResult {
-    exec_js_test("examples/hello-compute.js")
+fn hello_compute_example() {
+    exec_js_file("examples/hello-compute.js");
 }
 
 #[test]
-fn features() -> JsResult {
-    exec_js_test("tests/features.js")
+fn features() {
+    exec_js(
+        r#"
+        const adapter = await navigator.gpu.requestAdapter();
+
+        if (adapter.features.has("mappable-primary-buffers")) {
+            throw new TypeError("Adapter should not report support for wgpu native-only features");
+        }
+    "#,
+    );
+}
+
+#[test]
+fn uncaptured_error() {
+    check_js_stderr(
+        r#"
+            const code = `const val: u32 = 1.1;`;
+
+            const adapter = await navigator.gpu.requestAdapter();
+            const device = await adapter.requestDevice();
+            device.createShaderModule({ code })
+        "#,
+        "cts_runner caught WebGPU error:
+Shader '' parsing error: the type of `val` is expected to be `u32`, but got `{AbstractFloat}`
+  ┌─ wgsl:1:7
+  │
+1 │ const val: u32 = 1.1;
+  │       ^^^ definition of `val`\n\n",
+    );
 }
