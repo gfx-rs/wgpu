@@ -192,7 +192,6 @@ arrayvec.workspace = true
 bitflags.workspace = true
 cfg-if.workspace = true
 document-features.workspace = true
-hashbrown.workspace = true
 log.workspace = true
 parking_lot = { workspace = true, optional = true }
 profiling.workspace = true
