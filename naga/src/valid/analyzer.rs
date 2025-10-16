@@ -394,7 +394,15 @@ impl FunctionInfo {
         info.uniformity.non_uniform_result
     }
 
-    pub fn insert_global_use(
+    /// Note an entry point's use of `global` not recorded by [`ModuleInfo::process_function`].
+    ///
+    /// Most global variable usage should be recorded via [`add_ref_impl`] in the process
+    /// of expression behavior analysis by [`ModuleInfo::process_function`]. But that code
+    /// has no access to entrypoint-specific information, so interface analysis uses this
+    /// function to record global uses there (like task shader payloads).
+    ///
+    /// [`add_ref_impl`]: Self::add_ref_impl
+    pub(super) fn insert_global_use(
         &mut self,
         global_use: GlobalUse,
         global: Handle<crate::GlobalVariable>,
