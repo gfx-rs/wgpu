@@ -217,7 +217,7 @@ pub enum FunctionError {
     EmitResult(Handle<crate::Expression>),
     #[error("Expression not visited by the appropriate statement")]
     UnvisitedExpression(Handle<crate::Expression>),
-    #[error("Expression {0:?} should be u32, but isn't")]
+    #[error("Expression {0:?} in mesh shader intrinsic call should be `u32` (is the expression a signed integer?)")]
     InvalidMeshFunctionCall(Handle<crate::Expression>),
     #[error("Mesh output types differ from {0:?} to {1:?}")]
     ConflictingMeshOutputTypes(Handle<crate::Expression>, Handle<crate::Expression>),
