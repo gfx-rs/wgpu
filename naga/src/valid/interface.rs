@@ -405,11 +405,9 @@ impl VaryingContext<'_> {
                     // know if these are correct when the whole mesh pipeline is
                     // created and we're paired with a specific mesh or vertex
                     // shader.
-                } else {
+                } else if per_primitive {
                     // All other `Location` bindings must not be `per_primitive`.
-                    if per_primitive {
-                        return Err(VaryingError::InvalidPerPrimitive);
-                    }
+                    return Err(VaryingError::InvalidPerPrimitive);
                 }
 
                 if let Some(blend_src) = blend_src {
