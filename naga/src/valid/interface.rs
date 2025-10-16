@@ -851,9 +851,7 @@ impl super::Validator {
             {
                 return Err(EntryPointError::MissingVertexOutputPosition.with_span());
             }
-            if ep.stage == crate::ShaderStage::Mesh
-                && (!result_built_ins.is_empty() || !self.location_mask.is_empty())
-            {
+            if ep.stage == crate::ShaderStage::Mesh {
                 return Err(EntryPointError::UnexpectedMeshShaderEntryResult.with_span());
             }
             // Task shaders must have a single `MeshTaskSize` output, and nothing else.
