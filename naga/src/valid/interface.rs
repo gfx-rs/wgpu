@@ -839,20 +839,38 @@ impl super::Validator {
             .validate_function(&ep.function, module, mod_info, true)
             .map_err(WithSpan::into_other)?;
 
-        if let Some(handle) = ep.task_payload {
-            if ep.stage != crate::ShaderStage::Task && ep.stage != crate::ShaderStage::Mesh {
-                return Err(EntryPointError::UnexpectedTaskPayload.with_span());
+        // Validate the task shader payload.
+        match ep.stage {
+            // Task shaders must produce a payload.
+            crate::ShaderStage::Task => {
+                let Some(handle) = ep.task_payload else {
+                    return Err(EntryPointError::ExpectedTaskPayload.with_span());
+                };
+                if module.global_variables[handle].space != crate::AddressSpace::TaskPayload {
+                    return Err(EntryPointError::TaskPayloadWrongAddressSpace
+                        .with_span_handle(handle, &module.global_variables));
+                }
+                info.insert_global_use(GlobalUse::READ | GlobalUse::WRITE, handle);
             }
-            if module.global_variables[handle].space != crate::AddressSpace::TaskPayload {
-                return Err(EntryPointError::TaskPayloadWrongAddressSpace.with_span());
+
+            // Mesh shaders may accept a payload.
+            crate::ShaderStage::Mesh => {
+                if let Some(handle) = ep.task_payload {
+                    if module.global_variables[handle].space != crate::AddressSpace::TaskPayload {
+                        return Err(EntryPointError::TaskPayloadWrongAddressSpace
+                            .with_span_handle(handle, &module.global_variables));
+                    }
+                    info.insert_global_use(GlobalUse::READ, handle);
+                }
             }
-            // Make sure that this is always present in the outputted shader
-            let uses = if ep.stage == crate::ShaderStage::Mesh {
-                GlobalUse::READ
-            } else {
-                GlobalUse::READ | GlobalUse::WRITE
-            };
-            info.insert_global_use(uses, handle);
+
+            // Other stages must not have a payload.
+            _ => {
+                if let Some(handle) = ep.task_payload {
+                    return Err(EntryPointError::UnexpectedTaskPayload
+                        .with_span_handle(handle, &module.global_variables));
+                }
+            }
         }
 
         {
@@ -947,15 +965,6 @@ impl super::Validator {
                 return Err(EntryPointError::MoreThanOnePushConstantUsed
                     .with_span_handle(handle, &module.global_variables));
             }
-        }
-
-        if let Some(task_payload) = ep.task_payload {
-            if module.global_variables[task_payload].space != crate::AddressSpace::TaskPayload {
-                return Err(EntryPointError::TaskPayloadWrongAddressSpace
-                    .with_span_handle(task_payload, &module.global_variables));
-            }
-        } else if ep.stage == crate::ShaderStage::Task {
-            return Err(EntryPointError::ExpectedTaskPayload.with_span());
         }
 
         self.ep_resource_bindings.clear();
