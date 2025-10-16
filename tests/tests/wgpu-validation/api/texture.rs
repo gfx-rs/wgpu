@@ -145,7 +145,7 @@ fn non_planar_texture_view_plane() {
                 ..Default::default()
             });
         },
-        Some("Aspect Plane0 is not in the source texture format R8Unorm"),
+        Some("Aspect Plane0 is not a valid aspect of the source texture format R8Unorm"),
     );
 }
 
@@ -199,7 +199,7 @@ fn planar_texture_view_plane_out_of_bounds() {
                 });
             },
             Some(&format!(
-                "Aspect {view_aspect:?} is not in the source texture format {tex_format:?}"
+                "Aspect {view_aspect:?} is not a valid aspect of the source texture format {tex_format:?}"
             )),
         );
     }
@@ -208,7 +208,7 @@ fn planar_texture_view_plane_out_of_bounds() {
 /// Ensures that attempting to create a texture view from a specific plane of a
 /// planar texture with an invalid format fails validation.
 #[test]
-fn planar_texture_view_plane_bad_format() {
+fn planar_texture_bad_view_format() {
     let required_features = wgpu::Features::TEXTURE_FORMAT_NV12
         | wgpu::Features::TEXTURE_FORMAT_P010
         | wgpu::Features::TEXTURE_FORMAT_16BIT_NORM;
@@ -222,39 +222,27 @@ fn planar_texture_view_plane_bad_format() {
         height: 256,
         depth_or_array_layers: 1,
     };
-    for (tex_format, view_format, view_aspect) in [
-        (
-            wgpu::TextureFormat::NV12,
-            wgpu::TextureFormat::Rg8Unorm,
-            wgpu::TextureAspect::Plane0,
-        ),
-        (
-            wgpu::TextureFormat::P010,
-            wgpu::TextureFormat::Rg16Unorm,
-            wgpu::TextureAspect::Plane0,
-        ),
+    for (tex_format, view_format) in [
+        (wgpu::TextureFormat::NV12, wgpu::TextureFormat::Rg8Unorm),
+        (wgpu::TextureFormat::P010, wgpu::TextureFormat::Rg16Unorm),
     ] {
-        let tex = device.create_texture(&wgpu::TextureDescriptor {
-            label: None,
-            dimension: wgpu::TextureDimension::D2,
-            size,
-            format: tex_format,
-            usage: wgpu::TextureUsages::TEXTURE_BINDING,
-            mip_level_count: 1,
-            sample_count: 1,
-            view_formats: &[],
-        });
         fail(
             &device,
             || {
-                let _ = tex.create_view(&wgpu::TextureViewDescriptor {
-                    format: Some(view_format),
-                    aspect: view_aspect,
-                    ..Default::default()
+                let _ = device.create_texture(&wgpu::TextureDescriptor {
+                    label: None,
+                    dimension: wgpu::TextureDimension::D2,
+                    size,
+                    format: tex_format,
+                    usage: wgpu::TextureUsages::TEXTURE_BINDING,
+                    mip_level_count: 1,
+                    sample_count: 1,
+                    view_formats: &[view_format],
                 });
             },
             Some(&format!(
-                "unable to view texture {tex_format:?} as {view_format:?}"
+                "The view format {view_format:?} is not compatible with texture \
+                 format {tex_format:?}, only changing srgb-ness is allowed."
             )),
         );
     }

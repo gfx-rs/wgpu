@@ -92,7 +92,7 @@ impl AsBuildContext {
         }
     }
 
-    pub fn blas_build_entry(&self) -> BlasBuildEntry {
+    pub fn blas_build_entry(&self) -> BlasBuildEntry<'_> {
         BlasBuildEntry {
             blas: &self.blas,
             geometry: BlasGeometries::TriangleGeometries(vec![BlasTriangleGeometry {

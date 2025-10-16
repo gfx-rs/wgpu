@@ -14,7 +14,7 @@ use crate::{
         dxgi::{name::ObjectExt, result::HResult as _},
     },
     dx12::borrow_interface_temporarily,
-    AccelerationStructureEntries,
+    AccelerationStructureEntries, CommandEncoder as _,
 };
 
 fn make_box(origin: &wgt::Origin3d, size: &crate::CopyExtent) -> Direct3D12::D3D12_BOX {
@@ -312,6 +312,78 @@ impl super::CommandEncoder {
             }
         }
     }
+
+    unsafe fn buf_tex_intermediate<T>(
+        &mut self,
+        region: crate::BufferTextureCopy,
+        tex_fmt: wgt::TextureFormat,
+        copy_op: impl FnOnce(&mut Self, &super::Buffer, wgt::BufferSize, crate::BufferTextureCopy) -> T,
+    ) -> (T, super::Buffer) {
+        let size = {
+            let copy_info = region.buffer_layout.get_buffer_texture_copy_info(
+                tex_fmt,
+                region.texture_base.aspect.map(),
+                &region.size.into(),
+            );
+            copy_info.unwrap().bytes_in_copy
+        };
+
+        let size = wgt::BufferSize::new(size).unwrap();
+
+        let buffer = {
+            let (resource, allocation) =
+                super::suballocation::DeviceAllocationContext::from(&*self)
+                    .create_buffer(&crate::BufferDescriptor {
+                        label: None,
+                        size: size.get(),
+                        usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST,
+                        memory_flags: crate::MemoryFlags::empty(),
+                    })
+                    .expect(concat!(
+                        "internal error: ",
+                        "failed to allocate intermediate buffer ",
+                        "for offset alignment"
+                    ));
+            super::Buffer {
+                resource,
+                size: size.get(),
+                allocation,
+            }
+        };
+
+        let mut region = region;
+        region.buffer_layout.offset = 0;
+
+        unsafe {
+            self.transition_buffers(
+                [crate::BufferBarrier {
+                    buffer: &buffer,
+                    usage: crate::StateTransition {
+                        from: wgt::BufferUses::empty(),
+                        to: wgt::BufferUses::COPY_DST,
+                    },
+                }]
+                .into_iter(),
+            )
+        };
+
+        let t = copy_op(self, &buffer, size, region);
+
+        unsafe {
+            self.transition_buffers(
+                [crate::BufferBarrier {
+                    buffer: &buffer,
+                    usage: crate::StateTransition {
+                        from: wgt::BufferUses::COPY_DST,
+                        to: wgt::BufferUses::COPY_SRC,
+                    },
+                }]
+                .into_iter(),
+            )
+        };
+
+        (t, buffer)
+    }
 }
 
 impl crate::CommandEncoder for super::CommandEncoder {
@@ -366,6 +438,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         Ok(super::CommandBuffer { raw })
     }
     unsafe fn reset_all<I: Iterator<Item = super::CommandBuffer>>(&mut self, command_buffers: I) {
+        self.intermediate_copy_bufs.clear();
         for cmd_buf in command_buffers {
             self.free_lists.push(cmd_buf.raw);
         }
@@ -612,30 +685,59 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
-        let list = self.list.as_ref().unwrap();
-        for r in regions {
+        let offset_alignment = self.shared.private_caps.texture_data_placement_alignment();
+
+        for naive_copy_region in regions {
+            let is_offset_aligned = naive_copy_region.buffer_layout.offset % offset_alignment == 0;
+            let (final_copy_region, src) = if is_offset_aligned {
+                (naive_copy_region, src)
+            } else {
+                let (intermediate_to_dst_region, intermediate_buf) = unsafe {
+                    let src_offset = naive_copy_region.buffer_layout.offset;
+                    self.buf_tex_intermediate(
+                        naive_copy_region,
+                        dst.format,
+                        |this, buf, size, intermediate_to_dst_region| {
+                            let layout = crate::BufferCopy {
+                                src_offset,
+                                dst_offset: 0,
+                                size,
+                            };
+                            this.copy_buffer_to_buffer(src, buf, [layout].into_iter());
+                            intermediate_to_dst_region
+                        },
+                    )
+                };
+                self.intermediate_copy_bufs.push(intermediate_buf);
+                let intermediate_buf = self.intermediate_copy_bufs.last().unwrap();
+                (intermediate_to_dst_region, intermediate_buf)
+            };
+
+            let list = self.list.as_ref().unwrap();
+
             let src_location = Direct3D12::D3D12_TEXTURE_COPY_LOCATION {
                 pResource: unsafe { borrow_interface_temporarily(&src.resource) },
                 Type: Direct3D12::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
                 Anonymous: Direct3D12::D3D12_TEXTURE_COPY_LOCATION_0 {
-                    PlacedFootprint: r.to_subresource_footprint(dst.format),
+                    PlacedFootprint: final_copy_region.to_subresource_footprint(dst.format),
                 },
             };
             let dst_location = Direct3D12::D3D12_TEXTURE_COPY_LOCATION {
                 pResource: unsafe { borrow_interface_temporarily(&dst.resource) },
                 Type: Direct3D12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
                 Anonymous: Direct3D12::D3D12_TEXTURE_COPY_LOCATION_0 {
-                    SubresourceIndex: dst.calc_subresource_for_copy(&r.texture_base),
+                    SubresourceIndex: dst
+                        .calc_subresource_for_copy(&final_copy_region.texture_base),
                 },
             };
 
-            let src_box = make_box(&wgt::Origin3d::ZERO, &r.size);
+            let src_box = make_box(&wgt::Origin3d::ZERO, &final_copy_region.size);
             unsafe {
                 list.CopyTextureRegion(
                     &dst_location,
-                    r.texture_base.origin.x,
-                    r.texture_base.origin.y,
-                    r.texture_base.origin.z,
+                    final_copy_region.texture_base.origin.x,
+                    final_copy_region.texture_base.origin.y,
+                    final_copy_region.texture_base.origin.z,
                     &src_location,
                     Some(&src_box),
                 )
@@ -652,8 +754,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) where
         T: Iterator<Item = crate::BufferTextureCopy>,
     {
-        let list = self.list.as_ref().unwrap();
-        for r in regions {
+        let copy_aligned = |this: &mut Self,
+                            src: &super::Texture,
+                            dst: &super::Buffer,
+                            r: crate::BufferTextureCopy| {
+            let list = this.list.as_ref().unwrap();
+
             let src_location = Direct3D12::D3D12_TEXTURE_COPY_LOCATION {
                 pResource: unsafe { borrow_interface_temporarily(&src.resource) },
                 Type: Direct3D12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
@@ -672,6 +778,37 @@ impl crate::CommandEncoder for super::CommandEncoder {
             let src_box = make_box(&r.texture_base.origin, &r.size);
             unsafe {
                 list.CopyTextureRegion(&dst_location, 0, 0, 0, &src_location, Some(&src_box))
+            };
+        };
+
+        let offset_alignment = self.shared.private_caps.texture_data_placement_alignment();
+
+        for r in regions {
+            let is_offset_aligned = r.buffer_layout.offset % offset_alignment == 0;
+            if is_offset_aligned {
+                copy_aligned(self, src, dst, r)
+            } else {
+                let orig_offset = r.buffer_layout.offset;
+                let (intermediate_to_dst_region, src) = unsafe {
+                    self.buf_tex_intermediate(
+                        r,
+                        src.format,
+                        |this, buf, size, intermediate_region| {
+                            copy_aligned(this, src, buf, intermediate_region);
+                            crate::BufferCopy {
+                                src_offset: 0,
+                                dst_offset: orig_offset,
+                                size,
+                            }
+                        },
+                    )
+                };
+
+                unsafe {
+                    self.copy_buffer_to_buffer(&src, dst, [intermediate_to_dst_region].into_iter());
+                }
+
+                self.intermediate_copy_bufs.push(src);
             };
         }
     }
