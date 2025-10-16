@@ -1252,7 +1252,7 @@ impl FunctionInfo {
         if let &Some(ref other_vertex) = &callee.vertex_type {
             self.try_update_mesh_vertex_type(other_vertex.0, other_vertex.1)?;
         }
-        if let &Some(ref other_primitive) = &callee.vertex_type {
+        if let &Some(ref other_primitive) = &callee.primitive_type {
             self.try_update_mesh_primitive_type(other_primitive.0, other_primitive.1)?;
         }
         Ok(())
