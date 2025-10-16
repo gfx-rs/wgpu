@@ -1642,6 +1642,16 @@ impl super::Instance {
 
         let (phd_capabilities, phd_features) = self.shared.inspect(phd);
 
+        let mem_properties = {
+            profiling::scope!("vkGetPhysicalDeviceMemoryProperties");
+            unsafe { self.shared.raw.get_physical_device_memory_properties(phd) }
+        };
+        let memory_types = &mem_properties.memory_types_as_slice();
+        let supports_lazily_allocated = memory_types.iter().any(|mem| {
+            mem.property_flags
+                .contains(vk::MemoryPropertyFlags::LAZILY_ALLOCATED)
+        });
+
         let info = wgt::AdapterInfo {
             name: {
                 phd_capabilities
@@ -1681,6 +1691,7 @@ impl super::Instance {
                     .to_owned()
             },
             backend: wgt::Backend::Vulkan,
+            transient_saves_memory: supports_lazily_allocated,
         };
         let (available_features, mut downlevel_flags) =
             phd_features.to_wgpu(&self.shared.raw, phd, &phd_capabilities);

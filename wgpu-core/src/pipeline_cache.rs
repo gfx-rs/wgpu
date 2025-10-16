@@ -322,6 +322,7 @@ mod tests {
         driver: String::new(),
         driver_info: String::new(),
         backend: wgt::Backend::Vulkan,
+        transient_saves_memory: true,
     };
 
     // IMPORTANT: If these tests fail, then you MUST increment HEADER_VERSION

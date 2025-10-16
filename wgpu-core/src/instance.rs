@@ -699,7 +699,7 @@ impl Adapter {
             ),
         );
         allowed_usages.set(
-            wgt::TextureUsages::RENDER_ATTACHMENT,
+            wgt::TextureUsages::RENDER_ATTACHMENT | wgt::TextureUsages::TRANSIENT,
             caps.intersects(Tfc::COLOR_ATTACHMENT | Tfc::DEPTH_STENCIL_ATTACHMENT),
         );
         allowed_usages.set(
