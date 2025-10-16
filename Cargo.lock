@@ -2520,15 +2520,12 @@ name = "naga-test"
 version = "27.0.0"
 dependencies = [
  "bitflags 2.9.4",
- "env_logger",
  "naga",
  "ron",
- "rspirv",
  "serde",
  "serde_json",
  "spirv",
  "toml",
- "walkdir",
 ]
 
 [[package]]
@@ -4781,7 +4778,6 @@ dependencies = [
  "cfg-if",
  "cfg_aliases 0.2.1",
  "document-features",
- "hashbrown 0.16.0",
  "js-sys",
  "log",
  "naga",
