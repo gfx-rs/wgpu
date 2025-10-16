@@ -1577,8 +1577,8 @@ impl super::Validator {
                         crate::MeshFunction::SetVertex { index, value: _ }
                         | crate::MeshFunction::SetPrimitive { index, value: _ } => {
                             ensure_u32(index)?;
-                            // Value is validated elsewhere (since the value type isn't known ahead of time but must match for a function
-                            // and all functions it calls)
+                            // Value is validated elsewhere (since the value type isn't known ahead of time but must match for all calls
+                            // in a function or the function's called functions)
                         }
                     }
                 }
