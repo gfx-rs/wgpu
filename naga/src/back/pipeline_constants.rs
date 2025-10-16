@@ -309,13 +309,13 @@ fn process_mesh_shader_overrides(
             mesh_info.max_vertices = module
                 .to_ctx()
                 .eval_expr_to_u32(adjusted_global_expressions[r#override])
-                .map_err(|_| PipelineConstantError::NegativeWorkgroupSize)?;
+                .map_err(|_| PipelineConstantError::NegativeMeshOutputMax)?;
         }
         if let Some(r#override) = mesh_info.max_primitives_override {
             mesh_info.max_primitives = module
                 .to_ctx()
                 .eval_expr_to_u32(adjusted_global_expressions[r#override])
-                .map_err(|_| PipelineConstantError::NegativeWorkgroupSize)?;
+                .map_err(|_| PipelineConstantError::NegativeMeshOutputMax)?;
         }
     }
     Ok(())

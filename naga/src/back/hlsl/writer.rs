@@ -1765,7 +1765,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         module: &Module,
     ) -> bool {
         self.options.zero_initialize_workgroup_memory
-            && func_ctx.ty.is_compute_entry_point(module)
+            && func_ctx.ty.is_compute_like_entry_point(module)
             && module.global_variables.iter().any(|(handle, var)| {
                 !func_ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
             })

@@ -1094,7 +1094,10 @@ impl Writer {
                     super::ZeroInitializeWorkgroupMemoryMode::Polyfill,
                     Some(
                         ref mut interface @ FunctionInterface {
-                            stage: crate::ShaderStage::Compute,
+                            stage:
+                                crate::ShaderStage::Compute
+                                | crate::ShaderStage::Mesh
+                                | crate::ShaderStage::Task,
                             ..
                         },
                     ),
