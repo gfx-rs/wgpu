@@ -381,41 +381,72 @@ pub enum AddressSpace {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum BuiltIn {
+    /// Written in vertex/mesh shaders, read in fragment shaders
     Position { invariant: bool },
+    /// Read in task, mesh, vertex, and fragment shaders
     ViewIndex,
-    // vertex (and often mesh)
+
+    /// Read in vertex shaders
     BaseInstance,
+    /// Read in vertex shaders
     BaseVertex,
+    /// Written in vertex & mesh shaders
     ClipDistance,
+    /// Written in vertex & mesh shaders
     CullDistance,
+    /// Read in vertex shaders
     InstanceIndex,
+    /// Written in vertex & mesh shaders
     PointSize,
+    /// Read in vertex shaders
     VertexIndex,
+    /// Read in vertex & task shaders, or mesh shaders in pipelines without task shaders
     DrawID,
-    // fragment
+
+    /// Written in fragment shaders
     FragDepth,
+    /// Read in fragment shaders
     PointCoord,
+    /// Read in fragment shaders
     FrontFacing,
-    PrimitiveIndex, // Also for mesh output
+    /// Read in fragment shaders, in the future may written in mesh shaders
+    PrimitiveIndex,
+    /// Read in fragment shaders
     SampleIndex,
+    /// Read or written in fragment shaders
     SampleMask,
-    // compute (and task/mesh)
+
+    /// Read in compute, task, and mesh shaders
     GlobalInvocationId,
+    /// Read in compute, task, and mesh shaders
     LocalInvocationId,
+    /// Read in compute, task, and mesh shaders
     LocalInvocationIndex,
+    /// Read in compute, task, and mesh shaders
     WorkGroupId,
+    /// Read in compute, task, and mesh shaders
     WorkGroupSize,
+    /// Read in compute, task, and mesh shaders
     NumWorkGroups,
-    // subgroup
+
+    /// Read in compute, task, and mesh shaders
     NumSubgroups,
+    /// Read in compute, task, and mesh shaders
     SubgroupId,
+    /// Read in compute, fragment, task, and mesh shaders
     SubgroupSize,
+    /// Read in compute, fragment, task, and mesh shaders
     SubgroupInvocationId,
-    // mesh
+
+    /// Written in task shaders
     MeshTaskSize,
+    /// Written in mesh shaders
     CullPrimitive,
+    /// Written in mesh shaders
     PointIndex,
+    /// Written in mesh shaders
     LineIndices,
+    /// Written in mesh shaders
     TriangleIndices,
 }
 
