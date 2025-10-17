@@ -632,7 +632,6 @@ pub fn flatten_compose<'arenas>(
 }
 
 impl super::ShaderStage {
-    // TODO: make more things respect this
     pub const fn compute_like(self) -> bool {
         match self {
             Self::Vertex | Self::Fragment => false,
