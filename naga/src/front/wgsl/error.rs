@@ -406,6 +406,19 @@ pub(crate) enum Error<'a> {
         accept_span: Span,
         accept_type: String,
     },
+    MissingMeshShaderInfo {
+        mesh_attribute_span: Span,
+    },
+    OneMeshShaderAttribute {
+        attribute_span: Span,
+    },
+    ExpectedGlobalVariable {
+        name_span: Span,
+    },
+    MeshPrimitiveNoDefinedTopology {
+        attribute_span: Span,
+        struct_span: Span,
+    },
     StructMemberTooLarge {
         member_name_span: Span,
     },
@@ -1369,6 +1382,27 @@ impl<'a> Error<'a> {
                     (accept_span, format!("accept value of type {accept_type}").into()),
                 ],
                 notes: vec![],
+            },
+            Error::MissingMeshShaderInfo { mesh_attribute_span} => ParseError {
+                message: "mesh shader entry point is missing @vertex_output or @primitive_output".into(),
+                labels: vec![(mesh_attribute_span, "mesh shader entry declared here".into())],
+                notes: vec![],
+            },
+            Error::OneMeshShaderAttribute { attribute_span } => ParseError {
+                message: "only one of @vertex_output or @primitive_output was given".into(),
+                labels: vec![(attribute_span, "only one of @vertex_output or @primitive_output is provided".into())],
+                notes: vec![],
+            },
+            Error::ExpectedGlobalVariable { name_span } => ParseError {
+                message: "expected global variable".to_string(),
+                // TODO: I would like to also include the global declaration span
+                labels: vec![(name_span, "variable used here".into())],
+                notes: vec![],
+            },
+            Error::MeshPrimitiveNoDefinedTopology { struct_span, attribute_span } => ParseError {
+                message: "mesh primitive struct must have exactly one of point indices, line indices, or triangle indices".to_string(),
+                labels: vec![(attribute_span, "primitive type declared here".into()), (struct_span, "primitive struct declared here".into())],
+                notes: vec![]
             },
             Error::StructMemberTooLarge { member_name_span } => ParseError {
                 message: "struct member is too large".into(),

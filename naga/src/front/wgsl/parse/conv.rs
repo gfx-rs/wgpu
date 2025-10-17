@@ -16,6 +16,7 @@ pub fn map_address_space(word: &str, span: Span) -> Result<'_, crate::AddressSpa
         }),
         "push_constant" => Ok(crate::AddressSpace::PushConstant),
         "function" => Ok(crate::AddressSpace::Function),
+        "task_payload" => Ok(crate::AddressSpace::TaskPayload),
         _ => Err(Box::new(Error::UnknownAddressSpace(span))),
     }
 }
@@ -49,6 +50,12 @@ pub fn map_built_in(
         "subgroup_id" => crate::BuiltIn::SubgroupId,
         "subgroup_size" => crate::BuiltIn::SubgroupSize,
         "subgroup_invocation_id" => crate::BuiltIn::SubgroupInvocationId,
+        // mesh
+        "cull_primitive" => crate::BuiltIn::CullPrimitive,
+        "point_index" => crate::BuiltIn::PointIndex,
+        "line_indices" => crate::BuiltIn::LineIndices,
+        "triangle_indices" => crate::BuiltIn::TriangleIndices,
+        "mesh_task_size" => crate::BuiltIn::MeshTaskSize,
         _ => return Err(Box::new(Error::UnknownBuiltin(span))),
     };
     match built_in {

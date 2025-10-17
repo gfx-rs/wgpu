@@ -1,0 +1,846 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Float,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Quad,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Bool,
+                width: 1,
+            )),
+        ),
+        (
+            name: Some("TaskPayload"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("colorMask"),
+                        ty: 1,
+                        binding: None,
+                        offset: 0,
+                    ),
+                    (
+                        name: Some("visible"),
+                        ty: 2,
+                        binding: None,
+                        offset: 16,
+                    ),
+                ],
+                span: 32,
+            ),
+        ),
+        (
+            name: Some("VertexOutput"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("position"),
+                        ty: 1,
+                        binding: Some(BuiltIn(Position(
+                            invariant: false,
+                        ))),
+                        offset: 0,
+                    ),
+                    (
+                        name: Some("color"),
+                        ty: 1,
+                        binding: Some(Location(
+                            location: 0,
+                            interpolation: Some(Perspective),
+                            sampling: Some(Center),
+                            blend_src: None,
+                            per_primitive: false,
+                        )),
+                        offset: 16,
+                    ),
+                ],
+                span: 32,
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Tri,
+                scalar: (
+                    kind: Uint,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: Some("PrimitiveOutput"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("index"),
+                        ty: 6,
+                        binding: Some(BuiltIn(TriangleIndices)),
+                        offset: 0,
+                    ),
+                    (
+                        name: Some("cull"),
+                        ty: 2,
+                        binding: Some(BuiltIn(CullPrimitive)),
+                        offset: 12,
+                    ),
+                    (
+                        name: Some("colorMask"),
+                        ty: 1,
+                        binding: Some(Location(
+                            location: 1,
+                            interpolation: Some(Perspective),
+                            sampling: Some(Center),
+                            blend_src: None,
+                            per_primitive: true,
+                        )),
+                        offset: 16,
+                    ),
+                ],
+                span: 32,
+            ),
+        ),
+        (
+            name: Some("PrimitiveInput"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("colorMask"),
+                        ty: 1,
+                        binding: Some(Location(
+                            location: 1,
+                            interpolation: Some(Perspective),
+                            sampling: Some(Center),
+                            blend_src: None,
+                            per_primitive: true,
+                        )),
+                        offset: 0,
+                    ),
+                ],
+                span: 16,
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        ray_vertex_return: None,
+        external_texture_params: None,
+        external_texture_transfer_function: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [],
+    global_variables: [
+        (
+            name: Some("taskPayload"),
+            space: TaskPayload,
+            binding: None,
+            ty: 3,
+            init: None,
+        ),
+        (
+            name: Some("workgroupData"),
+            space: WorkGroup,
+            binding: None,
+            ty: 0,
+            init: None,
+        ),
+    ],
+    global_expressions: [],
+    functions: [],
+    entry_points: [
+        (
+            name: "ts_main",
+            stage: Task,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("ts_main"),
+                arguments: [],
+                result: Some((
+                    ty: 6,
+                    binding: Some(BuiltIn(MeshTaskSize)),
+                )),
+                local_variables: [],
+                expressions: [
+                    GlobalVariable(1),
+                    Literal(F32(1.0)),
+                    GlobalVariable(0),
+                    AccessIndex(
+                        base: 2,
+                        index: 0,
+                    ),
+                    Literal(F32(1.0)),
+                    Literal(F32(1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            4,
+                            5,
+                            6,
+                            7,
+                        ],
+                    ),
+                    GlobalVariable(0),
+                    AccessIndex(
+                        base: 9,
+                        index: 1,
+                    ),
+                    Literal(Bool(true)),
+                    Literal(U32(3)),
+                    Literal(U32(1)),
+                    Literal(U32(1)),
+                    Compose(
+                        ty: 6,
+                        components: [
+                            12,
+                            13,
+                            14,
+                        ],
+                    ),
+                ],
+                named_expressions: {},
+                body: [
+                    Store(
+                        pointer: 0,
+                        value: 1,
+                    ),
+                    Emit((
+                        start: 3,
+                        end: 4,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 8,
+                        end: 9,
+                    )),
+                    Store(
+                        pointer: 3,
+                        value: 8,
+                    ),
+                    Emit((
+                        start: 10,
+                        end: 11,
+                    )),
+                    Store(
+                        pointer: 10,
+                        value: 11,
+                    ),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 15,
+                        end: 16,
+                    )),
+                    Return(
+                        value: Some(15),
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+            mesh_info: None,
+            task_payload: Some(0),
+        ),
+        (
+            name: "ms_main",
+            stage: Mesh,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("ms_main"),
+                arguments: [
+                    (
+                        name: Some("index"),
+                        ty: 5,
+                        binding: Some(BuiltIn(LocalInvocationIndex)),
+                    ),
+                    (
+                        name: Some("id"),
+                        ty: 6,
+                        binding: Some(BuiltIn(GlobalInvocationId)),
+                    ),
+                ],
+                result: None,
+                local_variables: [
+                    (
+                        name: Some("v"),
+                        ty: 4,
+                        init: None,
+                    ),
+                    (
+                        name: Some("p"),
+                        ty: 7,
+                        init: None,
+                    ),
+                ],
+                expressions: [
+                    FunctionArgument(0),
+                    FunctionArgument(1),
+                    Literal(U32(3)),
+                    Literal(U32(1)),
+                    GlobalVariable(1),
+                    Literal(F32(2.0)),
+                    LocalVariable(0),
+                    AccessIndex(
+                        base: 6,
+                        index: 0,
+                    ),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            8,
+                            9,
+                            10,
+                            11,
+                        ],
+                    ),
+                    AccessIndex(
+                        base: 6,
+                        index: 1,
+                    ),
+                    GlobalVariable(0),
+                    AccessIndex(
+                        base: 14,
+                        index: 0,
+                    ),
+                    Load(
+                        pointer: 15,
+                    ),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            17,
+                            18,
+                            19,
+                            20,
+                        ],
+                    ),
+                    Binary(
+                        op: Multiply,
+                        left: 21,
+                        right: 16,
+                    ),
+                    Literal(U32(0)),
+                    Load(
+                        pointer: 6,
+                    ),
+                    AccessIndex(
+                        base: 6,
+                        index: 0,
+                    ),
+                    Literal(F32(-1.0)),
+                    Literal(F32(-1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            26,
+                            27,
+                            28,
+                            29,
+                        ],
+                    ),
+                    AccessIndex(
+                        base: 6,
+                        index: 1,
+                    ),
+                    GlobalVariable(0),
+                    AccessIndex(
+                        base: 32,
+                        index: 0,
+                    ),
+                    Load(
+                        pointer: 33,
+                    ),
+                    Literal(F32(0.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            35,
+                            36,
+                            37,
+                            38,
+                        ],
+                    ),
+                    Binary(
+                        op: Multiply,
+                        left: 39,
+                        right: 34,
+                    ),
+                    Literal(U32(1)),
+                    Load(
+                        pointer: 6,
+                    ),
+                    AccessIndex(
+                        base: 6,
+                        index: 0,
+                    ),
+                    Literal(F32(1.0)),
+                    Literal(F32(-1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            44,
+                            45,
+                            46,
+                            47,
+                        ],
+                    ),
+                    AccessIndex(
+                        base: 6,
+                        index: 1,
+                    ),
+                    GlobalVariable(0),
+                    AccessIndex(
+                        base: 50,
+                        index: 0,
+                    ),
+                    Load(
+                        pointer: 51,
+                    ),
+                    Literal(F32(1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            53,
+                            54,
+                            55,
+                            56,
+                        ],
+                    ),
+                    Binary(
+                        op: Multiply,
+                        left: 57,
+                        right: 52,
+                    ),
+                    Literal(U32(2)),
+                    Load(
+                        pointer: 6,
+                    ),
+                    LocalVariable(1),
+                    AccessIndex(
+                        base: 61,
+                        index: 0,
+                    ),
+                    Literal(U32(0)),
+                    Literal(U32(1)),
+                    Literal(U32(2)),
+                    Compose(
+                        ty: 6,
+                        components: [
+                            63,
+                            64,
+                            65,
+                        ],
+                    ),
+                    AccessIndex(
+                        base: 61,
+                        index: 1,
+                    ),
+                    GlobalVariable(0),
+                    AccessIndex(
+                        base: 68,
+                        index: 1,
+                    ),
+                    Load(
+                        pointer: 69,
+                    ),
+                    Unary(
+                        op: LogicalNot,
+                        expr: 70,
+                    ),
+                    AccessIndex(
+                        base: 61,
+                        index: 2,
+                    ),
+                    Literal(F32(1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            73,
+                            74,
+                            75,
+                            76,
+                        ],
+                    ),
+                    Literal(U32(0)),
+                    Load(
+                        pointer: 61,
+                    ),
+                ],
+                named_expressions: {
+                    0: "index",
+                    1: "id",
+                },
+                body: [
+                    MeshFunction(SetMeshOutputs(
+                        vertex_count: 2,
+                        primitive_count: 3,
+                    )),
+                    Store(
+                        pointer: 4,
+                        value: 5,
+                    ),
+                    Emit((
+                        start: 7,
+                        end: 8,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 12,
+                        end: 13,
+                    )),
+                    Store(
+                        pointer: 7,
+                        value: 12,
+                    ),
+                    Emit((
+                        start: 13,
+                        end: 14,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 15,
+                        end: 17,
+                    )),
+                    Emit((
+                        start: 21,
+                        end: 23,
+                    )),
+                    Store(
+                        pointer: 13,
+                        value: 22,
+                    ),
+                    Emit((
+                        start: 24,
+                        end: 25,
+                    )),
+                    MeshFunction(SetVertex(
+                        index: 23,
+                        value: 24,
+                    )),
+                    Emit((
+                        start: 25,
+                        end: 26,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 30,
+                        end: 31,
+                    )),
+                    Store(
+                        pointer: 25,
+                        value: 30,
+                    ),
+                    Emit((
+                        start: 31,
+                        end: 32,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 33,
+                        end: 35,
+                    )),
+                    Emit((
+                        start: 39,
+                        end: 41,
+                    )),
+                    Store(
+                        pointer: 31,
+                        value: 40,
+                    ),
+                    Emit((
+                        start: 42,
+                        end: 43,
+                    )),
+                    MeshFunction(SetVertex(
+                        index: 41,
+                        value: 42,
+                    )),
+                    Emit((
+                        start: 43,
+                        end: 44,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 48,
+                        end: 49,
+                    )),
+                    Store(
+                        pointer: 43,
+                        value: 48,
+                    ),
+                    Emit((
+                        start: 49,
+                        end: 50,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 51,
+                        end: 53,
+                    )),
+                    Emit((
+                        start: 57,
+                        end: 59,
+                    )),
+                    Store(
+                        pointer: 49,
+                        value: 58,
+                    ),
+                    Emit((
+                        start: 60,
+                        end: 61,
+                    )),
+                    MeshFunction(SetVertex(
+                        index: 59,
+                        value: 60,
+                    )),
+                    Emit((
+                        start: 62,
+                        end: 63,
+                    )),
+                    Emit((
+                        start: 66,
+                        end: 67,
+                    )),
+                    Store(
+                        pointer: 62,
+                        value: 66,
+                    ),
+                    Emit((
+                        start: 67,
+                        end: 68,
+                    )),
+                    Emit((
+                        start: 69,
+                        end: 72,
+                    )),
+                    Store(
+                        pointer: 67,
+                        value: 71,
+                    ),
+                    Emit((
+                        start: 72,
+                        end: 73,
+                    )),
+                    Emit((
+                        start: 77,
+                        end: 78,
+                    )),
+                    Store(
+                        pointer: 72,
+                        value: 77,
+                    ),
+                    Emit((
+                        start: 79,
+                        end: 80,
+                    )),
+                    MeshFunction(SetPrimitive(
+                        index: 78,
+                        value: 79,
+                    )),
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+            mesh_info: Some((
+                topology: Triangles,
+                max_vertices: 3,
+                max_vertices_override: None,
+                max_primitives: 1,
+                max_primitives_override: None,
+                vertex_output_type: 4,
+                primitive_output_type: 7,
+            )),
+            task_payload: Some(0),
+        ),
+        (
+            name: "fs_main",
+            stage: Fragment,
+            early_depth_test: None,
+            workgroup_size: (0, 0, 0),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("fs_main"),
+                arguments: [
+                    (
+                        name: Some("vertex"),
+                        ty: 4,
+                        binding: None,
+                    ),
+                    (
+                        name: Some("primitive"),
+                        ty: 8,
+                        binding: None,
+                    ),
+                ],
+                result: Some((
+                    ty: 1,
+                    binding: Some(Location(
+                        location: 0,
+                        interpolation: Some(Perspective),
+                        sampling: Some(Center),
+                        blend_src: None,
+                        per_primitive: false,
+                    )),
+                )),
+                local_variables: [],
+                expressions: [
+                    FunctionArgument(0),
+                    FunctionArgument(1),
+                    AccessIndex(
+                        base: 0,
+                        index: 1,
+                    ),
+                    AccessIndex(
+                        base: 1,
+                        index: 0,
+                    ),
+                    Binary(
+                        op: Multiply,
+                        left: 2,
+                        right: 3,
+                    ),
+                ],
+                named_expressions: {
+                    0: "vertex",
+                    1: "primitive",
+                },
+                body: [
+                    Emit((
+                        start: 2,
+                        end: 5,
+                    )),
+                    Return(
+                        value: Some(4),
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+            mesh_info: None,
+            task_payload: None,
+        ),
+    ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+    doc_comments: None,
+)
