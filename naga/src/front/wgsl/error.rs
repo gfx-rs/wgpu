@@ -1384,12 +1384,12 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::MissingMeshShaderInfo { mesh_attribute_span} => ParseError {
-                message: "mesh shader entry point is missing @vertex_output or @primitive_output".into(),
+                message: "mesh shader entry point is missing `@vertex_output` or `@primitive_output`".into(),
                 labels: vec![(mesh_attribute_span, "mesh shader entry declared here".into())],
                 notes: vec![],
             },
             Error::OneMeshShaderAttribute { attribute_span } => ParseError {
-                message: "only one of @vertex_output or @primitive_output was given".into(),
+                message: "only one of `@vertex_output` or `@primitive_output` was given".into(),
                 labels: vec![(attribute_span, "only one of @vertex_output or @primitive_output is provided".into())],
                 notes: vec![],
             },
