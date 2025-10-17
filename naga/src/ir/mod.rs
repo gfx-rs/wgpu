@@ -2566,28 +2566,40 @@ pub struct DocComments {
     pub module: Vec<String>,
 }
 
+/// The output topology for a mesh shader. Note that mesh shaders don't allow things like triangle-strips.
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum MeshOutputTopology {
+    /// Outputs individual vertices to be rendered as points.
     Points,
+    /// Outputs groups of 2 vertices to be renderedas lines .
     Lines,
+    /// Outputs groups of 3 vertices to be rendered as triangles.
     Triangles,
 }
 
+/// Information specific to mesh shader entry points.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 #[allow(dead_code)]
 pub struct MeshStageInfo {
+    /// The type of primitive outputted.
     pub topology: MeshOutputTopology,
+    /// The maximum number of vertices a mesh shader may output.
     pub max_vertices: u32,
+    /// If pipeline constants are used, the expressions that override `max_vertices`
     pub max_vertices_override: Option<Handle<Expression>>,
+    /// The maximum number of primitives a mesh shader may output.
     pub max_primitives: u32,
+    /// If pipeline constants are used, the expressions that override `max_primitives`
     pub max_primitives_override: Option<Handle<Expression>>,
+    /// The type used by vertex outputs, i.e. what is passed to `setVertex`.
     pub vertex_output_type: Handle<Type>,
+    /// The type used by primitive outputs, i.e. what is passed to `setPrimitive`.
     pub primitive_output_type: Handle<Type>,
 }
 
@@ -2597,14 +2609,17 @@ pub struct MeshStageInfo {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum MeshFunction {
+    /// Sets the number of vertices and primitives that will be outputted.
     SetMeshOutputs {
         vertex_count: Handle<Expression>,
         primitive_count: Handle<Expression>,
     },
+    /// Sets the output vertex at a given index.
     SetVertex {
         index: Handle<Expression>,
         value: Handle<Expression>,
     },
+    /// Sets the output primitive at a given index.
     SetPrimitive {
         index: Handle<Expression>,
         value: Handle<Expression>,
