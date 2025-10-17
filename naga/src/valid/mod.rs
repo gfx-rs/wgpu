@@ -83,7 +83,7 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub struct Capabilities: u32 {
+    pub struct Capabilities: u64 {
         /// Support for [`AddressSpace::PushConstant`][1].
         ///
         /// [1]: crate::AddressSpace::PushConstant
@@ -186,6 +186,8 @@ bitflags::bitflags! {
         /// Support for `quantizeToF16`, `pack2x16float`, and `unpack2x16float`, which store
         /// `f16`-precision values in `f32`s.
         const SHADER_FLOAT16_IN_FLOAT32 = 1 << 28;
+        /// Support for task shaders, mesh shaders, and per-primitive fragment inputs
+        const MESH_SHADER = 1 << 29;
     }
 }
 

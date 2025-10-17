@@ -98,6 +98,8 @@ pub enum VaryingError {
     InvalidPerPrimitive,
     #[error("Non-builtin members of a mesh primitive output struct must be decorated with `@per_primitive`")]
     MissingPerPrimitive,
+    #[error("The `MESH_SHADER` capability must be enabled to use per-primitive fragment inputs.")]
+    PerPrimitiveNotAllowed,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -151,6 +153,10 @@ pub enum EntryPointError {
     InvalidMeshPrimitiveOutputType,
     #[error("Task shaders must declare a task payload output")]
     ExpectedTaskPayload,
+    #[error(
+        "The `MESH_SHADER` capability must be enabled to compile mesh shaders and task shaders."
+    )]
+    MeshShaderCapabilityDisabled,
 }
 
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
@@ -386,6 +392,9 @@ impl VaryingContext<'_> {
                 blend_src,
                 per_primitive,
             } => {
+                if per_primitive && !self.capabilities.contains(Capabilities::MESH_SHADER) {
+                    return Err(VaryingError::PerPrimitiveNotAllowed);
+                }
                 // Only IO-shareable types may be stored in locations.
                 if !self.type_info[ty.index()]
                     .flags
@@ -802,6 +811,13 @@ impl super::Validator {
         module: &crate::Module,
         mod_info: &ModuleInfo,
     ) -> Result<FunctionInfo, WithSpan<EntryPointError>> {
+        if matches!(
+            ep.stage,
+            crate::ShaderStage::Task | crate::ShaderStage::Mesh
+        ) && !self.capabilities.contains(Capabilities::MESH_SHADER)
+        {
+            return Err(EntryPointError::MeshShaderCapabilityDisabled.with_span());
+        }
         if ep.early_depth_test.is_some() {
             let required = Capabilities::EARLY_DEPTH_TEST;
             if !self.capabilities.contains(required) {
