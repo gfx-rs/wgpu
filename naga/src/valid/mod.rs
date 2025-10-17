@@ -83,7 +83,7 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub struct Capabilities: u64 {
+    pub struct Capabilities: u32 {
         /// Support for [`AddressSpace::PushConstant`][1].
         ///
         /// [1]: crate::AddressSpace::PushConstant
