@@ -555,6 +555,7 @@ impl super::Adapter {
             }
             .is_ok()
                 && features3.BarycentricsSupported.as_bool()
+                && shader_model >= naga::back::hlsl::ShaderModel::V6_1
         };
         features.set(
             wgt::Features::SHADER_BARYCENTRICS,

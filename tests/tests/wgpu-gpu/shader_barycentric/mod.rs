@@ -6,7 +6,7 @@ pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
 }
 
 //
-// This test renders one triangles to a 2x2 render target. The triangle
+// This test renders one triangle to a 2x2 render target. The triangle
 // covers the bottom-left, bottom-right, and the top-left pixel.
 // XY layout of the render target, with the triangle:
 //
@@ -45,12 +45,12 @@ async fn barycentric(ctx: TestingContext) {
 
     let n = -0.505;
     let p = 0.51;
-    let two_triangles_xy: [f32; 6] = [n, n, p, n, n, p];
+    let triangle_xy: [f32; 6] = [n, n, p, n, n, p];
     let vertex_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: bytemuck::cast_slice(&two_triangles_xy),
+            contents: bytemuck::cast_slice(&triangle_xy),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 

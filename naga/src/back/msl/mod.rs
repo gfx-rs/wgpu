@@ -526,13 +526,13 @@ impl Options {
                         return Err(Error::UnsupportedAttribute("instance_id".to_string()));
                     }
                     // macOS: Since Metal 2.2
-                    // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/naga/issues/2164)
-                    crate::BuiltIn::PrimitiveIndex if self.lang_version < (2, 2) => {
+                    // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/wgpu/issues/4414)
+                    crate::BuiltIn::PrimitiveIndex if self.lang_version < (2, 3) => {
                         return Err(Error::UnsupportedAttribute("primitive_id".to_string()));
                     }
                     // macOS: Since Metal 2.2
-                    // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/naga/issues/2164)
-                    crate::BuiltIn::Barycentric if self.lang_version < (2, 2) => {
+                    // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/wgpu/issues/4414)
+                    crate::BuiltIn::Barycentric if self.lang_version < (2, 3) => {
                         return Err(Error::UnsupportedAttribute("barycentric_coord".to_string()));
                     }
                     _ => {}
