@@ -87,6 +87,7 @@ impl Global {
 
         let mut cmd_buf_data = cmd_enc.data.lock();
         cmd_buf_data.with_buffer(
+            crate::command::EncodingApi::Raw,
             |cmd_buf_data| -> Result<(), BuildAccelerationStructureError> {
                 let device = &cmd_enc.device;
                 device.check_is_valid()?;

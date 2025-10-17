@@ -77,6 +77,7 @@ SamplerDescriptor {
 #### General
 
 - Texture now has `from_custom`. By @R-Cramer4 in [#8315](https://github.com/gfx-rs/wgpu/pull/8315).
+- Using both the wgpu command encoding APIs and `CommandEncoder::as_hal_mut` on the same encoder will now result in a panic.
 
 ### Bug Fixes
 
