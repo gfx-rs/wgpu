@@ -2178,7 +2178,7 @@ pub enum Statement {
         /// The specific operation we're performing on `query`.
         fun: RayQueryFunction,
     },
-    /// A mesh shader intrinsic
+    /// A mesh shader intrinsic.
     MeshFunction(MeshFunction),
     /// Calculate a bitmask using a boolean from each active thread in the subgroup
     SubgroupBallot {
