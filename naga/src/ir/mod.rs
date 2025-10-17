@@ -997,7 +997,7 @@ pub enum Binding {
         /// whether they are per-primitive; a mesh shader's per-vertex and per-primitive
         /// outputs share the same location numbering space.
         ///
-        /// Per primitive values are not interpolated at all and are not dependent on the
+        /// Per-primitive values are not interpolated at all and are not dependent on the
         /// vertices or pixel location. For example, it may be used to store a
         /// non-interpolated normal vector.
         per_primitive: bool,
