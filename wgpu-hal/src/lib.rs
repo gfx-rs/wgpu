@@ -2438,6 +2438,36 @@ pub struct CopyExtent {
     pub depth: u32,
 }
 
+impl From<wgt::Extent3d> for CopyExtent {
+    fn from(value: wgt::Extent3d) -> Self {
+        let wgt::Extent3d {
+            width,
+            height,
+            depth_or_array_layers,
+        } = value;
+        Self {
+            width,
+            height,
+            depth: depth_or_array_layers,
+        }
+    }
+}
+
+impl From<CopyExtent> for wgt::Extent3d {
+    fn from(value: CopyExtent) -> Self {
+        let CopyExtent {
+            width,
+            height,
+            depth,
+        } = value;
+        Self {
+            width,
+            height,
+            depth_or_array_layers: depth,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct TextureCopy {
     pub src_base: TextureCopyBase,

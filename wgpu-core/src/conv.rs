@@ -124,6 +124,10 @@ pub fn map_texture_usage(
         wgt::TextureUses::STORAGE_ATOMIC,
         usage.contains(wgt::TextureUsages::STORAGE_ATOMIC),
     );
+    u.set(
+        wgt::TextureUses::TRANSIENT,
+        usage.contains(wgt::TextureUsages::TRANSIENT),
+    );
     u
 }
 
@@ -182,6 +186,10 @@ pub fn map_texture_usage_from_hal(uses: wgt::TextureUses) -> wgt::TextureUsages 
     u.set(
         wgt::TextureUsages::STORAGE_ATOMIC,
         uses.contains(wgt::TextureUses::STORAGE_ATOMIC),
+    );
+    u.set(
+        wgt::TextureUsages::TRANSIENT,
+        uses.contains(wgt::TextureUses::TRANSIENT),
     );
     u
 }

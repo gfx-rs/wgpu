@@ -22,3 +22,6 @@ deno_webidl.workspace = true
 deno_webgpu.workspace = true
 tokio = { workspace = true, features = ["full"] }
 termcolor.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

@@ -13,6 +13,7 @@ skip = [
     { name = "nanorand", version = "0.7.0" },
 
     # Deno uses an old version
+    { name = "bincode", version = "1.3.3" },
     { name = "which", version = "6.0.3" },
 
     # Winit uses an old version
@@ -25,11 +26,6 @@ skip = [
     { name = "windows-interface", version = "0.59.1" },
     { name = "windows-result", version = "0.3.4" },
     { name = "windows-strings", version = "0.4.2" },
-
-    # bindgen (used by deno) uses old version
-    { name = "itertools", version = "0.13.0" },
-    # Deno uses an old version
-    { name = "bincode", version = "1.3.3" },
 ]
 wildcards = "deny"
 allow-wildcard-paths = true

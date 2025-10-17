@@ -898,6 +898,229 @@ impl CommandEncoder {
             raw.transition_textures(&texture_barriers);
         }
     }
+
+    fn finish(
+        self: &Arc<Self>,
+        desc: &wgt::CommandBufferDescriptor<Label>,
+    ) -> (Arc<CommandBuffer>, Option<CommandEncoderError>) {
+        let mut cmd_enc_status = self.data.lock();
+
+        let res = match cmd_enc_status.finish() {
+            CommandEncoderStatus::Finished(cmd_buf_data) => Ok(cmd_buf_data),
+            CommandEncoderStatus::Error(err) => Err(err),
+            _ => unreachable!(),
+        };
+
+        let res = res.and_then(|mut cmd_buf_data| {
+            self.device.check_is_valid()?;
+            let snatch_guard = self.device.snatchable_lock.read();
+            let mut debug_scope_depth = 0;
+
+            let mut commands = mem::take(&mut cmd_buf_data.commands);
+            for command in commands.drain(..) {
+                if matches!(
+                    command,
+                    ArcCommand::RunRenderPass { .. } | ArcCommand::RunComputePass { .. }
+                ) {
+                    // Compute passes and render passes can accept either an
+                    // open or closed encoder. This state object holds an
+                    // `InnerCommandEncoder`. See the documentation of
+                    // [`EncodingState`].
+                    let mut state = EncodingState {
+                        device: &self.device,
+                        raw_encoder: &mut cmd_buf_data.encoder,
+                        tracker: &mut cmd_buf_data.trackers,
+                        buffer_memory_init_actions: &mut cmd_buf_data.buffer_memory_init_actions,
+                        texture_memory_actions: &mut cmd_buf_data.texture_memory_actions,
+                        as_actions: &mut cmd_buf_data.as_actions,
+                        temp_resources: &mut cmd_buf_data.temp_resources,
+                        indirect_draw_validation_resources: &mut cmd_buf_data
+                            .indirect_draw_validation_resources,
+                        snatch_guard: &snatch_guard,
+                        debug_scope_depth: &mut debug_scope_depth,
+                    };
+
+                    match command {
+                        ArcCommand::RunRenderPass {
+                            pass,
+                            color_attachments,
+                            depth_stencil_attachment,
+                            timestamp_writes,
+                            occlusion_query_set,
+                        } => {
+                            api_log!(
+                                "Begin encoding render pass with '{}' label",
+                                pass.label.as_deref().unwrap_or("")
+                            );
+                            let res = encode_render_pass(
+                                &mut state,
+                                pass,
+                                color_attachments,
+                                depth_stencil_attachment,
+                                timestamp_writes,
+                                occlusion_query_set,
+                            );
+                            match res.as_ref() {
+                                Err(err) => api_log!("Finished encoding render pass ({err:?})"),
+                                Ok(_) => api_log!("Finished encoding render pass (success)"),
+                            }
+                            res?;
+                        }
+                        ArcCommand::RunComputePass {
+                            pass,
+                            timestamp_writes,
+                        } => {
+                            api_log!(
+                                "Begin encoding compute pass with '{}' label",
+                                pass.label.as_deref().unwrap_or("")
+                            );
+                            let res = encode_compute_pass(&mut state, pass, timestamp_writes);
+                            match res.as_ref() {
+                                Err(err) => api_log!("Finished encoding compute pass ({err:?})"),
+                                Ok(_) => api_log!("Finished encoding compute pass (success)"),
+                            }
+                            res?;
+                        }
+                        _ => unreachable!(),
+                    }
+                } else {
+                    // All the other non-pass encoding routines assume the
+                    // encoder is open, so open it if necessary. This state
+                    // object holds an `&mut dyn hal::DynCommandEncoder`. By
+                    // convention, a bare HAL encoder reference in
+                    // [`EncodingState`] must always be an open encoder.
+                    let raw_encoder = cmd_buf_data.encoder.open_if_closed()?;
+                    let mut state = EncodingState {
+                        device: &self.device,
+                        raw_encoder,
+                        tracker: &mut cmd_buf_data.trackers,
+                        buffer_memory_init_actions: &mut cmd_buf_data.buffer_memory_init_actions,
+                        texture_memory_actions: &mut cmd_buf_data.texture_memory_actions,
+                        as_actions: &mut cmd_buf_data.as_actions,
+                        temp_resources: &mut cmd_buf_data.temp_resources,
+                        indirect_draw_validation_resources: &mut cmd_buf_data
+                            .indirect_draw_validation_resources,
+                        snatch_guard: &snatch_guard,
+                        debug_scope_depth: &mut debug_scope_depth,
+                    };
+                    match command {
+                        ArcCommand::CopyBufferToBuffer {
+                            src,
+                            src_offset,
+                            dst,
+                            dst_offset,
+                            size,
+                        } => {
+                            copy_buffer_to_buffer(
+                                &mut state, &src, src_offset, &dst, dst_offset, size,
+                            )?;
+                        }
+                        ArcCommand::CopyBufferToTexture { src, dst, size } => {
+                            copy_buffer_to_texture(&mut state, &src, &dst, &size)?;
+                        }
+                        ArcCommand::CopyTextureToBuffer { src, dst, size } => {
+                            copy_texture_to_buffer(&mut state, &src, &dst, &size)?;
+                        }
+                        ArcCommand::CopyTextureToTexture { src, dst, size } => {
+                            copy_texture_to_texture(&mut state, &src, &dst, &size)?;
+                        }
+                        ArcCommand::ClearBuffer { dst, offset, size } => {
+                            clear_buffer(&mut state, dst, offset, size)?;
+                        }
+                        ArcCommand::ClearTexture {
+                            dst,
+                            subresource_range,
+                        } => {
+                            clear_texture_cmd(&mut state, dst, &subresource_range)?;
+                        }
+                        ArcCommand::WriteTimestamp {
+                            query_set,
+                            query_index,
+                        } => {
+                            write_timestamp(&mut state, query_set, query_index)?;
+                        }
+                        ArcCommand::ResolveQuerySet {
+                            query_set,
+                            start_query,
+                            query_count,
+                            destination,
+                            destination_offset,
+                        } => {
+                            resolve_query_set(
+                                &mut state,
+                                query_set,
+                                start_query,
+                                query_count,
+                                destination,
+                                destination_offset,
+                            )?;
+                        }
+                        ArcCommand::PushDebugGroup(label) => {
+                            push_debug_group(&mut state, &label)?;
+                        }
+                        ArcCommand::PopDebugGroup => {
+                            pop_debug_group(&mut state)?;
+                        }
+                        ArcCommand::InsertDebugMarker(label) => {
+                            insert_debug_marker(&mut state, &label)?;
+                        }
+                        ArcCommand::BuildAccelerationStructures { blas, tlas } => {
+                            build_acceleration_structures(&mut state, blas, tlas)?;
+                        }
+                        ArcCommand::TransitionResources {
+                            buffer_transitions,
+                            texture_transitions,
+                        } => {
+                            transition_resources(
+                                &mut state,
+                                buffer_transitions,
+                                texture_transitions,
+                            )?;
+                        }
+                        ArcCommand::RunComputePass { .. } | ArcCommand::RunRenderPass { .. } => {
+                            unreachable!()
+                        }
+                    }
+                }
+            }
+
+            if debug_scope_depth > 0 {
+                Err(CommandEncoderError::DebugGroupError(
+                    DebugGroupError::MissingPop,
+                ))?;
+            }
+
+            // Close the encoder, unless it was closed already by a render or compute pass.
+            cmd_buf_data.encoder.close_if_open()?;
+
+            // Note: if we want to stop tracking the swapchain texture view,
+            // this is the place to do it.
+
+            Ok(cmd_buf_data)
+        });
+
+        let (data, error) = match res {
+            Err(e) => {
+                if e.is_destroyed_error() {
+                    // Errors related to destroyed resources are not reported until the
+                    // command buffer is submitted.
+                    (CommandEncoderStatus::Error(e.clone()), None)
+                } else {
+                    (CommandEncoderStatus::Error(e.clone()), Some(e))
+                }
+            }
+
+            Ok(data) => (CommandEncoderStatus::Finished(data), None),
+        };
+
+        let cmd_buf = Arc::new(CommandBuffer {
+            device: self.device.clone(),
+            label: desc.label.to_string(),
+            data: Mutex::new(rank::COMMAND_BUFFER_DATA, data),
+        });
+
+        (cmd_buf, error)
+    }
 }
 
 impl CommandBuffer {
@@ -1285,205 +1508,9 @@ impl Global {
         let hub = &self.hub;
 
         let cmd_enc = hub.command_encoders.get(encoder_id);
-        let mut cmd_enc_status = cmd_enc.data.lock();
 
-        let res = match cmd_enc_status.finish() {
-            CommandEncoderStatus::Finished(cmd_buf_data) => Ok(cmd_buf_data),
-            CommandEncoderStatus::Error(err) => Err(err),
-            _ => unreachable!(),
-        };
-
-        let res = res.and_then(|mut cmd_buf_data| {
-            cmd_enc.device.check_is_valid()?;
-            let snatch_guard = cmd_enc.device.snatchable_lock.read();
-            let mut debug_scope_depth = 0;
-
-            let mut commands = mem::take(&mut cmd_buf_data.commands);
-            for command in commands.drain(..) {
-                if matches!(
-                    command,
-                    ArcCommand::RunRenderPass { .. } | ArcCommand::RunComputePass { .. }
-                ) {
-                    // Compute passes and render passes can accept either an
-                    // open or closed encoder. This state object holds an
-                    // `InnerCommandEncoder`. See the documentation of
-                    // [`EncodingState`].
-                    let mut state = EncodingState {
-                        device: &cmd_enc.device,
-                        raw_encoder: &mut cmd_buf_data.encoder,
-                        tracker: &mut cmd_buf_data.trackers,
-                        buffer_memory_init_actions: &mut cmd_buf_data.buffer_memory_init_actions,
-                        texture_memory_actions: &mut cmd_buf_data.texture_memory_actions,
-                        as_actions: &mut cmd_buf_data.as_actions,
-                        temp_resources: &mut cmd_buf_data.temp_resources,
-                        indirect_draw_validation_resources: &mut cmd_buf_data
-                            .indirect_draw_validation_resources,
-                        snatch_guard: &snatch_guard,
-                        debug_scope_depth: &mut debug_scope_depth,
-                    };
-
-                    match command {
-                        ArcCommand::RunRenderPass {
-                            pass,
-                            color_attachments,
-                            depth_stencil_attachment,
-                            timestamp_writes,
-                            occlusion_query_set,
-                        } => {
-                            encode_render_pass(
-                                &mut state,
-                                pass,
-                                color_attachments,
-                                depth_stencil_attachment,
-                                timestamp_writes,
-                                occlusion_query_set,
-                            )?;
-                        }
-                        ArcCommand::RunComputePass {
-                            pass,
-                            timestamp_writes,
-                        } => {
-                            encode_compute_pass(&mut state, pass, timestamp_writes)?;
-                        }
-                        _ => unreachable!(),
-                    }
-                } else {
-                    // All the other non-pass encoding routines assume the
-                    // encoder is open, so open it if necessary. This state
-                    // object holds an `&mut dyn hal::DynCommandEncoder`. By
-                    // convention, a bare HAL encoder reference in
-                    // [`EncodingState`] must always be an open encoder.
-                    let raw_encoder = cmd_buf_data.encoder.open_if_closed()?;
-                    let mut state = EncodingState {
-                        device: &cmd_enc.device,
-                        raw_encoder,
-                        tracker: &mut cmd_buf_data.trackers,
-                        buffer_memory_init_actions: &mut cmd_buf_data.buffer_memory_init_actions,
-                        texture_memory_actions: &mut cmd_buf_data.texture_memory_actions,
-                        as_actions: &mut cmd_buf_data.as_actions,
-                        temp_resources: &mut cmd_buf_data.temp_resources,
-                        indirect_draw_validation_resources: &mut cmd_buf_data
-                            .indirect_draw_validation_resources,
-                        snatch_guard: &snatch_guard,
-                        debug_scope_depth: &mut debug_scope_depth,
-                    };
-                    match command {
-                        ArcCommand::CopyBufferToBuffer {
-                            src,
-                            src_offset,
-                            dst,
-                            dst_offset,
-                            size,
-                        } => {
-                            copy_buffer_to_buffer(
-                                &mut state, &src, src_offset, &dst, dst_offset, size,
-                            )?;
-                        }
-                        ArcCommand::CopyBufferToTexture { src, dst, size } => {
-                            copy_buffer_to_texture(&mut state, &src, &dst, &size)?;
-                        }
-                        ArcCommand::CopyTextureToBuffer { src, dst, size } => {
-                            copy_texture_to_buffer(&mut state, &src, &dst, &size)?;
-                        }
-                        ArcCommand::CopyTextureToTexture { src, dst, size } => {
-                            copy_texture_to_texture(&mut state, &src, &dst, &size)?;
-                        }
-                        ArcCommand::ClearBuffer { dst, offset, size } => {
-                            clear_buffer(&mut state, dst, offset, size)?;
-                        }
-                        ArcCommand::ClearTexture {
-                            dst,
-                            subresource_range,
-                        } => {
-                            clear_texture_cmd(&mut state, dst, &subresource_range)?;
-                        }
-                        ArcCommand::WriteTimestamp {
-                            query_set,
-                            query_index,
-                        } => {
-                            write_timestamp(&mut state, query_set, query_index)?;
-                        }
-                        ArcCommand::ResolveQuerySet {
-                            query_set,
-                            start_query,
-                            query_count,
-                            destination,
-                            destination_offset,
-                        } => {
-                            resolve_query_set(
-                                &mut state,
-                                query_set,
-                                start_query,
-                                query_count,
-                                destination,
-                                destination_offset,
-                            )?;
-                        }
-                        ArcCommand::PushDebugGroup(label) => {
-                            push_debug_group(&mut state, &label)?;
-                        }
-                        ArcCommand::PopDebugGroup => {
-                            pop_debug_group(&mut state)?;
-                        }
-                        ArcCommand::InsertDebugMarker(label) => {
-                            insert_debug_marker(&mut state, &label)?;
-                        }
-                        ArcCommand::BuildAccelerationStructures { blas, tlas } => {
-                            build_acceleration_structures(&mut state, blas, tlas)?;
-                        }
-                        ArcCommand::TransitionResources {
-                            buffer_transitions,
-                            texture_transitions,
-                        } => {
-                            transition_resources(
-                                &mut state,
-                                buffer_transitions,
-                                texture_transitions,
-                            )?;
-                        }
-                        ArcCommand::RunComputePass { .. } | ArcCommand::RunRenderPass { .. } => {
-                            unreachable!()
-                        }
-                    }
-                }
-            }
-
-            if debug_scope_depth > 0 {
-                Err(CommandEncoderError::DebugGroupError(
-                    DebugGroupError::MissingPop,
-                ))?;
-            }
-
-            // Close the encoder, unless it was closed already by a render or compute pass.
-            cmd_buf_data.encoder.close_if_open()?;
-
-            // Note: if we want to stop tracking the swapchain texture view,
-            // this is the place to do it.
-
-            Ok(cmd_buf_data)
-        });
-
-        let (data, error) = match res {
-            Err(e) => {
-                if e.is_destroyed_error() {
-                    // Errors related to destroyed resources are not reported until the
-                    // command buffer is submitted.
-                    (CommandEncoderStatus::Error(e.clone()), None)
-                } else {
-                    (CommandEncoderStatus::Error(e.clone()), Some(e))
-                }
-            }
-
-            Ok(data) => (CommandEncoderStatus::Finished(data), None),
-        };
-
-        let cmd_buf = CommandBuffer {
-            device: cmd_enc.device.clone(),
-            label: desc.label.to_string(),
-            data: Mutex::new(rank::COMMAND_BUFFER_DATA, data),
-        };
-
-        let cmd_buf_id = hub.command_buffers.prepare(id_in).assign(Arc::new(cmd_buf));
+        let (cmd_buf, error) = cmd_enc.finish(desc);
+        let cmd_buf_id = hub.command_buffers.prepare(id_in).assign(cmd_buf);
 
         (cmd_buf_id, error)
     }
