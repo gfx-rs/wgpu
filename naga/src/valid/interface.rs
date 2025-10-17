@@ -191,6 +191,7 @@ struct VaryingContext<'a> {
     capabilities: Capabilities,
     flags: super::ValidationFlags,
     mesh_output_type: MeshOutputType,
+    has_task_payload: bool,
 }
 
 impl VaryingContext<'_> {
@@ -243,16 +244,20 @@ impl VaryingContext<'_> {
                 }
 
                 let (visible, type_good) = match built_in {
-                    Bi::BaseInstance
-                    | Bi::BaseVertex
-                    | Bi::InstanceIndex
-                    | Bi::VertexIndex
-                    | Bi::DrawID => (
+                    Bi::BaseInstance | Bi::BaseVertex | Bi::InstanceIndex | Bi::VertexIndex => (
                         self.stage == St::Vertex && !self.output,
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
+                    Bi::DrawID => (
+                        // Always allowed in task/vertex stage. Allowed in mesh stage if there is no task stage in the pipeline.
+                        (self.stage == St::Vertex
+                            || self.stage == St::Task
+                            || (self.stage == St::Mesh && !self.has_task_payload))
+                            && !self.output,
+                        *ty_inner == Ti::Scalar(crate::Scalar::U32),
+                    ),
                     Bi::ClipDistance | Bi::CullDistance => (
-                        self.stage == St::Vertex && self.output,
+                        (self.stage == St::Vertex || self.stage == St::Mesh) && self.output,
                         match *ty_inner {
                             Ti::Array { base, size, .. } => {
                                 self.types[base].inner == Ti::Scalar(crate::Scalar::F32)
@@ -265,7 +270,7 @@ impl VaryingContext<'_> {
                         },
                     ),
                     Bi::PointSize => (
-                        self.stage == St::Vertex && self.output,
+                        (self.stage == St::Vertex || self.stage == St::Mesh) && self.output,
                         *ty_inner == Ti::Scalar(crate::Scalar::F32),
                     ),
                     Bi::PointCoord => (
@@ -290,9 +295,8 @@ impl VaryingContext<'_> {
                     ),
                     Bi::ViewIndex => (
                         match self.stage {
-                            St::Vertex | St::Fragment => !self.output,
+                            St::Vertex | St::Fragment | St::Task | St::Mesh => !self.output,
                             St::Compute => false,
-                            St::Task | St::Mesh => unreachable!(),
                         },
                         *ty_inner == Ti::Scalar(crate::Scalar::I32),
                     ),
@@ -776,6 +780,7 @@ impl super::Validator {
             capabilities: self.capabilities,
             flags: self.flags,
             mesh_output_type,
+            has_task_payload: ep.task_payload.is_some(),
         };
         ctx.validate(ep, ty, None)
             .map_err_inner(|e| EntryPointError::Result(e).with_span())?;
@@ -917,6 +922,7 @@ impl super::Validator {
                 capabilities: self.capabilities,
                 flags: self.flags,
                 mesh_output_type: MeshOutputType::None,
+                has_task_payload: ep.task_payload.is_some(),
             };
             ctx.validate(ep, fa.ty, fa.binding.as_ref())
                 .map_err_inner(|e| EntryPointError::Argument(index as u32, e).with_span())?;
@@ -936,6 +942,7 @@ impl super::Validator {
                 capabilities: self.capabilities,
                 flags: self.flags,
                 mesh_output_type: MeshOutputType::None,
+                has_task_payload: ep.task_payload.is_some(),
             };
             ctx.validate(ep, fr.ty, fr.binding.as_ref())
                 .map_err_inner(|e| EntryPointError::Result(e).with_span())?;
