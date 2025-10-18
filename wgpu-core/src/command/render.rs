@@ -1385,9 +1385,7 @@ impl RenderPassInfo {
                 return Err(RenderPassErrorInner::MultiViewMismatch);
             }
             if mask.get() != (1 << detected_mv) - 1 {
-                return Err(RenderPassErrorInner::MissingFeatures(MissingFeatures(
-                    wgt::Features::SELECTIVE_MULTIVIEW,
-                )));
+                device.require_features(wgt::Features::SELECTIVE_MULTIVIEW)?;
             }
         }
 
