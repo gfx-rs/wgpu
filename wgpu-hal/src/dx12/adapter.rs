@@ -569,8 +569,9 @@ impl super::Adapter {
             mesh_shader_supported,
         );
 
-        features.set(wgt::Features::MULTIVIEW, view_instancing);
-        features.set(wgt::Features::SELECTIVE_MULTIVIEW, view_instancing);
+        // Re-enable this when multiview is supported on DX12
+        // features.set(wgt::Features::MULTIVIEW, view_instancing);
+        // features.set(wgt::Features::SELECTIVE_MULTIVIEW, view_instancing);
 
         features.set(
             wgt::Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
