@@ -693,7 +693,13 @@ impl super::Validator {
                 TypeFlags::CONSTRUCTIBLE | TypeFlags::CREATION_RESOLVED,
                 false,
             ),
-            crate::AddressSpace::WorkGroup | crate::AddressSpace::TaskPayload => {
+            crate::AddressSpace::WorkGroup => (TypeFlags::DATA | TypeFlags::SIZED, false),
+            crate::AddressSpace::TaskPayload => {
+                if !self.capabilities.contains(Capabilities::MESH_SHADER) {
+                    return Err(GlobalVariableError::UnsupportedCapability(
+                        Capabilities::MESH_SHADER,
+                    ));
+                }
                 (TypeFlags::DATA | TypeFlags::SIZED, false)
             }
             crate::AddressSpace::PushConstant => {
