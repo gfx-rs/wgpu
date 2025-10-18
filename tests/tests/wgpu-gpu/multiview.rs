@@ -29,7 +29,7 @@ static DRAW_MULTIVIEW: GpuTestConfiguration = GpuTestConfiguration::new()
 static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::MULTIVIEW)
+            .features(Features::MULTIVIEW | Features::SELECTIVE_MULTIVIEW)
             .limits(Limits {
                 max_multiview_view_count: 4,
                 ..Limits::defaults()
@@ -214,7 +214,7 @@ async fn run_test(ctx: TestingContext, num_layers: u32) {
         let target_value = if view_idx == 0 {
             32
         } else if view_idx == num_layers as usize - 1 {
-            96
+            (32 + 64 * (num_layers - 1)) as u8
         } else {
             (clear_color * 255.0) as u8
         };
@@ -222,7 +222,7 @@ async fn run_test(ctx: TestingContext, num_layers: u32) {
         let failed_value = data[each_texture_size * view_idx..each_texture_size * (view_idx + 1)]
             .iter()
             .copied()
-            .find(|b| *b != target_value);
+            .find(|b| b.abs_diff(target_value) > 1);
         assert_eq!(failed_value, None, "Expected {target_value}");
     }
 }

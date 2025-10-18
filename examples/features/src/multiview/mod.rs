@@ -189,6 +189,11 @@ impl crate::framework::Example for Example {
     }
     fn required_features() -> wgpu::Features {
         wgpu::Features::MULTIVIEW
+            | if LAYERS > 2 {
+                wgpu::Features::SELECTIVE_MULTIVIEW
+            } else {
+                wgpu::Features::empty()
+            }
     }
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits {

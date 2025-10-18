@@ -1231,6 +1231,15 @@ bitflags_array! {
         ///
         /// [`Device::create_shader_module_passthrough`]: https://docs.rs/wgpu/latest/wgpu/struct.Device.html#method.create_shader_module_passthrough
         const EXPERIMENTAL_PASSTHROUGH_SHADERS = 1 << 52;
+
+        /// Enables using multiview where not all texture array layers are rendered to in a single render pass/render pipeline.
+        ///
+        /// Supported platforms
+        /// - Vulkan
+        /// - DX12
+        ///
+        /// While metal supports this in theory, the behavior of `view_index` differs from vulkan and dx12 so the feature isn't exposed.
+        const SELECTIVE_MULTIVIEW = 1 << 53;
     }
 
     /// Features that are not guaranteed to be supported.

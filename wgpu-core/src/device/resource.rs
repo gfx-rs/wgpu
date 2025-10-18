@@ -4287,8 +4287,11 @@ impl Device {
         };
 
         // Multiview is only supported if the feature is enabled
-        if desc.multiview_mask.is_some() {
+        if let Some(mv_mask) = desc.multiview_mask {
             self.require_features(wgt::Features::MULTIVIEW)?;
+            if !(mv_mask.get() + 1).is_power_of_two() {
+                self.require_features(wgt::Features::SELECTIVE_MULTIVIEW)?;
+            }
         }
 
         if !self

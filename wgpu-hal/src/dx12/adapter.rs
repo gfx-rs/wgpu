@@ -570,6 +570,7 @@ impl super::Adapter {
         );
 
         features.set(wgt::Features::MULTIVIEW, view_instancing);
+        features.set(wgt::Features::SELECTIVE_MULTIVIEW, view_instancing);
 
         features.set(
             wgt::Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
