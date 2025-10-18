@@ -452,13 +452,21 @@ impl crate::Device for super::Device {
                 }
             };
 
+            let mtl_storage_mode = if desc.usage.contains(wgt::TextureUses::TRANSIENT)
+                && self.shared.private_caps.supports_memoryless_storage
+            {
+                MTLStorageMode::Memoryless
+            } else {
+                MTLStorageMode::Private
+            };
+
             descriptor.set_texture_type(mtl_type);
             descriptor.set_width(desc.size.width as u64);
             descriptor.set_height(desc.size.height as u64);
             descriptor.set_mipmap_level_count(desc.mip_level_count as u64);
             descriptor.set_pixel_format(mtl_format);
             descriptor.set_usage(conv::map_texture_usage(desc.format, desc.usage));
-            descriptor.set_storage_mode(MTLStorageMode::Private);
+            descriptor.set_storage_mode(mtl_storage_mode);
 
             let raw = self.shared.device.lock().new_texture(&descriptor);
             if raw.as_ptr().is_null() {

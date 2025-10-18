@@ -914,6 +914,12 @@ impl super::PrivateCapabilities {
                     factor *= 2
                 }
             },
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
+            supports_memoryless_storage: if family_check {
+                device.supports_family(MTLGPUFamily::Apple2)
+            } else {
+                version.at_least((11, 0), (10, 0), os_is_mac)
+            },
         }
     }
 

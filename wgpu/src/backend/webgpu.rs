@@ -1223,7 +1223,7 @@ pub struct WebBuffer {
     /// The associated GPU buffer.
     inner: webgpu_sys::GpuBuffer,
     /// The mapped array buffer and mapped range.
-    mapping: RefCell<WebBufferMapState>,
+    mapping: Rc<RefCell<WebBufferMapState>>,
     /// Unique identifier for this Buffer.
     ident: crate::cmp::Identifier,
 }
@@ -1233,10 +1233,10 @@ impl WebBuffer {
     fn new(inner: webgpu_sys::GpuBuffer, desc: &crate::BufferDescriptor<'_>) -> Self {
         Self {
             inner,
-            mapping: RefCell::new(WebBufferMapState {
+            mapping: Rc::new(RefCell::new(WebBufferMapState {
                 mapped_buffer: None,
                 range: 0..desc.size,
-            }),
+            })),
             ident: crate::cmp::Identifier::create(),
         }
     }
@@ -1712,6 +1712,7 @@ impl dispatch::AdapterInterface for WebAdapter {
             driver: String::new(),
             driver_info: String::new(),
             backend: wgt::Backend::BrowserWebGpu,
+            transient_saves_memory: false,
         }
     }
 

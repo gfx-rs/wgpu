@@ -688,6 +688,10 @@ fn range_overlaps(a: &Range<BufferAddress>, b: &Range<BufferAddress>) -> bool {
     a.start < b.end && b.start < a.end
 }
 
+fn range_contains(a: &Range<BufferAddress>, b: &Range<BufferAddress>) -> bool {
+    a.start <= b.start && a.end >= b.end
+}
+
 #[derive(Debug, Copy, Clone)]
 enum RangeMappingKind {
     Mutable,
@@ -786,7 +790,7 @@ impl MapContext {
         if self.mapped_range.is_empty() {
             panic!("tried to call get_mapped_range(_mut) on an unmapped buffer");
         }
-        if !range_overlaps(&self.mapped_range, &new_sub.index) {
+        if !range_contains(&self.mapped_range, &new_sub.index) {
             panic!(
                 "tried to call get_mapped_range(_mut) on a range that is not entirely mapped. \
                  Attempted to get range {}, but the mapped range is {}..{}",
