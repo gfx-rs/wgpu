@@ -1956,7 +1956,14 @@ impl crate::Device for super::Device {
                 CachedBlobSizeInBytes: 0,
             },
             flags: Direct3D12::D3D12_PIPELINE_STATE_FLAG_NONE,
-            ..Default::default()
+
+            // Other crap
+            vertex_shader: Default::default(),
+            input_layout: Default::default(),
+            index_buffer_strip_cut_value: Default::default(),
+            stream_output: Default::default(),
+            task_shader: Default::default(),
+            mesh_shader: Default::default(),
         };
         let mut input_element_descs = Vec::new();
         let mut _blob_vs = None;

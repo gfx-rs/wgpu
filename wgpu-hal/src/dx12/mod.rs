@@ -1619,7 +1619,7 @@ pub enum ShaderModuleSource {
 }
 
 #[repr(C)]
-#[derive(Debug, Default)]
+#[derive(Debug)]
 struct RenderPipelineStateStreamDesc {
     root_signature: *mut Direct3D12::ID3D12RootSignature,
     pixel_shader: Direct3D12::D3D12_SHADER_BYTECODE,
