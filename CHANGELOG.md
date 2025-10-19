@@ -101,7 +101,7 @@ when using the `SELECTIVE_MULTIVIEW` feature. Note that this also influences app
 +     multiview_mask: NonZero::new(3),
 + }
 ```
-One other breaking change worth noting is that `@builtin(view_index)` now requires a type of `u32`, where previously it required `i32`.
+One other breaking change worth noting is that in WGSL `@builtin(view_index)` now requires a type of `u32`, where previously it required `i32`.
 
 By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206).
 
