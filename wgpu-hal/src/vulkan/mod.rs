@@ -641,6 +641,14 @@ struct PrivateCapabilities {
     shader_int8: bool,
 
     /// This is done to panic before undefined behavior, and is imperfect.
+    /// Basically, to allow implementations to emulate mv using instancing, if you
+    /// want to draw `n` instances to VR, you must draw `2n` instances, but you
+    /// can never draw more than `u32::MAX` instances. Therefore, when drawing
+    /// multiview on some vulkan implementations, it might restrict the instance
+    /// count, which isn't usually a thing in webgpu. We don't expose this limit
+    /// because its strange, i.e. only occurs on certain vulkan implementations
+    /// if you are drawing more than 128 million instances. We still want to avoid
+    /// undefined behavior in this situation, so we panic if the limit is violated.
     multiview_instance_index_limit: u32,
 }
 
