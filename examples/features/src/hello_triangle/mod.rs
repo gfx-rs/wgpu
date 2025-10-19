@@ -23,6 +23,8 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         .await
         .expect("Failed to find an appropriate adapter");
 
+    println!("{}", adapter.get_info().backend);
+
     // Create the logical device and command queue
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {

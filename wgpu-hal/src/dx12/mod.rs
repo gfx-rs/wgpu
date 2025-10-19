@@ -1619,11 +1619,9 @@ pub enum ShaderModuleSource {
 }
 
 #[repr(C)]
-#[derive(Debug)]
-struct MeshShaderPipelineStateStream {
+#[derive(Debug, Default)]
+struct RenderPipelineStateStreamDesc {
     root_signature: *mut Direct3D12::ID3D12RootSignature,
-    task_shader: Direct3D12::D3D12_SHADER_BYTECODE,
-    mesh_shader: Direct3D12::D3D12_SHADER_BYTECODE,
     pixel_shader: Direct3D12::D3D12_SHADER_BYTECODE,
     blend_state: Direct3D12::D3D12_BLEND_DESC,
     sample_mask: u32,
@@ -1636,8 +1634,18 @@ struct MeshShaderPipelineStateStream {
     node_mask: u32,
     cached_pso: Direct3D12::D3D12_CACHED_PIPELINE_STATE,
     flags: Direct3D12::D3D12_PIPELINE_STATE_FLAGS,
+
+    // Vertex pipeline specific
+    vertex_shader: Direct3D12::D3D12_SHADER_BYTECODE,
+    input_layout: Direct3D12::D3D12_INPUT_LAYOUT_DESC,
+    index_buffer_strip_cut_value: Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE,
+    stream_output: Direct3D12::D3D12_STREAM_OUTPUT_DESC,
+
+    // Mesh pipeline specific
+    task_shader: Direct3D12::D3D12_SHADER_BYTECODE,
+    mesh_shader: Direct3D12::D3D12_SHADER_BYTECODE,
 }
-impl MeshShaderPipelineStateStream {
+impl RenderPipelineStateStreamDesc {
     /// # Safety
     ///
     /// Returned bytes contain pointers into this struct, for them to be valid,
@@ -1674,10 +1682,6 @@ impl MeshShaderPipelineStateStream {
             D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE,
             self.root_signature
         );
-        if !self.task_shader.pShaderBytecode.is_null() {
-            push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS, self.task_shader);
-        }
-        push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS, self.mesh_shader);
         if !self.pixel_shader.pShaderBytecode.is_null() {
             push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS, self.pixel_shader);
         }
@@ -1727,6 +1731,38 @@ impl MeshShaderPipelineStateStream {
             );
         }
         push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS, self.flags);
+
+        // Vertex pipeline stuff
+        if !self.vertex_shader.pShaderBytecode.is_null() {
+            push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS, self.vertex_shader);
+        }
+        if !self.vertex_shader.pShaderBytecode.is_null() {
+            push_subobject!(
+                D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT,
+                self.input_layout
+            );
+        }
+        if !self.vertex_shader.pShaderBytecode.is_null() {
+            push_subobject!(
+                D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_IB_STRIP_CUT_VALUE,
+                self.index_buffer_strip_cut_value
+            );
+        }
+        if !self.vertex_shader.pShaderBytecode.is_null() {
+            push_subobject!(
+                D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_STREAM_OUTPUT,
+                self.stream_output
+            );
+        }
+
+        // Mesh pipeline stuff
+        if !self.task_shader.pShaderBytecode.is_null() {
+            push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS, self.task_shader);
+        }
+        if !self.mesh_shader.pShaderBytecode.is_null() {
+            push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS, self.mesh_shader);
+        }
+
         bytes
     }
 }

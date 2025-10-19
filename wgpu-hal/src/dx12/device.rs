@@ -1882,30 +1882,6 @@ impl crate::Device for super::Device {
             .map(|ds| ds.bias)
             .unwrap_or_default();
 
-        let rasterizer_state = Direct3D12::D3D12_RASTERIZER_DESC {
-            FillMode: conv::map_polygon_mode(desc.primitive.polygon_mode),
-            CullMode: match desc.primitive.cull_mode {
-                None => Direct3D12::D3D12_CULL_MODE_NONE,
-                Some(wgt::Face::Front) => Direct3D12::D3D12_CULL_MODE_FRONT,
-                Some(wgt::Face::Back) => Direct3D12::D3D12_CULL_MODE_BACK,
-            },
-            FrontCounterClockwise: match desc.primitive.front_face {
-                wgt::FrontFace::Cw => Foundation::FALSE,
-                wgt::FrontFace::Ccw => Foundation::TRUE,
-            },
-            DepthBias: bias.constant,
-            DepthBiasClamp: bias.clamp,
-            SlopeScaledDepthBias: bias.slope_scale,
-            DepthClipEnable: Foundation::BOOL::from(!desc.primitive.unclipped_depth),
-            MultisampleEnable: Foundation::BOOL::from(desc.multisample.count > 1),
-            ForcedSampleCount: 0,
-            AntialiasedLineEnable: false.into(),
-            ConservativeRaster: if desc.primitive.conservative {
-                Direct3D12::D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON
-            } else {
-                Direct3D12::D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
-            },
-        };
         let blob_fs = match desc.fragment_stage {
             Some(ref stage) => {
                 shader_stages |= wgt::ShaderStages::FRAGMENT;
@@ -1913,59 +1889,93 @@ impl crate::Device for super::Device {
             }
             None => None,
         };
-        let pixel_shader = match &blob_fs {
-            Some(shader) => shader.create_native_shader(),
-            None => Direct3D12::D3D12_SHADER_BYTECODE::default(),
-        };
-        let mut vertex_strides = [None; crate::MAX_VERTEX_BUFFERS];
-        let stream_output = Direct3D12::D3D12_STREAM_OUTPUT_DESC {
-            pSODeclaration: ptr::null(),
-            NumEntries: 0,
-            pBufferStrides: ptr::null(),
-            NumStrides: 0,
-            RasterizedStream: 0,
-        };
-        let blend_state = Direct3D12::D3D12_BLEND_DESC {
-            AlphaToCoverageEnable: Foundation::BOOL::from(
-                desc.multisample.alpha_to_coverage_enabled,
-            ),
-            IndependentBlendEnable: true.into(),
-            RenderTarget: conv::map_render_targets(desc.color_targets),
-        };
-        let depth_stencil_state = match desc.depth_stencil {
-            Some(ref ds) => conv::map_depth_stencil(ds),
-            None => Default::default(),
-        };
-        let dsv_format = desc
-            .depth_stencil
-            .as_ref()
-            .map_or(Dxgi::Common::DXGI_FORMAT_UNKNOWN, |ds| {
-                auxil::dxgi::conv::map_texture_format(ds.format)
-            });
-        let sample_desc = Dxgi::Common::DXGI_SAMPLE_DESC {
-            Count: desc.multisample.count,
-            Quality: 0,
-        };
-        let cached_pso = Direct3D12::D3D12_CACHED_PIPELINE_STATE {
-            pCachedBlob: ptr::null(),
-            CachedBlobSizeInBytes: 0,
-        };
-        let flags = Direct3D12::D3D12_PIPELINE_STATE_FLAG_NONE;
 
-        let raw: Direct3D12::ID3D12PipelineState = match &desc.vertex_processor {
+        let mut stream_desc = super::RenderPipelineStateStreamDesc {
+            root_signature: root_signature
+                .as_ref()
+                .map(|a| a.as_raw().cast())
+                .unwrap_or(ptr::null_mut()),
+            pixel_shader: match &blob_fs {
+                Some(shader) => shader.create_native_shader(),
+                None => Direct3D12::D3D12_SHADER_BYTECODE::default(),
+            },
+            blend_state: Direct3D12::D3D12_BLEND_DESC {
+                AlphaToCoverageEnable: Foundation::BOOL::from(
+                    desc.multisample.alpha_to_coverage_enabled,
+                ),
+                IndependentBlendEnable: true.into(),
+                RenderTarget: conv::map_render_targets(desc.color_targets),
+            },
+            sample_mask: desc.multisample.mask as u32,
+            rasterizer_state: Direct3D12::D3D12_RASTERIZER_DESC {
+                FillMode: conv::map_polygon_mode(desc.primitive.polygon_mode),
+                CullMode: match desc.primitive.cull_mode {
+                    None => Direct3D12::D3D12_CULL_MODE_NONE,
+                    Some(wgt::Face::Front) => Direct3D12::D3D12_CULL_MODE_FRONT,
+                    Some(wgt::Face::Back) => Direct3D12::D3D12_CULL_MODE_BACK,
+                },
+                FrontCounterClockwise: match desc.primitive.front_face {
+                    wgt::FrontFace::Cw => Foundation::FALSE,
+                    wgt::FrontFace::Ccw => Foundation::TRUE,
+                },
+                DepthBias: bias.constant,
+                DepthBiasClamp: bias.clamp,
+                SlopeScaledDepthBias: bias.slope_scale,
+                DepthClipEnable: Foundation::BOOL::from(!desc.primitive.unclipped_depth),
+                MultisampleEnable: Foundation::BOOL::from(desc.multisample.count > 1),
+                ForcedSampleCount: 0,
+                AntialiasedLineEnable: false.into(),
+                ConservativeRaster: if desc.primitive.conservative {
+                    Direct3D12::D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON
+                } else {
+                    Direct3D12::D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
+                },
+            },
+            depth_stencil_state: match desc.depth_stencil {
+                Some(ref ds) => conv::map_depth_stencil(ds),
+                None => Default::default(),
+            },
+            primitive_topology_type: topology_class,
+            rtv_formats: Direct3D12::D3D12_RT_FORMAT_ARRAY {
+                RTFormats: rtv_formats,
+                NumRenderTargets: desc.color_targets.len() as u32,
+            },
+            dsv_format: desc
+                .depth_stencil
+                .as_ref()
+                .map_or(Dxgi::Common::DXGI_FORMAT_UNKNOWN, |ds| {
+                    auxil::dxgi::conv::map_texture_format(ds.format)
+                }),
+            sample_desc: Dxgi::Common::DXGI_SAMPLE_DESC {
+                Count: desc.multisample.count,
+                Quality: 0,
+            },
+            node_mask: 0,
+            cached_pso: Direct3D12::D3D12_CACHED_PIPELINE_STATE {
+                pCachedBlob: ptr::null(),
+                CachedBlobSizeInBytes: 0,
+            },
+            flags: Direct3D12::D3D12_PIPELINE_STATE_FLAG_NONE,
+            ..Default::default()
+        };
+        let mut input_element_descs = Vec::new();
+        let mut _blob_vs = None;
+        let mut _blob_ts = None;
+        let mut _blob_ms = None;
+        let mut vertex_strides = [None; crate::MAX_VERTEX_BUFFERS];
+        match &desc.vertex_processor {
             &crate::VertexProcessor::Standard {
                 vertex_buffers,
                 ref vertex_stage,
             } => {
                 shader_stages |= wgt::ShaderStages::VERTEX;
-                let blob_vs = self.load_shader(
+                _blob_vs = Some(self.load_shader(
                     vertex_stage,
                     desc.layout,
                     naga::ShaderStage::Vertex,
                     desc.fragment_stage.as_ref(),
-                )?;
+                )?);
 
-                let mut input_element_descs = Vec::new();
                 for (i, (stride, vbuf)) in vertex_strides.iter_mut().zip(vertex_buffers).enumerate()
                 {
                     *stride = Some(vbuf.array_stride as u32);
@@ -1989,54 +1999,37 @@ impl crate::Device for super::Device {
                         });
                     }
                 }
-                let raw_desc = Direct3D12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
-                    pRootSignature: root_signature,
-                    VS: blob_vs.create_native_shader(),
-                    PS: pixel_shader,
-                    GS: Direct3D12::D3D12_SHADER_BYTECODE::default(),
-                    DS: Direct3D12::D3D12_SHADER_BYTECODE::default(),
-                    HS: Direct3D12::D3D12_SHADER_BYTECODE::default(),
-                    StreamOutput: stream_output,
-                    BlendState: blend_state,
-                    SampleMask: desc.multisample.mask as u32,
-                    RasterizerState: rasterizer_state,
-                    DepthStencilState: depth_stencil_state,
-                    InputLayout: Direct3D12::D3D12_INPUT_LAYOUT_DESC {
-                        pInputElementDescs: if input_element_descs.is_empty() {
-                            ptr::null()
-                        } else {
-                            input_element_descs.as_ptr()
-                        },
-                        NumElements: input_element_descs.len() as u32,
+                stream_desc.vertex_shader = _blob_vs.as_ref().unwrap().create_native_shader();
+                stream_desc.input_layout = Direct3D12::D3D12_INPUT_LAYOUT_DESC {
+                    pInputElementDescs: if input_element_descs.is_empty() {
+                        ptr::null()
+                    } else {
+                        input_element_descs.as_ptr()
                     },
-                    IBStripCutValue: match desc.primitive.strip_index_format {
-                        Some(wgt::IndexFormat::Uint16) => {
-                            Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFF
-                        }
-                        Some(wgt::IndexFormat::Uint32) => {
-                            Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF
-                        }
-                        None => Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
-                    },
-                    PrimitiveTopologyType: topology_class,
-                    NumRenderTargets: desc.color_targets.len() as u32,
-                    RTVFormats: rtv_formats,
-                    DSVFormat: dsv_format,
-                    SampleDesc: sample_desc,
-                    NodeMask: 0,
-                    CachedPSO: cached_pso,
-                    Flags: flags,
+                    NumElements: input_element_descs.len() as u32,
                 };
-                unsafe {
-                    profiling::scope!("ID3D12Device::CreateGraphicsPipelineState");
-                    self.raw.CreateGraphicsPipelineState(&raw_desc)
-                }
+                stream_desc.index_buffer_strip_cut_value = match desc.primitive.strip_index_format {
+                    Some(wgt::IndexFormat::Uint16) => {
+                        Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFF
+                    }
+                    Some(wgt::IndexFormat::Uint32) => {
+                        Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF
+                    }
+                    None => Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
+                };
+                stream_desc.stream_output = Direct3D12::D3D12_STREAM_OUTPUT_DESC {
+                    pSODeclaration: ptr::null(),
+                    NumEntries: 0,
+                    pBufferStrides: ptr::null(),
+                    NumStrides: 0,
+                    RasterizedStream: 0,
+                };
             }
             crate::VertexProcessor::Mesh {
                 task_stage,
                 mesh_stage,
             } => {
-                let blob_ts = if let Some(ts) = task_stage {
+                _blob_ts = if let Some(ts) = task_stage {
                     shader_stages |= wgt::ShaderStages::TASK;
                     Some(self.load_shader(
                         ts,
@@ -2047,54 +2040,35 @@ impl crate::Device for super::Device {
                 } else {
                     None
                 };
-                let task_shader = if let Some(ts) = &blob_ts {
+                let task_shader = if let Some(ts) = &_blob_ts {
                     ts.create_native_shader()
                 } else {
                     Default::default()
                 };
                 shader_stages |= wgt::ShaderStages::MESH;
-                let blob_ms = self.load_shader(
+                _blob_ms = Some(self.load_shader(
                     mesh_stage,
                     desc.layout,
                     naga::ShaderStage::Mesh,
                     desc.fragment_stage.as_ref(),
-                )?;
-                let desc = super::MeshShaderPipelineStateStream {
-                    root_signature: root_signature
-                        .as_ref()
-                        .map(|a| a.as_raw().cast())
-                        .unwrap_or(ptr::null_mut()),
-                    task_shader,
-                    pixel_shader,
-                    mesh_shader: blob_ms.create_native_shader(),
-                    blend_state,
-                    sample_mask: desc.multisample.mask as u32,
-                    rasterizer_state,
-                    depth_stencil_state,
-                    primitive_topology_type: topology_class,
-                    rtv_formats: Direct3D12::D3D12_RT_FORMAT_ARRAY {
-                        RTFormats: rtv_formats,
-                        NumRenderTargets: desc.color_targets.len() as u32,
-                    },
-                    dsv_format,
-                    sample_desc,
-                    node_mask: 0,
-                    cached_pso,
-                    flags,
-                };
-                let mut raw_desc = unsafe { desc.to_bytes() };
-                let stream_desc = Direct3D12::D3D12_PIPELINE_STATE_STREAM_DESC {
-                    SizeInBytes: raw_desc.len(),
-                    pPipelineStateSubobjectStream: raw_desc.as_mut_ptr().cast(),
-                };
-                let device: Direct3D12::ID3D12Device2 = self.raw.cast().unwrap();
-                unsafe {
-                    profiling::scope!("ID3D12Device2::CreatePipelineState");
-                    device.CreatePipelineState(&stream_desc)
-                }
+                )?);
+                stream_desc.task_shader = task_shader;
+                stream_desc.mesh_shader = _blob_ms.as_ref().unwrap().create_native_shader();
             }
-        }
-        .map_err(|err| crate::PipelineError::Linkage(shader_stages, err.to_string()))?;
+        };
+
+        let mut raw_desc = unsafe { stream_desc.to_bytes() };
+        let stream_desc = Direct3D12::D3D12_PIPELINE_STATE_STREAM_DESC {
+            SizeInBytes: raw_desc.len(),
+            pPipelineStateSubobjectStream: raw_desc.as_mut_ptr().cast(),
+        };
+        let device: Direct3D12::ID3D12Device2 = self.raw.cast().unwrap();
+        let raw: Direct3D12::ID3D12PipelineState = unsafe {
+            profiling::scope!("ID3D12Device2::CreatePipelineState");
+            device
+                .CreatePipelineState(&stream_desc)
+                .map_err(|err| crate::PipelineError::Linkage(shader_stages, err.to_string()))?
+        };
 
         if let Some(label) = desc.label {
             raw.set_name(label)?;
