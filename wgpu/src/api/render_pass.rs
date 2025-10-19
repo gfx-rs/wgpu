@@ -654,7 +654,11 @@ pub struct RenderPassDescriptor<'a> {
     pub timestamp_writes: Option<RenderPassTimestampWrites<'a>>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<&'a QuerySet>,
-    /// The mask of multiview image layers to use for this render pass
+    /// The mask of multiview image layers to use for this render pass. For example, if you wish
+    /// to render to the first 2 layers, you would use 3=0b11. If you wanted ro render to only the
+    /// 2nd layer, you would use 2=0b10. If you aren't using multiview this should be `None`.
+    ///
+    /// Note that setting bits higher than the number of texture layers is a validation error.
     pub multiview_mask: Option<NonZeroU32>,
 }
 #[cfg(send_sync)]
