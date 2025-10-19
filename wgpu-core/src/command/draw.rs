@@ -72,7 +72,7 @@ pub enum DrawError {
         max_total: u32,
     },
     #[error(
-        "Mesh shader calls in multiview render passes require `EXPERIMENTAL_MESH_SHADER_MULTIVIEW`, and the view count ({views_given}) must be <= `Limits::max_multiview_view_count` ({max_multiviews})"
+        "Mesh shader calls in multiview render passes require enabling the `EXPERIMENTAL_MESH_SHADER_MULTIVIEW` feature, and the view count ({views_given}) must be <= `Limits::max_multiview_view_count` ({max_multiviews})"
     )]
     MeshPipelineMultiviewLimitsViolated {
         views_given: u32,
