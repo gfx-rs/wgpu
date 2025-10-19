@@ -1649,14 +1649,26 @@ impl RenderPipelineStateStreamDesc {
     /// # Safety
     ///
     /// Returned bytes contain pointers into this struct, for them to be valid,
-    /// this struct may be at the same location. As if `as_bytes<'a>(&'a self) -> Vec<u8> + 'a`
+    /// this struct not move or be dropped. As if `as_bytes<'a>(&'a self) -> Vec<u8> + 'a`
     pub unsafe fn to_bytes(&self) -> Vec<u8> {
+        // This allocation is unpleasant but in general the struct can get large enough that
+        // an allocation isn't the worst thing in the world.
         use Direct3D12::*;
         let mut bytes = Vec::new();
 
+        // The thing to understand is that DX12 expects it to be laid out like any normal struct.
+        // Therefore, everything must obey certain alignment rules. Otherwise, everything goes
+        // to shit. Unfortunately, we can't just use a normal struct because we shouldn't push
+        // subobjects that aren't being used, and we shouldn't try to give all permutations
+        // of used subobjects their own struct.
+        //
+        // Therefore, we "construct" a struct manually here. This was mostly written through trial
+        // and error, though it seems very robust currently. Future fields should however be handled
+        // with extreme caution.
         macro_rules! push_subobject {
             ($subobject_type:expr, $data:expr) => {{
-                // Ensure 8-byte alignment for the subobject start
+                // Ensure 8-byte alignment for the subobject start, even though
+                // the tag is only a u32. I don't fully understand why.
                 let alignment = 8;
                 let aligned_length = bytes.len().next_multiple_of(alignment);
                 bytes.resize(aligned_length, 0);
@@ -1670,7 +1682,7 @@ impl RenderPipelineStateStreamDesc {
                 let data_start = bytes.len().next_multiple_of(obj_align);
                 bytes.resize(data_start, 0);
 
-                // Append the data itself
+                // Append the data itself, as raw bytes
                 #[allow(clippy::ptr_as_ptr, trivial_casts)]
                 let data_ptr = &$data as *const _ as *const u8;
                 let data_size = size_of_val(&$data);
@@ -1682,9 +1694,6 @@ impl RenderPipelineStateStreamDesc {
             D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE,
             self.root_signature
         );
-        if !self.pixel_shader.pShaderBytecode.is_null() {
-            push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS, self.pixel_shader);
-        }
         push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND, self.blend_state);
         push_subobject!(
             D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK,
@@ -1731,6 +1740,10 @@ impl RenderPipelineStateStreamDesc {
             );
         }
         push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS, self.flags);
+
+        if !self.pixel_shader.pShaderBytecode.is_null() {
+            push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS, self.pixel_shader);
+        }
 
         // Vertex pipeline stuff
         if !self.vertex_shader.pShaderBytecode.is_null() {
