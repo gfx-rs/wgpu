@@ -917,6 +917,108 @@ fn test_variable_decl() {
 }
 
 #[test]
+fn test_template_list() {
+    sub_test(
+        "A<B||C>D",
+        &[
+            Token::Word("A"),
+            Token::Paren('<'),
+            Token::Word("B"),
+            Token::LogicalOperation('|'),
+            Token::Word("C"),
+            Token::Paren('>'),
+            Token::Word("D"),
+        ],
+    );
+    sub_test(
+        "A(B<C,D>(E))",
+        &[
+            Token::Word("A"),
+            Token::Paren('('),
+            Token::Word("B"),
+            Token::TemplateArgsStart,
+            Token::Word("C"),
+            Token::Separator(','),
+            Token::Word("D"),
+            Token::TemplateArgsEnd,
+            Token::Paren('('),
+            Token::Word("E"),
+            Token::Paren(')'),
+            Token::Paren(')'),
+        ],
+    );
+    sub_test(
+        "array<i32,select(2,3,A>B)>",
+        &[
+            Token::Word("array"),
+            Token::TemplateArgsStart,
+            Token::Word("i32"),
+            Token::Separator(','),
+            Token::Word("select"),
+            Token::Paren('('),
+            Token::Number(Ok(Number::AbstractInt(2))),
+            Token::Separator(','),
+            Token::Number(Ok(Number::AbstractInt(3))),
+            Token::Separator(','),
+            Token::Word("A"),
+            Token::Paren('>'),
+            Token::Word("B"),
+            Token::Paren(')'),
+            Token::TemplateArgsEnd,
+        ],
+    );
+    sub_test(
+        "A[B<C]>D",
+        &[
+            Token::Word("A"),
+            Token::Paren('['),
+            Token::Word("B"),
+            Token::Paren('<'),
+            Token::Word("C"),
+            Token::Paren(']'),
+            Token::Paren('>'),
+            Token::Word("D"),
+        ],
+    );
+    sub_test(
+        "A<B<<C>",
+        &[
+            Token::Word("A"),
+            Token::TemplateArgsStart,
+            Token::Word("B"),
+            Token::ShiftOperation('<'),
+            Token::Word("C"),
+            Token::TemplateArgsEnd,
+        ],
+    );
+    sub_test(
+        "A<(B>=C)>",
+        &[
+            Token::Word("A"),
+            Token::TemplateArgsStart,
+            Token::Paren('('),
+            Token::Word("B"),
+            Token::LogicalOperation('>'),
+            Token::Word("C"),
+            Token::Paren(')'),
+            Token::TemplateArgsEnd,
+        ],
+    );
+    sub_test(
+        "A<B>=C>",
+        &[
+            Token::Word("A"),
+            Token::TemplateArgsStart,
+            Token::Word("B"),
+            Token::TemplateArgsEnd,
+            Token::Operation('='),
+            Token::Word("C"),
+            Token::Paren('>'),
+        ],
+    );
+}
+
+#[test]
 fn test_comments() {
     sub_test("// Single comment", &[]);
 
