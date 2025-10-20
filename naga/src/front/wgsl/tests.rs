@@ -667,6 +667,36 @@ fn parse_alias() {
 }
 
 #[test]
+fn shadowing_predeclared_types() {
+    parse_str(
+        "
+        fn test(f32: vec2f) -> vec2f { return f32; }
+        ",
+    )
+    .unwrap();
+    parse_str(
+        "
+        fn test(vec2: vec2f) -> vec2f { return vec2; }
+        ",
+    )
+    .unwrap();
+    parse_str(
+        "
+        alias vec2f = vec2u;
+        fn test(v: vec2f) -> vec2u { return v; }
+        ",
+    )
+    .unwrap();
+    parse_str(
+        "
+        struct vec2f { inner: vec2<f32> };
+        fn test(v: vec2f) -> vec2<f32> { return v.inner; }
+        ",
+    )
+    .unwrap();
+}
+
+#[test]
 fn parse_texture_load_store_expecting_four_args() {
     for (func, texture) in [
         (
