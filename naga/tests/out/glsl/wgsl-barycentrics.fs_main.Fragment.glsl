@@ -1,4 +1,5 @@
 #version 450 core
+#extension GL_EXT_fragment_shader_barycentric : require
 layout(location = 0) out vec4 _fs2p_location0;
 
 void main() {
