@@ -612,12 +612,32 @@ impl DeviceTracker {
 
 /// A full double sided tracker used by CommandBuffers.
 pub(crate) struct Tracker {
+    /// Buffers used within this command buffer.
+    ///
+    /// For compute passes, this only includes buffers actually used by the
+    /// pipeline (contrast with the `bind_groups` member).
     pub buffers: BufferTracker,
+
+    /// Textures used within this command buffer.
+    ///
+    /// For compute passes, this only includes textures actually used by the
+    /// pipeline (contrast with the `bind_groups` member).
     pub textures: TextureTracker,
+
     pub blas_s: BlasTracker,
     pub tlas_s: StatelessTracker<resource::Tlas>,
     pub views: StatelessTracker<resource::TextureView>,
+
+    /// Contains all bind groups that were passed in any call to
+    /// `set_bind_group` on the encoder.
+    ///
+    /// WebGPU requires that submission fails if any resource in any of these
+    /// bind groups is destroyed, even if the resource is not actually used by
+    /// the pipeline (e.g. because the pipeline does not use the bound slot, or
+    /// because the bind group was replaced by a subsequent call to
+    /// `set_bind_group`).
     pub bind_groups: StatelessTracker<binding_model::BindGroup>,
+
     pub compute_pipelines: StatelessTracker<pipeline::ComputePipeline>,
     pub render_pipelines: StatelessTracker<pipeline::RenderPipeline>,
     pub bundles: StatelessTracker<command::RenderBundle>,
@@ -654,6 +674,10 @@ impl Tracker {
     ///
     /// Only stateful things are merged in here, all other resources are owned
     /// indirectly by the bind group.
+    ///
+    /// # Panics
+    ///
+    /// If a resource in the `bind_group` is not found in the usage scope.
     pub fn set_from_bind_group(&mut self, scope: &mut UsageScope, bind_group: &BindGroupStates) {
         self.buffers.set_multiple(
             &mut scope.buffers,

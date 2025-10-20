@@ -1799,6 +1799,12 @@ fn validate_command_buffer(
                 }
             }
         }
+        {
+            profiling::scope!("bind groups");
+            for bind_group in &cmd_buf_data.trackers.bind_groups {
+                bind_group.try_raw(snatch_guard)?;
+            }
+        }
 
         if let Err(e) =
             cmd_buf_data.validate_acceleration_structure_actions(snatch_guard, command_index_guard)
