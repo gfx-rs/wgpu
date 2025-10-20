@@ -46,9 +46,21 @@ pub fn map_access_mode(word: &str, span: Span) -> Result<'_, crate::StorageAcces
     }
 }
 
-pub fn map_ray_flag(word: &str, span: Span) -> Result<'_, ()> {
+pub fn map_ray_flag(
+    enable_extensions: &EnableExtensions,
+    word: &str,
+    span: Span,
+) -> Result<'static, ()> {
     match word {
-        "vertex_return" => Ok(()),
+        "vertex_return" => {
+            if !enable_extensions.contains(ImplementedEnableExtension::WgpuRayQueryVertexReturn) {
+                return Err(Box::new(Error::EnableExtensionNotEnabled {
+                    span,
+                    kind: ImplementedEnableExtension::WgpuRayQueryVertexReturn.into(),
+                }));
+            }
+            Ok(())
+        }
         _ => Err(Box::new(Error::UnknownRayFlag(span))),
     }
 }
@@ -202,60 +214,6 @@ pub fn map_storage_format(word: &str, span: Span) -> Result<'_, crate::StorageFo
         "bgra8unorm" => Sf::Bgra8Unorm,
         _ => return Err(Box::new(Error::UnknownStorageFormat(span))),
     })
-}
-
-pub fn get_scalar_type(
-    enable_extensions: &EnableExtensions,
-    span: Span,
-    word: &str,
-) -> Result<'static, Option<Scalar>> {
-    use crate::ScalarKind as Sk;
-    let scalar = match word {
-        "f16" => Some(Scalar {
-            kind: Sk::Float,
-            width: 2,
-        }),
-        "f32" => Some(Scalar {
-            kind: Sk::Float,
-            width: 4,
-        }),
-        "f64" => Some(Scalar {
-            kind: Sk::Float,
-            width: 8,
-        }),
-        "i32" => Some(Scalar {
-            kind: Sk::Sint,
-            width: 4,
-        }),
-        "u32" => Some(Scalar {
-            kind: Sk::Uint,
-            width: 4,
-        }),
-        "i64" => Some(Scalar {
-            kind: Sk::Sint,
-            width: 8,
-        }),
-        "u64" => Some(Scalar {
-            kind: Sk::Uint,
-            width: 8,
-        }),
-        "bool" => Some(Scalar {
-            kind: Sk::Bool,
-            width: crate::BOOL_WIDTH,
-        }),
-        _ => None,
-    };
-
-    if matches!(scalar, Some(Scalar::F16))
-        && !enable_extensions.contains(ImplementedEnableExtension::F16)
-    {
-        return Err(Box::new(Error::EnableExtensionNotEnabled {
-            span,
-            kind: ImplementedEnableExtension::F16.into(),
-        }));
-    }
-
-    Ok(scalar)
 }
 
 pub fn map_derivative(word: &str) -> Option<(crate::DerivativeAxis, crate::DerivativeControl)> {
@@ -590,6 +548,20 @@ pub fn map_predeclared_type(
                 kind: extension_needed.into(),
             }));
         }
+    }
+
+    if matches!(
+        ty,
+        PredeclaredType::RayDesc
+            | PredeclaredType::RayIntersection
+            | PredeclaredType::TypeGenerator(TypeGenerator::AccelerationStructure)
+            | PredeclaredType::TypeGenerator(TypeGenerator::RayQuery)
+    ) && !enable_extensions.contains(ImplementedEnableExtension::WgpuRayQuery)
+    {
+        return Err(Box::new(Error::EnableExtensionNotEnabled {
+            span,
+            kind: ImplementedEnableExtension::WgpuRayQuery.into(),
+        }));
     }
 
     Ok(Some(ty))

@@ -94,7 +94,7 @@ impl<'iter, 'source> TemplateListIter<'iter, 'source> {
         ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, ir::ArraySize> {
         if let Some(expr) = self.template_list.next() {
-            lowerer.array_size2(*expr, ctx)
+            lowerer.array_size(*expr, ctx)
         } else {
             Ok(ir::ArraySize::Dynamic)
         }
@@ -165,7 +165,7 @@ impl<'iter, 'source> TemplateListIter<'iter, 'source> {
     ) -> Result<'source, bool> {
         if let Some(expr) = self.template_list.next() {
             let (enumerant, span) = Lowerer::enumerant(*expr, ctx)?;
-            conv::map_ray_flag(enumerant, span)?;
+            conv::map_ray_flag(&ctx.enable_extensions, enumerant, span)?;
             Ok(true)
         } else {
             Ok(false)

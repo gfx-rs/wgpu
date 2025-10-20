@@ -146,8 +146,6 @@ pub enum ExpectedToken<'a> {
     WorkgroupSizeSeparator,
     /// Expected: 'struct', 'let', 'var', 'type', ';', 'fn', eof
     GlobalItem,
-    /// Expected a type.
-    Type,
     /// Access of `var`, `let`, `const`.
     Variable,
     /// Access of a function
@@ -207,7 +205,6 @@ pub(crate) enum Error<'a> {
     UnknownAccess(Span),
     UnknownIdent(Span, &'a str),
     UnknownScalarType(Span),
-    UnknownType(Span),
     UnknownStorageFormat(Span),
     UnknownConservativeDepth(Span),
     UnknownEnableExtension(Span, &'a str),
@@ -524,7 +521,6 @@ impl<'a> Error<'a> {
                         "or the end of the file"
                     )
                     .to_string(),
-                    ExpectedToken::Type => "type".to_string(),
                     ExpectedToken::Variable => "variable access".to_string(),
                     ExpectedToken::Function => "function name".to_string(),
                     ExpectedToken::AfterIdentListArg => {
@@ -708,11 +704,6 @@ impl<'a> Error<'a> {
             Error::UnknownConservativeDepth(bad_span) => ParseError {
                 message: format!("unknown conservative depth: `{}`", &source[bad_span]),
                 labels: vec![(bad_span, "unknown conservative depth".into())],
-                notes: vec![],
-            },
-            Error::UnknownType(bad_span) => ParseError {
-                message: format!("unknown type: `{}`", &source[bad_span]),
-                labels: vec![(bad_span, "unknown type".into())],
                 notes: vec![],
             },
             Error::UnknownEnableExtension(span, word) => ParseError {

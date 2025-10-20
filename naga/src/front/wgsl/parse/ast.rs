@@ -4,7 +4,6 @@ use core::hash::Hash;
 use crate::diagnostic_filter::DiagnosticFilterNode;
 use crate::front::wgsl::parse::directive::enable_extension::EnableExtensions;
 use crate::front::wgsl::parse::number::Number;
-use crate::front::wgsl::Scalar;
 use crate::{Arena, FastIndexSet, Handle, Span};
 
 #[derive(Debug, Default)]
@@ -23,12 +22,6 @@ pub struct TranslationUnit<'a> {
     ///
     /// [`Function`]: crate::Function
     pub expressions: Arena<Expression<'a>>,
-
-    /// Non-user-defined types, like `vec4<f32>` or `array<i32, 10>`.
-    ///
-    /// These are referred to by `Handle<ast::Type<'a>>` values.
-    /// User-defined types are referred to by name until lowering.
-    pub types: Arena<Type<'a>>,
 
     /// Arena for all diagnostic filter rules parsed in this module, including those in functions.
     ///
@@ -139,14 +132,14 @@ pub enum GlobalDeclKind<'a> {
 #[derive(Debug)]
 pub struct FunctionArgument<'a> {
     pub name: Ident<'a>,
-    pub ty: Handle<Type<'a>>,
+    pub ty: TemplateElaboratedIdent<'a>,
     pub binding: Option<Binding<'a>>,
     pub handle: Handle<Local>,
 }
 
 #[derive(Debug)]
 pub struct FunctionResult<'a> {
-    pub ty: Handle<Type<'a>>,
+    pub ty: TemplateElaboratedIdent<'a>,
     pub binding: Option<Binding<'a>>,
     pub must_use: bool,
 }
@@ -197,7 +190,7 @@ pub struct GlobalVariable<'a> {
     pub name: Ident<'a>,
     pub template_list: Vec<Handle<Expression<'a>>>,
     pub binding: Option<ResourceBinding<'a>>,
-    pub ty: Option<Handle<Type<'a>>>,
+    pub ty: Option<TemplateElaboratedIdent<'a>>,
     pub init: Option<Handle<Expression<'a>>>,
     pub doc_comments: Vec<&'a str>,
 }
@@ -205,7 +198,7 @@ pub struct GlobalVariable<'a> {
 #[derive(Debug)]
 pub struct StructMember<'a> {
     pub name: Ident<'a>,
-    pub ty: Handle<Type<'a>>,
+    pub ty: TemplateElaboratedIdent<'a>,
     pub binding: Option<Binding<'a>>,
     pub align: Option<Handle<Expression<'a>>>,
     pub size: Option<Handle<Expression<'a>>>,
@@ -222,13 +215,13 @@ pub struct Struct<'a> {
 #[derive(Debug)]
 pub struct TypeAlias<'a> {
     pub name: Ident<'a>,
-    pub ty: Handle<Type<'a>>,
+    pub ty: TemplateElaboratedIdent<'a>,
 }
 
 #[derive(Debug)]
 pub struct Const<'a> {
     pub name: Ident<'a>,
-    pub ty: Option<Handle<Type<'a>>>,
+    pub ty: Option<TemplateElaboratedIdent<'a>>,
     pub init: Handle<Expression<'a>>,
     pub doc_comments: Vec<&'a str>,
 }
@@ -237,74 +230,8 @@ pub struct Const<'a> {
 pub struct Override<'a> {
     pub name: Ident<'a>,
     pub id: Option<Handle<Expression<'a>>>,
-    pub ty: Option<Handle<Type<'a>>>,
+    pub ty: Option<TemplateElaboratedIdent<'a>>,
     pub init: Option<Handle<Expression<'a>>>,
-}
-
-/// The size of an [`Array`] or [`BindingArray`].
-///
-/// [`Array`]: Type::Array
-/// [`BindingArray`]: Type::BindingArray
-#[derive(Debug, Copy, Clone)]
-pub enum ArraySize<'a> {
-    /// The length as a constant expression.
-    Constant(Handle<Expression<'a>>),
-    Dynamic,
-}
-
-#[derive(Debug)]
-pub enum Type<'a> {
-    Scalar(Scalar),
-    Vector {
-        size: crate::VectorSize,
-        ty: Handle<Type<'a>>,
-        ty_span: Span,
-    },
-    Matrix {
-        columns: crate::VectorSize,
-        rows: crate::VectorSize,
-        ty: Handle<Type<'a>>,
-        ty_span: Span,
-    },
-    CooperativeMatrix {
-        columns: crate::CooperativeSize,
-        rows: crate::CooperativeSize,
-        ty: Handle<Type<'a>>,
-        ty_span: Span,
-        role: crate::CooperativeRole,
-    },
-    Atomic(Scalar),
-    Pointer {
-        base: Handle<Type<'a>>,
-        space: crate::AddressSpace,
-    },
-    Array {
-        base: Handle<Type<'a>>,
-        size: ArraySize<'a>,
-    },
-    Image {
-        dim: crate::ImageDimension,
-        arrayed: bool,
-        class: crate::ImageClass,
-    },
-    Sampler {
-        comparison: bool,
-    },
-    AccelerationStructure {
-        vertex_return: bool,
-    },
-    RayQuery {
-        vertex_return: bool,
-    },
-    RayDesc,
-    RayIntersection,
-    BindingArray {
-        base: Handle<Type<'a>>,
-        size: ArraySize<'a>,
-    },
-
-    /// A user-defined type, like a struct or a type alias.
-    User(Ident<'a>),
 }
 
 #[derive(Debug, Default)]
@@ -405,7 +332,7 @@ pub enum Expression<'a> {
 #[derive(Debug)]
 pub struct LocalVariable<'a> {
     pub name: Ident<'a>,
-    pub ty: Option<Handle<Type<'a>>>,
+    pub ty: Option<TemplateElaboratedIdent<'a>>,
     pub init: Option<Handle<Expression<'a>>>,
     pub handle: Handle<Local>,
 }
@@ -413,7 +340,7 @@ pub struct LocalVariable<'a> {
 #[derive(Debug)]
 pub struct Let<'a> {
     pub name: Ident<'a>,
-    pub ty: Option<Handle<Type<'a>>>,
+    pub ty: Option<TemplateElaboratedIdent<'a>>,
     pub init: Handle<Expression<'a>>,
     pub handle: Handle<Local>,
 }
@@ -421,7 +348,7 @@ pub struct Let<'a> {
 #[derive(Debug)]
 pub struct LocalConst<'a> {
     pub name: Ident<'a>,
-    pub ty: Option<Handle<Type<'a>>>,
+    pub ty: Option<TemplateElaboratedIdent<'a>>,
     pub init: Handle<Expression<'a>>,
     pub handle: Handle<Local>,
 }

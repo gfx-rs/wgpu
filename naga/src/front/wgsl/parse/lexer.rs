@@ -1,8 +1,9 @@
 use super::{number::consume_number, Error, ExpectedToken, Result};
 use crate::front::wgsl::error::NumberError;
-use crate::front::wgsl::parse::directive::enable_extension::EnableExtensions;
-use crate::front::wgsl::parse::{conv, Number};
-use crate::front::wgsl::{ImplementedEnableExtension, Scalar};
+use crate::front::wgsl::parse::directive::enable_extension::{
+    EnableExtensions, ImplementedEnableExtension,
+};
+use crate::front::wgsl::parse::Number;
 use crate::Span;
 
 use alloc::{boxed::Box, vec::Vec};
@@ -554,10 +555,6 @@ impl<'a> Lexer<'a> {
         Ok(())
     }
 
-    pub(in crate::front::wgsl) fn end_of_generic_arguments(&mut self) -> bool {
-        self.next_if(Token::Separator(',')) && self.peek().0 != Token::TemplateArgsEnd
-    }
-
     pub(in crate::front::wgsl) fn next_ident_with_span(&mut self) -> Result<'a, (&'a str, Span)> {
         match self.next() {
             (Token::Word("_"), span) => Err(Box::new(Error::InvalidIdentifierUnderscore(span))),
@@ -584,67 +581,6 @@ impl<'a> Lexer<'a> {
         } else {
             Ok((word, span))
         }
-    }
-
-    /// Parses a generic scalar type, for example `<f32>`.
-    ///
-    /// Returns the span covering the inner type, excluding the brackets.
-    pub(in crate::front::wgsl) fn next_scalar_generic_with_span(
-        &mut self,
-    ) -> Result<'a, (Scalar, Span)> {
-        self.expect(Token::TemplateArgsStart)?;
-
-        let (scalar, span) = match self.next() {
-            (Token::Word(word), span) => {
-                conv::get_scalar_type(&self.enable_extensions, span, word)?
-                    .map(|scalar| (scalar, span))
-                    .ok_or(Error::UnknownScalarType(span))?
-            }
-            (_, span) => return Err(Box::new(Error::UnknownScalarType(span))),
-        };
-
-        self.expect(Token::TemplateArgsEnd)?;
-        Ok((scalar, span))
-    }
-
-    pub(in crate::front::wgsl) fn next_format_generic(
-        &mut self,
-    ) -> Result<'a, (crate::StorageFormat, crate::StorageAccess)> {
-        self.expect(Token::TemplateArgsStart)?;
-        let (ident, ident_span) = self.next_ident_with_span()?;
-        let format = conv::map_storage_format(ident, ident_span)?;
-        self.expect(Token::Separator(','))?;
-        let (ident, ident_span) = self.next_ident_with_span()?;
-        let access = conv::map_access_mode(ident, ident_span)?;
-        self.expect(Token::TemplateArgsEnd)?;
-        Ok((format, access))
-    }
-
-    pub(in crate::front::wgsl) fn next_acceleration_structure_flags(&mut self) -> Result<'a, bool> {
-        Ok(if self.next_if(Token::TemplateArgsStart) {
-            if !self.next_if(Token::TemplateArgsEnd) {
-                let (name, span) = self.next_ident_with_span()?;
-                let ret = if name == "vertex_return" {
-                    true
-                } else {
-                    return Err(Box::new(Error::UnknownAttribute(span)));
-                };
-                self.next_if(Token::Separator(','));
-                self.expect(Token::TemplateArgsEnd)?;
-                ret
-            } else {
-                false
-            }
-        } else {
-            false
-        })
-    }
-
-    pub(in crate::front::wgsl) fn next_cooperative_role(
-        &mut self,
-    ) -> Result<'a, crate::CooperativeRole> {
-        let (ident, span) = self.next_ident_with_span()?;
-        conv::map_cooperative_role(ident, span)
     }
 
     pub(in crate::front::wgsl) fn open_arguments(&mut self) -> Result<'a, ()> {

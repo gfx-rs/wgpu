@@ -93,9 +93,6 @@ pub struct GlobalContext<'source, 'temp, 'out> {
     /// The `TranslationUnit`'s expressions arena.
     ast_expressions: &'temp Arena<ast::Expression<'source>>,
 
-    /// The `TranslationUnit`'s types arena.
-    types: &'temp Arena<ast::Type<'source>>,
-
     // Naga IR values.
     /// The map from the names of module-scope declarations to the Naga IR
     /// `Handle`s we have built for them, owned by `Lowerer::lower`.
@@ -117,7 +114,6 @@ impl<'source> GlobalContext<'source, '_, '_> {
             enable_extensions: self.enable_extensions,
             ast_expressions: self.ast_expressions,
             globals: self.globals,
-            types: self.types,
             module: self.module,
             const_typifier: self.const_typifier,
             layouter: self.layouter,
@@ -131,7 +127,6 @@ impl<'source> GlobalContext<'source, '_, '_> {
             enable_extensions: self.enable_extensions,
             ast_expressions: self.ast_expressions,
             globals: self.globals,
-            types: self.types,
             module: self.module,
             const_typifier: self.const_typifier,
             layouter: self.layouter,
@@ -161,12 +156,6 @@ pub struct StatementContext<'source, 'temp, 'out> {
     ///
     /// [`TranslationUnit::expressions`]: ast::TranslationUnit::expressions
     ast_expressions: &'temp Arena<ast::Expression<'source>>,
-
-    /// A reference to [`TranslationUnit::types`] for the translation unit
-    /// we're lowering.
-    ///
-    /// [`TranslationUnit::types`]: ast::TranslationUnit::types
-    types: &'temp Arena<ast::Type<'source>>,
 
     // Naga IR values.
     /// The map from the names of module-scope declarations to the Naga IR
@@ -224,7 +213,6 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
         ExpressionContext {
             enable_extensions: self.enable_extensions,
             globals: self.globals,
-            types: self.types,
             ast_expressions: self.ast_expressions,
             const_typifier: self.const_typifier,
             layouter: self.layouter,
@@ -252,7 +240,6 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
         ExpressionContext {
             enable_extensions: self.enable_extensions,
             globals: self.globals,
-            types: self.types,
             ast_expressions: self.ast_expressions,
             const_typifier: self.const_typifier,
             layouter: self.layouter,
@@ -275,7 +262,6 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
             enable_extensions: self.enable_extensions,
             ast_expressions: self.ast_expressions,
             globals: self.globals,
-            types: self.types,
             module: self.module,
             const_typifier: self.const_typifier,
             layouter: self.layouter,
@@ -385,7 +371,6 @@ pub struct ExpressionContext<'source, 'temp, 'out> {
 
     // WGSL AST values.
     ast_expressions: &'temp Arena<ast::Expression<'source>>,
-    types: &'temp Arena<ast::Type<'source>>,
 
     // Naga IR values.
     /// The map from the names of module-scope declarations to the Naga IR
@@ -454,7 +439,6 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         ExpressionContext {
             enable_extensions: self.enable_extensions,
             globals: self.globals,
-            types: self.types,
             ast_expressions: self.ast_expressions,
             const_typifier: self.const_typifier,
             layouter: self.layouter,
@@ -483,7 +467,6 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             enable_extensions: self.enable_extensions,
             ast_expressions: self.ast_expressions,
             globals: self.globals,
-            types: self.types,
             module: self.module,
             const_typifier: self.const_typifier,
             layouter: self.layouter,
@@ -681,7 +664,6 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             enable_extensions: self.enable_extensions,
             expr_type: ExpressionContextType::Runtime(nested_rctx),
             ast_expressions: self.ast_expressions,
-            types: self.types,
             globals: self.globals,
             module: self.module,
             const_typifier: self.const_typifier,
@@ -1221,7 +1203,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             enable_extensions: tu.enable_extensions,
             ast_expressions: &tu.expressions,
             globals: &mut FastHashMap::default(),
-            types: &tu.types,
             module: &mut module,
             const_typifier: &mut Typifier::new(),
             layouter: &mut proc::Layouter::default(),
@@ -1266,7 +1247,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 }
                 ast::GlobalDeclKind::Var(ref v) => {
                     let explicit_ty =
-                        v.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx.as_const()))
+                        v.ty.as_ref()
+                            .map(|ast| self.resolve_ast_type(ast, &mut ctx.as_const()))
                             .transpose()?;
 
                     let (ty, initializer) = self.type_and_init(
@@ -1315,7 +1297,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let mut ectx = ctx.as_const();
 
                     let explicit_ty =
-                        c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx))
+                        c.ty.as_ref()
+                            .map(|ast| self.resolve_ast_type(ast, &mut ectx))
                             .transpose()?;
 
                     let (ty, init) = self.type_and_init(
@@ -1350,7 +1333,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 }
                 ast::GlobalDeclKind::Override(ref o) => {
                     let explicit_ty =
-                        o.ty.map(|ast| self.resolve_ast_type(ast, &mut ctx.as_const()))
+                        o.ty.as_ref()
+                            .map(|ast| self.resolve_ast_type(ast, &mut ctx.as_const()))
                             .transpose()?;
 
                     let mut ectx = ctx.as_override();
@@ -1405,8 +1389,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 }
                 ast::GlobalDeclKind::Type(ref alias) => {
                     let ty = self.resolve_named_ast_type(
-                        alias.ty,
-                        Some(alias.name.name.to_string()),
+                        &alias.ty,
+                        alias.name.name.to_string(),
                         &mut ctx.as_const(),
                     )?;
                     ctx.globals
@@ -1513,7 +1497,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .iter()
             .enumerate()
             .map(|(i, arg)| -> Result<'_, _> {
-                let ty = self.resolve_ast_type(arg.ty, &mut ctx.as_const())?;
+                let ty = self.resolve_ast_type(&arg.ty, &mut ctx.as_const())?;
                 let expr =
                     expressions.append(ir::Expression::FunctionArgument(i as u32), arg.name.span);
                 local_table.insert(arg.handle, Declared::Runtime(Typed::Plain(expr)));
@@ -1532,7 +1516,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .result
             .as_ref()
             .map(|res| -> Result<'_, _> {
-                let ty = self.resolve_ast_type(res.ty, &mut ctx.as_const())?;
+                let ty = self.resolve_ast_type(&res.ty, &mut ctx.as_const())?;
                 Ok(ir::FunctionResult {
                     ty,
                     binding: self.binding(&res.binding, ty, ctx)?,
@@ -1562,7 +1546,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             layouter: ctx.layouter,
             function: &mut function,
             named_expressions: &mut named_expressions,
-            types: ctx.types,
             module: ctx.module,
             local_expression_kind_tracker: &mut local_expression_kind_tracker,
             global_expression_kind_tracker: ctx.global_expression_kind_tracker,
@@ -1735,6 +1718,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let explicit_ty = l
                         .ty
+                        .as_ref()
                         .map(|ty| self.resolve_ast_type(ty, &mut ctx.as_const(block, &mut emitter)))
                         .transpose()?;
 
@@ -1774,10 +1758,11 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     emitter.start(&ctx.function.expressions);
 
                     let explicit_ty =
-                        v.ty.map(|ast| {
-                            self.resolve_ast_type(ast, &mut ctx.as_const(block, &mut emitter))
-                        })
-                        .transpose()?;
+                        v.ty.as_ref()
+                            .map(|ast| {
+                                self.resolve_ast_type(ast, &mut ctx.as_const(block, &mut emitter))
+                            })
+                            .transpose()?;
 
                     let mut ectx = ctx.as_expression(block, &mut emitter);
                     let (ty, initializer) = self.type_and_init(
@@ -1841,7 +1826,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let ectx = &mut ctx.as_const(block, &mut emitter);
 
                     let explicit_ty =
-                        c.ty.map(|ast| self.resolve_ast_type(ast, &mut ectx.as_const()))
+                        c.ty.as_ref()
+                            .map(|ast| self.resolve_ast_type(ast, &mut ectx.as_const()))
                             .transpose()?;
 
                     let (_ty, init) = self.type_and_init(
@@ -2617,14 +2603,32 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let span = ctx.ast_expressions.get_span(expr);
         let expr = &ctx.ast_expressions[expr];
 
-        let (ident, ident_span, template_list) = match expr {
-            &ast::Expression::Ident(ast::TemplateElaboratedIdent {
-                ident: ast::IdentExpr::Unresolved(ident),
-                ident_span,
-                ref template_list,
-                ..
-            }) => (ident, ident_span, template_list),
+        let ident = match *expr {
+            ast::Expression::Ident(ref ident) => ident,
             _ => return Err(Box::new(Error::UnexpectedExprForTypeExpression(span))),
+        };
+
+        self.type_specifier(ident, ctx, None)
+    }
+
+    fn type_specifier(
+        &mut self,
+        ident: &ast::TemplateElaboratedIdent<'source>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+        alias_name: Option<String>,
+    ) -> Result<'source, Handle<ir::Type>> {
+        let &ast::TemplateElaboratedIdent {
+            ref ident,
+            ident_span,
+            ref template_list,
+            ..
+        } = ident;
+
+        let ident = match *ident {
+            ast::IdentExpr::Unresolved(ident) => ident,
+            ast::IdentExpr::Local(_) => {
+                return Err(Box::new(Error::UnexpectedExprForTypeExpression(ident_span)))
+            }
         };
 
         let mut tl = TemplateListIter::new(ident_span, template_list);
@@ -2635,7 +2639,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     tl.finish(ctx)?;
                     return Ok(handle);
                 }
-                _ => return Err(Box::new(Error::UnexpectedExprForTypeExpression(span))),
+                _ => return Err(Box::new(Error::UnexpectedExprForTypeExpression(ident_span))),
             }
         }
 
@@ -2643,7 +2647,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let Some(ty) = ty else {
             return Err(Box::new(Error::UnknownIdent(ident_span, ident)));
         };
-        let ty = self.finalize_type(ctx, ty, &mut tl)?;
+        let ty = self.finalize_type(ctx, ty, &mut tl, alias_name)?;
 
         tl.finish(ctx)?;
 
@@ -2655,6 +2659,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         ctx: &mut ExpressionContext<'source, '_, '_>,
         ty: conv::PredeclaredType,
         tl: &mut TemplateListIter<'_, 'source>,
+        alias_name: Option<String>,
     ) -> Result<'source, Handle<ir::Type>> {
         let ty = match ty {
             conv::PredeclaredType::TypeInner(ty_inner) => {
@@ -2681,7 +2686,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
                     _ => {}
                 }
-                ctx.as_global().ensure_type_exists(None, ty_inner)
+                ctx.as_global().ensure_type_exists(alias_name, ty_inner)
             }
             conv::PredeclaredType::RayDesc => ctx.module.generate_ray_desc_type(),
             conv::PredeclaredType::RayIntersection => ctx.module.generate_ray_intersection_type(),
@@ -2783,7 +2788,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                     }
                 };
-                ctx.as_global().ensure_type_exists(None, ty_inner)
+                ctx.as_global().ensure_type_exists(alias_name, ty_inner)
             }
         };
         Ok(ty)
@@ -3096,7 +3101,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         ) if empty_template_list => {
                             return Err(Box::new(Error::UnderspecifiedCooperativeMatrix));
                         }
-                        _ => Constructor::Type(self.finalize_type(ctx, ty, &mut tl)?),
+                        _ => Constructor::Type(self.finalize_type(ctx, ty, &mut tl, None)?),
                     };
                     tl.finish(ctx)?;
                     let handle =
@@ -4381,7 +4386,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let mut doc_comments: Vec<Option<Vec<String>>> = Vec::new();
 
         for member in s.members.iter() {
-            let ty = self.resolve_ast_type(member.ty, &mut ctx.as_const())?;
+            let ty = self.resolve_ast_type(&member.ty, &mut ctx.as_const())?;
 
             ctx.layouter.update(ctx.module.to_ctx()).map_err(|err| {
                 let LayoutErrorInner::TooLarge = err.inner else {
@@ -4506,56 +4511,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
     fn array_size(
         &mut self,
-        size: ast::ArraySize<'source>,
-        ctx: &mut ExpressionContext<'source, '_, '_>,
-    ) -> Result<'source, ir::ArraySize> {
-        Ok(match size {
-            ast::ArraySize::Constant(expr) => {
-                let span = ctx.ast_expressions.get_span(expr);
-                let const_expr = self.expression(expr, &mut ctx.as_const());
-                match const_expr {
-                    Ok(value) => {
-                        let len = ctx.get_const_val(value).map_err(|err| {
-                            Box::new(match err {
-                                proc::ConstValueError::NonConst
-                                | proc::ConstValueError::InvalidType => {
-                                    Error::ExpectedConstExprConcreteIntegerScalar(span)
-                                }
-                                proc::ConstValueError::Negative => {
-                                    Error::ExpectedPositiveArrayLength(span)
-                                }
-                            })
-                        })?;
-                        let size =
-                            NonZeroU32::new(len).ok_or(Error::ExpectedPositiveArrayLength(span))?;
-                        ir::ArraySize::Constant(size)
-                    }
-                    Err(err) => {
-                        if let Error::ConstantEvaluatorError(ref ty, _) = *err {
-                            match **ty {
-                                proc::ConstantEvaluatorError::OverrideExpr => {
-                                    ir::ArraySize::Pending(self.array_size_override(
-                                        expr,
-                                        &mut ctx.as_global().as_override(),
-                                        span,
-                                    )?)
-                                }
-                                _ => {
-                                    return Err(err);
-                                }
-                            }
-                        } else {
-                            return Err(err);
-                        }
-                    }
-                }
-            }
-            ast::ArraySize::Dynamic => ir::ArraySize::Dynamic,
-        })
-    }
-
-    fn array_size2(
-        &mut self,
         expr: Handle<ast::Expression<'source>>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, ir::ArraySize> {
@@ -4635,146 +4590,20 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     /// [`SpecialTypes`]: ir::SpecialTypes
     fn resolve_named_ast_type(
         &mut self,
-        handle: Handle<ast::Type<'source>>,
-        name: Option<String>,
+        ident: &ast::TemplateElaboratedIdent<'source>,
+        name: String,
         ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, Handle<ir::Type>> {
-        let inner = match ctx.types[handle] {
-            ast::Type::Scalar(scalar) => scalar.to_inner_scalar(),
-            ast::Type::Vector { size, ty, ty_span } => {
-                let ty = self.resolve_ast_type(ty, ctx)?;
-                let scalar = match ctx.module.types[ty].inner {
-                    ir::TypeInner::Scalar(sc) => sc,
-                    _ => return Err(Box::new(Error::UnknownScalarType(ty_span))),
-                };
-                ir::TypeInner::Vector { size, scalar }
-            }
-            ast::Type::Matrix {
-                rows,
-                columns,
-                ty,
-                ty_span,
-            } => {
-                let ty = self.resolve_ast_type(ty, ctx)?;
-                let scalar = match ctx.module.types[ty].inner {
-                    ir::TypeInner::Scalar(sc) => sc,
-                    _ => return Err(Box::new(Error::UnknownScalarType(ty_span))),
-                };
-                match scalar.kind {
-                    ir::ScalarKind::Float => ir::TypeInner::Matrix {
-                        columns,
-                        rows,
-                        scalar,
-                    },
-                    _ => return Err(Box::new(Error::BadMatrixScalarKind(ty_span, scalar))),
-                }
-            }
-            ast::Type::CooperativeMatrix {
-                columns,
-                rows,
-                ty,
-                ty_span,
-                role,
-            } => {
-                let ty = self.resolve_ast_type(ty, ctx)?;
-                let scalar = match ctx.module.types[ty].inner {
-                    ir::TypeInner::Scalar(s) => s,
-                    _ => return Err(Box::new(Error::UnsupportedCooperativeScalar(ty_span))),
-                };
-                ir::TypeInner::CooperativeMatrix {
-                    columns,
-                    rows,
-                    scalar,
-                    role,
-                }
-            }
-            ast::Type::Atomic(scalar) => scalar.to_inner_atomic(),
-            ast::Type::Pointer { base, space } => {
-                let base = self.resolve_ast_type(base, ctx)?;
-                ir::TypeInner::Pointer { base, space }
-            }
-            ast::Type::Array { base, size } => {
-                let base = self.resolve_ast_type(base, &mut ctx.as_const())?;
-                let size = self.array_size(size, ctx)?;
-
-                // Determine the size of the base type, if needed.
-                ctx.layouter.update(ctx.module.to_ctx()).map_err(|err| {
-                    let LayoutErrorInner::TooLarge = err.inner else {
-                        unreachable!("unexpected layout error: {err:?}");
-                    };
-                    // Lots of type definitions don't get spans, so this error
-                    // message may not be very useful.
-                    Box::new(Error::TypeTooLarge {
-                        span: ctx.module.types.get_span(err.ty),
-                    })
-                })?;
-                let stride = ctx.layouter[base].to_stride();
-
-                ir::TypeInner::Array { base, size, stride }
-            }
-            ast::Type::Image {
-                dim,
-                arrayed,
-                class,
-            } => {
-                if class == crate::ImageClass::External {
-                    // Other than the WGSL backend, every backend that supports
-                    // external textures does so by lowering them to a set of
-                    // ordinary textures and some parameters saying how to
-                    // sample from them. We don't know which backend will
-                    // consume the `Module` we're building, but in case it's not
-                    // WGSL, populate `SpecialTypes::external_texture_params`
-                    // and `SpecialTypes::external_texture_transfer_function`
-                    // with the types the backend will use for the parameter
-                    // buffer.
-                    //
-                    // Neither of these are the type we are lowering here:
-                    // that's an ordinary `TypeInner::Image`. But the fact we
-                    // are lowering a `texture_external` implies the backends
-                    // may need these additional types too.
-                    ctx.module.generate_external_texture_types();
-                }
-                ir::TypeInner::Image {
-                    dim,
-                    arrayed,
-                    class,
-                }
-            }
-            ast::Type::Sampler { comparison } => ir::TypeInner::Sampler { comparison },
-            ast::Type::AccelerationStructure { vertex_return } => {
-                ir::TypeInner::AccelerationStructure { vertex_return }
-            }
-            ast::Type::RayQuery { vertex_return } => ir::TypeInner::RayQuery { vertex_return },
-            ast::Type::BindingArray { base, size } => {
-                let base = self.resolve_ast_type(base, ctx)?;
-                let size = self.array_size(size, ctx)?;
-                ir::TypeInner::BindingArray { base, size }
-            }
-            ast::Type::RayDesc => {
-                return Ok(ctx.module.generate_ray_desc_type());
-            }
-            ast::Type::RayIntersection => {
-                return Ok(ctx.module.generate_ray_intersection_type());
-            }
-            ast::Type::User(ref ident) => {
-                return match ctx.globals.get(ident.name) {
-                    Some(&LoweredGlobalDecl::Type(handle)) => Ok(handle),
-                    Some(_) => Err(Box::new(Error::Unexpected(ident.span, ExpectedToken::Type))),
-                    None => Err(Box::new(Error::UnknownType(ident.span))),
-                }
-            }
-        };
-
-        Ok(ctx.as_global().ensure_type_exists(name, inner))
+        self.type_specifier(ident, ctx, Some(name))
     }
 
     /// Return a Naga `Handle<Type>` representing the front-end type `handle`.
     fn resolve_ast_type(
         &mut self,
-        handle: Handle<ast::Type<'source>>,
+        ident: &ast::TemplateElaboratedIdent<'source>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, Handle<ir::Type>> {
-        self.resolve_named_ast_type(handle, None, ctx)
+        self.type_specifier(ident, ctx, None)
     }
 
     fn binding(

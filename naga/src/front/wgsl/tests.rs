@@ -345,7 +345,7 @@ fn parse_texture_load() {
     .unwrap();
     parse_str(
         "
-        var t: texture_multisampled_2d_array<i32>;
+        var t: texture_2d_array<i32>;
         fn foo() {
             let r: vec4<i32> = textureLoad(t, vec2<i32>(10, 20), 2, 3);
         }
@@ -354,9 +354,9 @@ fn parse_texture_load() {
     .unwrap();
     parse_str(
         "
-        var t: texture_storage_1d_array<r32float,read>;
+        var t: texture_storage_1d<r32float,read>;
         fn foo() {
-            let r: vec4<f32> = textureLoad(t, 10, 2);
+            let r: vec4<f32> = textureLoad(t, 10);
         }
     ",
     )
@@ -380,12 +380,21 @@ fn parse_texture_store() {
 fn parse_texture_query() {
     parse_str(
         "
-        var t: texture_multisampled_2d_array<f32>;
+        var t: texture_multisampled_2d<f32>;
         fn foo() {
-            var dim: vec2<u32> = textureDimensions(t);
-            dim = textureDimensions(t, 0);
-            let layers: u32 = textureNumLayers(t);
-            let samples: u32 = textureNumSamples(t);
+            let dim = textureDimensions(t);
+            let samples = textureNumSamples(t);
+        }
+    ",
+    )
+    .unwrap();
+    parse_str(
+        "
+        var t: texture_2d_array<f32>;
+        fn foo() {
+            let dim = textureDimensions(t);
+            let levels = textureNumLevels(t);
+            let layers = textureNumLayers(t);
         }
     ",
     )
