@@ -4564,23 +4564,34 @@ impl<T> PollType<T> {
     }
 }
 
-/// Error states after a device poll
+/// Error states after a device poll.
 #[derive(Debug)]
-#[cfg_attr(feature = "std", derive(thiserror::Error))]
 pub enum PollError {
     /// The requested Wait timed out before the submission was completed.
-    #[cfg_attr(
-        feature = "std",
-        error("The requested Wait timed out before the submission was completed.")
-    )]
     Timeout,
     /// The requested Wait was given a wrong submission index.
-    #[cfg_attr(
-        feature = "std",
-        error("Tried to wait using a submission index ({0}) that has not been returned by a successful submission (last successful submission: {1})")
-    )]
     WrongSubmissionIndex(u64, u64),
 }
+
+// This impl could be derived by `thiserror`, but by not doing so, we can reduce the number of
+// dependencies this early in the dependency graph, which may improve build parallelism.
+impl fmt::Display for PollError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PollError::Timeout => {
+                f.write_str("The requested Wait timed out before the submission was completed.")
+            }
+            PollError::WrongSubmissionIndex(requested, successful) => write!(
+                f,
+                "Tried to wait using a submission index ({requested}) \
+                that has not been returned by a successful submission \
+                (last successful submission: {successful}"
+            ),
+        }
+    }
+}
+
+impl core::error::Error for PollError {}
 
 /// Status of device poll operation.
 #[derive(Debug, PartialEq, Eq)]

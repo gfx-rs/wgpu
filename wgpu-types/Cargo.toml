@@ -37,7 +37,7 @@ alloc_instead_of_core = "warn"
 
 [features]
 default = ["std"]
-std = ["js-sys?/std", "web-sys?/std", "thiserror/std"]
+std = ["js-sys?/std", "web-sys?/std"]
 strict_asserts = []
 fragile-send-sync-non-atomic-wasm = []
 serde = ["dep:serde", "bitflags/serde"]
@@ -52,7 +52,6 @@ web = ["dep:js-sys", "dep:web-sys"]
 bitflags.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 log.workspace = true
-thiserror = { workspace = true, optional = true }
 serde = { workspace = true, default-features = false, features = [
     "alloc",
     "derive",
