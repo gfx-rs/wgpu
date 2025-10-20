@@ -14,8 +14,7 @@ int test_integer_dot_product()
     uint3 a_3_ = (1u).xxx;
     uint3 b_3_ = (1u).xxx;
     uint c_3_ = dot(a_3_, b_3_);
-    int c_4_ = dot((int(4)).xxxx, (int(2)).xxxx);
-    return c_4_;
+    return int(32);
 }
 
 uint test_packed_integer_dot_product()
