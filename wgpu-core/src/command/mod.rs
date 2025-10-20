@@ -357,11 +357,7 @@ impl CommandEncoderStatus {
         // Replace our state with `Consumed`, and return either the inner
         // state or an error, to be transferred to the command buffer.
         match mem::replace(self, Self::Consumed) {
-            Self::Recording(inner) => {
-                // Nothing should have opened the encoder yet.
-                assert!(!inner.encoder.is_open);
-                Self::Finished(inner)
-            }
+            Self::Recording(inner) => Self::Finished(inner),
             Self::Consumed | Self::Finished(_) => Self::Error(EncoderStateError::Ended.into()),
             Self::Locked(_) => Self::Error(EncoderStateError::Locked.into()),
             st @ Self::Error(_) => st,

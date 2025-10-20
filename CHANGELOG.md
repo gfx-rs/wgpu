@@ -42,9 +42,17 @@ Bottom level categories:
 
 ### Bug Fixes
 
+#### General
+
+- Remove an assertion that causes problems if `CommandEncoder::as_hal_mut` is used. By @andyleiserson in [#8387](https://github.com/gfx-rs/wgpu/pull/8387).
+
 #### DX12
 
 - Align copies b/w textures and buffers via a single intermediate buffer per copy when `D3D12_FEATURE_DATA_D3D12_OPTIONS13.UnrestrictedBufferTextureCopyPitchSupported` is `false`. By @ErichDonGubler in [#7721](https://github.com/gfx-rs/wgpu/pull/7721).
+
+#### Naga
+
+- Fix a bug that resulted in the Metal error `program scope variable must reside in constant address space` in some cases. Backport of [#8311](https://github.com/gfx-rs/wgpu/pull/8311) by @teoxoy.
 
 ## v27.0.2 (2025-10-03)
 
