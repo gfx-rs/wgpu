@@ -51,6 +51,10 @@ ignore = [
     # `paste` crate is no longer maintained https://rustsec.org/advisories/RUSTSEC-2024-0436
     # It's a dependency of `metal` (which is to be replaced with `objc2`) and a transitive dependency of `deno`.
     "RUSTSEC-2024-0436",
+    # There are SemVer-compatible upgrades for each of these, so ignore them for the v26 backports.
+    "RUSTSEC-2025-0047",
+    "RUSTSEC-2025-0055",
+    "RUSTSEC-2025-0056",
 ]
 
 [licenses]
