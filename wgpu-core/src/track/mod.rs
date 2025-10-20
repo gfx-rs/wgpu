@@ -641,8 +641,7 @@ impl Tracker {
     }
 
     /// Iterates through all resources in the given bind group and adopts
-    /// the state given for those resources in the UsageScope. It also
-    /// removes all touched resources from the usage scope.
+    /// the state given for those resources in the UsageScope.
     ///
     /// If a transition is needed to get the resources into the needed
     /// state, those transitions are stored within the tracker. A
@@ -650,32 +649,17 @@ impl Tracker {
     /// [`TextureTracker::drain_transitions`] is needed to get those transitions.
     ///
     /// This is a really funky method used by Compute Passes to generate
-    /// barriers after a call to dispatch without needing to iterate
-    /// over all elements in the usage scope. We use each the
-    /// bind group as a source of which IDs to look at. The bind groups
-    /// must have first been added to the usage scope.
+    /// barriers for each dispatch. We use the bind group as a source of which
+    /// IDs to look at.
     ///
     /// Only stateful things are merged in here, all other resources are owned
     /// indirectly by the bind group.
-    ///
-    /// # Safety
-    ///
-    /// The maximum ID given by each bind group resource must be less than the
-    /// value given to `set_size`
-    pub unsafe fn set_and_remove_from_usage_scope_sparse(
-        &mut self,
-        scope: &mut UsageScope,
-        bind_group: &BindGroupStates,
-    ) {
-        unsafe {
-            self.buffers.set_and_remove_from_usage_scope_sparse(
-                &mut scope.buffers,
-                bind_group.buffers.used_tracker_indices(),
-            )
-        };
-        unsafe {
-            self.textures
-                .set_and_remove_from_usage_scope_sparse(&mut scope.textures, &bind_group.views)
-        };
+    pub fn set_from_bind_group(&mut self, scope: &mut UsageScope, bind_group: &BindGroupStates) {
+        self.buffers.set_multiple(
+            &mut scope.buffers,
+            bind_group.buffers.used_tracker_indices(),
+        );
+        self.textures
+            .set_multiple(&mut scope.textures, &bind_group.views);
     }
 }

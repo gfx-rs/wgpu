@@ -293,21 +293,14 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         }
 
         for bind_group in self.pass.binder.list_active() {
-            unsafe {
-                self.intermediate_trackers
-                    .set_and_remove_from_usage_scope_sparse(&mut self.pass.scope, &bind_group.used)
-            }
+            self.intermediate_trackers
+                .set_from_bind_group(&mut self.pass.scope, &bind_group.used);
         }
 
         // Add the state of the indirect buffer if it hasn't been hit before.
-        unsafe {
-            self.intermediate_trackers
-                .buffers
-                .set_and_remove_from_usage_scope_sparse(
-                    &mut self.pass.scope.buffers,
-                    indirect_buffer,
-                );
-        }
+        self.intermediate_trackers
+            .buffers
+            .set_multiple(&mut self.pass.scope.buffers, indirect_buffer);
 
         CommandEncoder::drain_barriers(
             self.pass.base.raw_encoder,

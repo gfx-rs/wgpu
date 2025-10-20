@@ -442,12 +442,7 @@ impl BufferTracker {
     /// over all elements in the usage scope. We use each the
     /// a given iterator of ids as a source of which IDs to look at.
     /// All the IDs must have first been added to the usage scope.
-    ///
-    /// # Safety
-    ///
-    /// [`Self::set_size`] must be called with the maximum possible Buffer ID before this
-    /// method is called.
-    pub unsafe fn set_and_remove_from_usage_scope_sparse(
+    pub fn set_multiple(
         &mut self,
         scope: &mut BufferUsageScope,
         index_source: impl IntoIterator<Item = TrackerIndex>,
@@ -465,6 +460,9 @@ impl BufferTracker {
             if unsafe { !scope.metadata.contains_unchecked(index) } {
                 continue;
             }
+
+            // SAFETY: we checked that the index is in bounds for the scope, and
+            // called `set_size` to ensure it is valid for `self`.
             unsafe {
                 self.insert_or_barrier_update(
                     index,
@@ -477,8 +475,6 @@ impl BufferTracker {
                     },
                 )
             };
-
-            unsafe { scope.metadata.remove(index) };
         }
     }
 
