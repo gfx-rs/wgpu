@@ -2,7 +2,7 @@ use crate::front::wgsl::parse::directive::enable_extension::{
     EnableExtensions, ImplementedEnableExtension,
 };
 use crate::front::wgsl::{Error, Result, Scalar};
-use crate::Span;
+use crate::{ImageClass, ImageDimension, Span, TypeInner, VectorSize};
 
 use alloc::boxed::Box;
 
@@ -42,6 +42,22 @@ pub fn map_access_mode(word: &str, span: Span) -> Result<'_, crate::StorageAcces
         "atomic" => Ok(crate::StorageAccess::ATOMIC
             | crate::StorageAccess::LOAD
             | crate::StorageAccess::STORE),
+        _ => Err(Box::new(Error::UnknownAccess(span))),
+    }
+}
+
+pub fn map_ray_flag(word: &str, span: Span) -> Result<'_, ()> {
+    match word {
+        "vertex_return" => Ok(()),
+        _ => Err(Box::new(Error::UnknownRayFlag(span))),
+    }
+}
+
+pub fn map_cooperative_role(word: &str, span: Span) -> Result<'_, crate::CooperativeRole> {
+    match word {
+        "A" => Ok(crate::CooperativeRole::A),
+        "B" => Ok(crate::CooperativeRole::B),
+        "C" => Ok(crate::CooperativeRole::C),
         _ => Err(Box::new(Error::UnknownAccess(span))),
     }
 }
@@ -390,4 +406,191 @@ pub fn map_subgroup_operation(
         "subgroupInclusiveMul" => (sg::Mul, co::InclusiveScan),
         _ => return None,
     })
+}
+
+pub enum TypeGenerator {
+    Vector {
+        size: VectorSize,
+    },
+    Matrix {
+        columns: VectorSize,
+        rows: VectorSize,
+    },
+    Array,
+    Atomic,
+    Pointer,
+    SampledTexture {
+        dim: ImageDimension,
+        arrayed: bool,
+        multi: bool,
+    },
+    StorageTexture {
+        dim: ImageDimension,
+        arrayed: bool,
+    },
+    BindingArray,
+    AccelerationStructure,
+    RayQuery,
+    CooperativeMatrix {
+        columns: crate::CooperativeSize,
+        rows: crate::CooperativeSize,
+    },
+}
+
+pub enum PredeclaredType {
+    TypeInner(TypeInner),
+    RayDesc,
+    RayIntersection,
+    TypeGenerator(TypeGenerator),
+}
+impl From<TypeInner> for PredeclaredType {
+    fn from(value: TypeInner) -> Self {
+        Self::TypeInner(value)
+    }
+}
+impl From<TypeGenerator> for PredeclaredType {
+    fn from(value: TypeGenerator) -> Self {
+        Self::TypeGenerator(value)
+    }
+}
+
+pub fn map_predeclared_type(
+    enable_extensions: &EnableExtensions,
+    span: Span,
+    word: &str,
+) -> Result<'static, Option<PredeclaredType>> {
+    #[rustfmt::skip]
+    let ty = match word {
+        // predeclared types
+
+        // scalars
+        "bool" => TypeInner::Scalar(Scalar::BOOL).into(),
+        "i32" => TypeInner::Scalar(Scalar::I32).into(),
+        "u32" => TypeInner::Scalar(Scalar::U32).into(),
+        "f32" => TypeInner::Scalar(Scalar::F32).into(),
+        "f16" => TypeInner::Scalar(Scalar::F16).into(),
+        "i64" => TypeInner::Scalar(Scalar::I64).into(),
+        "u64" => TypeInner::Scalar(Scalar::U64).into(),
+        "f64" => TypeInner::Scalar(Scalar::F64).into(),
+        // vector aliases
+        "vec2i" => TypeInner::Vector { size: VectorSize::Bi,   scalar: Scalar::I32 }.into(),
+        "vec3i" => TypeInner::Vector { size: VectorSize::Tri,  scalar: Scalar::I32 }.into(),
+        "vec4i" => TypeInner::Vector { size: VectorSize::Quad, scalar: Scalar::I32 }.into(),
+        "vec2u" => TypeInner::Vector { size: VectorSize::Bi,   scalar: Scalar::U32 }.into(),
+        "vec3u" => TypeInner::Vector { size: VectorSize::Tri,  scalar: Scalar::U32 }.into(),
+        "vec4u" => TypeInner::Vector { size: VectorSize::Quad, scalar: Scalar::U32 }.into(),
+        "vec2f" => TypeInner::Vector { size: VectorSize::Bi,   scalar: Scalar::F32 }.into(),
+        "vec3f" => TypeInner::Vector { size: VectorSize::Tri,  scalar: Scalar::F32 }.into(),
+        "vec4f" => TypeInner::Vector { size: VectorSize::Quad, scalar: Scalar::F32 }.into(),
+        "vec2h" => TypeInner::Vector { size: VectorSize::Bi,   scalar: Scalar::F16 }.into(),
+        "vec3h" => TypeInner::Vector { size: VectorSize::Tri,  scalar: Scalar::F16 }.into(),
+        "vec4h" => TypeInner::Vector { size: VectorSize::Quad, scalar: Scalar::F16 }.into(),
+        // matrix aliases
+        "mat2x2f" => TypeInner::Matrix { columns: VectorSize::Bi,   rows: VectorSize::Bi,   scalar: Scalar::F32 }.into(),
+        "mat2x3f" => TypeInner::Matrix { columns: VectorSize::Bi,   rows: VectorSize::Tri,  scalar: Scalar::F32 }.into(),
+        "mat2x4f" => TypeInner::Matrix { columns: VectorSize::Bi,   rows: VectorSize::Quad, scalar: Scalar::F32 }.into(),
+        "mat3x2f" => TypeInner::Matrix { columns: VectorSize::Tri,  rows: VectorSize::Bi,   scalar: Scalar::F32 }.into(),
+        "mat3x3f" => TypeInner::Matrix { columns: VectorSize::Tri,  rows: VectorSize::Tri,  scalar: Scalar::F32 }.into(),
+        "mat3x4f" => TypeInner::Matrix { columns: VectorSize::Tri,  rows: VectorSize::Quad, scalar: Scalar::F32 }.into(),
+        "mat4x2f" => TypeInner::Matrix { columns: VectorSize::Quad, rows: VectorSize::Bi,   scalar: Scalar::F32 }.into(),
+        "mat4x3f" => TypeInner::Matrix { columns: VectorSize::Quad, rows: VectorSize::Tri,  scalar: Scalar::F32 }.into(),
+        "mat4x4f" => TypeInner::Matrix { columns: VectorSize::Quad, rows: VectorSize::Quad, scalar: Scalar::F32 }.into(),
+        "mat2x2h" => TypeInner::Matrix { columns: VectorSize::Bi,   rows: VectorSize::Bi,   scalar: Scalar::F16 }.into(),
+        "mat2x3h" => TypeInner::Matrix { columns: VectorSize::Bi,   rows: VectorSize::Tri,  scalar: Scalar::F16 }.into(),
+        "mat2x4h" => TypeInner::Matrix { columns: VectorSize::Bi,   rows: VectorSize::Quad, scalar: Scalar::F16 }.into(),
+        "mat3x2h" => TypeInner::Matrix { columns: VectorSize::Tri,  rows: VectorSize::Bi,   scalar: Scalar::F16 }.into(),
+        "mat3x3h" => TypeInner::Matrix { columns: VectorSize::Tri,  rows: VectorSize::Tri,  scalar: Scalar::F16 }.into(),
+        "mat3x4h" => TypeInner::Matrix { columns: VectorSize::Tri,  rows: VectorSize::Quad, scalar: Scalar::F16 }.into(),
+        "mat4x2h" => TypeInner::Matrix { columns: VectorSize::Quad, rows: VectorSize::Bi,   scalar: Scalar::F16 }.into(),
+        "mat4x3h" => TypeInner::Matrix { columns: VectorSize::Quad, rows: VectorSize::Tri,  scalar: Scalar::F16 }.into(),
+        "mat4x4h" => TypeInner::Matrix { columns: VectorSize::Quad, rows: VectorSize::Quad, scalar: Scalar::F16 }.into(),
+        // samplers
+        "sampler" =>            TypeInner::Sampler { comparison: false }.into(),
+        "sampler_comparison" => TypeInner::Sampler { comparison: true }.into(),
+        // depth textures
+        "texture_depth_2d" =>              TypeInner::Image { dim: ImageDimension::D2,   arrayed: false, class: ImageClass::Depth { multi: false } }.into(),
+        "texture_depth_2d_array" =>        TypeInner::Image { dim: ImageDimension::D2,   arrayed: true,  class: ImageClass::Depth { multi: false } }.into(),
+        "texture_depth_cube" =>            TypeInner::Image { dim: ImageDimension::Cube, arrayed: false, class: ImageClass::Depth { multi: false } }.into(),
+        "texture_depth_cube_array" =>      TypeInner::Image { dim: ImageDimension::Cube, arrayed: true,  class: ImageClass::Depth { multi: false } }.into(),
+        "texture_depth_multisampled_2d" => TypeInner::Image { dim: ImageDimension::D2,   arrayed: false, class: ImageClass::Depth { multi: true  } }.into(),
+        // external texture
+        "texture_external" => TypeInner::Image { dim: ImageDimension::D2, arrayed: false, class: ImageClass::External }.into(),
+        // ray desc
+        "RayDesc" => PredeclaredType::RayDesc,
+        // ray intersection
+        "RayIntersection" => PredeclaredType::RayIntersection,
+
+        // predeclared type generators
+
+        // vector
+        "vec2" => TypeGenerator::Vector { size: VectorSize::Bi   }.into(),
+        "vec3" => TypeGenerator::Vector { size: VectorSize::Tri  }.into(),
+        "vec4" => TypeGenerator::Vector { size: VectorSize::Quad }.into(),
+        // matrix
+        "mat2x2" => TypeGenerator::Matrix { columns: VectorSize::Bi,   rows: VectorSize::Bi   }.into(),
+        "mat2x3" => TypeGenerator::Matrix { columns: VectorSize::Bi,   rows: VectorSize::Tri  }.into(),
+        "mat2x4" => TypeGenerator::Matrix { columns: VectorSize::Bi,   rows: VectorSize::Quad }.into(),
+        "mat3x2" => TypeGenerator::Matrix { columns: VectorSize::Tri,  rows: VectorSize::Bi   }.into(),
+        "mat3x3" => TypeGenerator::Matrix { columns: VectorSize::Tri,  rows: VectorSize::Tri  }.into(),
+        "mat3x4" => TypeGenerator::Matrix { columns: VectorSize::Tri,  rows: VectorSize::Quad }.into(),
+        "mat4x2" => TypeGenerator::Matrix { columns: VectorSize::Quad, rows: VectorSize::Bi   }.into(),
+        "mat4x3" => TypeGenerator::Matrix { columns: VectorSize::Quad, rows: VectorSize::Tri  }.into(),
+        "mat4x4" => TypeGenerator::Matrix { columns: VectorSize::Quad, rows: VectorSize::Quad }.into(),
+        // array
+        "array" => TypeGenerator::Array.into(),
+        // atomic
+        "atomic" => TypeGenerator::Atomic.into(),
+        // pointer
+        "ptr" => TypeGenerator::Pointer.into(),
+        // sampled textures
+        "texture_1d" =>               TypeGenerator::SampledTexture { dim: ImageDimension::D1,   arrayed: false, multi: false }.into(),
+        "texture_2d" =>               TypeGenerator::SampledTexture { dim: ImageDimension::D2,   arrayed: false, multi: false }.into(),
+        "texture_2d_array" =>         TypeGenerator::SampledTexture { dim: ImageDimension::D2,   arrayed: true,  multi: false }.into(),
+        "texture_3d" =>               TypeGenerator::SampledTexture { dim: ImageDimension::D3,   arrayed: false, multi: false }.into(),
+        "texture_cube" =>             TypeGenerator::SampledTexture { dim: ImageDimension::Cube, arrayed: false, multi: false }.into(),
+        "texture_cube_array" =>       TypeGenerator::SampledTexture { dim: ImageDimension::Cube, arrayed: true,  multi: false }.into(),
+        "texture_multisampled_2d" =>  TypeGenerator::SampledTexture { dim: ImageDimension::D2,   arrayed: false, multi: true  }.into(),
+        // storage textures
+        "texture_storage_1d" =>       TypeGenerator::StorageTexture { dim: ImageDimension::D1,   arrayed: false }.into(),
+        "texture_storage_2d" =>       TypeGenerator::StorageTexture { dim: ImageDimension::D2,   arrayed: false }.into(),
+        "texture_storage_2d_array" => TypeGenerator::StorageTexture { dim: ImageDimension::D2,   arrayed: true  }.into(),
+        "texture_storage_3d" =>       TypeGenerator::StorageTexture { dim: ImageDimension::D3,   arrayed: false }.into(),
+        // binding array
+        "binding_array" => TypeGenerator::BindingArray.into(),
+        // acceleration structure
+        "acceleration_structure" => TypeGenerator::AccelerationStructure.into(),
+        // ray query
+        "ray_query" => TypeGenerator::RayQuery.into(),
+        // cooperative matrix
+        "coop_mat8x8" => TypeGenerator::CooperativeMatrix {
+            columns: crate::CooperativeSize::Eight,
+            rows: crate::CooperativeSize::Eight,
+        }.into(),
+        "coop_mat16x16" => TypeGenerator::CooperativeMatrix {
+            columns: crate::CooperativeSize::Sixteen,
+            rows: crate::CooperativeSize::Sixteen,
+        }.into(),
+        _ => return Ok(None),
+    };
+
+    // Check for the enable extension required to use this type, if any.
+    let extension_needed = match ty {
+        PredeclaredType::TypeInner(ref ty) if ty.scalar() == Some(Scalar::F16) => {
+            Some(ImplementedEnableExtension::F16)
+        }
+        PredeclaredType::TypeGenerator(TypeGenerator::CooperativeMatrix { .. }) => {
+            Some(ImplementedEnableExtension::WgpuCooperativeMatrix)
+        }
+        _ => None,
+    };
+    if let Some(extension_needed) = extension_needed {
+        if !enable_extensions.contains(extension_needed) {
+            return Err(Box::new(Error::EnableExtensionNotEnabled {
+                span,
+                kind: extension_needed.into(),
+            }));
+        }
+    }
+
+    Ok(Some(ty))
 }

@@ -8,7 +8,7 @@ use crate::Span;
 use alloc::boxed::Box;
 
 /// Tracks the status of every enable-extension known to Naga.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct EnableExtensions {
     wgpu_mesh_shader: bool,
     wgpu_ray_query: bool,

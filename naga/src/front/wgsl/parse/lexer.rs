@@ -644,21 +644,11 @@ impl<'a> Lexer<'a> {
         &mut self,
     ) -> Result<'a, crate::CooperativeRole> {
         let (ident, span) = self.next_ident_with_span()?;
-        match ident {
-            "A" => Ok(crate::CooperativeRole::A),
-            "B" => Ok(crate::CooperativeRole::B),
-            "C" => Ok(crate::CooperativeRole::C),
-            _ => Err(Box::new(Error::UnknownAccess(span))),
-        }
+        conv::map_cooperative_role(ident, span)
     }
 
     pub(in crate::front::wgsl) fn open_arguments(&mut self) -> Result<'a, ()> {
         self.expect(Token::Paren('('))
-    }
-
-    pub(in crate::front::wgsl) fn close_arguments(&mut self) -> Result<'a, ()> {
-        let _ = self.next_if(Token::Separator(','));
-        self.expect(Token::Paren(')'))
     }
 
     pub(in crate::front::wgsl) fn next_argument(&mut self) -> Result<'a, bool> {

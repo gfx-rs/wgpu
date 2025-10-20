@@ -7,14 +7,12 @@ use alloc::{
 };
 use core::num::NonZeroU32;
 
+use crate::front::wgsl::error::{Error, ExpectedToken, InvalidAssignmentType};
 use crate::front::wgsl::index::Index;
+use crate::front::wgsl::parse::directive::enable_extension::EnableExtensions;
 use crate::front::wgsl::parse::number::Number;
 use crate::front::wgsl::parse::{ast, conv};
 use crate::front::wgsl::Result;
-use crate::front::wgsl::{
-    error::{Error, ExpectedToken, InvalidAssignmentType},
-    parse::directive::enable_extension::EnableExtensions,
-};
 use crate::front::Typifier;
 use crate::{
     common::wgsl::{TryToWgsl, TypeContext},
@@ -24,8 +22,12 @@ use crate::{common::ForDebugWithTypes, proc::LayoutErrorInner};
 use crate::{ir, proc};
 use crate::{Arena, FastHashMap, FastIndexMap, Handle, Span};
 
+use construction::Constructor;
+use template_list::TemplateListIter;
+
 mod construction;
 mod conversion;
+mod template_list;
 
 /// Resolves the inner type of a given expression.
 ///
@@ -86,6 +88,8 @@ pub(super) use resolve;
 
 /// State for constructing a `ir::Module`.
 pub struct GlobalContext<'source, 'temp, 'out> {
+    enable_extensions: EnableExtensions,
+
     /// The `TranslationUnit`'s expressions arena.
     ast_expressions: &'temp Arena<ast::Expression<'source>>,
 
@@ -110,6 +114,7 @@ pub struct GlobalContext<'source, 'temp, 'out> {
 impl<'source> GlobalContext<'source, '_, '_> {
     fn as_const(&mut self) -> ExpressionContext<'source, '_, '_> {
         ExpressionContext {
+            enable_extensions: self.enable_extensions,
             ast_expressions: self.ast_expressions,
             globals: self.globals,
             types: self.types,
@@ -123,6 +128,7 @@ impl<'source> GlobalContext<'source, '_, '_> {
 
     fn as_override(&mut self) -> ExpressionContext<'source, '_, '_> {
         ExpressionContext {
+            enable_extensions: self.enable_extensions,
             ast_expressions: self.ast_expressions,
             globals: self.globals,
             types: self.types,
@@ -147,6 +153,8 @@ impl<'source> GlobalContext<'source, '_, '_> {
 
 /// State for lowering a statement within a function.
 pub struct StatementContext<'source, 'temp, 'out> {
+    enable_extensions: EnableExtensions,
+
     // WGSL AST values.
     /// A reference to [`TranslationUnit::expressions`] for the translation unit
     /// we're lowering.
@@ -214,6 +222,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
         'temp: 't,
     {
         ExpressionContext {
+            enable_extensions: self.enable_extensions,
             globals: self.globals,
             types: self.types,
             ast_expressions: self.ast_expressions,
@@ -241,6 +250,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
         'temp: 't,
     {
         ExpressionContext {
+            enable_extensions: self.enable_extensions,
             globals: self.globals,
             types: self.types,
             ast_expressions: self.ast_expressions,
@@ -262,6 +272,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
     #[allow(dead_code)]
     fn as_global(&mut self) -> GlobalContext<'a, '_, '_> {
         GlobalContext {
+            enable_extensions: self.enable_extensions,
             ast_expressions: self.ast_expressions,
             globals: self.globals,
             types: self.types,
@@ -370,6 +381,8 @@ pub enum ExpressionContextType<'temp, 'out> {
 /// [`as_const`]: ExpressionContext::as_const
 /// [`Expression::Constant`]: ir::Expression::Constant
 pub struct ExpressionContext<'source, 'temp, 'out> {
+    enable_extensions: EnableExtensions,
+
     // WGSL AST values.
     ast_expressions: &'temp Arena<ast::Expression<'source>>,
     types: &'temp Arena<ast::Type<'source>>,
@@ -439,6 +452,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     #[allow(dead_code)]
     fn as_const(&mut self) -> ExpressionContext<'source, '_, '_> {
         ExpressionContext {
+            enable_extensions: self.enable_extensions,
             globals: self.globals,
             types: self.types,
             ast_expressions: self.ast_expressions,
@@ -466,6 +480,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
 
     fn as_global(&mut self) -> GlobalContext<'source, '_, '_> {
         GlobalContext {
+            enable_extensions: self.enable_extensions,
             ast_expressions: self.ast_expressions,
             globals: self.globals,
             types: self.types,
@@ -663,6 +678,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             local_expression_kind_tracker: rctx.local_expression_kind_tracker,
         };
         let mut nested_ctx = ExpressionContext {
+            enable_extensions: self.enable_extensions,
             expr_type: ExpressionContextType::Runtime(nested_rctx),
             ast_expressions: self.ast_expressions,
             types: self.types,
@@ -1202,6 +1218,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         };
 
         let mut ctx = GlobalContext {
+            enable_extensions: tu.enable_extensions,
             ast_expressions: &tu.expressions,
             globals: &mut FastHashMap::default(),
             types: &tu.types,
@@ -1269,11 +1286,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         None
                     };
 
-                    let space = Self::var_address_space(
-                        &v.template_list,
-                        &ctx.as_const(),
-                        &tu.enable_extensions,
-                    )?;
+                    let space = Self::var_address_space(&v.template_list, &ctx.as_const())?;
 
                     let handle = ctx.module.global_variables.append(
                         ir::GlobalVariable {
@@ -1540,6 +1553,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
         let mut typifier = Typifier::default();
         let mut stmt_ctx = StatementContext {
+            enable_extensions: ctx.enable_extensions,
             local_table: &mut local_table,
             globals: ctx.globals,
             ast_expressions: ctx.ast_expressions,
@@ -2005,18 +2019,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 ir::Statement::Return { value }
             }
             ast::StatementKind::Kill => ir::Statement::Kill,
-            ast::StatementKind::Call {
-                ref function,
-                ref arguments,
-            } => {
+            ast::StatementKind::Call(ref call_phrase) => {
                 let mut emitter = proc::Emitter::default();
                 emitter.start(&ctx.function.expressions);
 
                 let _ = self.call(
+                    call_phrase,
                     stmt.span,
-                    function,
-                    arguments,
-                    None,
                     &mut ctx.as_expression(block, &mut emitter),
                     true,
                 )?;
@@ -2250,10 +2259,21 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let handle = ctx.interrupt_emitter(ir::Expression::Literal(literal), span)?;
                 return Ok(Typed::Plain(handle));
             }
-            ast::Expression::Ident(ast::IdentExpr::Local(local)) => {
+            ast::Expression::Ident(ast::TemplateElaboratedIdent {
+                ref template_list, ..
+            }) if !template_list.is_empty() => {
+                return Err(Box::new(Error::UnexpectedTemplate(span)))
+            }
+            ast::Expression::Ident(ast::TemplateElaboratedIdent {
+                ident: ast::IdentExpr::Local(local),
+                ..
+            }) => {
                 return ctx.local(&local, span);
             }
-            ast::Expression::Ident(ast::IdentExpr::Unresolved(name)) => {
+            ast::Expression::Ident(ast::TemplateElaboratedIdent {
+                ident: ast::IdentExpr::Unresolved(name),
+                ..
+            }) => {
                 let global = ctx
                     .globals
                     .get(name)
@@ -2281,14 +2301,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 };
 
                 return expr.try_map(|handle| ctx.interrupt_emitter(handle, span));
-            }
-            ast::Expression::Construct {
-                ref ty,
-                ty_span,
-                ref components,
-            } => {
-                let handle = self.construct(span, ty, ty_span, components, ctx)?;
-                return Ok(Typed::Plain(handle));
             }
             ast::Expression::Unary { op, expr } => {
                 let expr = self.expression_for_abstract(expr, ctx)?;
@@ -2339,14 +2351,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             ast::Expression::Binary { op, left, right } => {
                 self.binary(op, left, right, span, ctx)?
             }
-            ast::Expression::Call {
-                ref function,
-                ref arguments,
-                result_ty,
-            } => {
+            ast::Expression::Call(ref call_phrase) => {
                 let handle = self
-                    .call(span, function, arguments, result_ty, ctx, false)?
-                    .ok_or(Error::FunctionReturnsVoid(function.span))?;
+                    .call(call_phrase, span, ctx, false)?
+                    .ok_or(Error::FunctionReturnsVoid(span))?;
                 return Ok(Typed::Plain(handle));
             }
             ast::Expression::Index { base, index } => {
@@ -2427,29 +2435,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 };
 
                 access
-            }
-            ast::Expression::Bitcast { expr, to, ty_span } => {
-                let expr = self.expression(expr, ctx)?;
-                let to_resolved = self.resolve_ast_type(to, &mut ctx.as_const())?;
-
-                let element_scalar = match ctx.module.types[to_resolved].inner {
-                    ir::TypeInner::Scalar(scalar) => scalar,
-                    ir::TypeInner::Vector { scalar, .. } => scalar,
-                    _ => {
-                        let ty = resolve!(ctx, expr);
-                        return Err(Box::new(Error::BadTypeCast {
-                            from_type: ctx.type_resolution_to_string(ty),
-                            span: ty_span,
-                            to_type: ctx.type_to_string(to_resolved),
-                        }));
-                    }
-                };
-
-                Typed::Plain(ir::Expression::As {
-                    expr,
-                    kind: element_scalar.kind,
-                    convert: None,
-                })
             }
         };
 
@@ -2593,10 +2578,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let expr = &ctx.ast_expressions[expr];
 
         match *expr {
-            ast::Expression::Ident(ast::IdentExpr::Local(_)) => {
-                Err(Box::new(Error::UnexpectedIdentForEnumerant(span)))
-            }
-            ast::Expression::Ident(ast::IdentExpr::Unresolved(name)) => {
+            ast::Expression::Ident(ast::TemplateElaboratedIdent {
+                ident: ast::IdentExpr::Local(_),
+                ..
+            }) => Err(Box::new(Error::UnexpectedIdentForEnumerant(span))),
+            ast::Expression::Ident(ast::TemplateElaboratedIdent {
+                ident: ast::IdentExpr::Unresolved(name),
+                ..
+            }) => {
                 if ctx.globals.get(name).is_some() {
                     Err(Box::new(Error::UnexpectedIdentForEnumerant(span)))
                 } else {
@@ -2608,41 +2597,196 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     }
 
     fn var_address_space(
-        template_list: &Option<Vec<Handle<ast::Expression<'source>>>>,
+        template_list: &[Handle<ast::Expression<'source>>],
         ctx: &ExpressionContext<'source, '_, '_>,
-        enable_extensions: &EnableExtensions,
     ) -> Result<'source, ir::AddressSpace> {
-        let mut address_space = ir::AddressSpace::Handle;
+        let mut tl = TemplateListIter::new(Span::UNDEFINED, template_list);
+        let mut address_space = tl.maybe_address_space(ctx)?;
+        if let Some(ref mut address_space) = address_space {
+            tl.maybe_access_mode(address_space, ctx)?;
+        }
+        tl.finish(ctx)?;
+        Ok(address_space.unwrap_or(ir::AddressSpace::Handle))
+    }
 
-        if let &Some(ref template_list) = template_list {
-            let mut template_list_args = template_list.iter();
-            let address_space_expr = template_list_args.next().unwrap();
+    fn type_expression(
+        &mut self,
+        expr: Handle<ast::Expression<'source>>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, Handle<ir::Type>> {
+        let span = ctx.ast_expressions.get_span(expr);
+        let expr = &ctx.ast_expressions[expr];
 
-            let (enumerant, span) = Self::enumerant(*address_space_expr, ctx)?;
-            address_space = conv::map_address_space(enumerant, span, enable_extensions)?;
+        let (ident, ident_span, template_list) = match expr {
+            &ast::Expression::Ident(ast::TemplateElaboratedIdent {
+                ident: ast::IdentExpr::Unresolved(ident),
+                ident_span,
+                ref template_list,
+                ..
+            }) => (ident, ident_span, template_list),
+            _ => return Err(Box::new(Error::UnexpectedExprForTypeExpression(span))),
+        };
 
-            match address_space {
-                ir::AddressSpace::Storage { ref mut access } => {
-                    if let Some(access_mode_expr) = template_list_args.next() {
-                        let (enumerant, span) = Self::enumerant(*access_mode_expr, ctx)?;
-                        let access_mode = conv::map_access_mode(enumerant, span)?;
-                        *access = access_mode;
-                    } else {
-                        // defaulting to `read`
-                        *access = ir::StorageAccess::LOAD
-                    }
+        let mut tl = TemplateListIter::new(ident_span, template_list);
+
+        if let Some(global) = ctx.globals.get(ident) {
+            match global {
+                &LoweredGlobalDecl::Type(handle) => {
+                    tl.finish(ctx)?;
+                    return Ok(handle);
                 }
-                _ => {}
-            }
-
-            let unused_args: Vec<Span> = template_list_args
-                .map(|expr| ctx.ast_expressions.get_span(*expr))
-                .collect();
-            if !unused_args.is_empty() {
-                return Err(Box::new(Error::UnusedArgsForTemplate(unused_args)));
+                _ => return Err(Box::new(Error::UnexpectedExprForTypeExpression(span))),
             }
         }
-        Ok(address_space)
+
+        let ty = conv::map_predeclared_type(&ctx.enable_extensions, ident_span, ident)?;
+        let Some(ty) = ty else {
+            return Err(Box::new(Error::UnknownIdent(ident_span, ident)));
+        };
+        let ty = self.finalize_type(ctx, ty, &mut tl)?;
+
+        tl.finish(ctx)?;
+
+        Ok(ty)
+    }
+
+    fn finalize_type(
+        &mut self,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+        ty: conv::PredeclaredType,
+        tl: &mut TemplateListIter<'_, 'source>,
+    ) -> Result<'source, Handle<ir::Type>> {
+        let ty = match ty {
+            conv::PredeclaredType::TypeInner(ty_inner) => {
+                match ty_inner {
+                    ir::TypeInner::Image {
+                        class: ir::ImageClass::External,
+                        ..
+                    } => {
+                        // Other than the WGSL backend, every backend that supports
+                        // external textures does so by lowering them to a set of
+                        // ordinary textures and some parameters saying how to
+                        // sample from them. We don't know which backend will
+                        // consume the `Module` we're building, but in case it's not
+                        // WGSL, populate `SpecialTypes::external_texture_params`
+                        // and `SpecialTypes::external_texture_transfer_function`
+                        // with the types the backend will use for the parameter
+                        // buffer.
+                        //
+                        // Neither of these are the type we are lowering here:
+                        // that's an ordinary `TypeInner::Image`. But the fact we
+                        // are lowering a `texture_external` implies the backends
+                        // may need these additional types too.
+                        ctx.module.generate_external_texture_types();
+                    }
+                    _ => {}
+                }
+                ctx.as_global().ensure_type_exists(None, ty_inner)
+            }
+            conv::PredeclaredType::RayDesc => ctx.module.generate_ray_desc_type(),
+            conv::PredeclaredType::RayIntersection => ctx.module.generate_ray_intersection_type(),
+            conv::PredeclaredType::TypeGenerator(type_generator) => {
+                let ty_inner = match type_generator {
+                    conv::TypeGenerator::Vector { size } => {
+                        let (scalar, _) = tl.scalar(self, ctx)?;
+                        ir::TypeInner::Vector { size, scalar }
+                    }
+                    conv::TypeGenerator::Matrix { columns, rows } => {
+                        let (scalar, span) = tl.scalar(self, ctx)?;
+                        if scalar.kind != ir::ScalarKind::Float {
+                            return Err(Box::new(Error::BadMatrixScalarKind(span, scalar)));
+                        }
+                        ir::TypeInner::Matrix {
+                            columns,
+                            rows,
+                            scalar,
+                        }
+                    }
+                    conv::TypeGenerator::Array => {
+                        let base = tl.ty(self, ctx)?;
+                        let size = tl.maybe_array_size(self, ctx)?;
+
+                        // Determine the size of the base type, if needed.
+                        ctx.layouter.update(ctx.module.to_ctx()).map_err(|err| {
+                            let LayoutErrorInner::TooLarge = err.inner else {
+                                unreachable!("unexpected layout error: {err:?}");
+                            };
+                            // Lots of type definitions don't get spans, so this error
+                            // message may not be very useful.
+                            Box::new(Error::TypeTooLarge {
+                                span: ctx.module.types.get_span(err.ty),
+                            })
+                        })?;
+                        let stride = ctx.layouter[base].to_stride();
+
+                        ir::TypeInner::Array { base, size, stride }
+                    }
+                    conv::TypeGenerator::Atomic => {
+                        let (scalar, _) = tl.scalar(self, ctx)?;
+                        ir::TypeInner::Atomic(scalar)
+                    }
+                    conv::TypeGenerator::Pointer => {
+                        let mut space = tl.address_space(ctx)?;
+                        let base = tl.ty(self, ctx)?;
+                        tl.maybe_access_mode(&mut space, ctx)?;
+                        ir::TypeInner::Pointer { base, space }
+                    }
+                    conv::TypeGenerator::SampledTexture {
+                        dim,
+                        arrayed,
+                        multi,
+                    } => {
+                        let (scalar, span) = tl.scalar(self, ctx)?;
+                        let ir::Scalar { kind, width } = scalar;
+                        if width != 4 {
+                            return Err(Box::new(Error::BadTextureSampleType { span, scalar }));
+                        }
+                        ir::TypeInner::Image {
+                            dim,
+                            arrayed,
+                            class: ir::ImageClass::Sampled { kind, multi },
+                        }
+                    }
+                    conv::TypeGenerator::StorageTexture { dim, arrayed } => {
+                        let format = tl.storage_format(ctx)?;
+                        let access = tl.access_mode(ctx)?;
+                        ir::TypeInner::Image {
+                            dim,
+                            arrayed,
+                            class: ir::ImageClass::Storage { format, access },
+                        }
+                    }
+                    conv::TypeGenerator::BindingArray => {
+                        let base = tl.ty(self, ctx)?;
+                        let size = tl.maybe_array_size(self, ctx)?;
+                        ir::TypeInner::BindingArray { base, size }
+                    }
+                    conv::TypeGenerator::AccelerationStructure => {
+                        let vertex_return = tl.maybe_vertex_return(ctx)?;
+                        ir::TypeInner::AccelerationStructure { vertex_return }
+                    }
+                    conv::TypeGenerator::RayQuery => {
+                        let vertex_return = tl.maybe_vertex_return(ctx)?;
+                        ir::TypeInner::RayQuery { vertex_return }
+                    }
+                    conv::TypeGenerator::CooperativeMatrix { columns, rows } => {
+                        let (ty, span) = tl.ty_with_span(self, ctx)?;
+                        let ir::TypeInner::Scalar(scalar) = ctx.module.types[ty].inner else {
+                            return Err(Box::new(Error::UnsupportedCooperativeScalar(span)));
+                        };
+                        let role = tl.cooperative_role(ctx)?;
+                        ir::TypeInner::CooperativeMatrix {
+                            columns,
+                            rows,
+                            scalar,
+                            role,
+                        }
+                    }
+                };
+                ctx.as_global().ensure_type_exists(None, ty_inner)
+            }
+        };
+        Ok(ty)
     }
 
     fn binary(
@@ -2743,23 +2887,32 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     /// [`Call`]: ir::Statement::Call
     fn call(
         &mut self,
+        call_phrase: &ast::CallPhrase<'source>,
         span: Span,
-        function: &ast::Ident<'source>,
-        arguments: &[Handle<ast::Expression<'source>>],
-        result_ty: Option<(Handle<ast::Type<'source>>, Span)>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
         is_statement: bool,
     ) -> Result<'source, Option<Handle<ir::Expression>>> {
-        let function_span = function.span;
-        match ctx.globals.get(function.name) {
+        let function_name = match call_phrase.function.ident {
+            ast::IdentExpr::Unresolved(name) => name,
+            ast::IdentExpr::Local(_) => {
+                return Err(Box::new(Error::CalledLocalDecl(
+                    call_phrase.function.ident_span,
+                )))
+            }
+        };
+        let mut function_span = call_phrase.function.ident_span;
+        function_span.subsume(call_phrase.function.template_list_span);
+        let arguments = call_phrase.arguments.as_slice();
+
+        let mut tl = TemplateListIter::new(function_span, &call_phrase.function.template_list);
+
+        match ctx.globals.get(function_name) {
             Some(&LoweredGlobalDecl::Type(ty)) => {
-                let handle = self.construct(
-                    span,
-                    &ast::ConstructorType::Type(ty),
-                    function_span,
-                    arguments,
-                    ctx,
-                )?;
+                // user-declared types can't make use of template lists
+                tl.finish(ctx)?;
+
+                let handle =
+                    self.construct(span, Constructor::Type(ty), function_span, arguments, ctx)?;
                 Ok(Some(handle))
             }
             Some(
@@ -2777,6 +2930,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 handle: function,
                 must_use,
             }) => {
+                // user-declared functions can't make use of template lists
+                tl.finish(ctx)?;
+
                 let arguments = arguments
                     .iter()
                     .enumerate()
@@ -2832,8 +2988,126 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Ok(result)
             }
             None => {
+                match function_name {
+                    "bitcast" => {
+                        let ty = tl.ty(self, ctx)?;
+                        tl.finish(ctx)?;
+
+                        let mut args = ctx.prepare_args(arguments, 1, function_span);
+                        let expr = self.expression(args.next()?, ctx)?;
+                        args.finish()?;
+
+                        let element_scalar = match ctx.module.types[ty].inner {
+                            ir::TypeInner::Scalar(scalar) => scalar,
+                            ir::TypeInner::Vector { scalar, .. } => scalar,
+                            _ => {
+                                let ty_resolution = resolve!(ctx, expr);
+                                return Err(Box::new(Error::BadTypeCast {
+                                    from_type: ctx.type_resolution_to_string(ty_resolution),
+                                    span: function_span,
+                                    to_type: ctx.type_to_string(ty),
+                                }));
+                            }
+                        };
+
+                        let expr = ir::Expression::As {
+                            expr,
+                            kind: element_scalar.kind,
+                            convert: None,
+                        };
+
+                        let expr = ctx.append_expression(expr, function_span)?;
+                        return Ok(Some(expr));
+                    }
+                    "coopLoad" | "coopLoadT" => {
+                        let row_major = function_name.ends_with("T");
+                        let (matrix_ty, matrix_span) = tl.ty_with_span(self, ctx)?;
+                        tl.finish(ctx)?;
+
+                        let mut args = ctx.prepare_args(arguments, 1, span);
+                        let pointer = self.expression(args.next()?, ctx)?;
+                        let (columns, rows, role) = match ctx.module.types[matrix_ty].inner {
+                            ir::TypeInner::CooperativeMatrix {
+                                columns,
+                                rows,
+                                role,
+                                ..
+                            } => (columns, rows, role),
+                            _ => {
+                                return Err(Box::new(Error::InvalidCooperativeLoadType(
+                                    matrix_span,
+                                )))
+                            }
+                        };
+                        let stride = if args.total_args > 1 {
+                            self.expression(args.next()?, ctx)?
+                        } else {
+                            // Infer the stride from the matrix type
+                            let stride = if row_major {
+                                columns as u32
+                            } else {
+                                rows as u32
+                            };
+                            ctx.append_expression(
+                                ir::Expression::Literal(ir::Literal::U32(stride)),
+                                Span::UNDEFINED,
+                            )?
+                        };
+                        args.finish()?;
+
+                        let expr = crate::Expression::CooperativeLoad {
+                            columns,
+                            rows,
+                            role,
+                            data: crate::CooperativeData {
+                                pointer,
+                                stride,
+                                row_major,
+                            },
+                        };
+                        let expr = ctx.append_expression(expr, function_span)?;
+                        return Ok(Some(expr));
+                    }
+                    _ => {}
+                }
+
+                let ty = conv::map_predeclared_type(
+                    &ctx.enable_extensions,
+                    function_span,
+                    function_name,
+                )?;
+                if let Some(ty) = ty {
+                    let empty_template_list = call_phrase.function.template_list.is_empty();
+                    let constructor_ty = match ty {
+                        conv::PredeclaredType::TypeGenerator(conv::TypeGenerator::Vector {
+                            size,
+                        }) if empty_template_list => Constructor::PartialVector { size },
+                        conv::PredeclaredType::TypeGenerator(conv::TypeGenerator::Matrix {
+                            columns,
+                            rows,
+                        }) if empty_template_list => Constructor::PartialMatrix { columns, rows },
+                        conv::PredeclaredType::TypeGenerator(conv::TypeGenerator::Array)
+                            if empty_template_list =>
+                        {
+                            Constructor::PartialArray
+                        }
+                        conv::PredeclaredType::TypeGenerator(
+                            conv::TypeGenerator::CooperativeMatrix { .. },
+                        ) if empty_template_list => {
+                            return Err(Box::new(Error::UnderspecifiedCooperativeMatrix));
+                        }
+                        _ => Constructor::Type(self.finalize_type(ctx, ty, &mut tl)?),
+                    };
+                    tl.finish(ctx)?;
+                    let handle =
+                        self.construct(span, constructor_ty, function_span, arguments, ctx)?;
+                    return Ok(Some(handle));
+                };
+
+                tl.finish(ctx)?;
+
                 let span = function_span;
-                let expr = if let Some(fun) = conv::map_relational_fun(function.name) {
+                let expr = if let Some(fun) = conv::map_relational_fun(function_name) {
                     let mut args = ctx.prepare_args(arguments, 1, span);
                     let argument = self.expression(args.next()?, ctx)?;
                     args.finish()?;
@@ -2857,28 +3131,28 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     } else {
                         ir::Expression::Relational { fun, argument }
                     }
-                } else if let Some((axis, ctrl)) = conv::map_derivative(function.name) {
+                } else if let Some((axis, ctrl)) = conv::map_derivative(function_name) {
                     let mut args = ctx.prepare_args(arguments, 1, span);
                     let expr = self.expression(args.next()?, ctx)?;
                     args.finish()?;
 
                     ir::Expression::Derivative { axis, ctrl, expr }
-                } else if let Some(fun) = conv::map_standard_fun(function.name) {
+                } else if let Some(fun) = conv::map_standard_fun(function_name) {
                     self.math_function_helper(span, fun, arguments, ctx)?
-                } else if let Some(fun) = Texture::map(function.name) {
+                } else if let Some(fun) = Texture::map(function_name) {
                     self.texture_sample_helper(fun, arguments, span, ctx)?
-                } else if let Some((op, cop)) = conv::map_subgroup_operation(function.name) {
+                } else if let Some((op, cop)) = conv::map_subgroup_operation(function_name) {
                     return Ok(Some(
                         self.subgroup_operation_helper(span, op, cop, arguments, ctx)?,
                     ));
-                } else if let Some(mode) = SubgroupGather::map(function.name) {
+                } else if let Some(mode) = SubgroupGather::map(function_name) {
                     return Ok(Some(
                         self.subgroup_gather_helper(span, mode, arguments, ctx)?,
                     ));
-                } else if let Some(fun) = ir::AtomicFunction::map(function.name) {
+                } else if let Some(fun) = ir::AtomicFunction::map(function_name) {
                     return self.atomic_helper(span, fun, arguments, is_statement, ctx);
                 } else {
-                    match function.name {
+                    match function_name {
                         "select" => {
                             let mut args = ctx.prepare_args(arguments, 3, span);
 
@@ -3054,7 +3328,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 image,
                                 coordinate,
                                 array_index,
-                                fun: match function.name {
+                                fun: match function_name {
                                     "textureAtomicMin" => ir::AtomicFunction::Min,
                                     "textureAtomicMax" => ir::AtomicFunction::Max,
                                     "textureAtomicAdd" => ir::AtomicFunction::Add,
@@ -3392,17 +3666,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 committed: false,
                             }
                         }
-                        "RayDesc" => {
-                            let ty = ctx.module.generate_ray_desc_type();
-                            let handle = self.construct(
-                                span,
-                                &ast::ConstructorType::Type(ty),
-                                function.span,
-                                arguments,
-                                ctx,
-                            )?;
-                            return Ok(Some(handle));
-                        }
                         "subgroupBallot" => {
                             let mut args = ctx.prepare_args(arguments, 0, span);
                             let predicate = if arguments.len() == 1 {
@@ -3488,53 +3751,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             );
                             return Ok(Some(result));
                         }
-                        "coopLoad" | "coopLoadT" => {
-                            let row_major = function.name.ends_with("T");
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-                            let pointer = self.expression(args.next()?, ctx)?;
-                            let (matrix_ty, matrix_span) = result_ty.expect("generic argument");
-                            let (columns, rows, role) = match ctx.types[matrix_ty] {
-                                ast::Type::CooperativeMatrix {
-                                    columns,
-                                    rows,
-                                    role,
-                                    ..
-                                } => (columns, rows, role),
-                                _ => {
-                                    return Err(Box::new(Error::InvalidCooperativeLoadType(
-                                        matrix_span,
-                                    )))
-                                }
-                            };
-                            let stride = if args.total_args > 1 {
-                                self.expression(args.next()?, ctx)?
-                            } else {
-                                // Infer the stride from the matrix type
-                                let stride = if row_major {
-                                    columns as u32
-                                } else {
-                                    rows as u32
-                                };
-                                ctx.append_expression(
-                                    ir::Expression::Literal(ir::Literal::U32(stride)),
-                                    Span::UNDEFINED,
-                                )?
-                            };
-                            args.finish()?;
-
-                            crate::Expression::CooperativeLoad {
-                                columns,
-                                rows,
-                                role,
-                                data: crate::CooperativeData {
-                                    pointer,
-                                    stride,
-                                    row_major,
-                                },
-                            }
-                        }
                         "coopStore" | "coopStoreT" => {
-                            let row_major = function.name.ends_with("T");
+                            let row_major = function_name.ends_with("T");
 
                             let mut args = ctx.prepare_args(arguments, 2, span);
                             let target = self.expression(args.next()?, ctx)?;
@@ -3584,7 +3802,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             ir::Expression::CooperativeMultiplyAdd { a, b, c }
                         }
                         _ => {
-                            return Err(Box::new(Error::UnknownIdent(function.span, function.name)))
+                            return Err(Box::new(Error::UnknownIdent(function_span, function_name)))
                         }
                     }
                 };
@@ -4334,6 +4552,46 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             }
             ast::ArraySize::Dynamic => ir::ArraySize::Dynamic,
         })
+    }
+
+    fn array_size2(
+        &mut self,
+        expr: Handle<ast::Expression<'source>>,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, ir::ArraySize> {
+        let span = ctx.ast_expressions.get_span(expr);
+        let const_ctx = &mut ctx.as_const();
+        let const_expr = self.expression(expr, const_ctx);
+        match const_expr {
+            Ok(value) => {
+                let len = const_ctx.get_const_val(value).map_err(|err| {
+                    Box::new(match err {
+                        proc::ConstValueError::NonConst | proc::ConstValueError::InvalidType => {
+                            Error::ExpectedConstExprConcreteIntegerScalar(span)
+                        }
+                        proc::ConstValueError::Negative => Error::ExpectedPositiveArrayLength(span),
+                    })
+                })?;
+                let size = NonZeroU32::new(len).ok_or(Error::ExpectedPositiveArrayLength(span))?;
+                Ok(ir::ArraySize::Constant(size))
+            }
+            Err(err) => {
+                if let Error::ConstantEvaluatorError(ref ty, _) = *err {
+                    match **ty {
+                        proc::ConstantEvaluatorError::OverrideExpr => {
+                            Ok(ir::ArraySize::Pending(self.array_size_override(
+                                expr,
+                                &mut ctx.as_global().as_override(),
+                                span,
+                            )?))
+                        }
+                        _ => Err(err),
+                    }
+                } else {
+                    Err(err)
+                }
+            }
+        }
     }
 
     fn array_size_override(

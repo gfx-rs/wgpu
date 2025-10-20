@@ -58,6 +58,34 @@ pub enum IdentExpr<'a> {
     Local(Handle<Local>),
 }
 
+#[derive(Debug)]
+pub struct TemplateElaboratedIdent<'a> {
+    pub ident: IdentExpr<'a>,
+    pub ident_span: Span,
+    pub template_list: Vec<Handle<Expression<'a>>>,
+    pub template_list_span: Span,
+}
+
+/// A function call or type constructor expression.
+///
+/// We can't tell whether an expression like `IDENTIFIER(EXPR, ...)` is a
+/// construction expression or a function call until we know `IDENTIFIER`'s
+/// definition, so we represent everything of that form as one of these
+/// expressions until lowering. At that point, [`Lowerer::call`] has
+/// everything's definition in hand, and can decide whether to emit a Naga
+/// [`Constant`], [`As`], [`Splat`], or [`Compose`] expression.
+///
+/// [`Lowerer::call`]: Lowerer::call
+/// [`Constant`]: crate::Expression::Constant
+/// [`As`]: crate::Expression::As
+/// [`Splat`]: crate::Expression::Splat
+/// [`Compose`]: crate::Expression::Compose
+#[derive(Debug)]
+pub struct CallPhrase<'a> {
+    pub function: TemplateElaboratedIdent<'a>,
+    pub arguments: Vec<Handle<Expression<'a>>>,
+}
+
 /// A reference to a module-scope definition or predeclared object.
 ///
 /// Each [`GlobalDecl`] holds a set of these values, to be resolved to
@@ -167,7 +195,7 @@ pub struct ResourceBinding<'a> {
 #[derive(Debug)]
 pub struct GlobalVariable<'a> {
     pub name: Ident<'a>,
-    pub template_list: Option<Vec<Handle<Expression<'a>>>>,
+    pub template_list: Vec<Handle<Expression<'a>>>,
     pub binding: Option<ResourceBinding<'a>>,
     pub ty: Option<Handle<Type<'a>>>,
     pub init: Option<Handle<Expression<'a>>>,
@@ -314,10 +342,7 @@ pub enum StatementKind<'a> {
         value: Option<Handle<Expression<'a>>>,
     },
     Kill,
-    Call {
-        function: Ident<'a>,
-        arguments: Vec<Handle<Expression<'a>>>,
-    },
+    Call(CallPhrase<'a>),
     Assign {
         target: Handle<Expression<'a>>,
         op: Option<crate::BinaryOperator>,
@@ -342,92 +367,6 @@ pub struct SwitchCase<'a> {
     pub fall_through: bool,
 }
 
-/// A type at the head of a [`Construct`] expression.
-///
-/// WGSL has two types of [`type constructor expressions`]:
-///
-/// - Those that fully specify the type being constructed, like
-///   `vec3<f32>(x,y,z)`, which obviously constructs a `vec3<f32>`.
-///
-/// - Those that leave the component type of the composite being constructed
-///   implicit, to be inferred from the argument types, like `vec3(x,y,z)`,
-///   which constructs a `vec3<T>` where `T` is the type of `x`, `y`, and `z`.
-///
-/// This enum represents the head type of both cases. The `PartialFoo` variants
-/// represent the second case, where the component type is implicit.
-///
-/// This does not cover structs or types referred to by type aliases. See the
-/// documentation for [`Construct`] and [`Call`] expressions for details.
-///
-/// [`Construct`]: Expression::Construct
-/// [`type constructor expressions`]: https://gpuweb.github.io/gpuweb/wgsl/#type-constructor-expr
-/// [`Call`]: Expression::Call
-#[derive(Debug)]
-pub enum ConstructorType<'a> {
-    /// A scalar type or conversion: `f32(1)`.
-    Scalar(Scalar),
-
-    /// A vector construction whose component type is inferred from the
-    /// argument: `vec3(1.0)`.
-    PartialVector { size: crate::VectorSize },
-
-    /// A vector construction whose component type is written out:
-    /// `vec3<f32>(1.0)`.
-    Vector {
-        size: crate::VectorSize,
-        ty: Handle<Type<'a>>,
-        ty_span: Span,
-    },
-
-    /// A matrix construction whose component type is inferred from the
-    /// argument: `mat2x2(1,2,3,4)`.
-    PartialMatrix {
-        columns: crate::VectorSize,
-        rows: crate::VectorSize,
-    },
-
-    /// A matrix construction whose component type is written out:
-    /// `mat2x2<f32>(1,2,3,4)`.
-    Matrix {
-        columns: crate::VectorSize,
-        rows: crate::VectorSize,
-        ty: Handle<Type<'a>>,
-        ty_span: Span,
-    },
-
-    /// A cooperative matrix construction base `coop_mat8x8(...)`.
-    PartialCooperativeMatrix {
-        columns: crate::CooperativeSize,
-        rows: crate::CooperativeSize,
-    },
-
-    /// A full cooperative matrix construction `coop_mat8x8<f32,A>(...)`.
-    CooperativeMatrix {
-        columns: crate::CooperativeSize,
-        rows: crate::CooperativeSize,
-        ty: Handle<Type<'a>>,
-        ty_span: Span,
-        role: crate::CooperativeRole,
-    },
-
-    /// An array whose component type and size are inferred from the arguments:
-    /// `array(3,4,5)`.
-    PartialArray,
-
-    /// An array whose component type and size are written out:
-    /// `array<u32, 4>(3,4,5)`.
-    Array {
-        base: Handle<Type<'a>>,
-        size: ArraySize<'a>,
-    },
-
-    /// Constructing a value of a known Naga IR type.
-    ///
-    /// This variant is produced only during lowering, when we have Naga types
-    /// available, never during parsing.
-    Type(Handle<crate::Type>),
-}
-
 #[derive(Debug, Copy, Clone)]
 pub enum Literal {
     Bool(bool),
@@ -440,27 +379,7 @@ use crate::front::wgsl::lower::Lowerer;
 #[derive(Debug)]
 pub enum Expression<'a> {
     Literal(Literal),
-    Ident(IdentExpr<'a>),
-
-    /// A type constructor expression.
-    ///
-    /// This is only used for expressions like `KEYWORD(EXPR...)` and
-    /// `KEYWORD<PARAM>(EXPR...)`, where `KEYWORD` is a [type-defining keyword] like
-    /// `vec3`. These keywords cannot be shadowed by user definitions, so we can
-    /// tell that such an expression is a construction immediately.
-    ///
-    /// For ordinary identifiers, we can't tell whether an expression like
-    /// `IDENTIFIER(EXPR, ...)` is a construction expression or a function call
-    /// until we know `IDENTIFIER`'s definition, so we represent those as
-    /// [`Call`] expressions.
-    ///
-    /// [type-defining keyword]: https://gpuweb.github.io/gpuweb/wgsl/#type-defining-keywords
-    /// [`Call`]: Expression::Call
-    Construct {
-        ty: ConstructorType<'a>,
-        ty_span: Span,
-        components: Vec<Handle<Expression<'a>>>,
-    },
+    Ident(TemplateElaboratedIdent<'a>),
     Unary {
         op: crate::UnaryOperator,
         expr: Handle<Expression<'a>>,
@@ -472,26 +391,7 @@ pub enum Expression<'a> {
         left: Handle<Expression<'a>>,
         right: Handle<Expression<'a>>,
     },
-
-    /// A function call or type constructor expression.
-    ///
-    /// We can't tell whether an expression like `IDENTIFIER(EXPR, ...)` is a
-    /// construction expression or a function call until we know `IDENTIFIER`'s
-    /// definition, so we represent everything of that form as one of these
-    /// expressions until lowering. At that point, [`Lowerer::call`] has
-    /// everything's definition in hand, and can decide whether to emit a Naga
-    /// [`Constant`], [`As`], [`Splat`], or [`Compose`] expression.
-    ///
-    /// [`Lowerer::call`]: Lowerer::call
-    /// [`Constant`]: crate::Expression::Constant
-    /// [`As`]: crate::Expression::As
-    /// [`Splat`]: crate::Expression::Splat
-    /// [`Compose`]: crate::Expression::Compose
-    Call {
-        function: Ident<'a>,
-        arguments: Vec<Handle<Expression<'a>>>,
-        result_ty: Option<(Handle<Type<'a>>, Span)>,
-    },
+    Call(CallPhrase<'a>),
     Index {
         base: Handle<Expression<'a>>,
         index: Handle<Expression<'a>>,
@@ -499,11 +399,6 @@ pub enum Expression<'a> {
     Member {
         base: Handle<Expression<'a>>,
         field: Ident<'a>,
-    },
-    Bitcast {
-        expr: Handle<Expression<'a>>,
-        to: Handle<Type<'a>>,
-        ty_span: Span,
     },
 }
 

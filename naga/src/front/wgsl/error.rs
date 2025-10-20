@@ -200,6 +200,7 @@ pub(crate) enum Error<'a> {
     ReservedIdentifierPrefix(Span),
     UnknownAddressSpace(Span),
     InvalidLocalVariableAddressSpace(Span),
+    UnknownRayFlag(Span),
     RepeatedAttribute(Span),
     UnknownAttribute(Span),
     UnknownBuiltin(Span),
@@ -276,6 +277,7 @@ pub(crate) enum Error<'a> {
         span: Span,
     },
     CalledEntryPoint(Span),
+    CalledLocalDecl(Span),
     WrongArgumentCount {
         span: Span,
         expected: Range<u32>,
@@ -422,6 +424,12 @@ pub(crate) enum Error<'a> {
     UnexpectedIdentForEnumerant(Span),
     UnexpectedExprForEnumerant(Span),
     UnusedArgsForTemplate(Vec<Span>),
+    UnexpectedTemplate(Span),
+    MissingTemplateArg {
+        span: Span,
+        arg: &'static str,
+    },
+    UnexpectedExprForTypeExpression(Span),
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -665,6 +673,11 @@ impl<'a> Error<'a> {
             Error::InvalidLocalVariableAddressSpace(bad_span) => ParseError {
                 message: format!("invalid address space for local variable: `{}`", &source[bad_span]),
                 labels: vec![(bad_span, "local variables can only use 'function' address space".into())],
+                notes: vec![],
+            },
+            Error::UnknownRayFlag(bad_span) => ParseError {
+                message: format!("unknown ray flag: `{}`", &source[bad_span]),
+                labels: vec![(bad_span, "unknown ray flag".into())],
                 notes: vec![],
             },
             Error::RepeatedAttribute(bad_span) => ParseError {
@@ -924,6 +937,11 @@ impl<'a> Error<'a> {
             Error::CalledEntryPoint(span) => ParseError {
                 message: "entry point cannot be called".to_string(),
                 labels: vec![(span, "entry point cannot be called".into())],
+                notes: vec![],
+            },
+            Error::CalledLocalDecl(span) => ParseError {
+                message: "local declaration cannot be called".to_string(),
+                labels: vec![(span, "local declaration cannot be called".into())],
                 notes: vec![],
             },
             Error::WrongArgumentCount {
@@ -1434,6 +1452,27 @@ impl<'a> Error<'a> {
                 labels: expr_spans.iter().cloned().map(|span| -> (_, _){ (span, "unused".into()) }).collect(),
                 notes: vec![],
             },
+            Error::UnexpectedTemplate(span) => ParseError {
+                message: "unexpected template".to_string(),
+                labels: vec![(span, "expected identifier".into())],
+                notes: vec![],
+            },
+            Error::MissingTemplateArg {
+                span,
+                arg,
+            } => ParseError {
+                message: format!(
+                    "`{}` needs a template argument specified: {arg}",
+                    &source[span]
+                ),
+                labels: vec![(span, "is missing a template argument".into())],
+                notes: vec![],
+            },
+            Error::UnexpectedExprForTypeExpression(expr_span) => ParseError {
+                message: "unexpected expression".to_string(),
+                labels: vec![(expr_span, "needs to be an identifier resolving to a type declaration (alias or struct) or predeclared type(-generator)".into())],
+                notes: vec![],
+            }
         }
     }
 }

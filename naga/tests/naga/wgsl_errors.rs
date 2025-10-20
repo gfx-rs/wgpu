@@ -248,11 +248,11 @@ fn type_not_constructible() {
                 _ = atomic<i32>(0);
             }
         "#,
-        r#"error: type `atomic` is not constructible
+        r#"error: type `atomic<i32>` is not constructible
   ┌─ wgsl:3:21
   │
 3 │                 _ = atomic<i32>(0);
-  │                     ^^^^^^ type is not constructible
+  │                     ^^^^^^^^^^^ type is not constructible
 
 "#,
     );
@@ -2883,7 +2883,7 @@ fn function_returns_void() {
   ┌─ wgsl:7:18
   │
 7 │             let a = x();
-  │                     ^
+  │                     ^^^
   │
   = note: perhaps you meant to call the function in a separate statement?
 
@@ -4582,7 +4582,7 @@ fn cooperative_matrix_enable_extension() {
   ┌─ wgsl:2:13
   │
 2 │     let a = {ty}<f32, A>();
-  │             {carets} the `wgpu_cooperative_matrix` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │             {carets}^^^^^^^^ the `wgpu_cooperative_matrix` "Enable Extension" is needed for this functionality, but it is not currently enabled.
   │
   = note: You can enable this extension by adding `enable wgpu_cooperative_matrix;` at the top of the shader, before any other items.
 

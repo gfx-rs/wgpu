@@ -366,396 +366,6 @@ impl Parser {
         Ok(ast::SwitchValue::Expr(expr))
     }
 
-    /// Decide if we're looking at a construction expression, and return its
-    /// type if so.
-    ///
-    /// If the identifier `word` is a [type-defining keyword], then return a
-    /// [`ConstructorType`] value describing the type to build. Return an error
-    /// if the type is not constructible (like `sampler`).
-    ///
-    /// If `word` isn't a type name, then return `None`.
-    ///
-    /// [type-defining keyword]: https://gpuweb.github.io/gpuweb/wgsl/#type-defining-keywords
-    /// [`ConstructorType`]: ast::ConstructorType
-    fn constructor_type<'a>(
-        &mut self,
-        lexer: &mut Lexer<'a>,
-        word: &'a str,
-        span: Span,
-        ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<'a, Option<ast::ConstructorType<'a>>> {
-        if let Some(scalar) = conv::get_scalar_type(&lexer.enable_extensions, span, word)? {
-            return Ok(Some(ast::ConstructorType::Scalar(scalar)));
-        }
-
-        let partial = match word {
-            "vec2" => ast::ConstructorType::PartialVector {
-                size: crate::VectorSize::Bi,
-            },
-            "vec2i" => {
-                return Ok(Some(ast::ConstructorType::Vector {
-                    size: crate::VectorSize::Bi,
-                    ty: ctx.new_scalar(Scalar::I32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "vec2u" => {
-                return Ok(Some(ast::ConstructorType::Vector {
-                    size: crate::VectorSize::Bi,
-                    ty: ctx.new_scalar(Scalar::U32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "vec2f" => {
-                return Ok(Some(ast::ConstructorType::Vector {
-                    size: crate::VectorSize::Bi,
-                    ty: ctx.new_scalar(Scalar::F32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "vec2h" => {
-                return Ok(Some(ast::ConstructorType::Vector {
-                    size: crate::VectorSize::Bi,
-                    ty: ctx.new_scalar(Scalar::F16),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "vec3" => ast::ConstructorType::PartialVector {
-                size: crate::VectorSize::Tri,
-            },
-            "vec3i" => {
-                return Ok(Some(ast::ConstructorType::Vector {
-                    size: crate::VectorSize::Tri,
-                    ty: ctx.new_scalar(Scalar::I32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "vec3u" => {
-                return Ok(Some(ast::ConstructorType::Vector {
-                    size: crate::VectorSize::Tri,
-                    ty: ctx.new_scalar(Scalar::U32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "vec3f" => {
-                return Ok(Some(ast::ConstructorType::Vector {
-                    size: crate::VectorSize::Tri,
-                    ty: ctx.new_scalar(Scalar::F32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "vec3h" => {
-                return Ok(Some(ast::ConstructorType::Vector {
-                    size: crate::VectorSize::Tri,
-                    ty: ctx.new_scalar(Scalar::F16),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "vec4" => ast::ConstructorType::PartialVector {
-                size: crate::VectorSize::Quad,
-            },
-            "vec4i" => {
-                return Ok(Some(ast::ConstructorType::Vector {
-                    size: crate::VectorSize::Quad,
-                    ty: ctx.new_scalar(Scalar::I32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "vec4u" => {
-                return Ok(Some(ast::ConstructorType::Vector {
-                    size: crate::VectorSize::Quad,
-                    ty: ctx.new_scalar(Scalar::U32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "vec4f" => {
-                return Ok(Some(ast::ConstructorType::Vector {
-                    size: crate::VectorSize::Quad,
-                    ty: ctx.new_scalar(Scalar::F32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "vec4h" => {
-                return Ok(Some(ast::ConstructorType::Vector {
-                    size: crate::VectorSize::Quad,
-                    ty: ctx.new_scalar(Scalar::F16),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat2x2" => ast::ConstructorType::PartialMatrix {
-                columns: crate::VectorSize::Bi,
-                rows: crate::VectorSize::Bi,
-            },
-            "mat2x2f" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Bi,
-                    rows: crate::VectorSize::Bi,
-                    ty: ctx.new_scalar(Scalar::F32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat2x2h" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Bi,
-                    rows: crate::VectorSize::Bi,
-                    ty: ctx.new_scalar(Scalar::F16),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat2x3" => ast::ConstructorType::PartialMatrix {
-                columns: crate::VectorSize::Bi,
-                rows: crate::VectorSize::Tri,
-            },
-            "mat2x3f" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Bi,
-                    rows: crate::VectorSize::Tri,
-                    ty: ctx.new_scalar(Scalar::F32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat2x3h" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Bi,
-                    rows: crate::VectorSize::Tri,
-                    ty: ctx.new_scalar(Scalar::F16),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat2x4" => ast::ConstructorType::PartialMatrix {
-                columns: crate::VectorSize::Bi,
-                rows: crate::VectorSize::Quad,
-            },
-            "mat2x4f" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Bi,
-                    rows: crate::VectorSize::Quad,
-                    ty: ctx.new_scalar(Scalar::F32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat2x4h" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Bi,
-                    rows: crate::VectorSize::Quad,
-                    ty: ctx.new_scalar(Scalar::F16),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat3x2" => ast::ConstructorType::PartialMatrix {
-                columns: crate::VectorSize::Tri,
-                rows: crate::VectorSize::Bi,
-            },
-            "mat3x2f" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Tri,
-                    rows: crate::VectorSize::Bi,
-                    ty: ctx.new_scalar(Scalar::F32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat3x2h" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Tri,
-                    rows: crate::VectorSize::Bi,
-                    ty: ctx.new_scalar(Scalar::F16),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat3x3" => ast::ConstructorType::PartialMatrix {
-                columns: crate::VectorSize::Tri,
-                rows: crate::VectorSize::Tri,
-            },
-            "mat3x3f" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Tri,
-                    rows: crate::VectorSize::Tri,
-                    ty: ctx.new_scalar(Scalar::F32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat3x3h" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Tri,
-                    rows: crate::VectorSize::Tri,
-                    ty: ctx.new_scalar(Scalar::F16),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat3x4" => ast::ConstructorType::PartialMatrix {
-                columns: crate::VectorSize::Tri,
-                rows: crate::VectorSize::Quad,
-            },
-            "mat3x4f" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Tri,
-                    rows: crate::VectorSize::Quad,
-                    ty: ctx.new_scalar(Scalar::F32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat3x4h" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Tri,
-                    rows: crate::VectorSize::Quad,
-                    ty: ctx.new_scalar(Scalar::F16),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat4x2" => ast::ConstructorType::PartialMatrix {
-                columns: crate::VectorSize::Quad,
-                rows: crate::VectorSize::Bi,
-            },
-            "mat4x2f" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Quad,
-                    rows: crate::VectorSize::Bi,
-                    ty: ctx.new_scalar(Scalar::F32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat4x2h" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Quad,
-                    rows: crate::VectorSize::Bi,
-                    ty: ctx.new_scalar(Scalar::F16),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat4x3" => ast::ConstructorType::PartialMatrix {
-                columns: crate::VectorSize::Quad,
-                rows: crate::VectorSize::Tri,
-            },
-            "mat4x3f" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Quad,
-                    rows: crate::VectorSize::Tri,
-                    ty: ctx.new_scalar(Scalar::F32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat4x3h" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Quad,
-                    rows: crate::VectorSize::Tri,
-                    ty: ctx.new_scalar(Scalar::F16),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat4x4" => ast::ConstructorType::PartialMatrix {
-                columns: crate::VectorSize::Quad,
-                rows: crate::VectorSize::Quad,
-            },
-            "mat4x4f" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Quad,
-                    rows: crate::VectorSize::Quad,
-                    ty: ctx.new_scalar(Scalar::F32),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "mat4x4h" => {
-                return Ok(Some(ast::ConstructorType::Matrix {
-                    columns: crate::VectorSize::Quad,
-                    rows: crate::VectorSize::Quad,
-                    ty: ctx.new_scalar(Scalar::F16),
-                    ty_span: Span::UNDEFINED,
-                }))
-            }
-            "coop_mat8x8" => {
-                lexer.require_enable_extension(
-                    ImplementedEnableExtension::WgpuCooperativeMatrix,
-                    span,
-                )?;
-                ast::ConstructorType::PartialCooperativeMatrix {
-                    columns: crate::CooperativeSize::Eight,
-                    rows: crate::CooperativeSize::Eight,
-                }
-            }
-            "coop_mat16x16" => {
-                lexer.require_enable_extension(
-                    ImplementedEnableExtension::WgpuCooperativeMatrix,
-                    span,
-                )?;
-                ast::ConstructorType::PartialCooperativeMatrix {
-                    columns: crate::CooperativeSize::Sixteen,
-                    rows: crate::CooperativeSize::Sixteen,
-                }
-            }
-            "array" => ast::ConstructorType::PartialArray,
-            "atomic"
-            | "binding_array"
-            | "sampler"
-            | "sampler_comparison"
-            | "texture_1d"
-            | "texture_1d_array"
-            | "texture_2d"
-            | "texture_2d_array"
-            | "texture_3d"
-            | "texture_cube"
-            | "texture_cube_array"
-            | "texture_multisampled_2d"
-            | "texture_multisampled_2d_array"
-            | "texture_depth_2d"
-            | "texture_depth_2d_array"
-            | "texture_depth_cube"
-            | "texture_depth_cube_array"
-            | "texture_depth_multisampled_2d"
-            | "texture_external"
-            | "texture_storage_1d"
-            | "texture_storage_1d_array"
-            | "texture_storage_2d"
-            | "texture_storage_2d_array"
-            | "texture_storage_3d" => return Err(Box::new(Error::TypeNotConstructible(span))),
-            _ => return Ok(None),
-        };
-
-        // parse component type if present
-        match (lexer.peek().0, partial) {
-            (Token::TemplateArgsStart, ast::ConstructorType::PartialVector { size }) => {
-                let (ty, ty_span) = self.singular_generic(lexer, ctx)?;
-                Ok(Some(ast::ConstructorType::Vector { size, ty, ty_span }))
-            }
-            (Token::TemplateArgsStart, ast::ConstructorType::PartialMatrix { columns, rows }) => {
-                let (ty, ty_span) = self.singular_generic(lexer, ctx)?;
-                Ok(Some(ast::ConstructorType::Matrix {
-                    columns,
-                    rows,
-                    ty,
-                    ty_span,
-                }))
-            }
-            (
-                Token::TemplateArgsStart,
-                ast::ConstructorType::PartialCooperativeMatrix { columns, rows },
-            ) => {
-                let (ty, ty_span, role) = self.cooperative_scalar_and_role(lexer, ctx)?;
-                Ok(Some(ast::ConstructorType::CooperativeMatrix {
-                    columns,
-                    rows,
-                    ty,
-                    ty_span,
-                    role,
-                }))
-            }
-            (Token::TemplateArgsStart, ast::ConstructorType::PartialArray) => {
-                lexer.expect(Token::TemplateArgsStart)?;
-                let base = self.type_specifier(lexer, ctx)?;
-                let size = if lexer.end_of_generic_arguments() {
-                    let expr = self.const_generic_expression(lexer, ctx)?;
-                    lexer.next_if(Token::Separator(','));
-                    ast::ArraySize::Constant(expr)
-                } else {
-                    ast::ArraySize::Dynamic
-                };
-                lexer.expect(Token::TemplateArgsEnd)?;
-
-                Ok(Some(ast::ConstructorType::Array { base, size }))
-            }
-            (_, partial) => Ok(Some(partial)),
-        }
-    }
-
     /// Expects `name` to be consumed (not in lexer).
     fn arguments<'a>(
         &mut self,
@@ -789,57 +399,6 @@ impl Parser {
         self.push_rule_span(Rule::EnclosedExpr, lexer);
         let expr = self.expression(lexer, ctx)?;
         self.pop_rule_span(lexer);
-        Ok(expr)
-    }
-
-    /// Expects `name` to be consumed (not in lexer).
-    fn call_expression<'a>(
-        &mut self,
-        lexer: &mut Lexer<'a>,
-        name: &'a str,
-        name_span: Span,
-        ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<'a, Handle<ast::Expression<'a>>> {
-        let expr = match name {
-            // bitcast looks like a function call, but it's an operator and must be handled differently.
-            "bitcast" => {
-                let (to, span) = self.singular_generic(lexer, ctx)?;
-
-                lexer.open_arguments()?;
-                let expr = self.expression(lexer, ctx)?;
-                lexer.close_arguments()?;
-
-                ast::Expression::Bitcast {
-                    expr,
-                    to,
-                    ty_span: span,
-                }
-            }
-            // everything else must be handled later, since they can be hidden by user-defined functions.
-            _ => {
-                let result_ty = if lexer.peek().0 == Token::TemplateArgsStart {
-                    Some(self.singular_generic(lexer, ctx)?)
-                } else {
-                    None
-                };
-                let arguments = self.arguments(lexer, ctx)?;
-                ctx.unresolved.insert(ast::Dependency {
-                    ident: name,
-                    usage: name_span,
-                });
-                ast::Expression::Call {
-                    function: ast::Ident {
-                        name,
-                        span: name_span,
-                    },
-                    arguments,
-                    result_ty,
-                }
-            }
-        };
-
-        let span = lexer.span_with_start(name_span);
-        let expr = ctx.expressions.append(expr, span);
         Ok(expr)
     }
 
@@ -938,22 +497,19 @@ impl Parser {
                 literal_ray_intersection(crate::RayQueryIntersection::Aabb)
             }
             (Token::Word(word), span) => {
-                if let Some(ty) = self.constructor_type(lexer, word, span, ctx)? {
-                    let ty_span = lexer.span_with_start(span);
-                    let components = self.arguments(lexer, ctx)?;
-                    ast::Expression::Construct {
-                        ty,
-                        ty_span,
-                        components,
-                    }
-                } else if let Token::Paren('(') = lexer.peek().0 {
-                    self.pop_rule_span(lexer);
-                    return self.call_expression(lexer, word, span, ctx);
-                } else if ["bitcast", "coopLoad"].contains(&word) {
-                    self.pop_rule_span(lexer);
-                    return self.call_expression(lexer, word, span, ctx);
+                let ident = self.template_elaborated_ident(word, span, lexer, ctx)?;
+
+                if let Token::Paren('(') = lexer.peek().0 {
+                    let arguments = self.arguments(lexer, ctx)?;
+                    ctx.unresolved.insert(ast::Dependency {
+                        ident: word,
+                        usage: span,
+                    });
+                    ast::Expression::Call(ast::CallPhrase {
+                        function: ident,
+                        arguments,
+                    })
                 } else {
-                    let ident = self.ident_expr(word, span, ctx);
                     ast::Expression::Ident(ident)
                 }
             }
@@ -1117,6 +673,12 @@ impl Parser {
                 }
                 (Token::Word(word), span) => {
                     let ident = this.ident_expr(word, span, ctx);
+                    let ident = ast::TemplateElaboratedIdent {
+                        ident,
+                        ident_span: span,
+                        template_list: Vec::new(),
+                        template_list_span: Span::UNDEFINED,
+                    };
                     let ident = ctx.expressions.append(ast::Expression::Ident(ident), span);
                     this.component_or_swizzle_specifier(span, lexer, ctx, ident)?
                 }
@@ -1330,7 +892,7 @@ impl Parser {
         ctx: &mut ExpressionContext<'a, '_, '_>,
     ) -> Result<'a, ast::GlobalVariable<'a>> {
         self.push_rule_span(Rule::VariableDecl, lexer);
-        let template_list = self.maybe_template_list(lexer, ctx)?;
+        let (template_list, _) = self.maybe_template_list(lexer, ctx)?;
         let (name, ty) = self.optionally_typed_ident(lexer, ctx)?;
 
         let init = if lexer.next_if(Token::Operation('=')) {
@@ -1429,7 +991,8 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
-    ) -> Result<'a, Option<Vec<Handle<ast::Expression<'a>>>>> {
+    ) -> Result<'a, (Vec<Handle<ast::Expression<'a>>>, Span)> {
+        let start = lexer.start_byte_offset();
         if lexer.next_if(Token::TemplateArgsStart) {
             let mut args = Vec::new();
             args.push(self.expression(lexer, ctx)?);
@@ -1437,10 +1000,28 @@ impl Parser {
                 args.push(self.expression(lexer, ctx)?);
             }
             lexer.expect(Token::TemplateArgsEnd)?;
-            Ok(Some(args))
+            let span = lexer.span_from(start);
+            Ok((args, span))
         } else {
-            Ok(None)
+            Ok((Vec::new(), Span::UNDEFINED))
         }
+    }
+
+    fn template_elaborated_ident<'a>(
+        &mut self,
+        word: &'a str,
+        span: Span,
+        lexer: &mut Lexer<'a>,
+        ctx: &mut ExpressionContext<'a, '_, '_>,
+    ) -> Result<'a, ast::TemplateElaboratedIdent<'a>> {
+        let ident = self.ident_expr(word, span, ctx);
+        let (template_list, template_list_span) = self.maybe_template_list(lexer, ctx)?;
+        Ok(ast::TemplateElaboratedIdent {
+            ident,
+            ident_span: span,
+            template_list,
+            template_list_span,
+        })
     }
 
     /// Parses `<T>`, returning T and span of T
@@ -2145,38 +1726,44 @@ impl Parser {
     }
 
     /// Parse a function call statement.
-    /// Expects `ident` to be consumed (not in the lexer).
-    fn func_call_statement<'a>(
+    /// Expects `token` to be consumed (not in the lexer).
+    fn maybe_func_call_statement<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        ident: &'a str,
-        ident_span: Span,
         context: &mut ExpressionContext<'a, '_, '_>,
         block: &mut ast::Block<'a>,
-    ) -> Result<'a, ()> {
+        token: TokenSpan<'a>,
+    ) -> Result<'a, bool> {
+        let (name, name_span) = match token {
+            (Token::Word(name), span) => (name, span),
+            _ => return Ok(false),
+        };
+        let ident = self.template_elaborated_ident(name, name_span, lexer, context)?;
+        if ident.template_list.is_empty() && !matches!(lexer.peek(), (Token::Paren('('), _)) {
+            return Ok(false);
+        }
+
         self.push_rule_span(Rule::SingularExpr, lexer);
 
         context.unresolved.insert(ast::Dependency {
-            ident,
-            usage: ident_span,
+            ident: name,
+            usage: name_span,
         });
+
         let arguments = self.arguments(lexer, context)?;
-        let span = lexer.span_with_start(ident_span);
+        let span = lexer.span_with_start(name_span);
 
         block.stmts.push(ast::Statement {
-            kind: ast::StatementKind::Call {
-                function: ast::Ident {
-                    name: ident,
-                    span: ident_span,
-                },
+            kind: ast::StatementKind::Call(ast::CallPhrase {
+                function: ident,
                 arguments,
-            },
+            }),
             span,
         });
 
         self.pop_rule_span(lexer);
 
-        Ok(())
+        Ok(true)
     }
 
     /// Parses func_call_statement and variable_updating_statement
@@ -2187,12 +1774,10 @@ impl Parser {
         block: &mut ast::Block<'a>,
         token: TokenSpan<'a>,
     ) -> Result<'a, ()> {
-        match token {
-            (Token::Word(name), span) if matches!(lexer.peek(), (Token::Paren('('), _)) => {
-                self.func_call_statement(lexer, name, span, context, block)
-            }
-            token => self.variable_updating_statement(lexer, context, block, token),
+        if !self.maybe_func_call_statement(lexer, context, block, token)? {
+            self.variable_updating_statement(lexer, context, block, token)?;
         }
+        Ok(())
     }
 
     /// Parses variable_or_value_statement, func_call_statement and variable_updating_statement.
@@ -3239,7 +2824,7 @@ impl Parser {
             }
         }
 
-        lexer.enable_extensions = enable_extensions.clone();
+        lexer.enable_extensions = enable_extensions;
         tu.enable_extensions = enable_extensions;
         tu.diagnostic_filter_leaf =
             Self::write_diagnostic_filters(&mut tu.diagnostic_filters, diagnostic_filters, None);

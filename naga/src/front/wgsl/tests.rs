@@ -975,4 +975,102 @@ error: unused expressions for template
 ",
         );
     }
+
+    #[test]
+    fn unused_template_list_for_fn() {
+        assert_parse_err(
+            "
+fn inner_test() {}
+fn test() {
+    inner_test<unused_template_arg>();
+}
+",
+            "\
+error: unused expressions for template
+  ┌─ wgsl:4:16
+  │
+4 │     inner_test<unused_template_arg>();
+  │                ^^^^^^^^^^^^^^^^^^^ unused
+
+",
+        );
+    }
+
+    #[test]
+    fn unused_template_list_for_struct() {
+        assert_parse_err(
+            "
+struct test_struct {}
+fn test() {
+    _ = test_struct<unused_template_arg>();
+}
+",
+            "\
+error: unused expressions for template
+  ┌─ wgsl:4:21
+  │
+4 │     _ = test_struct<unused_template_arg>();
+  │                     ^^^^^^^^^^^^^^^^^^^ unused
+
+",
+        );
+    }
+
+    #[test]
+    fn unused_template_list_for_alias() {
+        assert_parse_err(
+            "
+alias test_alias = f32;
+fn test() {
+    _ = test_alias<unused_template_arg>();
+}
+",
+            "\
+error: unused expressions for template
+  ┌─ wgsl:4:20
+  │
+4 │     _ = test_alias<unused_template_arg>();
+  │                    ^^^^^^^^^^^^^^^^^^^ unused
+
+",
+        );
+    }
+
+    #[test]
+    fn unexpected_template() {
+        assert_parse_err(
+            "
+fn vertex() -> vec4<f32> {
+    return vec4<f32>;
+}
+",
+            "\
+error: unexpected template
+  ┌─ wgsl:3:12
+  │
+3 │     return vec4<f32>;
+  │            ^^^^^^^^^ expected identifier
+
+",
+        );
+    }
+
+    #[test]
+    fn expected_template_arg() {
+        assert_parse_err(
+            "
+fn test() {
+    bitcast(8);
+}
+",
+            "\
+error: `bitcast` needs a template argument specified: `T`, a type
+  ┌─ wgsl:3:5
+  │
+3 │     bitcast(8);
+  │     ^^^^^^^ is missing a template argument
+
+",
+        );
+    }
 }
