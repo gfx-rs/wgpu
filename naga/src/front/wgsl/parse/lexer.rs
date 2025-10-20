@@ -43,6 +43,21 @@ struct UnclosedCandidate {
     depth: usize,
 }
 
+/// Implements the [Template list discovery algorithm] but does so lazily and
+/// after tokenization.
+///
+/// It starts tokenizing `input` in a loop and stops once the first potential
+/// template list encontered has been disambiguated; populating the `tokens`
+/// buffer in the process.
+///
+/// Parameters
+///
+/// - `tokens` is expected to be an empty buffer of tokens that this function populates.
+/// - `source` is the whole original source code.
+/// - `input` is the remaining unconsumed source code.
+/// - `ignore_doc_comments` determines if doc comments are treated as [`Token::Trivia`].
+///
+/// [Template list discovery algorithm]: https://www.w3.org/TR/WGSL/#template-list-discovery
 fn consume_tokens<'a>(
     tokens: &mut Vec<(TokenSpan<'a>, &'a str)>,
     source: &'a str,
@@ -127,21 +142,10 @@ fn consume_tokens<'a>(
 
 /// Return the token at the start of `input`.
 ///
-/// If `generic` is `false`, then the bit shift operators `>>` or `<<`
-/// are valid lookahead tokens for the current parser state (see [§3.1
-/// Parsing] in the WGSL specification). In other words:
-///
-/// -   If `generic` is `true`, then we are expecting an angle bracket
-///     around a generic type parameter, like the `<` and `>` in
-///     `vec3<f32>`, so interpret `<` and `>` as `Token::Paren` tokens,
-///     even if they're part of `<<` or `>>` sequences.
-///
-/// -   Otherwise, interpret `<<` and `>>` as shift operators:
-///     `Token::LogicalOperation` tokens.
+/// If `waiting_for_template_end` is `true` and the current token is `>`, then
+/// [`Token::TemplateArgsEnd`] is returned instead of `>`, `>>`, `>=` or `>>=`.
 ///
 /// If `ignore_doc_comments` is true, doc comments are treated as [`Token::Trivia`].
-///
-/// [§3.1 Parsing]: https://gpuweb.github.io/gpuweb/wgsl/#parsing
 fn consume_token(
     input: &str,
     waiting_for_template_end: bool,
