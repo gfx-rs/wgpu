@@ -2094,6 +2094,7 @@ impl Writer {
                             "`barycentric` built-in",
                             &[spirv::Capability::FragmentBarycentricKHR],
                         )?;
+                        self.use_extension("SPV_KHR_fragment_shader_barycentric");
                         BuiltIn::BaryCoordKHR
                     }
                     Bi::SampleIndex => {

@@ -1,0 +1,4 @@
+god_mode = true
+
+[msl]
+lang_version = [2, 3]

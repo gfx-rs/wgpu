@@ -83,6 +83,7 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::GroupNonUniformShuffleRelative,
     spirv::Capability::RuntimeDescriptorArray,
     spirv::Capability::StorageImageMultisample,
+    spirv::Capability::FragmentBarycentricKHR,
     // tricky ones
     spirv::Capability::UniformBufferArrayDynamicIndexing,
     spirv::Capability::StorageBufferArrayDynamicIndexing,
