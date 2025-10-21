@@ -42,6 +42,8 @@ Bottom level categories:
 
 ## v26.0.5 (2025-10-21)
 
+This release includes `wgpu-hal` version `26.0.5`. All other crates remain at their previous versions.
+
 ### Bug Fixes
 
 #### DX12
