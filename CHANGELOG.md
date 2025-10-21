@@ -53,7 +53,7 @@ BREAKING CHANGE: `enumerate_adapters` is now `async`:
 
 This yields ([kek]) two benefits:
 
-- This method is now implemented on non-native using the standard `Adapter::request_adapter(…)`, making `enumerate_adapters` a portable surface. This was previous a nontrivial pain point when an application wanted to do some of its own filtering of adapters.
+- This method is now implemented on non-native using the standard `Adapter::request_adapter(…)`, making `enumerate_adapters` a portable surface. This was previously a nontrivial pain point when an application wanted to do some of its own filtering of adapters.
 - This method can now be implemented in custom backends.
 
 By @R-Cramer4 in [#8230](https://github.com/gfx-rs/wgpu/pull/8230)
@@ -80,10 +80,9 @@ SamplerDescriptor {
 
 ### Bug Fixes
 
-- Fixed bug where mapping sub-ranges of a buffer on web would fail with `OperationError: GPUBuffer.getMappedRange: GetMappedRange range extends beyond buffer's mapped range`. By @ryankaplan in [#8349](https://github.com/gfx-rs/wgpu/pull/8349)
-
 #### General
 
+- Fixed a bug where mapping sub-ranges of a buffer on web would fail with `OperationError: GPUBuffer.getMappedRange: GetMappedRange range extends beyond buffer's mapped range`. By @ryankaplan in [#8349](https://github.com/gfx-rs/wgpu/pull/8349)
 - Reject fragment shader output `location`s > `max_color_attachments` limit. By @ErichDonGubler in [#8316](https://github.com/gfx-rs/wgpu/pull/8316).
 - WebGPU device requests now support the required limits `maxColorAttachments` and `maxColorAttachmentBytesPerSample`. By @evilpie in [#8328](https://github.com/gfx-rs/wgpu/pull/8328)
 - Reject binding indices that exceed `wgpu_types::Limits::max_bindings_per_bind_group` when deriving a bind group layout for a pipeline. By @jimblandy in [#8325](https://github.com/gfx-rs/wgpu/pull/8325).
@@ -488,7 +487,7 @@ By @Vecvec in [#7829](https://github.com/gfx-rs/wgpu/pull/7829).
 #### naga
 
 - naga now infers the correct binding layout when a resource appears only in an assignment to `_`. By @andyleiserson in [#7540](https://github.com/gfx-rs/wgpu/pull/7540).
-- Implement `dot4U8Packed` and `dot4I8Packed` for all backends, using specialized intrinsics on SPIR-V, HSLS, and Metal if available, and polyfills everywhere else. By @robamler in [#7494](https://github.com/gfx-rs/wgpu/pull/7494), [#7574](https://github.com/gfx-rs/wgpu/pull/7574), and [#7653](https://github.com/gfx-rs/wgpu/pull/7653).
+- Implement `dot4U8Packed` and `dot4I8Packed` for all backends, using specialized intrinsics on SPIR-V, HLSL, and Metal if available, and polyfills everywhere else. By @robamler in [#7494](https://github.com/gfx-rs/wgpu/pull/7494), [#7574](https://github.com/gfx-rs/wgpu/pull/7574), and [#7653](https://github.com/gfx-rs/wgpu/pull/7653).
 - Add polyfilled `pack4x{I,U}8Clamped` built-ins to all backends and WGSL frontend. By @ErichDonGubler in [#7546](https://github.com/gfx-rs/wgpu/pull/7546).
 - Allow textureLoad's sample index arg to be unsigned. By @jimblandy in [#7625](https://github.com/gfx-rs/wgpu/pull/7625).
 - Properly convert arguments to atomic operations. By @jimblandy in [#7573](https://github.com/gfx-rs/wgpu/pull/7573).
