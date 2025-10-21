@@ -74,7 +74,8 @@ Day of Release:
 - Once the PR is CI clean, (force) rebase merge it.
 - Checkout the release branch with the merged PR.
 - Publish all relevant crates (see list above).
-- Create a new release on the `wgpu` repo with the changelog and a tag called `vX.Y.Z` on the release branch.
+- Create a new release on the `wgpu` repo with the relevant changelog included, based on a new tag called `vX.Y.Z` in the release branch.
+  - For each crate released, also create a tag `{crate_name}-vX.Y.Z`.
 - Backport the changelog and version bumps to the `trunk` branch.
   - Ensure that any items in the newly-released changelog don't appear in the "unreleased" section of the trunk changelog.
 - Update the release checklist with any needed changes.
