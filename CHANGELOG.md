@@ -80,6 +80,10 @@ SamplerDescriptor {
 
 ### Bug Fixes
 
+#### naga
+
+- Fix a bug that resulted in the Metal error `program scope variable must reside in constant address space` in some cases. By @teoxoy in [#8311](https://github.com/gfx-rs/wgpu/pull/8311).
+
 #### General
 
 - Fixed a bug where mapping sub-ranges of a buffer on web would fail with `OperationError: GPUBuffer.getMappedRange: GetMappedRange range extends beyond buffer's mapped range`. By @ryankaplan in [#8349](https://github.com/gfx-rs/wgpu/pull/8349)
