@@ -40,11 +40,13 @@ Bottom level categories:
 
 ## Unreleased
 
+## v26.0.5 (2025-10-21)
+
 ### Bug Fixes
 
 #### DX12
 
-- Align copies b/w textures and buffers via a single intermediate buffer per copy when `D3D12_FEATURE_DATA_D3D12_OPTIONS13.UnrestrictedBufferTextureCopyPitchSupported` is `false`. By @ErichDonGubler in [#7721](https://github.com/gfx-rs/wgpu/pull/7721).
+- Align copies b/w textures and buffers via a single intermediate buffer per copy when `D3D12_FEATURE_DATA_D3D12_OPTIONS13.UnrestrictedBufferTextureCopyPitchSupported` is `false`. By @ErichDonGubler in [#7721](https://github.com/gfx-rs/wgpu/pull/7721), backported in [#8375](https://github.com/gfx-rs/wgpu/pull/8375).
 
 ## v26.0.4 (2025-08-07)
 
