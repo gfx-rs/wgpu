@@ -40,6 +40,7 @@ Day of Release:
   ```
 - If there were any newly published crates, ensure `github:gfx-rs/wgpu` is added as an owner of that crate.
 - Create a new tag called `vX.Y.Z` and push it to the repo.
+  - For each crate being released (viz., every `publish`-able crate that is not `deno*`), create a new tag of the form `{crate_name}-vX.Y.X`.
 - Create a new release on the `wgpu` repo with the changelog from this version, targeting that tag
 - Create a branch with the with the new version `vX` and push it to the repo.
   - On this branch, remove the [!NOTE] at the top of [wgpu/examples/README.md].
