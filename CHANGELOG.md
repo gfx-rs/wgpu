@@ -40,6 +40,10 @@ Bottom level categories:
 
 ## Unreleased
 
+## v27.0.3 (2025-10-22)
+
+This release includes `naga`, `wgpu-core` and `wgpu-hal` version `27.0.3`. All other crates remain at their previous versions.
+
 ### Bug Fixes
 
 #### naga
