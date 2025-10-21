@@ -75,14 +75,27 @@ pub(super) fn contains_builtin(
 }
 
 impl crate::AddressSpace {
+    /// The base semantic (ACQUIRE, RELEASE, ACQUIRE_RELEASE) must be supplied
     pub(super) const fn to_spirv_semantics_and_scope(
         self,
+        semantic: spirv::MemorySemantics,
     ) -> (spirv::MemorySemantics, spirv::Scope) {
         match self {
-            Self::Storage { .. } => (spirv::MemorySemantics::UNIFORM_MEMORY, spirv::Scope::Device),
+            Self::Storage { .. } => (
+                spirv::MemorySemantics::UNIFORM_MEMORY.union(semantic),
+                spirv::Scope::Device,
+            ),
             Self::WorkGroup => (
-                spirv::MemorySemantics::WORKGROUP_MEMORY,
+                spirv::MemorySemantics::WORKGROUP_MEMORY.union(semantic),
                 spirv::Scope::Workgroup,
+            ),
+            Self::Uniform => (
+                spirv::MemorySemantics::UNIFORM_MEMORY.union(semantic),
+                spirv::Scope::Device,
+            ),
+            Self::Handle => (
+                spirv::MemorySemantics::IMAGE_MEMORY.union(semantic),
+                spirv::Scope::Device,
             ),
             _ => (spirv::MemorySemantics::empty(), spirv::Scope::Invocation),
         }

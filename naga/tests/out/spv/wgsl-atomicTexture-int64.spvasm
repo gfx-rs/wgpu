@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 31
+; Bound: 32
 OpCapability Shader
 OpCapability Int64ImageEXT
 OpCapability Int64
@@ -31,9 +31,10 @@ OpDecorate %12 BuiltIn LocalInvocationId
 %20 = OpConstant  %4  1
 %22 = OpTypePointer Image %4
 %24 = OpConstant  %6  0
-%26 = OpConstant  %8  4
-%27 = OpConstant  %6  2
-%28 = OpConstant  %6  264
+%26 = OpConstant  %8  1
+%27 = OpConstant  %6  2056
+%28 = OpConstant  %6  2
+%29 = OpConstant  %6  264
 %15 = OpFunction  %2  None %16
 %11 = OpLabel
 %14 = OpLoad  %5  %12
@@ -41,9 +42,9 @@ OpDecorate %12 BuiltIn LocalInvocationId
 OpBranch %21
 %21 = OpLabel
 %23 = OpImageTexelPointer  %22  %9 %19 %24
-%25 = OpAtomicUMax  %4  %23 %26 %24 %20
-OpControlBarrier %27 %27 %28
-%29 = OpImageTexelPointer  %22  %9 %19 %24
-%30 = OpAtomicUMin  %4  %29 %26 %24 %20
+%25 = OpAtomicUMax  %4  %23 %26 %27 %20
+OpControlBarrier %28 %28 %29
+%30 = OpImageTexelPointer  %22  %9 %19 %24
+%31 = OpAtomicUMin  %4  %30 %26 %27 %20
 OpReturn
 OpFunctionEnd

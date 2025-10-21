@@ -28,7 +28,7 @@ OpDecorate %18 BuiltIn LocalInvocationId
 %21 = OpConstantNull  %17
 %22 = OpTypeVector %5 3
 %27 = OpConstant  %4  264
-%30 = OpConstant  %4  256
+%32 = OpConstant  %4  256
 %11 = OpFunction  %2  None %12
 %10 = OpLabel
 OpBranch %15
@@ -45,8 +45,8 @@ OpBranch %25
 OpControlBarrier %13 %13 %27
 OpBranch %28
 %28 = OpLabel
-%31 = OpAtomicCompareExchange  %4  %8 %7 %30 %30 %14 %13
-%32 = OpIEqual  %5  %31 %13
-%29 = OpCompositeConstruct  %6  %31 %32
+%30 = OpAtomicCompareExchange  %4  %8 %7 %27 %32 %14 %13
+%31 = OpIEqual  %5  %30 %13
+%29 = OpCompositeConstruct  %6  %30 %31
 OpReturn
 OpFunctionEnd

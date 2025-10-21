@@ -147,7 +147,7 @@ OpDecorate %116 BuiltIn LocalInvocationId
 %155 = OpConstant  %7  3
 %158 = OpConstant  %7  4
 %170 = OpConstant  %23  2
-%171 = OpConstant  %7  256
+%171 = OpConstant  %7  260
 %53 = OpFunction  %2  None %54
 %52 = OpFunctionParameter  %8
 %51 = OpLabel

@@ -60,7 +60,7 @@ OpDecorate %22 BuiltIn LocalInvocationId
 %36 = OpConstant  %3  1
 %41 = OpTypeInt 32 1
 %40 = OpConstant  %41  1
-%42 = OpConstant  %6  64
+%42 = OpConstant  %6  72
 %46 = OpConstant  %6  1
 %54 = OpConstant  %6  264
 %25 = OpFunction  %2  None %26
