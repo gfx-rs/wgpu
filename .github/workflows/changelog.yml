@@ -5,6 +5,10 @@ on:
     paths:
       - 'CHANGELOG.md'
       - 'xtask/**/*'
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 env:
   #
