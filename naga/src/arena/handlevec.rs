@@ -14,7 +14,7 @@ use core::ops;
 /// Rather than a `push` method, `HandleVec` has an [`insert`] method, analogous
 /// to [`HashMap::insert`], that requires you to provide the handle at which the
 /// new value should appear. However, since `HandleVec` only supports insertion
-/// at the end, the given handle's index must be equal to the the `HandleVec`'s
+/// at the end, the given handle's index must be equal to the `HandleVec`'s
 /// current length; otherwise, the insertion will panic.
 ///
 /// [`insert`]: HandleVec::insert
