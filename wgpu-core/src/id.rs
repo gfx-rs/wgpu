@@ -161,12 +161,13 @@ impl<T: Marker> Hash for PointerId<T> {
 
 impl<T: StorageItem> From<&Arc<T>> for PointerId<T::Marker> {
     fn from(arc: &Arc<T>) -> Self {
-        // Since the memory representation of `Arc<T>` is just a pointer, it
-        // would be nice to use that pointer as the trace ID, since many
-        // `into_trace` implementations would then be no-ops at runtime.
-        // Unfortunately, because `Arc::as_ptr` returns a pointer to the
-        // contained data, and `Arc` stores reference counts before the data,
-        // we are adding an offset to the pointer here.
+        // Since the memory representation of `Arc<T>` is just a pointer to
+        // `ArcInner<T>`, it would be nice to use that pointer as the trace ID,
+        // since many `into_trace` implementations would then be no-ops at
+        // runtime. However, `Arc::as_ptr` returns a pointer to the contained
+        // data, not to the `ArcInner`. The `ArcInner` stores the reference
+        // counts before the data, so the machine code for this conversion has
+        // to add an offset to the pointer.
         PointerId::PointerId(Arc::as_ptr(arc) as usize, PhantomData)
     }
 }
