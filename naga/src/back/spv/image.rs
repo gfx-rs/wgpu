@@ -1363,8 +1363,7 @@ impl BlockContext<'_> {
         let result_type_id = self.get_expression_type_id(&self.fun_info[value].ty);
         let id = self.gen_id();
         let space = crate::AddressSpace::Handle;
-        let (semantics, scope) =
-            space.to_spirv_semantics_and_scope(spirv::MemorySemantics::ACQUIRE_RELEASE);
+        let (semantics, scope) = space.to_spirv_semantics_and_scope();
         let scope_constant_id = self.get_scope_constant(scope as u32);
         let semantics_id = self.get_index_constant(semantics.bits());
         let value_id = self.cached[value];

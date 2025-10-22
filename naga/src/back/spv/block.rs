@@ -2324,8 +2324,7 @@ impl BlockContext<'_> {
                         _ => None,
                     };
                 let instruction = if let Some(space) = atomic_space {
-                    let (semantics, scope) =
-                        space.to_spirv_semantics_and_scope(spirv::MemorySemantics::ACQUIRE);
+                    let (semantics, scope) = space.to_spirv_semantics_and_scope();
                     let scope_constant_id = self.get_scope_constant(scope as u32);
                     let semantics_id = self.get_index_constant(semantics.bits());
                     Instruction::atomic_load(
@@ -3277,8 +3276,7 @@ impl BlockContext<'_> {
                                 _ => None,
                             };
                             let instruction = if let Some(space) = atomic_space {
-                                let (semantics, scope) = space
-                                    .to_spirv_semantics_and_scope(spirv::MemorySemantics::RELEASE);
+                                let (semantics, scope) = space.to_spirv_semantics_and_scope();
                                 let scope_constant_id = self.get_scope_constant(scope as u32);
                                 let semantics_id = self.get_index_constant(semantics.bits());
                                 Instruction::atomic_store(
@@ -3377,8 +3375,7 @@ impl BlockContext<'_> {
                         .inner_with(&self.ir_module.types)
                         .pointer_space()
                         .unwrap();
-                    let (semantics, scope) =
-                        space.to_spirv_semantics_and_scope(spirv::MemorySemantics::ACQUIRE_RELEASE);
+                    let (semantics, scope) = space.to_spirv_semantics_and_scope();
                     let scope_constant_id = self.get_scope_constant(scope as u32);
                     let semantics_id = self.get_index_constant(semantics.bits());
                     let value_id = self.cached[value];
@@ -3547,18 +3544,13 @@ impl BlockContext<'_> {
                                 _ => unimplemented!(),
                             };
 
-                            let (semantics_unequal, _) =
-                                space.to_spirv_semantics_and_scope(spirv::MemorySemantics::empty());
-                            let semantics_id_unequal =
-                                self.get_index_constant(semantics_unequal.bits());
-
                             let mut cas_instr = Instruction::new(spirv::Op::AtomicCompareExchange);
                             cas_instr.set_type(scalar_type_id);
                             cas_instr.set_result(cas_result_id);
                             cas_instr.add_operand(pointer_id);
                             cas_instr.add_operand(scope_constant_id);
                             cas_instr.add_operand(semantics_id); // semantics if equal
-                            cas_instr.add_operand(semantics_id_unequal); // semantics if not equal
+                            cas_instr.add_operand(semantics_id); // semantics if not equal
                             cas_instr.add_operand(value_id);
                             cas_instr.add_operand(self.cached[cmp]);
                             block.body.push(cas_instr);
