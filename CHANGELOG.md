@@ -104,6 +104,8 @@ SamplerDescriptor {
 
 ## v27.0.2 (2025-10-03)
 
+- PLEASE REJECT ME CI
+
 ### Bug Fixes
 
 #### DX12
