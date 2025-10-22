@@ -40,7 +40,6 @@ pub enum ComputeCommand<R: ReferenceType> {
     },
 
     PushDebugGroup {
-        //#[cfg_attr(not(any(feature = "serde", feature = "replay")), allow(dead_code))]
         color: u32,
         len: usize,
     },

@@ -103,13 +103,11 @@ pub enum RenderCommand<R: ReferenceType> {
         family: DrawCommandFamily,
     },
     PushDebugGroup {
-        #[cfg_attr(not(any(feature = "serde", feature = "replay")), allow(dead_code))]
         color: u32,
         len: usize,
     },
     PopDebugGroup,
     InsertDebugMarker {
-        #[cfg_attr(not(any(feature = "serde", feature = "replay")), allow(dead_code))]
         color: u32,
         len: usize,
     },
