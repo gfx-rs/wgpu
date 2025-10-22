@@ -15,7 +15,7 @@ You can add additional user facing information if it's a major breaking change. 
 
 Top level categories:
 - Major changes
-- Added/New Features
+- New Features that shouldn't break CI
 - Changes
 - Bug Fixes (that don't change API)
 - Performance
