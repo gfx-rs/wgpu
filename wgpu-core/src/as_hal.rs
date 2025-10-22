@@ -330,6 +330,12 @@ impl Global {
         })
     }
 
+    /// Encode commands using the raw HAL command encoder.
+    ///
+    /// # Panics
+    ///
+    /// If the command encoder has already been used with the wgpu encoding API.
+    ///
     /// # Safety
     ///
     /// - The raw command encoder handle must not be manually destroyed

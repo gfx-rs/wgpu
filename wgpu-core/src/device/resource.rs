@@ -1806,7 +1806,6 @@ impl Device {
             samples: texture.desc.sample_count,
             selector,
             label: desc.label.to_string(),
-            tracking_data: TrackingData::new(self.tracker_indices.texture_views.clone()),
         };
 
         let view = Arc::new(view);

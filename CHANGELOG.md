@@ -78,6 +78,7 @@ SamplerDescriptor {
 #### General
 
 - Texture now has `from_custom`. By @R-Cramer4 in [#8315](https://github.com/gfx-rs/wgpu/pull/8315).
+- Using both the wgpu command encoding APIs and `CommandEncoder::as_hal_mut` on the same encoder will now result in a panic.
 
 ### Bug Fixes
 
@@ -93,6 +94,7 @@ SamplerDescriptor {
 - Reject binding indices that exceed `wgpu_types::Limits::max_bindings_per_bind_group` when deriving a bind group layout for a pipeline. By @jimblandy in [#8325](https://github.com/gfx-rs/wgpu/pull/8325).
 - Removed three features from `wgpu-hal` which did nothing useful: `"cargo-clippy"`, `"gpu-allocator"`, and `"rustc-hash"`. By @kpreid in [#8357](https://github.com/gfx-rs/wgpu/pull/8357).
 - `wgpu_types::PollError` now always implements the `Error` trait. By @kpreid in [#8384](https://github.com/gfx-rs/wgpu/pull/8384).
+- The texture subresources used by the color attachments of a render pass are no longer allowed to overlap when accessed via different texture views. By @andyleiserson in [#8402](https://github.com/gfx-rs/wgpu/pull/8402).
 
 #### DX12
 

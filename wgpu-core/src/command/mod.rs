@@ -177,6 +177,7 @@ impl CommandEncoderStatus {
     ) -> Result<(), EncoderStateError> {
         match self {
             Self::Recording(cmd_buf_data) => {
+                cmd_buf_data.encoder.api.set(EncodingApi::Wgpu);
                 match f() {
                     Ok(cmd) => cmd_buf_data.commands.push(cmd),
                     Err(err) => {
@@ -220,10 +221,12 @@ impl CommandEncoderStatus {
         E: Clone + Into<CommandEncoderError>,
     >(
         &mut self,
+        api: EncodingApi,
         f: F,
     ) -> Result<(), EncoderStateError> {
         match self {
-            Self::Recording(_) => {
+            Self::Recording(inner) => {
+                inner.encoder.api.set(api);
                 RecordingGuard { inner: self }.record(f);
                 Ok(())
             }
@@ -256,7 +259,10 @@ impl CommandEncoderStatus {
         f: F,
     ) -> T {
         match self {
-            Self::Recording(_) => RecordingGuard { inner: self }.record_as_hal_mut(f),
+            Self::Recording(inner) => {
+                inner.encoder.api.set(EncodingApi::Raw);
+                RecordingGuard { inner: self }.record_as_hal_mut(f)
+            }
             Self::Locked(_) => {
                 self.invalidate(EncoderStateError::Locked);
                 f(None)
@@ -358,8 +364,11 @@ impl CommandEncoderStatus {
         // state or an error, to be transferred to the command buffer.
         match mem::replace(self, Self::Consumed) {
             Self::Recording(inner) => {
-                // Nothing should have opened the encoder yet.
-                assert!(!inner.encoder.is_open);
+                // Raw encoding leaves the encoder open in `command_encoder_as_hal_mut`.
+                // Otherwise, nothing should have opened it yet.
+                if inner.encoder.api != EncodingApi::Raw {
+                    assert!(!inner.encoder.is_open);
+                }
                 Self::Finished(inner)
             }
             Self::Consumed | Self::Finished(_) => Self::Error(EncoderStateError::Ended.into()),
@@ -480,6 +489,38 @@ impl Drop for CommandEncoder {
     }
 }
 
+/// The encoding API being used with a `CommandEncoder`.
+///
+/// Mixing APIs on the same encoder is not allowed.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum EncodingApi {
+    // The regular wgpu encoding APIs are being used.
+    Wgpu,
+
+    // The raw hal encoding API is being used.
+    Raw,
+
+    // Neither encoding API has been called yet.
+    Undecided,
+
+    // The encoder is used internally by wgpu.
+    InternalUse,
+}
+
+impl EncodingApi {
+    pub(crate) fn set(&mut self, api: EncodingApi) {
+        match *self {
+            EncodingApi::Undecided => {
+                *self = api;
+            }
+            self_api if self_api != api => {
+                panic!("Mixing the wgpu encoding API with the raw encoding API is not permitted");
+            }
+            _ => {}
+        }
+    }
+}
+
 /// A raw [`CommandEncoder`][rce], and the raw [`CommandBuffer`][rcb]s built from it.
 ///
 /// Each wgpu-core [`CommandBuffer`] owns an instance of this type, which is
@@ -527,6 +568,13 @@ pub(crate) struct InnerCommandEncoder {
     ///
     /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
     pub(crate) is_open: bool,
+
+    /// Tracks which API is being used to encode commands.
+    ///
+    /// Mixing the wgpu encoding API with access to the raw hal encoder via
+    /// `as_hal_mut` is not supported. this field tracks which API is being used
+    /// in order to detect and reject invalid usage.
+    pub(crate) api: EncodingApi,
 
     pub(crate) label: String,
 }
@@ -790,6 +838,7 @@ impl CommandEncoder {
                         list: Vec::new(),
                         device: device.clone(),
                         is_open: false,
+                        api: EncodingApi::Undecided,
                         label: label.to_string(),
                     },
                     trackers: Tracker::new(),
@@ -915,6 +964,12 @@ impl CommandEncoder {
             self.device.check_is_valid()?;
             let snatch_guard = self.device.snatchable_lock.read();
             let mut debug_scope_depth = 0;
+
+            if cmd_buf_data.encoder.api == EncodingApi::Raw {
+                // Should have panicked on the first call that switched APIs,
+                // but lets be sure.
+                assert!(cmd_buf_data.commands.is_empty());
+            }
 
             let mut commands = mem::take(&mut cmd_buf_data.commands);
             for command in commands.drain(..) {

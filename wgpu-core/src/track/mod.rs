@@ -224,7 +224,6 @@ impl SharedTrackerIndexAllocator {
 pub(crate) struct TrackerIndexAllocators {
     pub buffers: Arc<SharedTrackerIndexAllocator>,
     pub textures: Arc<SharedTrackerIndexAllocator>,
-    pub texture_views: Arc<SharedTrackerIndexAllocator>,
     pub external_textures: Arc<SharedTrackerIndexAllocator>,
     pub samplers: Arc<SharedTrackerIndexAllocator>,
     pub bind_groups: Arc<SharedTrackerIndexAllocator>,
@@ -241,7 +240,6 @@ impl TrackerIndexAllocators {
         TrackerIndexAllocators {
             buffers: Arc::new(SharedTrackerIndexAllocator::new()),
             textures: Arc::new(SharedTrackerIndexAllocator::new()),
-            texture_views: Arc::new(SharedTrackerIndexAllocator::new()),
             external_textures: Arc::new(SharedTrackerIndexAllocator::new()),
             samplers: Arc::new(SharedTrackerIndexAllocator::new()),
             bind_groups: Arc::new(SharedTrackerIndexAllocator::new()),
