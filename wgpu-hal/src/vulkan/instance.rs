@@ -187,6 +187,8 @@ impl super::Swapchain {
             };
         };
 
+        unsafe { device.destroy_fence(self.fence, None) }
+
         // We cannot take this by value, as the function returns `self`.
         for semaphore in self.acquire_semaphores.drain(..) {
             let arc_removed = Arc::into_inner(semaphore).expect(
@@ -1115,7 +1117,7 @@ impl crate::Surface for super::Surface {
                 swapchain.raw,
                 timeout_ns,
                 acquire_semaphore_guard.acquire,
-                vk::Fence::null(),
+                swapchain.fence,
             )
         } {
             // We treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android.
@@ -1137,6 +1139,30 @@ impl crate::Surface for super::Surface {
                 };
             }
         };
+
+        // Wait for the image was acquired to be fully ready to be rendered too.
+        //
+        // This wait is very important on Windows to avoid bad frame pacing on
+        // Windows where the Vulkan driver is using a DXGI swapchain. See
+        // https://github.com/gfx-rs/wgpu/issues/8310 and
+        // https://github.com/gfx-rs/wgpu/issues/8354 for more details.
+        //
+        // On other platforms, this wait may serve to slightly decrease frame
+        // latency, depending on how the platform implements waiting within
+        // acquire.
+        unsafe {
+            swapchain
+                .device
+                .raw
+                .wait_for_fences(&[swapchain.fence], false, timeout_ns)
+                .map_err(super::map_host_device_oom_and_lost_err)?;
+
+            swapchain
+                .device
+                .raw
+                .reset_fences(&[swapchain.fence])
+                .map_err(super::map_host_device_oom_and_lost_err)?;
+        }
 
         drop(acquire_semaphore_guard);
         // We only advance the surface semaphores if we successfully acquired an image, otherwise
