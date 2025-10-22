@@ -102,6 +102,8 @@ SamplerDescriptor {
 
 - `DropCallback`s are now called after dropping all other fields of their parent structs. By @jerzywilczek in [#8353](https://github.com/gfx-rs/wgpu/pull/8353)
 
+It's the end! This should be fine.
+
 ## v27.0.2 (2025-10-03)
 
 ### Bug Fixes
