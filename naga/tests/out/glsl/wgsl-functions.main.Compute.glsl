@@ -20,10 +20,7 @@ int test_integer_dot_product() {
     uvec3 a_3_ = uvec3(1u);
     uvec3 b_3_ = uvec3(1u);
     uint c_3_ = ( + a_3_.x * b_3_.x + a_3_.y * b_3_.y + a_3_.z * b_3_.z);
-    ivec4 _e11 = ivec4(4);
-    ivec4 _e13 = ivec4(2);
-    int c_4_ = ( + _e11.x * _e13.x + _e11.y * _e13.y + _e11.z * _e13.z + _e11.w * _e13.w);
-    return c_4_;
+    return 32;
 }
 
 uint test_packed_integer_dot_product() {

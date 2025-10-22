@@ -36,6 +36,13 @@ ignore = [
     # It's a dependency of `metal` (which is to be replaced with `objc2-metal`), and a
     # transitive dependency of `deno`. https://github.com/gfx-rs/wgpu/issues/7873
     "RUSTSEC-2024-0436",
+    # `unic-*` crates are no longer maintained https://rustsec.org/advisories/RUSTSEC-2025-0100
+    # These are used via `deno`. https://github.com/gfx-rs/wgpu/issues/8393
+    "RUSTSEC-2025-0075",
+    "RUSTSEC-2025-0080",
+    "RUSTSEC-2025-0081",
+    "RUSTSEC-2025-0098",
+    "RUSTSEC-2025-0100",
 ]
 
 [licenses]

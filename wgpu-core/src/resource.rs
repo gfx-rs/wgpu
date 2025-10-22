@@ -1654,7 +1654,6 @@ pub struct TextureView {
     pub(crate) selector: TextureSelector,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
-    pub(crate) tracking_data: TrackingData,
 }
 
 impl Drop for TextureView {
@@ -1821,7 +1820,6 @@ crate::impl_resource_type!(TextureView);
 crate::impl_labeled!(TextureView);
 crate::impl_parent_device!(TextureView);
 crate::impl_storage_item!(TextureView);
-crate::impl_trackable!(TextureView);
 
 pub type ExternalTextureDescriptor<'a> = wgt::ExternalTextureDescriptor<Label<'a>>;
 

@@ -12,8 +12,7 @@ fn test_integer_dot_product() -> i32 {
     let a_3_ = vec3(1u);
     let b_3_ = vec3(1u);
     let c_3_ = dot(a_3_, b_3_);
-    let c_4_ = dot(vec4(4i), vec4(2i));
-    return c_4_;
+    return 32i;
 }
 
 fn test_packed_integer_dot_product() -> u32 {

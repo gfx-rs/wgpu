@@ -100,7 +100,7 @@ jobs:
 
       - name: run CTS
         shell: bash
-        run: cargo xtask cts --llvm-cov --backend ${{ matrix.backend }}
+        run: cargo --locked xtask cts --llvm-cov --backend ${{ matrix.backend }}
 
       - name: Generate coverage report
         id: coverage
@@ -109,7 +109,7 @@ jobs:
         run: |
           set -e
 
-          cargo llvm-cov report --lcov --output-path lcov.info
+          cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
         uses: codecov/codecov-action@v5
