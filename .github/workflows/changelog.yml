@@ -39,4 +39,4 @@ jobs:
 
       - name: Run `cargo xtask changelog …`
         run: |
-          cargo xtask changelog "origin/${{ github.event.pull_request.base.ref }}"
+          cargo xtask changelog --emit-github-messages "origin/${{ github.event.pull_request.base.ref }}"

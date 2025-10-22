@@ -4,6 +4,8 @@ use xshell::Shell;
 pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     const CHANGELOG_PATH_RELATIVE: &str = "./CHANGELOG.md";
 
+    let emit_github_messages = args.contains("--emit-github-messages");
+
     let from_branch = args
         .free_from_str()
         .ok()
@@ -60,7 +62,17 @@ pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Resu
         }
 
         for hunk in &hunks_in_a_released_section {
-            eprintln!("{hunk}");
+            eprintln!("{}", hunk.contents);
+
+            if emit_github_messages {
+                let title = "Released changelog content changed";
+                let message =
+                    "This PR changes changelog content that is already released.".to_owned();
+                println!(
+                    "::error file=CHANGELOG.md,line={},endLine={},title={title}::{message}",
+                    hunk.change_start_line_num, hunk.change_end_line_num,
+                )
+            }
         }
     }
 
@@ -74,6 +86,12 @@ pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Resu
     } else {
         Ok(())
     }
+}
+
+struct Hunk<'a> {
+    change_start_line_num: u64,
+    change_end_line_num: u64,
+    contents: &'a str,
 }
 
 /// Given some `changelog_contents` (in Markdown) containing the full end state of the provided
@@ -90,7 +108,7 @@ pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Resu
 ///   `changelog_contents`. using hunk information to compare against `changelog_contents`.
 ///
 /// Failing to uphold these assumptons is not unsafe, but will yield incorrect results.
-fn hunks_in_a_released_section<'a>(changelog_contents: &str, diff: &'a str) -> Vec<&'a str> {
+fn hunks_in_a_released_section<'a>(changelog_contents: &str, diff: &'a str) -> Vec<Hunk<'a>> {
     let mut changelog_lines = changelog_contents.lines();
 
     let changelog_unreleased_line_num =
@@ -109,7 +127,7 @@ fn hunks_in_a_released_section<'a>(changelog_contents: &str, diff: &'a str) -> V
         SplitPrefixInclusive::new("\n@@", &diff[first_hunk_idx..]).map(|s| &s['\n'.len_utf8()..])
     };
     let hunks_in_a_released_section = hunks
-        .filter(|hunk| {
+        .filter_map(|hunk| {
             let (hunk_header, hunk_contents) = hunk.split_once('\n').unwrap();
 
             // Reference: This is of the format `@@ -86,6 +88,10 @@ …`.
@@ -128,15 +146,25 @@ fn hunks_in_a_released_section<'a>(changelog_contents: &str, diff: &'a str) -> V
                 .parse::<u64>()
                 .unwrap();
 
-            let lines_until_first_change = hunk_contents
+            let mut change_lines = hunk_contents
                 .lines()
-                .take_while(|l| l.starts_with(' '))
-                .count() as u64;
+                .enumerate()
+                .filter(|(_idx, l)| !l.starts_with(' '))
+                .map(|(zero_based_idx, _l)| {
+                    post_change_hunk_start_offset + (zero_based_idx as u64)
+                });
 
-            let first_hunk_change_start_offset =
-                post_change_hunk_start_offset + lines_until_first_change;
+            let change_start_line_num = change_lines.next().unwrap();
 
-            first_hunk_change_start_offset >= changelog_first_release_section_line_num
+            if change_start_line_num >= changelog_first_release_section_line_num {
+                Some(Hunk {
+                    contents: hunk,
+                    change_start_line_num,
+                    change_end_line_num: change_lines.last().unwrap_or(change_start_line_num),
+                })
+            } else {
+                None
+            }
         })
         .collect::<Vec<_>>();
 
