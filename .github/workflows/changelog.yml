@@ -6,6 +6,10 @@ on:
       - ".github/workflows/changelog.yml"
       - "CHANGELOG.md"
       - "xtask/**/*"
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 env:
   #
