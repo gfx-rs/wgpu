@@ -1241,8 +1241,11 @@ impl RenderPassInfo {
             ) -> Result<(), ColorAttachmentError> {
                 let mut insert = |slice| {
                     let mip_level = view.desc.range.base_mip_level;
-                    if attachment_set.insert((view.tracking_data.tracker_index(), mip_level, slice))
-                    {
+                    if attachment_set.insert((
+                        view.parent.tracking_data.tracker_index(),
+                        mip_level,
+                        slice,
+                    )) {
                         Ok(())
                     } else {
                         Err(ColorAttachmentError::SubresourceOverlap {
