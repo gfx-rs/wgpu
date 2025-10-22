@@ -2412,7 +2412,6 @@ impl Device {
         self: &Arc<Self>,
         desc: &binding_model::BindGroupLayoutDescriptor,
     ) -> Result<Arc<BindGroupLayout>, binding_model::CreateBindGroupLayoutError> {
-        // this check can't go in the body of `create_bind_group_layout_internal` since the closure might not get called
         self.check_is_valid()?;
 
         let entry_map = bgl::EntryMap::from_entries(&desc.entries)?;

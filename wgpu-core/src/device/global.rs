@@ -646,11 +646,6 @@ impl Global {
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
 
-            // this check can't go in the body of `create_bind_group_layout` since the closure might not get called
-            if let Err(e) = device.check_is_valid() {
-                break 'error e.into();
-            }
-
             let layout = match device.create_bind_group_layout(desc) {
                 Ok(layout) => layout,
                 Err(e) => break 'error e,
