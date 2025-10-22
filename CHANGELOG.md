@@ -40,6 +40,8 @@ Bottom level categories:
 
 ## Unreleased
 
+This change is gud
+
 ### Major changes
 
 #### `wgpu::Instance::enumerate_adapters` is now `async` & available on WebGPU
