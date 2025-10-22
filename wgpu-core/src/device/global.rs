@@ -2021,69 +2021,9 @@ impl Global {
 
         let buffer = hub.buffers.get(buffer_id).get()?;
 
-        {
-            let snatch_guard = buffer.device.snatchable_lock.read();
-            buffer.check_destroyed(&snatch_guard)?;
-        }
-
-        let range_size = if let Some(size) = size {
-            size
-        } else {
-            buffer.size.saturating_sub(offset)
-        };
-
-        if offset % wgt::MAP_ALIGNMENT != 0 {
-            return Err(BufferAccessError::UnalignedOffset { offset });
-        }
-        if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err(BufferAccessError::UnalignedRangeSize { range_size });
-        }
-        let map_state = &*buffer.map_state.lock();
-        match *map_state {
-            resource::BufferMapState::Init { ref staging_buffer } => {
-                // offset (u64) can not be < 0, so no need to validate the lower bound
-                if offset + range_size > buffer.size {
-                    return Err(BufferAccessError::OutOfBoundsOverrun {
-                        index: offset + range_size - 1,
-                        max: buffer.size,
-                    });
-                }
-                let ptr = unsafe { staging_buffer.ptr() };
-                let ptr = unsafe { NonNull::new_unchecked(ptr.as_ptr().offset(offset as isize)) };
-                Ok((ptr, range_size))
-            }
-            resource::BufferMapState::Active {
-                ref mapping,
-                ref range,
-                ..
-            } => {
-                if offset < range.start {
-                    return Err(BufferAccessError::OutOfBoundsUnderrun {
-                        index: offset,
-                        min: range.start,
-                    });
-                }
-                if offset + range_size > range.end {
-                    return Err(BufferAccessError::OutOfBoundsOverrun {
-                        index: offset + range_size - 1,
-                        max: range.end,
-                    });
-                }
-                // ptr points to the beginning of the range we mapped in map_async
-                // rather than the beginning of the buffer.
-                let relative_offset = (offset - range.start) as isize;
-                unsafe {
-                    Ok((
-                        NonNull::new_unchecked(mapping.ptr.as_ptr().offset(relative_offset)),
-                        range_size,
-                    ))
-                }
-            }
-            resource::BufferMapState::Idle | resource::BufferMapState::Waiting(_) => {
-                Err(BufferAccessError::NotMapped)
-            }
-        }
+        buffer.get_mapped_range(offset, size)
     }
+
     pub fn buffer_unmap(&self, buffer_id: id::BufferId) -> BufferAccessResult {
         profiling::scope!("unmap", "Buffer");
         api_log!("Buffer::unmap {buffer_id:?}");
