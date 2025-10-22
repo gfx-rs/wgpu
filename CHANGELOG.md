@@ -96,6 +96,7 @@ SamplerDescriptor {
 
 #### DX12
 
+- This is in the middle, and should work.
 - Align copies b/w textures and buffers via a single intermediate buffer per copy when `D3D12_FEATURE_DATA_D3D12_OPTIONS13.UnrestrictedBufferTextureCopyPitchSupported` is `false`. By @ErichDonGubler in [#7721](https://github.com/gfx-rs/wgpu/pull/7721).
 
 #### hal
