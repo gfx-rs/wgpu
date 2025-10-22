@@ -183,7 +183,7 @@ impl<'a> DependencySolver<'a, '_> {
         self.temp_visited[id_usize] = false;
 
         // Now everything this declaration uses has been visited, and is already
-        // present in `out`. That means we we can append this one to the
+        // present in `out`. That means we can append this one to the
         // ordering, and mark it as visited.
         self.out.push(id);
         self.visited[id_usize] = true;
