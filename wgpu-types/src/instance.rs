@@ -363,6 +363,11 @@ pub struct Dx12BackendOptions {
     pub presentation_system: Dx12SwapchainKind,
     /// Whether to wait for the latency waitable object before acquiring the next swapchain image.
     pub latency_waitable_object: Dx12UseFrameLatencyWaitableObject,
+    /// Whether or not features should ignore the shader model version. If true, some features may
+    /// be marked as supported when shaders making use of them cannot be compiled at runtime.
+    /// The primary use case for this is using passthrough shaders or precompiled shaders to avoid
+    /// shipping DXC with the app.
+    pub features_ignore_shader_model: bool,
 }
 
 impl Dx12BackendOptions {
@@ -375,10 +380,12 @@ impl Dx12BackendOptions {
         let presentation_system = Dx12SwapchainKind::from_env().unwrap_or_default();
         let latency_waitable_object =
             Dx12UseFrameLatencyWaitableObject::from_env().unwrap_or_default();
+
         Self {
             shader_compiler: compiler,
             presentation_system,
             latency_waitable_object,
+            features_ignore_shader_model: false,
         }
     }
 
@@ -394,6 +401,7 @@ impl Dx12BackendOptions {
             shader_compiler,
             presentation_system,
             latency_waitable_object,
+            features_ignore_shader_model: self.features_ignore_shader_model,
         }
     }
 }
