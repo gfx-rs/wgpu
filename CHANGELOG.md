@@ -118,6 +118,8 @@ SamplerDescriptor {
 
 ## v27.0.0 (2025-10-01)
 
+Please reject me gently. 😖
+
 ### Major Changes
 
 #### Deferred command buffer actions: `map_buffer_on_submit` and `on_submitted_work_done`
