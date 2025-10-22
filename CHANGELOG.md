@@ -83,6 +83,7 @@ SamplerDescriptor {
 
 - Texture now has `from_custom`. By @R-Cramer4 in [#8315](https://github.com/gfx-rs/wgpu/pull/8315).
 - Using both the wgpu command encoding APIs and `CommandEncoder::as_hal_mut` on the same encoder will now result in a panic.
+- Allow `include_spirv!` and `include_spirv_raw!` macros to be used in constants and statics. By @clarfonthey in [#8250](https://github.com/gfx-rs/wgpu/pull/8250).
 
 ### Bug Fixes
 
@@ -336,7 +337,6 @@ By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282), [#8285](https://
 - Require new `F16_IN_F32` downlevel flag for `quantizeToF16`, `pack2x16float`, and `unpack2x16float` in WGSL input. By @aleiserson in [#8130](https://github.com/gfx-rs/wgpu/pull/8130).
 - The error message for non-copyable depth/stencil formats no longer mentions the aspect when it is not relevant. By @reima in [#8156](https://github.com/gfx-rs/wgpu/pull/8156).
 - Track the initialization status of buffer memory correctly when `copy_texture_to_buffer` skips over padding space between rows or layers, or when the start/end of a texture-buffer transfer is not 4B aligned. By @andyleiserson in [#8099](https://github.com/gfx-rs/wgpu/pull/8099).
-- Allow `include_spirv!` and `include_spirv_raw!` macros to be used in constants and statics. By @clarfonthey in [#8250](https://github.com/gfx-rs/wgpu/pull/8250).
 
 #### naga
 
