@@ -33,6 +33,10 @@ webgl = ["wgpu/webgl"]
 # allows us to force the build to have profiling code enabled so we can test that configuration.
 test-build-with-profiling = ["profiling/type-check"]
 
+# Note that even though this is a package of tests and a library of tests, there is a split of
+# [depenencies] and [dev-dependencies]. This is because keeping as many deps as possible as
+# dev-dependencies will make the dependency graph just a bit shallower, and makes
+# `cargo clippy -- -Wunused-crate-dependencies` give fewer false positives.
 [dependencies]
 wgpu = { workspace = true, features = ["noop"] }
 wgpu-hal = { workspace = true, features = ["validation_canary"] }
@@ -40,25 +44,27 @@ wgpu-macros.workspace = true
 
 anyhow.workspace = true
 arrayvec.workspace = true
-approx.workspace = true
 bitflags.workspace = true
 bytemuck.workspace = true
 cfg-if.workspace = true
 ctor.workspace = true
 futures-lite.workspace = true
+libtest-mimic.workspace = true
+log.workspace = true
+png.workspace = true
+pollster.workspace = true
+profiling.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+approx.workspace = true
 glam.workspace = true
 half = { workspace = true, features = ["bytemuck", "std"] }
 itertools.workspace = true
 image.workspace = true
-libtest-mimic.workspace = true
-log.workspace = true
 nanorand.workspace = true
 parking_lot.workspace = true
-png.workspace = true
-pollster.workspace = true
-profiling.workspace = true
-serde_json.workspace = true
-serde.workspace = true
 strum = { workspace = true, features = ["derive"] }
 trybuild.workspace = true
 

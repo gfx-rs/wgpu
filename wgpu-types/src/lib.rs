@@ -1413,6 +1413,8 @@ pub struct AdapterInfo {
     pub driver_info: String,
     /// Backend used for device
     pub backend: Backend,
+    /// If true, adding [`TextureUsages::TRANSIENT`] to a texture will decrease memory usage.
+    pub transient_saves_memory: bool,
 }
 
 /// Hints to the device about the memory allocation strategy.
@@ -3119,7 +3121,7 @@ impl TextureFormat {
         // Flags
         let basic =
             TextureUsages::COPY_SRC | TextureUsages::COPY_DST | TextureUsages::TEXTURE_BINDING;
-        let attachment = basic | TextureUsages::RENDER_ATTACHMENT;
+        let attachment = basic | TextureUsages::RENDER_ATTACHMENT | TextureUsages::TRANSIENT;
         let storage = basic | TextureUsages::STORAGE_BINDING;
         let binding = TextureUsages::TEXTURE_BINDING;
         let all_flags = attachment | storage | binding;
@@ -4560,23 +4562,34 @@ impl<T> PollType<T> {
     }
 }
 
-/// Error states after a device poll
+/// Error states after a device poll.
 #[derive(Debug)]
-#[cfg_attr(feature = "std", derive(thiserror::Error))]
 pub enum PollError {
     /// The requested Wait timed out before the submission was completed.
-    #[cfg_attr(
-        feature = "std",
-        error("The requested Wait timed out before the submission was completed.")
-    )]
     Timeout,
     /// The requested Wait was given a wrong submission index.
-    #[cfg_attr(
-        feature = "std",
-        error("Tried to wait using a submission index ({0}) that has not been returned by a successful submission (last successful submission: {1})")
-    )]
     WrongSubmissionIndex(u64, u64),
 }
+
+// This impl could be derived by `thiserror`, but by not doing so, we can reduce the number of
+// dependencies this early in the dependency graph, which may improve build parallelism.
+impl fmt::Display for PollError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PollError::Timeout => {
+                f.write_str("The requested Wait timed out before the submission was completed.")
+            }
+            PollError::WrongSubmissionIndex(requested, successful) => write!(
+                f,
+                "Tried to wait using a submission index ({requested}) \
+                that has not been returned by a successful submission \
+                (last successful submission: {successful}"
+            ),
+        }
+    }
+}
+
+impl core::error::Error for PollError {}
 
 /// Status of device poll operation.
 #[derive(Debug, PartialEq, Eq)]
@@ -5610,6 +5623,8 @@ bitflags::bitflags! {
         /// Allows a texture to be a [`BindingType::StorageTexture`] in a bind group.
         const STORAGE_BINDING = 1 << 3;
         /// Allows a texture to be an output attachment of a render pass.
+        ///
+        /// Consider adding [`TextureUsages::TRANSIENT`] if the contents are not reused.
         const RENDER_ATTACHMENT = 1 << 4;
 
         //
@@ -5619,6 +5634,15 @@ bitflags::bitflags! {
         //
         /// Allows a texture to be used with image atomics. Requires [`Features::TEXTURE_ATOMIC`].
         const STORAGE_ATOMIC = 1 << 16;
+        /// Specifies the contents of this texture will not be used in another pass to potentially reduce memory usage and bandwidth.
+        ///
+        /// No-op on platforms on platforms that do not benefit from transient textures.
+        /// Generally mobile and Apple chips care about this.
+        ///
+        /// Incompatible with ALL other usages except [`TextureUsages::RENDER_ATTACHMENT`] and requires it.
+        ///
+        /// Requires [`StoreOp::Discard`].
+        const TRANSIENT = 1 << 17;
     }
 }
 
@@ -5656,6 +5680,8 @@ bitflags::bitflags! {
         /// Image atomic enabled storage.
         /// cbindgen:ignore
         const STORAGE_ATOMIC = 1 << 11;
+        /// Transient texture that may not have any backing memory. Not a resource state stored in the trackers, only used for passing down usages to create_texture.
+        const TRANSIENT = 1 << 12;
         /// The combination of states that a texture may be in _at the same time_.
         /// cbindgen:ignore
         const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits();
@@ -5669,10 +5695,10 @@ bitflags::bitflags! {
         const ORDERED = Self::INCLUSIVE.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits();
 
         /// Flag used by the wgpu-core texture tracker to say a texture is in different states for every sub-resource
-        const COMPLEX = 1 << 12;
+        const COMPLEX = 1 << 13;
         /// Flag used by the wgpu-core texture tracker to say that the tracker does not know the state of the sub-resource.
         /// This is different from UNINITIALIZED as that says the tracker does know, but the texture has not been initialized.
-        const UNKNOWN = 1 << 13;
+        const UNKNOWN = 1 << 14;
     }
 }
 

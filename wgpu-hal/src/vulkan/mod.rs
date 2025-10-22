@@ -26,7 +26,7 @@ Otherwise, we manage a pool of `VkFence` objects behind each `hal::Fence`.
 
 mod adapter;
 mod command;
-mod conv;
+pub mod conv;
 mod device;
 mod drm;
 mod instance;
@@ -156,7 +156,6 @@ pub struct DebugUtilsMessengerUserData {
 pub struct InstanceShared {
     raw: ash::Instance,
     extensions: Vec<&'static CStr>,
-    drop_guard: Option<crate::DropGuard>,
     flags: wgt::InstanceFlags,
     memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     debug_utils: Option<DebugUtils>,
@@ -171,6 +170,10 @@ pub struct InstanceShared {
     /// It is associated with a `VkInstance` and its children,
     /// except for a `VkPhysicalDevice` and its children.
     instance_api_version: u32,
+
+    // The `drop_guard` field must be the last field of this struct so it is dropped last.
+    // Do not add new fields after it.
+    drop_guard: Option<crate::DropGuard>,
 }
 
 pub struct Instance {
@@ -715,7 +718,6 @@ struct DeviceShared {
     family_index: u32,
     queue_index: u32,
     raw_queue: vk::Queue,
-    drop_guard: Option<crate::DropGuard>,
     instance: Arc<InstanceShared>,
     physical_device: vk::PhysicalDevice,
     enabled_extensions: Vec<&'static CStr>,
@@ -737,6 +739,10 @@ struct DeviceShared {
     texture_identity_factory: ResourceIdentityFactory<vk::Image>,
     /// As above, for texture views.
     texture_view_identity_factory: ResourceIdentityFactory<vk::ImageView>,
+
+    // The `drop_guard` field must be the last field of this struct so it is dropped last.
+    // Do not add new fields after it.
+    drop_guard: Option<crate::DropGuard>,
 }
 
 impl Drop for DeviceShared {
@@ -945,12 +951,15 @@ impl crate::DynAccelerationStructure for AccelerationStructure {}
 #[derive(Debug)]
 pub struct Texture {
     raw: vk::Image,
-    drop_guard: Option<crate::DropGuard>,
     external_memory: Option<vk::DeviceMemory>,
     block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
     format: wgt::TextureFormat,
     copy_size: crate::CopyExtent,
     identity: ResourceIdentity<vk::Image>,
+
+    // The `drop_guard` field must be the last field of this struct so it is dropped last.
+    // Do not add new fields after it.
+    drop_guard: Option<crate::DropGuard>,
 }
 
 impl crate::DynTexture for Texture {}

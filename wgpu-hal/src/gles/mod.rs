@@ -408,13 +408,16 @@ impl TextureInner {
 #[derive(Debug)]
 pub struct Texture {
     pub inner: TextureInner,
-    pub drop_guard: Option<crate::DropGuard>,
     pub mip_level_count: u32,
     pub array_layer_count: u32,
     pub format: wgt::TextureFormat,
     #[allow(unused)]
     pub format_desc: TextureFormatDesc,
     pub copy_size: CopyExtent,
+
+    // The `drop_guard` field must be the last field of this struct so it is dropped last.
+    // Do not add new fields after it.
+    pub drop_guard: Option<crate::DropGuard>,
 }
 
 impl crate::DynTexture for Texture {}

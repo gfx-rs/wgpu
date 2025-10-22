@@ -29,11 +29,8 @@ naga = { workspace = true, features = [
     "hlsl-out",
 ] }
 spirv = { workspace = true, features = ["deserialize"] }
-rspirv.workspace = true
 ron.workspace = true
 toml.workspace = true
 bitflags.workspace = true
 serde_json.workspace = true
 serde.workspace = true
-walkdir.workspace = true
-env_logger.workspace = true

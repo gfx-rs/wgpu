@@ -1274,6 +1274,22 @@ impl Device {
             }
         }
 
+        if desc.usage.contains(wgt::TextureUsages::TRANSIENT) {
+            if !desc.usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) {
+                return Err(CreateTextureError::InvalidUsage(
+                    wgt::TextureUsages::TRANSIENT,
+                ));
+            }
+            let extra_usage =
+                desc.usage - wgt::TextureUsages::TRANSIENT - wgt::TextureUsages::RENDER_ATTACHMENT;
+            if !extra_usage.is_empty() {
+                return Err(CreateTextureError::IncompatibleUsage(
+                    wgt::TextureUsages::TRANSIENT,
+                    extra_usage,
+                ));
+            }
+        }
+
         let format_features = self
             .describe_format_features(desc.format)
             .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
@@ -1651,7 +1667,8 @@ impl Device {
         let level_end = texture.desc.mip_level_count;
         if mip_level_end > level_end {
             return Err(resource::CreateTextureViewError::TooManyMipLevels {
-                requested: mip_level_end,
+                base_mip_level: desc.range.base_mip_level,
+                mip_level_count: resolved_mip_level_count,
                 total: level_end,
             });
         }
@@ -1668,7 +1685,8 @@ impl Device {
         let layer_end = texture.desc.array_layer_count();
         if array_layer_end > layer_end {
             return Err(resource::CreateTextureViewError::TooManyArrayLayers {
-                requested: array_layer_end,
+                base_array_layer: desc.range.base_array_layer,
+                array_layer_count: resolved_array_layer_count,
                 total: layer_end,
             });
         };
@@ -1788,7 +1806,6 @@ impl Device {
             samples: texture.desc.sample_count,
             selector,
             label: desc.label.to_string(),
-            tracking_data: TrackingData::new(self.tracker_indices.texture_views.clone()),
         };
 
         let view = Arc::new(view);

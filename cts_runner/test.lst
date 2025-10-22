@@ -125,6 +125,7 @@ webgpu:api,validation,render_pass,render_pass_descriptor:color_attachments,depth
 // FAIL: webgpu:api,validation,render_pass,render_pass_descriptor:color_attachments,depthSlice,overlaps,diff_miplevel:*
 webgpu:api,validation,render_pass,render_pass_descriptor:resolveTarget,*
 webgpu:api,validation,render_pass,resolve:resolve_attachment:*
+webgpu:api,validation,resource_usages,texture,in_pass_encoder:subresources_and_binding_types_combination_for_color:compute=false;type0="render-target";type1="render-target"
 webgpu:api,validation,texture,rg11b10ufloat_renderable:*
 webgpu:api,operation,render_pipeline,overrides:*
 webgpu:api,operation,rendering,basic:clear:*

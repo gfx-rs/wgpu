@@ -649,7 +649,6 @@ impl super::Device {
         }
     }
 
-    #[cfg(windows)]
     fn find_memory_type_index(
         &self,
         type_bits_req: u32,
@@ -739,7 +738,17 @@ impl super::Device {
             // VK_ERROR_COMPRESSION_EXHAUSTED_EXT
             super::map_host_device_oom_and_ioca_err(err)
         }
-        let req = unsafe { self.shared.raw.get_image_memory_requirements(raw) };
+        let mut req = unsafe { self.shared.raw.get_image_memory_requirements(raw) };
+
+        if desc.usage.contains(wgt::TextureUses::TRANSIENT) {
+            let mem_type_index = self.find_memory_type_index(
+                req.memory_type_bits,
+                vk::MemoryPropertyFlags::LAZILY_ALLOCATED,
+            );
+            if let Some(mem_type_index) = mem_type_index {
+                req.memory_type_bits = 1 << mem_type_index;
+            }
+        }
 
         Ok(ImageWithoutMemory {
             raw,

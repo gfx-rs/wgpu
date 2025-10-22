@@ -64,6 +64,7 @@ mod texture_view_creation;
 mod timestamp_normalization;
 mod timestamp_query;
 mod transfer;
+mod transient;
 mod transition_resources;
 mod vertex_formats;
 mod vertex_indices;
@@ -135,6 +136,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     timestamp_normalization::all_tests(&mut tests);
     timestamp_query::all_tests(&mut tests);
     transfer::all_tests(&mut tests);
+    transient::all_tests(&mut tests);
     transition_resources::all_tests(&mut tests);
     vertex_formats::all_tests(&mut tests);
     vertex_indices::all_tests(&mut tests);

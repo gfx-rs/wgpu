@@ -310,8 +310,16 @@ impl CommandEncoder {
 
 /// [`Features::EXPERIMENTAL_RAY_QUERY`] must be enabled on the device in order to call these functions.
 impl CommandEncoder {
-    /// Mark acceleration structures as being built. ***Should only*** be used with wgpu-hal
-    /// functions, all wgpu functions already mark acceleration structures as built.
+    /// When encoding the acceleration structure build with the raw Hal encoder
+    /// (obtained from [`CommandEncoder::as_hal_mut`]), this function marks the
+    /// acceleration structures as having been built.
+    ///
+    /// This function must only be used with the raw encoder API. When using the
+    /// wgpu encoding API, acceleration structure build is tracked automatically.
+    ///
+    /// # Panics
+    ///
+    /// - If the encoder is being used with the wgpu encoding API.
     ///
     /// # Safety
     ///
