@@ -73,6 +73,10 @@ SamplerDescriptor {
 }
 ```
 
+### New Features
+
+- Added support for transient textures on Vulkan and Metal. By @opstic in [#8247](https://github.com/gfx-rs/wgpu/pull/8247)
+
 ### Changes
 
 #### General
@@ -307,8 +311,6 @@ By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282), [#8285](https://
 #### naga
 
 - Expose `naga::front::wgsl::UnimplementedEnableExtension`. By @ErichDonGubler in [#8237](https://github.com/gfx-rs/wgpu/pull/8237).
-
-- Added support for transient textures on Vulkan and Metal. By @opstic in [#8247](https://github.com/gfx-rs/wgpu/pull/8247)
 
 ### Changes
 
