@@ -9,6 +9,8 @@ on:
       - opened
       - synchronize
       - reopened
+      - labeled
+      - unlabeled
 
 env:
   #
@@ -41,6 +43,7 @@ jobs:
         with:
           fetch-depth: 0
 
+      # NOTE: Keep label name(s) in sync. with `xtask`'s implementation.
       - name: Run `cargo xtask changelog …`
         run: |
-          cargo --quiet xtask changelog --emit-github-messages "origin/${{ github.event.pull_request.base.ref }}" 2> >(tee --append "$GITHUB_STEP_SUMMARY" >&2)
+          cargo --quiet xtask changelog --emit-github-messages "origin/${{ github.event.pull_request.base.ref }}"  ${{ contains(github.event.pull_request.labels.*.name, 'changelog: released entry changed') && '--warn-only' || ''  }} 2> >(tee --append "$GITHUB_STEP_SUMMARY" >&2)

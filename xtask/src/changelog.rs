@@ -3,8 +3,10 @@ use xshell::Shell;
 
 pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     const CHANGELOG_PATH_RELATIVE: &str = "./CHANGELOG.md";
+    const WARN_LABEL: &str = "changelog: released entry changed";
 
     let emit_github_messages = args.contains("--emit-github-messages");
+    let warn_only = args.contains("--warn-only");
 
     let from_branch = args
         .free_from_str()
@@ -65,11 +67,24 @@ pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Resu
             eprintln!("{}", hunk.contents);
 
             if emit_github_messages {
+                let severity = if warn_only { "warning" } else { "error" };
                 let title = "Released changelog content changed";
-                let message =
+                let mut message =
                     "This PR changes changelog content that is already released.".to_owned();
+                if !warn_only {
+                    // NOTE: Keep this label name in sync. with CI's branching logic.
+                    message += &format!(
+                        concat!(
+                            "%0A%0A", // NOTE: newlines escaped for GitHub message format
+                            "If you know what you're doing, ",
+                            "you can add the `{}` label ",
+                            "and reduce this error's severity to a warning."
+                        ),
+                        WARN_LABEL
+                    );
+                }
                 println!(
-                    "::error file=CHANGELOG.md,line={},endLine={},title={title}::{message}",
+                    "::{severity} file=CHANGELOG.md,line={},endLine={},title={title}::{message}",
                     hunk.change_start_line_num, hunk.change_end_line_num,
                 )
             }
@@ -82,7 +97,12 @@ pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Resu
             "one or more checks against `{}` failed; see above for details",
             CHANGELOG_PATH_RELATIVE,
         );
-        Err(anyhow::Error::msg(msg))
+        if warn_only {
+            log::warn!("{msg}");
+            Ok(())
+        } else {
+            Err(anyhow::Error::msg(msg))
+        }
     } else {
         Ok(())
     }
