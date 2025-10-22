@@ -578,6 +578,13 @@ impl super::Device {
         let images =
             unsafe { functor.get_swapchain_images(raw) }.map_err(super::map_host_device_oom_err)?;
 
+        let fence = unsafe {
+            self.shared
+                .raw
+                .create_fence(&vk::FenceCreateInfo::default(), None)
+                .map_err(super::map_host_device_oom_err)?
+        };
+
         // NOTE: It's important that we define the same number of acquire/present semaphores
         // as we will need to index into them with the image index.
         let acquire_semaphores = (0..=images.len())
@@ -597,6 +604,7 @@ impl super::Device {
             functor,
             device: Arc::clone(&self.shared),
             images,
+            fence,
             config: config.clone(),
             acquire_semaphores,
             next_acquire_index: 0,
