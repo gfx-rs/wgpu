@@ -103,6 +103,7 @@ impl<W: Write> Writer<W> {
         self.namer.reset(
             module,
             &crate::keywords::wgsl::RESERVED_SET,
+            &crate::keywords::wgsl::BUILTIN_IDENTIFIER_SET,
             // an identifier must not start with two underscore
             proc::CaseInsensitiveKeywordSet::empty(),
             &["__", "_naga"],

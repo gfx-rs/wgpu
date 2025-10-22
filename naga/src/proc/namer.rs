@@ -91,6 +91,7 @@ pub struct Namer {
     /// The last numeric suffix used for each base name. Zero means "no suffix".
     unique: FastHashMap<String, u32>,
     keywords: &'static KeywordSet,
+    builtin_identifiers: &'static KeywordSet,
     keywords_case_insensitive: &'static CaseInsensitiveKeywordSet,
     reserved_prefixes: Vec<&'static str>,
 }
@@ -174,6 +175,13 @@ impl Namer {
     /// Guarantee uniqueness by applying a numeric suffix when necessary. If `label_raw`
     /// itself ends with digits, separate them from the suffix with an underscore.
     pub fn call(&mut self, label_raw: &str) -> String {
+        self.call_impl(label_raw, false)
+    }
+
+    /// See documentation of [`Self::call`]. Additionally this function allows ignoring
+    /// `Namer::builtin_identifiers` mainly for [`NameKey::StructMember`] since struct members
+    /// can't shadow builtin identifiers.
+    pub fn call_impl(&mut self, label_raw: &str, ignore_builtin_identifiers: bool) -> String {
         use core::fmt::Write as _; // for write!-ing to Strings
 
         let base = self.sanitize(label_raw);
@@ -197,6 +205,8 @@ impl Namer {
                 if base.ends_with(char::is_numeric)
                     || self.keywords.contains(base.as_ref())
                     || self.keywords_case_insensitive.contains(base.as_ref())
+                    || (!ignore_builtin_identifiers
+                        && self.builtin_identifiers.contains(base.as_ref()))
                 {
                     suffixed.push(SEPARATOR);
                 }
@@ -210,10 +220,22 @@ impl Namer {
     }
 
     pub fn call_or(&mut self, label: &Option<String>, fallback: &str) -> String {
-        self.call(match *label {
-            Some(ref name) => name,
-            None => fallback,
-        })
+        self.call_or_impl(label, fallback, false)
+    }
+
+    fn call_or_impl(
+        &mut self,
+        label: &Option<String>,
+        fallback: &str,
+        ignore_builtin_identifiers: bool,
+    ) -> String {
+        self.call_impl(
+            match *label {
+                Some(ref name) => name,
+                None => fallback,
+            },
+            ignore_builtin_identifiers,
+        )
     }
 
     /// Enter a local namespace for things like structs.
@@ -232,6 +254,7 @@ impl Namer {
         &mut self,
         module: &crate::Module,
         reserved_keywords: &'static KeywordSet,
+        builtin_identifiers: &'static KeywordSet,
         reserved_keywords_case_insensitive: &'static CaseInsensitiveKeywordSet,
         reserved_prefixes: &[&'static str],
         output: &mut FastHashMap<NameKey, String>,
@@ -241,6 +264,7 @@ impl Namer {
 
         self.unique.clear();
         self.keywords = reserved_keywords;
+        self.builtin_identifiers = builtin_identifiers;
         self.keywords_case_insensitive = reserved_keywords_case_insensitive;
 
         // Choose fallback names for anonymous entry point return types.
@@ -282,7 +306,7 @@ impl Namer {
                 // struct members have their own namespace, because access is always prefixed
                 self.namespace(members.len(), |namer| {
                     for (index, member) in members.iter().enumerate() {
-                        let name = namer.call_or(&member.name, "member");
+                        let name = namer.call_or_impl(&member.name, "member", true);
                         output.insert(NameKey::StructMember(ty_handle, index as u32), name);
                     }
                 })
