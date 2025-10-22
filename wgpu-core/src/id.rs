@@ -1,5 +1,4 @@
-use crate::{storage::StorageItem, Epoch, Index};
-use alloc::sync::Arc;
+use crate::{Epoch, Index};
 use core::{
     cmp::Ordering,
     fmt::{self, Debug},
@@ -96,6 +95,7 @@ pub enum SerialId {
     Id(Index, Epoch),
 }
 
+#[cfg(feature = "serde")]
 impl From<RawId> for SerialId {
     fn from(id: RawId) -> Self {
         let (index, epoch) = id.unzip();
@@ -103,14 +103,17 @@ impl From<RawId> for SerialId {
     }
 }
 
+#[cfg(feature = "serde")]
 pub struct ZeroIdError;
 
+#[cfg(feature = "serde")]
 impl fmt::Display for ZeroIdError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "IDs may not be zero")
     }
 }
 
+#[cfg(feature = "serde")]
 impl TryFrom<SerialId> for RawId {
     type Error = ZeroIdError;
     fn try_from(id: SerialId) -> Result<Self, ZeroIdError> {
@@ -127,21 +130,24 @@ impl TryFrom<SerialId> for RawId {
 ///
 /// This is used for tracing.
 #[allow(dead_code)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug)]
+#[cfg(feature = "serde")]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum PointerId<T: Marker> {
     // The only variant forces RON to not ignore "Id"
     PointerId(usize, #[serde(skip)] PhantomData<T>),
 }
 
+#[cfg(feature = "serde")]
 impl<T: Marker> Copy for PointerId<T> {}
 
+#[cfg(feature = "serde")]
 impl<T: Marker> Clone for PointerId<T> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
+#[cfg(feature = "serde")]
 impl<T: Marker> PartialEq for PointerId<T> {
     fn eq(&self, other: &Self) -> bool {
         let PointerId::PointerId(this, _) = self;
@@ -150,8 +156,10 @@ impl<T: Marker> PartialEq for PointerId<T> {
     }
 }
 
+#[cfg(feature = "serde")]
 impl<T: Marker> Eq for PointerId<T> {}
 
+#[cfg(feature = "serde")]
 impl<T: Marker> Hash for PointerId<T> {
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         let PointerId::PointerId(this, _) = self;
@@ -159,8 +167,9 @@ impl<T: Marker> Hash for PointerId<T> {
     }
 }
 
-impl<T: StorageItem> From<&Arc<T>> for PointerId<T::Marker> {
-    fn from(arc: &Arc<T>) -> Self {
+#[cfg(feature = "serde")]
+impl<T: crate::storage::StorageItem> From<&alloc::sync::Arc<T>> for PointerId<T::Marker> {
+    fn from(arc: &alloc::sync::Arc<T>) -> Self {
         // Since the memory representation of `Arc<T>` is just a pointer to
         // `ArcInner<T>`, it would be nice to use that pointer as the trace ID,
         // since many `into_trace` implementations would then be no-ops at
@@ -168,7 +177,7 @@ impl<T: StorageItem> From<&Arc<T>> for PointerId<T::Marker> {
         // data, not to the `ArcInner`. The `ArcInner` stores the reference
         // counts before the data, so the machine code for this conversion has
         // to add an offset to the pointer.
-        PointerId::PointerId(Arc::as_ptr(arc) as usize, PhantomData)
+        PointerId::PointerId(alloc::sync::Arc::as_ptr(arc) as usize, PhantomData)
     }
 }
 
