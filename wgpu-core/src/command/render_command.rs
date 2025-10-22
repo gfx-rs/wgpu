@@ -3,6 +3,7 @@ use wgt::{BufferAddress, BufferSize, Color};
 use super::{DrawCommandFamily, Rect};
 use crate::command::{serde_object_reference_struct, ArcReferences, ReferenceType};
 
+#[cfg(feature = "serde")]
 use macro_rules_attribute::apply;
 
 /// cbindgen:ignore

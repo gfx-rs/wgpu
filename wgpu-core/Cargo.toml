@@ -69,7 +69,14 @@ observe_locks = ["std", "dep:ron", "serde/serde_derive"]
 # --------------------------------------------------------------------
 
 ## Enables serialization via `serde` on common wgpu types.
-serde = ["dep:serde", "wgpu-types/serde", "arrayvec/serde", "hashbrown/serde", "smallvec/serde"]
+serde = [
+    "dep:serde",
+    "wgpu-types/serde",
+    "arrayvec/serde",
+    "hashbrown/serde",
+    "smallvec/serde",
+    "macro_rules_attribute",
+]
 
 ## Enable API tracing.
 trace = ["serde", "std", "dep:ron", "naga/serialize", "wgpu-types/trace"]
@@ -178,7 +185,7 @@ document-features.workspace = true
 hashbrown.workspace = true
 indexmap.workspace = true
 log.workspace = true
-macro_rules_attribute.workspace = true
+macro_rules_attribute = { workspace = true, optional = true }
 once_cell = { workspace = true, features = ["std"] }
 parking_lot.workspace = true
 profiling = { workspace = true, default-features = false }

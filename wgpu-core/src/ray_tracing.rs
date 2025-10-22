@@ -10,6 +10,7 @@
 
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
+#[cfg(feature = "serde")]
 use macro_rules_attribute::apply;
 use thiserror::Error;
 use wgt::{
