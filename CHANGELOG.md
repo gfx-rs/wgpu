@@ -139,6 +139,7 @@ By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206
 - `wgpu_types::PollError` now always implements the `Error` trait. By @kpreid in [#8384](https://github.com/gfx-rs/wgpu/pull/8384).
 - The texture subresources used by the color attachments of a render pass are no longer allowed to overlap when accessed via different texture views. By @andyleiserson in [#8402](https://github.com/gfx-rs/wgpu/pull/8402).
 - Fixed a bug where the texture aspect was not passed through when calling `copy_texture_to_buffer` in WebGPU, causing the copy to fail for depth/stencil textures. By @Tim-Evans-Seequent in [#8445](https://github.com/gfx-rs/wgpu/pull/8445).
+- Validate that buffers are unmapped in `write_buffer` calls. By @ErichDonGubler in [#8454](https://github.com/gfx-rs/wgpu/pull/8454).
 
 #### DX12
 

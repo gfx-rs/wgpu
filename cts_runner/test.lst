@@ -87,7 +87,8 @@ webgpu:api,validation,encoding,queries,general:occlusion_query,query_index:*
 webgpu:shader,validation,extension,dual_source_blending:blend_src_syntax_validation:*
 webgpu:api,validation,image_copy,buffer_texture_copies:depth_stencil_format,copy_usage_and_aspect:*
 webgpu:api,validation,image_copy,buffer_texture_copies:depth_stencil_format,copy_buffer_size:*
-fails-if(dx12,vulkan,metal) webgpu:api,validation,queue,buffer_mapped:writeBuffer:*
+// `vulkan` failure: https://github.com/gfx-rs/wgpu/issues/????
+fails-if(vulkan) webgpu:api,validation,queue,buffer_mapped:writeBuffer:*
 webgpu:api,validation,queue,buffer_mapped:copyBufferToBuffer:*
 webgpu:api,validation,queue,buffer_mapped:copyBufferToTexture:*
 webgpu:api,validation,queue,buffer_mapped:copyTextureToBuffer:*
