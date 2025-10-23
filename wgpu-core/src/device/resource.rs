@@ -900,7 +900,7 @@ impl Device {
             }
         }
 
-        let mut usage = conv::map_buffer_usage(desc.usage);
+        let mut usage = conv::map_buffer_usage(desc.usage, desc.mapped_at_creation);
 
         if desc.usage.contains(wgt::BufferUsages::INDIRECT) {
             self.require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
@@ -990,7 +990,10 @@ impl Device {
 
         let buffer_use = if !desc.mapped_at_creation {
             wgt::BufferUses::empty()
-        } else if desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
+        } else if desc
+            .usage
+            .intersects(wgt::BufferUsages::MAP_WRITE | wgt::BufferUsages::MAP_READ)
+        {
             // buffer is mappable, so we are just doing that at start
             let map_size = buffer.size;
             let mapping = if map_size == 0 {

@@ -369,6 +369,7 @@ enum BufferBacking {
     GlCachedOnHost {
         raw: glow::Buffer,
         cache: Arc<MaybeMutex<Vec<u8>>>,
+        writeable_while_mapped: bool,
     },
 }
 

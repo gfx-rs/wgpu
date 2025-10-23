@@ -28,9 +28,6 @@ fn cloneable_buffers(ctx: TestingContext) {
 
     buffer.unmap();
 
-    // This is actually a bug, we should not need to call submit to make the buffer contents visible.
-    ctx.queue.submit([]);
-
     let cloned_buffer = buffer.clone();
     let cloned_buffer_contents = buffer_contents.clone();
 

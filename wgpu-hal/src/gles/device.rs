@@ -528,7 +528,10 @@ impl crate::Device for super::Device {
 
         let host_backed_bytes = || Arc::new(MaybeMutex::new(vec![0; desc.size as usize]));
 
-        if emulate_map && desc.usage.intersects(wgt::BufferUses::MAP_WRITE) {
+        if emulate_map
+            && (desc.usage.intersects(wgt::BufferUses::MAP_WRITE)
+                && !desc.usage.intersects(wgt::BufferUses::MAP_READ))
+        {
             return Ok(super::Buffer {
                 backing: BufferBacking::Host {
                     data: host_backed_bytes(),
@@ -626,6 +629,7 @@ impl crate::Device for super::Device {
             BufferBacking::GlCachedOnHost {
                 cache: host_backed_bytes(),
                 raw,
+                writeable_while_mapped: desc.usage.contains(wgt::BufferUses::MAP_WRITE),
             }
         } else {
             BufferBacking::Gl { raw }
@@ -644,7 +648,12 @@ impl crate::Device for super::Device {
 
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
         match buffer.backing {
-            BufferBacking::Gl { raw } | BufferBacking::GlCachedOnHost { raw, cache: _ } => {
+            BufferBacking::Gl { raw }
+            | BufferBacking::GlCachedOnHost {
+                raw,
+                cache: _,
+                writeable_while_mapped: _,
+            } => {
                 let gl = &self.shared.context.lock();
                 unsafe { gl.delete_buffer(raw) };
             }
@@ -683,7 +692,11 @@ impl crate::Device for super::Device {
                     )
                 }
             }
-            &BufferBacking::GlCachedOnHost { raw, ref cache } => {
+            &BufferBacking::GlCachedOnHost {
+                raw,
+                ref cache,
+                writeable_while_mapped: _,
+            } => {
                 let gl = &self.shared.context.lock();
                 unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
                 let mut guard = lock(cache);
@@ -705,6 +718,17 @@ impl crate::Device for super::Device {
                 unsafe { gl.unmap_buffer(buffer.target) };
                 unsafe { gl.bind_buffer(buffer.target, None) };
                 *lock(&buffer.offset_of_current_mapping) = 0;
+            }
+            &BufferBacking::GlCachedOnHost {
+                raw,
+                ref cache,
+                writeable_while_mapped,
+            } if writeable_while_mapped => {
+                let gl = &self.shared.context.lock();
+                let data = lock(cache);
+                unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
+                unsafe { gl.buffer_sub_data_u8_slice(buffer.target, 0, &data) };
+                unsafe { gl.bind_buffer(buffer.target, None) };
             }
             &BufferBacking::Host { .. } | &BufferBacking::GlCachedOnHost { .. } => {}
         }

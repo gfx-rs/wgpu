@@ -26,7 +26,7 @@ pub fn is_valid_external_image_copy_dst_texture_format(format: wgt::TextureForma
     }
 }
 
-pub fn map_buffer_usage(usage: wgt::BufferUsages) -> wgt::BufferUses {
+pub fn map_buffer_usage(usage: wgt::BufferUsages, mapped_at_creation: bool) -> wgt::BufferUses {
     let mut u = wgt::BufferUses::empty();
     u.set(
         wgt::BufferUses::MAP_READ,
@@ -34,7 +34,8 @@ pub fn map_buffer_usage(usage: wgt::BufferUsages) -> wgt::BufferUses {
     );
     u.set(
         wgt::BufferUses::MAP_WRITE,
-        usage.contains(wgt::BufferUsages::MAP_WRITE),
+        usage.contains(wgt::BufferUsages::MAP_WRITE)
+            || (usage.contains(wgt::BufferUsages::MAP_READ) && mapped_at_creation),
     );
     u.set(
         wgt::BufferUses::COPY_SRC,
