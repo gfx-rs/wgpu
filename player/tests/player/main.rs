@@ -103,7 +103,7 @@ impl Test<'_> {
         println!("\t\t\tMapping...");
         for expect in &self.expectations {
             player
-                .get_buffer(expect.buffer)
+                .resolve_buffer_id(expect.buffer)
                 .map_async(
                     expect.offset,
                     Some(expect.data.len() as u64),
@@ -116,16 +116,17 @@ impl Test<'_> {
         }
 
         println!("\t\t\tWaiting...");
-        device.poll(wgt::PollType::Wait {
-            submission_index: None,
-            timeout: Some(std::time::Duration::from_secs(1)), // Tests really shouldn't need longer than that!
-        })
-        .unwrap();
+        device
+            .poll(wgt::PollType::Wait {
+                submission_index: None,
+                timeout: Some(std::time::Duration::from_secs(1)), // Tests really shouldn't need longer than that!
+            })
+            .unwrap();
 
         for expect in self.expectations {
             println!("\t\t\tChecking {}", expect.name);
             let (ptr, size) = player
-                .get_buffer(expect.buffer)
+                .resolve_buffer_id(expect.buffer)
                 .get_mapped_range(expect.offset, Some(expect.data.len() as wgt::BufferAddress))
                 .unwrap();
             let contents = unsafe { slice::from_raw_parts(ptr.as_ptr(), size as usize) };

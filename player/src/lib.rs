@@ -434,18 +434,11 @@ impl Player {
         }
     }
 
-    fn resolve_buffer_id(
+    pub fn resolve_buffer_id(
         &self,
         id: wgc::id::PointerId<wgc::id::markers::Buffer>,
     ) -> Arc<wgc::resource::Buffer> {
         self.buffers.get(&id).expect("invalid buffer").clone()
-    }
-
-    pub fn get_buffer(
-        &self,
-        id: wgc::id::PointerId<wgc::id::markers::Buffer>,
-    ) -> Arc<wgc::resource::Buffer> {
-        self.resolve_buffer_id(id)
     }
 
     fn resolve_texture_id(
