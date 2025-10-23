@@ -174,8 +174,7 @@ impl UserClosures {
             .extend(other.device_lost_invocations);
     }
 
-    /// Not a public API. For use by `player` only.
-    pub fn fire(self) {
+    fn fire(self) {
         // Note: this logic is specifically moved out of `handle_mapping()` in order to
         // have nothing locked by the time we execute users callback code.
 

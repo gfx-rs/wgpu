@@ -1792,7 +1792,7 @@ impl Global {
 
         let device = self.hub.devices.get(device_id);
 
-        let (closures, result) = device.poll(poll_type);
+        let (closures, result) = device.poll_and_return_closures(poll_type);
 
         closures.fire();
 
@@ -1825,7 +1825,7 @@ impl Global {
                     wgt::PollType::Poll
                 };
 
-                let (closures, result) = device.poll(poll_type);
+                let (closures, result) = device.poll_and_return_closures(poll_type);
 
                 let is_queue_empty = matches!(result, Ok(wgt::PollStatus::QueueEmpty));
 

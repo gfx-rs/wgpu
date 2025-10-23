@@ -715,6 +715,21 @@ impl Device {
     pub fn poll(
         &self,
         poll_type: wgt::PollType<crate::SubmissionIndex>,
+    ) -> Result<wgt::PollStatus, WaitIdleError> {
+        let (user_closures, result) = self.poll_and_return_closures(poll_type);
+        user_closures.fire();
+        result
+    }
+
+    /// Poll the device, returning any `UserClosures` that need to be executed.
+    ///
+    /// The caller must invoke the `UserClosures` even if this function returns
+    /// an error. This is an internal helper, used by `Device::poll` and
+    /// `Global::poll_all_devices`, so that `poll_all_devices` can invoke
+    /// closures once after all devices have been polled.
+    pub(crate) fn poll_and_return_closures(
+        &self,
+        poll_type: wgt::PollType<crate::SubmissionIndex>,
     ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
         let snatch_guard = self.snatchable_lock.read();
         let fence = self.fence.read();

@@ -116,12 +116,11 @@ impl Test<'_> {
         }
 
         println!("\t\t\tWaiting...");
-        let (user_closures, result) = device.poll(wgt::PollType::Wait {
+        device.poll(wgt::PollType::Wait {
             submission_index: None,
             timeout: Some(std::time::Duration::from_secs(1)), // Tests really shouldn't need longer than that!
-        });
-        user_closures.fire();
-        result.unwrap();
+        })
+        .unwrap();
 
         for expect in self.expectations {
             println!("\t\t\tChecking {}", expect.name);
