@@ -1155,6 +1155,33 @@ impl Queue {
         Ok(())
     }
 
+    #[cfg(feature = "trace")]
+    fn trace_submission(
+        &self,
+        submit_index: SubmissionIndex,
+        commands: Vec<crate::command::Command<crate::command::PointerReferences>>,
+    ) {
+        if let Some(ref mut trace) = *self.device.trace.lock() {
+            trace.add(Action::Submit(submit_index, commands));
+        }
+    }
+
+    #[cfg(feature = "trace")]
+    fn trace_failed_submission(
+        &self,
+        submit_index: SubmissionIndex,
+        commands: Option<Vec<crate::command::Command<crate::command::PointerReferences>>>,
+        error: alloc::string::String,
+    ) {
+        if let Some(ref mut trace) = *self.device.trace.lock() {
+            trace.add(Action::FailedCommands {
+                commands,
+                failed_at_submit: Some(submit_index),
+                error,
+            });
+        }
+    }
+
     pub fn submit(
         &self,
         command_buffers: &[Arc<CommandBuffer>],
@@ -1209,19 +1236,15 @@ impl Queue {
                         #[allow(unused_mut)]
                         let mut cmd_buf_data = command_buffer.take_finished();
 
-                        #[cfg(feature = "trace")]
-                        if let Some(ref mut trace) = *self.device.trace.lock() {
-                            if let Ok(ref mut cmd_buf_data) = cmd_buf_data {
-                                trace.add(Action::Submit(
-                                    submit_index,
-                                    cmd_buf_data.trace_commands.take().unwrap(),
-                                ));
-                            }
-                        }
-
                         if first_error.is_some() {
                             continue;
                         }
+
+                        #[cfg(feature = "trace")]
+                        let trace_commands = cmd_buf_data
+                            .as_mut()
+                            .ok()
+                            .and_then(|data| mem::take(&mut data.trace_commands));
 
                         let mut baked = match cmd_buf_data {
                             Ok(cmd_buf_data) => {
@@ -1235,12 +1258,30 @@ impl Queue {
                                     &mut command_index_guard,
                                 );
                                 if let Err(err) = res {
+                                    #[cfg(feature = "trace")]
+                                    self.trace_failed_submission(
+                                        submit_index,
+                                        trace_commands,
+                                        err.to_string(),
+                                    );
                                     first_error.get_or_insert(err);
                                     continue;
                                 }
+
+                                #[cfg(feature = "trace")]
+                                if let Some(commands) = trace_commands {
+                                    self.trace_submission(submit_index, commands);
+                                }
+
                                 cmd_buf_data.into_baked_commands()
                             }
                             Err(err) => {
+                                #[cfg(feature = "trace")]
+                                self.trace_failed_submission(
+                                    submit_index,
+                                    trace_commands,
+                                    err.to_string(),
+                                );
                                 first_error.get_or_insert(err.into());
                                 continue;
                             }

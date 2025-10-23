@@ -130,6 +130,14 @@ pub enum Action<'a, R: ReferenceType> {
         size: wgt::Extent3d,
     },
     Submit(crate::SubmissionIndex, Vec<Command<R>>),
+    FailedCommands {
+        commands: Option<Vec<Command<R>>>,
+        /// If `None`, then encoding failed due to a validation error (returned
+        /// from `CommandEncoder::finish`). If `Some`, submission failed due to
+        /// a resource having been destroyed.
+        failed_at_submit: Option<crate::SubmissionIndex>,
+        error: String,
+    },
     CreateBlas {
         id: R::Blas,
         desc: crate::resource::BlasDescriptor<'a>,

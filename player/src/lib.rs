@@ -417,6 +417,23 @@ impl Player {
                 let buffer = wgc::command::CommandBuffer::from_trace(device, resolved_commands);
                 queue.submit(&[buffer]).unwrap();
             }
+            Action::FailedCommands {
+                commands,
+                failed_at_submit,
+                error,
+            } => {
+                let action = if failed_at_submit.is_some() {
+                    "submitting"
+                } else {
+                    "encoding"
+                };
+                if let Some(commands) = commands {
+                    log::trace!(
+                        "Trace recorded an error {action} the following commands: {commands:#?}"
+                    );
+                }
+                panic!("Error recorded in trace: {error}");
+            }
             Action::CreateBlas { id, desc, sizes } => {
                 let blas = device.create_blas(&desc, sizes).expect("create_blas error");
                 self.blas_s.insert(id, blas);
