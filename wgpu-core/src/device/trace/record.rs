@@ -1,5 +1,5 @@
 use alloc::{borrow::Cow, string::ToString, sync::Arc, vec::Vec};
-use core::convert::Infallible;
+use core::{any::Any, convert::Infallible};
 use std::io::Write as _;
 
 use crate::{
@@ -39,7 +39,7 @@ pub(crate) fn new_render_bundle_encoder_descriptor(
     }
 }
 
-pub trait Trace: Send + Sync {
+pub trait Trace: Any + Send + Sync {
     fn make_binary(&mut self, kind: DataKind, data: &[u8]) -> Data;
 
     fn make_string(&mut self, kind: DataKind, data: &str) -> Data;
@@ -831,6 +831,17 @@ impl<T: IntoTrace> IntoTrace for Option<T> {
 fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, PointerReferences> {
     use Action as A;
     match action {
+        A::Init { desc, backend } => A::Init {
+            desc: wgt::DeviceDescriptor {
+                label: desc.label.map(|l| Cow::Owned(l.into_owned())),
+                required_features: desc.required_features,
+                required_limits: desc.required_limits,
+                experimental_features: desc.experimental_features,
+                memory_hints: desc.memory_hints,
+                trace: desc.trace,
+            },
+            backend,
+        },
         A::ConfigureSurface(surface, config) => A::ConfigureSurface(surface, config),
         A::CreateBuffer(buffer, desc) => A::CreateBuffer(
             buffer,
@@ -896,8 +907,7 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         A::DestroyBlas(blas) => A::DestroyBlas(blas),
         A::DestroyTlas(tlas) => A::DestroyTlas(tlas),
 
-        A::Init { .. }
-        | A::CreateTexture(..)
+        A::CreateTexture(..)
         | A::CreateTextureView { .. }
         | A::CreateExternalTexture { .. }
         | A::CreateSampler(..)

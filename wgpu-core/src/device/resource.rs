@@ -642,6 +642,14 @@ impl Device {
         }
     }
 
+    /// Stop tracing and return the trace object.
+    ///
+    /// This is mostly useful for in-memory traces.
+    #[cfg(feature = "trace")]
+    pub fn take_trace(&self) -> Option<Box<dyn trace::Trace + Send + Sync + 'static>> {
+        self.trace.lock().take()
+    }
+
     /// Checks that we are operating within the memory budget reported by the native APIs.
     ///
     /// If we are not, the device gets invalidated.

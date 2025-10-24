@@ -1993,6 +1993,15 @@ impl Global {
         device.generate_allocator_report()
     }
 
+    #[cfg(feature = "trace")]
+    pub fn device_take_trace(
+        &self,
+        device_id: DeviceId,
+    ) -> Option<Box<dyn trace::Trace + Send + Sync + 'static>> {
+        let device = self.hub.devices.get(device_id);
+        device.take_trace()
+    }
+
     pub fn queue_drop(&self, queue_id: QueueId) {
         profiling::scope!("Queue::drop");
         api_log!("Queue::drop {queue_id:?}");
