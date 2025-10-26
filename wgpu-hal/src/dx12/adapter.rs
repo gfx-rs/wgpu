@@ -611,6 +611,7 @@ impl super::Adapter {
             max_srv_count / 2
         };
 
+        // See https://microsoft.github.io/DirectX-Specs/d3d/ViewInstancing.html#maximum-viewinstancecount
         let max_multiview_view_count = if view_instancing { 4 } else { 0 };
 
         Some(crate::ExposedAdapter {
