@@ -1,9 +1,9 @@
+//! Renders different content to different layers of an array texture using multiview,
+//! a feature commonly used for VR rendering.
+
 use std::{num::NonZero, time::Instant};
 
-use wgpu::{
-    util::{BufferInitDescriptor, DeviceExt, TextureBlitter},
-    vertex_attr_array,
-};
+use wgpu::util::TextureBlitter;
 
 const TEXTURE_SIZE: u32 = 512;
 
@@ -12,7 +12,6 @@ const LAYERS: u32 = 2;
 
 pub struct Example {
     pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
     view: wgpu::TextureView,
     view1: wgpu::TextureView,
     view2: wgpu::TextureView,
@@ -26,17 +25,7 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
-        let shader_src = "
-            @vertex
-            fn vs_main(@location(0) position: vec2f) -> @builtin(position) vec4f {
-                return vec4f(position, 0.0, 1.0);
-            }
-
-            @fragment
-            fn fs_main(@builtin(view_index) view_index: u32) -> @location(0) vec4f {
-                return vec4f(f32(view_index) * 0.25 + 0.125);
-            }
-        ";
+        let shader_src = include_str!("shader.wgsl");
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
@@ -46,11 +35,7 @@ impl crate::framework::Example for Example {
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
             vertex: wgpu::VertexState {
-                buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: 8,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &vertex_attr_array![0 => Float32x2],
-                }],
+                buffers: &[],
                 module: &shader,
                 entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
@@ -71,21 +56,6 @@ impl crate::framework::Example for Example {
             layout: None,
             depth_stencil: None,
             cache: None,
-        });
-        let vertex_buffer_content: &[f32; 12] = &[
-            // Triangle 1
-            -1.0, -1.0, // Bottom left
-            1.0, 1.0, // Top right
-            -1.0, 1.0, // Top left
-            // Triangle 2
-            -1.0, -1.0, // Bottom left
-            1.0, -1.0, // Bottom right
-            1.0, 1.0, // Top right
-        ];
-        let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
-            label: None,
-            contents: bytemuck::cast_slice(vertex_buffer_content),
-            usage: wgpu::BufferUsages::VERTEX,
         });
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: None,
@@ -139,7 +109,6 @@ impl crate::framework::Example for Example {
         let blitter = wgpu::util::TextureBlitter::new(device, config.format);
         Self {
             pipeline,
-            vertex_buffer,
             view,
             view1,
             view2,
@@ -147,6 +116,7 @@ impl crate::framework::Example for Example {
             start_time: Instant::now(),
         }
     }
+
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         {
@@ -171,7 +141,6 @@ impl crate::framework::Example for Example {
                 multiview_mask: NonZero::new(multiview_mask),
             });
             rpass.set_pipeline(&self.pipeline);
-            rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             rpass.draw(0..6, 0..1);
         }
         if !(Instant::now() - self.start_time)
@@ -184,9 +153,11 @@ impl crate::framework::Example for Example {
         }
         queue.submit(Some(encoder.finish()));
     }
+
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
         Default::default()
     }
+
     fn required_features() -> wgpu::Features {
         wgpu::Features::MULTIVIEW
             | if LAYERS > 2 {
@@ -195,12 +166,14 @@ impl crate::framework::Example for Example {
                 wgpu::Features::empty()
             }
     }
+
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits {
             max_multiview_view_count: LAYERS,
             ..Default::default()
         }
     }
+
     fn resize(
         &mut self,
         _config: &wgpu::SurfaceConfiguration,
