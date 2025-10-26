@@ -910,6 +910,7 @@ impl super::PrivateCapabilities {
                 while factor < 32 && device.supports_vertex_amplification_count(factor * 2) {
                     factor *= 2
                 }
+                factor as u32
             },
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             supports_memoryless_storage: if family_check {
