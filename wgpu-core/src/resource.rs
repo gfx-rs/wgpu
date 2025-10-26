@@ -816,7 +816,7 @@ impl Buffer {
                 range,
                 host,
             } => {
-                #[allow(clippy::collapsible_if)]
+                #[cfg_attr(not(feature = "trace"), expect(clippy::collapsible_if))]
                 if host == HostMap::Write {
                     #[cfg(feature = "trace")]
                     if let Some(ref mut trace) = *device.trace.lock() {

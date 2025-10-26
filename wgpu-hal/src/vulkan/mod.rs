@@ -390,6 +390,8 @@ struct Swapchain {
     functor: khr::swapchain::Device,
     device: Arc<DeviceShared>,
     images: Vec<vk::Image>,
+    /// Fence used to wait on the acquired image.
+    fence: vk::Fence,
     config: crate::SurfaceConfiguration,
 
     /// Semaphores used between image acquisition and the first submission

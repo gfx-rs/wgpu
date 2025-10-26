@@ -105,12 +105,17 @@ One other breaking change worth noting is that in WGSL `@builtin(view_index)` no
 
 By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206).
 
+### New Features
+
+- Added support for transient textures on Vulkan and Metal. By @opstic in [#8247](https://github.com/gfx-rs/wgpu/pull/8247)
+
 ### Changes
 
 #### General
 
 - Texture now has `from_custom`. By @R-Cramer4 in [#8315](https://github.com/gfx-rs/wgpu/pull/8315).
 - Using both the wgpu command encoding APIs and `CommandEncoder::as_hal_mut` on the same encoder will now result in a panic.
+- Allow `include_spirv!` and `include_spirv_raw!` macros to be used in constants and statics. By @clarfonthey in [#8250](https://github.com/gfx-rs/wgpu/pull/8250).
 
 ### Bug Fixes
 
@@ -135,6 +140,38 @@ By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206
 #### hal
 
 - `DropCallback`s are now called after dropping all other fields of their parent structs. By @jerzywilczek in [#8353](https://github.com/gfx-rs/wgpu/pull/8353)
+
+## v27.0.4 (2025-10-23)
+
+This release includes `wgpu-hal` version `27.0.4`. All other crates remain at their previous versions.
+
+### Bug Fixes
+
+#### General
+
+- Remove fragile dependency constraint on `ordered-float` that prevented semver-compatible changes above `5.0.0`. By @kpreid in [#8371](https://github.com/gfx-rs/wgpu/pull/8371).
+
+#### Vulkan
+
+- Work around extremely poor frame pacing from AMD and Nvidia cards on Windows in `Fifo` and `FifoRelaxed` present modes. This is due to the drivers implicitly using a DXGI (Direct3D) swapchain to implement these modes and it having vastly different timing properties. See https://github.com/gfx-rs/wgpu/issues/8310 and https://github.com/gfx-rs/wgpu/issues/8354 for more information. By @cwfitzgerald in [#8420](https://github.com/gfx-rs/wgpu/pull/8420).
+
+## v27.0.3 (2025-10-22)
+
+This release includes `naga`, `wgpu-core` and `wgpu-hal` version `27.0.3`. All other crates remain at their previous versions.
+
+### Bug Fixes
+
+#### naga
+
+- Fix a bug that resulted in the Metal error `program scope variable must reside in constant address space` in some cases. Backport of [#8311](https://github.com/gfx-rs/wgpu/pull/8311) by @teoxoy.
+
+#### General
+
+- Remove an assertion that causes problems if `CommandEncoder::as_hal_mut` is used. By @andyleiserson in [#8387](https://github.com/gfx-rs/wgpu/pull/8387).
+
+#### DX12
+
+- Align copies b/w textures and buffers via a single intermediate buffer per copy when `D3D12_FEATURE_DATA_D3D12_OPTIONS13.UnrestrictedBufferTextureCopyPitchSupported` is `false`. By @ErichDonGubler in [#7721](https://github.com/gfx-rs/wgpu/pull/7721), backported in [#8374](https://github.com/gfx-rs/wgpu/pull/8374).
 
 ## v27.0.2 (2025-10-03)
 
@@ -322,8 +359,6 @@ By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282), [#8285](https://
 
 - Expose `naga::front::wgsl::UnimplementedEnableExtension`. By @ErichDonGubler in [#8237](https://github.com/gfx-rs/wgpu/pull/8237).
 
-- Added support for transient textures on Vulkan and Metal. By @opstic in [#8247](https://github.com/gfx-rs/wgpu/pull/8247)
-
 ### Changes
 
 #### General
@@ -348,7 +383,6 @@ By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282), [#8285](https://
 - Require new `F16_IN_F32` downlevel flag for `quantizeToF16`, `pack2x16float`, and `unpack2x16float` in WGSL input. By @aleiserson in [#8130](https://github.com/gfx-rs/wgpu/pull/8130).
 - The error message for non-copyable depth/stencil formats no longer mentions the aspect when it is not relevant. By @reima in [#8156](https://github.com/gfx-rs/wgpu/pull/8156).
 - Track the initialization status of buffer memory correctly when `copy_texture_to_buffer` skips over padding space between rows or layers, or when the start/end of a texture-buffer transfer is not 4B aligned. By @andyleiserson in [#8099](https://github.com/gfx-rs/wgpu/pull/8099).
-- Allow `include_spirv!` and `include_spirv_raw!` macros to be used in constants and statics. By @clarfonthey in [#8250](https://github.com/gfx-rs/wgpu/pull/8250).
 
 #### naga
 
@@ -397,6 +431,26 @@ By @wumpf in [#8282](https://github.com/gfx-rs/wgpu/pull/8282), [#8285](https://
 #### General
 
 - Clarify that subgroup barriers require both the `SUBGROUP` and `SUBGROUP_BARRIER` features / capabilities. By @andyleiserson in [#8203](https://github.com/gfx-rs/wgpu/pull/8203).
+
+# v26.0.6 (2025-10-23)
+
+This release includes `wgpu-hal` version `26.0.6`. All other crates remain at their previous versions.
+
+### Bug Fixes
+
+#### Vulkan
+
+- Work around extremely poor frame pacing from AMD and Nvidia cards on Windows in `Fifo` and `FifoRelaxed` present modes. This is due to the drivers implicitly using a DXGI (Direct3D) swapchain to implement these modes and it having vastly different timing properties. See https://github.com/gfx-rs/wgpu/issues/8310 and https://github.com/gfx-rs/wgpu/issues/8354 for more information. By @cwfitzgerald in [#8420](https://github.com/gfx-rs/wgpu/pull/8420).
+
+## v26.0.5 (2025-10-21)
+
+This release includes `wgpu-hal` version `26.0.5`. All other crates remain at their previous versions.
+
+### Bug Fixes
+
+#### DX12
+
+- Align copies b/w textures and buffers via a single intermediate buffer per copy when `D3D12_FEATURE_DATA_D3D12_OPTIONS13.UnrestrictedBufferTextureCopyPitchSupported` is `false`. By @ErichDonGubler in [#7721](https://github.com/gfx-rs/wgpu/pull/7721), backported in [#8375](https://github.com/gfx-rs/wgpu/pull/8375).
 
 ## v26.0.4 (2025-08-07)
 

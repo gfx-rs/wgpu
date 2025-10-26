@@ -966,6 +966,9 @@ pub struct PhysicalDeviceProperties {
     /// `VK_KHR_multiview` extension.
     multiview: Option<vk::PhysicalDeviceMultiviewPropertiesKHR<'static>>,
 
+    /// `VK_EXT_pci_bus_info` extension.
+    pci_bus_info: Option<vk::PhysicalDevicePCIBusInfoPropertiesEXT<'static>>,
+
     /// The device API version.
     ///
     /// Which is the version of Vulkan supported for device-level functionality.
@@ -1406,6 +1409,8 @@ impl super::InstanceShared {
                     >= vk::API_VERSION_1_3
                     || capabilities.supports_extension(ext::subgroup_size_control::NAME);
                 let supports_robustness2 = capabilities.supports_extension(ext::robustness2::NAME);
+                let supports_pci_bus_info =
+                    capabilities.supports_extension(ext::pci_bus_info::NAME);
 
                 let supports_acceleration_structure =
                     capabilities.supports_extension(khr::acceleration_structure::NAME);
@@ -1459,6 +1464,13 @@ impl super::InstanceShared {
                     let next = capabilities
                         .robustness2
                         .insert(vk::PhysicalDeviceRobustness2PropertiesEXT::default());
+                    properties2 = properties2.push_next(next);
+                }
+
+                if supports_pci_bus_info {
+                    let next = capabilities
+                        .pci_bus_info
+                        .insert(vk::PhysicalDevicePCIBusInfoPropertiesEXT::default());
                     properties2 = properties2.push_next(next);
                 }
 
@@ -1693,6 +1705,16 @@ impl super::Instance {
                 vk::PhysicalDeviceType::CPU => wgt::DeviceType::Cpu,
                 _ => wgt::DeviceType::Other,
             },
+            device_pci_bus_id: phd_capabilities
+                .pci_bus_info
+                .filter(|info| info.pci_bus != 0 || info.pci_device != 0)
+                .map(|info| {
+                    format!(
+                        "{:04x}:{:02x}:{:02x}.{}",
+                        info.pci_domain, info.pci_bus, info.pci_device, info.pci_function
+                    )
+                })
+                .unwrap_or_default(),
             driver: {
                 phd_capabilities
                     .driver
