@@ -1394,7 +1394,7 @@ impl RenderPassInfo {
         if let Some(mask) = multiview_mask {
             // 0x01 will have msb 0
             let mask_msb = 31 - mask.leading_zeros();
-            let detected_mv = detected_multiview.map(NonZeroU32::get).unwrap_or(0);
+            let detected_mv = detected_multiview.map(NonZeroU32::get).unwrap_or(1);
             if mask_msb >= detected_mv {
                 return Err(RenderPassErrorInner::MultiViewMismatch);
             }
