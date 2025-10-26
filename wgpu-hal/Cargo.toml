@@ -262,7 +262,7 @@ glutin_wgl_sys = { workspace = true, optional = true }
 # This doesn't support aarch64. See https://github.com/gfx-rs/wgpu/issues/6860.
 #
 # ⚠️ Keep in sync with static_dxc cfg in build.rs and cfg_alias in `wgpu` crate ⚠️
-[target.'cfg(all(windows, not(target_arch = "aarch64")))'.dependencies]
+[target.'cfg(all(windows, not(target_arch = "aarch64"), target_env = "msvc"))'.dependencies]
 mach-dxcompiler-rs = { workspace = true, optional = true }
 
 #######################
