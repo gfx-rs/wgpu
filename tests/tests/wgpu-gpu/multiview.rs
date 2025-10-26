@@ -194,10 +194,7 @@ async fn run_test(ctx: TestingContext, num_layers: u32) {
     let slice = readback_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
 
-    ctx.async_poll(wgpu::PollType::Wait {
-        submission_index: None,
-        timeout: None,
-    })
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
     .await
     .unwrap();
 
