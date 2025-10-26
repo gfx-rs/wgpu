@@ -150,12 +150,7 @@ async fn run_test(ctx: TestingContext, num_layers: u32) {
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: clear_color,
-                        g: clear_color,
-                        b: clear_color,
-                        a: clear_color,
-                    }),
+                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                     store: wgpu::StoreOp::Store,
                 },
             })],
