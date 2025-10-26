@@ -741,9 +741,6 @@ impl super::Adapter {
                         0
                     },
 
-                    // See https://microsoft.github.io/DirectX-Specs/d3d/ViewInstancing.html#maximum-viewinstancecount
-                    // This is really frickin annoying, 6 (probably 8) for cube mapping would be really nice. But they
-                    // arbitrarily chose 4, eliminating tons of use cases.
                     max_multiview_view_count,
                 },
                 alignments: crate::Alignments {
