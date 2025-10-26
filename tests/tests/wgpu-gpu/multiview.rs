@@ -203,7 +203,7 @@ async fn run_test(ctx: TestingContext, num_layers: u32) {
 
     let data = slice.get_mapped_range();
     let each_texture_size = (TEXTURE_SIZE * TEXTURE_SIZE) as usize;
-    assert!(data.len() == each_texture_size * num_layers as usize);
+    assert_eq!(data.len(), each_texture_size * num_layers as usize);
     eprintln!(
         "View values: {}, ({}), {}",
         data[0],
