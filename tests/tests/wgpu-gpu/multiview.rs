@@ -190,8 +190,8 @@ async fn run_test(ctx: TestingContext, num_layers: u32) {
     slice.map_async(wgpu::MapMode::Read, |_| ());
 
     ctx.async_poll(wgpu::PollType::wait_indefinitely())
-    .await
-    .unwrap();
+        .await
+        .unwrap();
 
     let data = slice.get_mapped_range();
     let each_texture_size = (TEXTURE_SIZE * TEXTURE_SIZE) as usize;
