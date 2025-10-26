@@ -210,9 +210,6 @@ impl super::DeviceShared {
                 let mut multiview_info;
                 let mask;
                 if let Some(multiview_mask) = multiview_mask {
-                    // Right now we enable all bits on the view masks and correlation masks.
-                    // This means we're rendering to all views in the subpass, and that all views
-                    // can be rendered concurrently.
                     mask = [multiview_mask.get()];
 
                     // On Vulkan 1.1 or later, this is an alias for core functionality
