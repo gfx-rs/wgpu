@@ -8,16 +8,18 @@ use wgpu::util::TextureBlitter;
 const TEXTURE_SIZE: u32 = 512;
 
 // Change this to demonstrate non-contiguous multiview functionality
-const LAYERS: u32 = 2;
+const LAYER_MASK: u32 = 3;
+
+const NUM_LAYERS: u32 = 32 - LAYER_MASK.leading_zeros();
 
 pub struct Example {
     pipeline: wgpu::RenderPipeline,
-    view: wgpu::TextureView,
-    view1: wgpu::TextureView,
-    view2: wgpu::TextureView,
+    entire_texture_view: wgpu::TextureView,
+    views: Vec<wgpu::TextureView>,
     start_time: Instant,
     blitter: TextureBlitter,
 }
+
 impl crate::framework::Example for Example {
     fn init(
         config: &wgpu::SurfaceConfiguration,
@@ -46,12 +48,12 @@ impl crate::framework::Example for Example {
                 entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::R8Unorm,
+                    format: wgpu::TextureFormat::Rgba8Unorm,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview_mask: NonZero::new(1 | (1 << (LAYERS - 1))),
+            multiview_mask: NonZero::new(LAYER_MASK),
             multisample: Default::default(),
             layout: None,
             depth_stencil: None,
@@ -62,56 +64,47 @@ impl crate::framework::Example for Example {
             size: wgpu::Extent3d {
                 width: TEXTURE_SIZE,
                 height: TEXTURE_SIZE,
-                depth_or_array_layers: LAYERS,
+                depth_or_array_layers: NUM_LAYERS,
             },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R8Unorm,
+            format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                 | wgpu::TextureUsages::COPY_SRC
                 | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         });
-        let view = texture.create_view(&wgpu::TextureViewDescriptor {
+        let entire_texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
             label: None,
-            format: Some(wgpu::TextureFormat::R8Unorm),
+            format: Some(wgpu::TextureFormat::Rgba8Unorm),
             dimension: Some(wgpu::TextureViewDimension::D2Array),
             usage: Some(wgpu::TextureUsages::RENDER_ATTACHMENT),
             aspect: wgpu::TextureAspect::All,
             base_mip_level: 0,
             mip_level_count: None,
             base_array_layer: 0,
-            array_layer_count: Some(LAYERS),
+            array_layer_count: Some(NUM_LAYERS),
         });
-        let view1 = texture.create_view(&wgpu::TextureViewDescriptor {
-            label: None,
-            format: Some(wgpu::TextureFormat::R8Unorm),
-            dimension: Some(wgpu::TextureViewDimension::D2),
-            usage: Some(wgpu::TextureUsages::TEXTURE_BINDING),
-            aspect: wgpu::TextureAspect::All,
-            base_mip_level: 0,
-            mip_level_count: None,
-            base_array_layer: 0,
-            array_layer_count: Some(1),
-        });
-        let view2 = texture.create_view(&wgpu::TextureViewDescriptor {
-            label: None,
-            format: Some(wgpu::TextureFormat::R8Unorm),
-            dimension: Some(wgpu::TextureViewDimension::D2),
-            usage: Some(wgpu::TextureUsages::TEXTURE_BINDING),
-            aspect: wgpu::TextureAspect::All,
-            base_mip_level: 0,
-            mip_level_count: None,
-            base_array_layer: LAYERS - 1,
-            array_layer_count: Some(1),
-        });
+        let mut views = Vec::new();
+        for i in 0..NUM_LAYERS {
+            views.push(texture.create_view(&wgpu::TextureViewDescriptor {
+                label: None,
+                format: Some(wgpu::TextureFormat::Rgba8Unorm),
+                dimension: Some(wgpu::TextureViewDimension::D2),
+                usage: Some(wgpu::TextureUsages::TEXTURE_BINDING),
+                aspect: wgpu::TextureAspect::All,
+                base_mip_level: 0,
+                mip_level_count: None,
+                base_array_layer: i,
+                array_layer_count: Some(1),
+            }));
+        }
         let blitter = wgpu::util::TextureBlitter::new(device, config.format);
         Self {
             pipeline,
-            view,
-            view1,
-            view2,
+            entire_texture_view,
+            views,
             blitter,
             start_time: Instant::now(),
         }
@@ -120,17 +113,18 @@ impl crate::framework::Example for Example {
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
         {
-            let multiview_mask = 1 | (1 << (LAYERS - 1));
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.view,
+                    view: &self.entire_texture_view,
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
                             r: 0.02,
-                            ..wgpu::Color::RED
+                            g: 0.02,
+                            b: 0.02,
+                            a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,
                     },
@@ -138,19 +132,15 @@ impl crate::framework::Example for Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-                multiview_mask: NonZero::new(multiview_mask),
+                multiview_mask: NonZero::new(LAYER_MASK),
             });
             rpass.set_pipeline(&self.pipeline);
             rpass.draw(0..6, 0..1);
         }
-        if !(Instant::now() - self.start_time)
-            .as_secs()
-            .is_multiple_of(2)
-        {
-            self.blitter.copy(device, &mut encoder, &self.view1, view);
-        } else {
-            self.blitter.copy(device, &mut encoder, &self.view2, view);
-        }
+
+        let layer = (Instant::now() - self.start_time).as_secs() % NUM_LAYERS as u64;
+        self.blitter
+            .copy(device, &mut encoder, &self.views[layer as usize], view);
         queue.submit(Some(encoder.finish()));
     }
 
@@ -160,7 +150,7 @@ impl crate::framework::Example for Example {
 
     fn required_features() -> wgpu::Features {
         wgpu::Features::MULTIVIEW
-            | if LAYERS > 2 {
+            | if !(LAYER_MASK + 1).is_power_of_two() {
                 wgpu::Features::SELECTIVE_MULTIVIEW
             } else {
                 wgpu::Features::empty()
@@ -169,7 +159,7 @@ impl crate::framework::Example for Example {
 
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits {
-            max_multiview_view_count: LAYERS,
+            max_multiview_view_count: NUM_LAYERS,
             ..Default::default()
         }
     }

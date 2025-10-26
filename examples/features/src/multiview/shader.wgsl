@@ -7,5 +7,5 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4f
 
 @fragment
 fn fs_main(@builtin(view_index) view_index: u32) -> @location(0) vec4f {
-    return vec4f(f32(view_index) * 0.25 + 0.125);
+    return vec4f(f32(view_index) * 0.25 + 0.125, 1.0 - f32(view_index) * 0.25, 1.0 - 0.5 * f32(view_index), 1.0);
 }
