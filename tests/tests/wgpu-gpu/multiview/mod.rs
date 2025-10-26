@@ -9,9 +9,22 @@ use wgpu_test::{
 };
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(DRAW_MULTIVIEW_SINGLE);
     vec.push(DRAW_MULTIVIEW);
     vec.push(DRAW_MULTIVIEW_NONCONTIGUOUS);
 }
+
+#[gpu_test]
+static DRAW_MULTIVIEW_SINGLE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::MULTIVIEW)
+            .limits(Limits {
+                max_multiview_view_count: 1,
+                ..Limits::defaults()
+            }),
+    )
+    .run_async(|ctx| run_test(ctx, 1));
 
 #[gpu_test]
 static DRAW_MULTIVIEW: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -23,7 +36,7 @@ static DRAW_MULTIVIEW: GpuTestConfiguration = GpuTestConfiguration::new()
                 ..Limits::defaults()
             }),
     )
-    .run_async(|ctx| run_test(ctx, 2));
+    .run_async(|ctx| run_test(ctx, 3));
 
 #[gpu_test]
 static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -35,9 +48,10 @@ static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration
                 ..Limits::defaults()
             }),
     )
-    .run_async(|ctx| run_test(ctx, 4));
+    .run_async(|ctx| run_test(ctx, 15));
 
-async fn run_test(ctx: TestingContext, num_layers: u32) {
+async fn run_test(ctx: TestingContext, layer_mask: u32) {
+    let num_layers = 32 - layer_mask.leading_zeros();
     let vertex_buffer_content: &[f32; 12] = &[
         // Triangle 1
         -1.0, -1.0, // Bottom left
@@ -54,17 +68,7 @@ async fn run_test(ctx: TestingContext, num_layers: u32) {
         usage: wgpu::BufferUsages::VERTEX,
     });
 
-    let shader_src = "
-            @vertex
-            fn vs_main(@location(0) position: vec2f) -> @builtin(position) vec4f {
-                return vec4f(position, 0.0, 1.0);
-            }
-
-            @fragment
-            fn fs_main(@builtin(view_index) view_index: u32) -> @location(0) vec4f {
-                return vec4f(f32(view_index) * 0.25 + 0.125);
-            }
-        ";
+    let shader_src = include_str!("shader.wgsl");
 
     let shader = ctx
         .device
@@ -96,7 +100,7 @@ async fn run_test(ctx: TestingContext, num_layers: u32) {
                 write_mask: wgpu::ColorWrites::ALL,
             })],
         }),
-        multiview_mask: NonZero::new(1 + (1 << (num_layers - 1))),
+        multiview_mask: NonZero::new(layer_mask),
         multisample: Default::default(),
         layout: None,
         depth_stencil: None,
@@ -109,7 +113,7 @@ async fn run_test(ctx: TestingContext, num_layers: u32) {
         size: wgpu::Extent3d {
             width: TEXTURE_SIZE,
             height: TEXTURE_SIZE,
-            depth_or_array_layers: num_layers,
+            depth_or_array_layers: 32 - layer_mask.leading_zeros(),
         },
         mip_level_count: 1,
         sample_count: 1,
@@ -142,7 +146,6 @@ async fn run_test(ctx: TestingContext, num_layers: u32) {
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor::default());
     {
-        let multiview_mask = 1 | (1 << (num_layers - 1));
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -157,7 +160,7 @@ async fn run_test(ctx: TestingContext, num_layers: u32) {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-            multiview_mask: NonZero::new(multiview_mask),
+            multiview_mask: NonZero::new(layer_mask),
         });
         rpass.set_pipeline(&pipeline);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
@@ -196,17 +199,9 @@ async fn run_test(ctx: TestingContext, num_layers: u32) {
     let data = slice.get_mapped_range();
     let each_texture_size = (TEXTURE_SIZE * TEXTURE_SIZE) as usize;
     assert_eq!(data.len(), each_texture_size * num_layers as usize);
-    eprintln!(
-        "View values: {}, ({}), {}",
-        data[0],
-        data[each_texture_size],
-        data[each_texture_size * (num_layers as usize - 1)]
-    );
     for view_idx in 0..num_layers as usize {
-        let target_value = if view_idx == 0 {
-            32
-        } else if view_idx == num_layers as usize - 1 {
-            (32 + 64 * (num_layers - 1)) as u8
+        let target_value = if (layer_mask & (1 << view_idx)) != 0 {
+            (32 + 64 * view_idx) as u8
         } else {
             (clear_color * 255.0) as u8
         };
