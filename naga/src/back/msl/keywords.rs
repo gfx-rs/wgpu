@@ -1,12 +1,13 @@
-use crate::proc::KeywordSet;
+use crate::proc::{concrete_int_scalars, vector_size_str, vector_sizes, KeywordSet};
 use crate::racy_lock::RacyLock;
+use alloc::{format, string::String, vec::Vec};
 
 // MSLS - Metal Shading Language Specification:
 // https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
 //
 // C++ - Standard for Programming Language C++ (N4431)
 // https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2015/n4431.pdf
-pub const RESERVED: &[&str] = &[
+const RESERVED: &[&str] = &[
     // Undocumented
     "assert", // found in https://github.com/gfx-rs/wgpu/issues/5347
     // Standard for Programming Language C++ (N4431): 2.5 Alternative tokens
@@ -346,6 +347,7 @@ pub const RESERVED: &[&str] = &[
     super::writer::MODF_FUNCTION,
     super::writer::ABS_FUNCTION,
     super::writer::DIV_FUNCTION,
+    // DOT_FUNCTION_PREFIX variants are added dynamically below
     super::writer::MOD_FUNCTION,
     super::writer::NEG_FUNCTION,
     super::writer::F2I32_FUNCTION,
@@ -359,8 +361,31 @@ pub const RESERVED: &[&str] = &[
     super::writer::EXTERNAL_TEXTURE_WRAPPER_STRUCT,
 ];
 
+// The set of concrete integer dot product function variants.
+// This must match the set of names that could be produced by
+// `Writer::get_dot_wrapper_function_helper_name`.
+static DOT_FUNCTION_NAMES: RacyLock<Vec<String>> = RacyLock::new(|| {
+    let mut names = Vec::new();
+    for scalar in concrete_int_scalars().map(crate::Scalar::to_msl_name) {
+        for size_suffix in vector_sizes().map(vector_size_str) {
+            let fun_name = format!(
+                "{}_{}{}",
+                super::writer::DOT_FUNCTION_PREFIX,
+                scalar,
+                size_suffix
+            );
+            names.push(fun_name);
+        }
+    }
+    names
+});
+
 /// The above set of reserved keywords, turned into a cached HashSet. This saves
 /// significant time during [`Namer::reset`](crate::proc::Namer::reset).
 ///
 /// See <https://github.com/gfx-rs/wgpu/pull/7338> for benchmarks.
-pub static RESERVED_SET: RacyLock<KeywordSet> = RacyLock::new(|| KeywordSet::from_iter(RESERVED));
+pub static RESERVED_SET: RacyLock<KeywordSet> = RacyLock::new(|| {
+    let mut set = KeywordSet::from_iter(RESERVED);
+    set.extend(DOT_FUNCTION_NAMES.iter().map(String::as_str));
+    set
+});
