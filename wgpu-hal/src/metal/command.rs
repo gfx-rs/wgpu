@@ -657,14 +657,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
             // This strangely isn't mentioned in https://developer.apple.com/documentation/metal/improving-rendering-performance-with-vertex-amplification.
             // The docs for [`renderTargetArrayLength`](https://developer.apple.com/documentation/metal/mtlrenderpassdescriptor/rendertargetarraylength)
             // also say "The number of active layers that all attachments must have for layered rendering," implying it is only for layered rendering.
-            // However, when I don't set this, I get undefined behavior in nonzero layers, so I think it is required.
+            // However, when I don't set this, I get undefined behavior in nonzero layers, and all non-apple examples of vertex amplification set it.
+            // So this is just one of those undocumented requirements.
             if let Some(mv) = desc.multiview_mask {
                 descriptor.set_render_target_array_length(32 - mv.leading_zeros() as u64);
             }
             let raw = self.raw_cmd_buf.as_ref().unwrap();
             let encoder = raw.new_render_command_encoder(descriptor);
             if let Some(mv) = desc.multiview_mask {
-                // Here we unpack the multiview bitmask. I'm not entirely sure why Apple makes us do this.
                 // Most likely the API just wasn't thought about enough. It's not like they ever allow you
                 // to use enough views to overflow a 32-bit bitmask.
                 let mv = mv.get();
