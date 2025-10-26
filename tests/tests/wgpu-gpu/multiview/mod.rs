@@ -1,9 +1,6 @@
 use std::num::NonZero;
 
-use wgpu::{
-    util::{BufferInitDescriptor, DeviceExt},
-    vertex_attr_array, Features, Limits,
-};
+use wgpu::{Features, Limits};
 use wgpu_test::{
     gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
@@ -52,21 +49,6 @@ static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration
 
 async fn run_test(ctx: TestingContext, layer_mask: u32) {
     let num_layers = 32 - layer_mask.leading_zeros();
-    let vertex_buffer_content: &[f32; 12] = &[
-        // Triangle 1
-        -1.0, -1.0, // Bottom left
-        1.0, 1.0, // Top right
-        -1.0, 1.0, // Top left
-        // Triangle 2
-        -1.0, -1.0, // Bottom left
-        1.0, -1.0, // Bottom right
-        1.0, 1.0, // Top right
-    ];
-    let vertex_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
-        label: None,
-        contents: bytemuck::cast_slice(vertex_buffer_content),
-        usage: wgpu::BufferUsages::VERTEX,
-    });
 
     let shader_src = include_str!("shader.wgsl");
 
@@ -80,11 +62,7 @@ async fn run_test(ctx: TestingContext, layer_mask: u32) {
     let pipeline_desc = wgpu::RenderPipelineDescriptor {
         label: None,
         vertex: wgpu::VertexState {
-            buffers: &[wgpu::VertexBufferLayout {
-                array_stride: 8,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &vertex_attr_array![0 => Float32x2],
-            }],
+            buffers: &[],
             module: &shader,
             entry_point: Some("vs_main"),
             compilation_options: Default::default(),
@@ -106,6 +84,7 @@ async fn run_test(ctx: TestingContext, layer_mask: u32) {
         depth_stencil: None,
         cache: None,
     };
+
     const TEXTURE_SIZE: u32 = 512;
     let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -122,7 +101,7 @@ async fn run_test(ctx: TestingContext, layer_mask: u32) {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
     });
-    let view = texture.create_view(&wgpu::TextureViewDescriptor {
+    let entire_texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
         label: None,
         format: Some(wgpu::TextureFormat::R8Unorm),
         dimension: Some(wgpu::TextureViewDimension::D2Array),
@@ -149,7 +128,7 @@ async fn run_test(ctx: TestingContext, layer_mask: u32) {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
+                view: &entire_texture_view,
                 depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
@@ -163,7 +142,6 @@ async fn run_test(ctx: TestingContext, layer_mask: u32) {
             multiview_mask: NonZero::new(layer_mask),
         });
         rpass.set_pipeline(&pipeline);
-        rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
         rpass.draw(0..6, 0..1);
     }
     encoder.copy_texture_to_buffer(
