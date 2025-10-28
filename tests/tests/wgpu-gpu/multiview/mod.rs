@@ -21,7 +21,7 @@ static DRAW_MULTIVIEW_SINGLE: GpuTestConfiguration = GpuTestConfiguration::new()
                 ..Limits::defaults()
             }),
     )
-    .run_async(|ctx| run_test(ctx, 1));
+    .run_async(|ctx| run_test(ctx, 0b1));
 
 #[gpu_test]
 static DRAW_MULTIVIEW: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -45,7 +45,7 @@ static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration
                 ..Limits::defaults()
             }),
     )
-    .run_async(|ctx| run_test(ctx, 15));
+    .run_async(|ctx| run_test(ctx, 0b1001));
 
 async fn run_test(ctx: TestingContext, layer_mask: u32) {
     let num_layers = 32 - layer_mask.leading_zeros();
@@ -85,7 +85,7 @@ async fn run_test(ctx: TestingContext, layer_mask: u32) {
         cache: None,
     };
 
-    const TEXTURE_SIZE: u32 = 512;
+    const TEXTURE_SIZE: u32 = 256;
     let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
         label: None,

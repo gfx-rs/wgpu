@@ -2653,6 +2653,26 @@ fn set_scissor(state: &mut State, rect: Rect<u32>) -> Result<(), RenderPassError
     Ok(())
 }
 
+fn validate_mesh_draw_multiview(state: &State) -> Result<(), RenderPassErrorInner> {
+    if let Some(mv) = state.info.multiview_mask {
+        let highest_bit = 31 - mv.leading_zeros();
+
+        let features = state.pass.base.device.features;
+
+        if !features.contains(wgt::Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW)
+            || highest_bit > state.pass.base.device.limits.max_mesh_multiview_view_count
+        {
+            return Err(RenderPassErrorInner::Draw(
+                DrawError::MeshPipelineMultiviewLimitsViolated {
+                    highest_view_index: highest_bit,
+                    max_multiviews: state.pass.base.device.limits.max_mesh_multiview_view_count,
+                },
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn draw(
     state: &mut State,
     vertex_count: u32,
@@ -2738,25 +2758,8 @@ fn draw_mesh_tasks(
 
     state.is_ready(DrawCommandFamily::DrawMeshTasks)?;
 
-    if let Some(mv) = state.info.multiview_mask {
-        let highest_bit = 31 - mv.leading_zeros();
-        if !state
-            .pass
-            .base
-            .device
-            .features
-            .contains(wgt::Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW)
-            || highest_bit > state.pass.base.device.limits.max_mesh_multiview_view_count
-        {
-            return Err(RenderPassErrorInner::Draw(
-                DrawError::MeshPipelineMultiviewLimitsViolated {
-                    highest_view_index: highest_bit,
-                    max_multiviews: state.pass.base.device.limits.max_mesh_multiview_view_count,
-                },
-            ));
-        }
-    }
     state.flush_bindings()?;
+    validate_mesh_draw_multiview(state)?;
 
     let groups_size_limit = state
         .pass
@@ -2808,24 +2811,7 @@ fn multi_draw_indirect(
     state.flush_bindings()?;
 
     if family == DrawCommandFamily::DrawMeshTasks {
-        if let Some(mv) = state.info.multiview_mask {
-            let highest_bit = 31 - mv.leading_zeros();
-            if !state
-                .pass
-                .base
-                .device
-                .features
-                .contains(wgt::Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW)
-                || highest_bit > state.pass.base.device.limits.max_mesh_multiview_view_count
-            {
-                return Err(RenderPassErrorInner::Draw(
-                    DrawError::MeshPipelineMultiviewLimitsViolated {
-                        highest_view_index: highest_bit,
-                        max_multiviews: state.pass.base.device.limits.max_mesh_multiview_view_count,
-                    },
-                ));
-            }
-        }
+        validate_mesh_draw_multiview(state)?;
     }
 
     state
@@ -3011,24 +2997,7 @@ fn multi_draw_indirect_count(
     state.flush_bindings()?;
 
     if family == DrawCommandFamily::DrawMeshTasks {
-        if let Some(mv) = state.info.multiview_mask {
-            let highest_bit = 31 - mv.leading_zeros();
-            if !state
-                .pass
-                .base
-                .device
-                .features
-                .contains(wgt::Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW)
-                || highest_bit > state.pass.base.device.limits.max_mesh_multiview_view_count
-            {
-                return Err(RenderPassErrorInner::Draw(
-                    DrawError::MeshPipelineMultiviewLimitsViolated {
-                        highest_view_index: highest_bit,
-                        max_multiviews: state.pass.base.device.limits.max_mesh_multiview_view_count,
-                    },
-                ));
-            }
-        }
+        validate_mesh_draw_multiview(state)?;
     }
 
     let stride = get_stride_of_indirect_args(family);

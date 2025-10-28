@@ -8,7 +8,7 @@ use wgpu::util::TextureBlitter;
 const TEXTURE_SIZE: u32 = 512;
 
 // Change this to demonstrate non-contiguous multiview functionality
-const LAYER_MASK: u32 = 3;
+const LAYER_MASK: u32 = 0b11;
 
 const NUM_LAYERS: u32 = 32 - LAYER_MASK.leading_zeros();
 
