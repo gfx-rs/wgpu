@@ -33,7 +33,7 @@ static DRAW_MULTIVIEW: GpuTestConfiguration = GpuTestConfiguration::new()
                 ..Limits::defaults()
             }),
     )
-    .run_async(|ctx| run_test(ctx, 3));
+    .run_async(|ctx| run_test(ctx, 0b11));
 
 #[gpu_test]
 static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration::new()
