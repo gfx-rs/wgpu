@@ -7,7 +7,6 @@ use crate::command::memory_init::SurfacesInDiscardState;
 use crate::command::{DebugGroupError, QueryResetMap, QueryUseError};
 use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::pipeline::LateSizedBufferGroup;
-use crate::ray_tracing::AsAction;
 use crate::resource::{DestroyedResourceError, Labeled, ParentDevice, QuerySet};
 use crate::track::{ResourceUsageCompatibilityError, UsageScope};
 use crate::{api_log, binding_model};
@@ -100,12 +99,15 @@ where
     );
     state.dynamic_offset_count += num_dynamic_offsets;
 
-    if bind_group.is_none() {
+    let Some(bind_group) = bind_group else {
         // TODO: Handle bind_group None.
         return Ok(());
-    }
+    };
 
-    let bind_group = bind_group.unwrap();
+    // Add the bind group to the tracker. This is done for both compute and
+    // render passes, and is used to fail submission of the command buffer if
+    // any resource in any of the bind groups has been destroyed, whether or
+    // not the bind group is actually used by the pipeline.
     let bind_group = state.base.tracker.bind_groups.insert_single(bind_group);
 
     bind_group.same_device(device)?;
@@ -113,7 +115,9 @@ where
     bind_group.validate_dynamic_bindings(index, &state.temp_offsets)?;
 
     if merge_bind_groups {
-        // merge the resource tracker in
+        // Merge the bind group's resources into the tracker. We only do this
+        // for render passes. For compute passes it is done per dispatch in
+        // [`flush_bindings`].
         unsafe {
             state.scope.merge_bind_group(&bind_group.used)?;
         }
@@ -122,57 +126,76 @@ where
     // is held to the bind group itself.
 
     state
-        .base
-        .buffer_memory_init_actions
-        .extend(bind_group.used_buffer_ranges.iter().filter_map(|action| {
-            action
-                .buffer
-                .initialization_status
-                .read()
-                .check_action(action)
-        }));
-    for action in bind_group.used_texture_ranges.iter() {
-        state.pending_discard_init_fixups.extend(
-            state
-                .base
-                .texture_memory_actions
-                .register_init_action(action),
-        );
-    }
-
-    let used_resource = bind_group
-        .used
-        .acceleration_structures
-        .into_iter()
-        .map(|tlas| AsAction::UseTlas(tlas.clone()));
-
-    state.base.as_actions.extend(used_resource);
-
-    let pipeline_layout = state.binder.pipeline_layout.clone();
-    let entries = state
         .binder
         .assign_group(index as usize, bind_group, &state.temp_offsets);
-    if !entries.is_empty() && pipeline_layout.is_some() {
-        let pipeline_layout = pipeline_layout.as_ref().unwrap().raw();
-        for (i, e) in entries.iter().enumerate() {
-            if let Some(group) = e.group.as_ref() {
-                let raw_bg = group.try_raw(state.base.snatch_guard)?;
-                unsafe {
-                    state.base.raw_encoder.set_bind_group(
-                        pipeline_layout,
-                        index + i as u32,
-                        Some(raw_bg),
-                        &e.dynamic_offsets,
-                    );
-                }
-            }
-        }
-    }
+
     Ok(())
 }
 
-/// After a pipeline has been changed, resources must be rebound
-pub(crate) fn rebind_resources<E, F: FnOnce()>(
+/// Helper for `flush_bindings` implementing the portions that are the same for
+/// compute and render passes.
+pub(super) fn flush_bindings_helper<F>(
+    state: &mut PassState,
+    mut f: F,
+) -> Result<(), DestroyedResourceError>
+where
+    F: FnMut(&Arc<BindGroup>),
+{
+    for bind_group in state.binder.list_active() {
+        f(bind_group);
+
+        state.base.buffer_memory_init_actions.extend(
+            bind_group.used_buffer_ranges.iter().filter_map(|action| {
+                action
+                    .buffer
+                    .initialization_status
+                    .read()
+                    .check_action(action)
+            }),
+        );
+        for action in bind_group.used_texture_ranges.iter() {
+            state.pending_discard_init_fixups.extend(
+                state
+                    .base
+                    .texture_memory_actions
+                    .register_init_action(action),
+            );
+        }
+
+        let used_resource = bind_group
+            .used
+            .acceleration_structures
+            .into_iter()
+            .map(|tlas| crate::ray_tracing::AsAction::UseTlas(tlas.clone()));
+
+        state.base.as_actions.extend(used_resource);
+    }
+
+    let range = state.binder.take_rebind_range();
+    let entries = state.binder.entries(range);
+    match state.binder.pipeline_layout.as_ref() {
+        Some(pipeline_layout) if entries.len() != 0 => {
+            for (i, e) in entries {
+                if let Some(group) = e.group.as_ref() {
+                    let raw_bg = group.try_raw(state.base.snatch_guard)?;
+                    unsafe {
+                        state.base.raw_encoder.set_bind_group(
+                            pipeline_layout.raw(),
+                            i as u32,
+                            Some(raw_bg),
+                            &e.dynamic_offsets,
+                        );
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+
+    Ok(())
+}
+
+pub(super) fn change_pipeline_layout<E, F: FnOnce()>(
     state: &mut PassState,
     pipeline_layout: &Arc<binding_model::PipelineLayout>,
     late_sized_buffer_groups: &[LateSizedBufferGroup],
@@ -189,24 +212,9 @@ where
             .unwrap()
             .is_equal(pipeline_layout)
     {
-        let (start_index, entries) = state
+        state
             .binder
             .change_pipeline_layout(pipeline_layout, late_sized_buffer_groups);
-        if !entries.is_empty() {
-            for (i, e) in entries.iter().enumerate() {
-                if let Some(group) = e.group.as_ref() {
-                    let raw_bg = group.try_raw(state.base.snatch_guard)?;
-                    unsafe {
-                        state.base.raw_encoder.set_bind_group(
-                            pipeline_layout.raw(),
-                            start_index as u32 + i as u32,
-                            Some(raw_bg),
-                            &e.dynamic_offsets,
-                        );
-                    }
-                }
-            }
-        }
 
         f();
 
