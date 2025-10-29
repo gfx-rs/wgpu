@@ -54,6 +54,7 @@ mod resource_error;
 mod samplers;
 mod scissor_tests;
 mod shader;
+mod shader_barycentric;
 mod shader_primitive_index;
 mod shader_view_format;
 mod subgroup_operations;
@@ -126,6 +127,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     samplers::all_tests(&mut tests);
     scissor_tests::all_tests(&mut tests);
     shader_primitive_index::all_tests(&mut tests);
+    shader_barycentric::all_tests(&mut tests);
     shader_view_format::all_tests(&mut tests);
     shader::all_tests(&mut tests);
     subgroup_operations::all_tests(&mut tests);

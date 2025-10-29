@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.1
 ; Generator: rspirv
-; Bound: 62
+; Bound: 61
 OpCapability Shader
 OpCapability AtomicFloat32AddEXT
 OpExtension "SPV_KHR_storage_buffer_storage_class"
@@ -52,9 +52,8 @@ OpDecorate %19 BuiltIn LocalInvocationId
 %31 = OpConstant  %3  1.5
 %34 = OpTypeInt 32 1
 %33 = OpConstant  %34  1
-%35 = OpConstant  %6  64
-%36 = OpConstant  %6  1
-%40 = OpConstant  %6  264
+%35 = OpConstant  %6  1
+%39 = OpConstant  %6  264
 %22 = OpFunction  %2  None %23
 %18 = OpLabel
 %21 = OpLoad  %8  %19
@@ -63,36 +62,36 @@ OpDecorate %19 BuiltIn LocalInvocationId
 %30 = OpAccessChain  %29  %15 %25
 OpBranch %32
 %32 = OpLabel
-OpAtomicStore %26 %33 %35 %31
-%37 = OpAccessChain  %24  %28 %36
-OpAtomicStore %37 %33 %35 %31
-%38 = OpAccessChain  %24  %30 %25
-OpAtomicStore %38 %33 %35 %31
-%39 = OpAccessChain  %24  %30 %36 %36
-OpAtomicStore %39 %33 %35 %31
-OpControlBarrier %5 %5 %40
-%41 = OpAtomicLoad  %3  %26 %33 %35
-%42 = OpAccessChain  %24  %28 %36
-%43 = OpAtomicLoad  %3  %42 %33 %35
-%44 = OpAccessChain  %24  %30 %25
-%45 = OpAtomicLoad  %3  %44 %33 %35
-%46 = OpAccessChain  %24  %30 %36 %36
-%47 = OpAtomicLoad  %3  %46 %33 %35
-OpControlBarrier %5 %5 %40
-%48 = OpAtomicFAddEXT  %3  %26 %33 %35 %31
-%50 = OpAccessChain  %24  %28 %36
-%49 = OpAtomicFAddEXT  %3  %50 %33 %35 %31
-%52 = OpAccessChain  %24  %30 %25
-%51 = OpAtomicFAddEXT  %3  %52 %33 %35 %31
-%54 = OpAccessChain  %24  %30 %36 %36
-%53 = OpAtomicFAddEXT  %3  %54 %33 %35 %31
-OpControlBarrier %5 %5 %40
-%55 = OpAtomicExchange  %3  %26 %33 %35 %31
-%57 = OpAccessChain  %24  %28 %36
-%56 = OpAtomicExchange  %3  %57 %33 %35 %31
-%59 = OpAccessChain  %24  %30 %25
-%58 = OpAtomicExchange  %3  %59 %33 %35 %31
-%61 = OpAccessChain  %24  %30 %36 %36
-%60 = OpAtomicExchange  %3  %61 %33 %35 %31
+OpAtomicStore %26 %33 %25 %31
+%36 = OpAccessChain  %24  %28 %35
+OpAtomicStore %36 %33 %25 %31
+%37 = OpAccessChain  %24  %30 %25
+OpAtomicStore %37 %33 %25 %31
+%38 = OpAccessChain  %24  %30 %35 %35
+OpAtomicStore %38 %33 %25 %31
+OpControlBarrier %5 %5 %39
+%40 = OpAtomicLoad  %3  %26 %33 %25
+%41 = OpAccessChain  %24  %28 %35
+%42 = OpAtomicLoad  %3  %41 %33 %25
+%43 = OpAccessChain  %24  %30 %25
+%44 = OpAtomicLoad  %3  %43 %33 %25
+%45 = OpAccessChain  %24  %30 %35 %35
+%46 = OpAtomicLoad  %3  %45 %33 %25
+OpControlBarrier %5 %5 %39
+%47 = OpAtomicFAddEXT  %3  %26 %33 %25 %31
+%49 = OpAccessChain  %24  %28 %35
+%48 = OpAtomicFAddEXT  %3  %49 %33 %25 %31
+%51 = OpAccessChain  %24  %30 %25
+%50 = OpAtomicFAddEXT  %3  %51 %33 %25 %31
+%53 = OpAccessChain  %24  %30 %35 %35
+%52 = OpAtomicFAddEXT  %3  %53 %33 %25 %31
+OpControlBarrier %5 %5 %39
+%54 = OpAtomicExchange  %3  %26 %33 %25 %31
+%56 = OpAccessChain  %24  %28 %35
+%55 = OpAtomicExchange  %3  %56 %33 %25 %31
+%58 = OpAccessChain  %24  %30 %25
+%57 = OpAtomicExchange  %3  %58 %33 %25 %31
+%60 = OpAccessChain  %24  %30 %35 %35
+%59 = OpAtomicExchange  %3  %60 %33 %25 %31
 OpReturn
 OpFunctionEnd

@@ -1,0 +1,32 @@
+; SPIR-V
+; Version: 1.1
+; Generator: rspirv
+; Bound: 17
+OpCapability Shader
+OpCapability FragmentBarycentricKHR
+OpExtension "SPV_KHR_fragment_shader_barycentric"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %12 "fs_main" %7 %10
+OpExecutionMode %12 OriginUpperLeft
+OpDecorate %7 BuiltIn BaryCoordKHR
+OpDecorate %10 Location 0
+%2 = OpTypeVoid
+%4 = OpTypeFloat 32
+%3 = OpTypeVector %4 3
+%5 = OpTypeVector %4 4
+%8 = OpTypePointer Input %3
+%7 = OpVariable  %8  Input
+%11 = OpTypePointer Output %5
+%10 = OpVariable  %11  Output
+%13 = OpTypeFunction %2
+%14 = OpConstant  %4  1
+%12 = OpFunction  %2  None %13
+%6 = OpLabel
+%9 = OpLoad  %3  %7
+OpBranch %15
+%15 = OpLabel
+%16 = OpCompositeConstruct  %5  %9 %14
+OpStore %10 %16
+OpReturn
+OpFunctionEnd

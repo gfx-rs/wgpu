@@ -902,6 +902,7 @@ impl super::PrivateCapabilities {
                 && (device.supports_family(MTLGPUFamily::Apple7)
                     || device.supports_family(MTLGPUFamily::Mac2)),
             supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
+            shader_barycentrics: device.supports_shader_barycentric_coordinates(),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             supports_memoryless_storage: if family_check {
                 device.supports_family(MTLGPUFamily::Apple2)
@@ -1002,6 +1003,11 @@ impl super::PrivateCapabilities {
         features.set(F::ADDRESS_MODE_CLAMP_TO_ZERO, true);
 
         features.set(F::RG11B10UFLOAT_RENDERABLE, self.format_rg11b10_all);
+
+        features.set(
+            F::SHADER_BARYCENTRICS,
+            self.shader_barycentrics && self.msl_version >= MTLLanguageVersion::V2_2,
+        );
 
         if self.supports_simd_scoped_operations {
             features.insert(F::SUBGROUP | F::SUBGROUP_BARRIER);

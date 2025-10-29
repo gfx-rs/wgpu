@@ -2772,6 +2772,17 @@ impl TextureAspect {
             _ => return None,
         })
     }
+
+    /// Returns the plane for a given texture aspect.
+    #[must_use]
+    pub fn to_plane(&self) -> Option<u32> {
+        match self {
+            TextureAspect::Plane0 => Some(0),
+            TextureAspect::Plane1 => Some(1),
+            TextureAspect::Plane2 => Some(2),
+            _ => None,
+        }
+    }
 }
 
 // There are some additional texture format helpers in `wgpu-core/src/conv.rs`,
@@ -6416,10 +6427,22 @@ impl<L, V> TextureDescriptor<L, V> {
     ///
     /// <https://gpuweb.github.io/gpuweb/#abstract-opdef-compute-render-extent>
     #[must_use]
-    pub fn compute_render_extent(&self, mip_level: u32) -> Extent3d {
+    pub fn compute_render_extent(&self, mip_level: u32, plane: Option<u32>) -> Extent3d {
+        let width = self.size.width >> mip_level;
+        let height = self.size.height >> mip_level;
+
+        let (width, height) = match (self.format, plane) {
+            (TextureFormat::NV12 | TextureFormat::P010, Some(0)) => (width, height),
+            (TextureFormat::NV12 | TextureFormat::P010, Some(1)) => (width / 2, height / 2),
+            _ => {
+                debug_assert!(!self.format.is_multi_planar_format());
+                (width, height)
+            }
+        };
+
         Extent3d {
-            width: u32::max(1, self.size.width >> mip_level),
-            height: u32::max(1, self.size.height >> mip_level),
+            width,
+            height,
             depth_or_array_layers: 1,
         }
     }
