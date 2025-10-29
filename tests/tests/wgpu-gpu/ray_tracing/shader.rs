@@ -1,8 +1,7 @@
 use crate::ray_tracing::{acceleration_structure_limits, AsBuildContext};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
-    include_wgsl, Backends, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor,
-    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    Backends, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor, InstanceFlags, include_wgsl
 };
 use wgpu::{AccelerationStructureFlags, BufferUsages};
 use wgpu_macros::gpu_test;
@@ -113,6 +112,8 @@ static PREVENT_INVALID_RAY_QUERY_CALLS: GpuTestConfiguration = GpuTestConfigurat
             .test_features_limits()
             .limits(acceleration_structure_limits())
             .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            // Otherwise, mistakes in the generated code won't be caught.
+            .instance_flags(InstanceFlags::GPU_BASED_VALIDATION)
             // not yet implemented in directx12
             .skip(FailureCase::backend(Backends::DX12)),
     )
