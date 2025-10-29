@@ -143,6 +143,127 @@ impl super::CommandEncoder {
         self.state.reset();
         self.leave_blit();
     }
+
+    /// Updates the bindings for a single shader stage, called in `set_bind_group`.
+    #[expect(clippy::too_many_arguments)]
+    fn update_bind_group_state(
+        &mut self,
+        stage: naga::ShaderStage,
+        render_encoder: Option<&metal::RenderCommandEncoder>,
+        compute_encoder: Option<&metal::ComputeCommandEncoder>,
+        index_base: super::ResourceData<u32>,
+        bg_info: &super::BindGroupLayoutInfo,
+        dynamic_offsets: &[wgt::DynamicOffset],
+        group_index: u32,
+        group: &super::BindGroup,
+    ) {
+        let resource_indices = match stage {
+            naga::ShaderStage::Vertex => &bg_info.base_resource_indices.vs,
+            naga::ShaderStage::Fragment => &bg_info.base_resource_indices.fs,
+            naga::ShaderStage::Task => &bg_info.base_resource_indices.ts,
+            naga::ShaderStage::Mesh => &bg_info.base_resource_indices.ms,
+            naga::ShaderStage::Compute => &bg_info.base_resource_indices.cs,
+        };
+        let buffers = match stage {
+            naga::ShaderStage::Vertex => group.counters.vs.buffers,
+            naga::ShaderStage::Fragment => group.counters.fs.buffers,
+            naga::ShaderStage::Task => group.counters.ts.buffers,
+            naga::ShaderStage::Mesh => group.counters.ms.buffers,
+            naga::ShaderStage::Compute => group.counters.cs.buffers,
+        };
+        let mut changes_sizes_buffer = false;
+        for index in 0..buffers {
+            let buf = &group.buffers[(index_base.buffers + index) as usize];
+            let mut offset = buf.offset;
+            if let Some(dyn_index) = buf.dynamic_index {
+                offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
+            }
+            let a1 = (resource_indices.buffers + index) as u64;
+            let a2 = Some(buf.ptr.as_native());
+            let a3 = offset;
+            match stage {
+                naga::ShaderStage::Vertex => render_encoder.unwrap().set_vertex_buffer(a1, a2, a3),
+                naga::ShaderStage::Fragment => {
+                    render_encoder.unwrap().set_fragment_buffer(a1, a2, a3)
+                }
+                naga::ShaderStage::Task => render_encoder.unwrap().set_object_buffer(a1, a2, a3),
+                naga::ShaderStage::Mesh => render_encoder.unwrap().set_mesh_buffer(a1, a2, a3),
+                naga::ShaderStage::Compute => compute_encoder.unwrap().set_buffer(a1, a2, a3),
+            }
+            if let Some(size) = buf.binding_size {
+                let br = naga::ResourceBinding {
+                    group: group_index,
+                    binding: buf.binding_location,
+                };
+                self.state.storage_buffer_length_map.insert(br, size);
+                changes_sizes_buffer = true;
+            }
+        }
+        if changes_sizes_buffer {
+            if let Some((index, sizes)) = self
+                .state
+                .make_sizes_buffer_update(stage, &mut self.temp.binding_sizes)
+            {
+                let a1 = index as _;
+                let a2 = (sizes.len() * WORD_SIZE) as u64;
+                let a3 = sizes.as_ptr().cast();
+                match stage {
+                    naga::ShaderStage::Vertex => {
+                        render_encoder.unwrap().set_vertex_bytes(a1, a2, a3)
+                    }
+                    naga::ShaderStage::Fragment => {
+                        render_encoder.unwrap().set_fragment_bytes(a1, a2, a3)
+                    }
+                    naga::ShaderStage::Task => render_encoder.unwrap().set_object_bytes(a1, a2, a3),
+                    naga::ShaderStage::Mesh => render_encoder.unwrap().set_mesh_bytes(a1, a2, a3),
+                    naga::ShaderStage::Compute => compute_encoder.unwrap().set_bytes(a1, a2, a3),
+                }
+            }
+        }
+        let samplers = match stage {
+            naga::ShaderStage::Vertex => group.counters.vs.samplers,
+            naga::ShaderStage::Fragment => group.counters.fs.samplers,
+            naga::ShaderStage::Task => group.counters.ts.samplers,
+            naga::ShaderStage::Mesh => group.counters.ms.samplers,
+            naga::ShaderStage::Compute => group.counters.cs.samplers,
+        };
+        for index in 0..samplers {
+            let res = group.samplers[(index_base.samplers + index) as usize];
+            let a1 = (resource_indices.samplers + index) as u64;
+            let a2 = Some(res.as_native());
+            match stage {
+                naga::ShaderStage::Vertex => {
+                    render_encoder.unwrap().set_vertex_sampler_state(a1, a2)
+                }
+                naga::ShaderStage::Fragment => {
+                    render_encoder.unwrap().set_fragment_sampler_state(a1, a2)
+                }
+                naga::ShaderStage::Task => render_encoder.unwrap().set_object_sampler_state(a1, a2),
+                naga::ShaderStage::Mesh => render_encoder.unwrap().set_mesh_sampler_state(a1, a2),
+                naga::ShaderStage::Compute => compute_encoder.unwrap().set_sampler_state(a1, a2),
+            }
+        }
+
+        let textures = match stage {
+            naga::ShaderStage::Vertex => group.counters.vs.textures,
+            naga::ShaderStage::Fragment => group.counters.fs.textures,
+            naga::ShaderStage::Task => group.counters.ts.textures,
+            naga::ShaderStage::Mesh => group.counters.ms.textures,
+            naga::ShaderStage::Compute => group.counters.cs.textures,
+        };
+        for index in 0..textures {
+            let res = group.textures[(index_base.textures + index) as usize];
+            let a1 = (resource_indices.textures + index) as u64;
+            let a2 = Some(res.as_native());
+            match stage {
+                naga::ShaderStage::Vertex => render_encoder.unwrap().set_vertex_texture(a1, a2),
+                naga::ShaderStage::Fragment => render_encoder.unwrap().set_fragment_texture(a1, a2),
+                naga::ShaderStage::Task => render_encoder.unwrap().set_object_texture(a1, a2),
+                naga::ShaderStage::Mesh => render_encoder.unwrap().set_mesh_texture(a1, a2),
+                naga::ShaderStage::Compute => compute_encoder.unwrap().set_texture(a1, a2),
+            }
+        }
+    }
 }
 
 impl super::CommandState {
@@ -683,138 +804,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
              render_encoder: Option<&metal::RenderCommandEncoder>,
              compute_encoder: Option<&metal::ComputeCommandEncoder>,
              index_base: super::ResourceData<u32>| {
-                let resource_indices = match stage {
-                    naga::ShaderStage::Vertex => &bg_info.base_resource_indices.vs,
-                    naga::ShaderStage::Fragment => &bg_info.base_resource_indices.fs,
-                    naga::ShaderStage::Task => &bg_info.base_resource_indices.ts,
-                    naga::ShaderStage::Mesh => &bg_info.base_resource_indices.ms,
-                    naga::ShaderStage::Compute => &bg_info.base_resource_indices.cs,
-                };
-                let buffers = match stage {
-                    naga::ShaderStage::Vertex => group.counters.vs.buffers,
-                    naga::ShaderStage::Fragment => group.counters.fs.buffers,
-                    naga::ShaderStage::Task => group.counters.ts.buffers,
-                    naga::ShaderStage::Mesh => group.counters.ms.buffers,
-                    naga::ShaderStage::Compute => group.counters.cs.buffers,
-                };
-                let mut changes_sizes_buffer = false;
-                for index in 0..buffers {
-                    let buf = &group.buffers[(index_base.buffers + index) as usize];
-                    let mut offset = buf.offset;
-                    if let Some(dyn_index) = buf.dynamic_index {
-                        offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
-                    }
-                    let a1 = (resource_indices.buffers + index) as u64;
-                    let a2 = Some(buf.ptr.as_native());
-                    let a3 = offset;
-                    match stage {
-                        naga::ShaderStage::Vertex => {
-                            render_encoder.unwrap().set_vertex_buffer(a1, a2, a3)
-                        }
-                        naga::ShaderStage::Fragment => {
-                            render_encoder.unwrap().set_fragment_buffer(a1, a2, a3)
-                        }
-                        naga::ShaderStage::Task => {
-                            render_encoder.unwrap().set_object_buffer(a1, a2, a3)
-                        }
-                        naga::ShaderStage::Mesh => {
-                            render_encoder.unwrap().set_mesh_buffer(a1, a2, a3)
-                        }
-                        naga::ShaderStage::Compute => {
-                            compute_encoder.unwrap().set_buffer(a1, a2, a3)
-                        }
-                    }
-                    if let Some(size) = buf.binding_size {
-                        let br = naga::ResourceBinding {
-                            group: group_index,
-                            binding: buf.binding_location,
-                        };
-                        self.state.storage_buffer_length_map.insert(br, size);
-                        changes_sizes_buffer = true;
-                    }
-                }
-                if changes_sizes_buffer {
-                    if let Some((index, sizes)) = self
-                        .state
-                        .make_sizes_buffer_update(stage, &mut self.temp.binding_sizes)
-                    {
-                        let a1 = index as _;
-                        let a2 = (sizes.len() * WORD_SIZE) as u64;
-                        let a3 = sizes.as_ptr().cast();
-                        match stage {
-                            naga::ShaderStage::Vertex => {
-                                render_encoder.unwrap().set_vertex_bytes(a1, a2, a3)
-                            }
-                            naga::ShaderStage::Fragment => {
-                                render_encoder.unwrap().set_fragment_bytes(a1, a2, a3)
-                            }
-                            naga::ShaderStage::Task => {
-                                render_encoder.unwrap().set_object_bytes(a1, a2, a3)
-                            }
-                            naga::ShaderStage::Mesh => {
-                                render_encoder.unwrap().set_mesh_bytes(a1, a2, a3)
-                            }
-                            naga::ShaderStage::Compute => {
-                                compute_encoder.unwrap().set_bytes(a1, a2, a3)
-                            }
-                        }
-                    }
-                }
-                let samplers = match stage {
-                    naga::ShaderStage::Vertex => group.counters.vs.samplers,
-                    naga::ShaderStage::Fragment => group.counters.fs.samplers,
-                    naga::ShaderStage::Task => group.counters.ts.samplers,
-                    naga::ShaderStage::Mesh => group.counters.ms.samplers,
-                    naga::ShaderStage::Compute => group.counters.cs.samplers,
-                };
-                for index in 0..samplers {
-                    let res = group.samplers[(index_base.samplers + index) as usize];
-                    let a1 = (resource_indices.samplers + index) as u64;
-                    let a2 = Some(res.as_native());
-                    match stage {
-                        naga::ShaderStage::Vertex => {
-                            render_encoder.unwrap().set_vertex_sampler_state(a1, a2)
-                        }
-                        naga::ShaderStage::Fragment => {
-                            render_encoder.unwrap().set_fragment_sampler_state(a1, a2)
-                        }
-                        naga::ShaderStage::Task => {
-                            render_encoder.unwrap().set_object_sampler_state(a1, a2)
-                        }
-                        naga::ShaderStage::Mesh => {
-                            render_encoder.unwrap().set_mesh_sampler_state(a1, a2)
-                        }
-                        naga::ShaderStage::Compute => {
-                            compute_encoder.unwrap().set_sampler_state(a1, a2)
-                        }
-                    }
-                }
-
-                let textures = match stage {
-                    naga::ShaderStage::Vertex => group.counters.vs.textures,
-                    naga::ShaderStage::Fragment => group.counters.fs.textures,
-                    naga::ShaderStage::Task => group.counters.ts.textures,
-                    naga::ShaderStage::Mesh => group.counters.ms.textures,
-                    naga::ShaderStage::Compute => group.counters.cs.textures,
-                };
-                for index in 0..textures {
-                    let res = group.textures[(index_base.textures + index) as usize];
-                    let a1 = (resource_indices.textures + index) as u64;
-                    let a2 = Some(res.as_native());
-                    match stage {
-                        naga::ShaderStage::Vertex => {
-                            render_encoder.unwrap().set_vertex_texture(a1, a2)
-                        }
-                        naga::ShaderStage::Fragment => {
-                            render_encoder.unwrap().set_fragment_texture(a1, a2)
-                        }
-                        naga::ShaderStage::Task => {
-                            render_encoder.unwrap().set_object_texture(a1, a2)
-                        }
-                        naga::ShaderStage::Mesh => render_encoder.unwrap().set_mesh_texture(a1, a2),
-                        naga::ShaderStage::Compute => compute_encoder.unwrap().set_texture(a1, a2),
-                    }
-                }
+                self.update_bind_group_state(
+                    stage,
+                    render_encoder,
+                    compute_encoder,
+                    index_base,
+                    bg_info,
+                    dynamic_offsets,
+                    group_index,
+                    group,
+                );
             };
         if let Some(encoder) = render_encoder {
             update_stage(
