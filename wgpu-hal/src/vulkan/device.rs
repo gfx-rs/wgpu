@@ -590,7 +590,8 @@ impl super::Device {
             }
         }
         if desc.format.is_multi_planar_format() {
-            raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
+            raw_flags |=
+                vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE;
         }
 
         let mut vk_info = vk::ImageCreateInfo::default()

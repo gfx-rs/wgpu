@@ -412,6 +412,8 @@ pub enum BuiltIn {
     /// Read in fragment shaders, in the future may written in mesh shaders
     PrimitiveIndex,
     /// Read in fragment shaders
+    Barycentric,
+    /// Read in fragment shaders
     SampleIndex,
     /// Read or written in fragment shaders
     SampleMask,

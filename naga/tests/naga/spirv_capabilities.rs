@@ -149,6 +149,17 @@ fn sample_rate_shading() {
 }
 
 #[test]
+fn barycentrics() {
+    require(
+        &[Ca::FragmentBarycentricKHR],
+        r#"
+        @fragment
+        fn f(@builtin(barycentric) x: vec3<f32>) { }
+    "#,
+    );
+}
+
+#[test]
 fn geometry() {
     require(
         &[Ca::Geometry],
