@@ -396,6 +396,11 @@ fn compile_dxc(
         .private_caps
         .instance_flags
         .contains(wgt::InstanceFlags::DEBUG)
+        && !device
+            .shared
+            .private_caps
+            .workarounds
+            .avoid_shader_debug_info
     {
         compile_args.push(Dxc::DXC_ARG_DEBUG);
         compile_args.push(Dxc::DXC_ARG_SKIP_OPTIMIZATIONS);
