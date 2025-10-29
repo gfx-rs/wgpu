@@ -3,14 +3,10 @@ use std::{
     process::Stdio,
 };
 
-use wgpu::{util::DeviceExt, Backends};
+use wgpu::util::DeviceExt;
 use wgpu_test::{
-    fail, gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters,
-    TestingContext,
+    fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
 };
-
-/// Backends that support mesh shaders
-const MESH_SHADER_BACKENDS: Backends = Backends::DX12.union(Backends::VULKAN);
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.extend([
@@ -157,7 +153,6 @@ fn get_shaders(
             info.use_frag.then(|| compile_msl(device, "fragShader")),
         ),
         _ => {
-            assert!(!MESH_SHADER_BACKENDS.contains(Backends::from(backend)));
             assert!(!info.use_task && !info.use_mesh && !info.use_frag);
             (None, dummy_shader, None)
         }
@@ -396,7 +391,6 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
 fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
     GpuTestConfiguration::new().parameters(
         TestParameters::default()
-            .skip(FailureCase::backend(!MESH_SHADER_BACKENDS))
             .test_features_limits()
             .features(
                 wgpu::Features::EXPERIMENTAL_MESH_SHADER
