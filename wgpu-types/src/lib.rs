@@ -1045,7 +1045,7 @@ impl Limits {
     #[must_use]
     pub const fn using_recommended_minimum_mesh_shader_values(self) -> Self {
         Self {
-            // I believe this is a common limit for apple devices. I'm not entirely sure why.
+            // This is a common limit for apple devices. It's not immediately clear why.
             max_task_workgroup_total_count: 1024,
             max_task_workgroups_per_dimension: 1024,
             // llvmpipe reports 0 multiview count, which just means no multiview is allowed
