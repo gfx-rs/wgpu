@@ -840,7 +840,7 @@ impl Writer {
                         each_two_true.push(both_true_id);
                     }
                 }
-                let mut all_or_id = each_two_true.pop().expect("since this must have multiple booleans, there must be at least one thing in `each_two_true");
+                let mut all_or_id = each_two_true.pop().expect("since this must have multiple booleans, there must be at least one thing in `each_two_true`");
                 for two_true in each_two_true {
                     let new_all_or_id = writer.id_gen.next();
                     block.body.push(Instruction::binary(
