@@ -510,6 +510,10 @@ pub fn create_validator(
         Caps::TEXTURE_EXTERNAL,
         features.intersects(wgt::Features::EXTERNAL_TEXTURE),
     );
+    caps.set(
+        Caps::SHADER_BARYCENTRICS,
+        features.intersects(wgt::Features::SHADER_BARYCENTRICS),
+    );
 
     naga::valid::Validator::new(flags, caps)
 }

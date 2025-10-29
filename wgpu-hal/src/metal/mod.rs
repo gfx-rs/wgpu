@@ -303,6 +303,7 @@ struct PrivateCapabilities {
     float_atomics: bool,
     supports_shared_event: bool,
     mesh_shaders: bool,
+    shader_barycentrics: bool,
     supports_memoryless_storage: bool,
 }
 

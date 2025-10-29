@@ -83,6 +83,7 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::GroupNonUniformShuffleRelative,
     spirv::Capability::RuntimeDescriptorArray,
     spirv::Capability::StorageImageMultisample,
+    spirv::Capability::FragmentBarycentricKHR,
     // tricky ones
     spirv::Capability::UniformBufferArrayDynamicIndexing,
     spirv::Capability::StorageBufferArrayDynamicIndexing,
@@ -6037,6 +6038,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         | crate::BuiltIn::WorkGroupSize => Some(crate::TypeInner::Vector {
                             size: crate::VectorSize::Tri,
                             scalar: crate::Scalar::U32,
+                        }),
+                        crate::BuiltIn::Barycentric => Some(crate::TypeInner::Vector {
+                            size: crate::VectorSize::Tri,
+                            scalar: crate::Scalar::F32,
                         }),
                         _ => None,
                     };

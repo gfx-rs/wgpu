@@ -1355,7 +1355,24 @@ impl Device {
             });
         }
 
-        let missing_allowed_usages = desc.usage - format_features.allowed_usages;
+        let missing_allowed_usages = match desc.format.planes() {
+            Some(planes) => {
+                let mut planes_usages = wgt::TextureUsages::all();
+                for plane in 0..planes {
+                    let aspect = wgt::TextureAspect::from_plane(plane).unwrap();
+                    let format = desc.format.aspect_specific_format(aspect).unwrap();
+                    let format_features = self
+                        .describe_format_features(format)
+                        .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
+
+                    planes_usages &= format_features.allowed_usages;
+                }
+
+                desc.usage - planes_usages
+            }
+            None => desc.usage - format_features.allowed_usages,
+        };
+
         if !missing_allowed_usages.is_empty() {
             // detect downlevel incompatibilities
             let wgpu_allowed_usages = desc
@@ -1722,13 +1739,15 @@ impl Device {
                 ));
             }
 
-            if aspects != hal::FormatAspects::from(texture.desc.format) {
+            if !texture.desc.format.is_multi_planar_format()
+                && aspects != hal::FormatAspects::from(texture.desc.format)
+            {
                 break 'error Err(TextureViewNotRenderableReason::Aspects(aspects));
             }
 
             Ok(texture
                 .desc
-                .compute_render_extent(desc.range.base_mip_level))
+                .compute_render_extent(desc.range.base_mip_level, desc.range.aspect.to_plane()))
         };
 
         // filter the usages based on the other criteria

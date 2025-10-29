@@ -387,6 +387,7 @@ pub enum BuiltIn {
     PointCoord,
     FrontFacing,
     PrimitiveIndex,
+    Barycentric,
     SampleIndex,
     SampleMask,
     // compute

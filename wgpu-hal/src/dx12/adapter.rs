@@ -568,6 +568,23 @@ impl super::Adapter {
             wgt::Features::EXPERIMENTAL_MESH_SHADER,
             mesh_shader_supported,
         );
+        let shader_barycentrics_supported = {
+            let mut features3 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS3::default();
+            unsafe {
+                device.CheckFeatureSupport(
+                    Direct3D12::D3D12_FEATURE_D3D12_OPTIONS3,
+                    <*mut _>::cast(&mut features3),
+                    size_of_val(&features3) as u32,
+                )
+            }
+            .is_ok()
+                && features3.BarycentricsSupported.as_bool()
+                && shader_model >= naga::back::hlsl::ShaderModel::V6_1
+        };
+        features.set(
+            wgt::Features::SHADER_BARYCENTRICS,
+            shader_barycentrics_supported,
+        );
 
         // TODO: Determine if IPresentationManager is supported
         let presentation_timer = auxil::dxgi::time::PresentationTimer::new_dxgi();
