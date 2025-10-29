@@ -5816,7 +5816,7 @@ pub struct SurfaceConfiguration<V> {
     ///   `desired_maximum_frame_latency + 1`, clamped to the supported range.
     /// - OpenGL: Ignored
     ///
-    /// It also has various subtle interactions with various present modes and apis.
+    /// It also has various subtle interactions with various present modes and APIs.
     /// - DX12 + Mailbox: Limits framerate to `desired_maximum_frame_latency * Monitor Hz` fps.
     /// - Vulkan/Metal + Mailbox: If this is set to `2`, limits framerate to `2 * Monitor Hz` fps. `3` or higher is unlimited.
     ///
