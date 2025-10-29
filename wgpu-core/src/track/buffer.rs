@@ -303,7 +303,7 @@ impl BufferTracker {
     }
 
     /// Extend the vectors to let the given index be valid.
-    fn allow_index(&mut self, index: usize) {
+    pub fn allow_index(&mut self, index: usize) {
         if index >= self.start.len() {
             self.set_size(index + 1);
         }
@@ -443,11 +443,11 @@ impl BufferTracker {
     /// a given iterator of ids as a source of which IDs to look at.
     /// All the IDs must have first been added to the usage scope.
     ///
-    /// # Safety
+    /// # Panics
     ///
-    /// [`Self::set_size`] must be called with the maximum possible Buffer ID before this
-    /// method is called.
-    pub unsafe fn set_and_remove_from_usage_scope_sparse(
+    /// If a resource identified by `index_source` is not found in the usage
+    /// scope.
+    pub fn set_multiple(
         &mut self,
         scope: &mut BufferUsageScope,
         index_source: impl IntoIterator<Item = TrackerIndex>,
@@ -461,10 +461,12 @@ impl BufferTracker {
             let index = index.as_usize();
 
             scope.tracker_assert_in_bounds(index);
-
-            if unsafe { !scope.metadata.contains_unchecked(index) } {
-                continue;
+            unsafe {
+                assert!(scope.metadata.contains_unchecked(index));
             }
+
+            // SAFETY: we checked that the index is in bounds for the scope, and
+            // called `set_size` to ensure it is valid for `self`.
             unsafe {
                 self.insert_or_barrier_update(
                     index,
@@ -477,8 +479,6 @@ impl BufferTracker {
                     },
                 )
             };
-
-            unsafe { scope.metadata.remove(index) };
         }
     }
 

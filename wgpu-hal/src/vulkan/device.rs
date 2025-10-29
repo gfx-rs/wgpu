@@ -8,7 +8,7 @@ use core::{
 };
 
 use arrayvec::ArrayVec;
-use ash::{ext, khr, vk};
+use ash::{ext, vk};
 use hashbrown::hash_map::Entry;
 use parking_lot::Mutex;
 
@@ -489,122 +489,6 @@ struct CompiledStage {
 }
 
 impl super::Device {
-    pub(super) unsafe fn create_swapchain(
-        &self,
-        surface: &super::Surface,
-        config: &crate::SurfaceConfiguration,
-        provided_old_swapchain: Option<super::Swapchain>,
-    ) -> Result<super::Swapchain, crate::SurfaceError> {
-        profiling::scope!("Device::create_swapchain");
-        let functor = khr::swapchain::Device::new(&surface.instance.raw, &self.shared.raw);
-
-        let old_swapchain = match provided_old_swapchain {
-            Some(osc) => osc.raw,
-            None => vk::SwapchainKHR::null(),
-        };
-
-        let color_space = if config.format == wgt::TextureFormat::Rgba16Float {
-            // Enable wide color gamut mode
-            // Vulkan swapchain for Android only supports DISPLAY_P3_NONLINEAR_EXT and EXTENDED_SRGB_LINEAR_EXT
-            vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT
-        } else {
-            vk::ColorSpaceKHR::SRGB_NONLINEAR
-        };
-
-        let original_format = self.shared.private_caps.map_texture_format(config.format);
-        let mut raw_flags = vk::SwapchainCreateFlagsKHR::empty();
-        let mut raw_view_formats: Vec<vk::Format> = vec![];
-        if !config.view_formats.is_empty() {
-            raw_flags |= vk::SwapchainCreateFlagsKHR::MUTABLE_FORMAT;
-            raw_view_formats = config
-                .view_formats
-                .iter()
-                .map(|f| self.shared.private_caps.map_texture_format(*f))
-                .collect();
-            raw_view_formats.push(original_format);
-        }
-
-        let mut info = vk::SwapchainCreateInfoKHR::default()
-            .flags(raw_flags)
-            .surface(surface.raw)
-            .min_image_count(config.maximum_frame_latency + 1) // TODO: https://github.com/gfx-rs/wgpu/issues/2869
-            .image_format(original_format)
-            .image_color_space(color_space)
-            .image_extent(vk::Extent2D {
-                width: config.extent.width,
-                height: config.extent.height,
-            })
-            .image_array_layers(config.extent.depth_or_array_layers)
-            .image_usage(conv::map_texture_usage(config.usage))
-            .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .pre_transform(vk::SurfaceTransformFlagsKHR::IDENTITY)
-            .composite_alpha(conv::map_composite_alpha_mode(config.composite_alpha_mode))
-            .present_mode(conv::map_present_mode(config.present_mode))
-            .clipped(true)
-            .old_swapchain(old_swapchain);
-
-        let mut format_list_info = vk::ImageFormatListCreateInfo::default();
-        if !raw_view_formats.is_empty() {
-            format_list_info = format_list_info.view_formats(&raw_view_formats);
-            info = info.push_next(&mut format_list_info);
-        }
-
-        let result = {
-            profiling::scope!("vkCreateSwapchainKHR");
-            unsafe { functor.create_swapchain(&info, None) }
-        };
-
-        // doing this before bailing out with error
-        if old_swapchain != vk::SwapchainKHR::null() {
-            unsafe { functor.destroy_swapchain(old_swapchain, None) }
-        }
-
-        let raw = match result {
-            Ok(swapchain) => swapchain,
-            Err(error) => {
-                return Err(match error {
-                    vk::Result::ERROR_SURFACE_LOST_KHR
-                    | vk::Result::ERROR_INITIALIZATION_FAILED => crate::SurfaceError::Lost,
-                    vk::Result::ERROR_NATIVE_WINDOW_IN_USE_KHR => {
-                        crate::SurfaceError::Other("Native window is in use")
-                    }
-                    // We don't use VK_EXT_image_compression_control
-                    // VK_ERROR_COMPRESSION_EXHAUSTED_EXT
-                    other => super::map_host_device_oom_and_lost_err(other).into(),
-                });
-            }
-        };
-
-        let images =
-            unsafe { functor.get_swapchain_images(raw) }.map_err(super::map_host_device_oom_err)?;
-
-        // NOTE: It's important that we define the same number of acquire/present semaphores
-        // as we will need to index into them with the image index.
-        let acquire_semaphores = (0..=images.len())
-            .map(|i| {
-                super::SwapchainAcquireSemaphore::new(&self.shared, i)
-                    .map(Mutex::new)
-                    .map(Arc::new)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let present_semaphores = (0..=images.len())
-            .map(|i| Arc::new(Mutex::new(super::SwapchainPresentSemaphores::new(i))))
-            .collect::<Vec<_>>();
-
-        Ok(super::Swapchain {
-            raw,
-            functor,
-            device: Arc::clone(&self.shared),
-            images,
-            config: config.clone(),
-            acquire_semaphores,
-            next_acquire_index: 0,
-            present_semaphores,
-            next_present_time: None,
-        })
-    }
-
     /// # Safety
     ///
     /// - `vk_image` must be created respecting `desc`

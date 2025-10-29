@@ -170,7 +170,7 @@ pub enum TransferError {
         src_sample_count: u32,
         dst_sample_count: u32,
     },
-    #[error("Requested mip level {requested} does no exist (count: {count})")]
+    #[error("Requested mip level {requested} does not exist (count: {count})")]
     InvalidMipLevel { requested: u32, count: u32 },
 }
 

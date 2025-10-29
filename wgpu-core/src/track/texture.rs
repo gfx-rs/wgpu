@@ -612,11 +612,10 @@ impl TextureTracker {
     /// bind group as a source of which IDs to look at. The bind groups
     /// must have first been added to the usage scope.
     ///
-    /// # Safety
+    /// # Panics
     ///
-    /// [`Self::set_size`] must be called with the maximum possible Buffer ID before this
-    /// method is called.
-    pub unsafe fn set_and_remove_from_usage_scope_sparse(
+    /// If a resource in `bind_group_state` is not found in the usage scope.
+    pub fn set_multiple(
         &mut self,
         scope: &mut TextureUsageScope,
         bind_group_state: &TextureViewBindGroupState,
@@ -628,12 +627,15 @@ impl TextureTracker {
 
         for (view, _) in bind_group_state.views.iter() {
             let index = view.parent.tracker_index().as_usize();
-            scope.tracker_assert_in_bounds(index);
 
-            if unsafe { !scope.metadata.contains_unchecked(index) } {
-                continue;
+            scope.tracker_assert_in_bounds(index);
+            unsafe {
+                assert!(scope.metadata.contains_unchecked(index));
             }
+
             let texture_selector = &view.parent.full_range;
+            // SAFETY: we checked that the index is in bounds for the scope, and
+            // called `set_size` to ensure it is valid for `self`.
             unsafe {
                 insert_or_barrier_update(
                     texture_selector,
@@ -649,8 +651,6 @@ impl TextureTracker {
                     &mut self.temp,
                 )
             };
-
-            unsafe { scope.metadata.remove(index) };
         }
     }
 }

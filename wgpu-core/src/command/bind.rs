@@ -1,3 +1,5 @@
+use core::{iter::zip, ops::Range};
+
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
 use arrayvec::ArrayVec;
@@ -192,14 +194,16 @@ mod compat {
     }
 
     #[derive(Debug, Default)]
-    pub(crate) struct BoundBindGroupLayouts {
+    pub(super) struct BoundBindGroupLayouts {
         entries: ArrayVec<Entry, { hal::MAX_BIND_GROUPS }>,
+        rebind_start: usize,
     }
 
     impl BoundBindGroupLayouts {
         pub fn new() -> Self {
             Self {
                 entries: (0..hal::MAX_BIND_GROUPS).map(|_| Entry::empty()).collect(),
+                rebind_start: 0,
             }
         }
 
@@ -211,15 +215,19 @@ mod compat {
                 .unwrap_or(self.entries.len())
         }
 
-        fn make_range(&self, start_index: usize) -> Range<usize> {
+        /// Get the range of entries that needs to be rebound, and clears it.
+        pub fn take_rebind_range(&mut self) -> Range<usize> {
             let end = self.num_valid_entries();
-            start_index..end.max(start_index)
+            let start = self.rebind_start;
+            self.rebind_start = end;
+            start..end.max(start)
         }
 
-        pub fn update_expectations(
-            &mut self,
-            expectations: &[Arc<BindGroupLayout>],
-        ) -> Range<usize> {
+        pub fn update_start_index(&mut self, start_index: usize) {
+            self.rebind_start = self.rebind_start.min(start_index);
+        }
+
+        pub fn update_expectations(&mut self, expectations: &[Arc<BindGroupLayout>]) {
             let start_index = self
                 .entries
                 .iter()
@@ -237,12 +245,12 @@ mod compat {
             for e in self.entries[expectations.len()..].iter_mut() {
                 e.expected = None;
             }
-            self.make_range(start_index)
+            self.update_start_index(start_index);
         }
 
-        pub fn assign(&mut self, index: usize, value: Arc<BindGroupLayout>) -> Range<usize> {
+        pub fn assign(&mut self, index: usize, value: Arc<BindGroupLayout>) {
             self.entries[index].assigned = Some(value);
-            self.make_range(index)
+            self.update_start_index(index);
         }
 
         pub fn list_active(&self) -> impl Iterator<Item = usize> + '_ {
@@ -333,10 +341,10 @@ impl Binder {
         &'a mut self,
         new: &Arc<PipelineLayout>,
         late_sized_buffer_groups: &[LateSizedBufferGroup],
-    ) -> (usize, &'a [EntryPayload]) {
+    ) {
         let old_id_opt = self.pipeline_layout.replace(new.clone());
 
-        let mut bind_range = self.manager.update_expectations(&new.bind_group_layouts);
+        self.manager.update_expectations(&new.bind_group_layouts);
 
         // Update the buffer binding sizes that are required by shaders.
         for (payload, late_group) in self.payloads.iter_mut().zip(late_sized_buffer_groups) {
@@ -363,11 +371,9 @@ impl Binder {
         if let Some(old) = old_id_opt {
             // root constants are the base compatibility property
             if old.push_constant_ranges != new.push_constant_ranges {
-                bind_range.start = 0;
+                self.manager.update_start_index(0);
             }
         }
-
-        (bind_range.start, &self.payloads[bind_range])
     }
 
     pub(super) fn assign_group<'a>(
@@ -375,7 +381,7 @@ impl Binder {
         index: usize,
         bind_group: &Arc<BindGroup>,
         offsets: &[wgt::DynamicOffset],
-    ) -> &'a [EntryPayload] {
+    ) {
         let payload = &mut self.payloads[index];
         payload.group = Some(bind_group.clone());
         payload.dynamic_offsets.clear();
@@ -401,8 +407,20 @@ impl Binder {
             }
         }
 
-        let bind_range = self.manager.assign(index, bind_group.layout.clone());
-        &self.payloads[bind_range]
+        self.manager.assign(index, bind_group.layout.clone());
+    }
+
+    /// Get the range of entries that needs to be rebound, and clears it.
+    pub(super) fn take_rebind_range(&mut self) -> Range<usize> {
+        self.manager.take_rebind_range()
+    }
+
+    pub(super) fn entries(
+        &self,
+        range: Range<usize>,
+    ) -> impl ExactSizeIterator<Item = (usize, &'_ EntryPayload)> + '_ {
+        let payloads = &self.payloads[range.clone()];
+        zip(range, payloads)
     }
 
     pub(super) fn list_active<'a>(&'a self) -> impl Iterator<Item = &'a Arc<BindGroup>> + 'a {
