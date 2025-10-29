@@ -562,6 +562,7 @@ impl super::PrivateCapabilities {
         // https://developer.apple.com/documentation/metal/developing_metal_apps_that_run_in_simulator
         let os_is_xr = version.major < 8 && device.supports_family(MTLGPUFamily::Apple2);
         let family_check = os_is_xr || version.at_least((10, 15), (13, 0), os_is_mac);
+        let metal3 = device.supports_family(MTLGPUFamily::Metal3);
 
         let mut sample_count_mask = crate::TextureFormatCapabilities::MULTISAMPLE_X4; // 1 and 4 samples are supported on all devices
         if device.supports_texture_sample_count(2) {
@@ -868,6 +869,7 @@ impl super::PrivateCapabilities {
                 ],
             ),
             supports_arrays_of_textures_write: family_check
+                && metal3
                 && (device.supports_family(MTLGPUFamily::Apple6)
                     || device.supports_family(MTLGPUFamily::Mac1)
                     || device.supports_family(MTLGPUFamily::MacCatalyst1)),
@@ -885,20 +887,19 @@ impl super::PrivateCapabilities {
             },
             timestamp_query_support,
             supports_simd_scoped_operations: family_check
-                && (device.supports_family(MTLGPUFamily::Metal3)
-                    || device.supports_family(MTLGPUFamily::Mac2)
+                && metal3
+                && (device.supports_family(MTLGPUFamily::Mac2)
                     || device.supports_family(MTLGPUFamily::Apple7)),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=5
-            int64: family_check
-                && (device.supports_family(MTLGPUFamily::Apple3)
-                    || device.supports_family(MTLGPUFamily::Metal3)),
+            int64: family_check && metal3 && device.supports_family(MTLGPUFamily::Apple3),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=6
             int64_atomics: family_check
-                && ((device.supports_family(MTLGPUFamily::Apple8)
-                    && device.supports_family(MTLGPUFamily::Mac2))
-                    || device.supports_family(MTLGPUFamily::Apple9)),
+                && (device.supports_family(MTLGPUFamily::Apple9)
+                    || (device.supports_family(MTLGPUFamily::Apple8)
+                        && device.supports_family(MTLGPUFamily::Mac2))),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=6
             float_atomics: family_check
+                && metal3
                 && (device.supports_family(MTLGPUFamily::Apple7)
                     || device.supports_family(MTLGPUFamily::Mac2)),
             supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
