@@ -902,8 +902,10 @@ impl super::PrivateCapabilities {
                 && (device.supports_family(MTLGPUFamily::Apple7)
                     || device.supports_family(MTLGPUFamily::Mac2)),
             supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
-            mesh_shaders: device.supports_family(MTLGPUFamily::Apple7)
-                || device.supports_family(MTLGPUFamily::Mac2),
+            mesh_shaders: family_check
+                && device.supports_family(MTLGPUFamily::Metal3)
+                && (device.supports_family(MTLGPUFamily::Apple7)
+                    || device.supports_family(MTLGPUFamily::Mac2)),
             shader_barycentrics: device.supports_shader_barycentric_coordinates(),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             supports_memoryless_storage: if family_check {
