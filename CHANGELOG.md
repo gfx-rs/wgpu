@@ -151,6 +151,10 @@ By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206
 - Validate that buffers are unmapped in `write_buffer` calls. By @ErichDonGubler in [#8454](https://github.com/gfx-rs/wgpu/pull/8454).
 - Add WGSL parsing for mesh shaders. By @inner-daemons in [#8370](https://github.com/gfx-rs/wgpu/pull/8370).
 
+#### naga
+
+- The `||` and `&&` operators now "short circuit", i.e., do not evaluate the RHS if the result can be determined from just the LHS. By @andyleiserson in [#7339](https://github.com/gfx-rs/wgpu/pull/7339).
+
 #### DX12
 
 - Align copies b/w textures and buffers via a single intermediate buffer per copy when `D3D12_FEATURE_DATA_D3D12_OPTIONS13.UnrestrictedBufferTextureCopyPitchSupported` is `false`. By @ErichDonGubler in [#7721](https://github.com/gfx-rs/wgpu/pull/7721).

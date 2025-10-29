@@ -46,15 +46,68 @@ vec3 bool_cast(vec3 x) {
     return vec3(y);
 }
 
+bool p() {
+    return true;
+}
+
+bool q() {
+    return false;
+}
+
+bool r() {
+    return true;
+}
+
+bool s() {
+    return false;
+}
+
 void logical() {
+    bool local = false;
+    bool local_1 = false;
+    bool local_2 = false;
+    bool local_3 = false;
+    bool local_4 = false;
     bool neg0_ = !(true);
     bvec2 neg1_ = not(bvec2(true));
-    bool or = (true || false);
-    bool and = (true && false);
+    if (!(true)) {
+        local = false;
+    } else {
+        local = true;
+    }
+    bool or = local;
+    if (true) {
+        local_1 = false;
+    } else {
+        local_1 = false;
+    }
+    bool and = local_1;
     bool bitwise_or0_ = (true || false);
     bvec3 bitwise_or1_ = bvec3(bvec3(true).x || bvec3(false).x, bvec3(true).y || bvec3(false).y, bvec3(true).z || bvec3(false).z);
     bool bitwise_and0_ = (true && false);
     bvec4 bitwise_and1_ = bvec4(bvec4(true).x && bvec4(false).x, bvec4(true).y && bvec4(false).y, bvec4(true).z && bvec4(false).z, bvec4(true).w && bvec4(false).w);
+    bool _e22 = p();
+    if (!(_e22)) {
+        bool _e26 = q();
+        local_2 = _e26;
+    } else {
+        local_2 = true;
+    }
+    bool _e28 = local_2;
+    if (_e28) {
+        bool _e31 = r();
+        if (!(_e31)) {
+            bool _e35 = s();
+            local_4 = _e35;
+        } else {
+            local_4 = true;
+        }
+        bool _e37 = local_4;
+        local_3 = _e37;
+    } else {
+        local_3 = false;
+    }
+    bool short_circuit = local_3;
     return;
 }
 

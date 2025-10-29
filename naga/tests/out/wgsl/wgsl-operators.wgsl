@@ -39,15 +39,69 @@ fn bool_cast(x: vec3<f32>) -> vec3<f32> {
     return vec3<f32>(y);
 }
 
+fn p() -> bool {
+    return true;
+}
+
+fn q() -> bool {
+    return false;
+}
+
+fn r() -> bool {
+    return true;
+}
+
+fn s() -> bool {
+    return false;
+}
+
 fn logical() {
+    var local: bool;
+    var local_1: bool;
+    var local_2: bool;
+    var local_3: bool;
+    var local_4: bool;
+
     let neg0_ = !(true);
     let neg1_ = !(vec2(true));
-    let or = (true || false);
-    let and = (true && false);
+    if !(true) {
+        local = false;
+    } else {
+        local = true;
+    }
+    let or = local;
+    if true {
+        local_1 = false;
+    } else {
+        local_1 = false;
+    }
+    let and = local_1;
     let bitwise_or0_ = (true | false);
     let bitwise_or1_ = (vec3(true) | vec3(false));
     let bitwise_and0_ = (true & false);
     let bitwise_and1_ = (vec4(true) & vec4(false));
+    let _e22 = p();
+    if !(_e22) {
+        let _e26 = q();
+        local_2 = _e26;
+    } else {
+        local_2 = true;
+    }
+    let _e28 = local_2;
+    if _e28 {
+        let _e31 = r();
+        if !(_e31) {
+            let _e35 = s();
+            local_4 = _e35;
+        } else {
+            local_4 = true;
+        }
+        let _e37 = local_4;
+        local_3 = _e37;
+    } else {
+        local_3 = false;
+    }
+    let short_circuit = local_3;
     return;
 }
 
