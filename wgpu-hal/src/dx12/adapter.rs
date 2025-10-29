@@ -6,6 +6,12 @@ use parking_lot::Mutex;
 use windows::{
     core::Interface as _,
     Win32::{
+        Devices::DeviceAndDriverInstallation::{
+            SetupDiDestroyDeviceInfoList, SetupDiEnumDeviceInfo, SetupDiGetClassDevsW,
+            SetupDiGetDeviceRegistryPropertyW, DIGCF_PRESENT, GUID_DEVCLASS_DISPLAY, HDEVINFO,
+            SPDRP_ADDRESS, SPDRP_BUSNUMBER, SPDRP_HARDWAREID, SP_DEVINFO_DATA,
+        },
+        Foundation::{GetLastError, ERROR_NO_MORE_ITEMS},
         Graphics::{Direct3D, Direct3D12, Dxgi},
         UI::WindowsAndMessaging,
     },
@@ -127,6 +133,7 @@ impl super::Adapter {
             } else {
                 wgt::DeviceType::DiscreteGpu
             },
+            device_pci_bus_id: get_adapter_pci_info(desc.VendorId, desc.DeviceId),
             driver: {
                 if let Ok(i) = unsafe { adapter.CheckInterfaceSupport(&Dxgi::IDXGIDevice::IID) } {
                     const MASK: i64 = 0xFFFF;
@@ -1023,4 +1030,148 @@ impl crate::Adapter for super::Adapter {
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         wgt::PresentationTimestamp(self.presentation_timer.get_timestamp_ns())
     }
+}
+
+fn get_adapter_pci_info(vendor_id: u32, device_id: u32) -> String {
+    // SAFETY: SetupDiGetClassDevsW is called with valid parameters
+    let device_info_set = unsafe {
+        match SetupDiGetClassDevsW(Some(&GUID_DEVCLASS_DISPLAY), None, None, DIGCF_PRESENT) {
+            Ok(set) => set,
+            Err(_) => return String::new(),
+        }
+    };
+
+    struct DeviceInfoSetGuard(HDEVINFO);
+    impl Drop for DeviceInfoSetGuard {
+        fn drop(&mut self) {
+            // SAFETY: device_info_set is a valid HDEVINFO and is only dropped once via this guard
+            unsafe {
+                let _ = SetupDiDestroyDeviceInfoList(self.0);
+            }
+        }
+    }
+    let _guard = DeviceInfoSetGuard(device_info_set);
+
+    let mut device_index = 0u32;
+    loop {
+        let mut device_info_data = SP_DEVINFO_DATA {
+            cbSize: size_of::<SP_DEVINFO_DATA>() as u32,
+            ..Default::default()
+        };
+
+        // SAFETY: device_info_set is a valid HDEVINFO, device_index starts at 0 and
+        // device_info_data is properly initialized above
+        unsafe {
+            if SetupDiEnumDeviceInfo(device_info_set, device_index, &mut device_info_data).is_err()
+            {
+                if GetLastError() == ERROR_NO_MORE_ITEMS {
+                    break;
+                }
+                device_index += 1;
+                continue;
+            }
+        }
+
+        let mut hardware_id_size = 0u32;
+        // SAFETY: device_info_set and device_info_data are valid
+        unsafe {
+            let _ = SetupDiGetDeviceRegistryPropertyW(
+                device_info_set,
+                &device_info_data,
+                SPDRP_HARDWAREID,
+                None,
+                None,
+                Some(&mut hardware_id_size),
+            );
+        }
+
+        if hardware_id_size == 0 {
+            device_index += 1;
+            continue;
+        }
+
+        let mut hardware_id_buffer = vec![0u8; hardware_id_size as usize];
+        // SAFETY: device_info_set and device_info_data are valid
+        unsafe {
+            if SetupDiGetDeviceRegistryPropertyW(
+                device_info_set,
+                &device_info_data,
+                SPDRP_HARDWAREID,
+                None,
+                Some(&mut hardware_id_buffer),
+                Some(&mut hardware_id_size),
+            )
+            .is_err()
+            {
+                device_index += 1;
+                continue;
+            }
+        }
+
+        let hardware_id_u16: Vec<u16> = hardware_id_buffer
+            .chunks_exact(2)
+            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+            .collect();
+        let hardware_ids: Vec<String> = hardware_id_u16
+            .split(|&c| c == 0)
+            .filter(|s| !s.is_empty())
+            .map(|s| String::from_utf16_lossy(s).to_uppercase())
+            .collect();
+
+        // https://learn.microsoft.com/en-us/windows-hardware/drivers/install/identifiers-for-pci-devices
+        let expected_id = format!("PCI\\VEN_{vendor_id:04X}&DEV_{device_id:04X}");
+        if !hardware_ids.iter().any(|id| id.contains(&expected_id)) {
+            device_index += 1;
+            continue;
+        }
+
+        let mut bus_buffer = [0u8; 4];
+        let mut data_size = bus_buffer.len() as u32;
+        // SAFETY: device_info_set and device_info_data are valid
+        let bus_number = unsafe {
+            if SetupDiGetDeviceRegistryPropertyW(
+                device_info_set,
+                &device_info_data,
+                SPDRP_BUSNUMBER,
+                None,
+                Some(&mut bus_buffer),
+                Some(&mut data_size),
+            )
+            .is_err()
+            {
+                device_index += 1;
+                continue;
+            }
+            u32::from_le_bytes(bus_buffer)
+        };
+
+        let mut addr_buffer = [0u8; 4];
+        let mut addr_size = addr_buffer.len() as u32;
+        // SAFETY: device_info_set and device_info_data are valid
+        unsafe {
+            if SetupDiGetDeviceRegistryPropertyW(
+                device_info_set,
+                &device_info_data,
+                SPDRP_ADDRESS,
+                None,
+                Some(&mut addr_buffer),
+                Some(&mut addr_size),
+            )
+            .is_err()
+            {
+                device_index += 1;
+                continue;
+            }
+        }
+        let address = u32::from_le_bytes(addr_buffer);
+
+        // https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/obtaining-device-configuration-information-at-irql---dispatch-level
+        let device = (address >> 16) & 0x0000FFFF;
+        let function = address & 0x0000FFFF;
+
+        // domain:bus:device.function
+        return format!("{:04x}:{:02x}:{:02x}.{:x}", 0, bus_number, device, function);
+    }
+
+    String::new()
 }

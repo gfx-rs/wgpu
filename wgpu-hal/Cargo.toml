@@ -143,6 +143,8 @@ dx12 = [
     "dep:range-alloc",
     "dep:windows-core",
     "dep:gpu-allocator",
+    "gpu-allocator/d3d12",
+    "windows/Win32_Devices_DeviceAndDriverInstallation",
     "windows/Win32_Graphics_Direct3D_Fxc",
     "windows/Win32_Graphics_Direct3D_Dxc",
     "windows/Win32_Graphics_Direct3D",

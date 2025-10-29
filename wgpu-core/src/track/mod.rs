@@ -612,12 +612,32 @@ impl DeviceTracker {
 
 /// A full double sided tracker used by CommandBuffers.
 pub(crate) struct Tracker {
+    /// Buffers used within this command buffer.
+    ///
+    /// For compute passes, this only includes buffers actually used by the
+    /// pipeline (contrast with the `bind_groups` member).
     pub buffers: BufferTracker,
+
+    /// Textures used within this command buffer.
+    ///
+    /// For compute passes, this only includes textures actually used by the
+    /// pipeline (contrast with the `bind_groups` member).
     pub textures: TextureTracker,
+
     pub blas_s: BlasTracker,
     pub tlas_s: StatelessTracker<resource::Tlas>,
     pub views: StatelessTracker<resource::TextureView>,
+
+    /// Contains all bind groups that were passed in any call to
+    /// `set_bind_group` on the encoder.
+    ///
+    /// WebGPU requires that submission fails if any resource in any of these
+    /// bind groups is destroyed, even if the resource is not actually used by
+    /// the pipeline (e.g. because the pipeline does not use the bound slot, or
+    /// because the bind group was replaced by a subsequent call to
+    /// `set_bind_group`).
     pub bind_groups: StatelessTracker<binding_model::BindGroup>,
+
     pub compute_pipelines: StatelessTracker<pipeline::ComputePipeline>,
     pub render_pipelines: StatelessTracker<pipeline::RenderPipeline>,
     pub bundles: StatelessTracker<command::RenderBundle>,
@@ -641,8 +661,7 @@ impl Tracker {
     }
 
     /// Iterates through all resources in the given bind group and adopts
-    /// the state given for those resources in the UsageScope. It also
-    /// removes all touched resources from the usage scope.
+    /// the state given for those resources in the UsageScope.
     ///
     /// If a transition is needed to get the resources into the needed
     /// state, those transitions are stored within the tracker. A
@@ -650,32 +669,21 @@ impl Tracker {
     /// [`TextureTracker::drain_transitions`] is needed to get those transitions.
     ///
     /// This is a really funky method used by Compute Passes to generate
-    /// barriers after a call to dispatch without needing to iterate
-    /// over all elements in the usage scope. We use each the
-    /// bind group as a source of which IDs to look at. The bind groups
-    /// must have first been added to the usage scope.
+    /// barriers for each dispatch. We use the bind group as a source of which
+    /// IDs to look at.
     ///
     /// Only stateful things are merged in here, all other resources are owned
     /// indirectly by the bind group.
     ///
-    /// # Safety
+    /// # Panics
     ///
-    /// The maximum ID given by each bind group resource must be less than the
-    /// value given to `set_size`
-    pub unsafe fn set_and_remove_from_usage_scope_sparse(
-        &mut self,
-        scope: &mut UsageScope,
-        bind_group: &BindGroupStates,
-    ) {
-        unsafe {
-            self.buffers.set_and_remove_from_usage_scope_sparse(
-                &mut scope.buffers,
-                bind_group.buffers.used_tracker_indices(),
-            )
-        };
-        unsafe {
-            self.textures
-                .set_and_remove_from_usage_scope_sparse(&mut scope.textures, &bind_group.views)
-        };
+    /// If a resource in the `bind_group` is not found in the usage scope.
+    pub fn set_from_bind_group(&mut self, scope: &mut UsageScope, bind_group: &BindGroupStates) {
+        self.buffers.set_multiple(
+            &mut scope.buffers,
+            bind_group.buffers.used_tracker_indices(),
+        );
+        self.textures
+            .set_multiple(&mut scope.textures, &bind_group.views);
     }
 }
