@@ -287,6 +287,90 @@ fn planar_texture_bad_size() {
     }
 }
 
+/// Ensures that creating a planar textures that support `RENDER_ATTACHMENT` usage
+/// is possible.
+#[test]
+fn planar_texture_render_attachment() {
+    let required_features = wgpu::Features::TEXTURE_FORMAT_NV12;
+    let device_desc = wgpu::DeviceDescriptor {
+        required_features,
+        ..Default::default()
+    };
+    let (device, _queue) = wgpu::Device::noop(&device_desc);
+    let size = wgpu::Extent3d {
+        width: 256,
+        height: 256,
+        depth_or_array_layers: 1,
+    };
+
+    for (tex_format, view_format, view_aspect) in [
+        (
+            wgpu::TextureFormat::NV12,
+            wgpu::TextureFormat::R8Unorm,
+            wgpu::TextureAspect::Plane0,
+        ),
+        (
+            wgpu::TextureFormat::NV12,
+            wgpu::TextureFormat::Rg8Unorm,
+            wgpu::TextureAspect::Plane1,
+        ),
+    ] {
+        valid(&device, || {
+            let texture = device.create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                dimension: wgpu::TextureDimension::D2,
+                size,
+                format: tex_format,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                mip_level_count: 1,
+                sample_count: 1,
+                view_formats: &[],
+            });
+
+            let _ = texture.create_view(&wgpu::TextureViewDescriptor {
+                format: Some(view_format),
+                aspect: view_aspect,
+                ..Default::default()
+            });
+        });
+    }
+}
+
+/// Ensures that creating a planar textures with `RENDER_ATTACHMENT`
+/// for non renderable planar formats fails validation.
+#[test]
+fn planar_texture_render_attachment_unsupported() {
+    let required_features =
+        wgpu::Features::TEXTURE_FORMAT_P010 | wgpu::Features::TEXTURE_FORMAT_16BIT_NORM;
+    let device_desc = wgpu::DeviceDescriptor {
+        required_features,
+        ..Default::default()
+    };
+    let (device, _queue) = wgpu::Device::noop(&device_desc);
+    let size = wgpu::Extent3d {
+        width: 256,
+        height: 256,
+        depth_or_array_layers: 1,
+    };
+
+    fail(
+        &device,
+        || {
+            let _ = device.create_texture(&wgpu::TextureDescriptor {
+                label: None,
+                dimension: wgpu::TextureDimension::D2,
+                size,
+                format: wgpu::TextureFormat::P010,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                mip_level_count: 1,
+                sample_count: 1,
+                view_formats: &[],
+            });
+        },
+        Some("Texture usages TextureUsages(RENDER_ATTACHMENT) are not allowed on a texture of type P010"),
+    );
+}
+
 /// Creates a texture and a buffer, and encodes a copy from the texture to the
 /// buffer.
 fn encode_copy_texture_to_buffer(

@@ -79,11 +79,10 @@ impl crate::AddressSpace {
         self,
     ) -> (spirv::MemorySemantics, spirv::Scope) {
         match self {
-            Self::Storage { .. } => (spirv::MemorySemantics::UNIFORM_MEMORY, spirv::Scope::Device),
-            Self::WorkGroup => (
-                spirv::MemorySemantics::WORKGROUP_MEMORY,
-                spirv::Scope::Workgroup,
-            ),
+            Self::Storage { .. } => (spirv::MemorySemantics::empty(), spirv::Scope::Device),
+            Self::WorkGroup => (spirv::MemorySemantics::empty(), spirv::Scope::Workgroup),
+            Self::Uniform => (spirv::MemorySemantics::empty(), spirv::Scope::Device),
+            Self::Handle => (spirv::MemorySemantics::empty(), spirv::Scope::Device),
             _ => (spirv::MemorySemantics::empty(), spirv::Scope::Invocation),
         }
     }

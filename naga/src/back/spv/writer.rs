@@ -2089,6 +2089,14 @@ impl Writer {
                         )?;
                         BuiltIn::PrimitiveId
                     }
+                    Bi::Barycentric => {
+                        self.require_any(
+                            "`barycentric` built-in",
+                            &[spirv::Capability::FragmentBarycentricKHR],
+                        )?;
+                        self.use_extension("SPV_KHR_fragment_shader_barycentric");
+                        BuiltIn::BaryCoordKHR
+                    }
                     Bi::SampleIndex => {
                         self.require_any(
                             "`sample_index` built-in",
