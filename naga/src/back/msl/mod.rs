@@ -535,6 +535,7 @@ impl Options {
                     // https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=114
                     crate::BuiltIn::ViewIndex if self.lang_version < (2, 2) => {
                         return Err(Error::UnsupportedAttribute("amplification_id".to_string()));
+                    }
                     // macOS: Since Metal 2.2
                     // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/wgpu/issues/4414)
                     crate::BuiltIn::Barycentric if self.lang_version < (2, 3) => {
