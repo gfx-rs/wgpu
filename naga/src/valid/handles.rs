@@ -233,6 +233,20 @@ impl super::Validator {
                     validate_const_expr(size)?;
                 }
             }
+            if let Some(task_payload) = entry_point.task_payload {
+                Self::validate_global_variable_handle(task_payload, global_variables)?;
+            }
+            if let Some(ref mesh_info) = entry_point.mesh_info {
+                validate_type(mesh_info.vertex_output_type)?;
+                validate_type(mesh_info.primitive_output_type)?;
+                for ov in mesh_info
+                    .max_vertices_override
+                    .iter()
+                    .chain(mesh_info.max_primitives_override.iter())
+                {
+                    validate_const_expr(*ov)?;
+                }
+            }
         }
 
         for (function_handle, function) in functions.iter() {
@@ -801,6 +815,22 @@ impl super::Validator {
                 }
                 Ok(())
             }
+            crate::Statement::MeshFunction(func) => match func {
+                crate::MeshFunction::SetMeshOutputs {
+                    vertex_count,
+                    primitive_count,
+                } => {
+                    validate_expr(vertex_count)?;
+                    validate_expr(primitive_count)?;
+                    Ok(())
+                }
+                crate::MeshFunction::SetVertex { index, value }
+                | crate::MeshFunction::SetPrimitive { index, value } => {
+                    validate_expr(index)?;
+                    validate_expr(value)?;
+                    Ok(())
+                }
+            },
             crate::Statement::SubgroupBallot { result, predicate } => {
                 validate_expr_opt(predicate)?;
                 validate_expr(result)?;

@@ -577,11 +577,8 @@ impl GPUDevice {
       multiview: None,
     };
 
-    let res = wgpu_core::command::RenderBundleEncoder::new(
-      &wgpu_descriptor,
-      self.id,
-      None,
-    );
+    let res =
+      wgpu_core::command::RenderBundleEncoder::new(&wgpu_descriptor, self.id);
     let (encoder, err) = match res {
       Ok(encoder) => (encoder, None),
       Err(e) => (

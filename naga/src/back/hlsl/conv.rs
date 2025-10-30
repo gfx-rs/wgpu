@@ -185,6 +185,9 @@ impl crate::BuiltIn {
             Self::PointSize | Self::PointCoord | Self::DrawID => {
                 return Err(Error::Custom(format!("Unsupported builtin {self:?}")))
             }
+            Self::CullPrimitive => "SV_CullPrimitive",
+            Self::PointIndex | Self::LineIndices | Self::TriangleIndices => unimplemented!(),
+            Self::MeshTaskSize => unreachable!(),
         })
     }
 }

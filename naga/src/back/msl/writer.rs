@@ -594,7 +594,8 @@ impl crate::AddressSpace {
             | Self::Private
             | Self::WorkGroup
             | Self::PushConstant
-            | Self::Handle => true,
+            | Self::Handle
+            | Self::TaskPayload => true,
             Self::Function => false,
         }
     }
@@ -607,6 +608,7 @@ impl crate::AddressSpace {
             // may end up with "const" even if the binding is read-write,
             // and that should be OK.
             Self::Storage { .. } => true,
+            Self::TaskPayload => unimplemented!(),
             // These should always be read-write.
             Self::Private | Self::WorkGroup => false,
             // These translate to `constant` address space, no need for qualifiers.
@@ -623,6 +625,7 @@ impl crate::AddressSpace {
             Self::Storage { .. } => Some("device"),
             Self::Private | Self::Function => Some("thread"),
             Self::WorkGroup => Some("threadgroup"),
+            Self::TaskPayload => Some("object_data"),
         }
     }
 }
@@ -4060,6 +4063,14 @@ impl<W: Write> Writer<W> {
                         }
                     }
                 }
+                // TODO: write emitters for these
+                crate::Statement::MeshFunction(crate::MeshFunction::SetMeshOutputs { .. }) => {
+                    unimplemented!()
+                }
+                crate::Statement::MeshFunction(
+                    crate::MeshFunction::SetVertex { .. }
+                    | crate::MeshFunction::SetPrimitive { .. },
+                ) => unimplemented!(),
                 crate::Statement::SubgroupBallot { result, predicate } => {
                     write!(self.out, "{level}")?;
                     let name = self.namer.call("");
@@ -6619,7 +6630,7 @@ template <typename A>
                     LocationMode::Uniform,
                     false,
                 ),
-                crate::ShaderStage::Task | crate::ShaderStage::Mesh => unreachable!(),
+                crate::ShaderStage::Task | crate::ShaderStage::Mesh => unimplemented!(),
             };
 
             // Should this entry point be modified to do vertex pulling?
@@ -6685,6 +6696,9 @@ template <typename A>
                                 ep_error = Some(e);
                                 break;
                             }
+                        }
+                        crate::AddressSpace::TaskPayload => {
+                            unimplemented!()
                         }
                         crate::AddressSpace::Function
                         | crate::AddressSpace::Private
@@ -7683,7 +7697,7 @@ mod workgroup_mem_init {
             fun_info: &valid::FunctionInfo,
         ) -> bool {
             options.zero_initialize_workgroup_memory
-                && ep.stage == crate::ShaderStage::Compute
+                && ep.stage.compute_like()
                 && module.global_variables.iter().any(|(handle, var)| {
                     !fun_info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
                 })

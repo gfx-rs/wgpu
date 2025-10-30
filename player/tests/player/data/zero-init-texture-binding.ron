@@ -3,13 +3,13 @@
     expectations: [
         (
             name: "Sampled Texture",
-            buffer: (index: 0, epoch: 1),
+            buffer: PointerId(0x10),
             offset: 0,
             data: File("zero-16k.bin", 16384),
         ),
         (
             name: "Storage Texture",
-            buffer: (index: 1, epoch: 1),
+            buffer: PointerId(0x110),
             offset: 0,
             data: File("zero-16k.bin", 16384),
         ),
@@ -17,7 +17,7 @@
         // MISSING: Partial views
     ],
     actions: [
-        CreateTexture(Id(0, 1), (
+        CreateTexture(PointerId(0x10), (
             label: Some("Sampled Texture"),
             size: (
                 width: 64,
@@ -31,12 +31,12 @@
             view_formats: [],
         )),
         CreateTextureView(
-            id: Id(0, 1),
-            parent_id: Id(0, 1),
+            id: PointerId(0x10),
+            parent: PointerId(0x10),
             desc: (),
         ),
         CreateBuffer(
-            Id(0, 1),
+            PointerId(0x10),
             (
                 label: Some("Sampled Texture Buffer"),
                 size: 16384,
@@ -44,7 +44,7 @@
                 mapped_at_creation: false,
             ),
         ),
-        CreateTexture(Id(1, 1), (
+        CreateTexture(PointerId(0x110), (
             label: Some("Storage Texture"),
             size: (
                 width: 64,
@@ -58,12 +58,12 @@
             view_formats: [],
         )),
         CreateTextureView(
-            id: Id(1, 1),
-            parent_id: Id(1, 1),
+            id: PointerId(0x110),
+            parent: PointerId(0x110),
             desc: (),
         ),
         CreateBuffer(
-            Id(1, 1),
+            PointerId(0x110),
             (
                 label: Some("Storage Texture Buffer"),
                 size: 16384,
@@ -73,7 +73,7 @@
         ),
 
 
-        CreateBindGroupLayout(Id(0, 1), (
+        CreateBindGroupLayout(PointerId(0x10), (
             label: None,
             entries: [
                 (
@@ -98,29 +98,29 @@
                 ),
             ],
         )),
-        CreateBindGroup(Id(0, 1), (
+        CreateBindGroup(PointerId(0x10), (
             label: None,
-            layout: Id(0, 1),
+            layout: PointerId(0x10),
             entries: [
                 (
                     binding: 0,
-                    resource: TextureView(Id(0, 1)),
+                    resource: TextureView(PointerId(0x10)),
                 ),
                 (
                     binding: 1,
-                    resource: TextureView(Id(1, 1)),
+                    resource: TextureView(PointerId(0x110)),
                 ),
             ],
         )),
-        CreatePipelineLayout(Id(0, 1), (
+        CreatePipelineLayout(PointerId(0x10), (
             label: None,
             bind_group_layouts: [
-                Id(0, 1),
+                PointerId(0x10),
             ],
             push_constant_ranges: [],
         )),
         CreateShaderModule(
-            id: Id(0, 1),
+            id: PointerId(0x10),
             desc: (
                 label: None,
                 flags: (bits: 3),
@@ -128,12 +128,12 @@
             data: "zero-init-texture-binding.wgsl",
         ),
         CreateComputePipeline(
-            id: Id(0, 1),
+            id: PointerId(0x10),
             desc: (
                 label: None,
-                layout: Some(Id(0, 1)),
+                layout: Some(PointerId(0x10)),
                 stage: (
-                    module: Id(0, 1),
+                    module: PointerId(0x10),
                     entry_point: None,
                     constants: {},
                     zero_initialize_workgroup_memory: true,
@@ -144,13 +144,13 @@
 
         Submit(1, [
             RunComputePass(
-                base: (
+                pass: (
                     commands: [
-                        SetPipeline(Id(0, 1)),
+                        SetPipeline(PointerId(0x10)),
                         SetBindGroup(
                             index: 0,
                             num_dynamic_offsets: 0,
-                            bind_group_id: Some(Id(0, 1)),
+                            bind_group: Some(PointerId(0x10)),
                         ),
                         Dispatch((4, 1, 1)),
                     ],
@@ -161,12 +161,12 @@
             ),
             CopyTextureToBuffer(
                 src: (
-                    texture: Id(0, 1),
+                    texture: PointerId(0x10),
                     mip_level: 0,
                     array_layer: 0,
                 ),
                 dst:  (
-                    buffer: Id(0, 1),
+                    buffer: PointerId(0x10),
                     layout: (
                         offset: 0,
                         bytes_per_row: Some(256),
@@ -180,12 +180,12 @@
             ),
             CopyTextureToBuffer(
                 src: (
-                    texture: Id(1, 1),
+                    texture: PointerId(0x110),
                     mip_level: 0,
                     array_layer: 0,
                 ),
                 dst:  (
-                    buffer: Id(1, 1),
+                    buffer: PointerId(0x110),
                     layout: (
                         offset: 0,
                         bytes_per_row: Some(256),

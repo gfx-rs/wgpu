@@ -39,6 +39,8 @@ pub enum PipelineConstantError {
     ValidationError(#[from] WithSpan<ValidationError>),
     #[error("workgroup_size override isn't strictly positive")]
     NegativeWorkgroupSize,
+    #[error("max vertices or max primitives is negative")]
+    NegativeMeshOutputMax,
 }
 
 /// Compact `module` and replace all overrides with constants.
@@ -243,6 +245,7 @@ pub fn process_overrides<'a>(
     for ep in entry_points.iter_mut() {
         process_function(&mut module, &override_map, &mut layouter, &mut ep.function)?;
         process_workgroup_size_override(&mut module, &adjusted_global_expressions, ep)?;
+        process_mesh_shader_overrides(&mut module, &adjusted_global_expressions, ep)?;
     }
     module.entry_points = entry_points;
     module.overrides = overrides;
@@ -291,6 +294,28 @@ fn process_workgroup_size_override(
                 },
             )?;
             ep.workgroup_size_overrides = None;
+        }
+    }
+    Ok(())
+}
+
+fn process_mesh_shader_overrides(
+    module: &mut Module,
+    adjusted_global_expressions: &HandleVec<Expression, Handle<Expression>>,
+    ep: &mut crate::EntryPoint,
+) -> Result<(), PipelineConstantError> {
+    if let Some(ref mut mesh_info) = ep.mesh_info {
+        if let Some(r#override) = mesh_info.max_vertices_override {
+            mesh_info.max_vertices = module
+                .to_ctx()
+                .eval_expr_to_u32(adjusted_global_expressions[r#override])
+                .map_err(|_| PipelineConstantError::NegativeMeshOutputMax)?;
+        }
+        if let Some(r#override) = mesh_info.max_primitives_override {
+            mesh_info.max_primitives = module
+                .to_ctx()
+                .eval_expr_to_u32(adjusted_global_expressions[r#override])
+                .map_err(|_| PipelineConstantError::NegativeMeshOutputMax)?;
         }
     }
     Ok(())
@@ -834,6 +859,26 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 crate::RayQueryFunction::ConfirmIntersection => {}
                 crate::RayQueryFunction::Terminate => {}
             }
+        }
+        Statement::MeshFunction(crate::MeshFunction::SetMeshOutputs {
+            ref mut vertex_count,
+            ref mut primitive_count,
+        }) => {
+            adjust(vertex_count);
+            adjust(primitive_count);
+        }
+        Statement::MeshFunction(
+            crate::MeshFunction::SetVertex {
+                ref mut index,
+                ref mut value,
+            }
+            | crate::MeshFunction::SetPrimitive {
+                ref mut index,
+                ref mut value,
+            },
+        ) => {
+            adjust(index);
+            adjust(value);
         }
         Statement::Break
         | Statement::Continue

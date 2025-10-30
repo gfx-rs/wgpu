@@ -1030,7 +1030,7 @@ impl Limits {
         Self {
             max_blas_geometry_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
             max_tlas_instance_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
-            max_blas_primitive_count: 1 << 28,      // 2^28: Metal's minimum
+            max_blas_primitive_count: (1 << 24) - 1, // Should be 2^28: Metal's minimum, but due to an llvmpipe bug it is 2^24 - 1
             max_acceleration_structures_per_shader_stage: 16, // Vulkan's minimum
             ..self
         }
@@ -5369,6 +5369,8 @@ bitflags::bitflags! {
 
 bitflags::bitflags! {
     /// Similar to `BufferUsages`, but used only for `CommandEncoder::transition_resources`.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct BufferUses: u16 {
         /// The argument to a read-only mapping.
@@ -5420,6 +5422,7 @@ bitflags::bitflags! {
 
 /// A buffer transition for use with `CommandEncoder::transition_resources`.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BufferTransition<T> {
     /// The buffer to transition.
     pub buffer: T,
@@ -5681,6 +5684,8 @@ bitflags::bitflags! {
 bitflags::bitflags! {
     /// Similar to `TextureUsages`, but used only for `CommandEncoder::transition_resources`.
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
     pub struct TextureUses: u16 {
         /// The texture is in unknown state.
         const UNINITIALIZED = 1 << 0;
@@ -5736,6 +5741,7 @@ bitflags::bitflags! {
 
 /// A texture transition for use with `CommandEncoder::transition_resources`.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TextureTransition<T> {
     /// The texture to transition.
     pub texture: T,
@@ -5749,6 +5755,7 @@ pub struct TextureTransition<T> {
 
 /// Specifies a particular set of subresources in a texture.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TextureSelector {
     /// Range of mips to use.
     pub mips: Range<u32>,
@@ -5819,25 +5826,40 @@ pub struct SurfaceConfiguration<V> {
     /// `AutoNoVsync` will gracefully do a designed sets of fallbacks if their primary modes are
     /// unsupported.
     pub present_mode: PresentMode,
-    /// Desired maximum number of frames that the presentation engine should queue in advance.
+    /// Desired maximum number of monitor refreshes between a [`Surface::get_current_texture`] call and the
+    /// texture being presented to the screen. This is sometimes called "Frames in Flight".
     ///
-    /// This is a hint to the backend implementation and will always be clamped to the supported range.
-    /// As a consequence, either the maximum frame latency is set directly on the swap chain,
-    /// or waits on present are scheduled to avoid exceeding the maximum frame latency if supported,
-    /// or the swap chain size is set to (max-latency + 1).
+    /// Defaults to `2` when created via [`Surface::get_default_config`] as this is a reasonable default.
     ///
-    /// Defaults to 2 when created via `Surface::get_default_config`.
+    /// This is ultimately a hint to the backend implementation and will always be clamped
+    /// to the supported range.
     ///
-    /// Typical values range from 3 to 1, but higher values are possible:
-    /// * Choose 2 or higher for potentially smoother frame display, as it allows to be at least one frame
-    ///   to be queued up. This typically avoids starving the GPU's work queue.
-    ///   Higher values are useful for achieving a constant flow of frames to the display under varying load.
-    /// * Choose 1 for low latency from frame recording to frame display.
-    ///   ⚠️ If the backend does not support waiting on present, this will cause the CPU to wait for the GPU
-    ///   to finish all work related to the previous frame when calling `Surface::get_current_texture`,
-    ///   causing CPU-GPU serialization (i.e. when `Surface::get_current_texture` returns, the GPU might be idle).
-    ///   It is currently not possible to query this. See <https://github.com/gfx-rs/wgpu/issues/2869>.
-    /// * A value of 0 is generally not supported and always clamped to a higher value.
+    /// Typical values are `1` to `3`, but higher values are valid, though likely to be clamped.
+    /// * Choose `1` to minimize latency above all else. This only gives a single monitor refresh for all of
+    ///   the CPU and GPU work to complete. ⚠️ As a result of these short swapchains, the CPU and GPU
+    ///   cannot run in parallel, prioritizing latency over throughput. For applications like GUIs doing
+    ///   a small amount of GPU work each frame that need low latency, this is a reasonable choice.
+    /// * Choose `2` for a balance between latency and throughput. The CPU and GPU both can each use
+    ///   a full monitor refresh to do their computations. This is a reasonable default for most applications.
+    /// * Choose `3` or higher to maximize throughput, sacrificing latency when the the CPU and GPU
+    ///   are using less than a full monitor refresh each. For applications that use CPU-side pipelining
+    ///   of frames this may be a reasonable choice. ⚠️ On 60hz displays the latency can be very noticeable.
+    ///
+    /// This maps to the backend in the following ways:
+    /// - Vulkan: Number of frames in the swapchain is `desired_maximum_frame_latency + 1`,
+    ///   clamped to the supported range.
+    /// - DX12: Calls [`IDXGISwapChain2::SetMaximumFrameLatency(desired_maximum_frame_latency)`][SMFL].
+    /// - Metal: Sets the `maximumDrawableCount` of the underlying `CAMetalLayer` to
+    ///   `desired_maximum_frame_latency + 1`, clamped to the supported range.
+    /// - OpenGL: Ignored
+    ///
+    /// It also has various subtle interactions with various present modes and APIs.
+    /// - DX12 + Mailbox: Limits framerate to `desired_maximum_frame_latency * Monitor Hz` fps.
+    /// - Vulkan/Metal + Mailbox: If this is set to `2`, limits framerate to `2 * Monitor Hz` fps. `3` or higher is unlimited.
+    ///
+    /// [`Surface::get_current_texture`]: ../wgpu/struct.Surface.html#method.get_current_texture
+    /// [`Surface::get_default_config`]: ../wgpu/struct.Surface.html#method.get_default_config
+    /// [SMFL]: https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_3/nf-dxgi1_3-idxgiswapchain2-setmaximumframelatency
     pub desired_maximum_frame_latency: u32,
     /// Specifies how the alpha channel of the textures should be handled during compositing.
     pub alpha_mode: CompositeAlphaMode,

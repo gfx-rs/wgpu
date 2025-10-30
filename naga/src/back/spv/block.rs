@@ -3655,6 +3655,7 @@ impl BlockContext<'_> {
                 } => {
                     self.write_subgroup_gather(mode, argument, result, &mut block)?;
                 }
+                Statement::MeshFunction(_) => unreachable!(),
             }
         }
 

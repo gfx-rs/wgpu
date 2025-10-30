@@ -64,6 +64,12 @@ struct Args {
     #[argh(option)]
     shader_model: Option<ShaderModelArg>,
 
+    /// the SPIR-V version to use if targeting SPIR-V
+    ///
+    /// For example, 1.0, 1.4, etc
+    #[argh(option)]
+    spirv_version: Option<SpirvVersionArg>,
+
     /// the shader stage, for example 'frag', 'vert', or 'compute'.
     /// if the shader stage is unspecified it will be derived from
     /// the file extension.
@@ -186,6 +192,22 @@ impl FromStr for ShaderModelArg {
             "67" => ShaderModel::V6_7,
             _ => return Err(format!("Invalid value for --shader-model: {s}")),
         }))
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SpirvVersionArg(u8, u8);
+
+impl FromStr for SpirvVersionArg {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let dot = s
+            .find(".")
+            .ok_or_else(|| "Missing dot separator".to_owned())?;
+        let major = s[..dot].parse::<u8>().map_err(|e| e.to_string())?;
+        let minor = s[dot + 1..].parse::<u8>().map_err(|e| e.to_string())?;
+        Ok(Self(major, minor))
     }
 }
 
@@ -464,6 +486,9 @@ fn run() -> anyhow::Result<()> {
     }
     if let Some(ref version) = args.metal_version {
         params.msl.lang_version = version.0;
+    }
+    if let Some(ref version) = args.spirv_version {
+        params.spv_out.lang_version = (version.0, version.1);
     }
     params.keep_coordinate_space = args.keep_coordinate_space;
 
