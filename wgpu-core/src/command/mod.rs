@@ -1589,21 +1589,31 @@ impl Global {
         self.hub.query_sets.get(query_set_id).get()
     }
 
+    /// Finishes a command encoder, creating a command buffer and returning errors that were
+    /// deferred until now.
+    ///
+    /// The returned `String` is the label of the command encoder, supplied so that `wgpu` can
+    /// include the label when printing deferred errors without having its own copy of the label.
+    /// This is a kludge and should be replaced if we think of a better solution to propagating
+    /// labels.
     pub fn command_encoder_finish(
         &self,
         encoder_id: id::CommandEncoderId,
         desc: &wgt::CommandBufferDescriptor<Label>,
         id_in: Option<id::CommandBufferId>,
-    ) -> (id::CommandBufferId, Option<CommandEncoderError>) {
+    ) -> (id::CommandBufferId, Option<(String, CommandEncoderError)>) {
         profiling::scope!("CommandEncoder::finish");
 
         let hub = &self.hub;
         let cmd_enc = hub.command_encoders.get(encoder_id);
 
-        let (cmd_buf, error) = cmd_enc.finish(desc);
+        let (cmd_buf, opt_error) = cmd_enc.finish(desc);
         let cmd_buf_id = hub.command_buffers.prepare(id_in).assign(cmd_buf);
 
-        (cmd_buf_id, error)
+        (
+            cmd_buf_id,
+            opt_error.map(|error| (cmd_enc.label.clone(), error)),
+        )
     }
 
     pub fn command_encoder_push_debug_group(
