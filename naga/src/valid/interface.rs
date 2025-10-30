@@ -870,6 +870,7 @@ impl super::Validator {
             (crate::ShaderStage::Mesh, &None) => {
                 return Err(EntryPointError::ExpectedMeshShaderAttributes.with_span());
             }
+            (crate::ShaderStage::Mesh, &Some(..)) => {}
             (_, &Some(_)) => {
                 return Err(EntryPointError::UnexpectedMeshShaderAttributes.with_span());
             }
