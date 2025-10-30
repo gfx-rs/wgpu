@@ -697,7 +697,9 @@ impl Writer {
 
         let valid_id = self.ray_query_initialization_tracking.then(||{
             let tmin_le_tmax_id = self.id_gen.next();
-            // Because this checks if tmin and tmax are ordered too (i.e: not NaN), there is no need for an additional check.
+            // Check both that tmin is less than or equal to tmax (https://docs.vulkan.org/spec/latest/appendices/spirvenv.html#VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06350)
+            // and implicitly that neither tmin or tmax are NaN (https://docs.vulkan.org/spec/latest/appendices/spirvenv.html#VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06351)
+            // because this checks if tmin and tmax are ordered too (i.e: not NaN).
             block.body.push(Instruction::binary(
                 spirv::Op::FOrdLessThanEqual,
                 bool_type_id,
@@ -706,6 +708,9 @@ impl Writer {
                 tmax_id,
             ));
 
+            // Check that tmin is greater than or equal to 0 (and
+            // therefore also tmax is too because it is greater than
+            // or equal to tmin) (https://docs.vulkan.org/spec/latest/appendices/spirvenv.html#VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06349).
             let tmin_ge_zero_id = self.id_gen.next();
             let zero_id = self.get_constant_scalar(crate::Literal::F32(0.0));
             block.body.push(Instruction::binary(
@@ -716,6 +721,7 @@ impl Writer {
                 zero_id,
             ));
 
+            // Check that ray origin is finite (https://docs.vulkan.org/spec/latest/appendices/spirvenv.html#VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06348)
             let ray_origin_infinite_id = self.id_gen.next();
             block.body.push(Instruction::unary(
                 spirv::Op::IsInf,
@@ -763,6 +769,7 @@ impl Writer {
                 ray_origin_not_finite_id,
             ));
 
+            // Check that ray direction is finite (https://docs.vulkan.org/spec/latest/appendices/spirvenv.html#VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06348)
             let ray_dir_infinite_id = self.id_gen.next();
             block.body.push(Instruction::unary(
                 spirv::Op::IsInf,
@@ -855,6 +862,8 @@ impl Writer {
                 less_than_two_id
             }
 
+            // Check that at most one of skip triangles and skip AABBs is
+            // present (https://docs.vulkan.org/spec/latest/appendices/spirvenv.html#VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06889)
             let contains_skip_triangles = write_ray_flags_contains_flags(
                 self,
                 &mut block,
@@ -874,6 +883,8 @@ impl Writer {
                 vec![contains_skip_triangles, contains_skip_aabbs],
             );
 
+            // Check that at most one of skip triangles (taken from above check),
+            // cull back facing, and cull front face is present (https://docs.vulkan.org/spec/latest/appendices/spirvenv.html#VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06890)
             let contains_cull_back = write_ray_flags_contains_flags(
                 self,
                 &mut block,
@@ -897,6 +908,8 @@ impl Writer {
                 ],
             );
 
+            // Check that at most one of force opaque, force not opaque, cull opaque,
+            // and cull not opaque are present (https://docs.vulkan.org/spec/latest/appendices/spirvenv.html#VUID-RuntimeSpirv-OpRayQueryInitializeKHR-06891)
             let contains_opaque = write_ray_flags_contains_flags(
                 self,
                 &mut block,
@@ -933,6 +946,7 @@ impl Writer {
                 ],
             );
 
+            // Combine all checks into a single flag saying whether the call is valid or not.
             self.write_reduce_and(
                 &mut block,
                 vec![
@@ -950,7 +964,7 @@ impl Writer {
         let merge_label_id = self.id_gen.next();
         let merge_block = Block::new(merge_label_id);
 
-        // NOTE: this block will be unreachable if initialization tracking is set to false.
+        // NOTE: this block will be unreachable if initialization tracking is disabled.
         let invalid_label_id = self.id_gen.next();
         let mut invalid_block = Block::new(invalid_label_id);
 
@@ -1273,6 +1287,9 @@ impl Writer {
             raw_kind_id,
             candidate_aabb_id,
         ));
+
+        // Check that the provided t value is between t min and the current committed
+        // t value, (https://docs.vulkan.org/spec/latest/appendices/spirvenv.html#VUID-RuntimeSpirv-OpRayQueryGenerateIntersectionKHR-06353)
 
         // Get the tmin
         let t_min_id = self.id_gen.next();
