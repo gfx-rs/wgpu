@@ -1125,53 +1125,61 @@ impl crate::Device for super::Device {
             let vs_info;
             let ts_info;
             let ms_info;
+
+            // Create the pipeline descriptor and do vertex/mesh pipeline specific setup
             let descriptor = match desc.vertex_processor {
                 crate::VertexProcessor::Standard {
                     vertex_buffers,
                     ref vertex_stage,
                 } => {
+                    // Vertex pipeline specific setup
+
                     let descriptor = metal::RenderPipelineDescriptor::new();
                     ts_info = None;
                     ms_info = None;
-                    vs_info = Some({
-                        let mut vertex_buffer_mappings =
-                            Vec::<naga::back::msl::VertexBufferMapping>::new();
-                        for (i, vbl) in vertex_buffers.iter().enumerate() {
-                            let mut attributes = Vec::<naga::back::msl::AttributeMapping>::new();
-                            for attribute in vbl.attributes.iter() {
-                                attributes.push(naga::back::msl::AttributeMapping {
-                                    shader_location: attribute.shader_location,
-                                    offset: attribute.offset as u32,
-                                    format: convert_vertex_format_to_naga(attribute.format),
-                                });
-                            }
 
-                            vertex_buffer_mappings.push(naga::back::msl::VertexBufferMapping {
-                                id: self.shared.private_caps.max_vertex_buffers - 1 - i as u32,
-                                stride: if vbl.array_stride > 0 {
-                                    vbl.array_stride.try_into().unwrap()
-                                } else {
-                                    vbl.attributes
-                                        .iter()
-                                        .map(|attribute| attribute.offset + attribute.format.size())
-                                        .max()
-                                        .unwrap_or(0)
-                                        .try_into()
-                                        .unwrap()
-                                },
-                                step_mode: match (vbl.array_stride == 0, vbl.step_mode) {
-                                    (true, _) => naga::back::msl::VertexBufferStepMode::Constant,
-                                    (false, wgt::VertexStepMode::Vertex) => {
-                                        naga::back::msl::VertexBufferStepMode::ByVertex
-                                    }
-                                    (false, wgt::VertexStepMode::Instance) => {
-                                        naga::back::msl::VertexBufferStepMode::ByInstance
-                                    }
-                                },
-                                attributes,
+                    // Collect vertex buffer mappings
+                    let mut vertex_buffer_mappings =
+                        Vec::<naga::back::msl::VertexBufferMapping>::new();
+                    for (i, vbl) in vertex_buffers.iter().enumerate() {
+                        let mut attributes = Vec::<naga::back::msl::AttributeMapping>::new();
+                        for attribute in vbl.attributes.iter() {
+                            attributes.push(naga::back::msl::AttributeMapping {
+                                shader_location: attribute.shader_location,
+                                offset: attribute.offset as u32,
+                                format: convert_vertex_format_to_naga(attribute.format),
                             });
                         }
 
+                        let mapping = naga::back::msl::VertexBufferMapping {
+                            id: self.shared.private_caps.max_vertex_buffers - 1 - i as u32,
+                            stride: if vbl.array_stride > 0 {
+                                vbl.array_stride.try_into().unwrap()
+                            } else {
+                                vbl.attributes
+                                    .iter()
+                                    .map(|attribute| attribute.offset + attribute.format.size())
+                                    .max()
+                                    .unwrap_or(0)
+                                    .try_into()
+                                    .unwrap()
+                            },
+                            step_mode: match (vbl.array_stride == 0, vbl.step_mode) {
+                                (true, _) => naga::back::msl::VertexBufferStepMode::Constant,
+                                (false, wgt::VertexStepMode::Vertex) => {
+                                    naga::back::msl::VertexBufferStepMode::ByVertex
+                                }
+                                (false, wgt::VertexStepMode::Instance) => {
+                                    naga::back::msl::VertexBufferStepMode::ByInstance
+                                }
+                            },
+                            attributes,
+                        };
+                        vertex_buffer_mappings.push(mapping);
+                    }
+
+                    // Setup vertex shader
+                    {
                         let vs = self.load_shader(
                             vertex_stage,
                             &vertex_buffer_mappings,
@@ -1188,7 +1196,7 @@ impl crate::Device for super::Device {
                             );
                         }
 
-                        super::PipelineStageInfo {
+                        vs_info = Some(super::PipelineStageInfo {
                             push_constants: desc.layout.push_constants_infos.vs,
                             sizes_slot: desc.layout.per_stage_map.vs.sizes_buffer,
                             sized_bindings: vs.sized_bindings,
@@ -1196,8 +1204,10 @@ impl crate::Device for super::Device {
                             library: Some(vs.library),
                             raw_wg_size: Default::default(),
                             work_group_memory_sizes: vec![],
-                        }
-                    });
+                        });
+                    }
+
+                    // Validate vertex buffer count
                     if desc.layout.total_counters.vs.buffers + (vertex_buffers.len() as u32)
                         > self.shared.private_caps.max_vertex_buffers
                     {
@@ -1212,6 +1222,7 @@ impl crate::Device for super::Device {
                         ));
                     }
 
+                    // Set the pipeline vertex buffer info
                     if !vertex_buffers.is_empty() {
                         let vertex_descriptor = metal::VertexDescriptor::new();
                         for (i, vb) in vertex_buffers.iter().enumerate() {
@@ -1250,14 +1261,19 @@ impl crate::Device for super::Device {
                         }
                         descriptor.set_vertex_descriptor(Some(vertex_descriptor));
                     }
+
                     MetalGenericRenderPipelineDescriptor::Standard(descriptor)
                 }
                 crate::VertexProcessor::Mesh {
                     ref task_stage,
                     ref mesh_stage,
                 } => {
+                    // Mesh pipeline specific setup
+
                     vs_info = None;
                     let descriptor = metal::MeshRenderPipelineDescriptor::new();
+
+                    // Setup task stage
                     if let Some(ref task_stage) = task_stage {
                         let ts = self.load_shader(
                             task_stage,
@@ -1285,6 +1301,8 @@ impl crate::Device for super::Device {
                     } else {
                         ts_info = None;
                     }
+
+                    // Setup mesh stage
                     {
                         let ms = self.load_shader(
                             mesh_stage,
@@ -1310,9 +1328,13 @@ impl crate::Device for super::Device {
                             work_group_memory_sizes: ms.wg_memory_sizes,
                         });
                     }
+
                     MetalGenericRenderPipelineDescriptor::Mesh(descriptor)
                 }
             };
+
+            // Standard and mesh render pipeline descriptors don't inherit from the same interface, despite sharing
+            // many methods. This function lets us call a function by name on whichever descriptor we are using.
             macro_rules! descriptor_fn {
                 ($method:ident $( ( $($args:expr),* ) )? ) => {
                     match descriptor {
@@ -1372,6 +1394,7 @@ impl crate::Device for super::Device {
                 }
             };
 
+            // Setup pipeline color attachments
             for (i, ct) in desc.color_targets.iter().enumerate() {
                 let at_descriptor = descriptor_fn!(color_attachments())
                     .object_at(i as u64)
@@ -1402,6 +1425,7 @@ impl crate::Device for super::Device {
                 }
             }
 
+            // Setup depth stencil state
             let depth_stencil = match desc.depth_stencil {
                 Some(ref ds) => {
                     let raw_format = self.shared.private_caps.map_format(ds.format);
@@ -1424,6 +1448,7 @@ impl crate::Device for super::Device {
                 None => None,
             };
 
+            // Setup multisample state
             if desc.multisample.count != 1 {
                 //TODO: handle sample mask
                 match descriptor {
@@ -1440,36 +1465,26 @@ impl crate::Device for super::Device {
                 //descriptor.set_alpha_to_one_enabled(desc.multisample.alpha_to_one_enabled);
             }
 
+            // Set debug label
             if let Some(name) = desc.label {
                 descriptor_fn!(set_label(name));
             }
 
+            // Create the pipeline from descriptor
             let raw = match descriptor {
-                MetalGenericRenderPipelineDescriptor::Standard(d) => self
-                    .shared
-                    .device
-                    .lock()
-                    .new_render_pipeline_state(&d)
-                    .map_err(|e| {
-                        crate::PipelineError::Linkage(
-                            wgt::ShaderStages::VERTEX | wgt::ShaderStages::FRAGMENT,
-                            format!("new_render_pipeline_state: {e:?}"),
-                        )
-                    })?,
-                MetalGenericRenderPipelineDescriptor::Mesh(d) => self
-                    .shared
-                    .device
-                    .lock()
-                    .new_mesh_render_pipeline_state(&d)
-                    .map_err(|e| {
-                        crate::PipelineError::Linkage(
-                            wgt::ShaderStages::TASK
-                                | wgt::ShaderStages::MESH
-                                | wgt::ShaderStages::FRAGMENT,
-                            format!("new_mesh_render_pipeline_state: {e:?}"),
-                        )
-                    })?,
-            };
+                MetalGenericRenderPipelineDescriptor::Standard(d) => {
+                    self.shared.device.lock().new_render_pipeline_state(&d)
+                }
+                MetalGenericRenderPipelineDescriptor::Mesh(d) => {
+                    self.shared.device.lock().new_mesh_render_pipeline_state(&d)
+                }
+            }
+            .map_err(|e| {
+                crate::PipelineError::Linkage(
+                    wgt::ShaderStages::VERTEX | wgt::ShaderStages::FRAGMENT,
+                    format!("new_render_pipeline_state: {e:?}"),
+                )
+            })?;
 
             self.counters.render_pipelines.add(1);
 
