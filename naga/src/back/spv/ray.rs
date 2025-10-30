@@ -1324,7 +1324,9 @@ impl Writer {
                 initialized_tracker_id,
                 super::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
             );
-            // TODO: Is double calling this invalid? Can't find anything to suggest so.
+
+            // Can't find anything to suggest double calling this function is invalid.
+
             let not_finished_id = self.id_gen.next();
             block.body.push(Instruction::unary(
                 spirv::Op::LogicalNot,
@@ -1623,7 +1625,7 @@ impl Writer {
                 initialized_tracker_id,
                 super::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
             );
-            // TODO: Is double calling this invalid? Can't find anything to suggest so, but it seems strange not to
+            // Although it seems strange to call this twice, I (Vecvec) can't find anything to suggest double calling this function is invalid.
             let not_finished_id = self.id_gen.next();
             block.body.push(Instruction::unary(
                 spirv::Op::LogicalNot,
