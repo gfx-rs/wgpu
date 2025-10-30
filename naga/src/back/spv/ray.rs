@@ -1866,9 +1866,18 @@ impl BlockContext<'_> {
             .get(&query)
             .expect("not a cached ray query");
 
+        let rq_get_vertex_positions_ty_id = self.get_handle_type_id(
+            *self
+                .ir_module
+                .special_types
+                .ray_vertex_return
+                .as_ref()
+                .expect("must be generated when reading in get vertex position"),
+        );
+
         let func_call_id = self.gen_id();
         block.body.push(Instruction::function_call(
-            self.writer.void_type,
+            rq_get_vertex_positions_ty_id,
             func_call_id,
             fn_id,
             &[query_id, tracker_id.initialized_tracker],
