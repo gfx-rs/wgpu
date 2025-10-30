@@ -607,6 +607,9 @@ impl super::PrivateCapabilities {
 
         let argument_buffers = device.argument_buffers_support();
 
+        // Lmao
+        let is_virtual = device.name().to_lowercase().contains("virtual");
+
         Self {
             family_check,
             msl_version: if os_is_xr || version.at_least((14, 0), (17, 0), os_is_mac) {
@@ -903,9 +906,11 @@ impl super::PrivateCapabilities {
                     || device.supports_family(MTLGPUFamily::Mac2)),
             supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
             mesh_shaders: family_check
-                && device.supports_family(MTLGPUFamily::Metal3)
-                && (device.supports_family(MTLGPUFamily::Apple7)
-                    || device.supports_family(MTLGPUFamily::Mac2)),
+                && (device.supports_family(MTLGPUFamily::Metal3)
+                    || device.supports_family(MTLGPUFamily::Apple7)
+                    || device.supports_family(MTLGPUFamily::Mac2))
+                    // Mesh shaders don't work on virtual devices even if they should be supported.
+                && !is_virtual,
             shader_barycentrics: device.supports_shader_barycentric_coordinates(),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             supports_memoryless_storage: if family_check {
