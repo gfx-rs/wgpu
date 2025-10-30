@@ -562,7 +562,7 @@ impl super::PrivateCapabilities {
         // https://developer.apple.com/documentation/metal/developing_metal_apps_that_run_in_simulator
         let os_is_xr = version.major < 8 && device.supports_family(MTLGPUFamily::Apple2);
         let family_check = os_is_xr || version.at_least((10, 15), (13, 0), os_is_mac);
-        let metal3 = device.supports_family(MTLGPUFamily::Metal3);
+        let metal3 = family_check && device.supports_family(MTLGPUFamily::Metal3);
 
         let mut sample_count_mask = crate::TextureFormatCapabilities::MULTISAMPLE_X4; // 1 and 4 samples are supported on all devices
         if device.supports_texture_sample_count(2) {
@@ -807,10 +807,12 @@ impl super::PrivateCapabilities {
             } else {
                 4
             },
-            // Per https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=7
             max_color_attachment_bytes_per_sample: if family_check
-                && device.supports_family(MTLGPUFamily::Apple4)
+                && device.supports_family(MTLGPUFamily::Apple7)
             {
+                128
+            } else if family_check && device.supports_family(MTLGPUFamily::Apple4) {
                 64
             } else {
                 32
@@ -853,13 +855,15 @@ impl super::PrivateCapabilities {
                     MTLFeatureSet::tvOS_GPUFamily1_v2,
                 ],
             ),
-            supports_binary_archives: family_check
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
+            supports_binary_archives: metal3
                 && (device.supports_family(MTLGPUFamily::Apple3)
-                    || device.supports_family(MTLGPUFamily::Mac1)),
+                    || device.supports_family(MTLGPUFamily::Mac2)),
             supports_capture_manager: version.at_least((10, 13), (11, 0), os_is_mac),
             can_set_maximum_drawables_count: version.at_least((10, 14), (11, 2), os_is_mac),
             can_set_display_sync: version.at_least((10, 13), OS_NOT_SUPPORT, os_is_mac),
             can_set_next_drawable_timeout: version.at_least((10, 13), (11, 0), os_is_mac),
+            // TODO: wtf
             supports_arrays_of_textures: Self::supports_any(
                 device,
                 &[
@@ -868,16 +872,19 @@ impl super::PrivateCapabilities {
                     MTLFeatureSet::macOS_GPUFamily1_v3,
                 ],
             ),
-            supports_arrays_of_textures_write: family_check
-                && metal3
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
+            supports_arrays_of_textures_write: metal3
                 && (device.supports_family(MTLGPUFamily::Apple6)
                     || device.supports_family(MTLGPUFamily::Mac1)
                     || device.supports_family(MTLGPUFamily::MacCatalyst1)),
             supports_mutability: version.at_least((10, 13), (11, 0), os_is_mac),
+            // TODO: check
             //Depth clipping is supported on all macOS GPU families and iOS family 4 and later
             supports_depth_clip_control: os_is_mac
                 || device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1),
+            // TODO: check
             supports_preserve_invariance: version.at_least((11, 0), (13, 0), os_is_mac),
+            // TODO: this might be wrong
             // Metal 2.2 on mac, 2.3 on iOS.
             supports_shader_primitive_index: version.at_least((10, 15), (14, 0), os_is_mac),
             has_unified_memory: if version.at_least((10, 15), (13, 0), os_is_mac) {
@@ -886,30 +893,35 @@ impl super::PrivateCapabilities {
                 None
             },
             timestamp_query_support,
-            supports_simd_scoped_operations: family_check
-                && metal3
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
+            supports_simd_scoped_operations: metal3
                 && (device.supports_family(MTLGPUFamily::Mac2)
                     || device.supports_family(MTLGPUFamily::Apple7)),
-            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=5
-            int64: family_check && metal3 && device.supports_family(MTLGPUFamily::Apple3),
-            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=6
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
+            int64: metal3 && device.supports_family(MTLGPUFamily::Apple3),
+            // TODO: my head hurts
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             int64_atomics: family_check
                 && (device.supports_family(MTLGPUFamily::Apple9)
                     || (device.supports_family(MTLGPUFamily::Apple8)
                         && device.supports_family(MTLGPUFamily::Mac2))),
-            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=6
-            float_atomics: family_check
-                && metal3
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
+            float_atomics: metal3
                 && (device.supports_family(MTLGPUFamily::Apple7)
                     || device.supports_family(MTLGPUFamily::Mac2)),
+            // https://developer.apple.com/documentation/metal/mtlsharedevent
             supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
-            shader_barycentrics: device.supports_shader_barycentric_coordinates(),
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=5 (footnote)
+            // Very difficult to piece together. The function docs claims to require macOS 10.15+,
+            // but the feature set tables say "some GPU devices in the Mac2 and Metal3 families...
+            // [check support by] by inspecting its MTLDevice.supportsShaderBarycentricCoordinates property"
+            // If we get a bug report for metal 3 on macOS 10.14 should be easy to fix. Otherwise it works.
+            shader_barycentrics: metal3 && device.supports_shader_barycentric_coordinates(),
+            // TODO: this surely doesn't require Metal4, despite what docs say
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
-            supports_memoryless_storage: if family_check {
-                device.supports_family(MTLGPUFamily::Apple2)
-            } else {
-                version.at_least((11, 0), (10, 0), os_is_mac)
-            },
+            supports_memoryless_storage: family_check
+                && device.supports_family(MTLGPUFamily::Metal4)
+                && device.supports_family(MTLGPUFamily::Apple2),
         }
     }
 
