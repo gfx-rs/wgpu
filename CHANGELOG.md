@@ -116,6 +116,9 @@ SamplerDescriptor {
 
 - Fixed a validation error regarding atomic memory semantics. By @atlv24 in [#8391](https://github.com/gfx-rs/wgpu/pull/8391).
 
+#### Metal
+- Fixed a variety of feature detection related bugs. By @inner-daemons in [#8439](https://github.com/gfx-rs/wgpu/pull/8439).
+
 #### hal
 
 - `DropCallback`s are now called after dropping all other fields of their parent structs. By @jerzywilczek in [#8353](https://github.com/gfx-rs/wgpu/pull/8353)
