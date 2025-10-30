@@ -1094,6 +1094,8 @@ impl Interface {
             wgt::ShaderStages::VERTEX => naga::ShaderStage::Vertex,
             wgt::ShaderStages::FRAGMENT => naga::ShaderStage::Fragment,
             wgt::ShaderStages::COMPUTE => naga::ShaderStage::Compute,
+            wgt::ShaderStages::MESH => naga::ShaderStage::Mesh,
+            wgt::ShaderStages::TASK => naga::ShaderStage::Task,
             _ => unreachable!(),
         }
     }
@@ -1238,7 +1240,7 @@ impl Interface {
         }
 
         // check workgroup size limits
-        if shader_stage == naga::ShaderStage::Compute {
+        if shader_stage.compute_like() {
             let max_workgroup_size_limits = [
                 self.limits.max_compute_workgroup_size_x,
                 self.limits.max_compute_workgroup_size_y,

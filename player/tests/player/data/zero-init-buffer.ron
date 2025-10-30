@@ -4,19 +4,19 @@
         // Ensuring that mapping zero-inits buffers.
         (
             name: "mapped_at_creation: false, with MAP_WRITE",
-            buffer: (index: 0, epoch: 1),
+            buffer: PointerId(0x10),
             offset: 0,
             data: Raw([0x00, 0x00, 0x00, 0x00]),
         ),
         (
             name: "mapped_at_creation: false, without MAP_WRITE",
-            buffer: (index: 1, epoch: 1),
+            buffer: PointerId(0x110),
             offset: 0,
             data: Raw([0x00, 0x00, 0x00, 0x00]),
         ),
         (
             name: "partially written buffer",
-            buffer: (index: 2, epoch: 1),
+            buffer: PointerId(0x120),
             offset: 0,
             data: Raw([0x00, 0x00, 0x00, 0x00,
                        0x00, 0x00, 0x80, 0xBF,
@@ -29,7 +29,7 @@
         // (by observing correct side effects of compute shader reading & writing values)
         (
             name: "buffer has correct values",
-            buffer: (index: 3, epoch: 1),
+            buffer: PointerId(0x130),
             offset: 0,
             data: Raw([0x00, 0x00, 0x00, 0x00,
                        0x01, 0x00, 0x00, 0x00,
@@ -39,7 +39,7 @@
     ],
     actions: [
         CreateBuffer(
-            Id(0, 1),
+            PointerId(0x10),
             (
                 label: Some("mapped_at_creation: false, with MAP_WRITE"),
                 size: 16,
@@ -48,7 +48,7 @@
             ),
         ),
         CreateBuffer(
-            Id(1, 1),
+            PointerId(0x110),
             (
                 label: Some("mapped_at_creation: false, without MAP_WRITE"),
                 size: 16,
@@ -57,7 +57,7 @@
             ),
         ),
         CreateBuffer(
-            Id(2, 1),
+            PointerId(0x120),
             (
                 label: Some("partially written"),
                 size: 24,
@@ -66,7 +66,7 @@
             ),
         ),
         WriteBuffer(
-            id: Id(2, 1),
+            id: PointerId(0x120),
             data: "data1.bin",
             range: (
                 start: 4,
@@ -75,20 +75,20 @@
             queued: true,
         ),
         CreateShaderModule(
-            id: Id(0, 1),
+            id: PointerId(0x10),
             desc: (
                 label: None,
                 flags: (bits: 3),
             ),
             data: "zero-init-buffer-for-binding.wgsl",
         ),
-        CreateBuffer(Id(3, 1), (
+        CreateBuffer(PointerId(0x130), (
             label: Some("used in binding"),
             size: 16,
             usage: "STORAGE | MAP_READ",
             mapped_at_creation: false,
         )),
-        CreateBindGroupLayout(Id(0, 1), (
+        CreateBindGroupLayout(PointerId(0x10), (
             label: None,
             entries: [
                 (
@@ -105,34 +105,34 @@
                 ),
             ],
         )),
-        CreateBindGroup(Id(0, 1), (
+        CreateBindGroup(PointerId(0x10), (
             label: None,
-            layout: Id(0, 1),
+            layout: PointerId(0x10),
             entries: [
                 (
                     binding: 0,
                     resource: Buffer((
-                        buffer: Id(3, 1),
+                        buffer: PointerId(0x130),
                         offset: 0,
                         size: Some(16),
                     )),
                 ),
             ],
         )),
-        CreatePipelineLayout(Id(0, 1), (
+        CreatePipelineLayout(PointerId(0x10), (
             label: None,
             bind_group_layouts: [
-                Id(0, 1),
+                PointerId(0x10),
             ],
             push_constant_ranges: [],
         )),
         CreateComputePipeline(
-            id: Id(0, 1),
+            id: PointerId(0x10),
             desc: (
                 label: None,
-                layout: Some(Id(0, 1)),
+                layout: Some(PointerId(0x10)),
                 stage: (
-                    module: Id(0, 1),
+                    module: PointerId(0x10),
                     entry_point: None,
                     constants: {},
                     zero_initialize_workgroup_memory: true,
@@ -142,14 +142,14 @@
         ),
         Submit(1, [
             RunComputePass(
-                base: (
+                pass: (
                     label: None,
                     commands: [
-                        SetPipeline(Id(0, 1)),
+                        SetPipeline(PointerId(0x10)),
                         SetBindGroup(
                             index: 0,
                             num_dynamic_offsets: 0,
-                            bind_group_id: Some(Id(0, 1)),
+                            bind_group: Some(PointerId(0x10)),
                         ),
                         Dispatch((4, 1, 1)),
                     ],

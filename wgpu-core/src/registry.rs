@@ -55,11 +55,6 @@ pub(crate) struct FutureId<'a, T: StorageItem> {
 }
 
 impl<T: StorageItem> FutureId<'_, T> {
-    #[cfg(feature = "trace")]
-    pub fn id(&self) -> Id<T::Marker> {
-        self.id
-    }
-
     /// Assign a new resource to this ID.
     ///
     /// Registers it with the registry.

@@ -545,6 +545,7 @@ impl Options {
                 interpolation,
                 sampling,
                 blend_src,
+                per_primitive: _,
             } => match mode {
                 LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(location)),
                 LocationMode::FragmentOutput => {
@@ -703,6 +704,10 @@ impl ResolvedBinding {
                     Bi::CullDistance | Bi::ViewIndex | Bi::DrawID => {
                         return Err(Error::UnsupportedBuiltIn(built_in))
                     }
+                    Bi::CullPrimitive => "primitive_culled",
+                    // TODO: figure out how to make this written as a function call
+                    Bi::PointIndex | Bi::LineIndices | Bi::TriangleIndices => unimplemented!(),
+                    Bi::MeshTaskSize => unreachable!(),
                 };
                 write!(out, "{name}")?;
             }

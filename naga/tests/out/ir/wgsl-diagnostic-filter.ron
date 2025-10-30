@@ -73,6 +73,8 @@
                 ],
                 diagnostic_filter_leaf: Some(0),
             ),
+            mesh_info: None,
+            task_payload: None,
         ),
     ],
     diagnostic_filters: [

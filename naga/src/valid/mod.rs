@@ -188,6 +188,8 @@ bitflags::bitflags! {
         const SHADER_FLOAT16_IN_FLOAT32 = 1 << 28;
         /// Support for fragment shader barycentric coordinates.
         const SHADER_BARYCENTRICS = 1 << 29;
+        /// Support for task shaders, mesh shaders, and per-primitive fragment inputs
+        const MESH_SHADER = 1 << 30;
     }
 }
 
@@ -280,6 +282,8 @@ bitflags::bitflags! {
         const VERTEX = 0x1;
         const FRAGMENT = 0x2;
         const COMPUTE = 0x4;
+        const MESH = 0x8;
+        const TASK = 0x10;
     }
 }
 

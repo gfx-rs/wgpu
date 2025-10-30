@@ -1094,7 +1094,10 @@ impl Writer {
                     super::ZeroInitializeWorkgroupMemoryMode::Polyfill,
                     Some(
                         ref mut interface @ FunctionInterface {
-                            stage: crate::ShaderStage::Compute,
+                            stage:
+                                crate::ShaderStage::Compute
+                                | crate::ShaderStage::Mesh
+                                | crate::ShaderStage::Task,
                             ..
                         },
                     ),
@@ -1991,6 +1994,7 @@ impl Writer {
                 interpolation,
                 sampling,
                 blend_src,
+                per_primitive: _,
             } => {
                 self.decorate(id, Decoration::Location, &[location]);
 
@@ -2148,6 +2152,11 @@ impl Writer {
                         )?;
                         BuiltIn::SubgroupLocalInvocationId
                     }
+                    Bi::MeshTaskSize
+                    | Bi::CullPrimitive
+                    | Bi::PointIndex
+                    | Bi::LineIndices
+                    | Bi::TriangleIndices => unreachable!(),
                 };
 
                 self.decorate(id, Decoration::BuiltIn, &[built_in as u32]);

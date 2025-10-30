@@ -307,6 +307,25 @@ impl StatementGraph {
                         crate::RayQueryFunction::Terminate => "RayQueryTerminate",
                     }
                 }
+                S::MeshFunction(crate::MeshFunction::SetMeshOutputs {
+                    vertex_count,
+                    primitive_count,
+                }) => {
+                    self.dependencies.push((id, vertex_count, "vertex_count"));
+                    self.dependencies
+                        .push((id, primitive_count, "primitive_count"));
+                    "SetMeshOutputs"
+                }
+                S::MeshFunction(crate::MeshFunction::SetVertex { index, value }) => {
+                    self.dependencies.push((id, index, "index"));
+                    self.dependencies.push((id, value, "value"));
+                    "SetVertex"
+                }
+                S::MeshFunction(crate::MeshFunction::SetPrimitive { index, value }) => {
+                    self.dependencies.push((id, index, "index"));
+                    self.dependencies.push((id, value, "value"));
+                    "SetPrimitive"
+                }
                 S::SubgroupBallot { result, predicate } => {
                     if let Some(predicate) = predicate {
                         self.dependencies.push((id, predicate, "predicate"));
