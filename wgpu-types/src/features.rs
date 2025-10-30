@@ -1244,7 +1244,7 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const SHADER_BARYCENTRICS = 1 << 53;
-      
+
         /// Enables using multiview where not all texture array layers are rendered to in a single render pass/render pipeline. Making
         /// use of this feature also requires enabling `Features::MULTIVIEW`.
         ///
