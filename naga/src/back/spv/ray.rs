@@ -933,7 +933,7 @@ impl Writer {
                 ],
             );
 
-            let all_valid_id = self.write_reduce_and(
+            self.write_reduce_and(
                 &mut block,
                 vec![
                     tmin_le_tmax_id,
@@ -944,9 +944,7 @@ impl Writer {
                     not_contain_skip_triangles_cull,
                     not_contain_multiple_opaque,
                 ],
-            );
-
-            all_valid_id
+            )
         });
 
         let merge_label_id = self.id_gen.next();
