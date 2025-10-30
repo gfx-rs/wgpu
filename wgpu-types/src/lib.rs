@@ -7944,11 +7944,11 @@ pub struct ShaderRuntimeChecks {
     /// on a ray query must obey these rules (functions using wgsl naming)
     /// - `rayQueryInitialize` must have called before `rayQueryProceed`
     /// - `rayQueryProceed` must have been called, returned true and have hit an AABB before
-    /// `rayQueryGenerateIntersection` is called
+    ///   `rayQueryGenerateIntersection` is called
     /// - `rayQueryProceed` must have been called, returned true and have hit a triangle before
-    /// `rayQueryConfirmIntersection` is called
+    ///   `rayQueryConfirmIntersection` is called
     /// - `rayQueryProceed` must have been called and have returned true before `rayQueryTerminate`,
-    /// `getCandidateHitVertexPositions` or `rayQueryGetCandidateIntersection` is called
+    ///   `getCandidateHitVertexPositions` or `rayQueryGetCandidateIntersection` is called
     /// - `rayQueryProceed` must have been called and have returned false before `rayQueryGetCommittedIntersection`
     ///   or `getCommittedHitVertexPositions` are called
     ///

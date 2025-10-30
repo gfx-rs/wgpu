@@ -1037,7 +1037,8 @@ impl Writer {
         let bool_type_id = self.get_bool_type_id();
         let bool_ptr_ty = self.get_pointer_type_id(bool_type_id, spirv::StorageClass::Function);
 
-        let (func_id, mut function, arg_ids) = self.write_function_signature(&[ray_query_type_id, u32_ptr_ty], bool_type_id);
+        let (func_id, mut function, arg_ids) =
+            self.write_function_signature(&[ray_query_type_id, u32_ptr_ty], bool_type_id);
 
         let query_id = arg_ids[0];
         let init_tracker_id = arg_ids[1];
@@ -1163,7 +1164,10 @@ impl Writer {
 
         let bool_type_id = self.get_bool_type_id();
 
-        let (func_id, mut function, arg_ids) = self.write_function_signature(&[ray_query_type_id, u32_ptr_ty, f32_type_id, f32_ptr_type_id], self.void_type);
+        let (func_id, mut function, arg_ids) = self.write_function_signature(
+            &[ray_query_type_id, u32_ptr_ty, f32_type_id, f32_ptr_type_id],
+            self.void_type,
+        );
 
         let query_id = arg_ids[0];
         let init_tracker_id = arg_ids[1];
@@ -1452,7 +1456,8 @@ impl Writer {
 
         let bool_type_id = self.get_bool_type_id();
 
-        let (func_id, mut function, arg_ids) = self.write_function_signature(&[ray_query_type_id, u32_ptr_ty], self.void_type);
+        let (func_id, mut function, arg_ids) =
+            self.write_function_signature(&[ray_query_type_id, u32_ptr_ty], self.void_type);
 
         let query_id = arg_ids[0];
         let init_tracker_id = arg_ids[1];
@@ -1613,7 +1618,10 @@ impl Writer {
 
         let bool_type_id = self.get_bool_type_id();
 
-        let (func_id, mut function, arg_ids) = self.write_function_signature(&[ray_query_type_id, u32_ptr_ty], rq_get_vertex_positions_ty_id);
+        let (func_id, mut function, arg_ids) = self.write_function_signature(
+            &[ray_query_type_id, u32_ptr_ty],
+            rq_get_vertex_positions_ty_id,
+        );
 
         let query_id = arg_ids[0];
         let init_tracker_id = arg_ids[1];
