@@ -634,35 +634,35 @@ impl super::PrivateCapabilities {
             family_check,
             msl_version: if version.at_least((14, 0), (17, 0), (17, 0), (1, 0), os_type) {
                 MTLLanguageVersion::V3_1
-            } else if version.at_least((13, 0), (16, 0), os_type) {
+            } else if version.at_least((13, 0), (16, 0), (16, 0), (1, 0), os_type) {
                 MTLLanguageVersion::V3_0
-            } else if version.at_least((12, 0), (15, 0), os_type) {
+            } else if version.at_least((12, 0), (15, 0), (15, 0), (1, 0), os_type) {
                 MTLLanguageVersion::V2_4
-            } else if version.at_least((11, 0), (14, 0), os_type) {
+            } else if version.at_least((11, 0), (14, 0), (14, 0), (1, 0), os_type) {
                 MTLLanguageVersion::V2_3
-            } else if version.at_least((10, 15), (13, 0), os_type) {
+            } else if version.at_least((10, 15), (13, 0), (13, 0), (1, 0), os_type) {
                 MTLLanguageVersion::V2_2
-            } else if version.at_least((10, 14), (12, 0), os_type) {
+            } else if version.at_least((10, 14), (12, 0), (12, 0), (1, 0), os_type) {
                 MTLLanguageVersion::V2_1
-            } else if version.at_least((10, 13), (11, 0), os_type) {
+            } else if version.at_least((10, 13), (11, 0), (11, 0), (1, 0), os_type) {
                 MTLLanguageVersion::V2_0
-            } else if version.at_least((10, 12), (10, 0), os_type) {
+            } else if version.at_least((10, 12), (10, 0), (10, 0), (1, 0), os_type) {
                 MTLLanguageVersion::V1_2
-            } else if version.at_least((10, 11), (9, 0), os_type) {
+            } else if version.at_least((10, 11), (9, 0), (9, 0), (1, 0), os_type) {
                 MTLLanguageVersion::V1_1
             } else {
                 MTLLanguageVersion::V1_0
             },
             // macOS 10.11 doesn't support read-write resources
-            fragment_rw_storage: version.at_least((10, 12), (8, 0), os_type),
+            fragment_rw_storage: version.at_least((10, 12), (8, 0), (8, 0), (1, 0), os_type),
             read_write_texture_tier: rw_texture_tier,
-            msaa_desktop: os_is_mac,
+            msaa_desktop: os_type == super::OsType::Macos,
             msaa_apple3: (family_check && device.supports_family(MTLGPUFamily::Apple3))
                 || device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily3_v4),
             msaa_apple7: family_check && device.supports_family(MTLGPUFamily::Apple7),
             resource_heaps: Self::supports_any(device, RESOURCE_HEAP_SUPPORT),
             argument_buffers,
-            shared_textures: !os_is_mac,
+            shared_textures: os_type != super::OsType::Macos,
             mutable_comparison_samplers: Self::supports_any(
                 device,
                 MUTABLE_COMPARISON_SAMPLER_SUPPORT,
@@ -674,22 +674,26 @@ impl super::PrivateCapabilities {
                 BASE_VERTEX_FIRST_INSTANCE_SUPPORT,
             ),
             dual_source_blending: Self::supports_any(device, DUAL_SOURCE_BLEND_SUPPORT),
-            low_power: !os_is_mac || device.is_low_power(),
-            headless: os_is_mac && device.is_headless(),
+            low_power: os_type != super::OsType::Macos || device.is_low_power(),
+            headless: os_type == super::OsType::Macos && device.is_headless(),
             layered_rendering: Self::supports_any(device, LAYERED_RENDERING_SUPPORT),
             function_specialization: Self::supports_any(device, FUNCTION_SPECIALIZATION_SUPPORT),
             depth_clip_mode: Self::supports_any(device, DEPTH_CLIP_MODE),
             texture_cube_array: Self::supports_any(device, TEXTURE_CUBE_ARRAY_SUPPORT),
-            supports_float_filtering: os_is_mac
-                || (version.at_least((11, 0), (14, 0), os_is_mac)
+            supports_float_filtering: os_type == super::OsType::Macos
+                || (version.at_least((11, 0), (14, 0), (16, 0), (1, 0), os_type)
                     && device.supports_32bit_float_filtering()),
-            format_depth24_stencil8: os_is_mac && device.d24_s8_supported(),
-            format_depth32_stencil8_filter: os_is_mac,
-            format_depth32_stencil8_none: !os_is_mac,
-            format_min_srgb_channels: if os_is_mac { 4 } else { 1 },
-            format_b5: !os_is_mac,
-            format_bc: os_is_mac,
-            format_eac_etc: !os_is_mac
+            format_depth24_stencil8: os_type == super::OsType::Macos && device.d24_s8_supported(),
+            format_depth32_stencil8_filter: os_type == super::OsType::Macos,
+            format_depth32_stencil8_none: os_type != super::OsType::Macos,
+            format_min_srgb_channels: if os_type == super::OsType::Macos {
+                4
+            } else {
+                1
+            },
+            format_b5: os_type != super::OsType::Macos,
+            format_bc: os_type == super::OsType::Macos,
+            format_eac_etc: os_type != super::OsType::Macos
                 // M1 in macOS supports EAC/ETC2
                 || (family_check && device.supports_family(MTLGPUFamily::Apple7)),
             // A8(Apple2) and later always support ASTC pixel formats
@@ -701,9 +705,9 @@ impl super::PrivateCapabilities {
             format_astc_3d: family_check && device.supports_family(MTLGPUFamily::Apple3),
             format_any8_unorm_srgb_all: Self::supports_any(device, ANY8_UNORM_SRGB_ALL),
             format_any8_unorm_srgb_no_write: !Self::supports_any(device, ANY8_UNORM_SRGB_ALL)
-                && !os_is_mac,
+                && os_type != super::OsType::Macos,
             format_any8_snorm_all: Self::supports_any(device, ANY8_SNORM_RESOLVE),
-            format_r16_norm_all: os_is_mac,
+            format_r16_norm_all: os_type == super::OsType::Macos,
             // No devices support r32's all capabilities
             format_r32_all: false,
             // All devices support r32's write capability
@@ -711,8 +715,8 @@ impl super::PrivateCapabilities {
             // iOS support r32float's write capability, macOS support r32float's all capabilities
             format_r32float_no_write_no_filter: false,
             // Only iOS doesn't support r32float's filter  capability
-            format_r32float_no_filter: !os_is_mac,
-            format_r32float_all: os_is_mac,
+            format_r32float_no_filter: os_type != super::OsType::Macos,
+            format_r32float_all: os_type == super::OsType::Macos,
             format_rgba8_srgb_all: Self::supports_any(device, RGBA8_SRGB),
             format_rgba8_srgb_no_write: !Self::supports_any(device, RGBA8_SRGB),
             format_rgb10a2_unorm_all: Self::supports_any(device, RGB10A2UNORM_ALL),
@@ -721,16 +725,17 @@ impl super::PrivateCapabilities {
             format_rg11b10_all: Self::supports_any(device, RG11B10FLOAT_ALL),
             format_rg11b10_no_write: !Self::supports_any(device, RG11B10FLOAT_ALL),
             format_rgb9e5_all: Self::supports_any(device, RGB9E5FLOAT_ALL),
-            format_rgb9e5_no_write: !Self::supports_any(device, RGB9E5FLOAT_ALL) && !os_is_mac,
-            format_rgb9e5_filter_only: os_is_mac,
+            format_rgb9e5_no_write: !Self::supports_any(device, RGB9E5FLOAT_ALL)
+                && os_type != super::OsType::Macos,
+            format_rgb9e5_filter_only: os_type == super::OsType::Macos,
             format_rg32_color: true,
             format_rg32_color_write: true,
             // Only macOS support rg32float's all capabilities
-            format_rg32float_all: os_is_mac,
+            format_rg32float_all: os_type == super::OsType::Macos,
             // All devices support rg32float's color + blend capabilities
             format_rg32float_color_blend: true,
             // Only iOS doesn't support rg32float's filter
-            format_rg32float_no_filter: !os_is_mac,
+            format_rg32float_no_filter: os_type != super::OsType::Macos,
             format_rgba32int_color: true,
             // All devices support rgba32uint and rgba32sint's color + write capabilities
             format_rgba32int_color_write: true,
@@ -738,7 +743,7 @@ impl super::PrivateCapabilities {
             // All devices support rgba32float's color + write capabilities
             format_rgba32float_color_write: true,
             // Only macOS support rgba32float's all capabilities
-            format_rgba32float_all: os_is_mac,
+            format_rgba32float_all: os_type == super::OsType::Macos,
             format_depth16unorm: Self::supports_any(
                 device,
                 &[
@@ -746,13 +751,13 @@ impl super::PrivateCapabilities {
                     MTLFeatureSet::macOS_GPUFamily1_v2,
                 ],
             ),
-            format_depth32float_filter: os_is_mac,
-            format_depth32float_none: !os_is_mac,
+            format_depth32float_filter: os_type == super::OsType::Macos,
+            format_depth32float_none: os_type != super::OsType::Macos,
             format_bgr10a2_all: Self::supports_any(device, BGR10A2_ALL),
             format_bgr10a2_no_write: !Self::supports_any(device, BGR10A2_ALL),
             max_buffers_per_stage: 31,
             max_vertex_buffers: 31.min(crate::MAX_VERTEX_BUFFERS as u32),
-            max_textures_per_stage: if os_is_mac
+            max_textures_per_stage: if os_type == super::OsType::Macos
                 || (family_check && device.supports_family(MTLGPUFamily::Apple6))
             {
                 128
@@ -790,7 +795,7 @@ impl super::PrivateCapabilities {
             } else {
                 64
             },
-            max_buffer_size: if version.at_least((10, 14), (12, 0), os_type) {
+            max_buffer_size: if version.at_least((10, 14), (12, 0), (12, 0), (1, 0), os_type) {
                 // maxBufferLength available on macOS 10.14+ and iOS 12.0+
                 let buffer_size: NSInteger = unsafe { msg_send![device.as_ref(), maxBufferLength] };
                 buffer_size as _
@@ -919,13 +924,19 @@ impl super::PrivateCapabilities {
                 || device.supports_family(MTLGPUFamily::Apple6)
                 || device.supports_family(MTLGPUFamily::Mac2),
             // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
-            supports_mutability: version.at_least((10, 13), (11, 0), os_type),
+            supports_mutability: version.at_least((10, 13), (11, 0), (11, 0), (1, 0), os_type),
             // TODO: how did they come to the following conclusion
             //Depth clipping is supported on all macOS GPU families and iOS family 4 and later
-            supports_depth_clip_control: os_is_mac
+            supports_depth_clip_control: os_type == super::OsType::Macos
                 || device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1),
             // https://developer.apple.com/documentation/metal/mtlcompileoptions/preserveinvariance
-            supports_preserve_invariance: version.at_least((11, 0), (14, 0), os_type),
+            supports_preserve_invariance: version.at_least(
+                (11, 0),
+                (14, 0),
+                (14, 0),
+                (1, 0),
+                os_type,
+            ),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             supports_shader_primitive_index: metal3
                 || device.supports_family(MTLGPUFamily::Apple7)
