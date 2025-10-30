@@ -342,13 +342,43 @@ impl Drop for Queue {
 
 #[derive(Clone, Debug)]
 pub struct Buffer {
-    raw: Option<glow::Buffer>,
+    backing: BufferBacking,
     target: BindTarget,
     size: wgt::BufferAddress,
     map_flags: u32,
-    data: Option<Arc<MaybeMutex<Vec<u8>>>>,
     offset_of_current_mapping: Arc<MaybeMutex<wgt::BufferAddress>>,
 }
+
+/// Storage backing a [`Buffer`]'s operations, possibly implemented with a host-side vector of
+/// bytes.
+///
+/// The [`Self::OnlyRaw`] variant is preferred, when supported. However, various workarounds for
+/// lack of support are needed to implement some operations. See [`Device::create_buffer`] for more
+/// details.
+#[derive(Clone, Debug)]
+enum BufferBacking {
+    /// A single [`glow::Buffer`] backing all operations.
+    Gl { raw: glow::Buffer },
+    /// A synchronized vector of bytes on the host. When needed, a newly created buffer with the
+    /// contents of `emulated_map_data` will be used for copy operations.
+    ///
+    /// This variant is used for write-only buffers.
+    Host { data: Arc<MaybeMutex<Vec<u8>>> },
+    /// A [`glow::Buffer`] that does not support byte access, and so requires whole copies
+    /// between a synchronized vector of bytes (`cache`) and a `raw` GL buffer.
+    GlCachedOnHost {
+        raw: glow::Buffer,
+        cache: Arc<MaybeMutex<Vec<u8>>>,
+    },
+}
+
+// #[derive(Clone, Debug)]
+// enum MapState {
+//     Mapped {
+//         offset: Arc<MaybeMutex<wgt::BufferAddress>>,
+//     },
+//     Unmapped,
+// }
 
 #[cfg(send_sync)]
 unsafe impl Sync for Buffer {}

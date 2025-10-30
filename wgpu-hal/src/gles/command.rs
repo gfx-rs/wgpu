@@ -3,7 +3,7 @@ use core::{mem, ops::Range};
 
 use arrayvec::ArrayVec;
 
-use super::{conv, Command as C};
+use super::{conv, BufferBacking, Command as C};
 
 #[derive(Clone, Copy, Debug, Default)]
 struct TextureSlotDesc {
@@ -291,9 +291,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
             if !bar.usage.from.contains(wgt::BufferUses::STORAGE_READ_WRITE) {
                 continue;
             }
+            let buffer = match &bar.buffer.backing {
+                &BufferBacking::Gl { raw } | &BufferBacking::GlCachedOnHost { raw, .. } => raw,
+                BufferBacking::Host { .. } => unreachable!(),
+            };
             self.cmd_buffer
                 .commands
-                .push(C::BufferBarrier(bar.buffer.raw.unwrap(), bar.usage.to));
+                .push(C::BufferBarrier(buffer, bar.usage.to));
         }
     }
 
@@ -1001,9 +1005,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) {
         self.state.index_offset = binding.offset;
         self.state.index_format = format;
-        self.cmd_buffer
-            .commands
-            .push(C::SetIndexBuffer(binding.buffer.raw.unwrap()));
+        let buffer = match &binding.buffer.backing {
+            &BufferBacking::Gl { raw } | &BufferBacking::GlCachedOnHost { raw, .. } => raw,
+            BufferBacking::Host { .. } => unreachable!(),
+        };
+        self.cmd_buffer.commands.push(C::SetIndexBuffer(buffer));
     }
     unsafe fn set_vertex_buffer<'a>(
         &mut self,
@@ -1012,8 +1018,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
     ) {
         self.state.dirty_vbuf_mask |= 1 << index;
         let (_, ref mut vb) = self.state.vertex_buffers[index as usize];
+        let raw = match &binding.buffer.backing {
+            &BufferBacking::Gl { raw } | &BufferBacking::GlCachedOnHost { raw, .. } => raw,
+            BufferBacking::Host { .. } => unreachable!(),
+        };
         *vb = Some(super::BufferBinding {
-            raw: binding.buffer.raw.unwrap(),
+            raw,
             offset: binding.offset,
         });
     }
@@ -1107,10 +1117,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
         for draw in 0..draw_count as wgt::BufferAddress {
             let indirect_offset =
                 offset + draw * size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
+            let indirect_buf = match &buffer.backing {
+                &BufferBacking::Gl { raw } | &BufferBacking::GlCachedOnHost { raw, .. } => raw,
+                BufferBacking::Host { .. } => unreachable!(),
+            };
             #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
             self.cmd_buffer.commands.push(C::DrawIndirect {
                 topology: self.state.topology,
-                indirect_buf: buffer.raw.unwrap(),
+                indirect_buf,
                 indirect_offset,
                 first_instance_location: self.state.first_instance_location.clone(),
             });
@@ -1130,11 +1144,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
         for draw in 0..draw_count as wgt::BufferAddress {
             let indirect_offset =
                 offset + draw * size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
+            let indirect_buf = match &buffer.backing {
+                &BufferBacking::Gl { raw } | &BufferBacking::GlCachedOnHost { raw, .. } => raw,
+                BufferBacking::Host { .. } => unreachable!(),
+            };
             #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
             self.cmd_buffer.commands.push(C::DrawIndexedIndirect {
                 topology: self.state.topology,
                 index_type,
-                indirect_buf: buffer.raw.unwrap(),
+                indirect_buf,
                 indirect_offset,
                 first_instance_location: self.state.first_instance_location.clone(),
             });
@@ -1221,8 +1239,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.cmd_buffer.commands.push(C::Dispatch(count));
     }
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
+        let indirect_buf = match &buffer.backing {
+            &BufferBacking::Gl { raw } | &BufferBacking::GlCachedOnHost { raw, .. } => raw,
+            BufferBacking::Host { .. } => unreachable!(),
+        };
         self.cmd_buffer.commands.push(C::DispatchIndirect {
-            indirect_buf: buffer.raw.unwrap(),
+            indirect_buf,
             indirect_offset: offset,
         });
     }

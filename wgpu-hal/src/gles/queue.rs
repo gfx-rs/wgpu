@@ -5,7 +5,7 @@ use core::sync::atomic::Ordering;
 use arrayvec::ArrayVec;
 use glow::HasContext;
 
-use super::{conv::is_layered_target, lock, Command as C, PrivateCapabilities};
+use super::{conv::is_layered_target, lock, BufferBacking, Command as C, PrivateCapabilities};
 
 const DEBUG_ID: u32 = 0;
 
@@ -323,8 +323,8 @@ impl super::Queue {
                 ref dst,
                 dst_target,
                 ref range,
-            } => match dst.raw {
-                Some(buffer) => {
+            } => match &dst.backing {
+                &BufferBacking::Gl { raw } | &BufferBacking::GlCachedOnHost { raw, cache: _ } => {
                     // When `INDEX_BUFFER_ROLE_CHANGE` isn't available, we can't copy into the
                     // index buffer from the zero buffer. This would fail in Chrome with the
                     // following message:
@@ -341,7 +341,7 @@ impl super::Queue {
 
                     if can_use_zero_buffer {
                         unsafe { gl.bind_buffer(glow::COPY_READ_BUFFER, Some(self.zero_buffer)) };
-                        unsafe { gl.bind_buffer(dst_target, Some(buffer)) };
+                        unsafe { gl.bind_buffer(dst_target, Some(raw)) };
                         let mut dst_offset = range.start;
                         while dst_offset < range.end {
                             let size = (range.end - dst_offset).min(super::ZERO_BUFFER_SIZE as u64);
@@ -357,17 +357,15 @@ impl super::Queue {
                             dst_offset += size;
                         }
                     } else {
-                        unsafe { gl.bind_buffer(dst_target, Some(buffer)) };
+                        unsafe { gl.bind_buffer(dst_target, Some(raw)) };
                         let zeroes = vec![0u8; (range.end - range.start) as usize];
                         unsafe {
                             gl.buffer_sub_data_u8_slice(dst_target, range.start as i32, &zeroes)
                         };
                     }
                 }
-                None => {
-                    lock(dst.data.as_ref().unwrap()).as_mut_slice()
-                        [range.start as usize..range.end as usize]
-                        .fill(0);
+                BufferBacking::Host { data } => {
+                    lock(data).as_mut_slice()[range.start as usize..range.end as usize].fill(0);
                 }
             },
             C::CopyBufferToBuffer {
@@ -392,10 +390,15 @@ impl super::Queue {
                     glow::COPY_WRITE_BUFFER
                 };
                 let size = copy.size.get() as usize;
-                match (src.raw, dst.raw) {
-                    (Some(ref src), Some(ref dst)) => {
-                        unsafe { gl.bind_buffer(copy_src_target, Some(*src)) };
-                        unsafe { gl.bind_buffer(copy_dst_target, Some(*dst)) };
+                match (&src.backing, &dst.backing) {
+                    (
+                        &BufferBacking::Gl { raw: src }
+                        | &BufferBacking::GlCachedOnHost { raw: src, cache: _ },
+                        &BufferBacking::Gl { raw: dst }
+                        | &BufferBacking::GlCachedOnHost { raw: dst, cache: _ },
+                    ) => {
+                        unsafe { gl.bind_buffer(copy_src_target, Some(src)) };
+                        unsafe { gl.bind_buffer(copy_dst_target, Some(dst)) };
                         unsafe {
                             gl.copy_buffer_sub_data(
                                 copy_src_target,
@@ -406,8 +409,12 @@ impl super::Queue {
                             )
                         };
                     }
-                    (Some(src), None) => {
-                        let mut data = lock(dst.data.as_ref().unwrap());
+                    (
+                        &BufferBacking::Gl { raw: src }
+                        | &BufferBacking::GlCachedOnHost { raw: src, cache: _ },
+                        BufferBacking::Host { data },
+                    ) => {
+                        let mut data = lock(data);
                         let dst_data = &mut data.as_mut_slice()
                             [copy.dst_offset as usize..copy.dst_offset as usize + size];
 
@@ -421,8 +428,12 @@ impl super::Queue {
                             )
                         };
                     }
-                    (None, Some(dst)) => {
-                        let data = lock(src.data.as_ref().unwrap());
+                    (
+                        BufferBacking::Host { data },
+                        &BufferBacking::Gl { raw: dst }
+                        | &BufferBacking::GlCachedOnHost { raw: dst, cache: _ },
+                    ) => {
+                        let data = lock(data);
                         let src_data = &data.as_slice()
                             [copy.src_offset as usize..copy.src_offset as usize + size];
                         unsafe { gl.bind_buffer(copy_dst_target, Some(dst)) };
@@ -434,7 +445,7 @@ impl super::Queue {
                             )
                         };
                     }
-                    (None, None) => {
+                    (&BufferBacking::Host { data: _ }, &BufferBacking::Host { data: _ }) => {
                         todo!()
                     }
                 }
@@ -756,14 +767,15 @@ impl super::Queue {
                 let mut unbind_unpack_buffer = false;
                 if !dst_format.is_compressed() {
                     let buffer_data;
-                    let unpack_data = match src.raw {
-                        Some(buffer) => {
-                            unsafe { gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(buffer)) };
+                    let unpack_data = match &src.backing {
+                        &BufferBacking::Gl { raw }
+                        | &BufferBacking::GlCachedOnHost { raw, cache: _ } => {
+                            unsafe { gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(raw)) };
                             unbind_unpack_buffer = true;
                             glow::PixelUnpackData::BufferOffset(copy.buffer_layout.offset as u32)
                         }
-                        None => {
-                            buffer_data = lock(src.data.as_ref().unwrap());
+                        BufferBacking::Host { data } => {
+                            buffer_data = lock(data);
                             let src_data =
                                 &buffer_data.as_slice()[copy.buffer_layout.offset as usize..];
                             glow::PixelUnpackData::Slice(Some(src_data))
@@ -818,16 +830,17 @@ impl super::Queue {
                     let offset = copy.buffer_layout.offset as u32;
 
                     let buffer_data;
-                    let unpack_data = match src.raw {
-                        Some(buffer) => {
-                            unsafe { gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(buffer)) };
+                    let unpack_data = match &src.backing {
+                        &BufferBacking::Gl { raw }
+                        | &BufferBacking::GlCachedOnHost { raw, cache: _ } => {
+                            unsafe { gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(raw)) };
                             unbind_unpack_buffer = true;
                             glow::CompressedPixelUnpackData::BufferRange(
                                 offset..offset + bytes_in_upload,
                             )
                         }
-                        None => {
-                            buffer_data = lock(src.data.as_ref().unwrap());
+                        BufferBacking::Host { data } => {
+                            buffer_data = lock(data);
                             let src_data = &buffer_data.as_slice()
                                 [(offset as usize)..(offset + bytes_in_upload) as usize];
                             glow::CompressedPixelUnpackData::Slice(src_data)
@@ -901,14 +914,15 @@ impl super::Queue {
 
                 let read_pixels = |offset| {
                     let mut buffer_data;
-                    let unpack_data = match dst.raw {
-                        Some(buffer) => {
+                    let unpack_data = match &dst.backing {
+                        &BufferBacking::Gl { raw }
+                        | &BufferBacking::GlCachedOnHost { raw, cache: _ } => {
                             unsafe { gl.pixel_store_i32(glow::PACK_ROW_LENGTH, row_texels as i32) };
-                            unsafe { gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(buffer)) };
+                            unsafe { gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(raw)) };
                             glow::PixelPackData::BufferOffset(offset as u32)
                         }
-                        None => {
-                            buffer_data = lock(dst.data.as_ref().unwrap());
+                        BufferBacking::Host { data } => {
+                            buffer_data = lock(data);
                             let dst_data = &mut buffer_data.as_mut_slice()[offset as usize..];
                             glow::PixelPackData::Slice(Some(dst_data))
                         }
@@ -991,11 +1005,17 @@ impl super::Queue {
                 dst_target,
                 dst_offset,
             } => {
+                let dst_raw_buffer = |buf: &super::Buffer| match &buf.backing {
+                    &BufferBacking::Gl { raw }
+                    | &BufferBacking::GlCachedOnHost { raw, cache: _ } => Some(raw),
+                    &BufferBacking::Host { data: _ } => None,
+                };
+                let dst_raw_buffer = dst_raw_buffer(dst);
                 if self
                     .shared
                     .private_caps
                     .contains(PrivateCapabilities::QUERY_BUFFERS)
-                    && dst.raw.is_some()
+                    && dst_raw_buffer.is_some()
                 {
                     unsafe {
                         // We're assuming that the only relevant queries are 8 byte timestamps or
@@ -1023,7 +1043,7 @@ impl super::Queue {
                                 query_size * i,
                             )
                         }
-                        gl.bind_buffer(dst_target, dst.raw);
+                        gl.bind_buffer(dst_target, dst_raw_buffer);
                         gl.copy_buffer_sub_data(
                             glow::QUERY_BUFFER,
                             dst_target,
@@ -1062,9 +1082,10 @@ impl super::Queue {
                         temp_query_results.push(result);
                     }
                     let query_data = bytemuck::cast_slice(&temp_query_results);
-                    match dst.raw {
-                        Some(buffer) => {
-                            unsafe { gl.bind_buffer(dst_target, Some(buffer)) };
+                    match &dst.backing {
+                        &BufferBacking::Gl { raw }
+                        | &BufferBacking::GlCachedOnHost { raw, cache: _ } => {
+                            unsafe { gl.bind_buffer(dst_target, Some(raw)) };
                             unsafe {
                                 gl.buffer_sub_data_u8_slice(
                                     dst_target,
@@ -1073,8 +1094,8 @@ impl super::Queue {
                                 )
                             };
                         }
-                        None => {
-                            let data = &mut lock(dst.data.as_ref().unwrap());
+                        BufferBacking::Host { data } => {
+                            let data = &mut lock(data);
                             let len = query_data.len().min(data.len());
                             data[..len].copy_from_slice(&query_data[..len]);
                         }

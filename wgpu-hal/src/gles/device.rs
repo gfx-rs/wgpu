@@ -7,7 +7,7 @@ use arrayvec::ArrayVec;
 use glow::HasContext;
 use naga::FastHashMap;
 
-use super::{conv, lock, MaybeMutex, PrivateCapabilities};
+use super::{conv, lock, BufferBacking, MaybeMutex, PrivateCapabilities};
 use crate::auxil::map_naga_stage;
 use crate::TlasInstance;
 
@@ -526,13 +526,16 @@ impl crate::Device for super::Device {
                 .private_caps
                 .contains(PrivateCapabilities::BUFFER_ALLOCATION);
 
+        let host_backed_bytes = || Arc::new(MaybeMutex::new(vec![0; desc.size as usize]));
+
         if emulate_map && desc.usage.intersects(wgt::BufferUses::MAP_WRITE) {
             return Ok(super::Buffer {
-                raw: None,
+                backing: BufferBacking::Host {
+                    data: host_backed_bytes(),
+                },
                 target,
                 size: desc.size,
                 map_flags: 0,
-                data: Some(Arc::new(MaybeMutex::new(vec![0; desc.size as usize]))),
                 offset_of_current_mapping: Arc::new(MaybeMutex::new(0)),
             });
         }
@@ -560,8 +563,8 @@ impl crate::Device for super::Device {
             map_flags |= glow::MAP_WRITE_BIT;
         }
 
-        let raw = Some(unsafe { gl.create_buffer() }.map_err(|_| crate::DeviceError::OutOfMemory)?);
-        unsafe { gl.bind_buffer(target, raw) };
+        let raw = unsafe { gl.create_buffer() }.map_err(|_| crate::DeviceError::OutOfMemory)?;
+        unsafe { gl.bind_buffer(target, Some(raw)) };
         let raw_size = desc
             .size
             .try_into()
@@ -614,33 +617,38 @@ impl crate::Device for super::Device {
                 .private_caps
                 .contains(PrivateCapabilities::DEBUG_FNS)
             {
-                let name = raw.map_or(0, |buf| buf.0.get());
+                let name = raw.0.get();
                 unsafe { gl.object_label(glow::BUFFER, name, Some(label)) };
             }
         }
 
-        let data = if emulate_map && desc.usage.contains(wgt::BufferUses::MAP_READ) {
-            Some(Arc::new(MaybeMutex::new(vec![0; desc.size as usize])))
+        let backing = if emulate_map && desc.usage.contains(wgt::BufferUses::MAP_READ) {
+            BufferBacking::GlCachedOnHost {
+                cache: host_backed_bytes(),
+                raw,
+            }
         } else {
-            None
+            BufferBacking::Gl { raw }
         };
 
         self.counters.buffers.add(1);
 
         Ok(super::Buffer {
-            raw,
+            backing,
             target,
             size: desc.size,
             map_flags,
-            data,
             offset_of_current_mapping: Arc::new(MaybeMutex::new(0)),
         })
     }
 
     unsafe fn destroy_buffer(&self, buffer: super::Buffer) {
-        if let Some(raw) = buffer.raw {
-            let gl = &self.shared.context.lock();
-            unsafe { gl.delete_buffer(raw) };
+        match buffer.backing {
+            BufferBacking::Gl { raw } | BufferBacking::GlCachedOnHost { raw, cache: _ } => {
+                let gl = &self.shared.context.lock();
+                unsafe { gl.delete_buffer(raw) };
+            }
+            BufferBacking::Host { data: _ } => {}
         }
 
         self.counters.buffers.sub(1);
@@ -656,33 +664,32 @@ impl crate::Device for super::Device {
         range: crate::MemoryRange,
     ) -> Result<crate::BufferMapping, crate::DeviceError> {
         let is_coherent = buffer.map_flags & glow::MAP_COHERENT_BIT != 0;
-        let ptr = match buffer.raw {
-            None => {
-                let mut vec = lock(buffer.data.as_ref().unwrap());
+        let ptr = match &buffer.backing {
+            BufferBacking::Host { data } => {
+                let mut vec = lock(data);
                 let slice = &mut vec.as_mut_slice()[range.start as usize..range.end as usize];
                 slice.as_mut_ptr()
             }
-            Some(raw) => {
+            &BufferBacking::Gl { raw } => {
                 let gl = &self.shared.context.lock();
                 unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
-                let ptr = if let Some(ref map_read_allocation) = buffer.data {
-                    let mut guard = lock(map_read_allocation);
-                    let slice = guard.as_mut_slice();
-                    unsafe { self.shared.get_buffer_sub_data(gl, buffer.target, 0, slice) };
-                    slice.as_mut_ptr()
-                } else {
-                    *lock(&buffer.offset_of_current_mapping) = range.start;
-                    unsafe {
-                        gl.map_buffer_range(
-                            buffer.target,
-                            range.start as i32,
-                            (range.end - range.start) as i32,
-                            buffer.map_flags,
-                        )
-                    }
-                };
-                unsafe { gl.bind_buffer(buffer.target, None) };
-                ptr
+                *lock(&buffer.offset_of_current_mapping) = range.start;
+                unsafe {
+                    gl.map_buffer_range(
+                        buffer.target,
+                        range.start as i32,
+                        (range.end - range.start) as i32,
+                        buffer.map_flags,
+                    )
+                }
+            }
+            &BufferBacking::GlCachedOnHost { raw, ref cache } => {
+                let gl = &self.shared.context.lock();
+                unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
+                let mut guard = lock(cache);
+                let slice = guard.as_mut_slice();
+                unsafe { self.shared.get_buffer_sub_data(gl, buffer.target, 0, slice) };
+                slice.as_mut_ptr()
             }
         };
         Ok(crate::BufferMapping {
@@ -691,22 +698,23 @@ impl crate::Device for super::Device {
         })
     }
     unsafe fn unmap_buffer(&self, buffer: &super::Buffer) {
-        if let Some(raw) = buffer.raw {
-            if buffer.data.is_none() {
+        match &buffer.backing {
+            &BufferBacking::Gl { raw } => {
                 let gl = &self.shared.context.lock();
                 unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
                 unsafe { gl.unmap_buffer(buffer.target) };
                 unsafe { gl.bind_buffer(buffer.target, None) };
                 *lock(&buffer.offset_of_current_mapping) = 0;
             }
+            &BufferBacking::Host { .. } | &BufferBacking::GlCachedOnHost { .. } => {}
         }
     }
     unsafe fn flush_mapped_ranges<I>(&self, buffer: &super::Buffer, ranges: I)
     where
         I: Iterator<Item = crate::MemoryRange>,
     {
-        if let Some(raw) = buffer.raw {
-            if buffer.data.is_none() {
+        match &buffer.backing {
+            &BufferBacking::Gl { raw } => {
                 let gl = &self.shared.context.lock();
                 unsafe { gl.bind_buffer(buffer.target, Some(raw)) };
                 for range in ranges {
@@ -720,6 +728,7 @@ impl crate::Device for super::Device {
                     };
                 }
             }
+            &BufferBacking::Host { .. } | &BufferBacking::GlCachedOnHost { .. } => {}
         }
     }
     unsafe fn invalidate_mapped_ranges<I>(&self, _buffer: &super::Buffer, _ranges: I) {
@@ -1261,7 +1270,11 @@ impl crate::Device for super::Device {
                 wgt::BindingType::Buffer { .. } => {
                     let bb = &desc.buffers[entry.resource_index as usize];
                     super::RawBinding::Buffer {
-                        raw: bb.buffer.raw.unwrap(),
+                        raw: match &bb.buffer.backing {
+                            &BufferBacking::Gl { raw }
+                            | &BufferBacking::GlCachedOnHost { raw, .. } => raw,
+                            &BufferBacking::Host { .. } => unreachable!(),
+                        },
                         offset: bb.offset as i32,
                         size: match bb.size {
                             Some(s) => s.get() as i32,
