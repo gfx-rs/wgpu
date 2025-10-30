@@ -1,7 +1,8 @@
 use crate::ray_tracing::{acceleration_structure_limits, AsBuildContext};
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
-    Backends, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor, CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor, InstanceFlags, include_wgsl
+    include_wgsl, Backends, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor,
+    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor, InstanceFlags,
 };
 use wgpu::{AccelerationStructureFlags, BufferUsages};
 use wgpu_macros::gpu_test;

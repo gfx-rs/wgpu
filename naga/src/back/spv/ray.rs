@@ -44,6 +44,68 @@ fn write_ray_flags_contains_flags(
 }
 
 impl Writer {
+    /// writes a logical and of two scalar booleans
+    fn write_logical_and(
+        &mut self,
+        block: &mut Block,
+        one: spirv::Word,
+        two: spirv::Word,
+    ) -> spirv::Word {
+        let id = self.id_gen.next();
+        let bool_id = self.get_bool_type_id();
+        block.body.push(Instruction::binary(
+            spirv::Op::LogicalAnd,
+            bool_id,
+            id,
+            one,
+            two,
+        ));
+        id
+    }
+
+    fn write_reduce_and(&mut self, block: &mut Block, mut bools: Vec<spirv::Word>) -> spirv::Word {
+        // The combined `and`ed together of all of the bools up to this point.
+        let mut current_combined = bools.pop().unwrap();
+        for boolean in bools {
+            current_combined = self.write_logical_and(block, current_combined, boolean)
+        }
+        current_combined
+    }
+
+    // returns the id of the function, the function, and ids for its arguments.
+    fn write_function_signature(
+        &mut self,
+        arg_types: &[spirv::Word],
+        return_ty: spirv::Word,
+    ) -> (spirv::Word, Function, Vec<spirv::Word>) {
+        let func_ty = self.get_function_type(LookupFunctionType {
+            parameter_type_ids: Vec::from(arg_types),
+            return_type_id: return_ty,
+        });
+
+        let mut function = Function::default();
+        let func_id = self.id_gen.next();
+        function.signature = Some(Instruction::function(
+            return_ty,
+            func_id,
+            spirv::FunctionControl::empty(),
+            func_ty,
+        ));
+
+        let mut arg_ids = Vec::with_capacity(arg_types.len());
+
+        for (idx, &arg_ty) in arg_types.iter().enumerate() {
+            let id = self.id_gen.next();
+            let instruction = Instruction::function_parameter(arg_ty, id);
+            function.parameters.push(FunctionArgument {
+                instruction,
+                handle_id: idx as u32,
+            });
+            arg_ids.push(id);
+        }
+        (func_id, function, arg_ids)
+    }
+
     pub(super) fn write_ray_query_get_intersection_function(
         &mut self,
         is_committed: bool,
@@ -90,38 +152,18 @@ impl Writer {
 
         let argument_type_id = self.get_ray_query_pointer_id();
 
-        let func_ty = self.get_function_type(LookupFunctionType {
-            parameter_type_ids: vec![argument_type_id, flag_pointer_type_id],
-            return_type_id: intersection_type_id,
-        });
-
-        let mut function = Function::default();
-        let func_id = self.id_gen.next();
-        function.signature = Some(Instruction::function(
+        let (func_id, mut function, arg_ids) = self.write_function_signature(
+            &[argument_type_id, flag_pointer_type_id],
             intersection_type_id,
-            func_id,
-            spirv::FunctionControl::empty(),
-            func_ty,
-        ));
-        let blank_intersection = self.get_constant_null(intersection_type_id);
-        let query_id = self.id_gen.next();
-        let instruction = Instruction::function_parameter(argument_type_id, query_id);
-        function.parameters.push(FunctionArgument {
-            instruction,
-            handle_id: 0,
-        });
+        );
 
-        let intersection_tracker_id = self.id_gen.next();
-        let instruction =
-            Instruction::function_parameter(flag_pointer_type_id, intersection_tracker_id);
-        function.parameters.push(FunctionArgument {
-            instruction,
-            handle_id: 1,
-        });
+        let query_id = arg_ids[0];
+        let intersection_tracker_id = arg_ids[1];
 
         let label_id = self.id_gen.next();
         let mut block = Block::new(label_id);
 
+        let blank_intersection = self.get_constant_null(intersection_type_id);
         let blank_intersection_id = self.id_gen.next();
         // This must be before everything else in the function.
         block.body.push(Instruction::variable(
@@ -169,14 +211,8 @@ impl Writer {
             not_finished_id
         };
 
-        let is_valid_id = self.id_gen.next();
-        block.body.push(Instruction::binary(
-            spirv::Op::LogicalAnd,
-            bool_type_id,
-            is_valid_id,
-            proceed_finished_correct_id,
-            proceeded_id,
-        ));
+        let is_valid_id =
+            self.write_logical_and(&mut block, proceed_finished_correct_id, proceeded_id);
 
         let valid_id = self.id_gen.next();
         let mut valid_block = Block::new(valid_id);
@@ -584,63 +620,22 @@ impl Writer {
         let bool_type_id = self.get_bool_type_id();
         let bool_vec3_type_id = self.get_vec3_bool_type_id();
 
-        let func_ty = self.get_function_type(LookupFunctionType {
-            parameter_type_ids: vec![
+        let (func_id, mut function, arg_ids) = self.write_function_signature(
+            &[
                 ray_query_type_id,
                 acceleration_structure_type_id,
                 ray_desc_type_id,
                 u32_ptr_ty,
                 f32_ptr_ty,
             ],
-            return_type_id: self.void_type,
-        });
-
-        let mut function = Function::default();
-        let func_id = self.id_gen.next();
-        function.signature = Some(Instruction::function(
             self.void_type,
-            func_id,
-            spirv::FunctionControl::empty(),
-            func_ty,
-        ));
-
-        let query_id = self.id_gen.next();
-        let instruction = Instruction::function_parameter(ray_query_type_id, query_id);
-        function.parameters.push(FunctionArgument {
-            instruction,
-            handle_id: 0,
-        });
-
-        let acceleration_structure_id = self.id_gen.next();
-        let instruction = Instruction::function_parameter(
-            acceleration_structure_type_id,
-            acceleration_structure_id,
         );
-        function.parameters.push(FunctionArgument {
-            instruction,
-            handle_id: 1,
-        });
 
-        let desc_id = self.id_gen.next();
-        let instruction = Instruction::function_parameter(ray_desc_type_id, desc_id);
-        function.parameters.push(FunctionArgument {
-            instruction,
-            handle_id: 2,
-        });
-
-        let init_tracker_id = self.id_gen.next();
-        let instruction = Instruction::function_parameter(u32_ptr_ty, init_tracker_id);
-        function.parameters.push(FunctionArgument {
-            instruction,
-            handle_id: 3,
-        });
-
-        let t_max_tracker_id = self.id_gen.next();
-        let instruction = Instruction::function_parameter(f32_ptr_ty, t_max_tracker_id);
-        function.parameters.push(FunctionArgument {
-            instruction,
-            handle_id: 4,
-        });
+        let query_id = arg_ids[0];
+        let acceleration_structure_id = arg_ids[1];
+        let desc_id = arg_ids[2];
+        let init_tracker_id = arg_ids[3];
+        let t_max_tracker_id = arg_ids[4];
 
         let label_id = self.id_gen.next();
         let mut block = Block::new(label_id);
@@ -829,14 +824,11 @@ impl Writer {
                 let mut each_two_true = Vec::new();
                 while let Some(last_bool) = bools.pop() {
                     for &bool in &bools {
-                        let both_true_id = writer.id_gen.next();
-                        block.body.push(Instruction::binary(
-                            spirv::Op::LogicalAnd,
-                            bool_ty,
-                            both_true_id,
+                        let both_true_id = writer.write_logical_and(
+                            block,
                             last_bool,
                             bool,
-                        ));
+                        );
                         each_two_true.push(both_true_id);
                     }
                 }
@@ -941,58 +933,18 @@ impl Writer {
                 ],
             );
 
-            let tmin_tmax_valid_id = self.id_gen.next();
-            block.body.push(Instruction::binary(
-                spirv::Op::LogicalAnd,
-                bool_type_id,
-                tmin_tmax_valid_id,
-                tmin_le_tmax_id,
-                tmin_ge_zero_id,
-            ));
-
-            let origin_dir_valid_id = self.id_gen.next();
-            block.body.push(Instruction::binary(
-                spirv::Op::LogicalAnd,
-                bool_type_id,
-                origin_dir_valid_id,
-                all_ray_origin_finite_id,
-                all_ray_dir_finite_id,
-            ));
-
-            let flags_skip_tri_aabbs_tri_cull_id = self.id_gen.next();
-            block.body.push(Instruction::binary(
-                spirv::Op::LogicalAnd,
-                bool_type_id,
-                flags_skip_tri_aabbs_tri_cull_id,
-                not_contain_skip_triangles_aabbs,
-                not_contain_skip_triangles_cull,
-            ));
-            let flags_valid_id = self.id_gen.next();
-            block.body.push(Instruction::binary(
-                spirv::Op::LogicalAnd,
-                bool_type_id,
-                flags_valid_id,
-                flags_skip_tri_aabbs_tri_cull_id,
-                not_contain_multiple_opaque,
-            ));
-
-            let tmin_tmax_origin_dir_valid_id = self.id_gen.next();
-            block.body.push(Instruction::binary(
-                spirv::Op::LogicalAnd,
-                bool_type_id,
-                tmin_tmax_origin_dir_valid_id,
-                tmin_tmax_valid_id,
-                origin_dir_valid_id,
-            ));
-
-            let all_valid_id = self.id_gen.next();
-            block.body.push(Instruction::binary(
-                spirv::Op::LogicalAnd,
-                bool_type_id,
-                all_valid_id,
-                tmin_tmax_origin_dir_valid_id,
-                flags_valid_id,
-            ));
+            let all_valid_id = self.write_reduce_and(
+                &mut block,
+                vec![
+                    tmin_le_tmax_id,
+                    tmin_ge_zero_id,
+                    all_ray_origin_finite_id,
+                    all_ray_dir_finite_id,
+                    not_contain_skip_triangles_aabbs,
+                    not_contain_skip_triangles_cull,
+                    not_contain_multiple_opaque,
+                ],
+            );
 
             all_valid_id
         });
@@ -1087,33 +1039,10 @@ impl Writer {
         let bool_type_id = self.get_bool_type_id();
         let bool_ptr_ty = self.get_pointer_type_id(bool_type_id, spirv::StorageClass::Function);
 
-        let func_ty = self.get_function_type(LookupFunctionType {
-            parameter_type_ids: vec![ray_query_type_id, u32_ptr_ty],
-            return_type_id: bool_type_id,
-        });
+        let (func_id, mut function, arg_ids) = self.write_function_signature(&[ray_query_type_id, u32_ptr_ty], bool_type_id);
 
-        let mut function = Function::default();
-        let func_id = self.id_gen.next();
-        function.signature = Some(Instruction::function(
-            bool_type_id,
-            func_id,
-            spirv::FunctionControl::empty(),
-            func_ty,
-        ));
-
-        let query_id = self.id_gen.next();
-        let instruction = Instruction::function_parameter(ray_query_type_id, query_id);
-        function.parameters.push(FunctionArgument {
-            instruction,
-            handle_id: 0,
-        });
-
-        let init_tracker_id = self.id_gen.next();
-        let instruction = Instruction::function_parameter(u32_ptr_ty, init_tracker_id);
-        function.parameters.push(FunctionArgument {
-            instruction,
-            handle_id: 1,
-        });
+        let query_id = arg_ids[0];
+        let init_tracker_id = arg_ids[1];
 
         let block_id = self.id_gen.next();
         let mut block = Block::new(block_id);
@@ -1236,47 +1165,12 @@ impl Writer {
 
         let bool_type_id = self.get_bool_type_id();
 
-        let func_ty = self.get_function_type(LookupFunctionType {
-            parameter_type_ids: vec![ray_query_type_id, u32_ptr_ty, f32_type_id, f32_ptr_type_id],
-            return_type_id: self.void_type,
-        });
+        let (func_id, mut function, arg_ids) = self.write_function_signature(&[ray_query_type_id, u32_ptr_ty, f32_type_id, f32_ptr_type_id], self.void_type);
 
-        let mut function = Function::default();
-        let func_id = self.id_gen.next();
-        function.signature = Some(Instruction::function(
-            self.void_type,
-            func_id,
-            spirv::FunctionControl::empty(),
-            func_ty,
-        ));
-
-        let query_id = self.id_gen.next();
-        let instruction = Instruction::function_parameter(ray_query_type_id, query_id);
-        function.parameters.push(FunctionArgument {
-            instruction,
-            handle_id: 0,
-        });
-
-        let init_tracker_id = self.id_gen.next();
-        let instruction = Instruction::function_parameter(u32_ptr_ty, init_tracker_id);
-        function.parameters.push(FunctionArgument {
-            instruction,
-            handle_id: 1,
-        });
-
-        let depth_id = self.id_gen.next();
-        let instruction = Instruction::function_parameter(f32_type_id, depth_id);
-        function.parameters.push(FunctionArgument {
-            instruction,
-            handle_id: 2,
-        });
-
-        let t_max_tracker_id = self.id_gen.next();
-        let instruction = Instruction::function_parameter(f32_ptr_type_id, t_max_tracker_id);
-        function.parameters.push(FunctionArgument {
-            instruction,
-            handle_id: 3,
-        });
+        let query_id = arg_ids[0];
+        let init_tracker_id = arg_ids[1];
+        let depth_id = arg_ids[2];
+        let t_max_tracker_id = arg_ids[3];
 
         let block_id = self.id_gen.next();
         let mut block = Block::new(block_id);
@@ -1335,14 +1229,7 @@ impl Writer {
                 finished_proceed_id,
             ));
 
-            let is_valid_id = self.id_gen.next();
-            block.body.push(Instruction::binary(
-                spirv::Op::LogicalAnd,
-                bool_type_id,
-                is_valid_id,
-                not_finished_id,
-                proceeded_id,
-            ));
+            let is_valid_id = self.write_logical_and(&mut block, not_finished_id, proceeded_id);
 
             block.body.push(Instruction::selection_merge(
                 final_label_id,
@@ -1567,33 +1454,10 @@ impl Writer {
 
         let bool_type_id = self.get_bool_type_id();
 
-        let func_ty = self.get_function_type(LookupFunctionType {
-            parameter_type_ids: vec![ray_query_type_id, u32_ptr_ty],
-            return_type_id: self.void_type,
-        });
+        let (func_id, mut function, arg_ids) = self.write_function_signature(&[ray_query_type_id, u32_ptr_ty], self.void_type);
 
-        let mut function = Function::default();
-        let func_id = self.id_gen.next();
-        function.signature = Some(Instruction::function(
-            self.void_type,
-            func_id,
-            spirv::FunctionControl::empty(),
-            func_ty,
-        ));
-
-        let query_id = self.id_gen.next();
-        let instruction = Instruction::function_parameter(ray_query_type_id, query_id);
-        function.parameters.push(FunctionArgument {
-            instruction,
-            handle_id: 0,
-        });
-
-        let init_tracker_id = self.id_gen.next();
-        let instruction = Instruction::function_parameter(u32_ptr_ty, init_tracker_id);
-        function.parameters.push(FunctionArgument {
-            instruction,
-            handle_id: 1,
-        });
+        let query_id = arg_ids[0];
+        let init_tracker_id = arg_ids[1];
 
         let block_id = self.id_gen.next();
         let mut block = Block::new(block_id);
@@ -1634,14 +1498,7 @@ impl Writer {
                 finished_proceed_id,
             ));
 
-            let is_valid_id = self.id_gen.next();
-            block.body.push(Instruction::binary(
-                spirv::Op::LogicalAnd,
-                bool_type_id,
-                is_valid_id,
-                not_finished_id,
-                proceeded_id,
-            ));
+            let is_valid_id = self.write_logical_and(&mut block, not_finished_id, proceeded_id);
 
             block.body.push(Instruction::selection_merge(
                 final_label_id,
@@ -1758,33 +1615,10 @@ impl Writer {
 
         let bool_type_id = self.get_bool_type_id();
 
-        let func_ty = self.get_function_type(LookupFunctionType {
-            parameter_type_ids: vec![ray_query_type_id, u32_ptr_ty],
-            return_type_id: self.void_type,
-        });
+        let (func_id, mut function, arg_ids) = self.write_function_signature(&[ray_query_type_id, u32_ptr_ty], rq_get_vertex_positions_ty_id);
 
-        let mut function = Function::default();
-        let func_id = self.id_gen.next();
-        function.signature = Some(Instruction::function(
-            self.void_type,
-            func_id,
-            spirv::FunctionControl::empty(),
-            func_ty,
-        ));
-
-        let query_id = self.id_gen.next();
-        let instruction = Instruction::function_parameter(ray_query_type_id, query_id);
-        function.parameters.push(FunctionArgument {
-            instruction,
-            handle_id: 0,
-        });
-
-        let init_tracker_id = self.id_gen.next();
-        let instruction = Instruction::function_parameter(u32_ptr_ty, init_tracker_id);
-        function.parameters.push(FunctionArgument {
-            instruction,
-            handle_id: 1,
-        });
+        let query_id = arg_ids[0];
+        let init_tracker_id = arg_ids[1];
 
         let block_id = self.id_gen.next();
         let mut block = Block::new(block_id);
@@ -1838,14 +1672,7 @@ impl Writer {
                 not_finished_id
             };
 
-            let is_valid_id = self.id_gen.next();
-            block.body.push(Instruction::binary(
-                spirv::Op::LogicalAnd,
-                bool_type_id,
-                is_valid_id,
-                correct_finish_id,
-                proceeded_id,
-            ));
+            let is_valid_id = self.write_logical_and(&mut block, correct_finish_id, proceeded_id);
             block.body.push(Instruction::selection_merge(
                 final_label_id,
                 spirv::SelectionControl::NONE,
@@ -1926,6 +1753,9 @@ impl Writer {
             },
             func_id,
         );
+
+        function.to_words(&mut self.logical_layout.function_definitions);
+
         func_id
     }
 }

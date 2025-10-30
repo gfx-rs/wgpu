@@ -129,12 +129,12 @@ OpStore %44 %49
 %107 = OpLogicalOr  %36  %106 %101
 %108 = OpLogicalOr  %36  %107 %102
 %109 = OpLogicalNot  %36  %108
-%110 = OpLogicalAnd  %36  %52 %53
-%111 = OpLogicalAnd  %36  %59 %65
-%112 = OpLogicalAnd  %36  %73 %85
-%113 = OpLogicalAnd  %36  %112 %109
-%114 = OpLogicalAnd  %36  %110 %111
-%115 = OpLogicalAnd  %36  %114 %113
+%110 = OpLogicalAnd  %36  %109 %52
+%111 = OpLogicalAnd  %36  %110 %53
+%112 = OpLogicalAnd  %36  %111 %59
+%113 = OpLogicalAnd  %36  %112 %65
+%114 = OpLogicalAnd  %36  %113 %73
+%115 = OpLogicalAnd  %36  %114 %85
 OpSelectionMerge %116 None
 OpBranchConditional %115 %118 %117
 %118 = OpLabel
