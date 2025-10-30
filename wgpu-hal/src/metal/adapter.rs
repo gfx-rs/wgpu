@@ -537,15 +537,17 @@ impl super::PrivateCapabilities {
                 &self,
                 mac_version: (usize, usize),
                 ios_version: (usize, usize),
-                is_mac: bool,
+                tvos_version: (usize, usize),
+                visionos_version: (usize, usize),
+                os_type: super::OsType,
             ) -> bool {
-                if is_mac {
-                    self.major > mac_version.0
-                        || (self.major == mac_version.0 && self.minor >= mac_version.1)
-                } else {
-                    self.major > ios_version.0
-                        || (self.major == ios_version.0 && self.minor >= ios_version.1)
-                }
+                let required = match os_type {
+                    super::OsType::Macos => mac_version,
+                    super::OsType::Ios => ios_version,
+                    super::OsType::Tvos => tvos_version,
+                    super::OsType::VisionOs => visionos_version,
+                };
+                self.major > required.0 || (self.major == required.0 && self.minor >= required.1)
             }
         }
 
@@ -555,14 +557,27 @@ impl super::PrivateCapabilities {
             msg_send![process_info, operatingSystemVersion]
         };
 
-        let os_is_mac = device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1);
-        // Metal was first introduced in OS X 10.11 and iOS 8. The current version number of visionOS is 1.0.0. Additionally,
-        // on the Simulator, Apple only provides the Apple2 GPU capability, and the Apple2+ GPU capability covers the capabilities of Apple2.
-        // Therefore, the following conditions can be used to determine if it is visionOS.
-        // https://developer.apple.com/documentation/metal/developing_metal_apps_that_run_in_simulator
-        let os_is_xr = version.major < 8 && device.supports_family(MTLGPUFamily::Apple2);
-        let family_check = os_is_xr || version.at_least((10, 15), (13, 0), os_is_mac);
+        let os_type = {
+            // Metal was first introduced in OS X 10.11 and iOS 8. The current version number of visionOS is 1.0.0. Additionally,
+            // on the Simulator, Apple only provides the Apple2 GPU capability, and the Apple2+ GPU capability covers the capabilities of Apple2.
+            // Therefore, the following conditions can be used to determine if it is visionOS.
+            // https://developer.apple.com/documentation/metal/developing_metal_apps_that_run_in_simulator
+            let os_is_xr = version.major < 8 && device.supports_family(MTLGPUFamily::Apple2);
+            let os_is_mac = device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1);
+            let os_is_tvos = device.supports_feature_set(MTLFeatureSet::tvOS_GPUFamily1_v1);
+            if os_is_xr {
+                super::OsType::VisionOs
+            } else if os_is_mac {
+                super::OsType::Macos
+            } else if os_is_tvos {
+                super::OsType::Tvos
+            } else {
+                super::OsType::Ios
+            }
+        };
+        let family_check = version.at_least((10, 15), (13, 0), (13, 0), (1, 0), os_type);
         let metal3 = family_check && device.supports_family(MTLGPUFamily::Metal3);
+        let metal4 = family_check && device.supports_family(MTLGPUFamily::Metal4);
 
         let mut sample_count_mask = crate::TextureFormatCapabilities::MULTISAMPLE_X4; // 1 and 4 samples are supported on all devices
         if device.supports_texture_sample_count(2) {
@@ -575,9 +590,15 @@ impl super::PrivateCapabilities {
             sample_count_mask |= crate::TextureFormatCapabilities::MULTISAMPLE_X16;
         }
 
-        let rw_texture_tier = if version.at_least((10, 13), (11, 0), os_is_mac) {
+        let rw_texture_tier = if version.at_least((10, 13), (11, 0), (11, 0), (1, 0), os_type) {
             device.read_write_texture_support()
-        } else if version.at_least((10, 12), OS_NOT_SUPPORT, os_is_mac) {
+        } else if version.at_least(
+            (10, 12),
+            OS_NOT_SUPPORT,
+            OS_NOT_SUPPORT,
+            OS_NOT_SUPPORT,
+            os_type,
+        ) {
             if Self::supports_any(device, &[MTLFeatureSet::macOS_ReadWriteTextureTier2]) {
                 MTLReadWriteTextureTier::Tier2
             } else {
@@ -588,7 +609,7 @@ impl super::PrivateCapabilities {
         };
 
         let mut timestamp_query_support = TimestampQuerySupport::empty();
-        if version.at_least((11, 0), (14, 0), os_is_mac)
+        if version.at_least((11, 0), (14, 0), (14, 0), (1, 0), os_type)
             && device.supports_counter_sampling(MTLCounterSamplingPoint::AtStageBoundary)
         {
             // If we don't support at stage boundary, don't support anything else.
@@ -606,40 +627,38 @@ impl super::PrivateCapabilities {
             // `TimestampQuerySupport::INSIDE_WGPU_PASSES` emerges from the other flags.
         }
 
+        // TODO: is this check something we can comfortably run?
         let argument_buffers = device.argument_buffers_support();
 
         Self {
             family_check,
-            msl_version: if os_is_xr || version.at_least((14, 0), (17, 0), os_is_mac) {
+            msl_version: if version.at_least((14, 0), (17, 0), (17, 0), (1, 0), os_type) {
                 MTLLanguageVersion::V3_1
-            } else if version.at_least((13, 0), (16, 0), os_is_mac) {
+            } else if version.at_least((13, 0), (16, 0), os_type) {
                 MTLLanguageVersion::V3_0
-            } else if version.at_least((12, 0), (15, 0), os_is_mac) {
+            } else if version.at_least((12, 0), (15, 0), os_type) {
                 MTLLanguageVersion::V2_4
-            } else if version.at_least((11, 0), (14, 0), os_is_mac) {
+            } else if version.at_least((11, 0), (14, 0), os_type) {
                 MTLLanguageVersion::V2_3
-            } else if version.at_least((10, 15), (13, 0), os_is_mac) {
+            } else if version.at_least((10, 15), (13, 0), os_type) {
                 MTLLanguageVersion::V2_2
-            } else if version.at_least((10, 14), (12, 0), os_is_mac) {
+            } else if version.at_least((10, 14), (12, 0), os_type) {
                 MTLLanguageVersion::V2_1
-            } else if version.at_least((10, 13), (11, 0), os_is_mac) {
+            } else if version.at_least((10, 13), (11, 0), os_type) {
                 MTLLanguageVersion::V2_0
-            } else if version.at_least((10, 12), (10, 0), os_is_mac) {
+            } else if version.at_least((10, 12), (10, 0), os_type) {
                 MTLLanguageVersion::V1_2
-            } else if version.at_least((10, 11), (9, 0), os_is_mac) {
+            } else if version.at_least((10, 11), (9, 0), os_type) {
                 MTLLanguageVersion::V1_1
             } else {
                 MTLLanguageVersion::V1_0
             },
             // macOS 10.11 doesn't support read-write resources
-            fragment_rw_storage: version.at_least((10, 12), (8, 0), os_is_mac),
+            fragment_rw_storage: version.at_least((10, 12), (8, 0), os_type),
             read_write_texture_tier: rw_texture_tier,
             msaa_desktop: os_is_mac,
-            msaa_apple3: if family_check {
-                device.supports_family(MTLGPUFamily::Apple3)
-            } else {
-                device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily3_v4)
-            },
+            msaa_apple3: (family_check && device.supports_family(MTLGPUFamily::Apple3))
+                || device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily3_v4),
             msaa_apple7: family_check && device.supports_family(MTLGPUFamily::Apple7),
             resource_heaps: Self::supports_any(device, RESOURCE_HEAP_SUPPORT),
             argument_buffers,
@@ -743,6 +762,7 @@ impl super::PrivateCapabilities {
                 31
             },
             max_samplers_per_stage: 16,
+            // TODO: check
             max_binding_array_elements: if argument_buffers == MTLArgumentBuffersTier::Tier2 {
                 1_000_000
             } else if family_check && device.supports_family(MTLGPUFamily::Apple4) {
@@ -750,6 +770,7 @@ impl super::PrivateCapabilities {
             } else {
                 31
             },
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=7
             max_sampler_binding_array_elements: if family_check
                 && device.supports_family(MTLGPUFamily::Apple9)
             {
@@ -758,18 +779,22 @@ impl super::PrivateCapabilities {
                 && (device.supports_family(MTLGPUFamily::Apple7)
                     || device.supports_family(MTLGPUFamily::Mac2))
             {
-                1000
+                1024
             } else if family_check && device.supports_family(MTLGPUFamily::Apple6) {
                 128
             } else {
                 16
             },
-            buffer_alignment: if os_is_mac || os_is_xr { 256 } else { 64 },
-            max_buffer_size: if version.at_least((10, 14), (12, 0), os_is_mac) {
+            buffer_alignment: if matches!(os_type, super::OsType::Macos | super::OsType::VisionOs) {
+                256
+            } else {
+                64
+            },
+            max_buffer_size: if version.at_least((10, 14), (12, 0), os_type) {
                 // maxBufferLength available on macOS 10.14+ and iOS 12.0+
                 let buffer_size: NSInteger = unsafe { msg_send![device.as_ref(), maxBufferLength] };
                 buffer_size as _
-            } else if os_is_mac {
+            } else if os_type == super::OsType::Macos {
                 1 << 30 // 1GB on macOS 10.11 and up
             } else {
                 1 << 28 // 256MB on iOS 8.0+
@@ -788,7 +813,7 @@ impl super::PrivateCapabilities {
             },
             max_texture_3d_size: 2048,
             max_texture_layers: 2048,
-            max_fragment_input_components: if os_is_mac
+            max_fragment_input_components: if os_type == super::OsType::Macos
                 || device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1)
             {
                 124
@@ -857,13 +882,30 @@ impl super::PrivateCapabilities {
             ),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             supports_binary_archives: metal3
-                && (device.supports_family(MTLGPUFamily::Apple3)
-                    || device.supports_family(MTLGPUFamily::Mac2)),
-            supports_capture_manager: version.at_least((10, 13), (11, 0), os_is_mac),
-            can_set_maximum_drawables_count: version.at_least((10, 14), (11, 2), os_is_mac),
-            can_set_display_sync: version.at_least((10, 13), OS_NOT_SUPPORT, os_is_mac),
-            can_set_next_drawable_timeout: version.at_least((10, 13), (11, 0), os_is_mac),
-            // TODO: wtf
+                || device.supports_family(MTLGPUFamily::Apple3)
+                || device.supports_family(MTLGPUFamily::Mac2),
+            supports_capture_manager: version.at_least((10, 13), (11, 0), (11, 0), (1, 0), os_type),
+            can_set_maximum_drawables_count: version.at_least(
+                (10, 14),
+                (11, 2),
+                (11, 2),
+                (1, 0),
+                os_type,
+            ),
+            can_set_display_sync: version.at_least(
+                (10, 13),
+                OS_NOT_SUPPORT,
+                OS_NOT_SUPPORT,
+                OS_NOT_SUPPORT,
+                os_type,
+            ),
+            can_set_next_drawable_timeout: version.at_least(
+                (10, 13),
+                (11, 0),
+                (11, 0),
+                (1, 0),
+                os_type,
+            ),
             supports_arrays_of_textures: Self::supports_any(
                 device,
                 &[
@@ -874,20 +916,22 @@ impl super::PrivateCapabilities {
             ),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             supports_arrays_of_textures_write: metal3
-                && (device.supports_family(MTLGPUFamily::Apple6)
-                    || device.supports_family(MTLGPUFamily::Mac1)
-                    || device.supports_family(MTLGPUFamily::MacCatalyst1)),
-            supports_mutability: version.at_least((10, 13), (11, 0), os_is_mac),
-            // TODO: check
+                || device.supports_family(MTLGPUFamily::Apple6)
+                || device.supports_family(MTLGPUFamily::Mac2),
+            // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
+            supports_mutability: version.at_least((10, 13), (11, 0), os_type),
+            // TODO: how did they come to the following conclusion
             //Depth clipping is supported on all macOS GPU families and iOS family 4 and later
             supports_depth_clip_control: os_is_mac
                 || device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1),
-            // TODO: check
-            supports_preserve_invariance: version.at_least((11, 0), (13, 0), os_is_mac),
-            // TODO: this might be wrong
-            // Metal 2.2 on mac, 2.3 on iOS.
-            supports_shader_primitive_index: version.at_least((10, 15), (14, 0), os_is_mac),
-            has_unified_memory: if version.at_least((10, 15), (13, 0), os_is_mac) {
+            // https://developer.apple.com/documentation/metal/mtlcompileoptions/preserveinvariance
+            supports_preserve_invariance: version.at_least((11, 0), (14, 0), os_type),
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
+            supports_shader_primitive_index: metal3
+                || device.supports_family(MTLGPUFamily::Apple7)
+                || device.supports_family(MTLGPUFamily::Mac2),
+            // https://developer.apple.com/documentation/metal/mtldevice/hasunifiedmemory
+            has_unified_memory: if version.at_least((10, 15), (13, 0), (13, 0), (1, 0), os_type) {
                 Some(device.has_unified_memory())
             } else {
                 None
@@ -895,11 +939,12 @@ impl super::PrivateCapabilities {
             timestamp_query_support,
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             supports_simd_scoped_operations: metal3
-                && (device.supports_family(MTLGPUFamily::Mac2)
-                    || device.supports_family(MTLGPUFamily::Apple7)),
+                || device.supports_family(MTLGPUFamily::Mac2)
+                || device.supports_family(MTLGPUFamily::Apple7),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
-            int64: metal3 && device.supports_family(MTLGPUFamily::Apple3),
-            // TODO: my head hurts
+            int64: metal3 || device.supports_family(MTLGPUFamily::Apple3),
+            // TODO: my head hurts, does this only allow min/max?
+            // "Some GPU devices in the Apple8 family support 64-bit atomic minimum and maximum..."
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             int64_atomics: family_check
                 && (device.supports_family(MTLGPUFamily::Apple9)
@@ -907,21 +952,20 @@ impl super::PrivateCapabilities {
                         && device.supports_family(MTLGPUFamily::Mac2))),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             float_atomics: metal3
-                && (device.supports_family(MTLGPUFamily::Apple7)
-                    || device.supports_family(MTLGPUFamily::Mac2)),
+                || device.supports_family(MTLGPUFamily::Apple7)
+                || device.supports_family(MTLGPUFamily::Mac2),
             // https://developer.apple.com/documentation/metal/mtlsharedevent
-            supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
+            supports_shared_event: version.at_least((10, 14), (12, 0), (12, 0), (1, 0), os_type),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=5 (footnote)
             // Very difficult to piece together. The function docs claims to require macOS 10.15+,
             // but the feature set tables say "some GPU devices in the Mac2 and Metal3 families...
             // [check support by] by inspecting its MTLDevice.supportsShaderBarycentricCoordinates property"
             // If we get a bug report for metal 3 on macOS 10.14 should be easy to fix. Otherwise it works.
-            shader_barycentrics: metal3 && device.supports_shader_barycentric_coordinates(),
-            // TODO: this surely doesn't require Metal4, despite what docs say
+            shader_barycentrics: metal4
+                || (version.at_least((10, 15), (14, 0), (16, 0), (1, 0), os_type)
+                    && device.supports_shader_barycentric_coordinates()),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
-            supports_memoryless_storage: family_check
-                && device.supports_family(MTLGPUFamily::Metal4)
-                && device.supports_family(MTLGPUFamily::Apple2),
+            supports_memoryless_storage: metal4 || device.supports_family(MTLGPUFamily::Apple2),
         }
     }
 

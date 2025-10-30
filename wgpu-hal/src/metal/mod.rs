@@ -1026,3 +1026,11 @@ impl crate::DynPipelineCache for PipelineCache {}
 pub struct AccelerationStructure;
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OsType {
+    Macos,
+    Ios,
+    Tvos,
+    VisionOs,
+}
