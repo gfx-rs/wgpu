@@ -200,6 +200,7 @@ impl Frontend {
                     "gl_BaseVertex" => BuiltIn::BaseVertex,
                     "gl_BaseInstance" => BuiltIn::BaseInstance,
                     "gl_PrimitiveID" => BuiltIn::PrimitiveIndex,
+                    "gl_BaryCoordEXT" => BuiltIn::Barycentric,
                     "gl_InstanceIndex" => BuiltIn::InstanceIndex,
                     "gl_VertexIndex" => BuiltIn::VertexIndex,
                     "gl_SampleID" => BuiltIn::SampleIndex,

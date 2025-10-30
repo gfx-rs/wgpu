@@ -1231,6 +1231,16 @@ bitflags_array! {
         ///
         /// [`Device::create_shader_module_passthrough`]: https://docs.rs/wgpu/latest/wgpu/struct.Device.html#method.create_shader_module_passthrough
         const EXPERIMENTAL_PASSTHROUGH_SHADERS = 1 << 52;
+
+        /// Enables shader barycentric coordinates.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with VK_KHR_fragment_shader_barycentric)
+        /// - DX12 (with SM 6.1+)
+        /// - Metal (with MSL 2.2+)
+        ///
+        /// This is a native only feature.
+        const SHADER_BARYCENTRICS = 1 << 53;
     }
 
     /// Features that are not guaranteed to be supported.

@@ -11,7 +11,9 @@ use wgt::{
 };
 
 use crate::command::{
-    encoder::EncodingState, pass, pass_base, pass_try, validate_and_begin_occlusion_query,
+    encoder::EncodingState,
+    pass::{self, flush_bindings_helper},
+    pass_base, pass_try, validate_and_begin_occlusion_query,
     validate_and_begin_pipeline_statistics_query, ArcCommand, DebugGroupError, EncoderStateError,
     InnerCommandEncoder, PassStateError, TimestampWritesError,
 };
@@ -75,6 +77,9 @@ fn store_hal_ops(store: StoreOp) -> hal::AttachmentOps {
 }
 
 /// Describes an individual channel within a render pass, such as color, depth, or stencil.
+///
+/// A channel must either be read-only, or it must specify both load and store
+/// operations. See [`ResolvedPassChannel`] for a validated version.
 #[repr(C)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -118,7 +123,12 @@ impl<V: Copy + Default> PassChannel<Option<V>> {
     }
 }
 
+/// Describes an individual channel within a render pass, such as color, depth, or stencil.
+///
+/// Unlike [`PassChannel`], this version uses the Rust type system to guarantee
+/// a valid specification.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ResolvedPassChannel<V> {
     ReadOnly,
     Operational(wgt::Operations<V>),
@@ -183,8 +193,8 @@ pub type ArcRenderPassColorAttachment = RenderPassColorAttachment<Arc<TextureVie
 
 // Avoid allocation in the common case that there is only one color attachment,
 // but don't bloat `ArcCommand::RunRenderPass` excessively.
-pub type ArcRenderPassColorAttachmentArray =
-    SmallVec<[Option<RenderPassColorAttachment<Arc<TextureView>>>; 1]>;
+pub type ColorAttachments<TV = Arc<TextureView>> =
+    SmallVec<[Option<RenderPassColorAttachment<TV>>; 1]>;
 
 impl ArcRenderPassColorAttachment {
     fn hal_ops(&self) -> hal::AttachmentOps {
@@ -200,12 +210,14 @@ impl ArcRenderPassColorAttachment {
 }
 
 /// Describes a depth/stencil attachment to a render pass.
+///
+/// This version uses the unvalidated [`PassChannel`].
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct RenderPassDepthStencilAttachment {
+pub struct RenderPassDepthStencilAttachment<TV> {
     /// The view to use as an attachment.
-    pub view: id::TextureViewId,
+    pub view: TV,
     /// What operations will be performed on the depth part of the attachment.
     pub depth: PassChannel<Option<f32>>,
     /// What operations will be performed on the stencil part of the attachment.
@@ -213,10 +225,13 @@ pub struct RenderPassDepthStencilAttachment {
 }
 
 /// Describes a depth/stencil attachment to a render pass.
+///
+/// This version uses the validated [`ResolvedPassChannel`].
 #[derive(Clone, Debug)]
-pub struct ArcRenderPassDepthStencilAttachment {
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct ResolvedRenderPassDepthStencilAttachment<TV> {
     /// The view to use as an attachment.
-    pub view: Arc<TextureView>,
+    pub view: TV,
     /// What operations will be performed on the depth part of the attachment.
     pub depth: ResolvedPassChannel<f32>,
     /// What operations will be performed on the stencil part of the attachment.
@@ -230,7 +245,7 @@ pub struct RenderPassDescriptor<'a> {
     /// The color attachments of the render pass.
     pub color_attachments: Cow<'a, [Option<RenderPassColorAttachment>]>,
     /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<&'a RenderPassDepthStencilAttachment>,
+    pub depth_stencil_attachment: Option<&'a RenderPassDepthStencilAttachment<id::TextureViewId>>,
     /// Defines where and when timestamp values will be written for this pass.
     pub timestamp_writes: Option<&'a PassTimestampWrites>,
     /// Defines where the occlusion query results will be stored for this pass.
@@ -244,7 +259,8 @@ struct ArcRenderPassDescriptor<'a> {
     pub color_attachments:
         ArrayVec<Option<ArcRenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
     /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<ArcRenderPassDepthStencilAttachment>,
+    pub depth_stencil_attachment:
+        Option<ResolvedRenderPassDepthStencilAttachment<Arc<TextureView>>>,
     /// Defines where and when timestamp values will be written for this pass.
     pub timestamp_writes: Option<ArcPassTimestampWrites>,
     /// Defines where the occlusion query results will be stored for this pass.
@@ -273,7 +289,7 @@ pub struct RenderPass {
 
     color_attachments:
         ArrayVec<Option<ArcRenderPassColorAttachment>, { hal::MAX_COLOR_ATTACHMENTS }>,
-    depth_stencil_attachment: Option<ArcRenderPassDepthStencilAttachment>,
+    depth_stencil_attachment: Option<ResolvedRenderPassDepthStencilAttachment<Arc<TextureView>>>,
     timestamp_writes: Option<ArcPassTimestampWrites>,
     occlusion_query_set: Option<Arc<QuerySet>>,
 
@@ -569,6 +585,15 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         } else {
             Err(DrawError::MissingPipeline(pass::MissingPipeline))
         }
+    }
+
+    /// Flush binding state in preparation for a draw call.
+    ///
+    /// See the compute pass version for an explanation of some ways that
+    /// `flush_bindings` differs between the two types of passes.
+    fn flush_bindings(&mut self) -> Result<(), RenderPassErrorInner> {
+        flush_bindings_helper(&mut self.pass, |_| {})?;
+        Ok(())
     }
 
     /// Reset the `RenderBundle`-related states.
@@ -960,7 +985,9 @@ impl RenderPassInfo {
         device: &Arc<Device>,
         hal_label: Option<&str>,
         color_attachments: &[Option<ArcRenderPassColorAttachment>],
-        mut depth_stencil_attachment: Option<ArcRenderPassDepthStencilAttachment>,
+        mut depth_stencil_attachment: Option<
+            ResolvedRenderPassDepthStencilAttachment<Arc<TextureView>>,
+        >,
         mut timestamp_writes: Option<ArcPassTimestampWrites>,
         mut occlusion_query_set: Option<Arc<QuerySet>>,
         encoder: &mut dyn hal::DynCommandEncoder,
@@ -1196,11 +1223,12 @@ impl RenderPassInfo {
                 },
             )?;
 
-            if !color_view
-                .desc
-                .aspects()
-                .contains(hal::FormatAspects::COLOR)
-            {
+            if !color_view.desc.aspects().intersects(
+                hal::FormatAspects::COLOR
+                    | hal::FormatAspects::PLANE_0
+                    | hal::FormatAspects::PLANE_1
+                    | hal::FormatAspects::PLANE_2,
+            ) {
                 return Err(RenderPassErrorInner::ColorAttachment(
                     ColorAttachmentError::InvalidFormat(color_view.desc.format),
                 ));
@@ -1638,7 +1666,7 @@ impl Global {
                         )));
                     }
 
-                    Some(ArcRenderPassDepthStencilAttachment {
+                    Some(ResolvedRenderPassDepthStencilAttachment {
                         view,
                         depth: if format.has_depth_aspect() {
                             depth_stencil_attachment.depth.resolve(|clear| if let Some(clear) = clear {
@@ -1750,79 +1778,6 @@ impl Global {
         }
     }
 
-    /// Note that this differs from [`Self::render_pass_end`], it will
-    /// create a new pass, replay the commands and end the pass.
-    #[doc(hidden)]
-    #[cfg(any(feature = "serde", feature = "replay"))]
-    pub fn render_pass_end_with_unresolved_commands(
-        &self,
-        encoder_id: id::CommandEncoderId,
-        base: BasePass<super::RenderCommand, Infallible>,
-        color_attachments: &[Option<RenderPassColorAttachment>],
-        depth_stencil_attachment: Option<&RenderPassDepthStencilAttachment>,
-        timestamp_writes: Option<&PassTimestampWrites>,
-        occlusion_query_set: Option<id::QuerySetId>,
-    ) {
-        #[cfg(feature = "trace")]
-        {
-            let cmd_enc = self.hub.command_encoders.get(encoder_id);
-            let mut cmd_buf_data = cmd_enc.data.lock();
-            let cmd_buf_data = cmd_buf_data.get_inner();
-
-            if let Some(ref mut list) = cmd_buf_data.trace_commands {
-                list.push(crate::command::Command::RunRenderPass {
-                    base: BasePass {
-                        label: base.label.clone(),
-                        error: None,
-                        commands: base.commands.clone(),
-                        dynamic_offsets: base.dynamic_offsets.clone(),
-                        string_data: base.string_data.clone(),
-                        push_constant_data: base.push_constant_data.clone(),
-                    },
-                    target_colors: color_attachments.to_vec(),
-                    target_depth_stencil: depth_stencil_attachment.cloned(),
-                    timestamp_writes: timestamp_writes.cloned(),
-                    occlusion_query_set_id: occlusion_query_set,
-                });
-            }
-        }
-
-        let BasePass {
-            label,
-            error: _,
-            commands,
-            dynamic_offsets,
-            string_data,
-            push_constant_data,
-        } = base;
-
-        let (mut render_pass, encoder_error) = self.command_encoder_begin_render_pass(
-            encoder_id,
-            &RenderPassDescriptor {
-                label: label.as_deref().map(Cow::Borrowed),
-                color_attachments: Cow::Borrowed(color_attachments),
-                depth_stencil_attachment,
-                timestamp_writes,
-                occlusion_query_set,
-            },
-        );
-        if let Some(err) = encoder_error {
-            panic!("{:?}", err);
-        };
-
-        render_pass.base = BasePass {
-            label,
-            error: None,
-            commands: super::RenderCommand::resolve_render_command_ids(&self.hub, &commands)
-                .unwrap(),
-            dynamic_offsets,
-            string_data,
-            push_constant_data,
-        };
-
-        self.render_pass_end(&mut render_pass).unwrap();
-    }
-
     pub fn render_pass_end(&self, pass: &mut RenderPass) -> Result<(), EncoderStateError> {
         profiling::scope!(
             "CommandEncoder::run_render_pass {}",
@@ -1869,8 +1824,10 @@ impl Global {
 pub(super) fn encode_render_pass(
     parent_state: &mut EncodingState<InnerCommandEncoder>,
     mut base: BasePass<ArcRenderCommand, Infallible>,
-    color_attachments: ArcRenderPassColorAttachmentArray,
-    mut depth_stencil_attachment: Option<ArcRenderPassDepthStencilAttachment>,
+    color_attachments: ColorAttachments<Arc<TextureView>>,
+    mut depth_stencil_attachment: Option<
+        ResolvedRenderPassDepthStencilAttachment<Arc<TextureView>>,
+    >,
     mut timestamp_writes: Option<ArcPassTimestampWrites>,
     occlusion_query_set: Option<Arc<QuerySet>>,
 ) -> Result<(), RenderPassError> {
@@ -2376,7 +2333,7 @@ fn set_pipeline(
     }
 
     // Rebind resource
-    pass::rebind_resources::<RenderPassErrorInner, _>(
+    pass::change_pipeline_layout::<RenderPassErrorInner, _>(
         &mut state.pass,
         &pipeline.layout,
         &pipeline.late_sized_buffer_groups,
@@ -2610,10 +2567,11 @@ fn draw(
     instance_count: u32,
     first_vertex: u32,
     first_instance: u32,
-) -> Result<(), DrawError> {
+) -> Result<(), RenderPassErrorInner> {
     api_log!("RenderPass::draw {vertex_count} {instance_count} {first_vertex} {first_instance}");
 
     state.is_ready(DrawCommandFamily::Draw)?;
+    state.flush_bindings()?;
 
     state
         .vertex
@@ -2644,10 +2602,11 @@ fn draw_indexed(
     first_index: u32,
     base_vertex: i32,
     first_instance: u32,
-) -> Result<(), DrawError> {
+) -> Result<(), RenderPassErrorInner> {
     api_log!("RenderPass::draw_indexed {index_count} {instance_count} {first_index} {base_vertex} {first_instance}");
 
     state.is_ready(DrawCommandFamily::DrawIndexed)?;
+    state.flush_bindings()?;
 
     let last_index = first_index as u64 + index_count as u64;
     let index_limit = state.index.limit;
@@ -2655,7 +2614,8 @@ fn draw_indexed(
         return Err(DrawError::IndexBeyondLimit {
             last_index,
             index_limit,
-        });
+        }
+        .into());
     }
     state
         .vertex
@@ -2681,10 +2641,11 @@ fn draw_mesh_tasks(
     group_count_x: u32,
     group_count_y: u32,
     group_count_z: u32,
-) -> Result<(), DrawError> {
+) -> Result<(), RenderPassErrorInner> {
     api_log!("RenderPass::draw_mesh_tasks {group_count_x} {group_count_y} {group_count_z}");
 
     state.is_ready(DrawCommandFamily::DrawMeshTasks)?;
+    state.flush_bindings()?;
 
     let groups_size_limit = state
         .pass
@@ -2702,7 +2663,8 @@ fn draw_mesh_tasks(
             current: [group_count_x, group_count_y, group_count_z],
             limit: groups_size_limit,
             max_total: max_groups,
-        });
+        }
+        .into());
     }
 
     unsafe {
@@ -2732,6 +2694,7 @@ fn multi_draw_indirect(
     );
 
     state.is_ready(family)?;
+    state.flush_bindings()?;
 
     state
         .pass
@@ -2913,6 +2876,7 @@ fn multi_draw_indirect_count(
     );
 
     state.is_ready(family)?;
+    state.flush_bindings()?;
 
     let stride = get_stride_of_indirect_args(family);
 
@@ -3425,8 +3389,8 @@ impl Global {
             count: 1,
             family: DrawCommandFamily::Draw,
 
-            vertex_or_index_limit: 0,
-            instance_limit: 0,
+            vertex_or_index_limit: None,
+            instance_limit: None,
         });
 
         Ok(())
@@ -3450,8 +3414,8 @@ impl Global {
             count: 1,
             family: DrawCommandFamily::DrawIndexed,
 
-            vertex_or_index_limit: 0,
-            instance_limit: 0,
+            vertex_or_index_limit: None,
+            instance_limit: None,
         });
 
         Ok(())
@@ -3475,8 +3439,8 @@ impl Global {
             count: 1,
             family: DrawCommandFamily::DrawMeshTasks,
 
-            vertex_or_index_limit: 0,
-            instance_limit: 0,
+            vertex_or_index_limit: None,
+            instance_limit: None,
         });
 
         Ok(())
@@ -3501,8 +3465,8 @@ impl Global {
             count,
             family: DrawCommandFamily::Draw,
 
-            vertex_or_index_limit: 0,
-            instance_limit: 0,
+            vertex_or_index_limit: None,
+            instance_limit: None,
         });
 
         Ok(())
@@ -3527,8 +3491,8 @@ impl Global {
             count,
             family: DrawCommandFamily::DrawIndexed,
 
-            vertex_or_index_limit: 0,
-            instance_limit: 0,
+            vertex_or_index_limit: None,
+            instance_limit: None,
         });
 
         Ok(())
@@ -3553,8 +3517,8 @@ impl Global {
             count,
             family: DrawCommandFamily::DrawMeshTasks,
 
-            vertex_or_index_limit: 0,
-            instance_limit: 0,
+            vertex_or_index_limit: None,
+            instance_limit: None,
         });
 
         Ok(())

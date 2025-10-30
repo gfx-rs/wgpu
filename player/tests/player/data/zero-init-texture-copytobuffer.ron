@@ -3,14 +3,14 @@
     expectations: [
         (
             name: "Copy to Buffer",
-            buffer: (index: 0, epoch: 1),
+            buffer: PointerId(0x10),
             offset: 0,
             data: File("zero-16k.bin", 16384),
         ),
         // MISSING: Partial copies
     ],
     actions: [
-        CreateTexture(Id(0, 1), (
+        CreateTexture(PointerId(0x10), (
             label: Some("Copy To Buffer Texture"),
             size: (
                 width: 64,
@@ -24,7 +24,7 @@
             view_formats: [],
         )),
         CreateBuffer(
-            Id(0, 1),
+            PointerId(0x10),
             (
                 label: Some("Copy to Buffer Buffer"),
                 size: 16384,
@@ -35,12 +35,12 @@
         Submit(1, [
             CopyTextureToBuffer(
                 src: (
-                    texture: Id(0, 1),
+                    texture: PointerId(0x10),
                     mip_level: 0,
                     array_layer: 0,
                 ),
                 dst:  (
-                    buffer: Id(0, 1),
+                    buffer: PointerId(0x10),
                     layout: (
                         offset: 0,
                         bytes_per_row: Some(256),

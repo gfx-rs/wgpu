@@ -2,7 +2,7 @@ use alloc::{string::ToString as _, sync::Arc, vec::Vec};
 use core::mem::{size_of, ManuallyDrop};
 
 #[cfg(feature = "trace")]
-use crate::device::trace;
+use crate::device::trace::{Action, IntoTrace};
 use crate::device::DeviceError;
 use crate::{
     api_log,
@@ -25,7 +25,7 @@ use hal::AccelerationStructureTriangleIndices;
 use wgt::Features;
 
 impl Device {
-    fn create_blas(
+    pub fn create_blas(
         self: &Arc<Self>,
         blas_desc: &resource::BlasDescriptor,
         sizes: wgt::BlasGeometrySizeDescriptors,
@@ -172,7 +172,7 @@ impl Device {
         }))
     }
 
-    fn create_tlas(
+    pub fn create_tlas(
         self: &Arc<Self>,
         desc: &resource::TlasDescriptor,
     ) -> Result<Arc<resource::Tlas>, CreateTlasError> {
@@ -273,19 +273,22 @@ impl Global {
             let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
-            if let Some(trace) = device.trace.lock().as_mut() {
-                trace.add(trace::Action::CreateBlas {
-                    id: fid.id(),
-                    desc: desc.clone(),
-                    sizes: sizes.clone(),
-                });
-            }
+            let trace_sizes = sizes.clone();
 
             let blas = match device.create_blas(desc, sizes) {
                 Ok(blas) => blas,
                 Err(e) => break 'error e,
             };
             let handle = blas.handle;
+
+            #[cfg(feature = "trace")]
+            if let Some(trace) = device.trace.lock().as_mut() {
+                trace.add(Action::CreateBlas {
+                    id: blas.to_trace(),
+                    desc: desc.clone(),
+                    sizes: trace_sizes,
+                });
+            }
 
             let id = fid.assign(Fallible::Valid(blas));
             api_log!("Device::create_blas -> {id:?}");
@@ -310,18 +313,18 @@ impl Global {
         let error = 'error: {
             let device = self.hub.devices.get(device_id);
 
-            #[cfg(feature = "trace")]
-            if let Some(trace) = device.trace.lock().as_mut() {
-                trace.add(trace::Action::CreateTlas {
-                    id: fid.id(),
-                    desc: desc.clone(),
-                });
-            }
-
             let tlas = match device.create_tlas(desc) {
                 Ok(tlas) => tlas,
                 Err(e) => break 'error e,
             };
+
+            #[cfg(feature = "trace")]
+            if let Some(trace) = device.trace.lock().as_mut() {
+                trace.add(Action::CreateTlas {
+                    id: tlas.to_trace(),
+                    desc: desc.clone(),
+                });
+            }
 
             let id = fid.assign(Fallible::Valid(tlas));
             api_log!("Device::create_tlas -> {id:?}");
@@ -342,7 +345,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(blas) = _blas.get() {
             if let Some(t) = blas.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyBlas(blas_id));
+                t.add(Action::DestroyBlas(blas.to_trace()));
             }
         }
     }
@@ -356,7 +359,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Ok(tlas) = _tlas.get() {
             if let Some(t) = tlas.device.trace.lock().as_mut() {
-                t.add(trace::Action::DestroyTlas(tlas_id));
+                t.add(Action::DestroyTlas(tlas.to_trace()));
             }
         }
     }

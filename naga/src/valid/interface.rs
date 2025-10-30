@@ -131,6 +131,8 @@ pub enum EntryPointError {
     InvalidIntegerInterpolation { location: u32 },
     #[error(transparent)]
     Function(#[from] FunctionError),
+    #[error("mesh shader entry point missing mesh shader attributes")]
+    ExpectedMeshShaderAttributes,
     #[error("Non mesh shader entry point cannot have mesh shader attributes")]
     UnexpectedMeshShaderAttributes,
     #[error("Non mesh/task shader entry point cannot have task payload attribute")]
@@ -223,6 +225,7 @@ impl VaryingContext<'_> {
                     Bi::ClipDistance => Capabilities::CLIP_DISTANCE,
                     Bi::CullDistance => Capabilities::CULL_DISTANCE,
                     Bi::PrimitiveIndex => Capabilities::PRIMITIVE_INDEX,
+                    Bi::Barycentric => Capabilities::SHADER_BARYCENTRICS,
                     Bi::ViewIndex => Capabilities::MULTIVIEW,
                     Bi::SampleIndex => Capabilities::MULTISAMPLED_SHADING,
                     Bi::NumSubgroups
@@ -311,6 +314,14 @@ impl VaryingContext<'_> {
                     Bi::PrimitiveIndex => (
                         self.stage == St::Fragment && !self.output,
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
+                    ),
+                    Bi::Barycentric => (
+                        self.stage == St::Fragment && !self.output,
+                        *ty_inner
+                            == Ti::Vector {
+                                size: Vs::Tri,
+                                scalar: crate::Scalar::F32,
+                            },
                     ),
                     Bi::SampleIndex => (
                         self.stage == St::Fragment && !self.output,
@@ -691,7 +702,13 @@ impl super::Validator {
                 TypeFlags::CONSTRUCTIBLE | TypeFlags::CREATION_RESOLVED,
                 false,
             ),
-            crate::AddressSpace::WorkGroup | crate::AddressSpace::TaskPayload => {
+            crate::AddressSpace::WorkGroup => (TypeFlags::DATA | TypeFlags::SIZED, false),
+            crate::AddressSpace::TaskPayload => {
+                if !self.capabilities.contains(Capabilities::MESH_SHADER) {
+                    return Err(GlobalVariableError::UnsupportedCapability(
+                        Capabilities::MESH_SHADER,
+                    ));
+                }
                 (TypeFlags::DATA | TypeFlags::SIZED, false)
             }
             crate::AddressSpace::PushConstant => {
@@ -849,8 +866,14 @@ impl super::Validator {
             return Err(EntryPointError::UnexpectedWorkgroupSize.with_span());
         }
 
-        if ep.stage != crate::ShaderStage::Mesh && ep.mesh_info.is_some() {
-            return Err(EntryPointError::UnexpectedMeshShaderAttributes.with_span());
+        match (ep.stage, &ep.mesh_info) {
+            (crate::ShaderStage::Mesh, &None) => {
+                return Err(EntryPointError::ExpectedMeshShaderAttributes.with_span());
+            }
+            (_, &Some(_)) => {
+                return Err(EntryPointError::UnexpectedMeshShaderAttributes.with_span());
+            }
+            (_, _) => {}
         }
 
         let mut info = self

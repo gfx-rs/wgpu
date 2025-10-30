@@ -3,7 +3,7 @@ targets = "SPIRV | METAL | WGSL"
 
 [msl]
 fake_missing_bindings = false
-lang_version = [2, 2]
+lang_version = [2, 3]
 spirv_cross_compatibility = false
 zero_initialize_workgroup_memory = true
 
