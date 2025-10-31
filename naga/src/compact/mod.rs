@@ -227,6 +227,9 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
         }
         if let Some(ref mesh_info) = entry.mesh_info {
             module_tracer
+                .global_variables_used
+                .insert(mesh_info.output_variable);
+            module_tracer
                 .types_used
                 .insert(mesh_info.vertex_output_type);
             module_tracer
@@ -385,6 +388,7 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
             module_map.globals.adjust(task_payload);
         }
         if let Some(ref mut mesh_info) = entry.mesh_info {
+            module_map.globals.adjust(&mut mesh_info.output_variable);
             module_map.types.adjust(&mut mesh_info.vertex_output_type);
             module_map
                 .types

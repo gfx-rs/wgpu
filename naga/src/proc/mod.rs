@@ -683,14 +683,14 @@ impl crate::Module {
             output_variable: gv,
         };
         let mut error = None;
-        let typ = &self.types[self.global_variables[gv].ty].inner;
+        let r#type = &self.types[self.global_variables[gv].ty].inner;
 
         let mut topology = output.topology;
         // Max, max override, type
         let mut vertex_info = (0, None, null_type);
         let mut primitive_info = (0, None, null_type);
 
-        match typ {
+        match r#type {
             &crate::TypeInner::Struct { ref members, .. } => {
                 let mut builtins = crate::FastHashSet::default();
                 for member in members {
@@ -700,7 +700,7 @@ impl crate::Module {
                                 error = Some(EntryPointError::BadMeshOutputVariableField);
                             }
                             if builtins.contains(&crate::BuiltIn::VertexCount) {
-                                error = Some(EntryPointError::BadMeshOutputVarableType);
+                                error = Some(EntryPointError::BadMeshOutputVariableType);
                             }
                             builtins.insert(crate::BuiltIn::VertexCount);
                         }
@@ -709,7 +709,7 @@ impl crate::Module {
                                 error = Some(EntryPointError::BadMeshOutputVariableField);
                             }
                             if builtins.contains(&crate::BuiltIn::PrimitiveCount) {
-                                error = Some(EntryPointError::BadMeshOutputVarableType);
+                                error = Some(EntryPointError::BadMeshOutputVariableType);
                             }
                             builtins.insert(crate::BuiltIn::PrimitiveCount);
                         }
@@ -767,18 +767,18 @@ impl crate::Module {
                                     _ => (),
                                 }
                                 if builtins.contains(&crate::BuiltIn::Primitives) {
-                                    error = Some(EntryPointError::BadMeshOutputVarableType);
+                                    error = Some(EntryPointError::BadMeshOutputVariableType);
                                 }
                                 builtins.insert(crate::BuiltIn::Primitives);
                             } else {
                                 vertex_info = (a, b, c);
                                 if builtins.contains(&crate::BuiltIn::Vertices) {
-                                    error = Some(EntryPointError::BadMeshOutputVarableType);
+                                    error = Some(EntryPointError::BadMeshOutputVariableType);
                                 }
                                 builtins.insert(crate::BuiltIn::Vertices);
                             }
                         }
-                        _ => error = Some(EntryPointError::BadMeshOutputVarableType),
+                        _ => error = Some(EntryPointError::BadMeshOutputVariableType),
                     }
                 }
                 output = crate::MeshStageInfo {
@@ -792,7 +792,7 @@ impl crate::Module {
                     ..output
                 }
             }
-            _ => error = Some(EntryPointError::BadMeshOutputVarableType),
+            _ => error = Some(EntryPointError::BadMeshOutputVariableType),
         }
         (
             output,

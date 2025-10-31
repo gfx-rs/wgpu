@@ -153,7 +153,7 @@ pub enum EntryPointError {
     #[error(
         "Mesh shader output variable must be a struct with fields that are all allowed builtins"
     )]
-    BadMeshOutputVarableType,
+    BadMeshOutputVariableType,
     #[error("Mesh shader output variable fields must have types that are in accordance with the mesh shader spec")]
     BadMeshOutputVariableField,
     #[error("Mesh shader entry point cannot have a return type")]
@@ -1085,12 +1085,9 @@ impl super::Validator {
             }
         }
 
-        // TODO: validate mesh entry point info
-
         // If this is a `Mesh` entry point, check its vertex and primitive output types.
         // We verified previously that only mesh shaders can have `mesh_info`.
         if let &Some(ref mesh_info) = &ep.mesh_info {
-            // TODO: validate global variable
             if module.global_variables[mesh_info.output_variable].space
                 != crate::AddressSpace::WorkGroup
             {
@@ -1105,14 +1102,14 @@ impl super::Validator {
             if let Some(e) = mesh_info.max_vertices_override {
                 if let crate::Expression::Override(o) = module.global_expressions[e] {
                     if implied.1[0] != Some(o) {
-                        return Err(EntryPointError::BadMeshOutputVarableType.with_span());
+                        return Err(EntryPointError::BadMeshOutputVariableType.with_span());
                     }
                 }
             }
             if let Some(e) = mesh_info.max_primitives_override {
                 if let crate::Expression::Override(o) = module.global_expressions[e] {
                     if implied.1[1] != Some(o) {
-                        return Err(EntryPointError::BadMeshOutputVarableType.with_span());
+                        return Err(EntryPointError::BadMeshOutputVariableType.with_span());
                     }
                 }
             }
@@ -1120,7 +1117,7 @@ impl super::Validator {
             implied.0.max_vertices_override = mesh_info.max_vertices_override;
             implied.0.max_primitives_override = mesh_info.max_primitives_override;
             if implied.0 != *mesh_info {
-                return Err(EntryPointError::BadMeshOutputVarableType.with_span());
+                return Err(EntryPointError::BadMeshOutputVariableType.with_span());
             }
 
             self.validate_mesh_output_type(
@@ -1135,14 +1132,6 @@ impl super::Validator {
                 mesh_info.primitive_output_type,
                 MeshOutputType::PrimitiveOutput,
             )?;
-        } else {
-            // This is not a `Mesh` entry point, so ensure that it never tries to produce
-            // vertices or primitives.
-            if info.mesh_shader_info.vertex_type.is_some()
-                || info.mesh_shader_info.primitive_type.is_some()
-            {
-                return Err(EntryPointError::UnexpectedMeshShaderAttributes.with_span());
-            }
         }
 
         Ok(info)
