@@ -76,6 +76,7 @@ SamplerDescriptor {
 ### New Features
 
 - Added support for transient textures on Vulkan and Metal. By @opstic in [#8247](https://github.com/gfx-rs/wgpu/pull/8247)
+- Implement shader triangle barycentric coordinate builtins. By @atlv24 in [#8320](https://github.com/gfx-rs/wgpu/pull/8320).
 
 ### Changes
 
@@ -86,12 +87,8 @@ SamplerDescriptor {
 - Using both the wgpu command encoding APIs and `CommandEncoder::as_hal_mut` on the same encoder will now result in a panic.
 - Allow `include_spirv!` and `include_spirv_raw!` macros to be used in constants and statics. By @clarfonthey in [#8250](https://github.com/gfx-rs/wgpu/pull/8250).
 - Added support for rendering onto multi-planar textures. By @noituri in [#8307](https://github.com/gfx-rs/wgpu/pull/8307).
-
-### Added/New Features
-
-## General
-
-- Implement shader triangle barycentric coordinate builtins. By @atlv24 in [#8320](https://github.com/gfx-rs/wgpu/pull/8320).
+- Validation errors from `CommandEncoder::finish()` will report the label of the invalid encoder. By @kpreid in [#8449](https://github.com/gfx-rs/wgpu/pull/8449).
+- Corrected documentation of the minimum alignment of the *end* of a mapped range of a buffer (it is 4, not 8). By @kpreid in [#8450](https://github.com/gfx-rs/wgpu/pull/8450).
 
 ### Bug Fixes
 

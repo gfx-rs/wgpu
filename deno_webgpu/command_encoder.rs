@@ -437,12 +437,14 @@ impl GPUCommandEncoder {
       label: crate::transform_label(descriptor.label.clone()),
     };
 
-    let (id, err) =
+    let (id, opt_label_and_err) =
       self
         .instance
         .command_encoder_finish(self.id, &wgpu_descriptor, None);
 
-    self.error_handler.push_error(err);
+    self
+      .error_handler
+      .push_error(opt_label_and_err.map(|(_label, err)| err));
 
     GPUCommandBuffer {
       instance: self.instance.clone(),
