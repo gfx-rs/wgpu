@@ -1377,6 +1377,8 @@ impl Frontend {
                 result: ty.map(|ty| FunctionResult { ty, binding: None }),
                 ..Default::default()
             },
+            mesh_info: None,
+            task_payload: None,
         });
 
         Ok(())
@@ -1446,6 +1448,7 @@ impl Context<'_> {
                         interpolation,
                         sampling: None,
                         blend_src: None,
+                        per_primitive: false,
                     };
                     location += 1;
 
@@ -1482,6 +1485,7 @@ impl Context<'_> {
                                 interpolation,
                                 sampling: None,
                                 blend_src: None,
+                                per_primitive: false,
                             };
                             location += 1;
                             binding

@@ -466,6 +466,7 @@ impl Frontend {
                         interpolation,
                         sampling,
                         blend_src,
+                        per_primitive: false,
                     },
                     handle,
                     storage,

@@ -623,6 +623,7 @@ impl<W> Writer<'_, W> {
                     interpolation,
                     sampling,
                     blend_src,
+                    per_primitive: _,
                 } => {
                     if interpolation == Some(Interpolation::Linear) {
                         self.features.request(Features::NOPERSPECTIVE_QUALIFIER);

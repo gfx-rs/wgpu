@@ -1,8 +1,6 @@
 use alloc::{sync::Arc, vec::Vec};
 use core::ops::Range;
 
-#[cfg(feature = "trace")]
-use crate::command::Command as TraceCommand;
 use crate::{
     api_log,
     command::{encoder::EncodingState, ArcCommand, EncoderStateError},
@@ -119,11 +117,6 @@ impl Global {
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
 
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.trace() {
-            list.push(TraceCommand::ClearBuffer { dst, offset, size });
-        }
-
         cmd_buf_data.push_with(|| -> Result<_, ClearError> {
             Ok(ArcCommand::ClearBuffer {
                 dst: self.resolve_buffer_id(dst)?,
@@ -146,14 +139,6 @@ impl Global {
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.trace() {
-            list.push(TraceCommand::ClearTexture {
-                dst,
-                subresource_range: *subresource_range,
-            });
-        }
 
         cmd_buf_data.push_with(|| -> Result<_, ClearError> {
             Ok(ArcCommand::ClearTexture {

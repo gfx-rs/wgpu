@@ -2197,6 +2197,9 @@ impl super::Adapter {
             if features.contains(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN) {
                 capabilities.push(spv::Capability::RayQueryPositionFetchKHR)
             }
+            if features.contains(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
+                capabilities.push(spv::Capability::MeshShadingEXT);
+            }
             if self.private_caps.shader_integer_dot_product {
                 // See <https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_shader_integer_dot_product.html#_new_spir_v_capabilities>.
                 capabilities.extend(&[

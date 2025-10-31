@@ -8,7 +8,7 @@
     entry_points: [
         (
             flags: ("EXPRESSIONS | BLOCKS | CONTROL_FLOW_UNIFORMITY | STRUCT_LAYOUTS | CONSTANTS | BINDINGS"),
-            available_stages: ("VERTEX | FRAGMENT | COMPUTE"),
+            available_stages: ("VERTEX | FRAGMENT | COMPUTE | MESH | TASK"),
             uniformity: (
                 non_uniform_result: None,
                 requirements: (""),
@@ -201,6 +201,10 @@
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
+            mesh_shader_info: (
+                vertex_type: None,
+                primitive_type: None,
+            ),
         ),
     ],
     const_expression_types: [
