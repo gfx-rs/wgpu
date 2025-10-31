@@ -6,6 +6,8 @@ use alloc::vec::Vec;
 use core::fmt;
 use std::sync::mpsc;
 
+use crate::COPY_BUFFER_ALIGNMENT;
+
 /// Efficiently performs many buffer writes by sharing and reusing temporary buffers.
 ///
 /// Internally it uses a ring-buffer of staging buffers that are sub-allocated.
@@ -63,6 +65,9 @@ impl StagingBelt {
     /// Allocate a staging belt slice of `size` to be copied into the `target` buffer
     /// at the specified offset.
     ///
+    /// `offset` and `size` must be multiples of [`COPY_BUFFER_ALIGNMENT`]
+    /// (as is required by the underlying buffer operations).
+    ///
     /// The upload will be placed into the provided command encoder. This encoder
     /// must be submitted after [`StagingBelt::finish()`] is called and before
     /// [`StagingBelt::recall()`] is called.
@@ -70,6 +75,7 @@ impl StagingBelt {
     /// If the `size` is greater than the size of any free internal buffer, a new buffer
     /// will be allocated for it. Therefore, the `chunk_size` passed to [`StagingBelt::new()`]
     /// should ideally be larger than every such size.
+    #[track_caller]
     pub fn write_buffer(
         &mut self,
         encoder: &mut CommandEncoder,
@@ -78,6 +84,14 @@ impl StagingBelt {
         size: BufferSize,
         device: &Device,
     ) -> BufferViewMut {
+        // Asserting this explicitly gives a usefully more specific, and more prompt, error than
+        // leaving it to regular API validation.
+        // We check only `offset`, not `size`, because `self.allocate()` will check the size.
+        assert!(
+            offset.is_multiple_of(COPY_BUFFER_ALIGNMENT),
+            "StagingBelt::write_buffer() offset {offset} must be a multiple of `COPY_BUFFER_ALIGNMENT`"
+        );
+
         let slice_of_belt = self.allocate(
             size,
             const { BufferSize::new(crate::COPY_BUFFER_ALIGNMENT).unwrap() },
@@ -94,6 +108,9 @@ impl StagingBelt {
     }
 
     /// Allocate a staging belt slice with the given `size` and `alignment` and return it.
+    ///
+    /// `size` must be a multiple of [`COPY_BUFFER_ALIGNMENT`]
+    /// (as is required by the underlying buffer operations).
     ///
     /// To use this slice, call [`BufferSlice::get_mapped_range_mut()`] and write your data into
     /// that [`BufferViewMut`].
@@ -112,12 +129,17 @@ impl StagingBelt {
     /// The chosen slice will be positioned within the buffer at a multiple of `alignment`,
     /// which may be used to meet alignment requirements for the operation you wish to perform
     /// with the slice. This does not necessarily affect the alignment of the [`BufferViewMut`].
+    #[track_caller]
     pub fn allocate(
         &mut self,
         size: BufferSize,
         alignment: BufferSize,
         device: &Device,
     ) -> BufferSlice<'_> {
+        assert!(
+            size.get().is_multiple_of(COPY_BUFFER_ALIGNMENT),
+            "StagingBelt allocation size {size} must be a multiple of `COPY_BUFFER_ALIGNMENT`"
+        );
         assert!(
             alignment.get().is_power_of_two(),
             "alignment must be a power of two, not {alignment}"
