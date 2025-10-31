@@ -856,7 +856,6 @@ impl<W: Write> Writer<W> {
                 }
             }
             Statement::RayQuery { .. } => unreachable!(),
-            Statement::MeshFunction(..) => unreachable!(),
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let res_name = Baked(result).to_string();

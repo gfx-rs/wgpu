@@ -9,6 +9,9 @@
         ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
         ("DATA | SIZED | COPY | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
         ("DATA | SIZED | COPY | IO_SHAREABLE | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | HOST_SHAREABLE | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
+        ("DATA | SIZED | COPY | CREATION_RESOLVED | ARGUMENT | CONSTRUCTIBLE"),
     ],
     functions: [],
     entry_points: [
@@ -24,6 +27,7 @@
             global_uses: [
                 ("READ | WRITE"),
                 ("WRITE"),
+                (""),
             ],
             expressions: [
                 (
@@ -233,6 +237,7 @@
             global_uses: [
                 ("READ"),
                 ("WRITE"),
+                ("WRITE"),
             ],
             expressions: [
                 (
@@ -259,11 +264,59 @@
                         requirements: (""),
                     ),
                     ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 11,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 5,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
                     assignable_global: None,
                     ty: Value(Scalar((
                         kind: Uint,
                         width: 4,
                     ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 11,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 5,
+                        space: WorkGroup,
+                    )),
                 ),
                 (
                     uniformity: (
@@ -303,26 +356,50 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (""),
                     ),
-                    ref_count: 9,
-                    assignable_global: None,
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 11,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 9,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 4,
-                        space: Function,
+                        space: WorkGroup,
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (""),
                     ),
                     ref_count: 1,
-                    assignable_global: None,
+                    assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 1,
-                        space: Function,
+                        space: WorkGroup,
                     )),
                 ),
                 (
@@ -384,14 +461,50 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (""),
                     ),
                     ref_count: 1,
-                    assignable_global: None,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 11,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 9,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 4,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 1,
-                        space: Function,
+                        space: WorkGroup,
                     )),
                 ),
                 (
@@ -499,31 +612,46 @@
                         requirements: (""),
                     ),
                     ref_count: 1,
-                    assignable_global: None,
-                    ty: Value(Scalar((
-                        kind: Uint,
-                        width: 4,
-                    ))),
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 11,
+                        space: WorkGroup,
+                    )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (""),
                     ),
                     ref_count: 1,
-                    assignable_global: None,
-                    ty: Handle(4),
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 9,
+                        space: WorkGroup,
+                    )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (""),
                     ),
                     ref_count: 1,
-                    assignable_global: None,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 4,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 1,
-                        space: Function,
+                        space: WorkGroup,
                     )),
                 ),
                 (
@@ -585,14 +713,50 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (""),
                     ),
                     ref_count: 1,
-                    assignable_global: None,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 11,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 9,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 4,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 1,
-                        space: Function,
+                        space: WorkGroup,
                     )),
                 ),
                 (
@@ -700,31 +864,46 @@
                         requirements: (""),
                     ),
                     ref_count: 1,
-                    assignable_global: None,
-                    ty: Value(Scalar((
-                        kind: Uint,
-                        width: 4,
-                    ))),
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 11,
+                        space: WorkGroup,
+                    )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (""),
                     ),
                     ref_count: 1,
-                    assignable_global: None,
-                    ty: Handle(4),
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 9,
+                        space: WorkGroup,
+                    )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (""),
                     ),
                     ref_count: 1,
-                    assignable_global: None,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 4,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 1,
-                        space: Function,
+                        space: WorkGroup,
                     )),
                 ),
                 (
@@ -786,14 +965,50 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (""),
                     ),
                     ref_count: 1,
-                    assignable_global: None,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 11,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 9,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 4,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 1,
-                        space: Function,
+                        space: WorkGroup,
                     )),
                 ),
                 (
@@ -901,43 +1116,46 @@
                         requirements: (""),
                     ),
                     ref_count: 1,
-                    assignable_global: None,
-                    ty: Value(Scalar((
-                        kind: Uint,
-                        width: 4,
-                    ))),
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 11,
+                        space: WorkGroup,
+                    )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(6),
+                        non_uniform_result: None,
                         requirements: (""),
                     ),
                     ref_count: 1,
-                    assignable_global: None,
-                    ty: Handle(4),
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 10,
+                        space: WorkGroup,
+                    )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(61),
+                        non_uniform_result: None,
                         requirements: (""),
                     ),
-                    ref_count: 4,
-                    assignable_global: None,
+                    ref_count: 1,
+                    assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 7,
-                        space: Function,
+                        space: WorkGroup,
                     )),
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(61),
+                        non_uniform_result: None,
                         requirements: (""),
                     ),
                     ref_count: 1,
-                    assignable_global: None,
+                    assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 6,
-                        space: Function,
+                        space: WorkGroup,
                     )),
                 ),
                 (
@@ -987,14 +1205,50 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(61),
+                        non_uniform_result: None,
                         requirements: (""),
                     ),
                     ref_count: 1,
-                    assignable_global: None,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 11,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 10,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 7,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 2,
-                        space: Function,
+                        space: WorkGroup,
                     )),
                 ),
                 (
@@ -1041,14 +1295,50 @@
                 ),
                 (
                     uniformity: (
-                        non_uniform_result: Some(61),
+                        non_uniform_result: None,
                         requirements: (""),
                     ),
                     ref_count: 1,
-                    assignable_global: None,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 11,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 10,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 7,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
                     ty: Value(Pointer(
                         base: 1,
-                        space: Function,
+                        space: WorkGroup,
                     )),
                 ),
                 (
@@ -1108,34 +1398,13 @@
                     assignable_global: None,
                     ty: Handle(1),
                 ),
-                (
-                    uniformity: (
-                        non_uniform_result: None,
-                        requirements: (""),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                    ty: Value(Scalar((
-                        kind: Uint,
-                        width: 4,
-                    ))),
-                ),
-                (
-                    uniformity: (
-                        non_uniform_result: Some(61),
-                        requirements: (""),
-                    ),
-                    ref_count: 1,
-                    assignable_global: None,
-                    ty: Handle(7),
-                ),
             ],
             sampling: [],
             dual_source_blending: false,
             diagnostic_filter_leaf: None,
             mesh_shader_info: (
-                vertex_type: Some((4, 24)),
-                primitive_type: Some((7, 79)),
+                vertex_type: None,
+                primitive_type: None,
             ),
         ),
         (
@@ -1148,6 +1417,7 @@
             may_kill: false,
             sampling_set: [],
             global_uses: [
+                (""),
                 (""),
                 (""),
             ],

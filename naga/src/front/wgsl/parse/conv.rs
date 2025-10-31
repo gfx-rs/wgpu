@@ -53,10 +53,15 @@ pub fn map_built_in(
         "subgroup_invocation_id" => crate::BuiltIn::SubgroupInvocationId,
         // mesh
         "cull_primitive" => crate::BuiltIn::CullPrimitive,
-        "point_index" => crate::BuiltIn::PointIndex,
+        "vertex_indices" => crate::BuiltIn::PointIndex,
         "line_indices" => crate::BuiltIn::LineIndices,
         "triangle_indices" => crate::BuiltIn::TriangleIndices,
         "mesh_task_size" => crate::BuiltIn::MeshTaskSize,
+        // mesh global variable
+        "vertex_count" => crate::BuiltIn::VertexCount,
+        "vertices" => crate::BuiltIn::Vertices,
+        "primitive_count" => crate::BuiltIn::PrimitiveCount,
+        "primitives" => crate::BuiltIn::Primitives,
         _ => return Err(Box::new(Error::UnknownBuiltin(span))),
     };
     match built_in {

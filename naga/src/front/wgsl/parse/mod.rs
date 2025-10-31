@@ -2803,8 +2803,7 @@ impl Parser {
             (ParsedAttribute::default(), ParsedAttribute::default());
         let mut id = ParsedAttribute::default();
         let mut payload = ParsedAttribute::default();
-        let mut vertex_output = ParsedAttribute::default();
-        let mut primitive_output = ParsedAttribute::default();
+        let mut mesh_output = ParsedAttribute::default();
 
         let mut must_use: ParsedAttribute<Span> = ParsedAttribute::default();
 
@@ -2872,26 +2871,15 @@ impl Parser {
                 "mesh" => {
                     stage.set(ShaderStage::Mesh, name_span)?;
                     compute_like_span = name_span;
+
+                    lexer.expect(Token::Paren('('))?;
+                    mesh_output.set(lexer.next_ident_with_span()?, name_span)?;
+                    lexer.expect(Token::Paren(')'))?;
                 }
                 "payload" => {
                     lexer.expect(Token::Paren('('))?;
                     payload.set(lexer.next_ident_with_span()?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;
-                }
-                "vertex_output" | "primitive_output" => {
-                    lexer.expect(Token::Paren('('))?;
-                    let type_span = lexer.peek().1;
-                    let r#type = self.type_decl(lexer, &mut ctx)?;
-                    let type_span = lexer.span_from(type_span.to_range().unwrap().start);
-                    lexer.expect(Token::Separator(','))?;
-                    let max_output = self.general_expression(lexer, &mut ctx)?;
-                    let end_span = lexer.expect_span(Token::Paren(')'))?;
-                    let total_span = name_span.until(&end_span);
-                    if name == "vertex_output" {
-                        vertex_output.set((r#type, type_span, max_output), total_span)?;
-                    } else if name == "primitive_output" {
-                        primitive_output.set((r#type, type_span, max_output), total_span)?;
-                    }
                 }
                 "workgroup_size" => {
                     lexer.expect(Token::Paren('('))?;
@@ -3060,35 +3048,12 @@ impl Parser {
                         if stage.compute_like() && workgroup_size.value.is_none() {
                             return Err(Box::new(Error::MissingWorkgroupSize(compute_like_span)));
                         }
-                        if stage == ShaderStage::Mesh
-                            && (vertex_output.value.is_none() || primitive_output.value.is_none())
-                        {
-                            return Err(Box::new(Error::MissingMeshShaderInfo {
-                                mesh_attribute_span: compute_like_span,
-                            }));
-                        }
-                        let mesh_shader_info = match (vertex_output.value, primitive_output.value) {
-                            (Some(vertex_output), Some(primitive_output)) => {
-                                Some(ast::EntryPointMeshShaderInfo {
-                                    vertex_count: vertex_output.2,
-                                    primitive_count: primitive_output.2,
-                                    vertex_type: (vertex_output.0, vertex_output.1),
-                                    primitive_type: (primitive_output.0, primitive_output.1),
-                                })
-                            }
-                            (None, None) => None,
-                            (Some(v), None) | (None, Some(v)) => {
-                                return Err(Box::new(Error::OneMeshShaderAttribute {
-                                    attribute_span: v.1,
-                                }))
-                            }
-                        };
 
                         Some(ast::EntryPoint {
                             stage,
                             early_depth_test: early_depth_test.value,
                             workgroup_size: workgroup_size.value,
-                            mesh_shader_info,
+                            mesh_output_variable: mesh_output.value,
                             task_payload: payload.value,
                         })
                     } else {

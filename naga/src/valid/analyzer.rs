@@ -1155,36 +1155,6 @@ impl FunctionInfo {
                     }
                     FunctionUniformity::new()
                 }
-                S::MeshFunction(func) => {
-                    self.available_stages |= ShaderStages::MESH;
-                    match &func {
-                        // TODO: double check all of this uniformity stuff. I frankly don't fully understand all of it.
-                        &crate::MeshFunction::SetMeshOutputs {
-                            vertex_count,
-                            primitive_count,
-                        } => {
-                            let _ = self.add_ref(vertex_count);
-                            let _ = self.add_ref(primitive_count);
-                            FunctionUniformity::new()
-                        }
-                        &crate::MeshFunction::SetVertex { index, value }
-                        | &crate::MeshFunction::SetPrimitive { index, value } => {
-                            let _ = self.add_ref(index);
-                            let _ = self.add_ref(value);
-                            let ty = self.expressions[value.index()].ty.handle().ok_or(
-                                FunctionError::InvalidMeshShaderOutputType(value).with_span(),
-                            )?;
-
-                            if matches!(func, crate::MeshFunction::SetVertex { .. }) {
-                                self.try_update_mesh_vertex_type(ty, value)?;
-                            } else {
-                                self.try_update_mesh_primitive_type(ty, value)?;
-                            };
-
-                            FunctionUniformity::new()
-                        }
-                    }
-                }
                 S::SubgroupBallot {
                     result: _,
                     predicate,

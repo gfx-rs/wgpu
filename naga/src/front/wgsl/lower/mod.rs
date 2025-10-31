@@ -1520,88 +1520,34 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ([0; 3], None)
                 };
 
-            let mesh_info = if let Some(mesh_info) = entry.mesh_shader_info {
-                let mut const_u32 = |expr| match self.const_u32(expr, &mut ctx.as_const()) {
-                    Ok(value) => Ok((value.0, None)),
-                    Err(err) => {
-                        if let Error::ConstantEvaluatorError(ref ty, _) = *err {
-                            match **ty {
-                                proc::ConstantEvaluatorError::OverrideExpr => Ok((
-                                    0,
-                                    Some(
-                                        // This is dubious but it seems the code isn't workgroup size specific
-                                        self.workgroup_size_override(expr, &mut ctx.as_override())?,
-                                    ),
-                                )),
-                                _ => Err(err),
-                            }
-                        } else {
-                            Err(err)
-                        }
-                    }
-                };
-                let (max_vertices, max_vertices_override) = const_u32(mesh_info.vertex_count)?;
-                let (max_primitives, max_primitives_override) =
-                    const_u32(mesh_info.primitive_count)?;
-                let vertex_output_type =
-                    self.resolve_ast_type(mesh_info.vertex_type.0, &mut ctx.as_const())?;
-                let primitive_output_type =
-                    self.resolve_ast_type(mesh_info.primitive_type.0, &mut ctx.as_const())?;
-
-                let mut topology = None;
-                let struct_span = ctx.module.types.get_span(primitive_output_type);
-                match &ctx.module.types[primitive_output_type].inner {
-                    &ir::TypeInner::Struct {
-                        ref members,
-                        span: _,
-                    } => {
-                        for member in members {
-                            let out_topology = match member.binding {
-                                Some(ir::Binding::BuiltIn(ir::BuiltIn::TriangleIndices)) => {
-                                    Some(ir::MeshOutputTopology::Triangles)
-                                }
-                                Some(ir::Binding::BuiltIn(ir::BuiltIn::LineIndices)) => {
-                                    Some(ir::MeshOutputTopology::Lines)
-                                }
-                                _ => None,
-                            };
-                            if out_topology.is_some() {
-                                if topology.is_some() {
-                                    return Err(Box::new(Error::MeshPrimitiveNoDefinedTopology {
-                                        attribute_span: mesh_info.primitive_type.1,
-                                        struct_span,
-                                    }));
-                                }
-                                topology = out_topology;
-                            }
-                        }
-                    }
-                    _ => {
-                        return Err(Box::new(Error::MeshPrimitiveNoDefinedTopology {
-                            attribute_span: mesh_info.primitive_type.1,
-                            struct_span,
+            let mesh_info = if let Some((var_name, var_span)) = entry.mesh_output_variable {
+                let var = match ctx.globals.get(var_name) {
+                    Some(&LoweredGlobalDecl::Var(handle)) => handle,
+                    Some(_) => {
+                        return Err(Box::new(Error::ExpectedGlobalVariable {
+                            name_span: var_span,
                         }))
                     }
-                }
-                let topology = if let Some(t) = topology {
-                    t
-                } else {
-                    return Err(Box::new(Error::MeshPrimitiveNoDefinedTopology {
-                        attribute_span: mesh_info.primitive_type.1,
-                        struct_span,
-                    }));
+                    None => return Err(Box::new(Error::UnknownIdent(var_span, var_name))),
                 };
 
-                Some(ir::MeshStageInfo {
-                    max_vertices,
-                    max_vertices_override,
-                    max_primitives,
-                    max_primitives_override,
+                let mut info = ctx.module.analyze_mesh_shader_info(var);
+                if let Some(h) = info.1[0] {
+                    info.0.max_vertices_override = Some(
+                        ctx.module
+                            .global_expressions
+                            .append(crate::Expression::Override(h), Span::UNDEFINED),
+                    );
+                }
+                if let Some(h) = info.1[1] {
+                    info.0.max_primitives_override = Some(
+                        ctx.module
+                            .global_expressions
+                            .append(crate::Expression::Override(h), Span::UNDEFINED),
+                    );
+                }
 
-                    vertex_output_type,
-                    primitive_output_type,
-                    topology,
-                })
+                Some(info.0)
             } else {
                 None
             };
@@ -3231,59 +3177,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 span,
                             );
                             return Ok(Some(result));
-                        }
-
-                        "setMeshOutputs" | "setVertex" | "setPrimitive" => {
-                            let mut args = ctx.prepare_args(arguments, 2, span);
-                            let arg1 = args.next()?;
-                            let arg2 = args.next()?;
-                            args.finish()?;
-
-                            let mut cast_u32 = |arg| {
-                                // Try to convert abstract values to the known argument types
-                                let expr = self.expression_for_abstract(arg, ctx)?;
-                                let goal_ty =
-                                    ctx.ensure_type_exists(ir::TypeInner::Scalar(ir::Scalar::U32));
-                                ctx.try_automatic_conversions(
-                                    expr,
-                                    &proc::TypeResolution::Handle(goal_ty),
-                                    ctx.ast_expressions.get_span(arg),
-                                )
-                            };
-
-                            let arg1 = cast_u32(arg1)?;
-                            let arg2 = if function.name == "setMeshOutputs" {
-                                cast_u32(arg2)?
-                            } else {
-                                self.expression(arg2, ctx)?
-                            };
-
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-
-                            // Emit all previous expressions, even if not used directly
-                            rctx.block
-                                .extend(rctx.emitter.finish(&rctx.function.expressions));
-                            rctx.block.push(
-                                crate::Statement::MeshFunction(match function.name {
-                                    "setMeshOutputs" => crate::MeshFunction::SetMeshOutputs {
-                                        vertex_count: arg1,
-                                        primitive_count: arg2,
-                                    },
-                                    "setVertex" => crate::MeshFunction::SetVertex {
-                                        index: arg1,
-                                        value: arg2,
-                                    },
-                                    "setPrimitive" => crate::MeshFunction::SetPrimitive {
-                                        index: arg1,
-                                        value: arg2,
-                                    },
-                                    _ => unreachable!(),
-                                }),
-                                span,
-                            );
-                            rctx.emitter.start(&rctx.function.expressions);
-
-                            return Ok(None);
                         }
                         _ => {
                             return Err(Box::new(Error::UnknownIdent(function.span, function.name)))

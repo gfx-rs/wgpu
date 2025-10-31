@@ -38,32 +38,35 @@ fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
     taskPayload.visible = true;
     return vec3(3, 1, 1);
 }
-@mesh
+
+struct MeshOutput {
+    @builtin(vertices) vertices: array<VertexOutput, 3>,
+    @builtin(primitives) primitives: array<PrimitiveOutput, 1>,
+    @builtin(vertex_count) vertex_count: u32,
+    @builtin(primitive_count) primitive_count: u32,
+}
+
+var<workgroup> mesh_output: MeshOutput;
+@mesh(mesh_output)
 @payload(taskPayload)
-@vertex_output(VertexOutput, 3) @primitive_output(PrimitiveOutput, 1)
 @workgroup_size(1)
 fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocation_id) id: vec3<u32>) {
-    setMeshOutputs(3, 1);
+    mesh_output.vertex_count = 3;
+    mesh_output.primitive_count = 1;
     workgroupData = 2.0;
-    var v: VertexOutput;
 
-    v.position = positions[0];
-    v.color = colors[0] * taskPayload.colorMask;
-    setVertex(0, v);
+    mesh_output.vertices[0].position = positions[0];
+    mesh_output.vertices[0].color = colors[0] * taskPayload.colorMask;
 
-    v.position = positions[1];
-    v.color = colors[1] * taskPayload.colorMask;
-    setVertex(1, v);
+    mesh_output.vertices[1].position = positions[1];
+    mesh_output.vertices[1].color = colors[1] * taskPayload.colorMask;
 
-    v.position = positions[2];
-    v.color = colors[2] * taskPayload.colorMask;
-    setVertex(2, v);
+    mesh_output.vertices[2].position = positions[2];
+    mesh_output.vertices[2].color = colors[2] * taskPayload.colorMask;
 
-    var p: PrimitiveOutput;
-    p.index = vec3<u32>(0, 1, 2);
-    p.cull = !taskPayload.visible;
-    p.colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
-    setPrimitive(0, p);
+    mesh_output.primitives[0].index = vec3<u32>(0, 1, 2);
+    mesh_output.primitives[0].cull = !taskPayload.visible;
+    mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
 }
 @fragment
 fn fs_main(vertex: VertexOutput, primitive: PrimitiveInput) -> @location(0) vec4<f32> {

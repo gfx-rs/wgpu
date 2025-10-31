@@ -2156,7 +2156,11 @@ impl Writer {
                     | Bi::CullPrimitive
                     | Bi::PointIndex
                     | Bi::LineIndices
-                    | Bi::TriangleIndices => unreachable!(),
+                    | Bi::TriangleIndices
+                    | Bi::VertexCount
+                    | Bi::PrimitiveCount
+                    | Bi::Vertices
+                    | Bi::Primitives => unreachable!(),
                 };
 
                 self.decorate(id, Decoration::BuiltIn, &[built_in as u32]);
