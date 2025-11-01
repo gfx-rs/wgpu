@@ -24,6 +24,7 @@ use crate::COPY_BUFFER_ALIGNMENT;
 ///
 /// [`Queue::write_buffer_with()`]: crate::Queue::write_buffer_with
 pub struct StagingBelt {
+    device: Device,
     chunk_size: BufferAddress,
     /// Chunks into which we are accumulating data to be transferred.
     active_chunks: Vec<Chunk>,
@@ -50,9 +51,10 @@ impl StagingBelt {
     /// * 1-4 times less than the total amount of data uploaded per submission
     ///   (per [`StagingBelt::finish()`]); and
     /// * bigger is better, within these bounds.
-    pub fn new(chunk_size: BufferAddress) -> Self {
+    pub fn new(device: Device, chunk_size: BufferAddress) -> Self {
         let (sender, receiver) = mpsc::channel();
         StagingBelt {
+            device,
             chunk_size,
             active_chunks: Vec::new(),
             closed_chunks: Vec::new(),
@@ -82,7 +84,6 @@ impl StagingBelt {
         target: &Buffer,
         offset: BufferAddress,
         size: BufferSize,
-        device: &Device,
     ) -> BufferViewMut {
         // Asserting this explicitly gives a usefully more specific, and more prompt, error than
         // leaving it to regular API validation.
@@ -95,7 +96,6 @@ impl StagingBelt {
         let slice_of_belt = self.allocate(
             size,
             const { BufferSize::new(crate::COPY_BUFFER_ALIGNMENT).unwrap() },
-            device,
         );
         encoder.copy_buffer_to_buffer(
             slice_of_belt.buffer(),
@@ -130,12 +130,7 @@ impl StagingBelt {
     /// which may be used to meet alignment requirements for the operation you wish to perform
     /// with the slice. This does not necessarily affect the alignment of the [`BufferViewMut`].
     #[track_caller]
-    pub fn allocate(
-        &mut self,
-        size: BufferSize,
-        alignment: BufferSize,
-        device: &Device,
-    ) -> BufferSlice<'_> {
+    pub fn allocate(&mut self, size: BufferSize, alignment: BufferSize) -> BufferSlice<'_> {
         assert!(
             size.get().is_multiple_of(COPY_BUFFER_ALIGNMENT),
             "StagingBelt allocation size {size} must be a multiple of `COPY_BUFFER_ALIGNMENT`"
@@ -164,7 +159,7 @@ impl StagingBelt {
                 self.free_chunks.swap_remove(index)
             } else {
                 Chunk {
-                    buffer: device.create_buffer(&BufferDescriptor {
+                    buffer: self.device.create_buffer(&BufferDescriptor {
                         label: Some("(wgpu internal) StagingBelt staging buffer"),
                         size: self.chunk_size.max(size.get()),
                         usage: BufferUsages::MAP_WRITE | BufferUsages::COPY_SRC,
@@ -232,11 +227,21 @@ impl StagingBelt {
 
 impl fmt::Debug for StagingBelt {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self {
+            device,
+            chunk_size,
+            active_chunks,
+            closed_chunks,
+            free_chunks,
+            sender: _,
+            receiver: _,
+        } = self;
         f.debug_struct("StagingBelt")
-            .field("chunk_size", &self.chunk_size)
-            .field("active_chunks", &self.active_chunks.len())
-            .field("closed_chunks", &self.closed_chunks.len())
-            .field("free_chunks", &self.free_chunks.len())
+            .field("device", device)
+            .field("chunk_size", chunk_size)
+            .field("active_chunks", &active_chunks.len())
+            .field("closed_chunks", &closed_chunks.len())
+            .field("free_chunks", &free_chunks.len())
             .finish_non_exhaustive()
     }
 }

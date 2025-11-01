@@ -372,7 +372,7 @@ impl crate::framework::Example for Example {
             uniform_buf,
             entities,
             depth_view,
-            staging_belt: wgpu::util::StagingBelt::new(0x100),
+            staging_belt: wgpu::util::StagingBelt::new(device.clone(), 0x100),
         }
     }
 
@@ -411,7 +411,6 @@ impl crate::framework::Example for Example {
                 &self.uniform_buf,
                 0,
                 wgpu::BufferSize::new((raw_uniforms.len() * 4) as wgpu::BufferAddress).unwrap(),
-                device,
             )
             .copy_from_slice(bytemuck::cast_slice(&raw_uniforms));
 

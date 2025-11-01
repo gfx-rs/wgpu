@@ -9,7 +9,7 @@ fn staging_belt_random_test() {
     let mut rng = nanorand::WyRand::new_seed(0xDEAD_BEEF);
     let buffer_size = 1024;
     let align = wgpu::COPY_BUFFER_ALIGNMENT;
-    let mut belt = wgpu::util::StagingBelt::new(buffer_size / 2);
+    let mut belt = wgpu::util::StagingBelt::new(device.clone(), buffer_size / 2);
     let target_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: buffer_size,
@@ -30,7 +30,6 @@ fn staging_belt_random_test() {
                 &target_buffer,
                 offset,
                 wgpu::BufferSize::new(size).unwrap(),
-                &device,
             );
             slice[0] = 1; // token amount of actual writing, just in case it makes a difference
         }
