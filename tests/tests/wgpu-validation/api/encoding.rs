@@ -48,3 +48,23 @@ fn mix_apis_hal_then_wgpu() {
     }
     encoder.clear_buffer(&buffer, 0, None);
 }
+
+/// Test that the command encoder’s label is remembered and used in errors.
+#[test]
+#[should_panic = "In a CommandEncoder, label = 'my encoder'"]
+fn encoding_error_contains_label_of_encoder() {
+    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("my buffer"),
+        size: 1024,
+        usage: wgpu::BufferUsages::MAP_READ,
+        mapped_at_creation: false,
+    });
+
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        label: Some("my encoder"),
+    });
+    // This is erroneous because it is copying to the same buffer.
+    encoder.copy_buffer_to_buffer(&buffer, 0, &buffer, 0, 10);
+    queue.submit([encoder.finish()]);
+}
