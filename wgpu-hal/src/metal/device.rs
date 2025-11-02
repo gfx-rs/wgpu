@@ -905,6 +905,25 @@ impl crate::Device for super::Device {
                         };
 
                         match layout.ty {
+                            wgt::BindingType::Buffer { .. } => {
+                                let start = entry.resource_index as usize;
+                                let end = start + count as usize;
+                                let buffers = &desc.buffers[start..end];
+                                let compute_visible =
+                                    layout.visibility.contains(wgt::ShaderStages::COMPUTE);
+
+                                for (idx, buffer_binding) in buffers.iter().enumerate() {
+                                    contents[idx] = buffer_binding.buffer.raw.gpu_resource_id();
+
+                                    let use_info = bg
+                                        .resources_to_use
+                                        .entry(buffer_binding.buffer.as_raw().cast())
+                                        .or_default();
+                                    use_info.stages |= stages;
+                                    use_info.uses |= uses;
+                                    use_info.visible_in_compute |= compute_visible;
+                                }
+                            }
                             wgt::BindingType::Texture { .. }
                             | wgt::BindingType::StorageTexture { .. } => {
                                 let start = entry.resource_index as usize;

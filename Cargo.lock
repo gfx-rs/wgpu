@@ -2412,8 +2412,7 @@ dependencies = [
 [[package]]
 name = "metal"
 version = "0.32.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00c15a6f673ff72ddcc22394663290f870fb224c1bfce55734a75c414150e605"
+source = "git+https://github.com/msvbg/metal-rs?branch=gpu_resource_id_for_buffer#a4866ca7659e53d252d5a3909dffb2bffdbb1f90"
 dependencies = [
  "bitflags 2.10.0",
  "block",
