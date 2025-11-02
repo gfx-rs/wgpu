@@ -18,12 +18,6 @@ skip = [
 
     # Winit uses an old version
     { name = "windows-sys", version = "0.52.0" },
-
-    # Temporarily allow older Windows version until updates make it through
-    { name = "windows", version = "0.59" },
-    { name = "windows-core", version = "0.59" },
-    { name = "windows-implement", version = "0.59" },
-    { name = "windows-strings", version = "0.3" },
 ]
 wildcards = "deny"
 allow-wildcard-paths = true
