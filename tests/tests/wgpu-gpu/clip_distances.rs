@@ -43,7 +43,7 @@ async fn clip_distances(ctx: TestingContext) {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -87,6 +87,7 @@ async fn clip_distances(ctx: TestingContext) {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
         rpass.set_pipeline(&pipeline);
         rpass.draw(0..3, 0..1);

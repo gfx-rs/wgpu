@@ -96,11 +96,13 @@ use thiserror::Error;
 use wgpu_hal::ShouldBeNonZeroExt;
 use wgt::error::{ErrorType, WebGpuError};
 
+#[cfg(feature = "trace")]
+use crate::command::ArcReferences;
 use crate::{
     binding_model::{BindError, BindGroup, PipelineLayout},
     command::{
-        BasePass, BindGroupStateChange, ColorAttachmentError, DrawError, MapPassErr,
-        PassErrorScope, RenderCommandError, StateChange,
+        BasePass, BindGroupStateChange, ColorAttachmentError, DrawError, IdReferences, MapPassErr,
+        PassErrorScope, RenderCommand, RenderCommandError, StateChange,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext,
@@ -120,11 +122,7 @@ use crate::{
     Label, LabelHelpers,
 };
 
-use super::{
-    pass,
-    render_command::{ArcRenderCommand, RenderCommand},
-    DrawCommandFamily, DrawKind,
-};
+use super::{pass, render_command::ArcRenderCommand, DrawCommandFamily, DrawKind};
 
 /// Describes a [`RenderBundleEncoder`].
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -158,7 +156,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct RenderBundleEncoder {
-    base: BasePass<RenderCommand, Infallible>,
+    base: BasePass<RenderCommand<IdReferences>, Infallible>,
     parent_id: id::DeviceId,
     pub(crate) context: RenderPassContext,
     pub(crate) is_depth_read_only: bool,
@@ -175,7 +173,6 @@ impl RenderBundleEncoder {
     pub fn new(
         desc: &RenderBundleEncoderDescriptor,
         parent_id: id::DeviceId,
-        base: Option<BasePass<RenderCommand, Infallible>>,
     ) -> Result<Self, CreateRenderBundleError> {
         let (is_depth_read_only, is_stencil_read_only) = match desc.depth_stencil {
             Some(ds) => {
@@ -197,7 +194,7 @@ impl RenderBundleEncoder {
         //TODO: validate that attachment formats are renderable,
         // have expected aspects, support multisampling.
         Ok(Self {
-            base: base.unwrap_or_else(|| BasePass::new(&desc.label)),
+            base: BasePass::new(&desc.label),
             parent_id,
             context: RenderPassContext {
                 attachments: AttachmentData {
@@ -221,7 +218,7 @@ impl RenderBundleEncoder {
                     }
                     sc
                 },
-                multiview: desc.multiview,
+                multiview_mask: desc.multiview,
             },
 
             is_depth_read_only,
@@ -242,7 +239,7 @@ impl RenderBundleEncoder {
                     depth_stencil: None,
                 },
                 sample_count: 0,
-                multiview: None,
+                multiview_mask: None,
             },
             is_depth_read_only: false,
             is_stencil_read_only: false,
@@ -250,11 +247,6 @@ impl RenderBundleEncoder {
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
         }
-    }
-
-    #[cfg(feature = "trace")]
-    pub(crate) fn to_base_pass(&self) -> BasePass<RenderCommand, Infallible> {
-        self.base.clone()
     }
 
     pub fn parent(&self) -> id::DeviceId {
@@ -305,12 +297,12 @@ impl RenderBundleEncoder {
 
         let base = &self.base;
 
-        for &command in &base.commands {
+        for command in &base.commands {
             match command {
-                RenderCommand::SetBindGroup {
+                &RenderCommand::SetBindGroup {
                     index,
                     num_dynamic_offsets,
-                    bind_group_id,
+                    bind_group,
                 } => {
                     let scope = PassErrorScope::SetBindGroup;
                     set_bind_group(
@@ -319,11 +311,11 @@ impl RenderBundleEncoder {
                         &base.dynamic_offsets,
                         index,
                         num_dynamic_offsets,
-                        bind_group_id,
+                        bind_group,
                     )
                     .map_pass_err(scope)?;
                 }
-                RenderCommand::SetPipeline(pipeline_id) => {
+                &RenderCommand::SetPipeline(pipeline) => {
                     let scope = PassErrorScope::SetPipelineRender;
                     set_pipeline(
                         &mut state,
@@ -331,12 +323,12 @@ impl RenderBundleEncoder {
                         &self.context,
                         self.is_depth_read_only,
                         self.is_stencil_read_only,
-                        pipeline_id,
+                        pipeline,
                     )
                     .map_pass_err(scope)?;
                 }
-                RenderCommand::SetIndexBuffer {
-                    buffer_id,
+                &RenderCommand::SetIndexBuffer {
+                    buffer,
                     index_format,
                     offset,
                     size,
@@ -345,24 +337,24 @@ impl RenderBundleEncoder {
                     set_index_buffer(
                         &mut state,
                         &buffer_guard,
-                        buffer_id,
+                        buffer,
                         index_format,
                         offset,
                         size,
                     )
                     .map_pass_err(scope)?;
                 }
-                RenderCommand::SetVertexBuffer {
+                &RenderCommand::SetVertexBuffer {
                     slot,
-                    buffer_id,
+                    buffer,
                     offset,
                     size,
                 } => {
                     let scope = PassErrorScope::SetVertexBuffer;
-                    set_vertex_buffer(&mut state, &buffer_guard, slot, buffer_id, offset, size)
+                    set_vertex_buffer(&mut state, &buffer_guard, slot, buffer, offset, size)
                         .map_pass_err(scope)?;
                 }
-                RenderCommand::SetPushConstant {
+                &RenderCommand::SetPushConstant {
                     stages,
                     offset,
                     size_bytes,
@@ -372,7 +364,7 @@ impl RenderBundleEncoder {
                     set_push_constant(&mut state, stages, offset, size_bytes, values_offset)
                         .map_pass_err(scope)?;
                 }
-                RenderCommand::Draw {
+                &RenderCommand::Draw {
                     vertex_count,
                     instance_count,
                     first_vertex,
@@ -392,7 +384,7 @@ impl RenderBundleEncoder {
                     )
                     .map_pass_err(scope)?;
                 }
-                RenderCommand::DrawIndexed {
+                &RenderCommand::DrawIndexed {
                     index_count,
                     instance_count,
                     first_index,
@@ -414,7 +406,7 @@ impl RenderBundleEncoder {
                     )
                     .map_pass_err(scope)?;
                 }
-                RenderCommand::DrawMeshTasks {
+                &RenderCommand::DrawMeshTasks {
                     group_count_x,
                     group_count_y,
                     group_count_z,
@@ -432,11 +424,13 @@ impl RenderBundleEncoder {
                     )
                     .map_pass_err(scope)?;
                 }
-                RenderCommand::DrawIndirect {
-                    buffer_id,
+                &RenderCommand::DrawIndirect {
+                    buffer,
                     offset,
                     count: 1,
                     family,
+                    vertex_or_index_limit: None,
+                    instance_limit: None,
                 } => {
                     let scope = PassErrorScope::Draw {
                         kind: DrawKind::DrawIndirect,
@@ -446,32 +440,39 @@ impl RenderBundleEncoder {
                         &mut state,
                         &base.dynamic_offsets,
                         &buffer_guard,
-                        buffer_id,
+                        buffer,
                         offset,
                         family,
                     )
                     .map_pass_err(scope)?;
                 }
-                RenderCommand::DrawIndirect { .. }
-                | RenderCommand::MultiDrawIndirectCount { .. }
-                | RenderCommand::PushDebugGroup { color: _, len: _ }
-                | RenderCommand::InsertDebugMarker { color: _, len: _ }
-                | RenderCommand::PopDebugGroup => {
+                &RenderCommand::DrawIndirect {
+                    count,
+                    vertex_or_index_limit,
+                    instance_limit,
+                    ..
+                } => {
+                    unreachable!("unexpected (multi-)draw indirect with count {count}, vertex_or_index_limits {vertex_or_index_limit:?}, instance_limit {instance_limit:?} found in a render bundle");
+                }
+                &RenderCommand::MultiDrawIndirectCount { .. }
+                | &RenderCommand::PushDebugGroup { color: _, len: _ }
+                | &RenderCommand::InsertDebugMarker { color: _, len: _ }
+                | &RenderCommand::PopDebugGroup => {
                     unimplemented!("not supported by a render bundle")
                 }
                 // Must check the TIMESTAMP_QUERY_INSIDE_PASSES feature
-                RenderCommand::WriteTimestamp { .. }
-                | RenderCommand::BeginOcclusionQuery { .. }
-                | RenderCommand::EndOcclusionQuery
-                | RenderCommand::BeginPipelineStatisticsQuery { .. }
-                | RenderCommand::EndPipelineStatisticsQuery => {
+                &RenderCommand::WriteTimestamp { .. }
+                | &RenderCommand::BeginOcclusionQuery { .. }
+                | &RenderCommand::EndOcclusionQuery
+                | &RenderCommand::BeginPipelineStatisticsQuery { .. }
+                | &RenderCommand::EndPipelineStatisticsQuery => {
                     unimplemented!("not supported by a render bundle")
                 }
-                RenderCommand::ExecuteBundle(_)
-                | RenderCommand::SetBlendConstant(_)
-                | RenderCommand::SetStencilReference(_)
-                | RenderCommand::SetViewport { .. }
-                | RenderCommand::SetScissor(_) => unreachable!("not supported by a render bundle"),
+                &RenderCommand::ExecuteBundle(_)
+                | &RenderCommand::SetBlendConstant(_)
+                | &RenderCommand::SetStencilReference(_)
+                | &RenderCommand::SetViewport { .. }
+                | &RenderCommand::SetScissor(_) => unreachable!("not supported by a render bundle"),
             }
         }
 
@@ -518,13 +519,13 @@ impl RenderBundleEncoder {
 
     pub fn set_index_buffer(
         &mut self,
-        buffer_id: id::BufferId,
+        buffer: id::BufferId,
         index_format: wgt::IndexFormat,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
         self.base.commands.push(RenderCommand::SetIndexBuffer {
-            buffer_id,
+            buffer,
             index_format,
             offset,
             size,
@@ -899,8 +900,8 @@ fn multi_draw_indirect(
         count: 1,
         family,
 
-        vertex_or_index_limit,
-        instance_limit,
+        vertex_or_index_limit: Some(vertex_or_index_limit),
+        instance_limit: Some(instance_limit),
     });
     Ok(())
 }
@@ -941,6 +942,7 @@ pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 //Note: here, `RenderBundle` is just wrapping a raw stream of render commands.
 // The plan is to back it by an actual Vulkan secondary buffer, D3D12 Bundle,
 // or Metal indirect command buffer.
+/// cbindgen:ignore
 #[derive(Debug)]
 pub struct RenderBundle {
     // Normalized command stream. It can be executed verbatim,
@@ -971,6 +973,11 @@ unsafe impl Send for RenderBundle {}
 unsafe impl Sync for RenderBundle {}
 
 impl RenderBundle {
+    #[cfg(feature = "trace")]
+    pub(crate) fn to_base_pass(&self) -> BasePass<RenderCommand<ArcReferences>, Infallible> {
+        self.base.clone()
+    }
+
     /// Actually encode the contents into a native command buffer.
     ///
     /// This is partially duplicating the logic of `render_pass_end`.
@@ -1142,8 +1149,9 @@ impl RenderBundle {
                             buffer,
                             *offset,
                             *family,
-                            *vertex_or_index_limit,
-                            *instance_limit,
+                            vertex_or_index_limit
+                                .expect("finalized render bundle missing vertex_or_index_limit"),
+                            instance_limit.expect("finalized render bundle missing instance_limit"),
                         )?;
 
                         let dst_buffer =
@@ -1590,7 +1598,7 @@ impl State {
 
 /// Error encountered when finishing recording a render bundle.
 #[derive(Clone, Debug, Error)]
-pub(super) enum RenderBundleErrorInner {
+pub enum RenderBundleErrorInner {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
@@ -1692,7 +1700,7 @@ pub mod bundle_ffi {
         bundle.base.commands.push(RenderCommand::SetBindGroup {
             index,
             num_dynamic_offsets: offset_length,
-            bind_group_id,
+            bind_group: bind_group_id,
         });
     }
 
@@ -1719,7 +1727,7 @@ pub mod bundle_ffi {
     ) {
         bundle.base.commands.push(RenderCommand::SetVertexBuffer {
             slot,
-            buffer_id,
+            buffer: buffer_id,
             offset,
             size,
         });
@@ -1813,10 +1821,12 @@ pub mod bundle_ffi {
         offset: BufferAddress,
     ) {
         bundle.base.commands.push(RenderCommand::DrawIndirect {
-            buffer_id,
+            buffer: buffer_id,
             offset,
             count: 1,
             family: DrawCommandFamily::Draw,
+            vertex_or_index_limit: None,
+            instance_limit: None,
         });
     }
 
@@ -1826,10 +1836,12 @@ pub mod bundle_ffi {
         offset: BufferAddress,
     ) {
         bundle.base.commands.push(RenderCommand::DrawIndirect {
-            buffer_id,
+            buffer: buffer_id,
             offset,
             count: 1,
             family: DrawCommandFamily::DrawIndexed,
+            vertex_or_index_limit: None,
+            instance_limit: None,
         });
     }
 

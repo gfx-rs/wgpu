@@ -889,7 +889,8 @@ where
 }
 
 /// cbindgen:ignore
-pub type ResolvedPipelineLayoutDescriptor<'a> = PipelineLayoutDescriptor<'a, Arc<BindGroupLayout>>;
+pub type ResolvedPipelineLayoutDescriptor<'a, BGL = Arc<BindGroupLayout>> =
+    PipelineLayoutDescriptor<'a, BGL>;
 
 #[derive(Debug)]
 pub struct PipelineLayout {

@@ -91,7 +91,9 @@ macro_rules! impl_deferred_command_buffer_actions {
         ///
         /// - If the buffer is already mapped.
         /// - If the buffer’s [`BufferUsages`] do not allow the requested [`MapMode`].
-        /// - If the endpoints of this slice are not aligned to [`MAP_ALIGNMENT`] within the buffer.
+        /// - If `bounds` is outside of the bounds of `buffer`.
+        /// - If `bounds` does not start at a multiple of [`MAP_ALIGNMENT`].
+        /// - If `bounds` has a length that is not a multiple of 4 greater than 0.
         ///
         /// [q::s]: Queue::submit
         /// [i::p_a]: Instance::poll_all

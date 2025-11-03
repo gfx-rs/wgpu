@@ -301,7 +301,7 @@ impl VaryingContext<'_> {
                             St::Vertex | St::Fragment | St::Task | St::Mesh => !self.output,
                             St::Compute => false,
                         },
-                        *ty_inner == Ti::Scalar(crate::Scalar::I32),
+                        *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
                     Bi::FragDepth => (
                         self.stage == St::Fragment && self.output,

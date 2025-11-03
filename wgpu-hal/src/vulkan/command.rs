@@ -784,7 +784,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             colors: ArrayVec::default(),
             depth_stencil: None,
             sample_count: desc.sample_count,
-            multiview: desc.multiview,
+            multiview_mask: desc.multiview_mask,
         };
         let mut fb_key = super::FramebufferKey {
             raw_pass: vk::RenderPass::null(),
@@ -825,15 +825,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     vk_clear_values.push(unsafe { mem::zeroed() });
                     fb_key.push_view(at.view.identified_raw_view());
                 }
-
-                // Assert this attachment is valid for the detected multiview, as a sanity check
-                // The driver crash for this is really bad on AMD, so the check is worth it
-                if let Some(multiview) = desc.multiview {
-                    assert_eq!(cat.target.view.layers, multiview);
-                    if let Some(ref resolve_target) = cat.resolve_target {
-                        assert_eq!(resolve_target.view.layers, multiview);
-                    }
-                }
             } else {
                 rp_key.colors.push(None);
             }
@@ -850,12 +841,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 stencil_ops: ds.stencil_ops,
             });
             fb_key.push_view(ds.target.view.identified_raw_view());
-
-            // Assert this attachment is valid for the detected multiview, as a sanity check
-            // The driver crash for this is really bad on AMD, so the check is worth it
-            if let Some(multiview) = desc.multiview {
-                assert_eq!(ds.target.view.layers, multiview);
-            }
         }
 
         let render_area = vk::Rect2D {
@@ -994,6 +979,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         unsafe {
+            self.current_pipeline_is_multiview = pipeline.is_multiview;
             self.device.raw.cmd_bind_pipeline(
                 self.active,
                 vk::PipelineBindPoint::GRAPHICS,
@@ -1081,6 +1067,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         first_instance: u32,
         instance_count: u32,
     ) {
+        if self.current_pipeline_is_multiview
+            && (first_instance as u64 + instance_count as u64 - 1)
+                > self.device.private_caps.multiview_instance_index_limit as u64
+        {
+            panic!("This vulkan device is affected by [#8333](https://github.com/gfx-rs/wgpu/issues/8333)");
+        }
         unsafe {
             self.device.raw.cmd_draw(
                 self.active,
@@ -1099,6 +1091,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         first_instance: u32,
         instance_count: u32,
     ) {
+        if self.current_pipeline_is_multiview
+            && (first_instance as u64 + instance_count as u64 - 1)
+                > self.device.private_caps.multiview_instance_index_limit as u64
+        {
+            panic!("This vulkan device is affected by [#8333](https://github.com/gfx-rs/wgpu/issues/8333)");
+        }
         unsafe {
             self.device.raw.cmd_draw_indexed(
                 self.active,

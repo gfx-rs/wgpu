@@ -1,8 +1,6 @@
 use alloc::{sync::Arc, vec, vec::Vec};
 use core::{iter, mem};
 
-#[cfg(feature = "trace")]
-use crate::command::Command as TraceCommand;
 use crate::{
     command::{encoder::EncodingState, ArcCommand, EncoderStateError},
     device::{Device, DeviceError, MissingFeatures},
@@ -366,14 +364,6 @@ impl Global {
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
 
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.trace() {
-            list.push(TraceCommand::WriteTimestamp {
-                query_set_id,
-                query_index,
-            });
-        }
-
         cmd_buf_data.push_with(|| -> Result<_, QueryError> {
             Ok(ArcCommand::WriteTimestamp {
                 query_set: self.resolve_query_set(query_set_id)?,
@@ -395,17 +385,6 @@ impl Global {
 
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.trace() {
-            list.push(TraceCommand::ResolveQuerySet {
-                query_set_id,
-                start_query,
-                query_count,
-                destination,
-                destination_offset,
-            });
-        }
 
         cmd_buf_data.push_with(|| -> Result<_, QueryError> {
             Ok(ArcCommand::ResolveQuerySet {

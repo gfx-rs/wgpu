@@ -19,7 +19,6 @@ const INDEXING_FEATURES: wgt::Features = wgt::Features::TEXTURE_BINDING_ARRAY
     .union(wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING)
     .union(wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS)
     .union(wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY);
-
 #[expect(rustdoc::private_intra_doc_links)]
 /// Features supported by a [`vk::PhysicalDevice`] and its extensions.
 ///
@@ -748,6 +747,7 @@ impl PhysicalDeviceFeatures {
 
         if let Some(ref multiview) = self.multiview {
             features.set(F::MULTIVIEW, multiview.multiview != 0);
+            features.set(F::SELECTIVE_MULTIVIEW, multiview.multiview != 0);
         }
 
         features.set(
@@ -989,6 +989,9 @@ pub struct PhysicalDeviceProperties {
     mesh_shader: Option<vk::PhysicalDeviceMeshShaderPropertiesEXT<'static>>,
 
     /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_KHR_multiview` extension.
+    multiview: Option<vk::PhysicalDeviceMultiviewPropertiesKHR<'static>>,
+
     /// `VK_EXT_pci_bus_info` extension.
     pci_bus_info: Option<vk::PhysicalDevicePCIBusInfoPropertiesEXT<'static>>,
 
@@ -1226,7 +1229,7 @@ impl PhysicalDeviceProperties {
         let (
             max_task_workgroup_total_count,
             max_task_workgroups_per_dimension,
-            max_mesh_multiview_count,
+            max_mesh_multiview_view_count,
             max_mesh_output_layers,
         ) = match self.mesh_shader {
             Some(m) => (
@@ -1288,6 +1291,11 @@ impl PhysicalDeviceProperties {
                 properties.max_per_stage_descriptor_acceleration_structures;
         }
 
+        let max_multiview_view_count = self
+            .multiview
+            .map(|a| a.max_multiview_view_count.min(32))
+            .unwrap_or(0);
+
         wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
             max_texture_dimension_2d: limits.max_image_dimension2_d,
@@ -1348,13 +1356,15 @@ impl PhysicalDeviceProperties {
 
             max_task_workgroup_total_count,
             max_task_workgroups_per_dimension,
-            max_mesh_multiview_count,
+            max_mesh_multiview_view_count,
             max_mesh_output_layers,
 
             max_blas_primitive_count,
             max_blas_geometry_count,
             max_tlas_instance_count,
             max_acceleration_structures_per_shader_stage,
+
+            max_multiview_view_count,
         }
     }
 
@@ -1412,6 +1422,9 @@ impl super::InstanceShared {
                 unsafe { self.raw.enumerate_device_extension_properties(phd).unwrap() };
             capabilities.properties = unsafe { self.raw.get_physical_device_properties(phd) };
             capabilities.device_api_version = capabilities.properties.api_version;
+
+            let supports_multiview = capabilities.device_api_version >= vk::API_VERSION_1_1
+                || capabilities.supports_extension(khr::multiview::NAME);
 
             if let Some(ref get_device_properties) = self.get_physical_device_properties {
                 // Get these now to avoid borrowing conflicts later
@@ -1496,6 +1509,13 @@ impl super::InstanceShared {
                     let next = capabilities
                         .mesh_shader
                         .insert(vk::PhysicalDeviceMeshShaderPropertiesEXT::default());
+                    properties2 = properties2.push_next(next);
+                }
+
+                if supports_multiview {
+                    let next = capabilities
+                        .multiview
+                        .insert(vk::PhysicalDeviceMultiviewProperties::default());
                     properties2 = properties2.push_next(next);
                 }
 
@@ -1894,6 +1914,10 @@ impl super::Instance {
             shader_int8: phd_features
                 .shader_float16_int8
                 .is_some_and(|features| features.shader_int8 != 0),
+            multiview_instance_index_limit: phd_capabilities
+                .multiview
+                .map(|a| a.max_multiview_instance_index)
+                .unwrap_or(0),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),

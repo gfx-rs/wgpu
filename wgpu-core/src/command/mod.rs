@@ -31,22 +31,30 @@ mod transition_resources;
 use alloc::{borrow::ToOwned as _, boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::convert::Infallible;
 use core::mem::{self, ManuallyDrop};
-use core::ops;
+use core::{ops, panic};
 
 pub(crate) use self::clear::clear_texture;
+#[cfg(feature = "serde")]
+pub(crate) use self::encoder_command::serde_object_reference_struct;
+#[cfg(any(feature = "trace", feature = "replay"))]
+#[doc(hidden)]
+pub use self::encoder_command::PointerReferences;
 pub use self::{
     bundle::*,
     clear::ClearError,
     compute::*,
-    compute_command::{ArcComputeCommand, ComputeCommand},
+    compute_command::ArcComputeCommand,
     draw::*,
-    encoder_command::{ArcCommand, Command},
+    encoder_command::{ArcCommand, ArcReferences, Command, IdReferences, ReferenceType},
     query::*,
     render::*,
-    render_command::{ArcRenderCommand, RenderCommand},
+    render_command::ArcRenderCommand,
     transfer::*,
 };
 pub(crate) use allocator::CommandAllocator;
+
+/// cbindgen:ignore
+pub use self::{compute_command::ComputeCommand, render_command::RenderCommand};
 
 pub(crate) use timestamp_writes::ArcPassTimestampWrites;
 pub use timestamp_writes::PassTimestampWrites;
@@ -80,9 +88,6 @@ use crate::{hal_label, LabelHelpers};
 use wgt::error::{ErrorType, WebGpuError};
 
 use thiserror::Error;
-
-#[cfg(feature = "trace")]
-type TraceCommand = Command;
 
 /// cbindgen:ignore
 pub type TexelCopyBufferInfo = ffi::TexelCopyBufferInfo;
@@ -148,12 +153,12 @@ pub(crate) enum CommandEncoderStatus {
 }
 
 impl CommandEncoderStatus {
-    #[cfg(feature = "trace")]
-    fn trace(&mut self) -> Option<&mut Vec<TraceCommand>> {
-        match self {
-            Self::Recording(cmd_buf_data) => cmd_buf_data.trace_commands.as_mut(),
-            _ => None,
-        }
+    #[doc(hidden)]
+    fn replay(&mut self, commands: Vec<Command<ArcReferences>>) {
+        let Self::Recording(cmd_buf_data) = self else {
+            panic!("encoder should be in the recording state");
+        };
+        cmd_buf_data.commands.extend(commands);
     }
 
     /// Push a command provided by a closure onto the encoder.
@@ -273,20 +278,6 @@ impl CommandEncoderStatus {
             }
             Self::Consumed => f(None),
             Self::Error(_) => f(None),
-            Self::Transitioning => unreachable!(),
-        }
-    }
-
-    #[cfg(all(feature = "trace", any(feature = "serde", feature = "replay")))]
-    fn get_inner(&mut self) -> &mut CommandBufferMutable {
-        match self {
-            Self::Locked(inner) | Self::Finished(inner) | Self::Recording(inner) => inner,
-            // This is unreachable because this function is only used when
-            // playing back a recorded trace. If only to avoid having to
-            // implement serialization for all the error types, we don't support
-            // storing the errors in a trace.
-            Self::Consumed => unreachable!("command encoder is consumed"),
-            Self::Error(_) => unreachable!("passes in a trace do not store errors"),
             Self::Transitioning => unreachable!(),
         }
     }
@@ -782,10 +773,12 @@ pub struct CommandBufferMutable {
 
     indirect_draw_validation_resources: crate::indirect_validation::DrawResources,
 
-    pub(crate) commands: Vec<ArcCommand>,
+    pub(crate) commands: Vec<Command<ArcReferences>>,
 
+    /// If tracing, `command_encoder_finish` replaces the `Arc`s in `commands`
+    /// with integer pointers, and moves them into `trace_commands`.
     #[cfg(feature = "trace")]
-    pub(crate) trace_commands: Option<Vec<TraceCommand>>,
+    pub(crate) trace_commands: Option<Vec<Command<PointerReferences>>>,
 }
 
 impl CommandBufferMutable {
@@ -972,7 +965,31 @@ impl CommandEncoder {
             }
 
             let mut commands = mem::take(&mut cmd_buf_data.commands);
-            for command in commands.drain(..) {
+            #[cfg(not(feature = "trace"))]
+            let command_iter = commands.drain(..);
+            #[cfg(feature = "trace")]
+            let mut trace_commands = None;
+
+            #[cfg(feature = "trace")]
+            let command_iter = {
+                if self.device.trace.lock().is_some() {
+                    trace_commands = Some(
+                        cmd_buf_data
+                            .trace_commands
+                            .insert(Vec::with_capacity(commands.len())),
+                    );
+                }
+
+                commands.drain(..).inspect(|cmd| {
+                    use crate::device::trace::IntoTrace;
+
+                    if let Some(ref mut trace) = trace_commands {
+                        trace.push(cmd.clone().to_trace());
+                    }
+                })
+            };
+
+            for command in command_iter {
                 if matches!(
                     command,
                     ArcCommand::RunRenderPass { .. } | ArcCommand::RunComputePass { .. }
@@ -1002,6 +1019,7 @@ impl CommandEncoder {
                             depth_stencil_attachment,
                             timestamp_writes,
                             occlusion_query_set,
+                            multiview_mask,
                         } => {
                             api_log!(
                                 "Begin encoding render pass with '{}' label",
@@ -1014,6 +1032,7 @@ impl CommandEncoder {
                                 depth_stencil_attachment,
                                 timestamp_writes,
                                 occlusion_query_set,
+                                multiview_mask,
                             );
                             match res.as_ref() {
                                 Err(err) => api_log!("Finished encoding render pass ({err:?})"),
@@ -1179,6 +1198,26 @@ impl CommandEncoder {
 }
 
 impl CommandBuffer {
+    /// Replay commands from a trace.
+    ///
+    /// This is exposed for the `player` crate only. It is not a public API.
+    /// It is not guaranteed to apply all of the validation that the original
+    /// entrypoints provide.
+    #[doc(hidden)]
+    pub fn from_trace(device: &Arc<Device>, commands: Vec<Command<ArcReferences>>) -> Arc<Self> {
+        let encoder = device.create_command_encoder(&None).unwrap();
+        let mut cmd_enc_status = encoder.data.lock();
+        cmd_enc_status.replay(commands);
+        drop(cmd_enc_status);
+
+        let (cmd_buf, error) = encoder.finish(&wgt::CommandBufferDescriptor { label: None });
+        if let Some(err) = error {
+            panic!("CommandEncoder::finish failed: {err}");
+        }
+
+        cmd_buf
+    }
+
     pub fn take_finished(&self) -> Result<CommandBufferMutable, CommandEncoderError> {
         use CommandEncoderStatus as St;
         match mem::replace(
@@ -1552,22 +1591,31 @@ impl Global {
         self.hub.query_sets.get(query_set_id).get()
     }
 
+    /// Finishes a command encoder, creating a command buffer and returning errors that were
+    /// deferred until now.
+    ///
+    /// The returned `String` is the label of the command encoder, supplied so that `wgpu` can
+    /// include the label when printing deferred errors without having its own copy of the label.
+    /// This is a kludge and should be replaced if we think of a better solution to propagating
+    /// labels.
     pub fn command_encoder_finish(
         &self,
         encoder_id: id::CommandEncoderId,
         desc: &wgt::CommandBufferDescriptor<Label>,
         id_in: Option<id::CommandBufferId>,
-    ) -> (id::CommandBufferId, Option<CommandEncoderError>) {
+    ) -> (id::CommandBufferId, Option<(String, CommandEncoderError)>) {
         profiling::scope!("CommandEncoder::finish");
 
         let hub = &self.hub;
-
         let cmd_enc = hub.command_encoders.get(encoder_id);
 
-        let (cmd_buf, error) = cmd_enc.finish(desc);
+        let (cmd_buf, opt_error) = cmd_enc.finish(desc);
         let cmd_buf_id = hub.command_buffers.prepare(id_in).assign(cmd_buf);
 
-        (cmd_buf_id, error)
+        (
+            cmd_buf_id,
+            opt_error.map(|error| (cmd_enc.label.clone(), error)),
+        )
     }
 
     pub fn command_encoder_push_debug_group(
@@ -1582,11 +1630,6 @@ impl Global {
 
         let cmd_enc = hub.command_encoders.get(encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.trace() {
-            list.push(TraceCommand::PushDebugGroup(label.to_owned()));
-        }
 
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
             Ok(ArcCommand::PushDebugGroup(label.to_owned()))
@@ -1606,11 +1649,6 @@ impl Global {
         let cmd_enc = hub.command_encoders.get(encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
 
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.trace() {
-            list.push(TraceCommand::InsertDebugMarker(label.to_owned()));
-        }
-
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
             Ok(ArcCommand::InsertDebugMarker(label.to_owned()))
         })
@@ -1627,11 +1665,6 @@ impl Global {
 
         let cmd_enc = hub.command_encoders.get(encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.trace() {
-            list.push(TraceCommand::PopDebugGroup);
-        }
 
         cmd_buf_data
             .push_with(|| -> Result<_, CommandEncoderError> { Ok(ArcCommand::PopDebugGroup) })

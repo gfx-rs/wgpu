@@ -24,6 +24,7 @@ use wgt::{
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
+    api_log,
     binding_model::{self, BindGroup, BindGroupLayout, BindGroupLayoutEntryError},
     command, conv,
     device::{
@@ -39,6 +40,7 @@ use crate::{
     lock::{rank, Mutex, RwLock},
     pipeline,
     pool::ResourcePool,
+    present,
     resource::{
         self, Buffer, ExternalTexture, Fallible, Labeled, ParentDevice, QuerySet,
         RawResourceAccess, Sampler, StagingBuffer, Texture, TextureView,
@@ -335,6 +337,34 @@ impl Device {
         } else {
             Err(MissingDownlevelFlags(flags))
         }
+    }
+
+    /// # Safety
+    ///
+    /// - See [wgpu::Device::start_graphics_debugger_capture][api] for details the safety.
+    ///
+    /// [api]: ../../wgpu/struct.Device.html#method.start_graphics_debugger_capture
+    pub unsafe fn start_graphics_debugger_capture(&self) {
+        api_log!("Device::start_graphics_debugger_capture");
+
+        if !self.is_valid() {
+            return;
+        }
+        unsafe { self.raw().start_graphics_debugger_capture() };
+    }
+
+    /// # Safety
+    ///
+    /// - See [wgpu::Device::stop_graphics_debugger_capture][api] for details the safety.
+    ///
+    /// [api]: ../../wgpu/struct.Device.html#method.stop_graphics_debugger_capture
+    pub unsafe fn stop_graphics_debugger_capture(&self) {
+        api_log!("Device::stop_graphics_debugger_capture");
+
+        if !self.is_valid() {
+            return;
+        }
+        unsafe { self.raw().stop_graphics_debugger_capture() };
     }
 }
 
@@ -682,6 +712,38 @@ impl Device {
         assert!(self.queue.set(Arc::downgrade(queue)).is_ok());
     }
 
+    pub fn poll(
+        &self,
+        poll_type: wgt::PollType<crate::SubmissionIndex>,
+    ) -> Result<wgt::PollStatus, WaitIdleError> {
+        let (user_closures, result) = self.poll_and_return_closures(poll_type);
+        user_closures.fire();
+        result
+    }
+
+    /// Poll the device, returning any `UserClosures` that need to be executed.
+    ///
+    /// The caller must invoke the `UserClosures` even if this function returns
+    /// an error. This is an internal helper, used by `Device::poll` and
+    /// `Global::poll_all_devices`, so that `poll_all_devices` can invoke
+    /// closures once after all devices have been polled.
+    pub(crate) fn poll_and_return_closures(
+        &self,
+        poll_type: wgt::PollType<crate::SubmissionIndex>,
+    ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
+        let snatch_guard = self.snatchable_lock.read();
+        let fence = self.fence.read();
+        let maintain_result = self.maintain(fence, poll_type, snatch_guard);
+
+        self.lose_if_oom();
+
+        // Some deferred destroys are scheduled in maintain so run this right after
+        // to avoid holding on to them until the next device poll.
+        self.deferred_resource_destruction();
+
+        maintain_result
+    }
+
     /// Check the current status of the GPU and process any submissions that have
     /// finished.
     ///
@@ -851,7 +913,7 @@ impl Device {
         (user_closures, result)
     }
 
-    pub(crate) fn create_buffer(
+    pub fn create_buffer(
         self: &Arc<Self>,
         desc: &resource::BufferDescriptor,
     ) -> Result<Arc<Buffer>, resource::CreateBufferError> {
@@ -1029,6 +1091,54 @@ impl Device {
         Ok(buffer)
     }
 
+    #[cfg(feature = "replay")]
+    pub fn set_buffer_data(
+        self: &Arc<Self>,
+        buffer: &Arc<Buffer>,
+        offset: wgt::BufferAddress,
+        data: &[u8],
+    ) -> resource::BufferAccessResult {
+        use crate::resource::RawResourceAccess;
+
+        let device = &buffer.device;
+
+        device.check_is_valid()?;
+        buffer.check_usage(wgt::BufferUsages::MAP_WRITE)?;
+
+        let last_submission = device
+            .get_queue()
+            .and_then(|queue| queue.lock_life().get_buffer_latest_submission_index(buffer));
+
+        if let Some(last_submission) = last_submission {
+            device.wait_for_submit(last_submission)?;
+        }
+
+        let snatch_guard = device.snatchable_lock.read();
+        let raw_buf = buffer.try_raw(&snatch_guard)?;
+
+        let mapping = unsafe {
+            device
+                .raw()
+                .map_buffer(raw_buf, offset..offset + data.len() as u64)
+        }
+        .map_err(|e| device.handle_hal_error(e))?;
+
+        unsafe { core::ptr::copy_nonoverlapping(data.as_ptr(), mapping.ptr.as_ptr(), data.len()) };
+
+        if !mapping.is_coherent {
+            #[allow(clippy::single_range_in_vec_init)]
+            unsafe {
+                device
+                    .raw()
+                    .flush_mapped_ranges(raw_buf, &[offset..offset + data.len() as u64])
+            };
+        }
+
+        unsafe { device.raw().unmap_buffer(raw_buf) };
+
+        Ok(())
+    }
+
     pub(crate) fn create_texture_from_hal(
         self: &Arc<Self>,
         hal_texture: Box<dyn hal::DynTexture>,
@@ -1161,7 +1271,7 @@ impl Device {
         }
     }
 
-    pub(crate) fn create_texture(
+    pub fn create_texture(
         self: &Arc<Self>,
         desc: &resource::TextureDescriptor,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
@@ -1499,7 +1609,7 @@ impl Device {
         Ok(texture)
     }
 
-    pub(crate) fn create_texture_view(
+    pub fn create_texture_view(
         self: &Arc<Self>,
         texture: &Arc<Texture>,
         desc: &resource::TextureViewDescriptor,
@@ -1837,7 +1947,7 @@ impl Device {
         Ok(view)
     }
 
-    pub(crate) fn create_external_texture(
+    pub fn create_external_texture(
         self: &Arc<Self>,
         desc: &resource::ExternalTextureDescriptor,
         planes: &[Arc<TextureView>],
@@ -1915,7 +2025,7 @@ impl Device {
         };
         let params = self.create_buffer(&params_desc)?;
         self.get_queue().unwrap().write_buffer(
-            Fallible::Valid(params.clone()),
+            params.clone(),
             0,
             bytemuck::bytes_of(&params_data),
         )?;
@@ -1932,7 +2042,7 @@ impl Device {
         Ok(external_texture)
     }
 
-    pub(crate) fn create_sampler(
+    pub fn create_sampler(
         self: &Arc<Self>,
         desc: &resource::SamplerDescriptor,
     ) -> Result<Arc<Sampler>, resource::CreateSamplerError> {
@@ -2043,7 +2153,7 @@ impl Device {
         Ok(sampler)
     }
 
-    pub(crate) fn create_shader_module<'a>(
+    pub fn create_shader_module<'a>(
         self: &Arc<Self>,
         desc: &pipeline::ShaderModuleDescriptor<'a>,
         source: pipeline::ShaderModuleSource<'a>,
@@ -2171,8 +2281,10 @@ impl Device {
         Ok(module)
     }
 
+    /// Not a public API. For use by `player` only.
     #[allow(unused_unsafe)]
-    pub(crate) unsafe fn create_shader_module_passthrough<'a>(
+    #[doc(hidden)]
+    pub unsafe fn create_shader_module_passthrough<'a>(
         self: &Arc<Self>,
         descriptor: &pipeline::ShaderModuleDescriptorPassthrough<'a>,
     ) -> Result<Arc<pipeline::ShaderModule>, pipeline::CreateShaderModuleError> {
@@ -2315,7 +2427,32 @@ impl Device {
             .collect()
     }
 
-    pub(crate) fn create_bind_group_layout(
+    pub fn create_bind_group_layout(
+        self: &Arc<Self>,
+        desc: &binding_model::BindGroupLayoutDescriptor,
+    ) -> Result<Arc<BindGroupLayout>, binding_model::CreateBindGroupLayoutError> {
+        self.check_is_valid()?;
+
+        let entry_map = bgl::EntryMap::from_entries(&desc.entries)?;
+
+        let bgl_result = self.bgl_pool.get_or_init(entry_map, |entry_map| {
+            let bgl =
+                self.create_bind_group_layout_internal(&desc.label, entry_map, bgl::Origin::Pool)?;
+            bgl.exclusive_pipeline
+                .set(binding_model::ExclusivePipeline::None)
+                .unwrap();
+            Ok(bgl)
+        });
+
+        match bgl_result {
+            Ok(layout) => Ok(layout),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Internal function exposed for use by `player` crate only.
+    #[doc(hidden)]
+    pub fn create_bind_group_layout_internal(
         self: &Arc<Self>,
         label: &crate::Label,
         entry_map: bgl::EntryMap,
@@ -2932,7 +3069,7 @@ impl Device {
 
     // This function expects the provided bind group layout to be resolved
     // (not passing a duplicate) beforehand.
-    pub(crate) fn create_bind_group(
+    pub fn create_bind_group(
         self: &Arc<Self>,
         desc: binding_model::ResolvedBindGroupDescriptor,
     ) -> Result<Arc<BindGroup>, binding_model::CreateBindGroupError> {
@@ -3387,7 +3524,7 @@ impl Device {
         }
     }
 
-    pub(crate) fn create_pipeline_layout(
+    pub fn create_pipeline_layout(
         self: &Arc<Self>,
         desc: &binding_model::ResolvedPipelineLayoutDescriptor,
     ) -> Result<Arc<binding_model::PipelineLayout>, binding_model::CreatePipelineLayoutError> {
@@ -3518,7 +3655,7 @@ impl Device {
                 match unique_bind_group_layouts.entry(bgl_entry_map) {
                     hashbrown::hash_map::Entry::Occupied(v) => Ok(Arc::clone(v.get())),
                     hashbrown::hash_map::Entry::Vacant(e) => {
-                        match self.create_bind_group_layout(
+                        match self.create_bind_group_layout_internal(
                             &None,
                             e.key().clone(),
                             bgl::Origin::Derived,
@@ -3544,7 +3681,7 @@ impl Device {
         Ok(layout)
     }
 
-    pub(crate) fn create_compute_pipeline(
+    pub fn create_compute_pipeline(
         self: &Arc<Self>,
         desc: pipeline::ResolvedComputePipelineDescriptor,
     ) -> Result<Arc<pipeline::ComputePipeline>, pipeline::CreateComputePipelineError> {
@@ -3677,7 +3814,7 @@ impl Device {
         Ok(pipeline)
     }
 
-    pub(crate) fn create_render_pipeline(
+    pub fn create_render_pipeline(
         self: &Arc<Self>,
         desc: pipeline::ResolvedGeneralRenderPipelineDescriptor,
     ) -> Result<Arc<pipeline::RenderPipeline>, pipeline::CreateRenderPipelineError> {
@@ -4305,8 +4442,11 @@ impl Device {
         };
 
         // Multiview is only supported if the feature is enabled
-        if desc.multiview.is_some() {
+        if let Some(mv_mask) = desc.multiview_mask {
             self.require_features(wgt::Features::MULTIVIEW)?;
+            if !(mv_mask.get() + 1).is_power_of_two() {
+                self.require_features(wgt::Features::SELECTIVE_MULTIVIEW)?;
+            }
         }
 
         if !self
@@ -4356,7 +4496,7 @@ impl Device {
                 multisample: desc.multisample,
                 fragment_stage,
                 color_targets,
-                multiview: desc.multiview,
+                multiview_mask: desc.multiview_mask,
                 cache: cache.as_ref().map(|it| it.raw()),
             };
             unsafe { self.raw().create_render_pipeline(&pipeline_desc) }.map_err(
@@ -4390,7 +4530,7 @@ impl Device {
                 depth_stencil: depth_stencil_state.as_ref().map(|state| state.format),
             },
             sample_count: samples,
-            multiview: desc.multiview,
+            multiview_mask: desc.multiview_mask,
         };
 
         let mut flags = pipeline::PipelineFlags::empty();
@@ -4572,7 +4712,7 @@ impl Device {
         Ok(())
     }
 
-    pub(crate) fn create_query_set(
+    pub fn create_query_set(
         self: &Arc<Self>,
         desc: &resource::QuerySetDescriptor,
     ) -> Result<Arc<QuerySet>, resource::CreateQuerySetError> {
@@ -4617,6 +4757,274 @@ impl Device {
         let query_set = Arc::new(query_set);
 
         Ok(query_set)
+    }
+
+    pub fn configure_surface(
+        self: &Arc<Self>,
+        surface: &crate::instance::Surface,
+        config: &wgt::SurfaceConfiguration<Vec<TextureFormat>>,
+    ) -> Option<present::ConfigureSurfaceError> {
+        use present::ConfigureSurfaceError as E;
+        profiling::scope!("surface_configure");
+
+        fn validate_surface_configuration(
+            config: &mut hal::SurfaceConfiguration,
+            caps: &hal::SurfaceCapabilities,
+            max_texture_dimension_2d: u32,
+        ) -> Result<(), E> {
+            let width = config.extent.width;
+            let height = config.extent.height;
+
+            if width > max_texture_dimension_2d || height > max_texture_dimension_2d {
+                return Err(E::TooLarge {
+                    width,
+                    height,
+                    max_texture_dimension_2d,
+                });
+            }
+
+            if !caps.present_modes.contains(&config.present_mode) {
+                // Automatic present mode checks.
+                //
+                // The "Automatic" modes are never supported by the backends.
+                let fallbacks = match config.present_mode {
+                    wgt::PresentMode::AutoVsync => {
+                        &[wgt::PresentMode::FifoRelaxed, wgt::PresentMode::Fifo][..]
+                    }
+                    // Always end in FIFO to make sure it's always supported
+                    wgt::PresentMode::AutoNoVsync => &[
+                        wgt::PresentMode::Immediate,
+                        wgt::PresentMode::Mailbox,
+                        wgt::PresentMode::Fifo,
+                    ][..],
+                    _ => {
+                        return Err(E::UnsupportedPresentMode {
+                            requested: config.present_mode,
+                            available: caps.present_modes.clone(),
+                        });
+                    }
+                };
+
+                let new_mode = fallbacks
+                    .iter()
+                    .copied()
+                    .find(|fallback| caps.present_modes.contains(fallback))
+                    .unwrap_or_else(|| {
+                        unreachable!(
+                            "Fallback system failed to choose present mode. \
+                            This is a bug. Mode: {:?}, Options: {:?}",
+                            config.present_mode, &caps.present_modes
+                        );
+                    });
+
+                api_log!(
+                    "Automatically choosing presentation mode by rule {:?}. Chose {new_mode:?}",
+                    config.present_mode
+                );
+                config.present_mode = new_mode;
+            }
+            if !caps.formats.contains(&config.format) {
+                return Err(E::UnsupportedFormat {
+                    requested: config.format,
+                    available: caps.formats.clone(),
+                });
+            }
+            if !caps
+                .composite_alpha_modes
+                .contains(&config.composite_alpha_mode)
+            {
+                let new_alpha_mode = 'alpha: {
+                    // Automatic alpha mode checks.
+                    let fallbacks = match config.composite_alpha_mode {
+                        wgt::CompositeAlphaMode::Auto => &[
+                            wgt::CompositeAlphaMode::Opaque,
+                            wgt::CompositeAlphaMode::Inherit,
+                        ][..],
+                        _ => {
+                            return Err(E::UnsupportedAlphaMode {
+                                requested: config.composite_alpha_mode,
+                                available: caps.composite_alpha_modes.clone(),
+                            });
+                        }
+                    };
+
+                    for &fallback in fallbacks {
+                        if caps.composite_alpha_modes.contains(&fallback) {
+                            break 'alpha fallback;
+                        }
+                    }
+
+                    unreachable!(
+                        "Fallback system failed to choose alpha mode. This is a bug. \
+                                  AlphaMode: {:?}, Options: {:?}",
+                        config.composite_alpha_mode, &caps.composite_alpha_modes
+                    );
+                };
+
+                api_log!(
+                    "Automatically choosing alpha mode by rule {:?}. Chose {new_alpha_mode:?}",
+                    config.composite_alpha_mode
+                );
+                config.composite_alpha_mode = new_alpha_mode;
+            }
+            if !caps.usage.contains(config.usage) {
+                return Err(E::UnsupportedUsage {
+                    requested: config.usage,
+                    available: caps.usage,
+                });
+            }
+            if width == 0 || height == 0 {
+                return Err(E::ZeroArea);
+            }
+            Ok(())
+        }
+
+        log::debug!("configuring surface with {config:?}");
+
+        let error = 'error: {
+            // User callbacks must not be called while we are holding locks.
+            let user_callbacks;
+            {
+                if let Err(e) = self.check_is_valid() {
+                    break 'error e.into();
+                }
+
+                let caps = match surface.get_capabilities(&self.adapter) {
+                    Ok(caps) => caps,
+                    Err(_) => break 'error E::UnsupportedQueueFamily,
+                };
+
+                let mut hal_view_formats = Vec::new();
+                for format in config.view_formats.iter() {
+                    if *format == config.format {
+                        continue;
+                    }
+                    if !caps.formats.contains(&config.format) {
+                        break 'error E::UnsupportedFormat {
+                            requested: config.format,
+                            available: caps.formats,
+                        };
+                    }
+                    if config.format.remove_srgb_suffix() != format.remove_srgb_suffix() {
+                        break 'error E::InvalidViewFormat(*format, config.format);
+                    }
+                    hal_view_formats.push(*format);
+                }
+
+                if !hal_view_formats.is_empty() {
+                    if let Err(missing_flag) =
+                        self.require_downlevel_flags(wgt::DownlevelFlags::SURFACE_VIEW_FORMATS)
+                    {
+                        break 'error E::MissingDownlevelFlags(missing_flag);
+                    }
+                }
+
+                let maximum_frame_latency = config.desired_maximum_frame_latency.clamp(
+                    *caps.maximum_frame_latency.start(),
+                    *caps.maximum_frame_latency.end(),
+                );
+                let mut hal_config = hal::SurfaceConfiguration {
+                    maximum_frame_latency,
+                    present_mode: config.present_mode,
+                    composite_alpha_mode: config.alpha_mode,
+                    format: config.format,
+                    extent: wgt::Extent3d {
+                        width: config.width,
+                        height: config.height,
+                        depth_or_array_layers: 1,
+                    },
+                    usage: conv::map_texture_usage(
+                        config.usage,
+                        hal::FormatAspects::COLOR,
+                        wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY
+                            | wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY
+                            | wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE,
+                    ),
+                    view_formats: hal_view_formats,
+                };
+
+                if let Err(error) = validate_surface_configuration(
+                    &mut hal_config,
+                    &caps,
+                    self.limits.max_texture_dimension_2d,
+                ) {
+                    break 'error error;
+                }
+
+                // Wait for all work to finish before configuring the surface.
+                let snatch_guard = self.snatchable_lock.read();
+                let fence = self.fence.read();
+
+                let maintain_result;
+                (user_callbacks, maintain_result) =
+                    self.maintain(fence, wgt::PollType::wait_indefinitely(), snatch_guard);
+
+                match maintain_result {
+                    // We're happy
+                    Ok(wgt::PollStatus::QueueEmpty) => {}
+                    Ok(wgt::PollStatus::WaitSucceeded) => {
+                        // After the wait, the queue should be empty. It can only be non-empty
+                        // if another thread is submitting at the same time.
+                        break 'error E::GpuWaitTimeout;
+                    }
+                    Ok(wgt::PollStatus::Poll) => {
+                        unreachable!("Cannot get a Poll result from a Wait action.")
+                    }
+                    Err(WaitIdleError::Timeout) if cfg!(target_arch = "wasm32") => {
+                        // On wasm, you cannot actually successfully wait for the surface.
+                        // However WebGL does not actually require you do this, so ignoring
+                        // the failure is totally fine. See https://github.com/gfx-rs/wgpu/issues/7363
+                    }
+                    Err(e) => {
+                        break 'error e.into();
+                    }
+                }
+
+                // All textures must be destroyed before the surface can be re-configured.
+                if let Some(present) = surface.presentation.lock().take() {
+                    if present.acquired_texture.is_some() {
+                        break 'error E::PreviousOutputExists;
+                    }
+                }
+
+                // TODO: Texture views may still be alive that point to the texture.
+                // this will allow the user to render to the surface texture, long after
+                // it has been removed.
+                //
+                // https://github.com/gfx-rs/wgpu/issues/4105
+
+                let surface_raw = surface.raw(self.backend()).unwrap();
+                match unsafe { surface_raw.configure(self.raw(), &hal_config) } {
+                    Ok(()) => (),
+                    Err(error) => {
+                        break 'error match error {
+                            hal::SurfaceError::Outdated | hal::SurfaceError::Lost => {
+                                E::InvalidSurface
+                            }
+                            hal::SurfaceError::Device(error) => {
+                                E::Device(self.handle_hal_error(error))
+                            }
+                            hal::SurfaceError::Other(message) => {
+                                log::error!("surface configuration failed: {message}");
+                                E::InvalidSurface
+                            }
+                        }
+                    }
+                }
+
+                let mut presentation = surface.presentation.lock();
+                *presentation = Some(present::Presentation {
+                    device: Arc::clone(self),
+                    config: config.clone(),
+                    acquired_texture: None,
+                });
+            }
+
+            user_callbacks.fire();
+            return None;
+        };
+
+        Some(error)
     }
 
     fn lose(&self, message: &str) {

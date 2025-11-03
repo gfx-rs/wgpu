@@ -56,7 +56,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
                     bias: wgpu::DepthBiasState::default(),
                 }),
                 multisample: wgpu::MultisampleState::default(),
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
 
@@ -84,6 +84,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: Some(&query_set),
+                multiview_mask: None,
             });
             render_pass.set_pipeline(&pipeline);
 

@@ -9,6 +9,7 @@ use metal::{
     MTLIndexType, MTLLoadAction, MTLPrimitiveType, MTLScissorRect, MTLSize, MTLStoreAction,
     MTLViewport, MTLVisibilityResultMode, NSRange,
 };
+use smallvec::SmallVec;
 
 // has to match `Temp::binding_sizes`
 const WORD_SIZE: usize = 4;
@@ -653,9 +654,33 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 descriptor
                     .set_visibility_result_buffer(Some(occlusion_query_set.raw_buffer.as_ref()))
             }
-
+            // This strangely isn't mentioned in https://developer.apple.com/documentation/metal/improving-rendering-performance-with-vertex-amplification.
+            // The docs for [`renderTargetArrayLength`](https://developer.apple.com/documentation/metal/mtlrenderpassdescriptor/rendertargetarraylength)
+            // also say "The number of active layers that all attachments must have for layered rendering," implying it is only for layered rendering.
+            // However, when I don't set this, I get undefined behavior in nonzero layers, and all non-apple examples of vertex amplification set it.
+            // So this is just one of those undocumented requirements.
+            if let Some(mv) = desc.multiview_mask {
+                descriptor.set_render_target_array_length(32 - mv.leading_zeros() as u64);
+            }
             let raw = self.raw_cmd_buf.as_ref().unwrap();
             let encoder = raw.new_render_command_encoder(descriptor);
+            if let Some(mv) = desc.multiview_mask {
+                // Most likely the API just wasn't thought about enough. It's not like they ever allow you
+                // to use enough views to overflow a 32-bit bitmask.
+                let mv = mv.get();
+                let msb = 32 - mv.leading_zeros();
+                let mut maps: SmallVec<[metal::VertexAmplificationViewMapping; 32]> =
+                    SmallVec::new();
+                for i in 0..msb {
+                    if (mv & (1 << i)) != 0 {
+                        maps.push(metal::VertexAmplificationViewMapping {
+                            renderTargetArrayIndexOffset: i,
+                            viewportArrayIndexOffset: i,
+                        });
+                    }
+                }
+                encoder.set_vertex_amplification_count(mv.count_ones() as u64, Some(&maps));
+            }
             if let Some(label) = desc.label {
                 encoder.set_label(label);
             }
