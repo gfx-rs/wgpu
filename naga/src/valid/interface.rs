@@ -397,9 +397,9 @@ impl VaryingContext<'_> {
                                 scalar: crate::Scalar::U32,
                             },
                     ),
-                    // Validated elsewhere
+                    // Validated elsewhere, shouldn't be here
                     Bi::VertexCount | Bi::PrimitiveCount | Bi::Vertices | Bi::Primitives => {
-                        (true, true)
+                        (false, true)
                     }
                 };
 
