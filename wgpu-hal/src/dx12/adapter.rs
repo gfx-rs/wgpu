@@ -180,9 +180,9 @@ impl super::Adapter {
                 && features2.DepthBoundsTestSupported.as_bool()
         };
 
-        let casting_fully_typed_format_supported = {
+        let (casting_fully_typed_format_supported, view_instancing) = {
             let mut features3 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS3::default();
-            unsafe {
+            if unsafe {
                 device.CheckFeatureSupport(
                     Direct3D12::D3D12_FEATURE_D3D12_OPTIONS3,
                     <*mut _>::cast(&mut features3),
@@ -190,7 +190,14 @@ impl super::Adapter {
                 )
             }
             .is_ok()
-                && features3.CastingFullyTypedFormatSupported.as_bool()
+            {
+                (
+                    features3.CastingFullyTypedFormatSupported.as_bool(),
+                    features3.ViewInstancingTier.0 >= Direct3D12::D3D12_VIEW_INSTANCING_TIER_1.0,
+                )
+            } else {
+                (false, false)
+            }
         };
 
         let heap_create_not_zeroed = {
@@ -586,6 +593,15 @@ impl super::Adapter {
             shader_barycentrics_supported,
         );
 
+        // Re-enable this when multiview is supported on DX12
+        // features.set(wgt::Features::MULTIVIEW, view_instancing);
+        // features.set(wgt::Features::SELECTIVE_MULTIVIEW, view_instancing);
+
+        features.set(
+            wgt::Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
+            mesh_shader_supported && view_instancing,
+        );
+
         // TODO: Determine if IPresentationManager is supported
         let presentation_timer = auxil::dxgi::time::PresentationTimer::new_dxgi();
 
@@ -611,6 +627,9 @@ impl super::Adapter {
         } else {
             max_srv_count / 2
         };
+
+        // See https://microsoft.github.io/DirectX-Specs/d3d/ViewInstancing.html#maximum-viewinstancecount
+        let max_multiview_view_count = if view_instancing { 4 } else { 0 };
 
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
@@ -711,7 +730,11 @@ impl super::Adapter {
                     max_task_workgroups_per_dimension:
                         Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
                     // Multiview not supported by WGPU yet
-                    max_mesh_multiview_count: 0,
+                    max_mesh_multiview_view_count: if mesh_shader_supported {
+                        max_multiview_view_count
+                    } else {
+                        0
+                    },
                     // This seems to be right, and I can't find anything to suggest it would be less than the 2048 provided here
                     max_mesh_output_layers: Direct3D12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION,
 
@@ -735,6 +758,8 @@ impl super::Adapter {
                     } else {
                         0
                     },
+
+                    max_multiview_view_count,
                 },
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(

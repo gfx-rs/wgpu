@@ -828,13 +828,15 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_task_workgroup_total_count: wgt::Limits::default().max_task_workgroup_total_count,
         max_task_workgroups_per_dimension: wgt::Limits::default().max_task_workgroups_per_dimension,
         max_mesh_output_layers: wgt::Limits::default().max_mesh_output_layers,
-        max_mesh_multiview_count: wgt::Limits::default().max_mesh_multiview_count,
+        max_mesh_multiview_view_count: wgt::Limits::default().max_mesh_multiview_view_count,
 
         max_blas_primitive_count: wgt::Limits::default().max_blas_primitive_count,
         max_blas_geometry_count: wgt::Limits::default().max_blas_geometry_count,
         max_tlas_instance_count: wgt::Limits::default().max_tlas_instance_count,
         max_acceleration_structures_per_shader_stage: wgt::Limits::default()
             .max_acceleration_structures_per_shader_stage,
+
+        max_multiview_view_count: wgt::Limits::default().max_multiview_view_count,
     }
 }
 

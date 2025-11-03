@@ -1469,6 +1469,11 @@ impl crate::Device for super::Device {
             if let Some(name) = desc.label {
                 descriptor_fn!(set_label(name));
             }
+            if let Some(mv) = desc.multiview_mask {
+                descriptor_fn!(set_max_vertex_amplification_count(
+                    mv.get().count_ones() as u64
+                ));
+            }
 
             // Create the pipeline from descriptor
             let raw = match descriptor {

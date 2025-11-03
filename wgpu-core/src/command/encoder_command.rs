@@ -1,4 +1,4 @@
-use core::convert::Infallible;
+use core::{convert::Infallible, num::NonZero};
 
 use alloc::{string::String, sync::Arc, vec::Vec};
 #[cfg(feature = "serde")]
@@ -171,6 +171,7 @@ pub enum Command<R: ReferenceType> {
             Option<crate::command::ResolvedRenderPassDepthStencilAttachment<R::TextureView>>,
         timestamp_writes: Option<crate::command::PassTimestampWrites<R::QuerySet>>,
         occlusion_query_set: Option<R::QuerySet>,
+        multiview_mask: Option<NonZero<u32>>,
     },
     BuildAccelerationStructures {
         blas: Vec<crate::ray_tracing::OwnedBlasBuildEntry<R>>,

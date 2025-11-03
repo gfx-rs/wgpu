@@ -47,7 +47,7 @@ fn test_planar_texture_creation_sampling(
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -101,6 +101,7 @@ fn test_planar_texture_creation_sampling(
         depth_stencil_attachment: None,
         timestamp_writes: None,
         occlusion_query_set: None,
+        multiview_mask: None,
     });
     rpass.set_pipeline(&pipeline);
     rpass.set_bind_group(0, &bind_group, &[]);
@@ -142,7 +143,7 @@ fn test_planar_texture_rendering(
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -170,7 +171,7 @@ fn test_planar_texture_rendering(
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -190,6 +191,7 @@ fn test_planar_texture_rendering(
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
         rpass.set_pipeline(&y_pipeline);
         rpass.draw(0..3, 0..1);
@@ -206,6 +208,7 @@ fn test_planar_texture_rendering(
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
         rpass.set_pipeline(&uv_pipeline);
         rpass.draw(0..3, 0..1);

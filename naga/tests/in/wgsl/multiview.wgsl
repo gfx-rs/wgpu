@@ -1,2 +1,2 @@
 @fragment
-fn main(@builtin(view_index) view_index: i32) {}
+fn main(@builtin(view_index) view_index: u32) {}

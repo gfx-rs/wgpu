@@ -258,6 +258,7 @@ fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             pass.set_pipeline(&pipeline);
             pass.draw_mesh_tasks(1, 1, 1);
@@ -364,6 +365,7 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
             }),
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
         pass.set_pipeline(&pipeline);
         match draw_type {

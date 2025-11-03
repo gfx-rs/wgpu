@@ -68,7 +68,7 @@ async fn run(_path: Option<String>) {
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     });
 
@@ -95,6 +95,7 @@ async fn run(_path: Option<String>) {
             depth_stencil_attachment: None,
             occlusion_query_set: None,
             timestamp_writes: None,
+            multiview_mask: None,
         });
         render_pass.set_pipeline(&pipeline);
         render_pass.draw(0..3, 0..1);
