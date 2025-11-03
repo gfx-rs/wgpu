@@ -22,7 +22,6 @@ mod adapter;
 mod command;
 mod conv;
 mod device;
-mod layer_observer;
 mod surface;
 mod time;
 
@@ -33,10 +32,11 @@ use arrayvec::ArrayVec;
 use bitflags::bitflags;
 use hashbrown::HashMap;
 use metal::{
-    foreign_types::ForeignTypeRef as _, MTLArgumentBuffersTier, MTLBuffer, MTLCommandBufferStatus,
-    MTLCullMode, MTLDepthClipMode, MTLIndexType, MTLLanguageVersion, MTLPrimitiveType,
-    MTLReadWriteTextureTier, MTLRenderStages, MTLResource, MTLResourceUsage, MTLSamplerState,
-    MTLSize, MTLTexture, MTLTextureType, MTLTriangleFillMode, MTLWinding,
+    foreign_types::{ForeignType as _, ForeignTypeRef as _},
+    MTLArgumentBuffersTier, MTLBuffer, MTLCommandBufferStatus, MTLCullMode, MTLDepthClipMode,
+    MTLIndexType, MTLLanguageVersion, MTLPrimitiveType, MTLReadWriteTextureTier, MTLRenderStages,
+    MTLResource, MTLResourceUsage, MTLSamplerState, MTLSize, MTLTexture, MTLTextureType,
+    MTLTriangleFillMode, MTLWinding,
 };
 use naga::FastHashMap;
 use parking_lot::{Mutex, RwLock};
@@ -106,7 +106,7 @@ pub struct Instance {}
 
 impl Instance {
     pub fn create_surface_from_layer(&self, layer: &metal::MetalLayerRef) -> Surface {
-        unsafe { Surface::from_layer(layer) }
+        Surface::from_layer(layer)
     }
 }
 
@@ -125,19 +125,25 @@ impl crate::Instance for Instance {
         _display_handle: raw_window_handle::RawDisplayHandle,
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Surface, crate::InstanceError> {
-        match window_handle {
-            #[cfg(any(target_os = "ios", target_os = "visionos"))]
-            raw_window_handle::RawWindowHandle::UiKit(handle) => {
-                Ok(unsafe { Surface::from_view(handle.ui_view.cast()) })
+        let layer = match window_handle {
+            raw_window_handle::RawWindowHandle::AppKit(handle) => unsafe {
+                raw_window_metal::Layer::from_ns_view(handle.ns_view)
+            },
+            raw_window_handle::RawWindowHandle::UiKit(handle) => unsafe {
+                raw_window_metal::Layer::from_ui_view(handle.ui_view)
+            },
+            _ => {
+                return Err(crate::InstanceError::new(format!(
+                    "window handle {window_handle:?} is not a Metal-compatible handle"
+                )))
             }
-            #[cfg(target_os = "macos")]
-            raw_window_handle::RawWindowHandle::AppKit(handle) => {
-                Ok(unsafe { Surface::from_view(handle.ns_view.cast()) })
-            }
-            _ => Err(crate::InstanceError::new(format!(
-                "window handle {window_handle:?} is not a Metal-compatible handle"
-            ))),
-        }
+        };
+
+        // SAFETY: The layer is an initialized instance of `CAMetalLayer`, and
+        // we transfer the retain count to `MetalLayer` using `into_raw`.
+        let layer = unsafe { metal::MetalLayer::from_ptr(layer.into_raw().cast().as_ptr()) };
+
+        Ok(Surface::new(layer))
     }
 
     unsafe fn enumerate_adapters(

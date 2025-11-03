@@ -60,7 +60,7 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 # exclude the Vulkan backend on MacOS unless a separate feature `vulkan-portability` is enabled. In response
 # to these features, it enables features of platform specific crates. For example, the `vulkan` feature in wgpu-core
 # enables the `vulkan` feature in `wgpu-core-deps-windows-linux-android` which in turn enables the
-# `vulkan` feature in `wgpu-hal` _only_ on those platforms. If you enable the `vulkan-portability` feature, it 
+# `vulkan` feature in `wgpu-hal` _only_ on those platforms. If you enable the `vulkan-portability` feature, it
 # will enable the `vulkan` feature in `wgpu-core-deps-apple`. The only way to do this is unfortunately to have
 # a separate crate for each platform category that participates in the feature unification.
 #
@@ -85,6 +85,7 @@ metal = [
     "dep:parking_lot",
     "dep:profiling",
     "dep:smallvec",
+    "dep:raw-window-metal",
 ]
 vulkan = [
     "naga/spv-out",
@@ -100,6 +101,7 @@ vulkan = [
     "dep:ordered-float",
     "dep:parking_lot",
     "dep:profiling",
+    "dep:raw-window-metal",
     "dep:smallvec",
     "dep:windows",
     "gpu-allocator/vulkan",
@@ -283,6 +285,9 @@ block = { workspace = true, optional = true }
 core-graphics-types = { workspace = true, optional = true }
 metal = { workspace = true, optional = true }
 objc = { workspace = true, optional = true }
+
+# backend: Metal + Vulkan
+raw-window-metal = { workspace = true, optional = true }
 
 #########################
 ### Platform: Android ###
