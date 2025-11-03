@@ -6,7 +6,11 @@ use crate::Span;
 
 use alloc::boxed::Box;
 
-pub fn map_address_space(word: &str, span: Span) -> Result<'_, crate::AddressSpace> {
+pub fn map_address_space<'a>(
+    word: &str,
+    span: Span,
+    enable_extensions: &EnableExtensions,
+) -> Result<'a, crate::AddressSpace> {
     match word {
         "private" => Ok(crate::AddressSpace::Private),
         "workgroup" => Ok(crate::AddressSpace::WorkGroup),
@@ -16,7 +20,16 @@ pub fn map_address_space(word: &str, span: Span) -> Result<'_, crate::AddressSpa
         }),
         "push_constant" => Ok(crate::AddressSpace::PushConstant),
         "function" => Ok(crate::AddressSpace::Function),
-        "task_payload" => Ok(crate::AddressSpace::TaskPayload),
+        "task_payload" => {
+            if enable_extensions.contains(ImplementedEnableExtension::MeshShader) {
+                Ok(crate::AddressSpace::TaskPayload)
+            } else {
+                Err(Box::new(Error::EnableExtensionNotEnabled {
+                    span,
+                    kind: ImplementedEnableExtension::MeshShader.into(),
+                }))
+            }
+        }
         _ => Err(Box::new(Error::UnknownAddressSpace(span))),
     }
 }
@@ -53,7 +66,7 @@ pub fn map_built_in(
         "subgroup_invocation_id" => crate::BuiltIn::SubgroupInvocationId,
         // mesh
         "cull_primitive" => crate::BuiltIn::CullPrimitive,
-        "vertex_indices" => crate::BuiltIn::PointIndex,
+        "point_index" => crate::BuiltIn::PointIndex,
         "line_indices" => crate::BuiltIn::LineIndices,
         "triangle_indices" => crate::BuiltIn::TriangleIndices,
         "mesh_task_size" => crate::BuiltIn::MeshTaskSize,
@@ -70,6 +83,21 @@ pub fn map_built_in(
                 return Err(Box::new(Error::EnableExtensionNotEnabled {
                     span,
                     kind: ImplementedEnableExtension::ClipDistances.into(),
+                }));
+            }
+        }
+        crate::BuiltIn::CullPrimitive
+        | crate::BuiltIn::PointIndex
+        | crate::BuiltIn::LineIndices
+        | crate::BuiltIn::TriangleIndices
+        | crate::BuiltIn::VertexCount
+        | crate::BuiltIn::Vertices
+        | crate::BuiltIn::PrimitiveCount
+        | crate::BuiltIn::Primitives => {
+            if !enable_extensions.contains(ImplementedEnableExtension::MeshShader) {
+                return Err(Box::new(Error::EnableExtensionNotEnabled {
+                    span,
+                    kind: ImplementedEnableExtension::MeshShader.into(),
                 }));
             }
         }

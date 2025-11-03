@@ -240,6 +240,15 @@ impl<'a> BindingParser<'a> {
                 lexer.expect(Token::Paren(')'))?;
             }
             "per_primitive" => {
+                if !lexer
+                    .enable_extensions
+                    .contains(ImplementedEnableExtension::MeshShader)
+                {
+                    return Err(Box::new(Error::EnableExtensionNotEnabled {
+                        span: name_span,
+                        kind: ImplementedEnableExtension::MeshShader.into(),
+                    }));
+                }
                 self.per_primitive.set((), name_span)?;
             }
             _ => return Err(Box::new(Error::UnknownAttribute(name_span))),
@@ -1324,7 +1333,7 @@ impl Parser {
                     };
                     crate::AddressSpace::Storage { access }
                 }
-                _ => conv::map_address_space(class_str, span)?,
+                _ => conv::map_address_space(class_str, span, &lexer.enable_extensions)?,
             };
             lexer.expect(Token::Paren('>'))?;
         }
@@ -1697,7 +1706,7 @@ impl Parser {
             "ptr" => {
                 lexer.expect_generic_paren('<')?;
                 let (ident, span) = lexer.next_ident_with_span()?;
-                let mut space = conv::map_address_space(ident, span)?;
+                let mut space = conv::map_address_space(ident, span, &lexer.enable_extensions)?;
                 lexer.expect(Token::Separator(','))?;
                 let base = self.type_decl(lexer, ctx)?;
                 if let crate::AddressSpace::Storage { ref mut access } = space {
@@ -2865,10 +2874,28 @@ impl Parser {
                     compute_like_span = name_span;
                 }
                 "task" => {
+                    if !lexer
+                        .enable_extensions
+                        .contains(ImplementedEnableExtension::MeshShader)
+                    {
+                        return Err(Box::new(Error::EnableExtensionNotEnabled {
+                            span: name_span,
+                            kind: ImplementedEnableExtension::MeshShader.into(),
+                        }));
+                    }
                     stage.set(ShaderStage::Task, name_span)?;
                     compute_like_span = name_span;
                 }
                 "mesh" => {
+                    if !lexer
+                        .enable_extensions
+                        .contains(ImplementedEnableExtension::MeshShader)
+                    {
+                        return Err(Box::new(Error::EnableExtensionNotEnabled {
+                            span: name_span,
+                            kind: ImplementedEnableExtension::MeshShader.into(),
+                        }));
+                    }
                     stage.set(ShaderStage::Mesh, name_span)?;
                     compute_like_span = name_span;
 
@@ -2877,6 +2904,15 @@ impl Parser {
                     lexer.expect(Token::Paren(')'))?;
                 }
                 "payload" => {
+                    if !lexer
+                        .enable_extensions
+                        .contains(ImplementedEnableExtension::MeshShader)
+                    {
+                        return Err(Box::new(Error::EnableExtensionNotEnabled {
+                            span: name_span,
+                            kind: ImplementedEnableExtension::MeshShader.into(),
+                        }));
+                    }
                     lexer.expect(Token::Paren('('))?;
                     payload.set(lexer.next_ident_with_span()?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;

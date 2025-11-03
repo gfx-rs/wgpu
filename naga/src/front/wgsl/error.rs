@@ -1375,7 +1375,6 @@ impl<'a> Error<'a> {
             },
             Error::ExpectedGlobalVariable { name_span } => ParseError {
                 message: "expected global variable".to_string(),
-                // TODO: I would like to also include the global declaration span
                 labels: vec![(name_span, "variable used here".into())],
                 notes: vec![],
             },
