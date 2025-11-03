@@ -674,7 +674,7 @@ impl Player {
             depth_stencil: desc.depth_stencil,
             multisample: desc.multisample,
             fragment,
-            multiview: desc.multiview,
+            multiview_mask: desc.multiview_mask,
             cache: desc.cache.map(|id| self.resolve_pipeline_cache_id(id)),
         }
     }
@@ -851,6 +851,7 @@ impl Player {
                 depth_stencil_attachment,
                 timestamp_writes,
                 occlusion_query_set,
+                multiview_mask,
             } => Command::RunRenderPass {
                 pass: self.resolve_render_pass(pass),
                 color_attachments: self.resolve_color_attachments(color_attachments),
@@ -858,6 +859,7 @@ impl Player {
                     .map(|att| self.resolve_depth_stencil_attachment(att)),
                 timestamp_writes: timestamp_writes.map(|tw| self.resolve_pass_timestamp_writes(tw)),
                 occlusion_query_set: occlusion_query_set.map(|qs| self.resolve_query_set_id(qs)),
+                multiview_mask,
             },
             Command::BuildAccelerationStructures { blas, tlas } => {
                 Command::BuildAccelerationStructures {

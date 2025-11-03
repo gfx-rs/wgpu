@@ -1019,6 +1019,7 @@ impl CommandEncoder {
                             depth_stencil_attachment,
                             timestamp_writes,
                             occlusion_query_set,
+                            multiview_mask,
                         } => {
                             api_log!(
                                 "Begin encoding render pass with '{}' label",
@@ -1031,6 +1032,7 @@ impl CommandEncoder {
                                 depth_stencil_attachment,
                                 timestamp_writes,
                                 occlusion_query_set,
+                                multiview_mask,
                             );
                             match res.as_ref() {
                                 Err(err) => api_log!("Finished encoding render pass ({err:?})"),

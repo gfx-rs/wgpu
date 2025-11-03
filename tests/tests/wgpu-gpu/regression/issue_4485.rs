@@ -68,7 +68,7 @@ async fn test_impl(ctx: &TestingContext) {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -98,6 +98,7 @@ async fn test_impl(ctx: &TestingContext) {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             render_pass.set_pipeline(&pipeline);
             render_pass.draw(0..3, 0..1);

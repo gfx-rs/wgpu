@@ -71,6 +71,13 @@ pub enum DrawError {
         limit: u32,
         max_total: u32,
     },
+    #[error(
+        "Mesh shader calls in multiview render passes require enabling the `EXPERIMENTAL_MESH_SHADER_MULTIVIEW` feature, and the highest bit ({highest_view_index}) in the multiview mask must be <= `Limits::max_multiview_view_count` ({max_multiviews})"
+    )]
+    MeshPipelineMultiviewLimitsViolated {
+        highest_view_index: u32,
+        max_multiviews: u32,
+    },
 }
 
 impl WebGpuError for DrawError {

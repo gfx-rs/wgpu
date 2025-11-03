@@ -1367,7 +1367,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     targets: Borrowed(frag.targets),
                 }
             }),
-            multiview: desc.multiview,
+            multiview_mask: desc.multiview_mask,
             cache: desc.cache.map(|cache| cache.inner.as_core().id),
         };
 
@@ -2554,6 +2554,7 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 color_attachments: Borrowed(&colors),
                 depth_stencil_attachment: depth_stencil.as_ref(),
                 occlusion_query_set: desc.occlusion_query_set.map(|qs| qs.inner.as_core().id),
+                multiview_mask: desc.multiview_mask,
             },
         );
 

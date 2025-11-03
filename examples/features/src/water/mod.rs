@@ -567,7 +567,7 @@ impl crate::framework::Example for Example {
             }),
             // No multisampling is used.
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             // No pipeline caching is used
             cache: None,
         });
@@ -605,7 +605,7 @@ impl crate::framework::Example for Example {
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None
         });
 
@@ -750,6 +750,7 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             rpass.execute_bundles([&self.terrain_bundle]);
@@ -778,6 +779,7 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             rpass.set_pipeline(&self.terrain_pipeline);
             rpass.set_bind_group(0, &self.terrain_normal_bind_group, &[]);
@@ -805,6 +807,7 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             rpass.set_pipeline(&self.water_pipeline);

@@ -186,7 +186,7 @@ impl WgpuContext {
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
         let surface_config = surface
@@ -319,6 +319,7 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                                         depth_stencil_attachment: None,
                                         occlusion_query_set: None,
                                         timestamp_writes: None,
+                                        multiview_mask: None,
                                     });
                                 render_pass.set_pipeline(&wgpu_context_ref.pipeline);
                                 // (9)

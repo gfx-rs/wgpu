@@ -84,6 +84,7 @@ metal = [
     "dep:objc",
     "dep:parking_lot",
     "dep:profiling",
+    "dep:smallvec",
 ]
 vulkan = [
     "naga/spv-out",

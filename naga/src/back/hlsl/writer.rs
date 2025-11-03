@@ -569,6 +569,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         match *binding {
             Some(crate::Binding::BuiltIn(builtin)) if !is_subgroup_builtin_binding(binding) => {
+                if builtin == crate::BuiltIn::ViewIndex
+                    && self.options.shader_model < ShaderModel::V6_1
+                {
+                    return Err(Error::ShaderModelTooLow(
+                        "used @builtin(view_index) or SV_ViewID".to_string(),
+                        ShaderModel::V6_1,
+                    ));
+                }
                 let builtin_str = builtin.to_hlsl_str()?;
                 write!(self.out, " : {builtin_str}")?;
             }

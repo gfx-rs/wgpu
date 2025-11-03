@@ -99,7 +99,7 @@ async fn set_array_stride_to_0(ctx: TestingContext) {
                 write_mask: wgpu::ColorWrites::ALL,
             })],
         }),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     };
     let mut first_pipeline_desc = pipeline_desc.clone();
@@ -148,6 +148,7 @@ async fn set_array_stride_to_0(ctx: TestingContext) {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         // The D3D12 backend used to not set the stride of vertex buffers if it was 0.

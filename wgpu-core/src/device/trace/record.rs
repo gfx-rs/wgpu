@@ -39,7 +39,7 @@ pub(crate) fn new_render_bundle_encoder_descriptor(
             }
         }),
         sample_count: context.sample_count,
-        multiview: context.multiview,
+        multiview: context.multiview_mask,
     }
 }
 
@@ -195,12 +195,14 @@ impl IntoTrace for ArcCommand {
                 depth_stencil_attachment,
                 timestamp_writes,
                 occlusion_query_set,
+                multiview_mask,
             } => Command::RunRenderPass {
                 pass: pass.into_trace(),
                 color_attachments: color_attachments.into_trace(),
                 depth_stencil_attachment: depth_stencil_attachment.map(|d| d.into_trace()),
                 timestamp_writes: timestamp_writes.map(|tw| tw.into_trace()),
                 occlusion_query_set: occlusion_query_set.map(|q| q.to_trace()),
+                multiview_mask,
             },
             ArcCommand::BuildAccelerationStructures { blas, tlas } => {
                 Command::BuildAccelerationStructures {
@@ -660,7 +662,7 @@ impl<'a> IntoTrace for crate::pipeline::ResolvedGeneralRenderPipelineDescriptor<
             depth_stencil: self.depth_stencil,
             multisample: self.multisample,
             fragment: self.fragment.map(|f| f.into_trace()),
-            multiview: self.multiview,
+            multiview_mask: self.multiview_mask,
             cache: self.cache.map(|c| c.into_trace()),
         }
     }
