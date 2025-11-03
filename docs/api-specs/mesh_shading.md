@@ -103,9 +103,7 @@ An example of using mesh shaders to render a single triangle can be seen [here](
 * DirectX 12 support is planned.
 * Metal support is desired but not currently planned.
 
-
 ## Naga implementation
-
 
 ### Supported frontends
 * 🛠️ WGSL
@@ -114,7 +112,7 @@ An example of using mesh shaders to render a single triangle can be seen [here](
 
 ### Supported backends
 * 🛠️ SPIR-V
-* ❌ HLSL
+* 🛠️ HLSL
 * ❌ MSL
 * 🚫 GLSL
 * 🚫 WGSL
@@ -130,7 +128,7 @@ The majority of changes relating to mesh shaders will be in WGSL and `naga`.
 
 Using any of these features in a `wgsl` program will require adding the `enable mesh_shading` directive to the top of a program.
 
-Two new shader stages will be added to `WGSL`. Fragment shaders are also modified slightly. Both task shaders and mesh shaders are allowed to use any compute-specific functionality, such as subgroup operations.
+Two new shader stages will be added to `WGSL`. Fragment shaders are also modified slightly. Both task shaders and mesh shaders are allowed to use any compute-available functionality, including subgroup operations.
 
 ### Task shader
 
@@ -144,6 +142,8 @@ A task shader entry point must return a `vec3<u32>` value. The return value of e
 
 Each task shader workgroup dispatches an independent mesh shader grid: in mesh shader invocations, `@builtin` values like `workgroup_id` and `global_invocation_id` describe the position of the workgroup and invocation within that grid;
 and `@builtin(num_workgroups)` matches the task shader workgroup's return value. Mesh shaders dispatched for other task shader workgroups are not included in the count. If it is necessary for a mesh shader to know which task shader workgroup dispatched it, the task shader can include its own workgroup id in the task payload.
+
+Task shaders can use compute and subgroup builtin inputs, in addition to `view_index` and `draw_id`.
 
 ### Mesh shader
 
@@ -159,17 +159,19 @@ A mesh shader entry point must have the following attributes:
 
 - `@workgroup_size`: this has the same meaning as when it appears on a compute shader entry point.
 
-- `@vertex_output(V, NV)`: This indicates that the mesh shader workgroup will generate at most `NV` vertex values, each of type `V`.
+- `@mesh(VAR)`: Here, `VAR` represents a workgroup variable storing the output information.
 
-- `@primitive_output(P, NP)`: This indicates that the mesh shader workgroup will generate at most `NP` primitives, each of type `P`.
+All mesh shader outputs are per-workgroup, and taken from the workgroup variable specified above. The type must have exactly 4 fields:
+- A field decorated with `@builtin(vertex_count)`, with type `u32`: this field represents the number of vertices that will be drawn
+- A field decorated with `@builtin(primitive_count)`, with type `u32`: this field represents the number of primitives that will be drawn
+- A field decorated with `@builtin(vertices)`, typed as an array of `V`, where `V` is the vertex output type as specified below
+- A field decorated with `@builtin(primitives)`, typed as an array of `P`, where `P` is the primitive output type as specified below
 
-Each mesh shader entry point invocation must call the `setMeshOutputs(numVertices: u32, numPrimitives: u32)` builtin function at least once. The values passed by each workgroup's first invocation (that is, the one whose `local_invocation_index` is `0`) determine how many vertices (values of type `V`) and primitives (values of type `P`) the workgroup must produce. The user can still write past these indices, but they won't be used in the output.
+For a vertex count `NV`, the first `NV` elements of the vertex array above are outputted. Therefore, `NV` must be less than or equal to the size of the vertex array. The same is true for primitives with `NP`.
 
-The `numVertices` and `numPrimitives` arguments must be no greater than `NV` and `NP` from the `@vertex_output` and `@primitive_output` attributes.
+The vertex output type `V` must meet the same requirements as a struct type returned by a `@vertex` entry point: all members must have either `@builtin` or `@location` attributes, there must be a `@builtin(position)`, and so on.
 
-To produce vertex data, the workgroup as a whole must make `numVertices` calls to the `setVertex(i: u32, vertex: V)` builtin function. This establishes `vertex` as the value of the `i`'th vertex, where `i` is less than the maximum number of output vertices in the `@vertex_output` attribute. `V` is the type given in the `@vertex_output` attribute. `V` must meet the same requirements as a struct type returned by a `@vertex` entry point: all members must have either `@builtin` or `@location` attributes, there must be a `@builtin(position)`, and so on.
-
-To produce primitives, the workgroup as a whole must make `numPrimitives` calls to the `setPrimitive(i: u32, primitive: P)` builtin function. This establishes `primitive` as the value of the `i`'th primitive, where `i` is less than the maximum number of output primitives in the `@primitive_output` attribute. `P` is the type given in the `@primitive_output` attribute. `P` must be a struct type, every member of which either has a `@location` or `@builtin` attribute. The following `@builtin` attributes are allowed:
+The primitive output type `P` must be a struct type, every member of which either has a `@location` or `@builtin` attribute. All members decorated with `@location` must also be decorated with `@per_primitive`, as must the corresponding fragment input. The `@per_primitive` decoration may only be applied to members decorated with `@location`. The following `@builtin` attributes are allowed:
 
 - `triangle_indices`, `line_indices`, or `point_index`: The annotated member must be of type `vec3<u32>`, `vec2<u32>`, or `u32`.
 
@@ -179,15 +181,13 @@ To produce primitives, the workgroup as a whole must make `numPrimitives` calls 
 
 - `cull_primitive`: The annotated member must be of type `bool`. If it is true, then the primitive is skipped during rendering.
 
-Every member of `P` with a `@location` attribute must either have a `@per_primitive` attribute, or be part of a struct type that appears in the primitive data as a struct member with the `@per_primitive` attribute.
-
 The `@location` attributes of `P` and `V` must not overlap, since they are merged to produce the user-defined inputs to the fragment shader.
 
-It is possible to write to the same vertex or primitive index repeatedly. Since the implicit arrays written by `setVertex` and `setPrimitive` are shared by the workgroup, data races on writes to the same index for a given type are undefined behavior.
+Mesh shaders can use compute and mesh shader builtin inputs, in addition to `view_index`, and if no task shader is present, `draw_id`.
 
 ### Fragment shader
 
-Fragment shaders can access vertex output data as if it is from a vertex shader. They can also access primitive output data, provided the input is decorated with `@per_primitive`. The `@per_primitive` attribute can be applied to a value directly, such as `@per_primitive @location(1) value: vec4<f32>`, to a struct such as `@per_primitive primitive_input: PrimitiveInput` where `PrimitiveInput` is a struct containing fields decorated with `@location` and `@builtin`, or to members of a struct that are themselves decorated with `@location` or `@builtin`.
+Fragment shaders can access vertex output data as if it is from a vertex shader. They can also access primitive output data, provided the input is decorated with `@per_primitive`. The `@per_primitive` decoration may only be applied to inputs or struct members decorated with `@location`.
 
 The primitive state is part of the fragment input and must match the output of the mesh shader in the pipeline. Using `@per_primitive` also requires enabling the mesh shader extension. Additionally, the locations of vertex and primitive input cannot overlap.
 
@@ -199,72 +199,75 @@ The following is a full example of WGSL shaders that could be used to create a m
 enable mesh_shading;
 
 const positions = array(
-	vec4(0.,1.,0.,1.),
-	vec4(-1.,-1.,0.,1.),
-	vec4(1.,-1.,0.,1.)
+    vec4(0., 1., 0., 1.),
+    vec4(-1., -1., 0., 1.),
+    vec4(1., -1., 0., 1.)
 );
 const colors = array(
-	vec4(0.,1.,0.,1.),
-	vec4(0.,0.,1.,1.),
-	vec4(1.,0.,0.,1.)
+    vec4(0., 1., 0., 1.),
+    vec4(0., 0., 1., 1.),
+    vec4(1., 0., 0., 1.)
 );
 struct TaskPayload {
-	colorMask: vec4<f32>,
-	visible: bool,
+    colorMask: vec4<f32>,
+    visible: bool,
 }
 var<task_payload> taskPayload: TaskPayload;
 var<workgroup> workgroupData: f32;
 struct VertexOutput {
-	@builtin(position) position: vec4<f32>,
-	@location(0) color: vec4<f32>,
+    @builtin(position) position: vec4<f32>,
+    @location(0) color: vec4<f32>,
 }
 struct PrimitiveOutput {
-	@builtin(triangle_indices) index: vec3<u32>,
-	@builtin(cull_primitive) cull: bool,
-	@per_primitive @location(1) colorMask: vec4<f32>,
+    @builtin(triangle_indices) index: vec3<u32>,
+    @builtin(cull_primitive) cull: bool,
+    @per_primitive @location(1) colorMask: vec4<f32>,
 }
 struct PrimitiveInput {
-	@per_primitive @location(1) colorMask: vec4<f32>,
+    @per_primitive @location(1) colorMask: vec4<f32>,
 }
 
 @task
 @payload(taskPayload)
 @workgroup_size(1)
 fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
-	workgroupData = 1.0;
-	taskPayload.colorMask = vec4(1.0, 1.0, 0.0, 1.0);
-	taskPayload.visible = true;
-	return vec3(3, 1, 1);
+    workgroupData = 1.0;
+    taskPayload.colorMask = vec4(1.0, 1.0, 0.0, 1.0);
+    taskPayload.visible = true;
+    return vec3(3, 1, 1);
 }
-@mesh
+
+struct MeshOutput {
+    @builtin(vertices) vertices: array<VertexOutput, 3>,
+    @builtin(primitives) primitives: array<PrimitiveOutput, 1>,
+    @builtin(vertex_count) vertex_count: u32,
+    @builtin(primitive_count) primitive_count: u32,
+}
+
+var<workgroup> mesh_output: MeshOutput;
+@mesh(mesh_output)
 @payload(taskPayload)
-@vertex_output(VertexOutput, 3) @primitive_output(PrimitiveOutput, 1)
 @workgroup_size(1)
 fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocation_id) id: vec3<u32>) {
-	setMeshOutputs(3, 1);
-	workgroupData = 2.0;
-	var v: VertexOutput;
+    mesh_output.vertex_count = 3;
+    mesh_output.primitive_count = 1;
+    workgroupData = 2.0;
 
-	v.position = positions[0];
-	v.color = colors[0] * taskPayload.colorMask;
-	setVertex(0, v);
+    mesh_output.vertices[0].position = positions[0];
+    mesh_output.vertices[0].color = colors[0] * taskPayload.colorMask;
 
-	v.position = positions[1];
-	v.color = colors[1] * taskPayload.colorMask;
-	setVertex(1, v);
+    mesh_output.vertices[1].position = positions[1];
+    mesh_output.vertices[1].color = colors[1] * taskPayload.colorMask;
 
-	v.position = positions[2];
-	v.color = colors[2] * taskPayload.colorMask;
-	setVertex(2, v);
+    mesh_output.vertices[2].position = positions[2];
+    mesh_output.vertices[2].color = colors[2] * taskPayload.colorMask;
 
-	var p: PrimitiveOutput;
-	p.index = vec3<u32>(0, 1, 2);
-	p.cull = !taskPayload.visible;
-	p.colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
-	setPrimitive(0, p);
+    mesh_output.primitives[0].index = vec3<u32>(0, 1, 2);
+    mesh_output.primitives[0].cull = !taskPayload.visible;
+    mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
 }
 @fragment
 fn fs_main(vertex: VertexOutput, primitive: PrimitiveInput) -> @location(0) vec4<f32> {
-	return vertex.color * primitive.colorMask;
+    return vertex.color * primitive.colorMask;
 }
 ```
