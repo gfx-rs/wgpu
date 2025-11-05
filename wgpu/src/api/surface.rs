@@ -69,6 +69,7 @@ impl Surface<'_> {
             format: *caps.formats.first()?,
             width,
             height,
+            set_web_canvas_size: false,
             desired_maximum_frame_latency: 2,
             present_mode: *caps.present_modes.first()?,
             alpha_mode: wgt::CompositeAlphaMode::Auto,

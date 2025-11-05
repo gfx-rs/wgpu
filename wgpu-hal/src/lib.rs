@@ -2380,6 +2380,10 @@ pub struct SurfaceConfiguration {
     /// Requested texture extent. Must be in
     /// `SurfaceCapabilities::extents` range.
     pub extent: wgt::Extent3d,
+    /// Whether, when the [`Surface`] being configured refers to a HTML `<canvas>` element,
+    /// the `width` and `height` of this configuration are used to set the `width` and `height`
+    /// attributes of the canvas element.
+    pub set_web_canvas_size: bool,
     /// Allowed usage of surface textures,
     pub usage: wgt::TextureUses,
     /// Allows views of swapchain texture to have a different format

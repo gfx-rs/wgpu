@@ -3852,14 +3852,16 @@ impl dispatch::SurfaceInterface for WebSurface {
     fn configure(&self, device: &dispatch::DispatchDevice, config: &crate::SurfaceConfiguration) {
         let device = device.as_webgpu();
 
-        match self.canvas {
-            Canvas::Canvas(ref canvas) => {
-                canvas.set_width(config.width);
-                canvas.set_height(config.height);
-            }
-            Canvas::Offscreen(ref canvas) => {
-                canvas.set_width(config.width);
-                canvas.set_height(config.height);
+        if config.set_web_canvas_size {
+            match self.canvas {
+                Canvas::Canvas(ref canvas) => {
+                    canvas.set_width(config.width);
+                    canvas.set_height(config.height);
+                }
+                Canvas::Offscreen(ref canvas) => {
+                    canvas.set_width(config.width);
+                    canvas.set_height(config.height);
+                }
             }
         }
 

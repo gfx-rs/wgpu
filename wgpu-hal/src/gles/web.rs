@@ -315,14 +315,16 @@ impl crate::Surface for Surface {
         device: &super::Device,
         config: &crate::SurfaceConfiguration,
     ) -> Result<(), crate::SurfaceError> {
-        match self.canvas {
-            Canvas::Canvas(ref canvas) => {
-                canvas.set_width(config.extent.width);
-                canvas.set_height(config.extent.height);
-            }
-            Canvas::Offscreen(ref canvas) => {
-                canvas.set_width(config.extent.width);
-                canvas.set_height(config.extent.height);
+        if config.set_web_canvas_size {
+            match self.canvas {
+                Canvas::Canvas(ref canvas) => {
+                    canvas.set_width(config.extent.width);
+                    canvas.set_height(config.extent.height);
+                }
+                Canvas::Offscreen(ref canvas) => {
+                    canvas.set_width(config.extent.width);
+                    canvas.set_height(config.extent.height);
+                }
             }
         }
 

@@ -557,6 +557,7 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
                         format,
                         width: params.width,
                         height: params.height,
+                        set_web_canvas_size: true,
                         desired_maximum_frame_latency: 2,
                         present_mode: wgpu::PresentMode::Fifo,
                         alpha_mode: wgpu::CompositeAlphaMode::Auto,

@@ -4933,6 +4933,7 @@ impl Device {
                         height: config.height,
                         depth_or_array_layers: 1,
                     },
+                    set_web_canvas_size: config.set_web_canvas_size,
                     usage: conv::map_texture_usage(
                         config.usage,
                         hal::FormatAspects::COLOR,

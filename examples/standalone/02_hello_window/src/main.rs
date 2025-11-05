@@ -62,6 +62,7 @@ impl State {
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             width: self.size.width,
             height: self.size.height,
+            set_web_canvas_size: false,
             desired_maximum_frame_latency: 2,
             present_mode: wgpu::PresentMode::AutoVsync,
         };
