@@ -558,7 +558,7 @@ jobs:
         if: matrix.os == 'windows-2022'
         uses: ./.github/actions/install-warp
         with:
-          target-dirs: "target/llvm-cov-target/debug target/llvm-cov-target/debug/deps"
+          target-dir: "target/llvm-cov-target/debug"
 
       - name: (Windows) Install Mesa
         if: matrix.os == 'windows-2022'
