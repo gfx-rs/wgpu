@@ -8,7 +8,7 @@ use core::fmt::Write;
 
 use super::Error;
 use super::ToWgslIfImplemented as _;
-use crate::{back::wgsl::polyfill::InversePolyfill, common::wgsl::TypeContext};
+use crate::{back::wgsl::polyfill::InversePolyfill, common::wgsl::TypeContext, GlobalVariable};
 use crate::{
     back::{self, Baked},
     common::{
@@ -33,6 +33,8 @@ enum Attribute {
     BlendSrc(u32),
     Stage(ShaderStage),
     WorkGroupSize([u32; 3]),
+    MeshTaskPayload(String),
+    PerPrimitive,
 }
 
 /// The WGSL form that `write_expr_with_indirection` should use to render a Naga
@@ -207,7 +209,35 @@ impl<W: Write> Writer<W> {
                     Attribute::Stage(ShaderStage::Compute),
                     Attribute::WorkGroupSize(ep.workgroup_size),
                 ],
-                ShaderStage::Mesh | ShaderStage::Task => unreachable!(),
+                ShaderStage::Mesh => {
+                    if ep.task_payload.is_some() {
+                        let payload_name = module.global_variables[ep.task_payload.unwrap()]
+                            .name
+                            .clone()
+                            .unwrap();
+                        vec![
+                            Attribute::Stage(ShaderStage::Mesh),
+                            Attribute::MeshTaskPayload(payload_name),
+                            Attribute::WorkGroupSize(ep.workgroup_size),
+                        ]
+                    } else {
+                        vec![
+                            Attribute::Stage(ShaderStage::Mesh),
+                            Attribute::WorkGroupSize(ep.workgroup_size),
+                        ]
+                    }
+                }
+                ShaderStage::Task => {
+                    let payload_name = module.global_variables[ep.task_payload.unwrap()]
+                        .name
+                        .clone()
+                        .unwrap();
+                    vec![
+                        Attribute::Stage(ShaderStage::Task),
+                        Attribute::WorkGroupSize(ep.workgroup_size),
+                        Attribute::MeshTaskPayload(payload_name),
+                    ]
+                }
             };
 
             self.write_attributes(&attributes)?;
@@ -243,6 +273,7 @@ impl<W: Write> Writer<W> {
         let mut needs_f16 = false;
         let mut needs_dual_source_blending = false;
         let mut needs_clip_distances = false;
+        let mut needs_mesh_shaders = false;
 
         // Determine which `enable` declarations are needed
         for (_, ty) in module.types.iter() {
@@ -271,6 +302,14 @@ impl<W: Write> Writer<W> {
             }
         }
 
+        if module
+            .entry_points
+            .iter()
+            .any(|ep| matches!(ep.stage, ShaderStage::Mesh | ShaderStage::Task))
+        {
+            needs_mesh_shaders = true;
+        }
+
         // Write required declarations
         let mut any_written = false;
         if needs_f16 {
@@ -283,6 +322,10 @@ impl<W: Write> Writer<W> {
         }
         if needs_clip_distances {
             writeln!(self.out, "enable clip_distances;")?;
+            any_written = true;
+        }
+        if needs_mesh_shaders {
+            writeln!(self.out, "enable mesh_shading;")?;
             any_written = true;
         }
         if any_written {
@@ -403,7 +446,8 @@ impl<W: Write> Writer<W> {
                         ShaderStage::Vertex => "vertex",
                         ShaderStage::Fragment => "fragment",
                         ShaderStage::Compute => "compute",
-                        ShaderStage::Task | ShaderStage::Mesh => unreachable!(),
+                        ShaderStage::Task => "task",
+                        ShaderStage::Mesh => "mesh",
                     };
                     write!(self.out, "@{stage_str} ")?;
                 }
@@ -433,6 +477,10 @@ impl<W: Write> Writer<W> {
                         write!(self.out, "@interpolate({interpolation}) ")?;
                     }
                 }
+                Attribute::MeshTaskPayload(ref payload_name) => {
+                    write!(self.out, "@payload({payload_name}) ")?;
+                }
+                Attribute::PerPrimitive => write!(self.out, "@per_primitive ")?,
             };
         }
         Ok(())
@@ -1822,21 +1870,42 @@ fn map_binding_to_attribute(binding: &crate::Binding) -> Vec<Attribute> {
             interpolation,
             sampling,
             blend_src: None,
-            per_primitive: _,
-        } => vec![
-            Attribute::Location(location),
-            Attribute::Interpolate(interpolation, sampling),
-        ],
+            per_primitive,
+        } => {
+            if per_primitive {
+                vec![
+                    Attribute::PerPrimitive,
+                    Attribute::Location(location),
+                    Attribute::Interpolate(interpolation, sampling),
+                ]
+            } else {
+                vec![
+                    Attribute::Location(location),
+                    Attribute::Interpolate(interpolation, sampling),
+                ]
+            }
+        }
         crate::Binding::Location {
             location,
             interpolation,
             sampling,
             blend_src: Some(blend_src),
-            per_primitive: _,
-        } => vec![
-            Attribute::Location(location),
-            Attribute::BlendSrc(blend_src),
-            Attribute::Interpolate(interpolation, sampling),
-        ],
+            per_primitive,
+        } => {
+            if per_primitive {
+                vec![
+                    Attribute::PerPrimitive,
+                    Attribute::Location(location),
+                    Attribute::BlendSrc(blend_src),
+                    Attribute::Interpolate(interpolation, sampling),
+                ]
+            } else {
+                vec![
+                    Attribute::Location(location),
+                    Attribute::BlendSrc(blend_src),
+                    Attribute::Interpolate(interpolation, sampling),
+                ]
+            }
+        }
     }
 }
