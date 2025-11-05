@@ -549,47 +549,45 @@ impl VaryingContext<'_> {
                 .validate_impl(ep, ty, binding)
                 .map_err(|e| e.with_span_context(span_context)),
             None => {
-                match self.types[ty].inner {
-                    crate::TypeInner::Struct { ref members, .. } => {
-                        for (index, member) in members.iter().enumerate() {
-                            let span_context = self.types.get_span_context(ty);
-                            match member.binding {
-                                None => {
-                                    if self.flags.contains(super::ValidationFlags::BINDINGS) {
-                                        return Err(VaryingError::MemberMissingBinding(
-                                            index as u32,
-                                        )
-                                        .with_span_context(span_context));
-                                    }
-                                }
-                                Some(ref binding) => self
-                                    .validate_impl(ep, member.ty, binding)
-                                    .map_err(|e| e.with_span_context(span_context))?,
-                            }
-                        }
+                let crate::TypeInner::Struct { ref members, .. } = self.types[ty].inner else {
+                    if self.flags.contains(super::ValidationFlags::BINDINGS) {
+                        return Err(VaryingError::MissingBinding.with_span());
+                    } else {
+                        return Ok(());
+                    }
+                };
 
-                        if !self.blend_src_mask.is_empty() {
-                            let span_context = self.types.get_span_context(ty);
-
-                            // If there's any blend_src usage, it must apply to all members of which there must be exactly 2.
-                            if members.len() != 2 || self.blend_src_mask.len() != 2 {
-                                return Err(VaryingError::IncompleteBlendSrcUsage
+                for (index, member) in members.iter().enumerate() {
+                    let span_context = self.types.get_span_context(ty);
+                    match member.binding {
+                        None => {
+                            if self.flags.contains(super::ValidationFlags::BINDINGS) {
+                                return Err(VaryingError::MemberMissingBinding(index as u32)
                                     .with_span_context(span_context));
                             }
-                            // Also, all members must have the same type.
-                            if members[0].ty != members[1].ty {
-                                return Err(VaryingError::BlendSrcOutputTypeMismatch {
-                                    blend_src_0_type: members[0].ty,
-                                    blend_src_1_type: members[1].ty,
-                                }
-                                .with_span_context(span_context));
-                            }
                         }
+                        Some(ref binding) => self
+                            .validate_impl(ep, member.ty, binding)
+                            .map_err(|e| e.with_span_context(span_context))?,
                     }
-                    _ => {
-                        if self.flags.contains(super::ValidationFlags::BINDINGS) {
-                            return Err(VaryingError::MissingBinding.with_span());
+                }
+
+                if !self.blend_src_mask.is_empty() {
+                    let span_context = self.types.get_span_context(ty);
+
+                    // If there's any blend_src usage, it must apply to all members of which there must be exactly 2.
+                    if members.len() != 2 || self.blend_src_mask.len() != 2 {
+                        return Err(
+                            VaryingError::IncompleteBlendSrcUsage.with_span_context(span_context)
+                        );
+                    }
+                    // Also, all members must have the same type.
+                    if members[0].ty != members[1].ty {
+                        return Err(VaryingError::BlendSrcOutputTypeMismatch {
+                            blend_src_0_type: members[0].ty,
+                            blend_src_1_type: members[1].ty,
                         }
+                        .with_span_context(span_context));
                     }
                 }
                 Ok(())
