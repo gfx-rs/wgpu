@@ -8,7 +8,7 @@ use core::fmt::Write;
 
 use super::Error;
 use super::ToWgslIfImplemented as _;
-use crate::{back::wgsl::polyfill::InversePolyfill, common::wgsl::TypeContext};
+use crate::{GlobalVariable, back::wgsl::polyfill::InversePolyfill, common::wgsl::TypeContext};
 use crate::{
     back::{self, Baked},
     common::{
@@ -209,6 +209,29 @@ impl<W: Write> Writer<W> {
                     Attribute::Stage(ShaderStage::Compute),
                     Attribute::WorkGroupSize(ep.workgroup_size),
                 ],
+                ShaderStage::Mesh => {
+                    if ep.task_payload.is_some() {
+                        let payload_name = module.global_variables[ep.task_payload.unwrap()].name.clone().unwrap();
+                        vec![
+                            Attribute::Stage(ShaderStage::Mesh),
+                            Attribute::MeshTaskPayload(payload_name),
+                            Attribute::WorkGroupSize(ep.workgroup_size),
+                        ]
+                    } else {
+                        vec![
+                            Attribute::Stage(ShaderStage::Mesh),
+                            Attribute::WorkGroupSize(ep.workgroup_size),
+                        ]
+                    }
+                },
+                ShaderStage::Task => {
+                    let payload_name = module.global_variables[ep.task_payload.unwrap()].name.clone().unwrap();
+                    vec![
+                        Attribute::Stage(ShaderStage::Task),
+                        Attribute::WorkGroupSize(ep.workgroup_size),
+                        Attribute::MeshTaskPayload(payload_name),
+                    ]
+                },
                 ShaderStage::Mesh => {
                     if ep.task_payload.is_some() {
                         let payload_name = module.global_variables[ep.task_payload.unwrap()]
@@ -1870,21 +1893,11 @@ fn map_binding_to_attribute(binding: &crate::Binding) -> Vec<Attribute> {
             interpolation,
             sampling,
             blend_src: None,
-            per_primitive,
-        } => {
-            if per_primitive {
-                vec![
-                    Attribute::PerPrimitive,
-                    Attribute::Location(location),
-                    Attribute::Interpolate(interpolation, sampling),
-                ]
-            } else {
-                vec![
-                    Attribute::Location(location),
-                    Attribute::Interpolate(interpolation, sampling),
-                ]
-            }
-        }
+            per_primitive: _,
+        } => vec![
+            Attribute::Location(location),
+            Attribute::Interpolate(interpolation, sampling),
+        ],
         crate::Binding::Location {
             location,
             interpolation,
