@@ -14,6 +14,7 @@ You can add additional user facing information if it's a major breaking change. 
 ```
 
 Top level categories:
+
 - Major changes
 - Added/New Features
 - Changes
