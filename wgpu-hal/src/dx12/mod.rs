@@ -93,7 +93,7 @@ use hashbrown::HashMap;
 use parking_lot::{Mutex, RwLock};
 use suballocation::Allocator;
 use windows::{
-    core::{Free, Interface},
+    core::{Free as _, Interface},
     Win32::{
         Foundation,
         Graphics::{
@@ -1347,7 +1347,7 @@ impl crate::Surface for Surface {
                                 .ok_or(crate::SurfaceError::Other("IDXGIFactoryMedia not found"))?
                                 .CreateSwapChainForCompositionSurfaceHandle(
                                     &device.present_queue,
-                                    handle,
+                                    Some(handle),
                                     &desc,
                                     None,
                                 )
