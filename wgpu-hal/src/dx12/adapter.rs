@@ -116,7 +116,25 @@ impl super::Adapter {
         }
         .unwrap();
 
+        let driver_version = unsafe { adapter.CheckInterfaceSupport(&Dxgi::IDXGIDevice::IID) }
+            .ok()
+            .map(|i| {
+                const MASK: i64 = 0xFFFF;
+                (i >> 48, (i >> 32) & MASK, (i >> 16) & MASK, i & MASK)
+            })
+            .unwrap_or((0, 0, 0, 0));
+
         let mut workarounds = super::Workarounds::default();
+
+        let is_warp = device_name.contains("Microsoft Basic Render Driver");
+
+        // WARP uses two different versioning schemes. Versions that ship with windows
+        // use a version that starts with 10.x.x.x. Versions that ship from Nuget use 1.0.x.x.
+        //
+        // As far as we know, this is only an issue on the Nuget versions.
+        if is_warp && driver_version >= (1, 0, 13, 0) && driver_version.0 < 10 {
+            workarounds.avoid_shader_debug_info = true;
+        }
 
         let info = wgt::AdapterInfo {
             backend: wgt::Backend::Dx12,
@@ -126,7 +144,6 @@ impl super::Adapter {
             device_type: if Dxgi::DXGI_ADAPTER_FLAG(desc.Flags as i32)
                 .contains(Dxgi::DXGI_ADAPTER_FLAG_SOFTWARE)
             {
-                workarounds.avoid_cpu_descriptor_overwrites = true;
                 wgt::DeviceType::Cpu
             } else if features_architecture.UMA.as_bool() {
                 wgt::DeviceType::IntegratedGpu
@@ -134,20 +151,10 @@ impl super::Adapter {
                 wgt::DeviceType::DiscreteGpu
             },
             device_pci_bus_id: get_adapter_pci_info(desc.VendorId, desc.DeviceId),
-            driver: {
-                if let Ok(i) = unsafe { adapter.CheckInterfaceSupport(&Dxgi::IDXGIDevice::IID) } {
-                    const MASK: i64 = 0xFFFF;
-                    format!(
-                        "{}.{}.{}.{}",
-                        i >> 48,
-                        (i >> 32) & MASK,
-                        (i >> 16) & MASK,
-                        i & MASK
-                    )
-                } else {
-                    String::new()
-                }
-            },
+            driver: format!(
+                "{}.{}.{}.{}",
+                driver_version.0, driver_version.1, driver_version.2, driver_version.3
+            ),
             driver_info: String::new(),
             transient_saves_memory: false,
         };
@@ -319,6 +326,7 @@ impl super::Adapter {
         };
         let private_caps = super::PrivateCapabilities {
             instance_flags,
+            workarounds,
             heterogeneous_resource_heaps: options.ResourceHeapTier
                 != Direct3D12::D3D12_RESOURCE_HEAP_TIER_1,
             memory_architecture: if features_architecture.UMA.as_bool() {
@@ -532,8 +540,8 @@ impl super::Adapter {
         .is_ok();
 
         // Once ray tracing pipelines are supported they also will go here
-        let supports_ray_tracing = features5.RaytracingTier
-            == Direct3D12::D3D12_RAYTRACING_TIER_1_1
+        let supports_ray_tracing = features5.RaytracingTier.0
+            >= Direct3D12::D3D12_RAYTRACING_TIER_1_1.0
             && shader_model >= naga::back::hlsl::ShaderModel::V6_5
             && has_features5;
         features.set(
@@ -639,7 +647,6 @@ impl super::Adapter {
                 dcomp_lib: Arc::clone(dcomp_lib),
                 private_caps,
                 presentation_timer,
-                workarounds,
                 memory_budget_thresholds,
                 compiler_container,
                 options: backend_options,
