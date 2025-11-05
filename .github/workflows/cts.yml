@@ -71,7 +71,8 @@ jobs:
       - name: caching
         uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: v2-rust # Increment version for cache busting
+          # The version number can be incremented for cache busting.
+          prefix-key: v2-rust-${{ hashFiles('cts_runner/revision.txt') }}
           cache-directories: cts
 
       # We enable line numbers for panics, but that's it
