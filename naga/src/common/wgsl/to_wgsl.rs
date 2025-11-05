@@ -183,6 +183,14 @@ impl TryToWgsl for crate::BuiltIn {
             Bi::SubgroupInvocationId => "subgroup_invocation_id",
 
             // Non-standard built-ins.
+            Bi::TriangleIndices => "triangle_indices",
+            Bi::CullPrimitive => "cull_primitive",
+            Bi::MeshTaskSize => "mesh_task_size",
+            Bi::Vertices => "vertices",
+            Bi::Primitives => "primitives",
+            Bi::VertexCount => "vertex_count",
+            Bi::PrimitiveCount => "primitive_count",
+
             Bi::BaseInstance
             | Bi::BaseVertex
             | Bi::CullDistance
@@ -190,15 +198,8 @@ impl TryToWgsl for crate::BuiltIn {
             | Bi::DrawID
             | Bi::PointCoord
             | Bi::WorkGroupSize
-            | Bi::CullPrimitive
-            | Bi::TriangleIndices
             | Bi::LineIndices
-            | Bi::MeshTaskSize
-            | Bi::PointIndex
-            | Bi::VertexCount
-            | Bi::PrimitiveCount
-            | Bi::Vertices
-            | Bi::Primitives => return None,
+            | Bi::PointIndex => return None,
         })
     }
 }
