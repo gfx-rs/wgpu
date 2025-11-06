@@ -120,9 +120,7 @@ fails-if(dx12) webgpu:api,validation,image_copy,layout_related:offset_alignment:
 webgpu:api,validation,image_copy,texture_related:format:dimension="1d";*
 webgpu:api,validation,queue,submit:command_buffer,*
 webgpu:api,validation,render_pass,render_pass_descriptor:attachments,*
-webgpu:api,validation,render_pass,render_pass_descriptor:color_attachments,depthSlice,bound_check:*
-// Fails due to missing validation.
-// FAIL: webgpu:api,validation,render_pass,render_pass_descriptor:color_attachments,depthSlice,overlaps,diff_miplevel:*
+webgpu:api,validation,render_pass,render_pass_descriptor:color_attachments,depthSlice,*
 webgpu:api,validation,render_pass,render_pass_descriptor:resolveTarget,*
 webgpu:api,validation,render_pass,resolve:resolve_attachment:*
 webgpu:api,validation,resource_usages,buffer,in_pass_encoder:*
@@ -134,6 +132,7 @@ webgpu:api,validation,resource_usages,texture,in_pass_encoder:subresources_and_b
 webgpu:api,validation,resource_usages,texture,in_pass_encoder:unused_bindings_in_pipeline:*
 webgpu:api,validation,texture,rg11b10ufloat_renderable:*
 webgpu:api,operation,render_pipeline,overrides:*
+webgpu:api,operation,rendering,3d_texture_slices:*
 webgpu:api,operation,rendering,basic:clear:*
 webgpu:api,operation,rendering,basic:fullscreen_quad:*
 //FAIL: webgpu:api,operation,rendering,basic:large_draw:*

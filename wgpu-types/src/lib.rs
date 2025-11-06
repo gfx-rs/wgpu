@@ -6462,8 +6462,14 @@ impl<L, V> TextureDescriptor<L, V> {
     /// <https://gpuweb.github.io/gpuweb/#abstract-opdef-compute-render-extent>
     #[must_use]
     pub fn compute_render_extent(&self, mip_level: u32, plane: Option<u32>) -> Extent3d {
-        let width = self.size.width >> mip_level;
-        let height = self.size.height >> mip_level;
+        let min_size = if let TextureFormat::NV12 | TextureFormat::P010 = self.format {
+            2
+        } else {
+            1
+        };
+
+        let width = u32::max(min_size, self.size.width >> mip_level);
+        let height = u32::max(min_size, self.size.height >> mip_level);
 
         let (width, height) = match (self.format, plane) {
             (TextureFormat::NV12 | TextureFormat::P010, Some(0)) => (width, height),
