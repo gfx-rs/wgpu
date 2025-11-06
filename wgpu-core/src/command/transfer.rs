@@ -170,6 +170,8 @@ pub enum TransferError {
     },
     #[error("Requested mip level {requested} does not exist (count: {count})")]
     InvalidMipLevel { requested: u32, count: u32 },
+    #[error("Buffer is expected to be unmapped, but was not")]
+    BufferNotAvailable,
 }
 
 impl WebGpuError for TransferError {
@@ -211,7 +213,8 @@ impl WebGpuError for TransferError {
             | Self::InvalidSampleCount { .. }
             | Self::SampleCountNotEqual { .. }
             | Self::InvalidMipLevel { .. }
-            | Self::SameSourceDestinationBuffer => return ErrorType::Validation,
+            | Self::SameSourceDestinationBuffer
+            | Self::BufferNotAvailable => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }

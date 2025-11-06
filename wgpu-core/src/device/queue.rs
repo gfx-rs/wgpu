@@ -648,6 +648,9 @@ impl Queue {
         buffer_offset: u64,
         buffer_size: wgt::BufferSize,
     ) -> Result<(), TransferError> {
+        if !matches!(&*buffer.map_state.lock(), BufferMapState::Idle) {
+            return Err(TransferError::BufferNotAvailable);
+        }
         buffer.check_usage(wgt::BufferUsages::COPY_DST)?;
         if buffer_size.get() % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(TransferError::UnalignedCopySize(buffer_size.get()));
