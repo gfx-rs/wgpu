@@ -124,6 +124,9 @@ By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206
 - Corrected documentation of the minimum alignment of the *end* of a mapped range of a buffer (it is 4, not 8). By @kpreid in [#8450](https://github.com/gfx-rs/wgpu/pull/8450).
 - `util::StagingBelt` now takes a `Device` when it is created instead of when it is used. By @kpreid in [#8462](https://github.com/gfx-rs/wgpu/pull/8462).
 
+#### Metal
+- Add support for mesh shaders. By @SupaMaggie70Incorporated in [#8139](https://github.com/gfx-rs/wgpu/pull/8139)
+
 ### Bug Fixes
 
 #### naga

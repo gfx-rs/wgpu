@@ -1169,12 +1169,11 @@ bitflags_array! {
         /// This is a native only feature.
         const UNIFORM_BUFFER_BINDING_ARRAYS = 1 << 47;
 
-        /// Enables mesh shaders and task shaders in mesh shader pipelines.
+        /// Enables mesh shaders and task shaders in mesh shader pipelines. This extension does NOT imply support for
+        /// compiling mesh shaders at runtime. Rather, the user must use custom passthrough shaders.
         ///
         /// Supported platforms:
         /// - Vulkan (with [VK_EXT_mesh_shader](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_mesh_shader.html))
-        ///
-        /// Potential Platforms:
         /// - DX12
         /// - Metal
         ///
