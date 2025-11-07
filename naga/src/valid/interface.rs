@@ -98,8 +98,6 @@ pub enum VaryingError {
     InvalidPerPrimitive,
     #[error("Non-builtin members of a mesh primitive output struct must be decorated with `@per_primitive`")]
     MissingPerPrimitive,
-    #[error("The `MESH_SHADER` capability must be enabled to use per-primitive fragment inputs.")]
-    PerPrimitiveNotAllowed,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -402,6 +400,24 @@ impl VaryingContext<'_> {
                         (false, true)
                     }
                 };
+                match built_in {
+                    Bi::CullPrimitive
+                    | Bi::PointIndex
+                    | Bi::LineIndices
+                    | Bi::TriangleIndices
+                    | Bi::MeshTaskSize
+                    | Bi::VertexCount
+                    | Bi::PrimitiveCount
+                    | Bi::Vertices
+                    | Bi::Primitives => {
+                        if !self.capabilities.contains(Capabilities::MESH_SHADER) {
+                            return Err(VaryingError::UnsupportedCapability(
+                                Capabilities::MESH_SHADER,
+                            ));
+                        }
+                    }
+                    _ => (),
+                }
 
                 if !visible {
                     return Err(VaryingError::InvalidBuiltInStage(built_in));
@@ -419,7 +435,9 @@ impl VaryingContext<'_> {
                 per_primitive,
             } => {
                 if per_primitive && !self.capabilities.contains(Capabilities::MESH_SHADER) {
-                    return Err(VaryingError::PerPrimitiveNotAllowed);
+                    return Err(VaryingError::UnsupportedCapability(
+                        Capabilities::MESH_SHADER,
+                    ));
                 }
                 // Only IO-shareable types may be stored in locations.
                 if !self.type_info[ty.index()]
@@ -1130,6 +1148,7 @@ impl super::Validator {
                 mesh_info.primitive_output_type,
                 MeshOutputType::PrimitiveOutput,
             )?;
+            info.insert_global_use(GlobalUse::READ, mesh_info.output_variable);
         }
 
         Ok(info)
