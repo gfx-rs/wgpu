@@ -608,7 +608,7 @@ impl crate::AddressSpace {
             // may end up with "const" even if the binding is read-write,
             // and that should be OK.
             Self::Storage { .. } => true,
-            Self::TaskPayload => unimplemented!(),
+            Self::TaskPayload => true,
             // These should always be read-write.
             Self::Private | Self::WorkGroup => false,
             // These translate to `constant` address space, no need for qualifiers.
@@ -6603,26 +6603,42 @@ template <typename A>
 
             self.write_wrapped_functions(module, &ctx)?;
 
-            let (em_str, in_mode, out_mode, can_vertex_pull) = match ep.stage {
+            let (em_str, in_mode, out_mode, can_vertex_pull, extra_attribute) = match ep.stage {
                 crate::ShaderStage::Vertex => (
-                    "vertex",
+                    Some("vertex"),
                     LocationMode::VertexInput,
                     LocationMode::VertexOutput,
                     true,
+                    None,
                 ),
                 crate::ShaderStage::Fragment => (
-                    "fragment",
+                    Some("fragment"),
                     LocationMode::FragmentInput,
                     LocationMode::FragmentOutput,
                     false,
+                    None,
                 ),
                 crate::ShaderStage::Compute => (
-                    "kernel",
+                    Some("kernel"),
                     LocationMode::Uniform,
                     LocationMode::Uniform,
                     false,
+                    None,
                 ),
-                crate::ShaderStage::Task | crate::ShaderStage::Mesh => unimplemented!(),
+                crate::ShaderStage::Task => (
+                    None,
+                    LocationMode::Uniform,
+                    LocationMode::Uniform,
+                    false,
+                    Some("task"),
+                ),
+                crate::ShaderStage::Mesh => (
+                    None,
+                    LocationMode::Uniform,
+                    LocationMode::Uniform,
+                    false,
+                    Some("mesh"),
+                ),
             };
 
             // Should this entry point be modified to do vertex pulling?
@@ -6689,9 +6705,7 @@ template <typename A>
                                 break;
                             }
                         }
-                        crate::AddressSpace::TaskPayload => {
-                            unimplemented!()
-                        }
+                        crate::AddressSpace::TaskPayload => {}
                         crate::AddressSpace::Function
                         | crate::AddressSpace::Private
                         | crate::AddressSpace::WorkGroup => {}
@@ -6817,7 +6831,7 @@ template <typename A>
             let stage_out_name = self.namer.call(&format!("{fun_name}Output"));
             let result_member_name = self.namer.call("member");
             let result_type_name = match fun.result {
-                Some(ref result) => {
+                Some(ref result) if ep.stage != crate::ShaderStage::Task => {
                     let mut result_members = Vec::new();
                     if let crate::TypeInner::Struct { ref members, .. } =
                         module.types[result.ty].inner
@@ -6888,7 +6902,7 @@ template <typename A>
                     writeln!(self.out, "}};")?;
                     &stage_out_name
                 }
-                None => "void",
+                _ => "void",
             };
 
             // If we're doing a vertex pulling transform, define the buffer
@@ -6908,8 +6922,16 @@ template <typename A>
                 }
             }
 
+            // Mesh/task (object) shaders use `[[mesh]] void ...` syntax instead of `kernel void ...`.
+            if let Some(extra_attribute) = extra_attribute {
+                writeln!(self.out, "[[{extra_attribute}]]")?;
+            }
+
             // Write the entry point function's name, and begin its argument list.
-            writeln!(self.out, "{em_str} {result_type_name} {fun_name}(")?;
+            if let Some(em_str) = em_str {
+                write!(self.out, "{em_str} ")?;
+            }
+            writeln!(self.out, "{result_type_name} {fun_name}(")?;
 
             let mut is_first_argument = true;
             let mut separator = || {
@@ -7114,7 +7136,7 @@ template <typename A>
                 // the resolves have already been checked for `!fake_missing_bindings` case
                 let resolved = match var.space {
                     crate::AddressSpace::PushConstant => options.resolve_push_constants(ep).ok(),
-                    crate::AddressSpace::WorkGroup => None,
+                    crate::AddressSpace::WorkGroup | crate::AddressSpace::TaskPayload => None,
                     _ => options
                         .resolve_resource_binding(ep, var.binding.as_ref().unwrap())
                         .ok(),

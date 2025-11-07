@@ -711,14 +711,15 @@ impl ResolvedBinding {
                     Bi::CullDistance | Bi::DrawID => {
                         return Err(Error::UnsupportedBuiltIn(built_in))
                     }
-                    Bi::CullPrimitive => "primitive_culled",
-                    // TODO: figure out how to make this written as a function call
-                    Bi::PointIndex | Bi::LineIndices | Bi::TriangleIndices => unimplemented!(),
-                    Bi::MeshTaskSize
+                    Bi::CullPrimitive
+                    | Bi::PointIndex
+                    | Bi::LineIndices
+                    | Bi::TriangleIndices
+                    | Bi::MeshTaskSize
                     | Bi::VertexCount
                     | Bi::PrimitiveCount
                     | Bi::Vertices
-                    | Bi::Primitives => unreachable!(),
+                    | Bi::Primitives => "TODO_MESH_BUILTIN",
                 };
                 write!(out, "{name}")?;
             }
