@@ -165,10 +165,9 @@ impl Device {
     /// thus it's the caller responsibility to pass a shader which doesn't perform any of this
     /// operations.
     ///
-    /// See the documentation for [`ShaderRuntimeChecks`][src] for more information about specific checks.
+    /// See the documentation for [`ShaderRuntimeChecks`] for more information about specific checks.
     ///
     /// [csm]: Self::create_shader_module
-    /// [src]: crate::ShaderRuntimeChecks
     #[must_use]
     pub unsafe fn create_shader_module_trusted(
         &self,
