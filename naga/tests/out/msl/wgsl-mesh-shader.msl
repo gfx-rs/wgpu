@@ -36,9 +36,12 @@ struct MeshOutput {
     char _pad4[8];
 };
 
+struct ts_mainOutput {
+    metal::uint3 member [[TODO_MESH_BUILTIN]];
+};
 [[task]]
-void ts_main(
-  object_data TaskPayload& taskPayload
+ts_mainOutput ts_main(
+  object_data TaskPayload& taskPayload [[payload]]
 , threadgroup float& workgroupData
 ) {
     workgroupData = 1.0;
@@ -54,7 +57,7 @@ struct ms_mainInput {
 void ms_main(
   uint index [[thread_index_in_threadgroup]]
 , metal::uint3 id [[thread_position_in_grid]]
-, object_data TaskPayload const& taskPayload
+, object_data TaskPayload const& taskPayload [[payload]]
 , threadgroup float& workgroupData
 , threadgroup MeshOutput& mesh_output
 ) {

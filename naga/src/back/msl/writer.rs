@@ -410,7 +410,7 @@ impl TypedGlobalVariable<'_> {
             first_time: false,
         };
 
-        let (space, access, reference) = match var.space.to_msl_name() {
+        let (space, access, reference, trailing_attribute) = match var.space.to_msl_name() {
             Some(space) if self.reference => {
                 let access = if var.space.needs_access_qualifier()
                     && !self.usage.intersects(valid::GlobalUse::WRITE)
@@ -419,14 +419,19 @@ impl TypedGlobalVariable<'_> {
                 } else {
                     ""
                 };
-                (space, access, "&")
+                let trailing_attribute = if var.space == crate::AddressSpace::TaskPayload {
+                    " [[payload]]"
+                } else {
+                    ""
+                };
+                (space, access, "&", trailing_attribute)
             }
-            _ => ("", "", ""),
+            _ => ("", "", "", ""),
         };
 
         Ok(write!(
             out,
-            "{}{}{}{}{}{} {}",
+            "{}{}{}{}{}{} {}{}",
             space,
             if space.is_empty() { "" } else { " " },
             ty_name,
@@ -434,6 +439,7 @@ impl TypedGlobalVariable<'_> {
             access,
             reference,
             name,
+            trailing_attribute
         )?)
     }
 }
@@ -6831,7 +6837,7 @@ template <typename A>
             let stage_out_name = self.namer.call(&format!("{fun_name}Output"));
             let result_member_name = self.namer.call("member");
             let result_type_name = match fun.result {
-                Some(ref result) if ep.stage != crate::ShaderStage::Task => {
+                Some(ref result) => {
                     let mut result_members = Vec::new();
                     if let crate::TypeInner::Struct { ref members, .. } =
                         module.types[result.ty].inner
@@ -6902,7 +6908,7 @@ template <typename A>
                     writeln!(self.out, "}};")?;
                     &stage_out_name
                 }
-                _ => "void",
+                None => "void",
             };
 
             // If we're doing a vertex pulling transform, define the buffer
