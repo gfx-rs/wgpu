@@ -258,7 +258,7 @@ cargo xtask cts -f your_tests.lst
 ```
 
 To find the full list of tests, go to the
-[web version of the CTS](https://gpuweb.github.io/cts/standalone/?runnow=0&worker=0&debug=0&q=webgpu:*).
+[web-based standalone CTS runner](https://gpuweb.github.io/cts/standalone/?runnow=0&worker=0&debug=0&q=webgpu:*).
 
 The version of the CTS used by `cargo xtask cts` is specified in
 [`cts_runner/revision.txt`](../cts_runner/revision.txt).
