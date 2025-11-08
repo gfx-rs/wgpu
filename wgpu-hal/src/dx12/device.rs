@@ -2066,6 +2066,7 @@ impl crate::Device for super::Device {
 
         let raw: Direct3D12::ID3D12PipelineState =
             if let Ok(device) = self.raw.cast::<Direct3D12::ID3D12Device2>() {
+                // Prefer stream descs where possible
                 let mut raw_desc = unsafe { stream_desc.to_bytes() };
                 let stream_desc = Direct3D12::D3D12_PIPELINE_STATE_STREAM_DESC {
                     SizeInBytes: raw_desc.len(),
@@ -2078,6 +2079,7 @@ impl crate::Device for super::Device {
                     })?
                 }
             } else {
+                // Use standard but less flexible descriptor elsewhere
                 let desc = stream_desc.to_traditional_descriptor();
                 unsafe {
                     self.raw.CreateGraphicsPipelineState(&desc).map_err(|err| {
