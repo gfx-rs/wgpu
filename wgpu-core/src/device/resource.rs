@@ -88,6 +88,8 @@ pub struct Device {
 
     pub(crate) command_indices: RwLock<CommandIndices>,
 
+    pub(crate) render_pass_command_pool: Mutex<Vec<Vec<command::ArcRenderCommand>>>,
+
     /// The index of the last successful submission to this device's
     /// [`hal::Queue`].
     ///
@@ -289,6 +291,7 @@ impl Device {
                     next_acceleration_structure_build_command_index: 1,
                 },
             ),
+            render_pass_command_pool: Mutex::new(rank::DEVICE_RENDER_PASS_COMMAND_POOL, Vec::new()),
             last_successful_submission_index: AtomicU64::new(0),
             fence: RwLock::new(rank::DEVICE_FENCE, ManuallyDrop::new(fence)),
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },

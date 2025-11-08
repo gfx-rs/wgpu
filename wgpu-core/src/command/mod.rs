@@ -26,6 +26,7 @@ pub use self::{
 };
 pub(crate) use allocator::CommandAllocator;
 
+pub(crate) use render_command::ArcRenderCommand;
 pub(crate) use timestamp_writes::ArcPassTimestampWrites;
 pub use timestamp_writes::PassTimestampWrites;
 
@@ -877,11 +878,11 @@ pub struct BasePass<C, E> {
 }
 
 impl<C: Clone, E: Clone> BasePass<C, E> {
-    fn new(label: &Label) -> Self {
+    fn new(commands: Vec<C>, label: &Label) -> Self {
         Self {
             label: label.as_deref().map(str::to_owned),
             error: None,
-            commands: Vec::new(),
+            commands,
             dynamic_offsets: Vec::new(),
             string_data: Vec::new(),
             push_constant_data: Vec::new(),

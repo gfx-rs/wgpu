@@ -69,7 +69,7 @@ impl ComputePass {
         } = desc;
 
         Self {
-            base: BasePass::new(&label),
+            base: BasePass::new(Vec::new(), &label),
             parent: Some(parent),
             timestamp_writes,
 

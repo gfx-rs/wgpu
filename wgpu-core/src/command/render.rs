@@ -1,5 +1,5 @@
 use alloc::{borrow::Cow, sync::Arc, vec::Vec};
-use core::{fmt, num::NonZeroU32, ops::Range, str};
+use core::{fmt, mem, num::NonZeroU32, ops::Range, str};
 
 use arrayvec::ArrayVec;
 use thiserror::Error;
@@ -287,8 +287,15 @@ impl RenderPass {
             occlusion_query_set,
         } = desc;
 
+        let render_commands = parent
+            .device
+            .render_pass_command_pool
+            .lock()
+            .pop()
+            .unwrap_or_else(|| Vec::with_capacity(1 << 14));
+
         Self {
-            base: BasePass::new(label),
+            base: BasePass::new(render_commands, label),
             parent: Some(parent),
             color_attachments,
             depth_stencil_attachment,
@@ -2251,6 +2258,11 @@ impl Global {
             }
 
             encoder.close_and_swap().map_pass_err(pass_scope)?;
+
+            device
+                .render_pass_command_pool
+                .lock()
+                .push(mem::take(&mut base.commands));
 
             Ok(())
         })

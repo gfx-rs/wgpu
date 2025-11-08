@@ -138,6 +138,7 @@ define_lock_ranks! {
     rank DEVICE_TRACKERS "Device::trackers" followed by { }
     rank DEVICE_LOST_CLOSURE "Device::device_lost_closure" followed by { }
     rank DEVICE_USAGE_SCOPES "Device::usage_scopes" followed by { }
+    rank DEVICE_RENDER_PASS_COMMAND_POOL "Device::render_pass_command_pool" followed by { }
     rank IDENTITY_MANAGER_VALUES "IdentityManager::values" followed by { }
     rank REGISTRY_STORAGE "Registry::storage" followed by { }
     rank RESOURCE_POOL_INNER "ResourcePool::inner" followed by { }

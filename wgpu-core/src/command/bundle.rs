@@ -196,7 +196,7 @@ impl RenderBundleEncoder {
         //TODO: validate that attachment formats are renderable,
         // have expected aspects, support multisampling.
         Ok(Self {
-            base: base.unwrap_or_else(|| BasePass::new(&desc.label)),
+            base: base.unwrap_or_else(|| BasePass::new(Vec::new(), &desc.label)),
             parent_id,
             context: RenderPassContext {
                 attachments: AttachmentData {
@@ -232,7 +232,7 @@ impl RenderBundleEncoder {
 
     pub fn dummy(parent_id: id::DeviceId) -> Self {
         Self {
-            base: BasePass::new(&None),
+            base: BasePass::new(Vec::new(), &None),
             parent_id,
             context: RenderPassContext {
                 attachments: AttachmentData {
