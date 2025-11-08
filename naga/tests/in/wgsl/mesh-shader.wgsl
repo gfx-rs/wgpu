@@ -10,12 +10,11 @@ const colors = array(
     vec4(0., 0., 1., 1.),
     vec4(1., 0., 0., 1.)
 );
+
 struct TaskPayload {
     colorMask: vec4<f32>,
     visible: bool,
 }
-var<task_payload> taskPayload: TaskPayload;
-var<workgroup> workgroupData: f32;
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) color: vec4<f32>,
@@ -28,6 +27,9 @@ struct PrimitiveOutput {
 struct PrimitiveInput {
     @per_primitive @location(1) colorMask: vec4<f32>,
 }
+
+var<task_payload> taskPayload: TaskPayload;
+var<workgroup> workgroupData: f32;
 
 @task
 @payload(taskPayload)
@@ -45,8 +47,8 @@ struct MeshOutput {
     @builtin(vertex_count) vertex_count: u32,
     @builtin(primitive_count) primitive_count: u32,
 }
-
 var<workgroup> mesh_output: MeshOutput;
+
 @mesh(mesh_output)
 @payload(taskPayload)
 @workgroup_size(1)
@@ -68,6 +70,7 @@ fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocati
     mesh_output.primitives[0].cull = !taskPayload.visible;
     mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
 }
+
 @fragment
 fn fs_main(vertex: VertexOutput, primitive: PrimitiveInput) -> @location(0) vec4<f32> {
     return vertex.color * primitive.colorMask;
