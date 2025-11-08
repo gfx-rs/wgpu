@@ -25,7 +25,9 @@ use wgt::{
 use crate::device::trace;
 use crate::{
     api_log,
-    binding_model::{self, BindGroup, BindGroupLayout, BindGroupLayoutEntryError},
+    binding_model::{
+        self, BindGroup, BindGroupLateBufferBindingInfo, BindGroupLayout, BindGroupLayoutEntryError,
+    },
     command, conv,
     device::{
         bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
@@ -3279,10 +3281,16 @@ impl Device {
             .map_err(|e| self.handle_hal_error(e))?;
 
         // collect in the order of BGL iteration
-        let late_buffer_binding_sizes = layout
+        let late_buffer_binding_infos = layout
             .entries
             .indices()
-            .flat_map(|binding| late_buffer_binding_sizes.get(&binding).cloned())
+            .flat_map(|binding| {
+                let size = late_buffer_binding_sizes.get(&binding).cloned()?;
+                Some(BindGroupLateBufferBindingInfo {
+                    binding_index: binding,
+                    size,
+                })
+            })
             .collect();
 
         let bind_group = BindGroup {
@@ -3295,7 +3303,7 @@ impl Device {
             used_buffer_ranges,
             used_texture_ranges,
             dynamic_binding_info,
-            late_buffer_binding_sizes,
+            late_buffer_binding_infos,
         };
 
         let bind_group = Arc::new(bind_group);
