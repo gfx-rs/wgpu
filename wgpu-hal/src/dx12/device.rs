@@ -5,6 +5,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
+use arrayvec::ArrayVec;
 use core::{ffi, num::NonZeroU32, ptr, time::Duration};
 use std::time::Instant;
 
@@ -981,7 +982,7 @@ impl crate::Device for super::Device {
         let mut ranges = Vec::with_capacity(total_non_dynamic_entries);
 
         let mut bind_group_infos =
-            arrayvec::ArrayVec::<super::BindGroupInfo, { crate::MAX_BIND_GROUPS }>::default();
+            ArrayVec::<super::BindGroupInfo, { crate::MAX_BIND_GROUPS }>::default();
         for (index, bgl) in desc.bind_group_layouts.iter().enumerate() {
             let mut info = super::BindGroupInfo {
                 tables: super::TableTypes::empty(),
@@ -1952,6 +1953,19 @@ impl crate::Device for super::Device {
         };
         let flags = Direct3D12::D3D12_PIPELINE_STATE_FLAG_NONE;
 
+        let mut view_instancing: ArrayVec<Direct3D12::D3D12_VIEW_INSTANCE_LOCATION, 32> =
+            ArrayVec::new();
+        if let Some(mask) = desc.multiview_mask {
+            let mask = mask.get();
+            // The mask gets applied later
+            for i in 0..32 - mask.leading_zeros() {
+                view_instancing.push(Direct3D12::D3D12_VIEW_INSTANCE_LOCATION {
+                    ViewportArrayIndex: 0,
+                    RenderTargetArrayIndex: i,
+                });
+            }
+        }
+
         let mut stream_desc = super::RenderPipelineStateStreamDesc {
             // Shared by vertex and mesh pipelines
             root_signature: root_signature
@@ -1973,6 +1987,17 @@ impl crate::Device for super::Device {
             node_mask: 0,
             cached_pso,
             flags,
+            view_instancing: if !view_instancing.is_empty() {
+                Some(Direct3D12::D3D12_VIEW_INSTANCING_DESC {
+                    // TODO: rethink this
+                    ViewInstanceCount: view_instancing.len() as u32,
+                    pViewInstanceLocations: view_instancing.as_ptr(),
+                    // This lets us hide certain values later
+                    Flags: Direct3D12::D3D12_VIEW_INSTANCING_FLAG_ENABLE_VIEW_INSTANCE_MASKING,
+                })
+            } else {
+                None
+            },
 
             // Other crap
             vertex_shader: Default::default(),

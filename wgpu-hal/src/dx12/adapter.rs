@@ -601,13 +601,20 @@ impl super::Adapter {
             shader_barycentrics_supported,
         );
 
-        // Re-enable this when multiview is supported on DX12
-        // features.set(wgt::Features::MULTIVIEW, view_instancing);
-        // features.set(wgt::Features::SELECTIVE_MULTIVIEW, view_instancing);
+        features.set(
+            wgt::Features::MULTIVIEW,
+            view_instancing && shader_model >= naga::back::hlsl::ShaderModel::V6_1,
+        );
+        features.set(
+            wgt::Features::SELECTIVE_MULTIVIEW,
+            view_instancing && shader_model >= naga::back::hlsl::ShaderModel::V6_1,
+        );
 
         features.set(
             wgt::Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
-            mesh_shader_supported && view_instancing,
+            mesh_shader_supported
+                && view_instancing
+                && shader_model >= naga::back::hlsl::ShaderModel::V6_1,
         );
 
         // TODO: Determine if IPresentationManager is supported

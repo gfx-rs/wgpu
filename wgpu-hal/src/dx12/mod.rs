@@ -1633,6 +1633,7 @@ struct RenderPipelineStateStreamDesc {
     node_mask: u32,
     cached_pso: Direct3D12::D3D12_CACHED_PIPELINE_STATE,
     flags: Direct3D12::D3D12_PIPELINE_STATE_FLAGS,
+    view_instancing: Option<Direct3D12::D3D12_VIEW_INSTANCING_DESC>,
 
     // Vertex pipeline specific
     vertex_shader: Direct3D12::D3D12_SHADER_BYTECODE,

@@ -110,6 +110,12 @@ impl super::RenderPipelineStateStreamDesc {
         if !self.pixel_shader.pShaderBytecode.is_null() {
             push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS, self.pixel_shader);
         }
+        if let Some(view_instancing) = self.view_instancing {
+            push_subobject!(
+                D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VIEW_INSTANCING,
+                view_instancing
+            );
+        }
 
         // Vertex pipeline stuff
         if !self.vertex_shader.pShaderBytecode.is_null() {
