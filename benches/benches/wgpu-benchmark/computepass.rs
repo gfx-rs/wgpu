@@ -3,17 +3,16 @@ use std::{
     time::{Duration, Instant},
 };
 
-use criterion::{criterion_group, Criterion, Throughput};
 use nanorand::{Rng, WyRand};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use std::sync::LazyLock;
+use wgpu_benchmark::{iter_auto, iter_many, BenchmarkContext, LoopControl};
 
-use crate::{is_test, DeviceState};
+use crate::DeviceState;
 
-fn dispatch_count() -> usize {
+fn dispatch_count(ctx: &BenchmarkContext) -> usize {
     // When testing we only want to run a very lightweight version of the benchmark
     // to ensure that it does not break.
-    if is_test() {
+    if ctx.is_test() {
         8
     } else {
         10_000
@@ -25,18 +24,18 @@ fn dispatch_count() -> usize {
 // This is in fact so slow that it makes the benchmark unusable when we use the same amount of
 // resources as the regular benchmark.
 // For details see https://github.com/gfx-rs/wgpu/issues/5766
-fn dispatch_count_bindless() -> usize {
+fn dispatch_count_bindless(ctx: &BenchmarkContext) -> usize {
     // On CI we only want to run a very lightweight version of the benchmark
     // to ensure that it does not break.
-    if is_test() {
+    if ctx.is_test() {
         8
     } else {
         1_000
     }
 }
 
-fn thread_count_list() -> &'static [usize] {
-    if is_test() {
+fn thread_count_list(ctx: &BenchmarkContext) -> &'static [usize] {
+    if ctx.is_test() {
         &[2]
     } else {
         &[2, 4, 8]
@@ -62,11 +61,11 @@ struct ComputepassState {
 
 impl ComputepassState {
     /// Create and prepare all the resources needed for the computepass benchmark.
-    fn new() -> Self {
+    fn new(ctx: &BenchmarkContext) -> Self {
         let device_state = DeviceState::new();
 
-        let dispatch_count = dispatch_count();
-        let dispatch_count_bindless = dispatch_count_bindless();
+        let dispatch_count = dispatch_count(ctx);
+        let dispatch_count_bindless = dispatch_count_bindless(ctx);
         let texture_count = dispatch_count * TEXTURES_PER_DISPATCH;
         let storage_buffer_count = dispatch_count * STORAGE_BUFFERS_PER_DISPATCH;
         let storage_texture_count = dispatch_count * STORAGE_TEXTURES_PER_DISPATCH;
@@ -377,10 +376,15 @@ impl ComputepassState {
         }
     }
 
-    fn run_subpass(&self, pass_number: usize, total_passes: usize) -> wgpu::CommandBuffer {
+    fn run_subpass(
+        &self,
+        ctx: &BenchmarkContext,
+        pass_number: usize,
+        total_passes: usize,
+    ) -> wgpu::CommandBuffer {
         profiling::scope!("Computepass", &format!("Pass {pass_number}/{total_passes}"));
 
-        let dispatch_count = dispatch_count();
+        let dispatch_count = dispatch_count(ctx);
         let dispatch_per_pass = dispatch_count / total_passes;
 
         let mut encoder = self
@@ -431,183 +435,140 @@ impl ComputepassState {
     }
 }
 
-fn run_bench(ctx: &mut Criterion) {
-    let state = LazyLock::new(ComputepassState::new);
+pub fn run_bench(mut ctx: BenchmarkContext) -> anyhow::Result<Vec<wgpu_benchmark::SubBenchResult>> {
+    let state = ComputepassState::new(&ctx);
 
-    let dispatch_count = dispatch_count();
-    let dispatch_count_bindless = dispatch_count_bindless();
-    let texture_count = dispatch_count * TEXTURES_PER_DISPATCH;
-    let storage_buffer_count = dispatch_count * STORAGE_BUFFERS_PER_DISPATCH;
-    let storage_texture_count = dispatch_count * STORAGE_TEXTURES_PER_DISPATCH;
+    ctx.default_iterations = LoopControl::Time(Duration::from_secs(3));
+
+    // This benchmark hangs on Apple Paravirtualized GPUs. No idea why.
+    if state.device_state.adapter_info.name.contains("Paravirtual") {
+        anyhow::bail!("Benchmark unsupported on Paravirtualized GPUs");
+    }
+
+    let dispatch_count = dispatch_count(&ctx);
+    let dispatch_count_bindless = dispatch_count_bindless(&ctx);
+
+    let mut results = Vec::new();
 
     // Test 10k dispatch calls split up into 1, 2, 4, and 8 computepasses
-    let mut group = ctx.benchmark_group("Computepass: Single Threaded");
-    group.throughput(Throughput::Elements(dispatch_count as _));
+    for &cpasses in thread_count_list(&ctx) {
+        let labels = vec![
+            format!("Encoding ({cpasses} passes)"),
+            format!("Submit ({cpasses} passes)"),
+        ];
 
-    for time_submit in [false, true] {
-        for &cpasses in thread_count_list() {
-            let dispatch_per_pass = dispatch_count / cpasses;
+        results.extend(iter_many(
+            &ctx,
+            labels,
+            "dispatches",
+            dispatch_count as _,
+            || {
+                let mut buffers: Vec<wgpu::CommandBuffer> = Vec::with_capacity(cpasses);
+                let encoding_start = Instant::now();
+                for i in 0..cpasses {
+                    buffers.push(state.run_subpass(&ctx, i, cpasses));
+                }
+                let encoding_duration = encoding_start.elapsed();
 
-            let label = if time_submit {
-                "Submit Time"
-            } else {
-                "Computepass Time"
-            };
+                let submit_start = Instant::now();
+                state.device_state.queue.submit(buffers);
+                let submit_duration = submit_start.elapsed();
 
-            group.bench_function(
-                format!("{cpasses} computepasses x {dispatch_per_pass} dispatches ({label})"),
-                |b| {
-                    LazyLock::force(&state);
-
-                    b.iter_custom(|iters| {
-                        profiling::scope!("benchmark invocation");
-
-                        let mut duration = Duration::ZERO;
-
-                        for _ in 0..iters {
-                            profiling::scope!("benchmark iteration");
-
-                            let mut start = Instant::now();
-
-                            let mut buffers: Vec<wgpu::CommandBuffer> = Vec::with_capacity(cpasses);
-                            for i in 0..cpasses {
-                                buffers.push(state.run_subpass(i, cpasses));
-                            }
-
-                            if time_submit {
-                                start = Instant::now();
-                            } else {
-                                duration += start.elapsed();
-                            }
-
-                            state.device_state.queue.submit(buffers);
-
-                            if time_submit {
-                                duration += start.elapsed();
-                            }
-
-                            state
-                                .device_state
-                                .device
-                                .poll(wgpu::PollType::wait_indefinitely())
-                                .unwrap();
-                        }
-
-                        duration
-                    })
-                },
-            );
-        }
-    }
-    group.finish();
-
-    // Test 10k dispatch calls split up over 2, 4, and 8 threads.
-    let mut group = ctx.benchmark_group("Computepass: Multi Threaded");
-    group.throughput(Throughput::Elements(dispatch_count as _));
-
-    for &threads in thread_count_list() {
-        let dispatch_per_pass = dispatch_count / threads;
-        group.bench_function(
-            format!("{threads} threads x {dispatch_per_pass} dispatch"),
-            |b| {
-                LazyLock::force(&state);
-
-                b.iter_custom(|iters| {
-                    profiling::scope!("benchmark invocation");
-
-                    // This benchmark hangs on Apple Paravirtualized GPUs. No idea why.
-                    if state.device_state.adapter_info.name.contains("Paravirtual") {
-                        return Duration::from_secs_f32(1.0);
-                    }
-
-                    let mut duration = Duration::ZERO;
-
-                    for _ in 0..iters {
-                        profiling::scope!("benchmark iteration");
-
-                        let start = Instant::now();
-
-                        let buffers = (0..threads)
-                            .into_par_iter()
-                            .map(|i| state.run_subpass(i, threads))
-                            .collect::<Vec<_>>();
-
-                        duration += start.elapsed();
-
-                        state.device_state.queue.submit(buffers);
-                        state
-                            .device_state
-                            .device
-                            .poll(wgpu::PollType::wait_indefinitely())
-                            .unwrap();
-                    }
-
-                    duration
-                })
-            },
-        );
-    }
-    group.finish();
-
-    // Test 10k dispatch calls split up over 1, 2, 4, and 8 threads.
-    let mut group = ctx.benchmark_group("Computepass: Bindless");
-    group.throughput(Throughput::Elements(dispatch_count_bindless as _));
-
-    group.bench_function(format!("{dispatch_count_bindless} dispatch"), |b| {
-        LazyLock::force(&state);
-
-        b.iter_custom(|iters| {
-            profiling::scope!("benchmark invocation");
-
-            // This benchmark hangs on Apple Paravirtualized GPUs. No idea why.
-            if state.device_state.adapter_info.name.contains("Paravirtual") {
-                return Duration::from_secs_f32(1.0);
-            }
-
-            // Need bindless to run this benchmark
-            if state.bindless_bind_group.is_none() {
-                return Duration::from_secs(1);
-            }
-
-            let mut duration = Duration::ZERO;
-
-            for _ in 0..iters {
-                profiling::scope!("benchmark iteration");
-
-                let start = Instant::now();
-
-                let buffer = state.run_bindless_pass(dispatch_count_bindless);
-
-                duration += start.elapsed();
-
-                state.device_state.queue.submit([buffer]);
                 state
                     .device_state
                     .device
                     .poll(wgpu::PollType::wait_indefinitely())
                     .unwrap();
-            }
 
-            duration
-        })
-    });
-    group.finish();
+                vec![encoding_duration, submit_duration]
+            },
+        ));
+    }
 
-    ctx.bench_function(
+    // Test 10k dispatch calls split up over 2, 4, and 8 threads.
+    for &threads in thread_count_list(&ctx) {
+        let labels = vec![
+            format!("Encoding ({threads} threads)"),
+            format!("Submit ({threads} threads)"),
+        ];
+
+        results.extend(iter_many(
+            &ctx,
+            labels,
+            "dispatches",
+            dispatch_count as _,
+            || {
+                let encoding_start = Instant::now();
+                let buffers = (0..threads)
+                    .into_par_iter()
+                    .map(|i| state.run_subpass(&ctx, i, threads))
+                    .collect::<Vec<_>>();
+                let encoding_duration = encoding_start.elapsed();
+
+                let submit_start = Instant::now();
+                state.device_state.queue.submit(buffers);
+                let submit_duration = submit_start.elapsed();
+
+                state
+                    .device_state
+                    .device
+                    .poll(wgpu::PollType::wait_indefinitely())
+                    .unwrap();
+
+                vec![encoding_duration, submit_duration]
+            },
+        ));
+    }
+
+    // Test 10k dispatch calls with bindless rendering.
+    if state.bindless_bind_group.is_some() {
+        let labels = vec![
+            "Encoding (bindless)".to_string(),
+            "Submit (bindless)".to_string(),
+        ];
+
+        results.extend(iter_many(
+            &ctx,
+            labels,
+            "dispatches",
+            dispatch_count_bindless as _,
+            || {
+                let encoding_start = Instant::now();
+                let buffer = state.run_bindless_pass(dispatch_count_bindless);
+                let encoding_duration = encoding_start.elapsed();
+
+                let submit_start = Instant::now();
+                state.device_state.queue.submit([buffer]);
+                let submit_duration = submit_start.elapsed();
+
+                state
+                    .device_state
+                    .device
+                    .poll(wgpu::PollType::wait_indefinitely())
+                    .unwrap();
+
+                vec![encoding_duration, submit_duration]
+            },
+        ));
+    }
+
+    // Test empty submit overhead with all resources
+    let texture_count = dispatch_count * TEXTURES_PER_DISPATCH;
+    let storage_buffer_count = dispatch_count * STORAGE_BUFFERS_PER_DISPATCH;
+    let storage_texture_count = dispatch_count * STORAGE_TEXTURES_PER_DISPATCH;
+
+    results.push(iter_auto(
+        &ctx,
         &format!(
-            "Computepass: Empty Submit with {} Resources",
+            "Empty Submit with {} Resources",
             texture_count + storage_texture_count + storage_buffer_count
         ),
-        |b| {
-            LazyLock::force(&state);
-
-            b.iter(|| state.device_state.queue.submit([]));
+        "submits",
+        1,
+        || {
+            state.device_state.queue.submit([]);
         },
-    );
-}
+    ));
 
-criterion_group! {
-    name = computepass;
-    config = Criterion::default().measurement_time(Duration::from_secs(10));
-    targets = run_bench,
+    Ok(results)
 }
