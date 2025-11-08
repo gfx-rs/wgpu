@@ -920,9 +920,8 @@ bitflags_array! {
         /// Supported platforms:
         /// - Vulkan
         /// - Metal
+        /// - DX12
         /// - OpenGL (web only)
-        ///
-        /// DX12 support is a WIP.
         ///
         /// This is a native only feature.
         const MULTIVIEW = 1 << 26;
@@ -1250,8 +1249,8 @@ bitflags_array! {
         ///
         /// Supported platforms
         /// - Vulkan
+        /// - DX12
         ///
-        /// DX12 will support this when it supports multiview in general.
         ///
         /// While metal supports this in theory, the behavior of `view_index` differs from vulkan and dx12 so the feature isn't exposed.
         const SELECTIVE_MULTIVIEW = 1 << 54;
