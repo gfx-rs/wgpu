@@ -685,6 +685,9 @@ pub struct RenderPassDescriptor<'a> {
     /// 2nd layer, you would use 2=0b10. If you aren't using multiview this should be `None`.
     ///
     /// Note that setting bits higher than the number of texture layers is a validation error.
+    ///
+    /// This doesn't influence load/store/clear/etc operations, as those are defined for attachments,
+    /// so affect the entire attachment. This only influences later calls on the `RenderPass` object.
     pub multiview_mask: Option<NonZeroU32>,
 }
 #[cfg(send_sync)]
