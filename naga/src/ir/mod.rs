@@ -2583,7 +2583,7 @@ pub struct DocComments {
 pub enum MeshOutputTopology {
     /// Outputs individual vertices to be rendered as points.
     Points,
-    /// Outputs groups of 2 vertices to be rendered as lines.
+    /// Outputs groups of 2 vertices to be renderedas lines .
     Lines,
     /// Outputs groups of 3 vertices to be rendered as triangles.
     Triangles,
