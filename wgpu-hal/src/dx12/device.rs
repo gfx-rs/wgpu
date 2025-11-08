@@ -2064,18 +2064,27 @@ impl crate::Device for super::Device {
             }
         };
 
-        let mut raw_desc = unsafe { stream_desc.to_bytes() };
-        let stream_desc = Direct3D12::D3D12_PIPELINE_STATE_STREAM_DESC {
-            SizeInBytes: raw_desc.len(),
-            pPipelineStateSubobjectStream: raw_desc.as_mut_ptr().cast(),
-        };
-        let device: Direct3D12::ID3D12Device2 = self.raw.cast().unwrap();
-        let raw: Direct3D12::ID3D12PipelineState = unsafe {
-            profiling::scope!("ID3D12Device2::CreatePipelineState");
-            device
-                .CreatePipelineState(&stream_desc)
-                .map_err(|err| crate::PipelineError::Linkage(shader_stages, err.to_string()))?
-        };
+        let raw: Direct3D12::ID3D12PipelineState =
+            if let Ok(device) = self.raw.cast::<Direct3D12::ID3D12Device2>() {
+                let mut raw_desc = unsafe { stream_desc.to_bytes() };
+                let stream_desc = Direct3D12::D3D12_PIPELINE_STATE_STREAM_DESC {
+                    SizeInBytes: raw_desc.len(),
+                    pPipelineStateSubobjectStream: raw_desc.as_mut_ptr().cast(),
+                };
+                unsafe {
+                    profiling::scope!("ID3D12Device2::CreatePipelineState");
+                    device.CreatePipelineState(&stream_desc).map_err(|err| {
+                        crate::PipelineError::Linkage(shader_stages, err.to_string())
+                    })?
+                }
+            } else {
+                let desc = stream_desc.to_traditional_descriptor();
+                unsafe {
+                    self.raw.CreateGraphicsPipelineState(&desc).map_err(|err| {
+                        crate::PipelineError::Linkage(shader_stages, err.to_string())
+                    })?
+                }
+            };
 
         if let Some(label) = desc.label {
             raw.set_name(label)?;
