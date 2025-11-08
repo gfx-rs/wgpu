@@ -53,7 +53,7 @@ static ALLOW_INPUT_NOT_CONSUMED: GpuTestConfiguration = GpuTestConfiguration::ne
                         write_mask: ColorWrites::all(),
                     })],
                 }),
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
     });

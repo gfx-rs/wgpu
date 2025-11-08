@@ -532,7 +532,7 @@ fn clear_texture_via_render_passes(
                         sample_count: dst_texture.desc.sample_count,
                         color_attachments,
                         depth_stencil_attachment,
-                        multiview: None,
+                        multiview_mask: None,
                         timestamp_writes: None,
                         occlusion_query_set: None,
                     })

@@ -196,7 +196,6 @@ impl SurfaceWrapper {
             config.format = format;
             config.view_formats.push(format);
         };
-        config.present_mode = wgpu::PresentMode::Immediate;
         config.desired_maximum_frame_latency = 3;
 
         surface.configure(&context.device, &config);

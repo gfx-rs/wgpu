@@ -652,7 +652,7 @@ var tex: texture_external;
                 write_mask: ColorWrites::ALL,
             })],
         }),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     });
 
@@ -685,6 +685,7 @@ var tex: texture_external;
         depth_stencil_attachment: None,
         timestamp_writes: None,
         occlusion_query_set: None,
+        multiview_mask: None,
     });
 
     pass.set_pipeline(&pipeline);

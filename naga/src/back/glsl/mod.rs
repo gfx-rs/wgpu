@@ -5215,8 +5215,13 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
                 "gl_FragCoord"
             }
         }
-        Bi::ViewIndex if options.targeting_webgl => "int(gl_ViewID_OVR)",
-        Bi::ViewIndex => "gl_ViewIndex",
+        Bi::ViewIndex => {
+            if options.targeting_webgl {
+                "gl_ViewID_OVR"
+            } else {
+                "uint(gl_ViewIndex)"
+            }
+        }
         // vertex
         Bi::BaseInstance => "uint(gl_BaseInstance)",
         Bi::BaseVertex => "uint(gl_BaseVertex)",

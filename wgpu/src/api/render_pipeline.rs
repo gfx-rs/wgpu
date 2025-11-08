@@ -229,9 +229,13 @@ pub struct RenderPipelineDescriptor<'a> {
     pub multisample: MultisampleState,
     /// The compiled fragment stage, its entry point, and the color targets.
     pub fragment: Option<FragmentState<'a>>,
-    /// If the pipeline will be used with a multiview render pass, this indicates how many array
-    /// layers the attachments will have.
-    pub multiview: Option<NonZeroU32>,
+    /// If the pipeline will be used with a multiview render pass, this indicates what multiview
+    /// mask the render pass will be used with. The masks must match exactly.
+    ///
+    /// For example, if you wish to render to the first 2 layers, you would use 3=0b11. If you
+    /// wanted to render to only the 2nd layer, you would use 2=0b10. If you aren't using
+    /// multiview this should be `None`.
+    pub multiview_mask: Option<NonZeroU32>,
     /// The pipeline cache to use when creating this pipeline.
     pub cache: Option<&'a PipelineCache>,
 }

@@ -58,7 +58,7 @@ fn frag() -> @location({}) vec4f {{
                 primitive: Default::default(),
                 depth_stencil: None,
                 multisample: Default::default(),
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             })
         },

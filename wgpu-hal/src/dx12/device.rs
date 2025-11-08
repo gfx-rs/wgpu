@@ -23,7 +23,7 @@ use super::{conv, descriptor, D3D12Lib};
 use crate::{
     auxil::{
         self,
-        dxgi::{name::ObjectExt, result::HResult},
+        dxgi::{name::ObjectExt as _, result::HResult as _},
     },
     dx12::{
         borrow_optional_interface_temporarily, shader_compilation, suballocation, DCompLib,
@@ -1882,6 +1882,31 @@ impl crate::Device for super::Device {
             .map(|ds| ds.bias)
             .unwrap_or_default();
 
+        let rasterizer_state = Direct3D12::D3D12_RASTERIZER_DESC {
+            FillMode: conv::map_polygon_mode(desc.primitive.polygon_mode),
+            CullMode: match desc.primitive.cull_mode {
+                None => Direct3D12::D3D12_CULL_MODE_NONE,
+                Some(wgt::Face::Front) => Direct3D12::D3D12_CULL_MODE_FRONT,
+                Some(wgt::Face::Back) => Direct3D12::D3D12_CULL_MODE_BACK,
+            },
+            FrontCounterClockwise: match desc.primitive.front_face {
+                wgt::FrontFace::Cw => Foundation::FALSE,
+                wgt::FrontFace::Ccw => Foundation::TRUE,
+            },
+            DepthBias: bias.constant,
+            DepthBiasClamp: bias.clamp,
+            SlopeScaledDepthBias: bias.slope_scale,
+            DepthClipEnable: windows_core::BOOL::from(!desc.primitive.unclipped_depth),
+            MultisampleEnable: windows_core::BOOL::from(desc.multisample.count > 1),
+            ForcedSampleCount: 0,
+            AntialiasedLineEnable: false.into(),
+            ConservativeRaster: if desc.primitive.conservative {
+                Direct3D12::D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON
+            } else {
+                Direct3D12::D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
+            },
+        };
+
         let blob_fs = match desc.fragment_stage {
             Some(ref stage) => {
                 shader_stages |= wgt::ShaderStages::FRAGMENT;
@@ -1889,79 +1914,71 @@ impl crate::Device for super::Device {
             }
             None => None,
         };
+        let pixel_shader = match &blob_fs {
+            Some(shader) => shader.create_native_shader(),
+            None => Direct3D12::D3D12_SHADER_BYTECODE::default(),
+        };
+        let stream_output = Direct3D12::D3D12_STREAM_OUTPUT_DESC {
+            pSODeclaration: ptr::null(),
+            NumEntries: 0,
+            pBufferStrides: ptr::null(),
+            NumStrides: 0,
+            RasterizedStream: 0,
+        };
+        let blend_state = Direct3D12::D3D12_BLEND_DESC {
+            AlphaToCoverageEnable: windows_core::BOOL::from(
+                desc.multisample.alpha_to_coverage_enabled,
+            ),
+            IndependentBlendEnable: true.into(),
+            RenderTarget: conv::map_render_targets(desc.color_targets),
+        };
+        let depth_stencil_state = match desc.depth_stencil {
+            Some(ref ds) => conv::map_depth_stencil(ds),
+            None => Default::default(),
+        };
+        let dsv_format = desc
+            .depth_stencil
+            .as_ref()
+            .map_or(Dxgi::Common::DXGI_FORMAT_UNKNOWN, |ds| {
+                auxil::dxgi::conv::map_texture_format(ds.format)
+            });
+        let sample_desc = Dxgi::Common::DXGI_SAMPLE_DESC {
+            Count: desc.multisample.count,
+            Quality: 0,
+        };
+        let cached_pso = Direct3D12::D3D12_CACHED_PIPELINE_STATE {
+            pCachedBlob: ptr::null(),
+            CachedBlobSizeInBytes: 0,
+        };
+        let flags = Direct3D12::D3D12_PIPELINE_STATE_FLAG_NONE;
 
         let mut stream_desc = super::RenderPipelineStateStreamDesc {
+            // Shared by vertex and mesh pipelines
             root_signature: root_signature
                 .as_ref()
                 .map(|a| a.as_raw().cast())
                 .unwrap_or(ptr::null_mut()),
-            pixel_shader: match &blob_fs {
-                Some(shader) => shader.create_native_shader(),
-                None => Direct3D12::D3D12_SHADER_BYTECODE::default(),
-            },
-            blend_state: Direct3D12::D3D12_BLEND_DESC {
-                AlphaToCoverageEnable: Foundation::BOOL::from(
-                    desc.multisample.alpha_to_coverage_enabled,
-                ),
-                IndependentBlendEnable: true.into(),
-                RenderTarget: conv::map_render_targets(desc.color_targets),
-            },
+            pixel_shader,
+            blend_state,
             sample_mask: desc.multisample.mask as u32,
-            rasterizer_state: Direct3D12::D3D12_RASTERIZER_DESC {
-                FillMode: conv::map_polygon_mode(desc.primitive.polygon_mode),
-                CullMode: match desc.primitive.cull_mode {
-                    None => Direct3D12::D3D12_CULL_MODE_NONE,
-                    Some(wgt::Face::Front) => Direct3D12::D3D12_CULL_MODE_FRONT,
-                    Some(wgt::Face::Back) => Direct3D12::D3D12_CULL_MODE_BACK,
-                },
-                FrontCounterClockwise: match desc.primitive.front_face {
-                    wgt::FrontFace::Cw => Foundation::FALSE,
-                    wgt::FrontFace::Ccw => Foundation::TRUE,
-                },
-                DepthBias: bias.constant,
-                DepthBiasClamp: bias.clamp,
-                SlopeScaledDepthBias: bias.slope_scale,
-                DepthClipEnable: Foundation::BOOL::from(!desc.primitive.unclipped_depth),
-                MultisampleEnable: Foundation::BOOL::from(desc.multisample.count > 1),
-                ForcedSampleCount: 0,
-                AntialiasedLineEnable: false.into(),
-                ConservativeRaster: if desc.primitive.conservative {
-                    Direct3D12::D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON
-                } else {
-                    Direct3D12::D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
-                },
-            },
-            depth_stencil_state: match desc.depth_stencil {
-                Some(ref ds) => conv::map_depth_stencil(ds),
-                None => Default::default(),
-            },
+            rasterizer_state,
+            depth_stencil_state,
             primitive_topology_type: topology_class,
             rtv_formats: Direct3D12::D3D12_RT_FORMAT_ARRAY {
                 RTFormats: rtv_formats,
                 NumRenderTargets: desc.color_targets.len() as u32,
             },
-            dsv_format: desc
-                .depth_stencil
-                .as_ref()
-                .map_or(Dxgi::Common::DXGI_FORMAT_UNKNOWN, |ds| {
-                    auxil::dxgi::conv::map_texture_format(ds.format)
-                }),
-            sample_desc: Dxgi::Common::DXGI_SAMPLE_DESC {
-                Count: desc.multisample.count,
-                Quality: 0,
-            },
+            dsv_format,
+            sample_desc,
             node_mask: 0,
-            cached_pso: Direct3D12::D3D12_CACHED_PIPELINE_STATE {
-                pCachedBlob: ptr::null(),
-                CachedBlobSizeInBytes: 0,
-            },
-            flags: Direct3D12::D3D12_PIPELINE_STATE_FLAG_NONE,
+            cached_pso,
+            flags,
 
             // Other crap
             vertex_shader: Default::default(),
             input_layout: Default::default(),
             index_buffer_strip_cut_value: Default::default(),
-            stream_output: Default::default(),
+            stream_output,
             task_shader: Default::default(),
             mesh_shader: Default::default(),
         };

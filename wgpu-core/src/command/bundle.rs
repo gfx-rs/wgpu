@@ -218,7 +218,7 @@ impl RenderBundleEncoder {
                     }
                     sc
                 },
-                multiview: desc.multiview,
+                multiview_mask: desc.multiview,
             },
 
             is_depth_read_only,
@@ -239,7 +239,7 @@ impl RenderBundleEncoder {
                     depth_stencil: None,
                 },
                 sample_count: 0,
-                multiview: None,
+                multiview_mask: None,
             },
             is_depth_read_only: false,
             is_stencil_read_only: false,

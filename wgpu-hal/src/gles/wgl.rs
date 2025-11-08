@@ -128,7 +128,7 @@ impl WglContext {
         if unsafe { OpenGL::wglGetCurrentContext() }.is_invalid() {
             return Ok(());
         }
-        unsafe { OpenGL::wglMakeCurrent(None, None) }
+        unsafe { OpenGL::wglMakeCurrent(Default::default(), Default::default()) }
     }
 }
 
@@ -226,7 +226,7 @@ unsafe fn setup_pixel_format(dc: Gdi::HDC) -> Result<(), crate::InstanceError> {
         if index == 0 {
             return Err(crate::InstanceError::with_source(
                 String::from("unable to choose pixel format"),
-                Error::from_win32(),
+                Error::from_thread(),
             ));
         }
 
@@ -244,7 +244,7 @@ unsafe fn setup_pixel_format(dc: Gdi::HDC) -> Result<(), crate::InstanceError> {
         if index == 0 {
             return Err(crate::InstanceError::with_source(
                 String::from("unable to get pixel format index"),
-                Error::from_win32(),
+                Error::from_thread(),
             ));
         }
         let mut format = Default::default();
@@ -254,7 +254,7 @@ unsafe fn setup_pixel_format(dc: Gdi::HDC) -> Result<(), crate::InstanceError> {
         {
             return Err(crate::InstanceError::with_source(
                 String::from("unable to read pixel format"),
-                Error::from_win32(),
+                Error::from_thread(),
             ));
         }
 
@@ -311,7 +311,7 @@ fn create_global_window_class() -> Result<CString, crate::InstanceError> {
     if atom == 0 {
         return Err(crate::InstanceError::with_source(
             String::from("unable to register window class"),
-            Error::from_win32(),
+            Error::from_thread(),
         ));
     }
 
@@ -382,7 +382,7 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
                         1,
                         None,
                         None,
-                        instance,
+                        Some(instance.into()),
                         None,
                     )
                 }
@@ -394,11 +394,11 @@ fn create_instance_device() -> Result<InstanceDevice, crate::InstanceError> {
                 })?;
                 let window = Window { window };
 
-                let dc = unsafe { Gdi::GetDC(window.window) };
+                let dc = unsafe { Gdi::GetDC(Some(window.window)) };
                 if dc.is_invalid() {
                     return Err(crate::InstanceError::with_source(
                         String::from("unable to create memory device"),
-                        Error::from_win32(),
+                        Error::from_thread(),
                     ));
                 }
                 let dc = DeviceContextHandle {
@@ -484,7 +484,7 @@ impl crate::Instance for Instance {
             if context.is_null() {
                 return Err(crate::InstanceError::with_source(
                     String::from("unable to create OpenGL context"),
-                    Error::from_win32(),
+                    Error::from_thread(),
                 ));
             }
             WglContext {
@@ -636,7 +636,7 @@ struct DeviceContextHandle {
 impl Drop for DeviceContextHandle {
     fn drop(&mut self) {
         unsafe {
-            Gdi::ReleaseDC(self.window, self.device);
+            Gdi::ReleaseDC(Some(self.window), self.device);
         };
     }
 }
@@ -672,11 +672,11 @@ impl Surface {
     ) -> Result<(), crate::SurfaceError> {
         let swapchain = self.swapchain.read();
         let sc = swapchain.as_ref().unwrap();
-        let dc = unsafe { Gdi::GetDC(self.window) };
+        let dc = unsafe { Gdi::GetDC(Some(self.window)) };
         if dc.is_invalid() {
             log::error!(
                 "unable to get the device context from window: {}",
-                Error::from_win32()
+                Error::from_thread()
             );
             return Err(crate::SurfaceError::Other(
                 "unable to get the device context from window",
@@ -750,11 +750,11 @@ impl crate::Surface for Surface {
         // Remove the old configuration.
         unsafe { self.unconfigure(device) };
 
-        let dc = unsafe { Gdi::GetDC(self.window) };
+        let dc = unsafe { Gdi::GetDC(Some(self.window)) };
         if dc.is_invalid() {
             log::error!(
                 "unable to get the device context from window: {}",
-                Error::from_win32()
+                Error::from_thread()
             );
             return Err(crate::SurfaceError::Other(
                 "unable to get the device context from window",
@@ -828,7 +828,7 @@ impl crate::Surface for Surface {
         };
 
         if unsafe { extra.SwapIntervalEXT(if vsync { 1 } else { 0 }) } == Foundation::FALSE.0 {
-            log::error!("unable to set swap interval: {}", Error::from_win32());
+            log::error!("unable to set swap interval: {}", Error::from_thread());
             return Err(crate::SurfaceError::Other("unable to set swap interval"));
         }
 

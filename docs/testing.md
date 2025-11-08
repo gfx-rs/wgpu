@@ -24,6 +24,7 @@ This is a table of contents, in the form of the repository's directory structure
 
 - benches
    - [benches](#benchmark-tests)
+- [cts_runner](#webgpu-cts)
 - examples
    - [features](#example-tests)
 - naga
@@ -231,3 +232,33 @@ does not support those features.
 Throughout the codebase we have standard `#[test]`s that test individual
 functions or small parts of the codebase. These don't run on the gpu.
 
+## WebGPU CTS
+
+WebGPU includes a Conformance Test Suite to validate that implementations are
+working correctly. We run cases from the CTS against wgpu using
+[Deno](https://deno.com/). A [default list of enabled
+tests](../cts_runner/test.lst) is automatically run on pull requests in CI.
+
+To run the default set of CTS tests locally, run:
+
+```
+cargo xtask cts
+```
+
+You can also specify a test selector on the command line:
+
+```
+cargo xtask cts 'webgpu:api,operation,command_buffer,basic:*'
+```
+
+Or supply your own test list in a file:
+
+```
+cargo xtask cts -f your_tests.lst
+```
+
+To find the full list of tests, go to the
+[web-based standalone CTS runner](https://gpuweb.github.io/cts/standalone/?runnow=0&worker=0&debug=0&q=webgpu:*).
+
+The version of the CTS used by `cargo xtask cts` is specified in
+[`cts_runner/revision.txt`](../cts_runner/revision.txt).

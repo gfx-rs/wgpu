@@ -377,8 +377,8 @@ impl Buffer {
     /// - If the buffer is already mapped.
     /// - If the buffer’s [`BufferUsages`] do not allow the requested [`MapMode`].
     /// - If `bounds` is outside of the bounds of `self`.
-    /// - If `bounds` has a length less than 1.
-    /// - If the start and end of `bounds` are not be aligned to [`MAP_ALIGNMENT`].
+    /// - If `bounds` does not start at a multiple of [`MAP_ALIGNMENT`].
+    /// - If `bounds` has a length that is not a multiple of 4 greater than 0.
     ///
     /// [CEmbos]: CommandEncoder::map_buffer_on_submit
     /// [CBmbos]: CommandBuffer::map_buffer_on_submit
@@ -409,8 +409,8 @@ impl Buffer {
     /// # Panics
     ///
     /// - If `bounds` is outside of the bounds of `self`.
-    /// - If `bounds` has a length less than 1.
-    /// - If the start and end of `bounds` are not aligned to [`MAP_ALIGNMENT`].
+    /// - If `bounds` does not start at a multiple of [`MAP_ALIGNMENT`].
+    /// - If `bounds` has a length that is not a multiple of 4 greater than 0.
     /// - If the buffer to which `self` refers is not currently [mapped].
     /// - If you try to create a view which overlaps an existing [`BufferViewMut`].
     ///
@@ -433,8 +433,8 @@ impl Buffer {
     /// # Panics
     ///
     /// - If `bounds` is outside of the bounds of `self`.
-    /// - If `bounds` has a length less than 1.
-    /// - If the start and end of `bounds` are not aligned to [`MAP_ALIGNMENT`].
+    /// - If `bounds` does not start at a multiple of [`MAP_ALIGNMENT`].
+    /// - If `bounds` has a length that is not a multiple of 4 greater than 0.
     /// - If the buffer to which `self` refers is not currently [mapped].
     /// - If you try to create a view which overlaps an existing [`BufferView`] or [`BufferViewMut`].
     ///
@@ -553,7 +553,8 @@ impl<'a> BufferSlice<'a> {
     ///
     /// - If the buffer is already mapped.
     /// - If the buffer’s [`BufferUsages`] do not allow the requested [`MapMode`].
-    /// - If the endpoints of this slice are not aligned to [`MAP_ALIGNMENT`] within the buffer.
+    /// - If the beginning of this slice is not aligned to [`MAP_ALIGNMENT`] within the buffer.
+    /// - If the length of this slice is not a multiple of 4.
     ///
     /// [CEmbos]: CommandEncoder::map_buffer_on_submit
     /// [CBmbos]: CommandBuffer::map_buffer_on_submit
@@ -589,7 +590,8 @@ impl<'a> BufferSlice<'a> {
     ///
     /// # Panics
     ///
-    /// - If the endpoints of this slice are not aligned to [`MAP_ALIGNMENT`] within the buffer.
+    /// - If the beginning of this slice is not aligned to [`MAP_ALIGNMENT`] within the buffer.
+    /// - If the length of this slice is not a multiple of 4.
     /// - If the buffer to which `self` refers is not currently [mapped].
     /// - If you try to create a view which overlaps an existing [`BufferViewMut`].
     ///
@@ -622,7 +624,8 @@ impl<'a> BufferSlice<'a> {
     ///
     /// # Panics
     ///
-    /// - If the endpoints of this slice are not aligned to [`MAP_ALIGNMENT`].
+    /// - If the beginning of this slice is not aligned to [`MAP_ALIGNMENT`] within the buffer.
+    /// - If the length of this slice is not a multiple of 4.
     /// - If the buffer to which `self` refers is not currently [mapped].
     /// - If you try to create a view which overlaps an existing [`BufferView`] or [`BufferViewMut`].
     ///

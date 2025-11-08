@@ -188,6 +188,12 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgl: false,
         webgpu: false,
     },
+    ExampleDesc {
+        name: "multiview",
+        function: wgpu_examples::multiview::main,
+        webgl: false,
+        webgpu: false,
+    },
 ];
 
 fn get_example_name() -> Option<String> {
