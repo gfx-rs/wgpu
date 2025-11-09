@@ -2097,7 +2097,7 @@ impl crate::Device for super::Device {
                 }
             } else {
                 // Use standard but less flexible descriptor elsewhere
-                let desc = stream_desc.to_traditional_descriptor();
+                let desc = stream_desc.to_graphics_pipeline_descriptor();
                 unsafe {
                     self.raw.CreateGraphicsPipelineState(&desc).map_err(|err| {
                         crate::PipelineError::Linkage(shader_stages, err.to_string())
