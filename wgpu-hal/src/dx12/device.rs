@@ -1974,7 +1974,7 @@ impl crate::Device for super::Device {
             cached_pso,
             flags,
 
-            // Other crap
+            // Optional data that depends on the pipeline type (vertex vs mesh).
             vertex_shader: Default::default(),
             input_layout: Default::default(),
             index_buffer_strip_cut_value: Default::default(),
@@ -1983,9 +1983,9 @@ impl crate::Device for super::Device {
             mesh_shader: Default::default(),
         };
         let mut input_element_descs = Vec::new();
-        let mut _blob_vs = None;
-        let mut _blob_ts = None;
-        let mut _blob_ms = None;
+        let mut blob_vs = None;
+        let mut blob_ts = None;
+        let mut blob_ms = None;
         let mut vertex_strides = [None; crate::MAX_VERTEX_BUFFERS];
         match &desc.vertex_processor {
             &crate::VertexProcessor::Standard {
@@ -1993,7 +1993,7 @@ impl crate::Device for super::Device {
                 ref vertex_stage,
             } => {
                 shader_stages |= wgt::ShaderStages::VERTEX;
-                _blob_vs = Some(self.load_shader(
+                blob_vs = Some(self.load_shader(
                     vertex_stage,
                     desc.layout,
                     naga::ShaderStage::Vertex,
@@ -2023,7 +2023,7 @@ impl crate::Device for super::Device {
                         });
                     }
                 }
-                stream_desc.vertex_shader = _blob_vs.as_ref().unwrap().create_native_shader();
+                stream_desc.vertex_shader = blob_vs.as_ref().unwrap().create_native_shader();
                 stream_desc.input_layout = Direct3D12::D3D12_INPUT_LAYOUT_DESC {
                     pInputElementDescs: if input_element_descs.is_empty() {
                         ptr::null()
@@ -2053,7 +2053,7 @@ impl crate::Device for super::Device {
                 task_stage,
                 mesh_stage,
             } => {
-                _blob_ts = if let Some(ts) = task_stage {
+                blob_ts = if let Some(ts) = task_stage {
                     shader_stages |= wgt::ShaderStages::TASK;
                     Some(self.load_shader(
                         ts,
@@ -2064,20 +2064,20 @@ impl crate::Device for super::Device {
                 } else {
                     None
                 };
-                let task_shader = if let Some(ts) = &_blob_ts {
+                let task_shader = if let Some(ts) = &blob_ts {
                     ts.create_native_shader()
                 } else {
                     Default::default()
                 };
                 shader_stages |= wgt::ShaderStages::MESH;
-                _blob_ms = Some(self.load_shader(
+                blob_ms = Some(self.load_shader(
                     mesh_stage,
                     desc.layout,
                     naga::ShaderStage::Mesh,
                     desc.fragment_stage.as_ref(),
                 )?);
                 stream_desc.task_shader = task_shader;
-                stream_desc.mesh_shader = _blob_ms.as_ref().unwrap().create_native_shader();
+                stream_desc.mesh_shader = blob_ms.as_ref().unwrap().create_native_shader();
             }
         };
 

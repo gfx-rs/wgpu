@@ -21,8 +21,10 @@ use windows::Win32::Graphics::Dxgi;
 impl super::RenderPipelineStateStreamDesc {
     /// # Safety
     ///
-    /// Returned bytes contain pointers into this struct, for them to be valid,
-    /// this struct not move or be dropped. As if `as_bytes<'a>(&'a self) -> Vec<u8> + 'a`
+    /// Returned bytes contains a pointer to the root signature.
+    /// Therefore, the bytes must not outlive the root signature pointed to by this struct.
+    ///
+    /// As if `as_bytes<'a>(&'a self) -> Vec<u8> + 'a`.
     pub unsafe fn to_bytes(&self) -> Vec<u8> {
         // This allocation is unpleasant but in general the struct can get large enough that
         // an allocation isn't the worst thing in the world.
@@ -38,6 +40,8 @@ impl super::RenderPipelineStateStreamDesc {
         // Therefore, we "construct" a struct manually here. This was mostly written through trial
         // and error, though it seems very robust currently. Future fields should however be handled
         // with extreme caution.
+        //
+        // See <https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_pipeline_state_stream_desc>.
         macro_rules! push_subobject {
             ($subobject_type:expr, $data:expr) => {{
                 // Ensure 8-byte alignment for the subobject start, even though
