@@ -1,9 +1,16 @@
 //! We try to use pipeline stream descriptors where possible, but this isn't allowed
 //! on some older windows 10 versions. Therefore, we also must have some logic to
-//! convert such descriptors to the traditional equivalent.
+//! convert such descriptors to the "traditional" equivalent,
+//! `D3D12_GRAPHICS_PIPELINE_STATE_DESC`.
 //!
-//! The code for pipeline stream descriptors is extremely gross and extremely unsafe.
-//! It has been isolated to this file for that reason.
+//! Stream descriptors allow extending the pipeline, enabling more advanced features,
+//! including mesh shaders and multiview/view instancing. Using a stream descriptor
+//! is like using a vulkan descriptor with a `pNext` chain. It doesn't have direct
+//! benefits to all use cases, but allows new use cases.
+//!
+//! The code for pipeline stream descriptors is very complicated, and can have bad
+//! consequences if it is written incorrectly. It has been isolated to this file for
+//! that reason.
 
 use core::mem::ManuallyDrop;
 
