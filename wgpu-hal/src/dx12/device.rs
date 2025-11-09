@@ -1957,7 +1957,10 @@ impl crate::Device for super::Device {
             ArrayVec::new();
         if let Some(mask) = desc.multiview_mask {
             let mask = mask.get();
-            // The mask gets applied later
+            // This array is just what _could_ be rendered to. We actually apply the mask at
+            // renderpass creation time. The `view_index` passed to the shader depends on the
+            // view's index in this array, so if we include every view in this array, `view_index`
+            // actually the texture array layer, like in vulkan.
             for i in 0..32 - mask.leading_zeros() {
                 view_instancing.push(Direct3D12::D3D12_VIEW_INSTANCE_LOCATION {
                     ViewportArrayIndex: 0,
