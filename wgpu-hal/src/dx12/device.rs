@@ -1983,9 +1983,9 @@ impl crate::Device for super::Device {
             mesh_shader: Default::default(),
         };
         let mut input_element_descs = Vec::new();
-        let mut blob_vs = None;
-        let mut blob_ts = None;
-        let mut blob_ms = None;
+        let blob_vs;
+        let blob_ts;
+        let blob_ms;
         let mut vertex_strides = [None; crate::MAX_VERTEX_BUFFERS];
         match &desc.vertex_processor {
             &crate::VertexProcessor::Standard {
