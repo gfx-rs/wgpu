@@ -1992,10 +1992,9 @@ impl crate::Device for super::Device {
             flags,
             view_instancing: if !view_instancing.is_empty() {
                 Some(Direct3D12::D3D12_VIEW_INSTANCING_DESC {
-                    // TODO: rethink this
                     ViewInstanceCount: view_instancing.len() as u32,
                     pViewInstanceLocations: view_instancing.as_ptr(),
-                    // This lets us hide certain values later
+                    // This lets us hide/mask certain values later, at renderpass creation time.
                     Flags: Direct3D12::D3D12_VIEW_INSTANCING_FLAG_ENABLE_VIEW_INSTANCE_MASKING,
                 })
             } else {
