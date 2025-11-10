@@ -1951,8 +1951,8 @@ impl crate::Device for super::Device {
         };
         let flags = Direct3D12::D3D12_PIPELINE_STATE_FLAG_NONE;
 
-        let mut view_instancing: ArrayVec<Direct3D12::D3D12_VIEW_INSTANCE_LOCATION, 32> =
-            ArrayVec::new();
+        let mut view_instancing =
+            core::pin::pin!(ArrayVec::<Direct3D12::D3D12_VIEW_INSTANCE_LOCATION, 32>::new());
         if let Some(mask) = desc.multiview_mask {
             let mask = mask.get();
             // This array is just what _could_ be rendered to. We actually apply the mask at
