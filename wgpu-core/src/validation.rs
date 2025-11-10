@@ -270,6 +270,8 @@ pub enum InputError {
     InterpolationMismatch(Option<naga::Interpolation>),
     #[error("Input sampling doesn't match provided {0:?}")]
     SamplingMismatch(Option<naga::Sampling>),
+    #[error("Pipeline input has perprimitive: {expected} but shader declares perprimitive: {}", !expected)]
+    WrongPerPrimitive { expected: bool },
 }
 
 impl WebGpuError for InputError {
@@ -1346,41 +1348,46 @@ impl Interface {
                             .get(&location)
                             .ok_or(InputError::Missing)
                             .and_then(|provided| {
-                                let (compatible, num_components) = match shader_stage {
-                                    // For vertex attributes, there are defaults filled out
-                                    // by the driver if data is not provided.
-                                    naga::ShaderStage::Vertex => {
-                                        let is_compatible =
-                                            iv.ty.scalar.kind == provided.ty.scalar.kind;
-                                        // vertex inputs don't count towards inter-stage
-                                        (is_compatible, 0)
-                                    }
-                                    naga::ShaderStage::Fragment => {
-                                        if iv.interpolation != provided.interpolation {
-                                            return Err(InputError::InterpolationMismatch(
-                                                provided.interpolation,
-                                            ));
+                                let (compatible, num_components, per_primitive_correct) =
+                                    match shader_stage {
+                                        // For vertex attributes, there are defaults filled out
+                                        // by the driver if data is not provided.
+                                        naga::ShaderStage::Vertex => {
+                                            let is_compatible =
+                                                iv.ty.scalar.kind == provided.ty.scalar.kind;
+                                            // vertex inputs don't count towards inter-stage
+                                            (is_compatible, 0, !iv.per_primitive)
                                         }
-                                        if iv.sampling != provided.sampling {
-                                            return Err(InputError::SamplingMismatch(
-                                                provided.sampling,
-                                            ));
+                                        naga::ShaderStage::Fragment => {
+                                            if iv.interpolation != provided.interpolation {
+                                                return Err(InputError::InterpolationMismatch(
+                                                    provided.interpolation,
+                                                ));
+                                            }
+                                            if iv.sampling != provided.sampling {
+                                                return Err(InputError::SamplingMismatch(
+                                                    provided.sampling,
+                                                ));
+                                            }
+                                            (
+                                                iv.ty.is_subtype_of(&provided.ty),
+                                                iv.ty.dim.num_components(),
+                                                iv.per_primitive == provided.per_primitive,
+                                            )
                                         }
-                                        (
-                                            iv.ty.is_subtype_of(&provided.ty)
-                                                && iv.per_primitive == provided.per_primitive,
-                                            iv.ty.dim.num_components(),
-                                        )
-                                    }
-                                    // These can't have varying inputs
-                                    naga::ShaderStage::Compute
-                                    | naga::ShaderStage::Task
-                                    | naga::ShaderStage::Mesh => (false, 0),
-                                };
-                                if compatible {
-                                    Ok(num_components)
-                                } else {
+                                        // These can't have varying inputs
+                                        naga::ShaderStage::Compute
+                                        | naga::ShaderStage::Task
+                                        | naga::ShaderStage::Mesh => (false, 0, false),
+                                    };
+                                if !compatible {
                                     Err(InputError::WrongType(provided.ty))
+                                } else if !per_primitive_correct {
+                                    Err(InputError::WrongPerPrimitive {
+                                        expected: provided.per_primitive,
+                                    })
+                                } else {
+                                    Ok(num_components)
                                 }
                             });
                     match result {
