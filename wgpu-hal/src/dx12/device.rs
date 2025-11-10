@@ -1866,8 +1866,6 @@ impl crate::Device for super::Device {
         >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         let mut shader_stages = wgt::ShaderStages::empty();
-        let root_signature =
-            unsafe { borrow_optional_interface_temporarily(&desc.layout.shared.signature) };
         let (topology_class, topology) = conv::map_topology(desc.primitive.topology);
         let mut rtv_formats = [Dxgi::Common::DXGI_FORMAT_UNKNOWN;
             Direct3D12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as usize];
@@ -1968,10 +1966,12 @@ impl crate::Device for super::Device {
 
         let mut stream_desc = super::RenderPipelineStateStreamDesc {
             // Shared by vertex and mesh pipelines
-            root_signature: root_signature
+            root_signature: desc
+                .layout
+                .shared
+                .signature
                 .as_ref()
-                .map(|a| a.as_raw().cast())
-                .unwrap_or(ptr::null_mut()),
+                .map(core::pin::Pin::new),
             pixel_shader,
             blend_state,
             sample_mask: desc.multisample.mask as u32,
@@ -1999,7 +1999,7 @@ impl crate::Device for super::Device {
                 None
             },
 
-            // Other crap
+            // Optional data that depends on the pipeline type (vertex vs mesh).
             vertex_shader: Default::default(),
             input_layout: Default::default(),
             index_buffer_strip_cut_value: Default::default(),
@@ -2008,9 +2008,9 @@ impl crate::Device for super::Device {
             mesh_shader: Default::default(),
         };
         let mut input_element_descs = Vec::new();
-        let mut _blob_vs = None;
-        let mut _blob_ts = None;
-        let mut _blob_ms = None;
+        let blob_vs;
+        let blob_ts;
+        let blob_ms;
         let mut vertex_strides = [None; crate::MAX_VERTEX_BUFFERS];
         match &desc.vertex_processor {
             &crate::VertexProcessor::Standard {
@@ -2018,7 +2018,7 @@ impl crate::Device for super::Device {
                 ref vertex_stage,
             } => {
                 shader_stages |= wgt::ShaderStages::VERTEX;
-                _blob_vs = Some(self.load_shader(
+                blob_vs = Some(self.load_shader(
                     vertex_stage,
                     desc.layout,
                     naga::ShaderStage::Vertex,
@@ -2048,7 +2048,7 @@ impl crate::Device for super::Device {
                         });
                     }
                 }
-                stream_desc.vertex_shader = _blob_vs.as_ref().unwrap().create_native_shader();
+                stream_desc.vertex_shader = blob_vs.as_ref().unwrap().create_native_shader();
                 stream_desc.input_layout = Direct3D12::D3D12_INPUT_LAYOUT_DESC {
                     pInputElementDescs: if input_element_descs.is_empty() {
                         ptr::null()
@@ -2078,7 +2078,7 @@ impl crate::Device for super::Device {
                 task_stage,
                 mesh_stage,
             } => {
-                _blob_ts = if let Some(ts) = task_stage {
+                blob_ts = if let Some(ts) = task_stage {
                     shader_stages |= wgt::ShaderStages::TASK;
                     Some(self.load_shader(
                         ts,
@@ -2089,23 +2089,22 @@ impl crate::Device for super::Device {
                 } else {
                     None
                 };
-                let task_shader = if let Some(ts) = &_blob_ts {
+                let task_shader = if let Some(ts) = &blob_ts {
                     ts.create_native_shader()
                 } else {
                     Default::default()
                 };
                 shader_stages |= wgt::ShaderStages::MESH;
-                _blob_ms = Some(self.load_shader(
+                blob_ms = Some(self.load_shader(
                     mesh_stage,
                     desc.layout,
                     naga::ShaderStage::Mesh,
                     desc.fragment_stage.as_ref(),
                 )?);
                 stream_desc.task_shader = task_shader;
-                stream_desc.mesh_shader = _blob_ms.as_ref().unwrap().create_native_shader();
+                stream_desc.mesh_shader = blob_ms.as_ref().unwrap().create_native_shader();
             }
         };
-
         let raw: Direct3D12::ID3D12PipelineState =
             if let Ok(device) = self.raw.cast::<Direct3D12::ID3D12Device2>() {
                 // Prefer stream descs where possible
@@ -2122,7 +2121,7 @@ impl crate::Device for super::Device {
                 }
             } else {
                 // Use standard but less flexible descriptor elsewhere
-                let desc = stream_desc.to_traditional_descriptor();
+                let desc = stream_desc.to_graphics_pipeline_descriptor();
                 unsafe {
                     self.raw.CreateGraphicsPipelineState(&desc).map_err(|err| {
                         crate::PipelineError::Linkage(shader_stages, err.to_string())
