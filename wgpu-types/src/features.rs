@@ -1542,6 +1542,7 @@ impl Features {
         Self::from_bits_truncate(FeatureBits([
             FeaturesWGPU::EXPERIMENTAL_MESH_SHADER.bits()
                 | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_MULTIVIEW.bits()
+                | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_POINTS.bits()
                 | FeaturesWGPU::EXPERIMENTAL_RAY_QUERY.bits()
                 | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
                 | FeaturesWGPU::EXPERIMENTAL_PASSTHROUGH_SHADERS.bits(),
