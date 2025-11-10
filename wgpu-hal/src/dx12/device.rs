@@ -1865,7 +1865,6 @@ impl crate::Device for super::Device {
         >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         let mut shader_stages = wgt::ShaderStages::empty();
-        let pinned_root_sig = core::pin::Pin::new(&desc.layout.shared.signature);
         let (topology_class, topology) = conv::map_topology(desc.primitive.topology);
         let mut rtv_formats = [Dxgi::Common::DXGI_FORMAT_UNKNOWN;
             Direct3D12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as usize];
@@ -1953,10 +1952,12 @@ impl crate::Device for super::Device {
 
         let mut stream_desc = super::RenderPipelineStateStreamDesc {
             // Shared by vertex and mesh pipelines
-            root_signature: (*pinned_root_sig)
+            root_signature: desc
+                .layout
+                .shared
+                .signature
                 .as_ref()
-                .map(|a| a.as_raw().cast())
-                .unwrap_or(ptr::null_mut()),
+                .map(core::pin::Pin::new),
             pixel_shader,
             blend_state,
             sample_mask: desc.multisample.mask as u32,
@@ -2079,7 +2080,6 @@ impl crate::Device for super::Device {
                 stream_desc.mesh_shader = blob_ms.as_ref().unwrap().create_native_shader();
             }
         };
-
         let raw: Direct3D12::ID3D12PipelineState =
             if let Ok(device) = self.raw.cast::<Direct3D12::ID3D12Device2>() {
                 // Prefer stream descs where possible

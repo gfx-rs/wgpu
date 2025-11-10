@@ -17,10 +17,11 @@ use core::mem::ManuallyDrop;
 use alloc::vec::Vec;
 use windows::Win32::Graphics::Direct3D12;
 use windows::Win32::Graphics::Dxgi;
+use windows_core::Interface;
 
 use crate::dx12::borrow_interface_temporarily;
 
-impl super::RenderPipelineStateStreamDesc {
+impl super::RenderPipelineStateStreamDesc<'_> {
     /// # Safety
     ///
     /// Must not outlive `self`, as it contains a pointer to the root signature as pointed to
@@ -73,9 +74,12 @@ impl super::RenderPipelineStateStreamDesc {
                 bytes.extend_from_slice(slice);
             }};
         }
+
         push_subobject!(
             D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE,
             self.root_signature
+                .map(|a| { a.as_raw() })
+                .unwrap_or(core::ptr::null_mut())
         );
         push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND, self.blend_state);
         push_subobject!(
@@ -166,8 +170,8 @@ impl super::RenderPipelineStateStreamDesc {
         &self,
     ) -> Direct3D12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
         Direct3D12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
-            pRootSignature: if !self.root_signature.is_null() {
-                unsafe { borrow_interface_temporarily(&*self.root_signature) }
+            pRootSignature: if let Some(rsig) = self.root_signature {
+                unsafe { borrow_interface_temporarily(&*rsig) }
             } else {
                 ManuallyDrop::new(None)
             },
