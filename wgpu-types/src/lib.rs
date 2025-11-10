@@ -517,10 +517,7 @@ macro_rules! with_limits {
         $macro_name!(max_push_constant_size, Ordering::Less);
         $macro_name!(max_non_sampler_bindings, Ordering::Less);
 
-        $macro_name!(max_task_workgroup_total_count, Ordering::Less);
-        $macro_name!(max_task_workgroups_per_dimension, Ordering::Less);
-        $macro_name!(max_mesh_multiview_view_count, Ordering::Less);
-        $macro_name!(max_mesh_output_layers, Ordering::Less);
+        // TODO: mesh stuff
 
         $macro_name!(max_blas_primitive_count, Ordering::Less);
         $macro_name!(max_blas_geometry_count, Ordering::Less);
@@ -689,11 +686,31 @@ pub struct Limits {
     /// to create many bind groups at the cost of a large up-front allocation at device creation.
     pub max_non_sampler_bindings: u32,
 
-    /// The maximum total value of x*y*z for a given `draw_mesh_tasks` command
-    pub max_task_workgroup_total_count: u32,
+    /// The maximum total value for a `RenderPass::draw_mesh_tasks(x, y, z)` operation.
+    /// Also for task shader outputs. Defaults to 65535. Higher is "better".
+    pub max_task_mesh_workgroup_total_count: u32,
     /// The maximum value for each dimension of a `RenderPass::draw_mesh_tasks(x, y, z)` operation.
-    /// Defaults to 65535. Higher is "better".
-    pub max_task_workgroups_per_dimension: u32,
+    /// Also for task shader outputs. Defaults to 256. Higher is "better".
+    pub max_task_mesh_workgroups_per_dimension: u32,
+
+    // These are fundamentally different. It is very common for limits on mesh shaders to be much lower,
+    // so as to properly use the hardware, where task shaders are usually just emulated with compute
+    // shaders. Therefore, we should have different limits for mesh vs task shaders.
+    /// Maximum total number of invocations, or threads, per task shader workgroup.
+    pub max_task_invocations_per_workgroup: u32,
+    /// The maximum value for each dimension of a task shader's workgroup size.
+    pub max_task_invocations_per_dimension: u32,
+    /// Maximum total number of invocations, or threads, per mesh shader workgroup.
+    pub max_mesh_invocations_per_workgroup: u32,
+    /// The maximum value for each dimension of a mesh shader's workgroup size.
+    pub max_mesh_invocations_per_dimension: u32,
+
+    /// The maximum size of the payload passed from task to mesh shader.
+    pub max_task_payload_size: u32,
+    /// The maximum number of vertices that a mesh shader may output.
+    pub max_mesh_output_vertices: u32,
+    /// The maximum number of primitives that a mesh shader may output.
+    pub max_mesh_output_primitives: u32,
     /// The maximum number of layers that can be output from a mesh shader
     pub max_mesh_output_layers: u32,
     /// The maximum number of views that can be used by a mesh shader in multiview rendering
@@ -824,10 +841,17 @@ impl Limits {
             max_push_constant_size: 0,
             max_non_sampler_bindings: 1_000_000,
 
-            max_task_workgroup_total_count: 0,
-            max_task_workgroups_per_dimension: 0,
-            max_mesh_multiview_view_count: 0,
+            max_task_mesh_workgroup_total_count: 0,
+            max_task_mesh_workgroups_per_dimension: 0,
+            max_task_invocations_per_workgroup: 0,
+            max_task_invocations_per_dimension: 0,
+            max_mesh_invocations_per_workgroup: 0,
+            max_mesh_invocations_per_dimension: 0,
+            max_task_payload_size: 0,
+            max_mesh_output_vertices: 0,
+            max_mesh_output_primitives: 0,
             max_mesh_output_layers: 0,
+            max_mesh_multiview_view_count: 0,
 
             max_blas_primitive_count: 0,
             max_blas_geometry_count: 0,
@@ -905,11 +929,6 @@ impl Limits {
             max_color_attachments: 4,
             // see: https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=7
             max_compute_workgroup_storage_size: 16352,
-
-            max_task_workgroups_per_dimension: 0,
-            max_task_workgroup_total_count: 0,
-            max_mesh_multiview_view_count: 0,
-            max_mesh_output_layers: 0,
             ..Self::defaults()
         }
     }
@@ -1060,12 +1079,26 @@ impl Limits {
             // Literally just made this up as 256^2 or 2^16.
             // My GPU supports 2^22, and compute shaders don't have this kind of limit.
             // This very likely is never a real limiter
-            max_task_workgroup_total_count: 65536,
-            max_task_workgroups_per_dimension: 256,
+            max_task_mesh_workgroup_total_count: 65536,
+            max_task_mesh_workgroups_per_dimension: 256,
+            // Copied from compute limits, this is low enough that it should be sensible.
+            max_task_invocations_per_workgroup: 256,
+            max_task_invocations_per_dimension: 64,
+
+            // DX12 limitation, revisit for vulkan
+            max_mesh_invocations_per_workgroup: 128,
+            max_mesh_invocations_per_dimension: 128,
+
+            // DX12 specifies this as minimum
+            max_task_payload_size: 16_384,
+            // DX12 limitation, revisit for vulkan
+            max_mesh_output_vertices: 256,
+            max_mesh_output_primitives: 256,
+            // llvmpipe once again requires this to be 8. An RTX 3060 supports well over 1024.
+            // Also DX12 vaguely suggests going over this is illegal in some cases.
+            max_mesh_output_layers: 8,
             // llvmpipe reports 0 multiview count, which just means no multiview is allowed
             max_mesh_multiview_view_count: 0,
-            // llvmpipe once again requires this to be 8. An RTX 3060 supports well over 1024.
-            max_mesh_output_layers: 8,
             ..self
         }
     }

@@ -1231,18 +1231,37 @@ impl PhysicalDeviceProperties {
             .min(limits.max_compute_work_group_count[1])
             .min(limits.max_compute_work_group_count[2]);
         let (
-            max_task_workgroup_total_count,
-            max_task_workgroups_per_dimension,
-            max_mesh_multiview_view_count,
+            max_task_mesh_workgroup_total_count,
+            max_task_mesh_workgroups_per_dimension,
+            max_task_invocations_per_workgroup,
+            max_task_invocations_per_dimension,
+            max_mesh_invocations_per_workgroup,
+            max_mesh_invocations_per_dimension,
+            max_task_payload_size,
+            max_mesh_output_vertices,
+            max_mesh_output_primitives,
             max_mesh_output_layers,
+            max_mesh_multiview_view_count,
         ) = match self.mesh_shader {
             Some(m) => (
-                m.max_task_work_group_total_count,
-                m.max_task_work_group_count.into_iter().min().unwrap(),
-                m.max_mesh_multiview_view_count,
+                m.max_task_work_group_total_count
+                    .min(m.max_mesh_work_group_total_count),
+                m.max_task_work_group_count
+                    .into_iter()
+                    .chain(m.max_mesh_work_group_count)
+                    .min()
+                    .unwrap(),
+                m.max_task_work_group_invocations,
+                m.max_task_work_group_size.into_iter().min().unwrap(),
+                m.max_mesh_work_group_invocations,
+                m.max_mesh_work_group_size.into_iter().min().unwrap(),
+                m.max_task_payload_size,
+                m.max_mesh_output_vertices,
+                m.max_mesh_output_primitives,
                 m.max_mesh_output_layers,
+                m.max_mesh_multiview_view_count,
             ),
-            None => (0, 0, 0, 0),
+            None => (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
         };
 
         // Prevent very large buffers on mesa and most android devices, and in all cases
@@ -1358,10 +1377,19 @@ impl PhysicalDeviceProperties {
             max_buffer_size,
             max_non_sampler_bindings: u32::MAX,
 
-            max_task_workgroup_total_count,
-            max_task_workgroups_per_dimension,
-            max_mesh_multiview_view_count,
+            max_task_mesh_workgroup_total_count,
+            max_task_mesh_workgroups_per_dimension,
+            max_task_invocations_per_workgroup,
+            max_task_invocations_per_dimension,
+
+            max_mesh_invocations_per_workgroup,
+            max_mesh_invocations_per_dimension,
+
+            max_task_payload_size,
+            max_mesh_output_vertices,
+            max_mesh_output_primitives,
             max_mesh_output_layers,
+            max_mesh_multiview_view_count,
 
             max_blas_primitive_count,
             max_blas_geometry_count,
