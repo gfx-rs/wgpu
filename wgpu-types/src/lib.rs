@@ -703,28 +703,29 @@ pub struct Limits {
     /// The maximum value for each dimension of a `RenderPass::draw_mesh_tasks(x, y, z)` operation.
     /// Also for task shader outputs. Defaults to 256. Higher is "better".
     pub max_task_mesh_workgroups_per_dimension: u32,
-
     // These are fundamentally different. It is very common for limits on mesh shaders to be much lower,
     // so as to properly use the hardware, where task shaders are usually just emulated with compute
     // shaders. Therefore, we should have different limits for mesh vs task shaders.
-    /// Maximum total number of invocations, or threads, per task shader workgroup.
+    /// Maximum total number of invocations, or threads, per task shader workgroup. Higher is "better".
     pub max_task_invocations_per_workgroup: u32,
-    /// The maximum value for each dimension of a task shader's workgroup size.
+    /// The maximum value for each dimension of a task shader's workgroup size. Higher is "better".
     pub max_task_invocations_per_dimension: u32,
-    /// Maximum total number of invocations, or threads, per mesh shader workgroup.
+    /// Maximum total number of invocations, or threads, per mesh shader workgroup. Higher is "better".
     pub max_mesh_invocations_per_workgroup: u32,
-    /// The maximum value for each dimension of a mesh shader's workgroup size.
+    /// The maximum value for each dimension of a mesh shader's workgroup size. Higher is "better".
     pub max_mesh_invocations_per_dimension: u32,
 
-    /// The maximum size of the payload passed from task to mesh shader.
+    /// The maximum size of the payload passed from task to mesh shader. Higher is "better".
     pub max_task_payload_size: u32,
-    /// The maximum number of vertices that a mesh shader may output.
+    /// The maximum number of vertices that a mesh shader may output. Higher is "better".
     pub max_mesh_output_vertices: u32,
-    /// The maximum number of primitives that a mesh shader may output.
+    /// The maximum number of primitives that a mesh shader may output. Higher is "better".
     pub max_mesh_output_primitives: u32,
-    /// The maximum number of layers that can be output from a mesh shader
+    /// The maximum number of layers that can be output from a mesh shader. Higher is "better".
+    /// See [#8509](https://github.com/gfx-rs/wgpu/issues/8509).
     pub max_mesh_output_layers: u32,
-    /// The maximum number of views that can be used by a mesh shader in multiview rendering
+    /// The maximum number of views that can be used by a mesh shader in multiview rendering.
+    /// Higher is "better".
     pub max_mesh_multiview_view_count: u32,
 
     /// The maximum number of primitive (ex: triangles, aabbs) a BLAS is allowed to have. Requesting
