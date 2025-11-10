@@ -226,8 +226,7 @@ impl crate::framework::Example for Example {
         }
 
         // calculates number of work groups from PARTICLES_PER_GROUP constant
-        let work_group_count =
-            ((NUM_PARTICLES as f32) / (PARTICLES_PER_GROUP as f32)).ceil() as u32;
+        let work_group_count = NUM_PARTICLES.div_ceil(PARTICLES_PER_GROUP);
 
         // returns Example struct and No encoder commands
 
