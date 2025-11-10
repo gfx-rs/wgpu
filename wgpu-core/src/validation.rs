@@ -344,7 +344,8 @@ pub enum StageError {
         input: Option<u32>,
         shader: Option<u32>,
     },
-    #[error("Primitive index can only be used in a fragment shader if the preceding shader was a vertex shader or a mesh shader that writes to primitive index.")]
+    #[error("Primitive index can only be used in a fragment shader if the preceding shader was a vertex shader or a mesh shader that writes to primitive index.
+    If a mesh shader writes to primitive index, it must be read by the fragment shader.")]
     PrimitiveIndexError,
     #[error("Draw id can only be used in a mesh shader if the pipeline has no task shader.")]
     DrawIdError,
@@ -957,7 +958,9 @@ pub struct StageIo {
     /// Fragment shaders cannot input primitive index on mesh shaders that don't output it on DX12.
     /// Therefore, we track between shader stages if primitive index is written (or if vertex shader
     /// is used).
-    pub primitive_index: bool,
+    ///
+    /// This is Some if it was a mesh shader.
+    pub primitive_index: Option<bool>,
 }
 
 impl Interface {
@@ -1524,11 +1527,13 @@ impl Interface {
                 shader: entry_point.task_payload_size,
             });
         }
-        if shader_stage == naga::ShaderStage::Fragment
-            && has_primitive_index
-            && !inputs.primitive_index
-        {
-            return Err(StageError::PrimitiveIndexError);
+
+        // Fragment shader primitive index is treated like a varying
+        if let Some(primitive_index) = inputs.primitive_index {
+            if primitive_index != has_primitive_index && shader_stage == naga::ShaderStage::Fragment
+            {
+                return Err(StageError::PrimitiveIndexError);
+            }
         }
         if shader_stage == naga::ShaderStage::Mesh
             && inputs.task_payload_size.is_some()
@@ -1549,7 +1554,11 @@ impl Interface {
         Ok(StageIo {
             task_payload_size: entry_point.task_payload_size,
             varyings: outputs,
-            primitive_index: has_primitive_index || shader_stage == naga::ShaderStage::Vertex,
+            primitive_index: if shader_stage == naga::ShaderStage::Mesh {
+                Some(has_primitive_index)
+            } else {
+                None
+            },
         })
     }
 
