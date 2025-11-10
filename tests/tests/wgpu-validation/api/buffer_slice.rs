@@ -36,7 +36,7 @@ fn getters() {
             slice_with_size.offset(),
             slice_with_size.size()
         ),
-        (&buffer, 10, NonZero::new(80).unwrap())
+        (&buffer, 10, 80)
     );
 
     let slice_without_size = buffer.slice(10..);
@@ -46,7 +46,7 @@ fn getters() {
             slice_without_size.offset(),
             slice_without_size.size()
         ),
-        (&buffer, 10, NonZero::new(90).unwrap())
+        (&buffer, 10, 90)
     );
 }
 

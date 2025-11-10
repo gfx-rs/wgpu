@@ -110,6 +110,7 @@ macro_rules! impl_deferred_command_buffer_actions {
             callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
         ) {
             let (offset, size) = range_to_offset_size(bounds, buffer.size);
+            let size = BufferSize::new(size).expect("buffer slices can not be empty");
             self.actions.lock().buffer_mappings.push(
                 crate::api::command_buffer_actions::DeferredBufferMapping {
                     buffer: buffer.clone(),

@@ -105,7 +105,7 @@ impl RenderPass<'_> {
             &buffer_slice.buffer.inner,
             index_format,
             buffer_slice.offset,
-            Some(buffer_slice.size),
+            Some(buffer_slice.size_expect_nonzero()),
         );
     }
 

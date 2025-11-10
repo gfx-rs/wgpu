@@ -885,6 +885,8 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 
 ### Changes
 
+- Buffer slices with a length of 0 can now be created, but not mapped or used. By @beholdnec in [#8505] (https://github.com/gfx-rs/wgpu/pull/8505).
+
 #### General
 
 - Require new enable extensions when using ray queries and position fetch (`wgpu_ray_query`, `wgpu_ray_query_vertex_return`). By @Vecvec in [#8545](https://github.com/gfx-rs/wgpu/pull/8545).
