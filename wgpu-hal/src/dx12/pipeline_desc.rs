@@ -14,8 +14,8 @@ use windows::Win32::Graphics::Dxgi;
 impl super::RenderPipelineStateStreamDesc {
     /// # Safety
     ///
-    /// Returned bytes contain pointers into this struct, for them to be valid,
-    /// this struct not move or be dropped. As if `as_bytes<'a>(&'a self) -> Vec<u8> + 'a`
+    /// Must not outlive `self`, as it contains a pointer to the root signature as pointed to
+    /// by this struct.
     pub unsafe fn to_bytes(&self) -> Vec<u8> {
         // This allocation is unpleasant but in general the struct can get large enough that
         // an allocation isn't the worst thing in the world.
