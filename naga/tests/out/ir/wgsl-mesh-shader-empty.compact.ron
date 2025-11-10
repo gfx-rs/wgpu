@@ -2,6 +2,27 @@
     types: [
         (
             name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: Some("TaskPayload"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("dummy"),
+                        ty: 0,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 4,
+            ),
+        ),
+        (
+            name: None,
             inner: Vector(
                 size: Quad,
                 scalar: (
@@ -11,66 +32,20 @@
             ),
         ),
         (
-            name: None,
-            inner: Scalar((
-                kind: Bool,
-                width: 1,
-            )),
-        ),
-        (
-            name: Some("TaskPayload"),
-            inner: Struct(
-                members: [
-                    (
-                        name: Some("colorMask"),
-                        ty: 0,
-                        binding: None,
-                        offset: 0,
-                    ),
-                    (
-                        name: Some("visible"),
-                        ty: 1,
-                        binding: None,
-                        offset: 16,
-                    ),
-                ],
-                span: 32,
-            ),
-        ),
-        (
             name: Some("VertexOutput"),
             inner: Struct(
                 members: [
                     (
                         name: Some("position"),
-                        ty: 0,
+                        ty: 2,
                         binding: Some(BuiltIn(Position(
                             invariant: false,
                         ))),
                         offset: 0,
                     ),
-                    (
-                        name: Some("color"),
-                        ty: 0,
-                        binding: Some(Location(
-                            location: 0,
-                            interpolation: Some(Perspective),
-                            sampling: Some(Center),
-                            blend_src: None,
-                            per_primitive: false,
-                        )),
-                        offset: 16,
-                    ),
                 ],
-                span: 32,
+                span: 16,
             ),
-        ),
-        (
-            name: None,
-            inner: Scalar((
-                kind: Uint,
-                width: 4,
-            )),
         ),
         (
             name: None,
@@ -88,30 +63,12 @@
                 members: [
                     (
                         name: Some("index"),
-                        ty: 5,
+                        ty: 4,
                         binding: Some(BuiltIn(TriangleIndices)),
                         offset: 0,
                     ),
-                    (
-                        name: Some("cull"),
-                        ty: 1,
-                        binding: Some(BuiltIn(CullPrimitive)),
-                        offset: 12,
-                    ),
-                    (
-                        name: Some("colorMask"),
-                        ty: 0,
-                        binding: Some(Location(
-                            location: 1,
-                            interpolation: Some(Perspective),
-                            sampling: Some(Center),
-                            blend_src: None,
-                            per_primitive: true,
-                        )),
-                        offset: 16,
-                    ),
                 ],
-                span: 32,
+                span: 16,
             ),
         ),
         (
@@ -119,15 +76,15 @@
             inner: Array(
                 base: 3,
                 size: Constant(3),
-                stride: 32,
+                stride: 16,
             ),
         ),
         (
             name: None,
             inner: Array(
-                base: 6,
+                base: 5,
                 size: Constant(1),
-                stride: 32,
+                stride: 16,
             ),
         ),
         (
@@ -136,30 +93,30 @@
                 members: [
                     (
                         name: Some("vertices"),
-                        ty: 7,
+                        ty: 6,
                         binding: Some(BuiltIn(Vertices)),
                         offset: 0,
                     ),
                     (
                         name: Some("primitives"),
-                        ty: 8,
+                        ty: 7,
                         binding: Some(BuiltIn(Primitives)),
-                        offset: 96,
+                        offset: 48,
                     ),
                     (
                         name: Some("vertex_count"),
-                        ty: 4,
+                        ty: 0,
                         binding: Some(BuiltIn(VertexCount)),
-                        offset: 128,
+                        offset: 64,
                     ),
                     (
                         name: Some("primitive_count"),
-                        ty: 4,
+                        ty: 0,
                         binding: Some(BuiltIn(PrimitiveCount)),
-                        offset: 132,
+                        offset: 68,
                     ),
                 ],
-                span: 144,
+                span: 80,
             ),
         ),
     ],
@@ -178,14 +135,14 @@
             name: Some("taskPayload"),
             space: TaskPayload,
             binding: None,
-            ty: 2,
+            ty: 1,
             init: None,
         ),
         (
             name: Some("mesh_output"),
             space: WorkGroup,
             binding: None,
-            ty: 9,
+            ty: 8,
             init: None,
         ),
     ],
@@ -202,16 +159,16 @@
                 name: Some("ts_main"),
                 arguments: [],
                 result: Some((
-                    ty: 5,
+                    ty: 4,
                     binding: Some(BuiltIn(MeshTaskSize)),
                 )),
                 local_variables: [],
                 expressions: [
-                    Literal(U32(3)),
+                    Literal(U32(1)),
                     Literal(U32(1)),
                     Literal(U32(1)),
                     Compose(
-                        ty: 5,
+                        ty: 4,
                         components: [
                             0,
                             1,
@@ -265,7 +222,7 @@
                 max_primitives: 1,
                 max_primitives_override: None,
                 vertex_output_type: 3,
-                primitive_output_type: 6,
+                primitive_output_type: 5,
                 output_variable: 1,
             )),
             task_payload: Some(0),

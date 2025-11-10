@@ -4,27 +4,22 @@
 enable mesh_shading;
 
 struct TaskPayload {
-    colorMask: vec4<f32>,
-    visible: bool,
+    dummy: u32,
 }
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
-    @location(0) color: vec4<f32>,
 }
 struct PrimitiveOutput {
     @builtin(triangle_indices) index: vec3<u32>,
-    @builtin(cull_primitive) cull: bool,
-    @per_primitive @location(1) colorMask: vec4<f32>,
 }
 
 var<task_payload> taskPayload: TaskPayload;
-var<workgroup> workgroupData: f32;
 
 @task
 @payload(taskPayload)
 @workgroup_size(1)
 fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
-    return vec3(3, 1, 1);
+    return vec3(1, 1, 1);
 }
 
 struct MeshOutput {

@@ -222,7 +222,6 @@ struct VertexOutput {
 struct PrimitiveOutput {
     @builtin(triangle_indices) index: vec3<u32>,
     @builtin(cull_primitive) cull: bool,
-    @builtin(primitive_index) primitive_index: u32,
     @per_primitive @location(1) colorMask: vec4<f32>,
 }
 struct PrimitiveInput {
@@ -239,7 +238,7 @@ fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
     workgroupData = 1.0;
     taskPayload.colorMask = vec4(1.0, 1.0, 0.0, 1.0);
     taskPayload.visible = true;
-    return vec3(3, 1, 1);
+    return vec3(1, 1, 1);
 }
 
 struct MeshOutput {
@@ -269,7 +268,6 @@ fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocati
 
     mesh_output.primitives[0].index = vec3<u32>(0, 1, 2);
     mesh_output.primitives[0].cull = !taskPayload.visible;
-    mesh_output.primitives[0].primitive_index = 1;
     mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
 }
 

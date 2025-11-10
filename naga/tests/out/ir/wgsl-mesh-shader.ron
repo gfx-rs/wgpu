@@ -106,12 +106,6 @@
                         offset: 12,
                     ),
                     (
-                        name: Some("primitive_index"),
-                        ty: 5,
-                        binding: Some(BuiltIn(PrimitiveIndex)),
-                        offset: 16,
-                    ),
-                    (
                         name: Some("colorMask"),
                         ty: 1,
                         binding: Some(Location(
@@ -121,10 +115,10 @@
                             blend_src: None,
                             per_primitive: true,
                         )),
-                        offset: 32,
+                        offset: 16,
                     ),
                 ],
-                span: 48,
+                span: 32,
             ),
         ),
         (
@@ -160,7 +154,7 @@
             inner: Array(
                 base: 7,
                 size: Constant(1),
-                stride: 48,
+                stride: 32,
             ),
         ),
         (
@@ -183,16 +177,16 @@
                         name: Some("vertex_count"),
                         ty: 5,
                         binding: Some(BuiltIn(VertexCount)),
-                        offset: 144,
+                        offset: 128,
                     ),
                     (
                         name: Some("primitive_count"),
                         ty: 5,
                         binding: Some(BuiltIn(PrimitiveCount)),
-                        offset: 148,
+                        offset: 132,
                     ),
                 ],
-                span: 160,
+                span: 144,
             ),
         ),
     ],
@@ -273,7 +267,7 @@
                         index: 1,
                     ),
                     Literal(Bool(true)),
-                    Literal(U32(3)),
+                    Literal(U32(1)),
                     Literal(U32(1)),
                     Literal(U32(1)),
                     Compose(
@@ -628,20 +622,6 @@
                         base: 94,
                         index: 2,
                     ),
-                    Literal(U32(1)),
-                    GlobalVariable(2),
-                    AccessIndex(
-                        base: 97,
-                        index: 1,
-                    ),
-                    AccessIndex(
-                        base: 98,
-                        index: 0,
-                    ),
-                    AccessIndex(
-                        base: 99,
-                        index: 3,
-                    ),
                     Literal(F32(1.0)),
                     Literal(F32(0.0)),
                     Literal(F32(1.0)),
@@ -649,10 +629,10 @@
                     Compose(
                         ty: 1,
                         components: [
-                            101,
-                            102,
-                            103,
-                            104,
+                            96,
+                            97,
+                            98,
+                            99,
                         ],
                     ),
                 ],
@@ -901,25 +881,13 @@
                         start: 94,
                         end: 96,
                     )),
-                    Store(
-                        pointer: 95,
-                        value: 96,
-                    ),
                     Emit((
-                        start: 98,
-                        end: 99,
-                    )),
-                    Emit((
-                        start: 99,
+                        start: 100,
                         end: 101,
                     )),
-                    Emit((
-                        start: 105,
-                        end: 106,
-                    )),
                     Store(
-                        pointer: 100,
-                        value: 105,
+                        pointer: 95,
+                        value: 100,
                     ),
                     Return(
                         value: None,
