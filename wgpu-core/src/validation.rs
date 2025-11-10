@@ -168,7 +168,6 @@ struct SpecializationConstant {
 struct EntryPointMeshInfo {
     max_vertices: u32,
     max_primitives: u32,
-    topology: naga::MeshOutputTopology,
 }
 
 #[derive(Debug, Default)]
@@ -181,6 +180,7 @@ struct EntryPoint {
     sampling_pairs: FastHashSet<(naga::Handle<Resource>, naga::Handle<Resource>)>,
     workgroup_size: [u32; 3],
     dual_source_blending: bool,
+    task_payload_size: Option<u32>,
     mesh_info: Option<EntryPointMeshInfo>,
 }
 
@@ -329,6 +329,12 @@ pub enum StageError {
         var: InterfaceVar,
         limit: u32,
     },
+    #[error("Mesh shaders are limited to {limit} output vertices, but the shader has a maximum number of {value}")]
+    TooManyMeshVertices { limit: u32, value: u32 },
+    #[error("Mesh shaders are limited to {limit} output primitives, but the shader has a maximum number of {value}")]
+    TooManyMeshPrimitives { limit: u32, value: u32 },
+    #[error("Mesh or task shaders are limited to {limit} bytes of task payload, but the shader has a task payload of size {value}")]
+    TaskPayloadTooLarge { limit: u32, value: u32 },
 }
 
 impl WebGpuError for StageError {
@@ -351,7 +357,10 @@ impl WebGpuError for StageError {
             | Self::MissingEntryPoint(..)
             | Self::NoEntryPointFound
             | Self::MultipleEntryPointsFound
-            | Self::ColorAttachmentLocationTooLarge { .. } => return ErrorType::Validation,
+            | Self::ColorAttachmentLocationTooLarge { .. }
+            | Self::TooManyMeshVertices { .. }
+            | Self::TooManyMeshPrimitives { .. }
+            | Self::TaskPayloadTooLarge { .. } => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
@@ -1065,12 +1074,30 @@ impl Interface {
             ep.dual_source_blending = info.dual_source_blending;
             ep.workgroup_size = entry_point.workgroup_size;
 
+            if let Some(task_payload) = entry_point.task_payload {
+                ep.task_payload_size = Some(
+                    module.types[module.global_variables[task_payload].ty]
+                        .inner
+                        .size(module.to_ctx()),
+                );
+            }
             if let Some(ref mesh_info) = entry_point.mesh_info {
                 ep.mesh_info = Some(EntryPointMeshInfo {
                     max_vertices: mesh_info.max_vertices,
                     max_primitives: mesh_info.max_primitives,
-                    topology: mesh_info.topology,
                 });
+                Self::populate(
+                    &mut ep.outputs,
+                    None,
+                    mesh_info.vertex_output_type,
+                    &module.types,
+                );
+                Self::populate(
+                    &mut ep.outputs,
+                    None,
+                    mesh_info.primitive_output_type,
+                    &module.types,
+                );
             }
 
             entry_points.insert((entry_point.stage, entry_point.name.clone()), ep);
@@ -1134,7 +1161,7 @@ impl Interface {
             Some(some) => some,
             None => return Err(StageError::MissingEntryPoint(pair.1)),
         };
-        let (_stage, entry_point_name) = pair;
+        let (_, entry_point_name) = pair;
 
         // check resources visibility
         for &handle in entry_point.resources.iter() {
@@ -1258,24 +1285,48 @@ impl Interface {
 
         // check workgroup size limits
         if shader_stage.compute_like() {
-            let max_workgroup_size_limits = [
-                self.limits.max_compute_workgroup_size_x,
-                self.limits.max_compute_workgroup_size_y,
-                self.limits.max_compute_workgroup_size_z,
-            ];
+            let (max_workgroup_size_limits, max_workgroup_size_total) = match shader_stage {
+                naga::ShaderStage::Compute => (
+                    [
+                        self.limits.max_compute_workgroup_size_x,
+                        self.limits.max_compute_workgroup_size_y,
+                        self.limits.max_compute_workgroup_size_z,
+                    ],
+                    self.limits.max_compute_invocations_per_workgroup,
+                ),
+                naga::ShaderStage::Task => (
+                    [
+                        self.limits.max_task_invocations_per_dimension,
+                        self.limits.max_task_invocations_per_dimension,
+                        self.limits.max_task_invocations_per_dimension,
+                    ],
+                    self.limits.max_task_invocations_per_workgroup,
+                ),
+                naga::ShaderStage::Mesh => (
+                    [
+                        self.limits.max_mesh_invocations_per_dimension,
+                        self.limits.max_mesh_invocations_per_dimension,
+                        self.limits.max_mesh_invocations_per_dimension,
+                    ],
+                    self.limits.max_mesh_invocations_per_workgroup,
+                ),
+                _ => unreachable!(),
+            };
             let total_invocations = entry_point.workgroup_size.iter().product::<u32>();
 
             if entry_point.workgroup_size.contains(&0)
-                || total_invocations > self.limits.max_compute_invocations_per_workgroup
-                || entry_point.workgroup_size[0] > max_workgroup_size_limits[0]
-                || entry_point.workgroup_size[1] > max_workgroup_size_limits[1]
-                || entry_point.workgroup_size[2] > max_workgroup_size_limits[2]
+                || total_invocations > max_workgroup_size_total
+                || {
+                    entry_point.workgroup_size[0] > max_workgroup_size_limits[0]
+                        || entry_point.workgroup_size[1] > max_workgroup_size_limits[1]
+                        || entry_point.workgroup_size[2] > max_workgroup_size_limits[2]
+                }
             {
                 return Err(StageError::InvalidWorkgroupSize {
                     current: entry_point.workgroup_size,
                     current_total: total_invocations,
                     limit: max_workgroup_size_limits,
-                    total: self.limits.max_compute_invocations_per_workgroup,
+                    total: max_workgroup_size_total,
                 });
             }
         }
@@ -1401,6 +1452,29 @@ impl Interface {
                 used: inter_stage_components,
                 limit: self.limits.max_inter_stage_shader_components,
             });
+        }
+
+        if let Some(ref mesh_info) = entry_point.mesh_info {
+            if mesh_info.max_vertices > self.limits.max_mesh_output_vertices {
+                return Err(StageError::TooManyMeshVertices {
+                    limit: self.limits.max_mesh_output_vertices,
+                    value: mesh_info.max_vertices,
+                });
+            }
+            if mesh_info.max_primitives > self.limits.max_mesh_output_primitives {
+                return Err(StageError::TooManyMeshPrimitives {
+                    limit: self.limits.max_mesh_output_primitives,
+                    value: mesh_info.max_primitives,
+                });
+            }
+        }
+        if let Some(task_payload_size) = entry_point.task_payload_size {
+            if task_payload_size > self.limits.max_task_payload_size {
+                return Err(StageError::TaskPayloadTooLarge {
+                    limit: self.limits.max_task_payload_size,
+                    value: task_payload_size,
+                });
+            }
         }
 
         let outputs = entry_point
