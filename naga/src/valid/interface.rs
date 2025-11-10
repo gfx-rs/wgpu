@@ -1058,6 +1058,11 @@ impl super::Validator {
                     return Err(EntryPointError::WrongTaskPayloadUsed
                         .with_span_handle(var_handle, &module.global_variables));
                 }
+                let size = module.types[var.ty].inner.size(module.to_ctx());
+                if size < 4 {
+                    return Err(EntryPointError::TaskPayloadTooSmall(size)
+                        .with_span_handle(var_handle, &module.global_variables));
+                }
             }
 
             let allowed_usage = match var.space {
@@ -1106,11 +1111,6 @@ impl super::Validator {
                             .with_span_handle(var_handle, &module.global_variables));
                     }
                 }
-            }
-            let size = module.types[var.ty].inner.size(module.to_ctx());
-            if size < 4 {
-                return Err(EntryPointError::TaskPayloadTooSmall(size)
-                    .with_span_handle(var_handle, &module.global_variables));
             }
         }
 
