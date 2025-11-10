@@ -129,6 +129,9 @@ pub enum EntryPointError {
     InvalidIntegerInterpolation { location: u32 },
     #[error(transparent)]
     Function(#[from] FunctionError),
+    #[error("Capability {0:?} is not supported")]
+    UnsupportedCapability(Capabilities),
+
     #[error("mesh shader entry point missing mesh shader attributes")]
     ExpectedMeshShaderAttributes,
     #[error("Non mesh shader entry point cannot have mesh shader attributes")]
@@ -143,9 +146,6 @@ pub enum EntryPointError {
     WrongTaskShaderEntryResult,
     #[error("Task shaders must declare a task payload output")]
     ExpectedTaskPayload,
-    #[error("Capability {0:?} is not supported")]
-    UnsupportedCapability(Capabilities),
-
     #[error(
         "Mesh shader output variable must be a struct with fields that are all allowed builtins"
     )]
@@ -162,6 +162,8 @@ pub enum EntryPointError {
     InvalidMeshPrimitiveOutputType,
     #[error("Mesh output global variable must live in the workgroup address space")]
     WrongMeshOutputAddressSpace,
+    #[error("Task payload must be at least 4 bytes, but is {0} bytes")]
+    TaskPayloadTooSmall(u32),
 }
 
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
@@ -1104,6 +1106,11 @@ impl super::Validator {
                             .with_span_handle(var_handle, &module.global_variables));
                     }
                 }
+            }
+            let size = module.types[var.ty].inner.size(module.to_ctx());
+            if size < 4 {
+                return Err(EntryPointError::TaskPayloadTooSmall(size)
+                    .with_span_handle(var_handle, &module.global_variables));
             }
         }
 
