@@ -1799,9 +1799,13 @@ fn validate_command_buffer(
                 }
             }
         }
+        // WebGPU requires that we check every bind group referenced during
+        // encoding, even ones that may have been replaced before being used.
+        // TODO(<https://github.com/gfx-rs/wgpu/issues/8510>): Optimize this.
         {
             profiling::scope!("bind groups");
             for bind_group in &cmd_buf_data.trackers.bind_groups {
+                // This checks the bind group and all resources it references.
                 bind_group.try_raw(snatch_guard)?;
             }
         }

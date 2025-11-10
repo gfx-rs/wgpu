@@ -418,7 +418,7 @@ impl Binder {
     pub(super) fn entries(
         &self,
         range: Range<usize>,
-    ) -> impl ExactSizeIterator<Item = (usize, &'_ EntryPayload)> + '_ {
+    ) -> impl ExactSizeIterator<Item = (usize, &'_ EntryPayload)> + Clone + '_ {
         let payloads = &self.payloads[range.clone()];
         zip(range, payloads)
     }

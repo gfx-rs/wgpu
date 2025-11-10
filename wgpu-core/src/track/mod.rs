@@ -661,7 +661,8 @@ impl Tracker {
     }
 
     /// Iterates through all resources in the given bind group and adopts
-    /// the state given for those resources in the UsageScope.
+    /// the state given for those resources in the UsageScope. It also
+    /// removes all touched resources from the usage scope.
     ///
     /// If a transition is needed to get the resources into the needed
     /// state, those transitions are stored within the tracker. A
@@ -669,8 +670,10 @@ impl Tracker {
     /// [`TextureTracker::drain_transitions`] is needed to get those transitions.
     ///
     /// This is a really funky method used by Compute Passes to generate
-    /// barriers for each dispatch. We use the bind group as a source of which
-    /// IDs to look at.
+    /// barriers after a call to dispatch without needing to iterate
+    /// over all elements in the usage scope. We use each the
+    /// bind group as a source of which IDs to look at. The bind groups
+    /// must have first been added to the usage scope.
     ///
     /// Only stateful things are merged in here, all other resources are owned
     /// indirectly by the bind group.
@@ -678,12 +681,16 @@ impl Tracker {
     /// # Panics
     ///
     /// If a resource in the `bind_group` is not found in the usage scope.
-    pub fn set_from_bind_group(&mut self, scope: &mut UsageScope, bind_group: &BindGroupStates) {
-        self.buffers.set_multiple(
+    pub fn set_and_remove_from_usage_scope_sparse(
+        &mut self,
+        scope: &mut UsageScope,
+        bind_group: &BindGroupStates,
+    ) {
+        self.buffers.set_and_remove_from_usage_scope_sparse(
             &mut scope.buffers,
             bind_group.buffers.used_tracker_indices(),
         );
         self.textures
-            .set_multiple(&mut scope.textures, &bind_group.views);
+            .set_and_remove_from_usage_scope_sparse(&mut scope.textures, &bind_group.views);
     }
 }
