@@ -1865,8 +1865,7 @@ impl crate::Device for super::Device {
         >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         let mut shader_stages = wgt::ShaderStages::empty();
-        let root_signature =
-            unsafe { borrow_optional_interface_temporarily(&desc.layout.shared.signature) };
+        let pinned_root_sig = core::pin::Pin::new(&desc.layout.shared.signature);
         let (topology_class, topology) = conv::map_topology(desc.primitive.topology);
         let mut rtv_formats = [Dxgi::Common::DXGI_FORMAT_UNKNOWN;
             Direct3D12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as usize];
@@ -1954,7 +1953,7 @@ impl crate::Device for super::Device {
 
         let mut stream_desc = super::RenderPipelineStateStreamDesc {
             // Shared by vertex and mesh pipelines
-            root_signature: root_signature
+            root_signature: (*pinned_root_sig)
                 .as_ref()
                 .map(|a| a.as_raw().cast())
                 .unwrap_or(ptr::null_mut()),

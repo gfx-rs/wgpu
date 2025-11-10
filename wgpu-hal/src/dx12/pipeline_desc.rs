@@ -18,6 +18,8 @@ use alloc::vec::Vec;
 use windows::Win32::Graphics::Direct3D12;
 use windows::Win32::Graphics::Dxgi;
 
+use crate::dx12::borrow_interface_temporarily;
+
 impl super::RenderPipelineStateStreamDesc {
     /// # Safety
     ///
@@ -164,11 +166,11 @@ impl super::RenderPipelineStateStreamDesc {
         &self,
     ) -> Direct3D12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
         Direct3D12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
-            pRootSignature: ManuallyDrop::new(if !self.root_signature.is_null() {
-                Some(unsafe { (*self.root_signature).clone() })
+            pRootSignature: if !self.root_signature.is_null() {
+                unsafe { borrow_interface_temporarily(&*self.root_signature) }
             } else {
-                None
-            }),
+                ManuallyDrop::new(None)
+            },
             VS: self.vertex_shader,
             PS: self.pixel_shader,
             DS: Direct3D12::D3D12_SHADER_BYTECODE::default(),
