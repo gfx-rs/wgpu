@@ -317,7 +317,10 @@ impl VaryingContext<'_> {
                         *ty_inner == Ti::Scalar(crate::Scalar::BOOL),
                     ),
                     Bi::PrimitiveIndex => (
-                        self.stage == St::Fragment && !self.output,
+                        (self.stage == St::Fragment && !self.output)
+                            || (self.stage == St::Mesh
+                                && self.output
+                                && self.mesh_output_type == MeshOutputType::PrimitiveOutput),
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
                     Bi::Barycentric => (

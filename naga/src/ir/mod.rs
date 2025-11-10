@@ -409,7 +409,7 @@ pub enum BuiltIn {
     PointCoord,
     /// Read in fragment shaders
     FrontFacing,
-    /// Read in fragment shaders, in the future may written in mesh shaders
+    /// Read in fragment shaders, written in mesh shaders
     PrimitiveIndex,
     /// Read in fragment shaders
     Barycentric,

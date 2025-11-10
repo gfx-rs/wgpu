@@ -183,6 +183,8 @@ The primitive output type `P` must be a struct type, every member of which eithe
 
 The `@location` attributes of `P` and `V` must not overlap, since they are merged to produce the user-defined inputs to the fragment shader.
 
+Mesh shaders may write to the `primitive_index` builtin. This is treated just like a field decorated with `@location`, so if the mesh shader outputs `primitive_index` the fragment shader must input it and vice versa.
+
 Mesh shaders can use compute and mesh shader builtin inputs, in addition to `view_index`, and if no task shader is present, `draw_id`.
 
 ### Fragment shader
@@ -220,6 +222,7 @@ struct VertexOutput {
 struct PrimitiveOutput {
     @builtin(triangle_indices) index: vec3<u32>,
     @builtin(cull_primitive) cull: bool,
+    @builtin(primitive_index) primitive_index: u32,
     @per_primitive @location(1) colorMask: vec4<f32>,
 }
 struct PrimitiveInput {
@@ -266,6 +269,7 @@ fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocati
 
     mesh_output.primitives[0].index = vec3<u32>(0, 1, 2);
     mesh_output.primitives[0].cull = !taskPayload.visible;
+    mesh_output.primitives[0].primitive_index = 1;
     mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
 }
 

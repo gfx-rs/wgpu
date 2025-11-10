@@ -1333,6 +1333,66 @@
                     ref_count: 1,
                     assignable_global: Some(2),
                     ty: Value(Pointer(
+                        base: 5,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: None,
+                    ty: Value(Scalar((
+                        kind: Uint,
+                        width: 4,
+                    ))),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 11,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 10,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
+                        base: 7,
+                        space: WorkGroup,
+                    )),
+                ),
+                (
+                    uniformity: (
+                        non_uniform_result: None,
+                        requirements: (""),
+                    ),
+                    ref_count: 1,
+                    assignable_global: Some(2),
+                    ty: Value(Pointer(
                         base: 1,
                         space: WorkGroup,
                     )),
