@@ -129,6 +129,7 @@ pub struct InterfaceVar {
     pub ty: NumericType,
     interpolation: Option<naga::Interpolation>,
     sampling: Option<naga::Sampling>,
+    per_primitive: bool,
 }
 
 impl InterfaceVar {
@@ -137,6 +138,7 @@ impl InterfaceVar {
             ty: NumericType::from_vertex_format(format),
             interpolation: None,
             sampling: None,
+            per_primitive: false,
         }
     }
 }
@@ -980,13 +982,15 @@ impl Interface {
                 location,
                 interpolation,
                 sampling,
-                .. // second_blend_source
+                per_primitive,
+                blend_src: _,
             }) => Varying::Local {
                 location,
                 iv: InterfaceVar {
                     ty: numeric_ty,
                     interpolation,
                     sampling,
+                    per_primitive,
                 },
             },
             Some(&naga::Binding::BuiltIn(built_in)) => Varying::BuiltIn(built_in),
@@ -1363,15 +1367,15 @@ impl Interface {
                                             ));
                                         }
                                         (
-                                            iv.ty.is_subtype_of(&provided.ty),
+                                            iv.ty.is_subtype_of(&provided.ty)
+                                                && iv.per_primitive == provided.per_primitive,
                                             iv.ty.dim.num_components(),
                                         )
                                     }
-                                    naga::ShaderStage::Compute => (false, 0),
-                                    // TODO: add validation for these, see https://github.com/gfx-rs/wgpu/issues/8003
-                                    naga::ShaderStage::Task | naga::ShaderStage::Mesh => {
-                                        unreachable!()
-                                    }
+                                    // These can't have varying inputs
+                                    naga::ShaderStage::Compute
+                                    | naga::ShaderStage::Task
+                                    | naga::ShaderStage::Mesh => (false, 0),
                                 };
                                 if compatible {
                                     Ok(num_components)
