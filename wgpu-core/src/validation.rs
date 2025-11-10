@@ -339,6 +339,15 @@ pub enum StageError {
     TooManyMeshPrimitives { limit: u32, value: u32 },
     #[error("Mesh or task shaders are limited to {limit} bytes of task payload, but the shader has a task payload of size {value}")]
     TaskPayloadTooLarge { limit: u32, value: u32 },
+    #[error("Mesh shader's task payload has size {shader:?}, which doesn't match input from previous stage {input:?}")]
+    TaskPayloadMustMatch {
+        input: Option<u32>,
+        shader: Option<u32>,
+    },
+    #[error("Primitive index can only be used in a fragment shader if the preceding shader was a vertex shader or a mesh shader that writes to primitive index.")]
+    PrimitiveIndexError,
+    #[error("Draw id can only be used in a mesh shader if the pipeline has no task shader.")]
+    DrawIdError,
 }
 
 impl WebGpuError for StageError {
@@ -364,7 +373,10 @@ impl WebGpuError for StageError {
             | Self::ColorAttachmentLocationTooLarge { .. }
             | Self::TooManyMeshVertices { .. }
             | Self::TooManyMeshPrimitives { .. }
-            | Self::TaskPayloadTooLarge { .. } => return ErrorType::Validation,
+            | Self::TaskPayloadTooLarge { .. }
+            | Self::TaskPayloadMustMatch { .. }
+            | Self::PrimitiveIndexError
+            | Self::DrawIdError => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
@@ -937,7 +949,16 @@ impl<'a> BindingLayoutSource<'a> {
     }
 }
 
-pub type StageIo = FastHashMap<wgt::ShaderLocation, InterfaceVar>;
+#[derive(Debug, Clone, Default)]
+pub struct StageIo {
+    pub varyings: FastHashMap<wgt::ShaderLocation, InterfaceVar>,
+    /// This must match between mesh & task shaders
+    pub task_payload_size: Option<u32>,
+    /// Fragment shaders cannot input primitive index on mesh shaders that don't output it on DX12.
+    /// Therefore, we track between shader stages if primitive index is written (or if vertex shader
+    /// is used).
+    pub primitive_index: bool,
+}
 
 impl Interface {
     fn populate(
@@ -1338,58 +1359,60 @@ impl Interface {
         }
 
         let mut inter_stage_components = 0;
+        let mut has_primitive_index = false;
+        let mut has_draw_id = false;
 
         // check inputs compatibility
         for input in entry_point.inputs.iter() {
             match *input {
                 Varying::Local { location, ref iv } => {
-                    let result =
-                        inputs
-                            .get(&location)
-                            .ok_or(InputError::Missing)
-                            .and_then(|provided| {
-                                let (compatible, num_components, per_primitive_correct) =
-                                    match shader_stage {
-                                        // For vertex attributes, there are defaults filled out
-                                        // by the driver if data is not provided.
-                                        naga::ShaderStage::Vertex => {
-                                            let is_compatible =
-                                                iv.ty.scalar.kind == provided.ty.scalar.kind;
-                                            // vertex inputs don't count towards inter-stage
-                                            (is_compatible, 0, !iv.per_primitive)
+                    let result = inputs
+                        .varyings
+                        .get(&location)
+                        .ok_or(InputError::Missing)
+                        .and_then(|provided| {
+                            let (compatible, num_components, per_primitive_correct) =
+                                match shader_stage {
+                                    // For vertex attributes, there are defaults filled out
+                                    // by the driver if data is not provided.
+                                    naga::ShaderStage::Vertex => {
+                                        let is_compatible =
+                                            iv.ty.scalar.kind == provided.ty.scalar.kind;
+                                        // vertex inputs don't count towards inter-stage
+                                        (is_compatible, 0, !iv.per_primitive)
+                                    }
+                                    naga::ShaderStage::Fragment => {
+                                        if iv.interpolation != provided.interpolation {
+                                            return Err(InputError::InterpolationMismatch(
+                                                provided.interpolation,
+                                            ));
                                         }
-                                        naga::ShaderStage::Fragment => {
-                                            if iv.interpolation != provided.interpolation {
-                                                return Err(InputError::InterpolationMismatch(
-                                                    provided.interpolation,
-                                                ));
-                                            }
-                                            if iv.sampling != provided.sampling {
-                                                return Err(InputError::SamplingMismatch(
-                                                    provided.sampling,
-                                                ));
-                                            }
-                                            (
-                                                iv.ty.is_subtype_of(&provided.ty),
-                                                iv.ty.dim.num_components(),
-                                                iv.per_primitive == provided.per_primitive,
-                                            )
+                                        if iv.sampling != provided.sampling {
+                                            return Err(InputError::SamplingMismatch(
+                                                provided.sampling,
+                                            ));
                                         }
-                                        // These can't have varying inputs
-                                        naga::ShaderStage::Compute
-                                        | naga::ShaderStage::Task
-                                        | naga::ShaderStage::Mesh => (false, 0, false),
-                                    };
-                                if !compatible {
-                                    Err(InputError::WrongType(provided.ty))
-                                } else if !per_primitive_correct {
-                                    Err(InputError::WrongPerPrimitive {
-                                        expected: provided.per_primitive,
-                                    })
-                                } else {
-                                    Ok(num_components)
-                                }
-                            });
+                                        (
+                                            iv.ty.is_subtype_of(&provided.ty),
+                                            iv.ty.dim.num_components(),
+                                            iv.per_primitive == provided.per_primitive,
+                                        )
+                                    }
+                                    // These can't have varying inputs
+                                    naga::ShaderStage::Compute
+                                    | naga::ShaderStage::Task
+                                    | naga::ShaderStage::Mesh => (false, 0, false),
+                                };
+                            if !compatible {
+                                Err(InputError::WrongType(provided.ty))
+                            } else if !per_primitive_correct {
+                                Err(InputError::WrongPerPrimitive {
+                                    expected: provided.per_primitive,
+                                })
+                            } else {
+                                Ok(num_components)
+                            }
+                        });
                     match result {
                         Ok(num_components) => {
                             inter_stage_components += num_components;
@@ -1402,6 +1425,12 @@ impl Interface {
                             })
                         }
                     }
+                }
+                Varying::BuiltIn(naga::BuiltIn::PrimitiveIndex) => {
+                    has_primitive_index = true;
+                }
+                Varying::BuiltIn(naga::BuiltIn::DrawID) => {
+                    has_draw_id = true;
                 }
                 Varying::BuiltIn(_) => {}
             }
@@ -1487,6 +1516,26 @@ impl Interface {
                 });
             }
         }
+        if shader_stage == naga::ShaderStage::Mesh
+            && entry_point.task_payload_size != inputs.task_payload_size
+        {
+            return Err(StageError::TaskPayloadMustMatch {
+                input: inputs.task_payload_size,
+                shader: entry_point.task_payload_size,
+            });
+        }
+        if shader_stage == naga::ShaderStage::Fragment
+            && has_primitive_index
+            && !inputs.primitive_index
+        {
+            return Err(StageError::PrimitiveIndexError);
+        }
+        if shader_stage == naga::ShaderStage::Mesh
+            && inputs.task_payload_size.is_some()
+            && has_draw_id
+        {
+            return Err(StageError::DrawIdError);
+        }
 
         let outputs = entry_point
             .outputs
@@ -1497,7 +1546,11 @@ impl Interface {
             })
             .collect();
 
-        Ok(outputs)
+        Ok(StageIo {
+            task_payload_size: entry_point.task_payload_size,
+            varyings: outputs,
+            primitive_index: has_primitive_index || shader_stage == naga::ShaderStage::Vertex,
+        })
     }
 
     pub fn fragment_uses_dual_source_blending(

@@ -3972,7 +3972,7 @@ impl Device {
                         self.require_features(wgt::Features::VERTEX_ATTRIBUTE_64BIT)?;
                     }
 
-                    let previous = io.insert(
+                    let previous = io.varyings.insert(
                         attribute.shader_location,
                         validation::InterfaceVar::vertex_attribute(attribute.format),
                     );
@@ -4411,7 +4411,7 @@ impl Device {
         }
 
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
-            for (i, output) in io.iter() {
+            for (i, output) in io.varyings.iter() {
                 match color_targets.get(*i as usize) {
                     Some(Some(state)) => {
                         validation::check_texture_format(state.format, &output.ty).map_err(
