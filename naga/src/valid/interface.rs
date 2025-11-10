@@ -143,10 +143,8 @@ pub enum EntryPointError {
     WrongTaskShaderEntryResult,
     #[error("Task shaders must declare a task payload output")]
     ExpectedTaskPayload,
-    #[error(
-        "The `MESH_SHADER` capability must be enabled to compile mesh shaders and task shaders"
-    )]
-    MeshShaderCapabilityDisabled,
+    #[error("Capability {0:?} is not supported")]
+    UnsupportedCapability(Capabilities),
 
     #[error(
         "Mesh shader output variable must be a struct with fields that are all allowed builtins"
@@ -868,7 +866,9 @@ impl super::Validator {
             crate::ShaderStage::Task | crate::ShaderStage::Mesh
         ) && !self.capabilities.contains(Capabilities::MESH_SHADER)
         {
-            return Err(EntryPointError::MeshShaderCapabilityDisabled.with_span());
+            return Err(
+                EntryPointError::UnsupportedCapability(Capabilities::MESH_SHADER).with_span(),
+            );
         }
         if ep.early_depth_test.is_some() {
             let required = Capabilities::EARLY_DEPTH_TEST;
@@ -1140,6 +1140,16 @@ impl super::Validator {
             implied.0.max_primitives_override = mesh_info.max_primitives_override;
             if implied.0 != *mesh_info {
                 return Err(EntryPointError::BadMeshOutputVariableType.with_span());
+            }
+            if mesh_info.topology == crate::MeshOutputTopology::Points
+                && !self
+                    .capabilities
+                    .contains(Capabilities::MESH_SHADER_POINT_TOPOLOGY)
+            {
+                return Err(EntryPointError::UnsupportedCapability(
+                    Capabilities::MESH_SHADER_POINT_TOPOLOGY,
+                )
+                .with_span());
             }
 
             self.validate_mesh_output_type(

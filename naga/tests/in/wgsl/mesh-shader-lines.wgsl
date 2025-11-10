@@ -10,7 +10,7 @@ struct VertexOutput {
     @builtin(position) position: vec4<f32>,
 }
 struct PrimitiveOutput {
-    @builtin(triangle_indices) indices: vec3<u32>,
+    @builtin(line_indices) indices: vec2<u32>,
 }
 
 var<task_payload> taskPayload: TaskPayload;
@@ -23,7 +23,7 @@ fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
 }
 
 struct MeshOutput {
-    @builtin(vertices) vertices: array<VertexOutput, 3>,
+    @builtin(vertices) vertices: array<VertexOutput, 2>,
     @builtin(primitives) primitives: array<PrimitiveOutput, 1>,
     @builtin(vertex_count) vertex_count: u32,
     @builtin(primitive_count) primitive_count: u32,

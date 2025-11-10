@@ -62,7 +62,7 @@
             inner: Struct(
                 members: [
                     (
-                        name: Some("index"),
+                        name: Some("indices"),
                         ty: 4,
                         binding: Some(BuiltIn(TriangleIndices)),
                         offset: 0,

@@ -1255,6 +1255,16 @@ bitflags_array! {
         ///
         /// While metal supports this in theory, the behavior of `view_index` differs from vulkan and dx12 so the feature isn't exposed.
         const SELECTIVE_MULTIVIEW = 1 << 54;
+
+        /// Enables the use of point-primitive outputs from mesh shaders. Making use of this feature also requires enabling
+        /// `Features::EXPERIMENTAL_MESH_SHADER`.
+        ///
+        /// Supported platforms
+        /// - Vulkan
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const EXPERIMENTAL_MESH_SHADER_POINTS = 1 << 55;
     }
 
     /// Features that are not guaranteed to be supported.

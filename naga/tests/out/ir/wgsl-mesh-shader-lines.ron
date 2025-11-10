@@ -50,7 +50,7 @@
         (
             name: None,
             inner: Vector(
-                size: Tri,
+                size: Bi,
                 scalar: (
                     kind: Uint,
                     width: 4,
@@ -64,18 +64,28 @@
                     (
                         name: Some("indices"),
                         ty: 4,
-                        binding: Some(BuiltIn(TriangleIndices)),
+                        binding: Some(BuiltIn(LineIndices)),
                         offset: 0,
                     ),
                 ],
-                span: 16,
+                span: 8,
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Tri,
+                scalar: (
+                    kind: Uint,
+                    width: 4,
+                ),
             ),
         ),
         (
             name: None,
             inner: Array(
                 base: 3,
-                size: Constant(3),
+                size: Constant(2),
                 stride: 16,
             ),
         ),
@@ -84,7 +94,7 @@
             inner: Array(
                 base: 5,
                 size: Constant(1),
-                stride: 16,
+                stride: 8,
             ),
         ),
         (
@@ -93,30 +103,30 @@
                 members: [
                     (
                         name: Some("vertices"),
-                        ty: 6,
+                        ty: 7,
                         binding: Some(BuiltIn(Vertices)),
                         offset: 0,
                     ),
                     (
                         name: Some("primitives"),
-                        ty: 7,
+                        ty: 8,
                         binding: Some(BuiltIn(Primitives)),
-                        offset: 48,
+                        offset: 32,
                     ),
                     (
                         name: Some("vertex_count"),
                         ty: 0,
                         binding: Some(BuiltIn(VertexCount)),
-                        offset: 64,
+                        offset: 40,
                     ),
                     (
                         name: Some("primitive_count"),
                         ty: 0,
                         binding: Some(BuiltIn(PrimitiveCount)),
-                        offset: 68,
+                        offset: 44,
                     ),
                 ],
-                span: 80,
+                span: 48,
             ),
         ),
     ],
@@ -142,7 +152,7 @@
             name: Some("mesh_output"),
             space: WorkGroup,
             binding: None,
-            ty: 8,
+            ty: 9,
             init: None,
         ),
     ],
@@ -159,7 +169,7 @@
                 name: Some("ts_main"),
                 arguments: [],
                 result: Some((
-                    ty: 4,
+                    ty: 6,
                     binding: Some(BuiltIn(MeshTaskSize)),
                 )),
                 local_variables: [],
@@ -168,7 +178,7 @@
                     Literal(U32(1)),
                     Literal(U32(1)),
                     Compose(
-                        ty: 4,
+                        ty: 6,
                         components: [
                             0,
                             1,
@@ -216,8 +226,8 @@
                 diagnostic_filter_leaf: None,
             ),
             mesh_info: Some((
-                topology: Triangles,
-                max_vertices: 3,
+                topology: Lines,
+                max_vertices: 2,
                 max_vertices_override: None,
                 max_primitives: 1,
                 max_primitives_override: None,
