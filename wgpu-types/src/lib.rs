@@ -518,6 +518,18 @@ macro_rules! with_limits {
         $macro_name!(max_non_sampler_bindings, Ordering::Less);
 
         // TODO: mesh stuff
+        $macro_name!(max_task_mesh_workgroup_total_count, Ordering::Less);
+        $macro_name!(max_task_mesh_workgroups_per_dimension, Ordering::Less);
+        $macro_name!(max_task_invocations_per_workgroup, Ordering::Less);
+        $macro_name!(max_task_invocations_per_dimension, Ordering::Less);
+        $macro_name!(max_mesh_invocations_per_workgroup, Ordering::Less);
+        $macro_name!(max_mesh_invocations_per_dimension, Ordering::Less);
+
+        $macro_name!(max_task_payload_size, Ordering::Less);
+        $macro_name!(max_mesh_output_vertices, Ordering::Less);
+        $macro_name!(max_mesh_output_primitives, Ordering::Less);
+        $macro_name!(max_mesh_output_layers, Ordering::Less);
+        $macro_name!(max_mesh_multiview_view_count, Ordering::Less);
 
         $macro_name!(max_blas_primitive_count, Ordering::Less);
         $macro_name!(max_blas_geometry_count, Ordering::Less);
