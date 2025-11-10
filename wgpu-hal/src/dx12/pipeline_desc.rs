@@ -1,9 +1,16 @@
 //! We try to use pipeline stream descriptors where possible, but this isn't allowed
 //! on some older windows 10 versions. Therefore, we also must have some logic to
-//! convert such descriptors to the traditional equivalent.
+//! convert such descriptors to the "traditional" equivalent,
+//! `D3D12_GRAPHICS_PIPELINE_STATE_DESC`.
 //!
-//! The code for pipeline stream descriptors is extremely gross and extremely unsafe.
-//! It has been isolated to this file for that reason.
+//! Stream descriptors allow extending the pipeline, enabling more advanced features,
+//! including mesh shaders and multiview/view instancing. Using a stream descriptor
+//! is like using a vulkan descriptor with a `pNext` chain. It doesn't have direct
+//! benefits to all use cases, but allows new use cases.
+//!
+//! The code for pipeline stream descriptors is very complicated, and can have bad
+//! consequences if it is written incorrectly. It has been isolated to this file for
+//! that reason.
 
 use core::mem::ManuallyDrop;
 
@@ -17,26 +24,33 @@ impl super::RenderPipelineStateStreamDesc {
     /// Must not outlive `self`, as it contains a pointer to the root signature as pointed to
     /// by this struct.
     pub unsafe fn to_bytes(&self) -> Vec<u8> {
-        // This allocation is unpleasant but in general the struct can get large enough that
-        // an allocation isn't the worst thing in the world.
         use Direct3D12::*;
+
+        // Dynamic allocation is used here because the resulting stream can become very large.
         let mut bytes = Vec::new();
 
         // The thing to understand is that DX12 expects it to be laid out like any normal struct.
-        // Therefore, everything must obey certain alignment rules. Otherwise, everything goes
-        // to shit. Unfortunately, we can't just use a normal struct because we shouldn't push
+        // Therefore, everything must obey certain alignment rules. Otherwise, everything gets
+        // corrupted. Unfortunately, we can't just use a normal struct because we can't push
         // subobjects that aren't being used, and we shouldn't try to give all permutations
         // of used subobjects their own struct.
         //
-        // Therefore, we "construct" a struct manually here. This was mostly written through trial
-        // and error, though it seems very robust currently. Future fields should however be handled
-        // with extreme caution.
+        // Essentially, each field is prefaced by its type identifier. This identifier is a 32
+        // bit integer, but must be aligned to 64 bits. Then the actual subobject is aligned as
+        // it is required to (not necessarily to 64 bits!). And if we don't use a field, we
+        // shouldn't push it.
+        //
+        // Therefore, we "construct" a struct manually here. Adding fields should be done with
+        // extreme caution.
+        //
+        // See <https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_pipeline_state_stream_desc>.
         macro_rules! push_subobject {
             ($subobject_type:expr, $data:expr) => {{
                 // Ensure 8-byte alignment for the subobject start, even though
                 // the tag is only a u32. I don't fully understand why.
                 let alignment = 8;
                 let aligned_length = bytes.len().next_multiple_of(alignment);
+                // Pad with zeros
                 bytes.resize(aligned_length, 0);
 
                 // Append the type tag (u32)
@@ -46,6 +60,7 @@ impl super::RenderPipelineStateStreamDesc {
                 // Align the data
                 let obj_align = align_of_val(&$data);
                 let data_start = bytes.len().next_multiple_of(obj_align);
+                // Pad with zeros
                 bytes.resize(data_start, 0);
 
                 // Append the data itself, as raw bytes
@@ -145,7 +160,9 @@ impl super::RenderPipelineStateStreamDesc {
         bytes
     }
 
-    pub fn to_traditional_descriptor(&self) -> Direct3D12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
+    pub fn to_graphics_pipeline_descriptor(
+        &self,
+    ) -> Direct3D12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
         Direct3D12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
             pRootSignature: ManuallyDrop::new(if !self.root_signature.is_null() {
                 Some(unsafe { (*self.root_signature).clone() })
