@@ -4261,7 +4261,6 @@ impl Device {
                 };
             }
             pipeline::RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
-                // TODO: task stuff
                 self.require_features(wgt::Features::EXPERIMENTAL_MESH_SHADER)?;
 
                 task_stage = if let Some(task) = task {

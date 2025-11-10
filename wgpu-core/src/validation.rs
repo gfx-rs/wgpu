@@ -1182,7 +1182,6 @@ impl Interface {
         inputs: StageIo,
         compare_function: Option<wgt::CompareFunction>,
     ) -> Result<StageIo, StageError> {
-        // TODO: mesh validation fun stuff
         // Since a shader module can have multiple entry points with the same name,
         // we need to look for one with the right execution model.
         let shader_stage = Self::shader_stage_from_stage_bit(stage_bit);
