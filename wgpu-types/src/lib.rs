@@ -517,7 +517,6 @@ macro_rules! with_limits {
         $macro_name!(max_push_constant_size, Ordering::Less);
         $macro_name!(max_non_sampler_bindings, Ordering::Less);
 
-        // TODO: mesh stuff
         $macro_name!(max_task_mesh_workgroup_total_count, Ordering::Less);
         $macro_name!(max_task_mesh_workgroups_per_dimension, Ordering::Less);
         $macro_name!(max_task_invocations_per_workgroup, Ordering::Less);

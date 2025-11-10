@@ -164,6 +164,13 @@ struct SpecializationConstant {
     ty: NumericType,
 }
 
+#[derive(Debug)]
+struct EntryPointMeshInfo {
+    max_vertices: u32,
+    max_primitives: u32,
+    topology: naga::MeshOutputTopology,
+}
+
 #[derive(Debug, Default)]
 struct EntryPoint {
     inputs: Vec<Varying>,
@@ -174,6 +181,7 @@ struct EntryPoint {
     sampling_pairs: FastHashSet<(naga::Handle<Resource>, naga::Handle<Resource>)>,
     workgroup_size: [u32; 3],
     dual_source_blending: bool,
+    mesh_info: Option<EntryPointMeshInfo>,
 }
 
 #[derive(Debug)]
@@ -1057,6 +1065,14 @@ impl Interface {
             ep.dual_source_blending = info.dual_source_blending;
             ep.workgroup_size = entry_point.workgroup_size;
 
+            if let Some(ref mesh_info) = entry_point.mesh_info {
+                ep.mesh_info = Some(EntryPointMeshInfo {
+                    max_vertices: mesh_info.max_vertices,
+                    max_primitives: mesh_info.max_primitives,
+                    topology: mesh_info.topology,
+                });
+            }
+
             entry_points.insert((entry_point.stage, entry_point.name.clone()), ep);
         }
 
@@ -1109,6 +1125,7 @@ impl Interface {
         inputs: StageIo,
         compare_function: Option<wgt::CompareFunction>,
     ) -> Result<StageIo, StageError> {
+        // TODO: mesh validation fun stuff
         // Since a shader module can have multiple entry points with the same name,
         // we need to look for one with the right execution model.
         let shader_stage = Self::shader_stage_from_stage_bit(stage_bit);

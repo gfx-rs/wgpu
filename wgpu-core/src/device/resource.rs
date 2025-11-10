@@ -4261,6 +4261,7 @@ impl Device {
                 };
             }
             pipeline::RenderPipelineVertexProcessor::Mesh(ref task, ref mesh) => {
+                // TODO: task stuff
                 self.require_features(wgt::Features::EXPERIMENTAL_MESH_SHADER)?;
 
                 task_stage = if let Some(task) = task {
@@ -4363,20 +4364,18 @@ impl Device {
                     )
                     .map_err(stage_err)?;
 
-                if validated_stages == wgt::ShaderStages::VERTEX {
-                    if let Some(ref interface) = shader_module.interface {
-                        io = interface
-                            .check_stage(
-                                &mut binding_layout_source,
-                                &mut shader_binding_sizes,
-                                &fragment_entry_point_name,
-                                stage,
-                                io,
-                                desc.depth_stencil.as_ref().map(|d| d.depth_compare),
-                            )
-                            .map_err(stage_err)?;
-                        validated_stages |= stage;
-                    }
+                if let Some(ref interface) = shader_module.interface {
+                    io = interface
+                        .check_stage(
+                            &mut binding_layout_source,
+                            &mut shader_binding_sizes,
+                            &fragment_entry_point_name,
+                            stage,
+                            io,
+                            desc.depth_stencil.as_ref().map(|d| d.depth_compare),
+                        )
+                        .map_err(stage_err)?;
+                    validated_stages |= stage;
                 }
 
                 if let Some(ref interface) = shader_module.interface {
