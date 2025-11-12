@@ -336,11 +336,11 @@ jobs:
         run: |
           set -e
 
-          # wgpu_core package
           cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} \
                 --package wgpu-core \
                 --package wgpu-hal \
                 --package naga \
+                --package wgpu \
                 --all-features --no-deps --document-private-items
 
   # We run minimal checks on the MSRV of the core crates, ensuring that
