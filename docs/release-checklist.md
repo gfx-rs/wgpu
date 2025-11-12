@@ -54,7 +54,7 @@ Day of Release:
     - Add an AMA comment.
   - Include the r/rust post shortlink in the following posts as well:
   - [wgpu matrix](https://matrix.to/#/#wgpu:matrix.org)
-  - [Rust Gamedev Discord](https://discord.gg/yNtPTb2) in the #crates channel
+  - [Rust Gamedev Discord](https://discord.gg/X3MYBNXUMJ) in the #crates and #wgpu channel
   - [Bevy Discord](https://discord.com/invite/bevy) in the #rendering-dev channel
   - [Graphics Programming Discord](https://discord.gg/6mgNGk7) in the #webgpu channel
   - [Rust Community Discord](https://discord.gg/rust-lang-community) in the #games-and-graphics channel
