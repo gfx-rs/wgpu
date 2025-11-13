@@ -1,0 +1,43 @@
+name: changelog
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/changelog.yml"
+      - "CHANGELOG.md"
+      - "xtask/**/*"
+
+env:
+  #
+  # Dependency versioning
+  #
+
+  # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
+  REPO_MSRV: "1.88"
+
+  #
+  # Environment variables
+  #
+
+  CARGO_INCREMENTAL: false
+  CARGO_TERM_COLOR: always
+  RUST_LOG: info
+  RUST_BACKTRACE: "1"
+  CACHE_SUFFIX: c # cache busting
+
+jobs:
+  changelog:
+    timeout-minutes: 2
+
+    name: Check changelog for errors
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Run `cargo xtask changelog …`
+        run: |
+          cargo xtask changelog "origin/${{ github.event.pull_request.base.ref }}"

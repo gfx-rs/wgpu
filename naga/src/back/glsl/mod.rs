@@ -139,7 +139,8 @@ impl crate::AddressSpace {
             | crate::AddressSpace::Uniform
             | crate::AddressSpace::Storage { .. }
             | crate::AddressSpace::Handle
-            | crate::AddressSpace::PushConstant => false,
+            | crate::AddressSpace::PushConstant
+            | crate::AddressSpace::TaskPayload => false,
         }
     }
 }
@@ -1300,6 +1301,9 @@ impl<'a, W: Write> Writer<'a, W> {
             crate::AddressSpace::Storage { .. } => {
                 self.write_interface_block(handle, global)?;
             }
+            crate::AddressSpace::TaskPayload => {
+                self.write_interface_block(handle, global)?;
+            }
             // A global variable in the `Function` address space is a
             // contradiction in terms.
             crate::AddressSpace::Function => unreachable!(),
@@ -1614,6 +1618,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 interpolation,
                 sampling,
                 blend_src,
+                per_primitive: _,
             } => (location, interpolation, sampling, blend_src),
             crate::Binding::BuiltIn(built_in) => {
                 match built_in {
@@ -1732,6 +1737,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 interpolation: None,
                 sampling: None,
                 blend_src,
+                per_primitive: false,
             },
             stage: self.entry_point.stage,
             options: VaryingOptions::from_writer_options(self.options, output),
@@ -1873,7 +1879,7 @@ impl<'a, W: Write> Writer<'a, W> {
         writeln!(self.out, ") {{")?;
 
         if self.options.zero_initialize_workgroup_memory
-            && ctx.ty.is_compute_entry_point(self.module)
+            && ctx.ty.is_compute_like_entry_point(self.module)
         {
             self.write_workgroup_variables_initialization(&ctx)?;
         }
@@ -5204,8 +5210,13 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
                 "gl_FragCoord"
             }
         }
-        Bi::ViewIndex if options.targeting_webgl => "int(gl_ViewID_OVR)",
-        Bi::ViewIndex => "gl_ViewIndex",
+        Bi::ViewIndex => {
+            if options.targeting_webgl {
+                "gl_ViewID_OVR"
+            } else {
+                "uint(gl_ViewIndex)"
+            }
+        }
         // vertex
         Bi::BaseInstance => "uint(gl_BaseInstance)",
         Bi::BaseVertex => "uint(gl_BaseVertex)",
@@ -5227,6 +5238,7 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
         Bi::PointCoord => "gl_PointCoord",
         Bi::FrontFacing => "gl_FrontFacing",
         Bi::PrimitiveIndex => "uint(gl_PrimitiveID)",
+        Bi::Barycentric => "gl_BaryCoordEXT",
         Bi::SampleIndex => "gl_SampleID",
         Bi::SampleMask => {
             if options.output {
@@ -5247,6 +5259,19 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
         Bi::SubgroupId => "gl_SubgroupID",
         Bi::SubgroupSize => "gl_SubgroupSize",
         Bi::SubgroupInvocationId => "gl_SubgroupInvocationID",
+        // mesh
+        // TODO: figure out how to map these to glsl things as glsl treats them as arrays
+        Bi::CullPrimitive
+        | Bi::PointIndex
+        | Bi::LineIndices
+        | Bi::TriangleIndices
+        | Bi::MeshTaskSize
+        | Bi::VertexCount
+        | Bi::PrimitiveCount
+        | Bi::Vertices
+        | Bi::Primitives => {
+            unimplemented!()
+        }
     }
 }
 
@@ -5262,6 +5287,7 @@ const fn glsl_storage_qualifier(space: crate::AddressSpace) -> Option<&'static s
         As::Handle => Some("uniform"),
         As::WorkGroup => Some("shared"),
         As::PushConstant => Some("uniform"),
+        As::TaskPayload => unreachable!(),
     }
 }
 

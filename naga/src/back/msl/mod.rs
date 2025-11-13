@@ -526,9 +526,20 @@ impl Options {
                         return Err(Error::UnsupportedAttribute("instance_id".to_string()));
                     }
                     // macOS: Since Metal 2.2
-                    // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/naga/issues/2164)
-                    crate::BuiltIn::PrimitiveIndex if self.lang_version < (2, 2) => {
+                    // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/wgpu/issues/4414)
+                    crate::BuiltIn::PrimitiveIndex if self.lang_version < (2, 3) => {
                         return Err(Error::UnsupportedAttribute("primitive_id".to_string()));
+                    }
+                    // macOS: since Metal 2.3
+                    // iOS: Since Metal 2.2
+                    // https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=114
+                    crate::BuiltIn::ViewIndex if self.lang_version < (2, 2) => {
+                        return Err(Error::UnsupportedAttribute("amplification_id".to_string()));
+                    }
+                    // macOS: Since Metal 2.2
+                    // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/wgpu/issues/4414)
+                    crate::BuiltIn::Barycentric if self.lang_version < (2, 3) => {
+                        return Err(Error::UnsupportedAttribute("barycentric_coord".to_string()));
                     }
                     _ => {}
                 }
@@ -540,6 +551,7 @@ impl Options {
                 interpolation,
                 sampling,
                 blend_src,
+                per_primitive: _,
             } => match mode {
                 LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(location)),
                 LocationMode::FragmentOutput => {
@@ -668,6 +680,7 @@ impl ResolvedBinding {
                 let name = match built_in {
                     Bi::Position { invariant: false } => "position",
                     Bi::Position { invariant: true } => "position, invariant",
+                    Bi::ViewIndex => "amplification_id",
                     // vertex
                     Bi::BaseInstance => "base_instance",
                     Bi::BaseVertex => "base_vertex",
@@ -680,6 +693,7 @@ impl ResolvedBinding {
                     Bi::PointCoord => "point_coord",
                     Bi::FrontFacing => "front_facing",
                     Bi::PrimitiveIndex => "primitive_id",
+                    Bi::Barycentric => "barycentric_coord",
                     Bi::SampleIndex => "sample_id",
                     Bi::SampleMask => "sample_mask",
                     // compute
@@ -694,9 +708,17 @@ impl ResolvedBinding {
                     Bi::SubgroupId => "simdgroup_index_in_threadgroup",
                     Bi::SubgroupSize => "threads_per_simdgroup",
                     Bi::SubgroupInvocationId => "thread_index_in_simdgroup",
-                    Bi::CullDistance | Bi::ViewIndex | Bi::DrawID => {
+                    Bi::CullDistance | Bi::DrawID => {
                         return Err(Error::UnsupportedBuiltIn(built_in))
                     }
+                    Bi::CullPrimitive => "primitive_culled",
+                    // TODO: figure out how to make this written as a function call
+                    Bi::PointIndex | Bi::LineIndices | Bi::TriangleIndices => unimplemented!(),
+                    Bi::MeshTaskSize
+                    | Bi::VertexCount
+                    | Bi::PrimitiveCount
+                    | Bi::Vertices
+                    | Bi::Primitives => unreachable!(),
                 };
                 write!(out, "{name}")?;
             }

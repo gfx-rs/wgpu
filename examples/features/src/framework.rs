@@ -196,6 +196,7 @@ impl SurfaceWrapper {
             config.format = format;
             config.view_formats.push(format);
         };
+        config.desired_maximum_frame_latency = 3;
 
         surface.configure(&context.device, &config);
         self.config = Some(config);

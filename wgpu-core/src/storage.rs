@@ -19,7 +19,9 @@ where
     Occupied(T, Epoch),
 }
 
-pub(crate) trait StorageItem: ResourceType {
+/// Not a public API. For use only by `player`.
+#[doc(hidden)]
+pub trait StorageItem: ResourceType {
     type Marker: Marker;
 }
 

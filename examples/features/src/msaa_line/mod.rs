@@ -77,7 +77,7 @@ impl Example {
                 count: sample_count,
                 ..Default::default()
             },
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
         let mut encoder =
@@ -307,6 +307,7 @@ impl crate::framework::Example for Example {
                     depth_stencil_attachment: None,
                     timestamp_writes: None,
                     occlusion_query_set: None,
+                    multiview_mask: None,
                 })
                 .execute_bundles(iter::once(&self.bundle));
         }

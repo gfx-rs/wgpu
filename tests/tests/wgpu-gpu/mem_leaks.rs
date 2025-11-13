@@ -126,7 +126,7 @@ async fn draw_test_with_reports(
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -207,6 +207,7 @@ async fn draw_test_with_reports(
         depth_stencil_attachment: None,
         timestamp_writes: None,
         occlusion_query_set: None,
+        multiview_mask: None,
     });
 
     rpass.set_pipeline(&pipeline);

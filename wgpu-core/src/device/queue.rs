@@ -15,7 +15,7 @@ use wgt::{
 
 use super::{life::LifetimeTracker, Device};
 #[cfg(feature = "trace")]
-use crate::device::trace::Action;
+use crate::device::trace::{Action, IntoTrace};
 use crate::{
     api_log,
     command::{
@@ -521,7 +521,7 @@ impl WebGpuError for QueueSubmitError {
 impl Queue {
     pub fn write_buffer(
         &self,
-        buffer: Fallible<Buffer>,
+        buffer: Arc<Buffer>,
         buffer_offset: wgt::BufferAddress,
         data: &[u8],
     ) -> Result<(), QueueWriteError> {
@@ -529,8 +529,6 @@ impl Queue {
         api_log!("Queue::write_buffer");
 
         self.device.check_is_valid()?;
-
-        let buffer = buffer.get()?;
 
         let data_size = data.len() as wgt::BufferAddress;
 
@@ -650,6 +648,9 @@ impl Queue {
         buffer_offset: u64,
         buffer_size: wgt::BufferSize,
     ) -> Result<(), TransferError> {
+        if !matches!(&*buffer.map_state.lock(), BufferMapState::Idle) {
+            return Err(TransferError::BufferNotAvailable);
+        }
         buffer.check_usage(wgt::BufferUsages::COPY_DST)?;
         if buffer_size.get() % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(TransferError::UnalignedCopySize(buffer_size.get()));
@@ -728,7 +729,7 @@ impl Queue {
 
     pub fn write_texture(
         &self,
-        destination: wgt::TexelCopyTextureInfo<Fallible<Texture>>,
+        destination: wgt::TexelCopyTextureInfo<Arc<Texture>>,
         data: &[u8],
         data_layout: &wgt::TexelCopyBufferLayout,
         size: &wgt::Extent3d,
@@ -738,7 +739,7 @@ impl Queue {
 
         self.device.check_is_valid()?;
 
-        let dst = destination.texture.get()?;
+        let dst = destination.texture;
         let destination = wgt::TexelCopyTextureInfo {
             texture: (),
             mip_level: destination.mip_level,
@@ -1559,19 +1560,19 @@ impl Global {
         data: &[u8],
     ) -> Result<(), QueueWriteError> {
         let queue = self.hub.queues.get(queue_id);
+        let buffer = self.hub.buffers.get(buffer_id).get()?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *queue.device.trace.lock() {
             let data_path = trace.make_binary("bin", data);
             trace.add(Action::WriteBuffer {
-                id: buffer_id,
+                id: buffer.to_trace(),
                 data: data_path,
                 range: buffer_offset..buffer_offset + data.len() as u64,
                 queued: true,
             });
         }
 
-        let buffer = self.hub.buffers.get(buffer_id);
         queue.write_buffer(buffer, buffer_offset, data)
     }
 
@@ -1624,24 +1625,25 @@ impl Global {
         size: &wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
         let queue = self.hub.queues.get(queue_id);
+        let texture = self.hub.textures.get(destination.texture).get()?;
+        let destination = wgt::TexelCopyTextureInfo {
+            texture,
+            mip_level: destination.mip_level,
+            origin: destination.origin,
+            aspect: destination.aspect,
+        };
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *queue.device.trace.lock() {
             let data_path = trace.make_binary("bin", data);
             trace.add(Action::WriteTexture {
-                to: *destination,
+                to: destination.to_trace(),
                 data: data_path,
                 layout: *data_layout,
                 size: *size,
             });
         }
 
-        let destination = wgt::TexelCopyTextureInfo {
-            texture: self.hub.textures.get(destination.texture),
-            mip_level: destination.mip_level,
-            origin: destination.origin,
-            aspect: destination.aspect,
-        };
         queue.write_texture(destination, data, data_layout, size)
     }
 
@@ -1797,6 +1799,12 @@ fn validate_command_buffer(
                             .unwrap();
                     };
                 }
+            }
+        }
+        {
+            profiling::scope!("bind groups");
+            for bind_group in &cmd_buf_data.trackers.bind_groups {
+                bind_group.try_raw(snatch_guard)?;
             }
         }
 

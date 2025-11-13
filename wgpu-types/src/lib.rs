@@ -519,12 +519,14 @@ macro_rules! with_limits {
 
         $macro_name!(max_task_workgroup_total_count, Ordering::Less);
         $macro_name!(max_task_workgroups_per_dimension, Ordering::Less);
-        $macro_name!(max_mesh_multiview_count, Ordering::Less);
+        $macro_name!(max_mesh_multiview_view_count, Ordering::Less);
         $macro_name!(max_mesh_output_layers, Ordering::Less);
 
         $macro_name!(max_blas_primitive_count, Ordering::Less);
         $macro_name!(max_blas_geometry_count, Ordering::Less);
         $macro_name!(max_tlas_instance_count, Ordering::Less);
+
+        $macro_name!(max_multiview_view_count, Ordering::Less);
     };
 }
 
@@ -683,6 +685,11 @@ pub struct Limits {
     pub max_push_constant_size: u32,
     /// Maximum number of live non-sampler bindings.
     ///
+    /// <div class="warning">
+    /// The default value is **1_000_000**, On systems with integrated GPUs (iGPUs)—particularly on Windows using the D3D12
+    /// backend—this can lead to significant system RAM consumption since iGPUs share system memory directly with the CPU.
+    /// </div>
+    ///
     /// This limit only affects the d3d12 backend. Using a large number will allow the device
     /// to create many bind groups at the cost of a large up-front allocation at device creation.
     pub max_non_sampler_bindings: u32,
@@ -694,8 +701,8 @@ pub struct Limits {
     pub max_task_workgroups_per_dimension: u32,
     /// The maximum number of layers that can be output from a mesh shader
     pub max_mesh_output_layers: u32,
-    /// The maximum number of views that can be used by a mesh shader
-    pub max_mesh_multiview_count: u32,
+    /// The maximum number of views that can be used by a mesh shader in multiview rendering
+    pub max_mesh_multiview_view_count: u32,
 
     /// The maximum number of primitive (ex: triangles, aabbs) a BLAS is allowed to have. Requesting
     /// more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_QUERY`]
@@ -713,6 +720,9 @@ pub struct Limits {
     /// Requesting more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_QUERY`]
     /// is enabled.
     pub max_acceleration_structures_per_shader_stage: u32,
+
+    /// The maximum number of views that can be used in multiview rendering
+    pub max_multiview_view_count: u32,
 }
 
 impl Default for Limits {
@@ -767,12 +777,13 @@ impl Limits {
     ///     max_non_sampler_bindings: 1_000_000,
     ///     max_task_workgroup_total_count: 0,
     ///     max_task_workgroups_per_dimension: 0,
-    ///     max_mesh_multiview_count: 0,
+    ///     max_mesh_multiview_view_count: 0,
     ///     max_mesh_output_layers: 0,
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
     ///     max_tlas_instance_count: 0,
     ///     max_acceleration_structures_per_shader_stage: 0,
+    ///     max_multiview_view_count: 0,
     /// });
     /// ```
     ///
@@ -820,13 +831,15 @@ impl Limits {
 
             max_task_workgroup_total_count: 0,
             max_task_workgroups_per_dimension: 0,
-            max_mesh_multiview_count: 0,
+            max_mesh_multiview_view_count: 0,
             max_mesh_output_layers: 0,
 
             max_blas_primitive_count: 0,
             max_blas_geometry_count: 0,
             max_tlas_instance_count: 0,
             max_acceleration_structures_per_shader_stage: 0,
+
+            max_multiview_view_count: 0,
         }
     }
 
@@ -875,13 +888,15 @@ impl Limits {
     ///
     ///     max_task_workgroup_total_count: 0,
     ///     max_task_workgroups_per_dimension: 0,
-    ///     max_mesh_multiview_count: 0,
+    ///     max_mesh_multiview_view_count: 0,
     ///     max_mesh_output_layers: 0,
     ///
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
     ///     max_tlas_instance_count: 0,
     ///     max_acceleration_structures_per_shader_stage: 0,
+    ///
+    ///     max_multiview_view_count: 0,
     /// });
     /// ```
     #[must_use]
@@ -898,7 +913,7 @@ impl Limits {
 
             max_task_workgroups_per_dimension: 0,
             max_task_workgroup_total_count: 0,
-            max_mesh_multiview_count: 0,
+            max_mesh_multiview_view_count: 0,
             max_mesh_output_layers: 0,
             ..Self::defaults()
         }
@@ -950,13 +965,15 @@ impl Limits {
     ///
     ///     max_task_workgroup_total_count: 0,
     ///     max_task_workgroups_per_dimension: 0,
-    ///     max_mesh_multiview_count: 0,
+    ///     max_mesh_multiview_view_count: 0,
     ///     max_mesh_output_layers: 0,
     ///
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
     ///     max_tlas_instance_count: 0,
     ///     max_acceleration_structures_per_shader_stage: 0,
+    ///
+    ///     max_multiview_view_count: 0,
     /// });
     /// ```
     #[must_use]
@@ -1018,7 +1035,7 @@ impl Limits {
         Self {
             max_blas_geometry_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
             max_tlas_instance_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
-            max_blas_primitive_count: 1 << 28,      // 2^28: Metal's minimum
+            max_blas_primitive_count: (1 << 24) - 1, // Should be 2^28: Metal's minimum, but due to an llvmpipe bug it is 2^24 - 1
             max_acceleration_structures_per_shader_stage: 16, // Vulkan's minimum
             ..self
         }
@@ -1051,7 +1068,7 @@ impl Limits {
             max_task_workgroup_total_count: 65536,
             max_task_workgroups_per_dimension: 256,
             // llvmpipe reports 0 multiview count, which just means no multiview is allowed
-            max_mesh_multiview_count: 0,
+            max_mesh_multiview_view_count: 0,
             // llvmpipe once again requires this to be 8. An RTX 3060 supports well over 1024.
             max_mesh_output_layers: 8,
             ..self
@@ -1409,6 +1426,13 @@ pub struct AdapterInfo {
     pub device: u32,
     /// Type of device
     pub device_type: DeviceType,
+    /// [`Backend`]-specific PCI bus ID of the adapter.
+    ///
+    /// * For [`Backend::Vulkan`], [`VkPhysicalDevicePCIBusInfoPropertiesEXT`] is used,
+    ///   if available, in the form `bus:device.function`, e.g. `0000:01:00.0`.
+    ///
+    /// [`VkPhysicalDevicePCIBusInfoPropertiesEXT`]: https://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDevicePCIBusInfoPropertiesEXT.html
+    pub device_pci_bus_id: String,
     /// Driver name
     pub driver: String,
     /// Driver info
@@ -2765,6 +2789,17 @@ impl TextureAspect {
             _ => return None,
         })
     }
+
+    /// Returns the plane for a given texture aspect.
+    #[must_use]
+    pub fn to_plane(&self) -> Option<u32> {
+        match self {
+            TextureAspect::Plane0 => Some(0),
+            TextureAspect::Plane1 => Some(1),
+            TextureAspect::Plane2 => Some(2),
+            _ => None,
+        }
+    }
 }
 
 // There are some additional texture format helpers in `wgpu-core/src/conv.rs`,
@@ -2851,6 +2886,20 @@ impl TextureFormat {
         }
     }
 
+    /// Returns the subsampling factor for the indicated plane of a multi-planar format.
+    #[must_use]
+    pub fn subsampling_factors(&self, plane: Option<u32>) -> (u32, u32) {
+        match *self {
+            Self::NV12 | Self::P010 => match plane {
+                Some(0) => (1, 1),
+                Some(1) => (2, 2),
+                Some(plane) => unreachable!("plane {plane} is not valid for {self:?}"),
+                None => unreachable!("the plane must be specified for multi-planar formats"),
+            },
+            _ => (1, 1),
+        }
+    }
+
     /// Returns `true` if the format has a color aspect
     #[must_use]
     pub fn has_color_aspect(&self) -> bool {
@@ -2880,6 +2929,10 @@ impl TextureFormat {
     }
 
     /// Returns the size multiple requirement for a texture using this format.
+    ///
+    /// `create_texture` currently enforces a stricter restriction than this for
+    /// mipmapped multi-planar formats.
+    /// TODO(<https://github.com/gfx-rs/wgpu/issues/8491>): Remove this note.
     #[must_use]
     pub fn size_multiple_requirement(&self) -> (u32, u32) {
         match *self {
@@ -5339,6 +5392,8 @@ bitflags::bitflags! {
 
 bitflags::bitflags! {
     /// Similar to `BufferUsages`, but used only for `CommandEncoder::transition_resources`.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct BufferUses: u16 {
         /// The argument to a read-only mapping.
@@ -5390,6 +5445,7 @@ bitflags::bitflags! {
 
 /// A buffer transition for use with `CommandEncoder::transition_resources`.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BufferTransition<T> {
     /// The buffer to transition.
     pub buffer: T,
@@ -5651,6 +5707,8 @@ bitflags::bitflags! {
 bitflags::bitflags! {
     /// Similar to `TextureUsages`, but used only for `CommandEncoder::transition_resources`.
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
     pub struct TextureUses: u16 {
         /// The texture is in unknown state.
         const UNINITIALIZED = 1 << 0;
@@ -5686,10 +5744,10 @@ bitflags::bitflags! {
         const TRANSIENT = 1 << 12;
         /// The combination of states that a texture may be in _at the same time_.
         /// cbindgen:ignore
-        const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits();
+        const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits() | Self::STORAGE_READ_ONLY.bits();
         /// The combination of states that a texture must exclusively be in.
         /// cbindgen:ignore
-        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
+        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is ordered, then if the texture state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
@@ -5706,6 +5764,7 @@ bitflags::bitflags! {
 
 /// A texture transition for use with `CommandEncoder::transition_resources`.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TextureTransition<T> {
     /// The texture to transition.
     pub texture: T,
@@ -5719,6 +5778,7 @@ pub struct TextureTransition<T> {
 
 /// Specifies a particular set of subresources in a texture.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TextureSelector {
     /// Range of mips to use.
     pub mips: Range<u32>,
@@ -5789,25 +5849,40 @@ pub struct SurfaceConfiguration<V> {
     /// `AutoNoVsync` will gracefully do a designed sets of fallbacks if their primary modes are
     /// unsupported.
     pub present_mode: PresentMode,
-    /// Desired maximum number of frames that the presentation engine should queue in advance.
+    /// Desired maximum number of monitor refreshes between a [`Surface::get_current_texture`] call and the
+    /// texture being presented to the screen. This is sometimes called "Frames in Flight".
     ///
-    /// This is a hint to the backend implementation and will always be clamped to the supported range.
-    /// As a consequence, either the maximum frame latency is set directly on the swap chain,
-    /// or waits on present are scheduled to avoid exceeding the maximum frame latency if supported,
-    /// or the swap chain size is set to (max-latency + 1).
+    /// Defaults to `2` when created via [`Surface::get_default_config`] as this is a reasonable default.
     ///
-    /// Defaults to 2 when created via `Surface::get_default_config`.
+    /// This is ultimately a hint to the backend implementation and will always be clamped
+    /// to the supported range.
     ///
-    /// Typical values range from 3 to 1, but higher values are possible:
-    /// * Choose 2 or higher for potentially smoother frame display, as it allows to be at least one frame
-    ///   to be queued up. This typically avoids starving the GPU's work queue.
-    ///   Higher values are useful for achieving a constant flow of frames to the display under varying load.
-    /// * Choose 1 for low latency from frame recording to frame display.
-    ///   ⚠️ If the backend does not support waiting on present, this will cause the CPU to wait for the GPU
-    ///   to finish all work related to the previous frame when calling `Surface::get_current_texture`,
-    ///   causing CPU-GPU serialization (i.e. when `Surface::get_current_texture` returns, the GPU might be idle).
-    ///   It is currently not possible to query this. See <https://github.com/gfx-rs/wgpu/issues/2869>.
-    /// * A value of 0 is generally not supported and always clamped to a higher value.
+    /// Typical values are `1` to `3`, but higher values are valid, though likely to be clamped.
+    /// * Choose `1` to minimize latency above all else. This only gives a single monitor refresh for all of
+    ///   the CPU and GPU work to complete. ⚠️ As a result of these short swapchains, the CPU and GPU
+    ///   cannot run in parallel, prioritizing latency over throughput. For applications like GUIs doing
+    ///   a small amount of GPU work each frame that need low latency, this is a reasonable choice.
+    /// * Choose `2` for a balance between latency and throughput. The CPU and GPU both can each use
+    ///   a full monitor refresh to do their computations. This is a reasonable default for most applications.
+    /// * Choose `3` or higher to maximize throughput, sacrificing latency when the the CPU and GPU
+    ///   are using less than a full monitor refresh each. For applications that use CPU-side pipelining
+    ///   of frames this may be a reasonable choice. ⚠️ On 60hz displays the latency can be very noticeable.
+    ///
+    /// This maps to the backend in the following ways:
+    /// - Vulkan: Number of frames in the swapchain is `desired_maximum_frame_latency + 1`,
+    ///   clamped to the supported range.
+    /// - DX12: Calls [`IDXGISwapChain2::SetMaximumFrameLatency(desired_maximum_frame_latency)`][SMFL].
+    /// - Metal: Sets the `maximumDrawableCount` of the underlying `CAMetalLayer` to
+    ///   `desired_maximum_frame_latency + 1`, clamped to the supported range.
+    /// - OpenGL: Ignored
+    ///
+    /// It also has various subtle interactions with various present modes and APIs.
+    /// - DX12 + Mailbox: Limits framerate to `desired_maximum_frame_latency * Monitor Hz` fps.
+    /// - Vulkan/Metal + Mailbox: If this is set to `2`, limits framerate to `2 * Monitor Hz` fps. `3` or higher is unlimited.
+    ///
+    /// [`Surface::get_current_texture`]: ../wgpu/struct.Surface.html#method.get_current_texture
+    /// [`Surface::get_default_config`]: ../wgpu/struct.Surface.html#method.get_default_config
+    /// [SMFL]: https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_3/nf-dxgi1_3-idxgiswapchain2-setmaximumframelatency
     pub desired_maximum_frame_latency: u32,
     /// Specifies how the alpha channel of the textures should be handled during compositing.
     pub alpha_mode: CompositeAlphaMode,
@@ -6134,9 +6209,17 @@ impl Extent3d {
     }
 
     /// Calculates the extent at a given mip level.
-    /// Does *not* account for memory size being a multiple of block size.
+    ///
+    /// This is a low-level helper for internal use.
+    ///
+    /// It does *not* account for memory size being a multiple of block size.
+    ///
+    /// TODO(<https://github.com/gfx-rs/wgpu/issues/8491>): It also does not
+    /// consider whether an even dimension is required due to chroma
+    /// subsampling, but it probably should.
     ///
     /// <https://gpuweb.github.io/gpuweb/#logical-miplevel-specific-texture-extent>
+    #[doc(hidden)]
     #[must_use]
     pub fn mip_level_size(&self, level: u32, dim: TextureDimension) -> Self {
         Self {
@@ -6407,12 +6490,30 @@ impl<L, V> TextureDescriptor<L, V> {
 
     /// Computes the render extent of this texture.
     ///
+    /// This is a low-level helper exported for use by wgpu-core.
+    ///
     /// <https://gpuweb.github.io/gpuweb/#abstract-opdef-compute-render-extent>
+    ///
+    /// # Panics
+    ///
+    /// If the mip level is out of range.
+    #[doc(hidden)]
     #[must_use]
-    pub fn compute_render_extent(&self, mip_level: u32) -> Extent3d {
+    pub fn compute_render_extent(&self, mip_level: u32, plane: Option<u32>) -> Extent3d {
+        let Extent3d {
+            width,
+            height,
+            depth_or_array_layers: _,
+        } = self.mip_level_size(mip_level).expect("invalid mip level");
+
+        let (w_subsampling, h_subsampling) = self.format.subsampling_factors(plane);
+
+        let width = width / w_subsampling;
+        let height = height / h_subsampling;
+
         Extent3d {
-            width: u32::max(1, self.size.width >> mip_level),
-            height: u32::max(1, self.size.height >> mip_level),
+            width,
+            height,
             depth_or_array_layers: 1,
         }
     }
@@ -7876,6 +7977,20 @@ pub struct ShaderRuntimeChecks {
     /// conclusions about other safety-critical code paths. This option SHOULD NOT be disabled
     /// when running untrusted code.
     pub force_loop_bounding: bool,
+    /// If false, the caller **MUST** ensure that in all passed shaders every function operating
+    /// on a ray query must obey these rules (functions using wgsl naming)
+    /// - `rayQueryInitialize` must have called before `rayQueryProceed`
+    /// - `rayQueryProceed` must have been called, returned true and have hit an AABB before
+    ///   `rayQueryGenerateIntersection` is called
+    /// - `rayQueryProceed` must have been called, returned true and have hit a triangle before
+    ///   `rayQueryConfirmIntersection` is called
+    /// - `rayQueryProceed` must have been called and have returned true before `rayQueryTerminate`,
+    ///   `getCandidateHitVertexPositions` or `rayQueryGetCandidateIntersection` is called
+    /// - `rayQueryProceed` must have been called and have returned false before `rayQueryGetCommittedIntersection`
+    ///   or `getCommittedHitVertexPositions` are called
+    ///
+    /// It is the aim that these cases will not cause UB if this is set to true, but currently this will still happen on DX12 and Metal.
+    pub ray_query_initialization_tracking: bool,
 }
 
 impl ShaderRuntimeChecks {
@@ -7908,6 +8023,7 @@ impl ShaderRuntimeChecks {
         Self {
             bounds_checks: all_checks,
             force_loop_bounding: all_checks,
+            ray_query_initialization_tracking: all_checks,
         }
     }
 }

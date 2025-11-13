@@ -161,6 +161,7 @@ impl crate::BuiltIn {
             Self::FragDepth => "SV_Depth",
             Self::FrontFacing => "SV_IsFrontFace",
             Self::PrimitiveIndex => "SV_PrimitiveID",
+            Self::Barycentric => "SV_Barycentrics",
             Self::SampleIndex => "SV_SampleIndex",
             Self::SampleMask => "SV_Coverage",
             // compute
@@ -172,6 +173,7 @@ impl crate::BuiltIn {
             // to this field will get replaced with references to `SPECIAL_CBUF_VAR`
             // in `Writer::write_expr`.
             Self::NumWorkGroups => "SV_GroupID",
+            Self::ViewIndex => "SV_ViewID",
             // These builtins map to functions
             Self::SubgroupSize
             | Self::SubgroupInvocationId
@@ -180,9 +182,16 @@ impl crate::BuiltIn {
             Self::BaseInstance | Self::BaseVertex | Self::WorkGroupSize => {
                 return Err(Error::Unimplemented(format!("builtin {self:?}")))
             }
-            Self::PointSize | Self::ViewIndex | Self::PointCoord | Self::DrawID => {
+            Self::PointSize | Self::PointCoord | Self::DrawID => {
                 return Err(Error::Custom(format!("Unsupported builtin {self:?}")))
             }
+            Self::CullPrimitive => "SV_CullPrimitive",
+            Self::PointIndex | Self::LineIndices | Self::TriangleIndices => unimplemented!(),
+            Self::MeshTaskSize
+            | Self::VertexCount
+            | Self::PrimitiveCount
+            | Self::Vertices
+            | Self::Primitives => unreachable!(),
         })
     }
 }

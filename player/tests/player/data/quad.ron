@@ -3,21 +3,21 @@
     expectations: [
         (
             name: "Quad",
-            buffer: (index: 0, epoch: 1),
+            buffer: PointerId(0x10),
             offset: 0,
             data: File("quad.bin", 16384),
         )
     ],
     actions: [
         CreateShaderModule(
-            id: Id(0, 1),
+            id: PointerId(0x10),
             desc: (
                 label: None,
                 flags: (bits: 3),
             ),
             data: "quad.wgsl",
         ),
-        CreateTexture(Id(0, 1), (
+        CreateTexture(PointerId(0x10), (
             label: Some("Output Texture"),
             size: (
                 width: 64,
@@ -31,12 +31,12 @@
             view_formats: [],
         )),
         CreateTextureView(
-            id: Id(0, 1),
-            parent_id: Id(0, 1),
+            id: PointerId(0x10),
+            parent: PointerId(0x10),
             desc: (),
         ),
         CreateBuffer(
-            Id(0, 1),
+            PointerId(0x10),
             (
                 label: Some("Output Buffer"),
                 size: 16384,
@@ -44,29 +44,31 @@
                 mapped_at_creation: false,
             ),
         ),
-        CreatePipelineLayout(Id(0, 1), (
+        CreatePipelineLayout(PointerId(0x10), (
             label: None,
             bind_group_layouts: [],
             push_constant_ranges: [],
         )),
-        CreateRenderPipeline(
-            id: Id(0, 1),
+        CreateGeneralRenderPipeline(
+            id: PointerId(0x10),
             desc: (
                 label: None,
-                layout: Some(Id(0, 1)),
-                vertex: (
-                    stage: (
-                        module: Id(0, 1),
-                        entry_point: None,
-                        constants: {},
-                        zero_initialize_workgroup_memory: true,
-                        vertex_pulling_transform: false,
+                layout: Some(PointerId(0x10)),
+                vertex: Vertex(
+                    VertexState(
+                        stage: (
+                            module: PointerId(0x10),
+                            entry_point: None,
+                            constants: {},
+                            zero_initialize_workgroup_memory: true,
+                            vertex_pulling_transform: false,
+                        ),
+                        buffers: [],
                     ),
-                    buffers: [],
                 ),
                 fragment: Some((
                     stage: (
-                        module: Id(0, 1),
+                        module: PointerId(0x10),
                         entry_point: None,
                         constants: {},
                         zero_initialize_workgroup_memory: true,
@@ -82,9 +84,9 @@
         ),
         Submit(1, [
             RunRenderPass(
-                base: (
+                pass: (
                     commands: [
-                        SetPipeline(Id(0, 1)),
+                        SetPipeline(PointerId(0x10)),
                         Draw(
                             vertex_count: 3,
                             instance_count: 1,
@@ -96,9 +98,9 @@
                     string_data: [],
                     push_constant_data: [],
                 ),
-                target_colors: [
+                color_attachments: [
                     Some((
-                        view: Id(0, 1),
+                        view: PointerId(0x10),
                         resolve_target: None,
                         load_op: clear(Color(
                             r: 0,
@@ -109,16 +111,16 @@
                         store_op: store,
                     )),
                 ],
-                target_depth_stencil: None,
+                depth_stencil_attachment: None,
             ),
             CopyTextureToBuffer(
                 src: (
-                    texture: Id(0, 1),
+                    texture: PointerId(0x10),
                     mip_level: 0,
                     array_layer: 0,
                 ),
                 dst:  (
-                    buffer: Id(0, 1),
+                    buffer: PointerId(0x10),
                     layout: (
                         offset: 0,
                         bytes_per_row: Some(256),

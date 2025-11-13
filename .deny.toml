@@ -18,14 +18,6 @@ skip = [
 
     # Winit uses an old version
     { name = "windows-sys", version = "0.52.0" },
-
-    # Loom uses a new windows version
-    { name = "windows", version = "0.61.1" },
-    { name = "windows-core", version = "0.61.2" },
-    { name = "windows-implement", version = "0.60.0" },
-    { name = "windows-interface", version = "0.59.1" },
-    { name = "windows-result", version = "0.3.4" },
-    { name = "windows-strings", version = "0.4.2" },
 ]
 wildcards = "deny"
 allow-wildcard-paths = true
@@ -64,6 +56,9 @@ private = { ignore = true }
 [sources]
 allow-git = [
     # Waiting on releases; used in examples/tests only
+
+    # Pending a release for https://github.com/Xudong-Huang/generator-rs/pull/75
+    "https://github.com/Xudong-Huang/generator-rs",
 ]
 unknown-registry = "deny"
 unknown-git = "deny"

@@ -336,11 +336,11 @@ jobs:
         run: |
           set -e
 
-          # wgpu_core package
           cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} \
                 --package wgpu-core \
                 --package wgpu-hal \
                 --package naga \
+                --package wgpu \
                 --all-features --no-deps --document-private-items
 
   # We run minimal checks on the MSRV of the core crates, ensuring that
@@ -558,7 +558,7 @@ jobs:
         if: matrix.os == 'windows-2022'
         uses: ./.github/actions/install-warp
         with:
-          target-dirs: "target/llvm-cov-target/debug target/llvm-cov-target/debug/deps"
+          target-dir: "target/llvm-cov-target/debug"
 
       - name: (Windows) Install Mesa
         if: matrix.os == 'windows-2022'
@@ -609,7 +609,7 @@ jobs:
         # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
         run: git add . && git diff --exit-code HEAD naga/tests/out
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always() # We want artifacts even if the tests fail.
         with:
           name: comparison-images-${{ matrix.os }}
@@ -691,7 +691,7 @@ jobs:
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.38.1
+        uses: crate-ci/typos@v1.39.0
 
   check-cts-runner:
     # runtime is normally 2 minutes

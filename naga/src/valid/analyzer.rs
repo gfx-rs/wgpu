@@ -372,6 +372,22 @@ impl FunctionInfo {
         info.uniformity.non_uniform_result
     }
 
+    /// Note an entry point's use of `global` not recorded by [`ModuleInfo::process_function`].
+    ///
+    /// Most global variable usage should be recorded via [`add_ref_impl`] in the process
+    /// of expression behavior analysis by [`ModuleInfo::process_function`]. But that code
+    /// has no access to entrypoint-specific information, so interface analysis uses this
+    /// function to record global uses there (like task shader payloads).
+    ///
+    /// [`add_ref_impl`]: Self::add_ref_impl
+    pub(super) fn insert_global_use(
+        &mut self,
+        global_use: GlobalUse,
+        global: Handle<crate::GlobalVariable>,
+    ) {
+        self.global_uses[global.index()] |= global_use;
+    }
+
     /// Record a use of `expr` for its value.
     ///
     /// This is used for almost all expression references. Anything
@@ -635,7 +651,8 @@ impl FunctionInfo {
                     // local data is non-uniform
                     As::Function | As::Private => false,
                     // workgroup memory is exclusively accessed by the group
-                    As::WorkGroup => true,
+                    // task payload memory is very similar to workgroup memory
+                    As::WorkGroup | As::TaskPayload => true,
                     // uniform data
                     As::Uniform | As::PushConstant => true,
                     // storage data is only uniform when read-only

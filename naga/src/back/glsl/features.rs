@@ -55,6 +55,8 @@ bitflags::bitflags! {
         const SUBGROUP_OPERATIONS = 1 << 24;
         /// Image atomics
         const TEXTURE_ATOMICS = 1 << 25;
+        /// Image atomics
+        const SHADER_BARYCENTRICS = 1 << 26;
     }
 }
 
@@ -286,6 +288,14 @@ impl FeaturesManager {
         if self.0.contains(Features::TEXTURE_ATOMICS) {
             // https://www.khronos.org/registry/OpenGL/extensions/OES/OES_shader_image_atomic.txt
             writeln!(out, "#extension GL_OES_shader_image_atomic : require")?;
+        }
+
+        if self.0.contains(Features::SHADER_BARYCENTRICS) {
+            // https://github.com/KhronosGroup/GLSL/blob/main/extensions/ext/GLSL_EXT_fragment_shader_barycentric.txt
+            writeln!(
+                out,
+                "#extension GL_EXT_fragment_shader_barycentric : require"
+            )?;
         }
 
         Ok(())
@@ -603,6 +613,9 @@ impl<W> Writer<'_, W> {
                     crate::BuiltIn::InstanceIndex | crate::BuiltIn::DrawID => {
                         self.features.request(Features::INSTANCE_INDEX)
                     }
+                    crate::BuiltIn::Barycentric => {
+                        self.features.request(Features::SHADER_BARYCENTRICS)
+                    }
                     _ => {}
                 },
                 Binding::Location {
@@ -610,6 +623,7 @@ impl<W> Writer<'_, W> {
                     interpolation,
                     sampling,
                     blend_src,
+                    per_primitive: _,
                 } => {
                     if interpolation == Some(Interpolation::Linear) {
                         self.features.request(Features::NOPERSPECTIVE_QUALIFIER);

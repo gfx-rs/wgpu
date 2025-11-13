@@ -156,6 +156,7 @@ impl crate::Instance for Instance {
                         vendor: 0,
                         device: 0,
                         device_type: shared.private_caps.device_type(),
+                        device_pci_bus_id: String::new(),
                         driver: String::new(),
                         driver_info: String::new(),
                         backend: wgt::Backend::Metal,
@@ -301,6 +302,8 @@ struct PrivateCapabilities {
     int64_atomics: bool,
     float_atomics: bool,
     supports_shared_event: bool,
+    supported_vertex_amplification_factor: u32,
+    shader_barycentrics: bool,
     supports_memoryless_storage: bool,
 }
 

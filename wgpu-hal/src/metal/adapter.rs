@@ -902,6 +902,17 @@ impl super::PrivateCapabilities {
                 && (device.supports_family(MTLGPUFamily::Apple7)
                     || device.supports_family(MTLGPUFamily::Mac2)),
             supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
+            supported_vertex_amplification_factor: {
+                let mut factor = 1;
+                // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=8
+                // The table specifies either none, 2, 8, or unsupported, implying it is a relatively small power of 2
+                // The bitmask only uses 32 bits, so it can't be higher even if the device for some reason claims to support that.
+                while factor < 32 && device.supports_vertex_amplification_count(factor * 2) {
+                    factor *= 2
+                }
+                factor as u32
+            },
+            shader_barycentrics: device.supports_shader_barycentric_coordinates(),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             supports_memoryless_storage: if family_check {
                 device.supports_family(MTLGPUFamily::Apple2)
@@ -1003,8 +1014,17 @@ impl super::PrivateCapabilities {
 
         features.set(F::RG11B10UFLOAT_RENDERABLE, self.format_rg11b10_all);
 
+        features.set(
+            F::SHADER_BARYCENTRICS,
+            self.shader_barycentrics && self.msl_version >= MTLLanguageVersion::V2_2,
+        );
+
         if self.supports_simd_scoped_operations {
             features.insert(F::SUBGROUP | F::SUBGROUP_BARRIER);
+        }
+
+        if self.supported_vertex_amplification_factor > 1 {
+            features.insert(F::MULTIVIEW);
         }
 
         features
@@ -1037,7 +1057,6 @@ impl super::PrivateCapabilities {
         downlevel
             .flags
             .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
-
         let base = wgt::Limits::default();
         crate::Capabilities {
             limits: wgt::Limits {
@@ -1085,7 +1104,7 @@ impl super::PrivateCapabilities {
 
                 max_task_workgroup_total_count: 0,
                 max_task_workgroups_per_dimension: 0,
-                max_mesh_multiview_count: 0,
+                max_mesh_multiview_view_count: 0,
                 max_mesh_output_layers: 0,
 
                 max_blas_primitive_count: 0, // When added: 2^28 from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits
@@ -1098,6 +1117,12 @@ impl super::PrivateCapabilities {
                 // > [Acceleration structures] are opaque objects that can be bound directly using
                 // buffer binding points or via argument buffers
                 max_acceleration_structures_per_shader_stage: 0,
+
+                max_multiview_view_count: if self.supported_vertex_amplification_factor > 1 {
+                    self.supported_vertex_amplification_factor
+                } else {
+                    0
+                },
             },
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),

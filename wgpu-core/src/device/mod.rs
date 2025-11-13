@@ -61,7 +61,7 @@ impl<T: PartialEq> Eq for AttachmentData<T> {}
 pub(crate) struct RenderPassContext {
     pub attachments: AttachmentData<TextureFormat>,
     pub sample_count: u32,
-    pub multiview: Option<NonZeroU32>,
+    pub multiview_mask: Option<NonZeroU32>,
 }
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -144,10 +144,10 @@ impl RenderPassContext {
                 res: res.error_ident(),
             });
         }
-        if self.multiview != other.multiview {
+        if self.multiview_mask != other.multiview_mask {
             return Err(RenderPassCompatibilityError::IncompatibleMultiview {
-                expected: self.multiview,
-                actual: other.multiview,
+                expected: self.multiview_mask,
+                actual: other.multiview_mask,
                 res: res.error_ident(),
             });
         }
@@ -509,6 +509,18 @@ pub fn create_validator(
     caps.set(
         Caps::TEXTURE_EXTERNAL,
         features.intersects(wgt::Features::EXTERNAL_TEXTURE),
+    );
+    caps.set(
+        Caps::SHADER_BARYCENTRICS,
+        features.intersects(wgt::Features::SHADER_BARYCENTRICS),
+    );
+    caps.set(
+        Caps::MESH_SHADER,
+        features.intersects(wgt::Features::EXPERIMENTAL_MESH_SHADER),
+    );
+    caps.set(
+        Caps::MESH_SHADER_POINT_TOPOLOGY,
+        features.intersects(wgt::Features::EXPERIMENTAL_MESH_SHADER_POINTS),
     );
 
     naga::valid::Validator::new(flags, caps)

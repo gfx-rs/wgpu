@@ -147,6 +147,7 @@ pub(super) fn map_builtin(word: spirv::Word, invariant: bool) -> Result<crate::B
         Some(Bi::PointCoord) => crate::BuiltIn::PointCoord,
         Some(Bi::FrontFacing) => crate::BuiltIn::FrontFacing,
         Some(Bi::PrimitiveId) => crate::BuiltIn::PrimitiveIndex,
+        Some(Bi::BaryCoordKHR) => crate::BuiltIn::Barycentric,
         Some(Bi::SampleId) => crate::BuiltIn::SampleIndex,
         Some(Bi::SampleMask) => crate::BuiltIn::SampleMask,
         // compute

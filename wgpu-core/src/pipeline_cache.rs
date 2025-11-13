@@ -319,6 +319,7 @@ mod tests {
         vendor: 0x0002_FEED,
         device: 0xFEFE_FEFE,
         device_type: wgt::DeviceType::Other,
+        device_pci_bus_id: String::new(),
         driver: String::new(),
         driver_info: String::new(),
         backend: wgt::Backend::Vulkan,

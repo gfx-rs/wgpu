@@ -423,19 +423,19 @@ impl LiteralVector {
     /// Returns [`ArrayVec`] of [`Literal`]s
     fn to_literal_vec(&self) -> ArrayVec<Literal, { crate::VectorSize::MAX }> {
         match *self {
-            LiteralVector::F64(ref v) => v.iter().map(|e| (Literal::F64(*e))).collect(),
-            LiteralVector::F32(ref v) => v.iter().map(|e| (Literal::F32(*e))).collect(),
-            LiteralVector::F16(ref v) => v.iter().map(|e| (Literal::F16(*e))).collect(),
-            LiteralVector::U32(ref v) => v.iter().map(|e| (Literal::U32(*e))).collect(),
-            LiteralVector::I32(ref v) => v.iter().map(|e| (Literal::I32(*e))).collect(),
-            LiteralVector::U64(ref v) => v.iter().map(|e| (Literal::U64(*e))).collect(),
-            LiteralVector::I64(ref v) => v.iter().map(|e| (Literal::I64(*e))).collect(),
-            LiteralVector::Bool(ref v) => v.iter().map(|e| (Literal::Bool(*e))).collect(),
+            LiteralVector::F64(ref v) => v.iter().map(|e| Literal::F64(*e)).collect(),
+            LiteralVector::F32(ref v) => v.iter().map(|e| Literal::F32(*e)).collect(),
+            LiteralVector::F16(ref v) => v.iter().map(|e| Literal::F16(*e)).collect(),
+            LiteralVector::U32(ref v) => v.iter().map(|e| Literal::U32(*e)).collect(),
+            LiteralVector::I32(ref v) => v.iter().map(|e| Literal::I32(*e)).collect(),
+            LiteralVector::U64(ref v) => v.iter().map(|e| Literal::U64(*e)).collect(),
+            LiteralVector::I64(ref v) => v.iter().map(|e| Literal::I64(*e)).collect(),
+            LiteralVector::Bool(ref v) => v.iter().map(|e| Literal::Bool(*e)).collect(),
             LiteralVector::AbstractInt(ref v) => {
-                v.iter().map(|e| (Literal::AbstractInt(*e))).collect()
+                v.iter().map(|e| Literal::AbstractInt(*e)).collect()
             }
             LiteralVector::AbstractFloat(ref v) => {
-                v.iter().map(|e| (Literal::AbstractFloat(*e))).collect()
+                v.iter().map(|e| Literal::AbstractFloat(*e)).collect()
             }
         }
     }

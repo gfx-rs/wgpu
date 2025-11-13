@@ -889,7 +889,8 @@ where
 }
 
 /// cbindgen:ignore
-pub type ResolvedPipelineLayoutDescriptor<'a> = PipelineLayoutDescriptor<'a, Arc<BindGroupLayout>>;
+pub type ResolvedPipelineLayoutDescriptor<'a, BGL = Arc<BindGroupLayout>> =
+    PipelineLayoutDescriptor<'a, BGL>;
 
 #[derive(Debug)]
 pub struct PipelineLayout {
@@ -1164,6 +1165,14 @@ pub(crate) fn buffer_binding_type_bounds_check_alignment(
 }
 
 #[derive(Debug)]
+pub(crate) struct BindGroupLateBufferBindingInfo {
+    /// The normal binding index in the bind group.
+    pub binding_index: u32,
+    /// The size that exists at bind time.
+    pub size: wgt::BufferSize,
+}
+
+#[derive(Debug)]
 pub struct BindGroup {
     pub(crate) raw: Snatchable<Box<dyn hal::DynBindGroup>>,
     pub(crate) device: Arc<Device>,
@@ -1177,7 +1186,7 @@ pub struct BindGroup {
     pub(crate) dynamic_binding_info: Vec<BindGroupDynamicBindingData>,
     /// Actual binding sizes for buffers that don't have `min_binding_size`
     /// specified in BGL. Listed in the order of iteration of `BGL.entries`.
-    pub(crate) late_buffer_binding_sizes: Vec<wgt::BufferSize>,
+    pub(crate) late_buffer_binding_infos: Vec<BindGroupLateBufferBindingInfo>,
 }
 
 impl Drop for BindGroup {
@@ -1288,10 +1297,13 @@ impl WebGpuError for GetBindGroupLayoutError {
 }
 
 #[derive(Clone, Debug, Error, Eq, PartialEq)]
-#[error("Buffer is bound with size {bound_size} where the shader expects {shader_size} in group[{group_index}] compact index {compact_index}")]
+#[error(
+    "In bind group index {group_index}, the buffer bound at binding index {binding_index} \
+     is bound with size {bound_size} where the shader expects {shader_size}."
+)]
 pub struct LateMinBufferBindingSizeMismatch {
     pub group_index: u32,
-    pub compact_index: usize,
+    pub binding_index: u32,
     pub shader_size: wgt::BufferAddress,
     pub bound_size: wgt::BufferAddress,
 }
