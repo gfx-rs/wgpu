@@ -4,7 +4,7 @@ use anyhow::Context;
 use pico_args::Arguments;
 use xshell::Shell;
 
-use crate::util::flatten_args;
+use crate::{install_warp, util::flatten_args};
 
 pub fn run_tests(
     shell: Shell,
@@ -13,8 +13,42 @@ pub fn run_tests(
 ) -> anyhow::Result<()> {
     let llvm_cov = args.contains("--llvm-cov");
     let list = args.contains("--list");
-    let cargo_args = flatten_args(args, passthrough_args);
+
+    // Determine the build profile from arguments
+    let is_release = args.contains("--release");
+    let custom_profile = args
+        .opt_value_from_str::<_, String>("--cargo-profile")
+        .ok()
+        .flatten();
+    let profile = if is_release {
+        "release"
+    } else if let Some(ref p) = custom_profile {
+        p.as_str()
+    } else {
+        "debug"
+    };
+
+    let mut cargo_args = flatten_args(args, passthrough_args);
+
+    // Re-add profile flags that were consumed during argument parsing
+    if is_release {
+        cargo_args.insert(0, OsString::from("--release"));
+    } else if let Some(ref p) = custom_profile {
+        cargo_args.insert(0, OsString::from(format!("--cargo-profile={p}")));
+    }
+
     // Retries handled by cargo nextest natively
+
+    // Install WARP on Windows for D3D12 testing
+    if cfg!(target_os = "windows") {
+        let llvm_cov_dir = if llvm_cov {
+            "target/llvm-cov-target"
+        } else {
+            "target"
+        };
+        let target_dir = format!("{llvm_cov_dir}/{profile}");
+        install_warp::install_warp(&shell, &target_dir)?;
+    }
 
     // These needs to match the command in "run wgpu-info" in `.github/workflows/ci.yml`
     let llvm_cov_flags: &[_] = if llvm_cov {
