@@ -3,7 +3,7 @@
 🧪Experimental🧪
 
 `wgpu` supports an experimental version of mesh shading when `Features::EXPERIMENTAL_MESH_SHADER` is enabled.
-The status of the implementation is documented in [the mesh-shading issue](https://github.com/gfx-rs/wgpu/issues/7197). This document will **NOT** be updated regularly to communicate implementation progress.
+The status of the implementation is documented in [the mesh-shading issue](https://github.com/gfx-rs/wgpu/issues/7197).
 
 **Note**: The features documented here may have major bugs in them and are expected to be subject
 to breaking changes. Suggestions for the API exposed by this should be posted on the issue above.
