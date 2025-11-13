@@ -101,7 +101,7 @@ impl<'a> TextureBlitterBuilder<'a> {
         let pipeline = self
             .device
             .create_render_pipeline(&RenderPipelineDescriptor {
-                label: Some("wgpu::uti::TextureBlitter::pipeline"),
+                label: Some("wgpu::util::TextureBlitter::pipeline"),
                 layout: Some(&pipeline_layout),
                 vertex: VertexState {
                     module: &shader,
