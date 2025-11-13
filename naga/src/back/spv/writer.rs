@@ -2778,7 +2778,6 @@ impl Writer {
         self.io_f16_polyfills.needs_polyfill(ty_inner)
     }
 
-    #[allow(dead_code)]
     pub(super) fn write_debug_printf(
         &mut self,
         block: &mut Block,
