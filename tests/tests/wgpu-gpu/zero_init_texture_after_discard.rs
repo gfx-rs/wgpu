@@ -173,7 +173,6 @@ impl<'ctx> TestCase<'ctx> {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-                multiview_mask: None,
             });
             ctx.queue.submit([encoder.finish()]);
         } else {
@@ -260,7 +259,6 @@ impl<'ctx> TestCase<'ctx> {
                 ),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-                multiview_mask: None,
             });
     }
 
@@ -286,7 +284,6 @@ impl<'ctx> TestCase<'ctx> {
                 ),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-                multiview_mask: None,
             });
     }
 
@@ -312,7 +309,6 @@ impl<'ctx> TestCase<'ctx> {
                 ),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-                multiview_mask: None,
             });
     }
 

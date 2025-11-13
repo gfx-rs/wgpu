@@ -207,7 +207,7 @@ impl<W: Write> Writer<W> {
                     Attribute::Stage(ShaderStage::Compute),
                     Attribute::WorkGroupSize(ep.workgroup_size),
                 ],
-                ShaderStage::Mesh | ShaderStage::Task => unreachable!(),
+                ShaderStage::Task | ShaderStage::Mesh => unreachable!(),
             };
 
             self.write_attributes(&attributes)?;
@@ -856,7 +856,6 @@ impl<W: Write> Writer<W> {
                 }
             }
             Statement::RayQuery { .. } => unreachable!(),
-            Statement::MeshFunction(..) => unreachable!(),
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let res_name = Baked(result).to_string();
@@ -1823,7 +1822,6 @@ fn map_binding_to_attribute(binding: &crate::Binding) -> Vec<Attribute> {
             interpolation,
             sampling,
             blend_src: None,
-            per_primitive: _,
         } => vec![
             Attribute::Location(location),
             Attribute::Interpolate(interpolation, sampling),
@@ -1833,7 +1831,6 @@ fn map_binding_to_attribute(binding: &crate::Binding) -> Vec<Attribute> {
             interpolation,
             sampling,
             blend_src: Some(blend_src),
-            per_primitive: _,
         } => vec![
             Attribute::Location(location),
             Attribute::BlendSrc(blend_src),

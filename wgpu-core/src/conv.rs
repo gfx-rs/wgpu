@@ -111,12 +111,7 @@ pub fn map_texture_usage(
             flags.contains(wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE),
         );
     }
-    let is_color = aspect.intersects(
-        hal::FormatAspects::COLOR
-            | hal::FormatAspects::PLANE_0
-            | hal::FormatAspects::PLANE_1
-            | hal::FormatAspects::PLANE_2,
-    );
+    let is_color = aspect.contains(hal::FormatAspects::COLOR);
     u.set(
         wgt::TextureUses::COLOR_TARGET,
         usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) && is_color,

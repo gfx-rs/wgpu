@@ -3,14 +3,14 @@
     expectations: [
         (
             name: "Render Target",
-            buffer: PointerId(0x10),
+            buffer: (index: 0, epoch: 1),
             offset: 0,
             data: File("zero-16k.bin", 16384),
         ),
         // MISSING: Partial view.
     ],
     actions: [
-        CreateTexture(PointerId(0x10), (
+        CreateTexture(Id(0, 1), (
             label: Some("Render Target Texture"),
             size: (
                 width: 64,
@@ -24,12 +24,12 @@
             view_formats: [],
         )),
         CreateTextureView(
-            id: PointerId(0x10),
-            parent: PointerId(0x10),
+            id: Id(0, 1),
+            parent_id: Id(0, 1),
             desc: (),
         ),
         CreateBuffer(
-            PointerId(0x10),
+            Id(0, 1),
             (
                 label: Some("Render Target Buffer"),
                 size: 16384,
@@ -40,15 +40,15 @@
 
         Submit(1, [
             RunRenderPass(
-                pass: (
+                base: (
                     commands: [],
                     dynamic_offsets: [],
                     string_data: [],
                     push_constant_data: [],
                 ),
-                color_attachments: [
+                target_colors: [
                     Some((
-                        view: PointerId(0x10),
+                        view: Id(0, 1),
                         resolve_target: None,
                         load_op: load,
                         store_op: store,
@@ -57,16 +57,16 @@
                         ),
                     )),
                 ],
-                depth_stencil_attachment: None,
+                target_depth_stencil: None,
             ),
             CopyTextureToBuffer(
                 src: (
-                    texture: PointerId(0x10),
+                    texture: Id(0, 1),
                     mip_level: 0,
                     array_layer: 0,
                 ),
                 dst:  (
-                    buffer: PointerId(0x10),
+                    buffer: Id(0, 1),
                     layout: (
                         offset: 0,
                         bytes_per_row: Some(256),

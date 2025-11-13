@@ -224,7 +224,7 @@ impl RenderpassState {
                         })],
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                     }),
-                    multiview_mask: None,
+                    multiview: None,
                     cache: None,
                 });
 
@@ -322,7 +322,7 @@ impl RenderpassState {
                         })],
                         compilation_options: wgpu::PipelineCompilationOptions::default(),
                     }),
-                    multiview_mask: None,
+                    multiview: None,
                     cache: None,
                 },
             ));
@@ -370,7 +370,6 @@ impl RenderpassState {
             occlusion_query_set: None,
             timestamp_writes: None,
             depth_stencil_attachment: None,
-            multiview_mask: None,
         });
 
         let start_idx = pass_number * draws_per_pass;
@@ -418,7 +417,6 @@ impl RenderpassState {
             occlusion_query_set: None,
             timestamp_writes: None,
             depth_stencil_attachment: None,
-            multiview_mask: None,
         });
 
         render_pass.set_pipeline(self.bindless_pipeline.as_ref().unwrap());

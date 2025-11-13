@@ -1367,7 +1367,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     targets: Borrowed(frag.targets),
                 }
             }),
-            multiview_mask: desc.multiview_mask,
+            multiview: desc.multiview,
             cache: desc.cache.map(|cache| cache.inner.as_core().id),
         };
 
@@ -1779,7 +1779,7 @@ impl dispatch::DeviceInterface for CoreDevice {
             sample_count: desc.sample_count,
             multiview: desc.multiview,
         };
-        let encoder = match wgc::command::RenderBundleEncoder::new(&descriptor, self.id) {
+        let encoder = match wgc::command::RenderBundleEncoder::new(&descriptor, self.id, None) {
             Ok(encoder) => encoder,
             Err(e) => panic!("Error in Device::create_render_bundle_encoder: {e}"),
         };
@@ -2554,7 +2554,6 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
                 color_attachments: Borrowed(&colors),
                 depth_stencil_attachment: depth_stencil.as_ref(),
                 occlusion_query_set: desc.occlusion_query_set.map(|qs| qs.inner.as_core().id),
-                multiview_mask: desc.multiview_mask,
             },
         );
 
@@ -2578,13 +2577,13 @@ impl dispatch::CommandEncoderInterface for CoreCommandEncoder {
 
     fn finish(&mut self) -> dispatch::DispatchCommandBuffer {
         let descriptor = wgt::CommandBufferDescriptor::default();
-        let (id, opt_label_and_error) =
+        let (id, error) = self
+            .context
+            .0
+            .command_encoder_finish(self.id, &descriptor, None);
+        if let Some(cause) = error {
             self.context
-                .0
-                .command_encoder_finish(self.id, &descriptor, None);
-        if let Some((label, cause)) = opt_label_and_error {
-            self.context
-                .handle_error(&self.error_sink, cause, Some(&label), "a CommandEncoder");
+                .handle_error_nolabel(&self.error_sink, cause, "a CommandEncoder");
         }
         CoreCommandBuffer {
             context: self.context.clone(),

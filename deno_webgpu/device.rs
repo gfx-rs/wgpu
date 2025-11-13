@@ -577,8 +577,11 @@ impl GPUDevice {
       multiview: None,
     };
 
-    let res =
-      wgpu_core::command::RenderBundleEncoder::new(&wgpu_descriptor, self.id);
+    let res = wgpu_core::command::RenderBundleEncoder::new(
+      &wgpu_descriptor,
+      self.id,
+      None,
+    );
     let (encoder, err) = match res {
       Ok(encoder) => (encoder, None),
       Err(e) => (
@@ -876,7 +879,7 @@ impl GPUDevice {
       multisample,
       fragment,
       cache: None,
-      multiview_mask: None,
+      multiview: None,
     };
 
     let (id, err) = self.instance.device_create_render_pipeline(

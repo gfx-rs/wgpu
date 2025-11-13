@@ -2,7 +2,6 @@
 
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::num::NonZero;
 
 use deno_core::cppgc::Ptr;
 use deno_core::op2;
@@ -143,7 +142,6 @@ impl GPUCommandEncoder {
       occlusion_query_set: descriptor
         .occlusion_query_set
         .map(|query_set| query_set.id),
-      multiview_mask: NonZero::new(descriptor.multiview_mask),
     };
 
     let (render_pass, err) = self
@@ -439,14 +437,12 @@ impl GPUCommandEncoder {
       label: crate::transform_label(descriptor.label.clone()),
     };
 
-    let (id, opt_label_and_err) =
+    let (id, err) =
       self
         .instance
         .command_encoder_finish(self.id, &wgpu_descriptor, None);
 
-    self
-      .error_handler
-      .push_error(opt_label_and_err.map(|(_label, err)| err));
+    self.error_handler.push_error(err);
 
     GPUCommandBuffer {
       instance: self.instance.clone(),

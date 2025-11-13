@@ -179,9 +179,6 @@ impl super::AddressSpace {
             crate::AddressSpace::Storage { access } => access,
             crate::AddressSpace::Handle => Sa::LOAD,
             crate::AddressSpace::PushConstant => Sa::LOAD,
-            // TaskPayload isn't always writable, but this is checked for elsewhere,
-            // when not using multiple payloads and matching the entry payload is checked.
-            crate::AddressSpace::TaskPayload => Sa::LOAD | Sa::STORE,
         }
     }
 }
@@ -629,15 +626,6 @@ pub fn flatten_compose<'arenas>(
         .flat_map(move |component| flatten_compose(component, is_vector, expressions))
         .flat_map(move |component| flatten_splat(component, is_vector, expressions))
         .take(size)
-}
-
-impl super::ShaderStage {
-    pub const fn compute_like(self) -> bool {
-        match self {
-            Self::Vertex | Self::Fragment => false,
-            Self::Compute | Self::Task | Self::Mesh => true,
-        }
-    }
 }
 
 #[test]

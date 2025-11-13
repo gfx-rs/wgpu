@@ -96,7 +96,7 @@ async fn dual_source_blending_disabled(ctx: TestingContext) {
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),
-                    multiview_mask: None,
+                    multiview: None,
                     cache: None,
                 });
         },
@@ -159,7 +159,7 @@ async fn dual_source_blending_enabled(ctx: TestingContext) {
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview_mask: None,
+        multiview: None,
         cache: None,
     };
 

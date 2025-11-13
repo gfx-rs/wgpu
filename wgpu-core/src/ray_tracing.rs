@@ -10,22 +10,18 @@
 
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
-#[cfg(feature = "serde")]
-use macro_rules_attribute::apply;
 use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
     AccelerationStructureGeometryFlags, BufferAddress, IndexFormat, VertexFormat,
 };
 
-#[cfg(feature = "serde")]
-use crate::command::serde_object_reference_struct;
 use crate::{
-    command::{ArcReferences, EncoderStateError, IdReferences, ReferenceType},
+    command::EncoderStateError,
     device::{DeviceError, MissingFeatures},
     id::{BlasId, BufferId, TlasId},
     resource::{
-        Blas, BlasCompactCallback, BlasPrepareCompactResult, DestroyedResourceError,
+        Blas, BlasCompactCallback, BlasPrepareCompactResult, Buffer, DestroyedResourceError,
         InvalidResourceError, MissingBufferUsageError, ResourceErrorIdent, Tlas,
     },
 };
@@ -310,62 +306,60 @@ pub(crate) enum AsAction {
 
 /// Like [`BlasTriangleGeometry`], but with owned data.
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
-pub struct OwnedBlasTriangleGeometry<R: ReferenceType> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TraceBlasTriangleGeometry {
     pub size: wgt::BlasTriangleGeometrySizeDescriptor,
-    pub vertex_buffer: R::Buffer,
-    pub index_buffer: Option<R::Buffer>,
-    pub transform_buffer: Option<R::Buffer>,
+    pub vertex_buffer: BufferId,
+    pub index_buffer: Option<BufferId>,
+    pub transform_buffer: Option<BufferId>,
     pub first_vertex: u32,
     pub vertex_stride: BufferAddress,
     pub first_index: Option<u32>,
     pub transform_buffer_offset: Option<BufferAddress>,
 }
 
-pub type ArcBlasTriangleGeometry = OwnedBlasTriangleGeometry<ArcReferences>;
-pub type TraceBlasTriangleGeometry = OwnedBlasTriangleGeometry<IdReferences>;
-
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
-pub enum OwnedBlasGeometries<R: ReferenceType> {
-    TriangleGeometries(Vec<OwnedBlasTriangleGeometry<R>>),
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum TraceBlasGeometries {
+    TriangleGeometries(Vec<TraceBlasTriangleGeometry>),
 }
 
-pub type ArcBlasGeometries = OwnedBlasGeometries<ArcReferences>;
-pub type TraceBlasGeometries = OwnedBlasGeometries<IdReferences>;
-
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
-pub struct OwnedBlasBuildEntry<R: ReferenceType> {
-    pub blas: R::Blas,
-    pub geometries: OwnedBlasGeometries<R>,
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TraceBlasBuildEntry {
+    pub blas_id: BlasId,
+    pub geometries: TraceBlasGeometries,
 }
 
-pub type ArcBlasBuildEntry = OwnedBlasBuildEntry<ArcReferences>;
-pub type TraceBlasBuildEntry = OwnedBlasBuildEntry<IdReferences>;
-
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
-pub struct OwnedTlasInstance<R: ReferenceType> {
-    pub blas: R::Blas,
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TraceTlasInstance {
+    pub blas_id: BlasId,
     pub transform: [f32; 12],
     pub custom_data: u32,
     pub mask: u8,
 }
 
-pub type ArcTlasInstance = OwnedTlasInstance<ArcReferences>;
-pub type TraceTlasInstance = OwnedTlasInstance<IdReferences>;
-
 #[derive(Debug, Clone)]
-#[cfg_attr(feature = "serde", apply(serde_object_reference_struct))]
-pub struct OwnedTlasPackage<R: ReferenceType> {
-    pub tlas: R::Tlas,
-    pub instances: Vec<Option<OwnedTlasInstance<R>>>,
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TraceTlasPackage {
+    pub tlas_id: TlasId,
+    pub instances: Vec<Option<TraceTlasInstance>>,
     pub lowest_unmodified: u32,
 }
 
-pub type TraceTlasPackage = OwnedTlasPackage<IdReferences>;
-pub type ArcTlasPackage = OwnedTlasPackage<ArcReferences>;
+/// Like [`BlasTriangleGeometry`], but with `Arc`s.
+#[derive(Debug, Clone)]
+pub struct ArcBlasTriangleGeometry {
+    pub size: wgt::BlasTriangleGeometrySizeDescriptor,
+    pub vertex_buffer: Arc<Buffer>,
+    pub index_buffer: Option<Arc<Buffer>>,
+    pub transform_buffer: Option<Arc<Buffer>>,
+    pub first_vertex: u32,
+    pub vertex_stride: BufferAddress,
+    pub first_index: Option<u32>,
+    pub transform_buffer_offset: Option<BufferAddress>,
+}
 
 /// [`BlasTriangleGeometry`], without the resources.
 #[derive(Debug, Clone)]
@@ -375,6 +369,32 @@ pub struct BlasTriangleGeometryInfo {
     pub vertex_stride: BufferAddress,
     pub first_index: Option<u32>,
     pub transform_buffer_offset: Option<BufferAddress>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ArcBlasGeometries {
+    TriangleGeometries(Vec<ArcBlasTriangleGeometry>),
+}
+
+#[derive(Debug, Clone)]
+pub struct ArcBlasBuildEntry {
+    pub blas: Arc<Blas>,
+    pub geometries: ArcBlasGeometries,
+}
+
+#[derive(Debug, Clone)]
+pub struct ArcTlasInstance {
+    pub blas: Arc<Blas>,
+    pub transform: [f32; 12],
+    pub custom_data: u32,
+    pub mask: u8,
+}
+
+#[derive(Debug, Clone)]
+pub struct ArcTlasPackage {
+    pub tlas: Arc<Tlas>,
+    pub instances: Vec<Option<ArcTlasInstance>>,
+    pub lowest_unmodified: u32,
 }
 
 #[derive(Clone, Debug, Error)]

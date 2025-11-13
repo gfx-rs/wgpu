@@ -1,4 +1,4 @@
-use core::{num::NonZeroU32, ops::Range};
+use core::ops::Range;
 
 use crate::{
     api::{impl_deferred_command_buffer_actions, SharedDeferredCommandBufferActions},
@@ -231,33 +231,7 @@ impl RenderPass<'_> {
         self.inner.draw_indexed(indices, base_vertex, instances);
     }
 
-    /// Draws using a mesh pipeline.
-    ///
-    /// The current pipeline must be a mesh pipeline.
-    ///
-    /// If the current pipeline has a task shader, run it with an workgroup for
-    /// every `vec3<u32>(i, j, k)` where `i`, `j`, and `k` are between `0` and
-    /// `group_count_x`, `group_count_y`, and `group_count_z`. The invocation with
-    /// index zero in each group is responsible for determining the mesh shader dispatch.
-    /// Its return value indicates the number of workgroups of mesh shaders to invoke. It also
-    /// passes a payload value for them to consume. Because each task workgroup is essentially
-    /// a mesh shader draw call, mesh workgroups dispatched by different task workgroups
-    /// cannot interact in any way, and `workgroup_id` corresponds to its location in the
-    /// calling specific task shader's dispatch group.
-    ///
-    /// If the current pipeline lacks a task shader, run its mesh shader with a
-    /// workgroup for every `vec3<u32>(i, j, k)` where `i`, `j`, and `k` are
-    /// between `0` and `group_count_x`, `group_count_y`, and `group_count_z`.
-    ///
-    /// Each mesh shader workgroup outputs a set of vertices and indices for primitives.
-    /// The indices outputted correspond to the vertices outputted by that same workgroup;
-    /// there is no global vertex buffer. These primitives are passed to the rasterizer and
-    /// essentially treated like a vertex shader output, except that the mesh shader may
-    /// choose to cull specific primitives or pass per-primitive non-interpolated values
-    /// to the fragment shader. As such, each primitive is then rendered with the current
-    /// pipeline's fragment shader, if present. Otherwise, [No Color Output mode] is used.
-    ///
-    /// [No Color Output mode]: https://www.w3.org/TR/webgpu/#no-color-output
+    /// Draws using a mesh shader pipeline
     pub fn draw_mesh_tasks(&mut self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {
         self.inner
             .draw_mesh_tasks(group_count_x, group_count_y, group_count_z);
@@ -290,7 +264,7 @@ impl RenderPass<'_> {
             .draw_indexed_indirect(&indirect_buffer.inner, indirect_offset);
     }
 
-    /// Draws using a mesh pipeline,
+    /// Draws using a mesh shader pipeline,
     /// based on the contents of the `indirect_buffer`
     ///
     /// This is like calling [`RenderPass::draw_mesh_tasks`] but the contents of the call are specified in the `indirect_buffer`.
@@ -680,12 +654,6 @@ pub struct RenderPassDescriptor<'a> {
     pub timestamp_writes: Option<RenderPassTimestampWrites<'a>>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<&'a QuerySet>,
-    /// The mask of multiview image layers to use for this render pass. For example, if you wish
-    /// to render to the first 2 layers, you would use 3=0b11. If you wanted ro render to only the
-    /// 2nd layer, you would use 2=0b10. If you aren't using multiview this should be `None`.
-    ///
-    /// Note that setting bits higher than the number of texture layers is a validation error.
-    pub multiview_mask: Option<NonZeroU32>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPassDescriptor<'_>: Send, Sync);

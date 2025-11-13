@@ -64,7 +64,7 @@ static RESOLVE_WITH_TRANSIENT: GpuTestConfiguration = GpuTestConfiguration::new(
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview_mask: None,
+            multiview: None,
             cache: None,
         };
         let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
@@ -119,7 +119,6 @@ static RESOLVE_WITH_TRANSIENT: GpuTestConfiguration = GpuTestConfiguration::new(
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-                multiview_mask: None,
             });
 
             rpass.set_pipeline(&pipeline);

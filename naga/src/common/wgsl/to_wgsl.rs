@@ -169,7 +169,6 @@ impl TryToWgsl for crate::BuiltIn {
             Bi::FragDepth => "frag_depth",
             Bi::FrontFacing => "front_facing",
             Bi::PrimitiveIndex => "primitive_index",
-            Bi::Barycentric => "barycentric",
             Bi::SampleIndex => "sample_index",
             Bi::SampleMask => "sample_mask",
             Bi::GlobalInvocationId => "global_invocation_id",
@@ -189,12 +188,7 @@ impl TryToWgsl for crate::BuiltIn {
             | Bi::PointSize
             | Bi::DrawID
             | Bi::PointCoord
-            | Bi::WorkGroupSize
-            | Bi::CullPrimitive
-            | Bi::TriangleIndices
-            | Bi::LineIndices
-            | Bi::MeshTaskSize
-            | Bi::PointIndex => return None,
+            | Bi::WorkGroupSize => return None,
         })
     }
 }
@@ -358,7 +352,6 @@ pub const fn address_space_str(
             As::WorkGroup => "workgroup",
             As::Handle => return (None, None),
             As::Function => "function",
-            As::TaskPayload => return (None, None),
         }),
         None,
     )

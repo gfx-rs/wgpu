@@ -3,14 +3,14 @@
     expectations: [
         (
             name: "basic",
-            buffer: PointerId(0x10),
+            buffer: (index: 0, epoch: 1),
             offset: 0,
             data: Raw([0x00, 0x00, 0x80, 0xBF]),
         )
     ],
     actions: [
         CreateBuffer(
-            PointerId(0x10),
+            Id(0, 1),
             (
                 label: Some("dummy"),
                 size: 16,
@@ -19,7 +19,7 @@
             ),
         ),
         WriteBuffer(
-            id: PointerId(0x10),
+            id: Id(0, 1),
             data: "data1.bin",
             range: (
                 start: 0,

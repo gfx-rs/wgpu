@@ -3,19 +3,19 @@
     expectations: [
         (
             name: "Queried number of compute invocations is correct",
-            buffer: PointerId(0x10),
+            buffer: (index: 0, epoch: 1),
             offset: 0,
             data: U64([0x0, 0x2A]),
         ),
     ],
     actions: [
-        CreatePipelineLayout(PointerId(0x10), (
+        CreatePipelineLayout(Id(0, 1), (
             label: Some("empty"),
             bind_group_layouts: [],
             push_constant_ranges: [],
         )),
         CreateShaderModule(
-            id: PointerId(0x10),
+            id: Id(0, 1),
             desc: (
                 label: None,
                 flags: (bits: 3),
@@ -23,12 +23,12 @@
             data: "empty.wgsl",
         ),
         CreateComputePipeline(
-            id: PointerId(0x10),
+            id: Id(0, 1),
             desc: (
                 label: None,
-                layout: Some(PointerId(0x10)),
+                layout: Some(Id(0, 1)),
                 stage: (
-                    module: PointerId(0x10),
+                    module: Id(0, 1),
                     entry_point: None,
                     constants: {},
                     zero_initialize_workgroup_memory: true,
@@ -37,7 +37,7 @@
             ),
         ),
         CreateQuerySet(
-            id: PointerId(0x10),
+            id: Id(0, 1),
             desc: (
                 label: Some("Compute Invocation QuerySet"),
                 count: 2,
@@ -45,7 +45,7 @@
             ),
         ),
         CreateBuffer(
-            PointerId(0x10),
+            Id(0, 1),
             (
                 label: Some("Compute Invocation Result Buffer"),
                 size: 16,
@@ -55,11 +55,11 @@
         ),
         Submit(1, [
             RunComputePass(
-                pass: (
+                base: (
                     commands: [
-                        SetPipeline(PointerId(0x10)),
+                        SetPipeline(Id(0, 1)),
                         BeginPipelineStatisticsQuery(
-                            query_set: PointerId(0x10),
+                            query_set_id: Id(0, 1),
                             query_index: 0,
                         ),
                         Dispatch((2, 3, 7,)),
@@ -71,10 +71,10 @@
                 ),
             ),
             ResolveQuerySet(
-                query_set: PointerId(0x10),
+                query_set_id: Id(0, 1),
                 start_query: 0,
                 query_count: 1,
-                destination: PointerId(0x10),
+                destination: Id(0, 1),
                 destination_offset: 0,
             )
         ]),

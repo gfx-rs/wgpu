@@ -3,13 +3,13 @@
     expectations: [
         (
             name: "Quad",
-            buffer: PointerId(0x10),
+            buffer: (index: 0, epoch: 1),
             offset: 0,
             data: File("clear-texture.bin", 16384),
         ),
         (
             name: "buffer clear",
-            buffer: PointerId(0x110),
+            buffer: (index: 1, epoch: 1),
             offset: 0,
             data: Raw([
                 0x00, 0x00, 0x80, 0xBF,
@@ -20,7 +20,7 @@
         )
     ],
     actions: [
-        CreateTexture(PointerId(0x10), (
+        CreateTexture(Id(0, 1), (
             label: Some("Output Texture"),
             size: (
                 width: 64,
@@ -36,7 +36,7 @@
         // First fill the texture to ensure it wasn't just zero initialized or "happened" to be zero.
         WriteTexture(
             to: (
-                texture: PointerId(0x10),
+                texture: Id(0, 1),
                 mip_level: 0,
                 array_layer: 0,
             ),
@@ -52,7 +52,7 @@
             ),
         ),
         CreateBuffer(
-            PointerId(0x10),
+            Id(0, 1),
             (
                 label: Some("Output Buffer"),
                 size: 16384,
@@ -62,7 +62,7 @@
         ),
 
         CreateBuffer(
-            PointerId(0x110),
+            Id(1, 1),
             (
                 label: Some("Buffer to be cleared"),
                 size: 16,
@@ -72,7 +72,7 @@
         ),
         // Make sure there is something in the buffer, otherwise it might be just zero init!
         WriteBuffer(
-            id: PointerId(0x110),
+            id: Id(1, 1),
             data: "data1.bin",
             range: (
                 start: 0,
@@ -82,7 +82,7 @@
         ),
         Submit(1, [
             ClearTexture(
-                dst: PointerId(0x10),
+                dst: Id(0, 1),
                 subresource_range: ImageSubresourceRange(
                     aspect: all,
                     baseMipLevel: 0,
@@ -93,12 +93,12 @@
             ),
             CopyTextureToBuffer(
                 src: (
-                    texture: PointerId(0x10),
+                    texture: Id(0, 1),
                     mip_level: 0,
                     array_layer: 0,
                 ),
                 dst:  (
-                    buffer: PointerId(0x10),
+                    buffer: Id(0, 1),
                     layout: (
                         offset: 0,
                         bytes_per_row: Some(256),
@@ -112,7 +112,7 @@
             ),
             // Partial clear to prove
             ClearBuffer(
-                dst: PointerId(0x110),
+                dst: Id(1, 1),
                 offset: 4,
                 size: Some(8),
             )

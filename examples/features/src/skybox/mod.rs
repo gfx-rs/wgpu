@@ -218,7 +218,7 @@ impl crate::framework::Example for Example {
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
+            multiview: None,
             cache: None,
         });
         let entity_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -252,7 +252,7 @@ impl crate::framework::Example for Example {
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
+            multiview: None,
             cache: None,
         });
 
@@ -372,7 +372,7 @@ impl crate::framework::Example for Example {
             uniform_buf,
             entities,
             depth_view,
-            staging_belt: wgpu::util::StagingBelt::new(device.clone(), 0x100),
+            staging_belt: wgpu::util::StagingBelt::new(0x100),
         }
     }
 
@@ -411,6 +411,7 @@ impl crate::framework::Example for Example {
                 &self.uniform_buf,
                 0,
                 wgpu::BufferSize::new((raw_uniforms.len() * 4) as wgpu::BufferAddress).unwrap(),
+                device,
             )
             .copy_from_slice(bytemuck::cast_slice(&raw_uniforms));
 
@@ -443,7 +444,6 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-                multiview_mask: None,
             });
 
             rpass.set_bind_group(0, &self.bind_group, &[]);

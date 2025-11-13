@@ -91,7 +91,6 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
             }),
             timestamp_writes: None,
             occlusion_query_set: Some(&occlusion_query_set),
-            multiview_mask: None,
         });
 
         // Drop render pass attachments right away.
@@ -549,7 +548,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
-            multiview_mask: None,
+            multiview: None,
             cache: None,
         });
 

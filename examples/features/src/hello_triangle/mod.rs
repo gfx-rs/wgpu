@@ -71,7 +71,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview_mask: None,
+        multiview: None,
         cache: None,
     });
 
@@ -129,7 +129,6 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                                     depth_stencil_attachment: None,
                                     timestamp_writes: None,
                                     occlusion_query_set: None,
-                                    multiview_mask: None,
                                 });
                             rpass.set_pipeline(&render_pipeline);
                             rpass.draw(0..3, 0..1);

@@ -8,6 +8,8 @@ use wgt::{
     TextureUsages,
 };
 
+#[cfg(feature = "trace")]
+use crate::command::Command as TraceCommand;
 use crate::{
     api_log,
     command::{
@@ -168,7 +170,7 @@ pub enum TransferError {
         src_sample_count: u32,
         dst_sample_count: u32,
     },
-    #[error("Requested mip level {requested} does not exist (count: {count})")]
+    #[error("Requested mip level {requested} does no exist (count: {count})")]
     InvalidMipLevel { requested: u32, count: u32 },
 }
 
@@ -823,6 +825,17 @@ impl Global {
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
 
+        #[cfg(feature = "trace")]
+        if let Some(ref mut list) = cmd_buf_data.trace() {
+            list.push(TraceCommand::CopyBufferToBuffer {
+                src: source,
+                src_offset: source_offset,
+                dst: destination,
+                dst_offset: destination_offset,
+                size,
+            });
+        }
+
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
             Ok(ArcCommand::CopyBufferToBuffer {
                 src: self.resolve_buffer_id(source)?,
@@ -850,6 +863,15 @@ impl Global {
 
         let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut list) = cmd_buf_data.trace() {
+            list.push(TraceCommand::CopyBufferToTexture {
+                src: *source,
+                dst: *destination,
+                size: *copy_size,
+            });
+        }
 
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
             Ok(ArcCommand::CopyBufferToTexture {
@@ -885,6 +907,15 @@ impl Global {
         let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
 
+        #[cfg(feature = "trace")]
+        if let Some(list) = cmd_buf_data.trace() {
+            list.push(TraceCommand::CopyTextureToBuffer {
+                src: *source,
+                dst: *destination,
+                size: *copy_size,
+            });
+        }
+
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
             Ok(ArcCommand::CopyTextureToBuffer {
                 src: wgt::TexelCopyTextureInfo::<Arc<Texture>> {
@@ -918,6 +949,15 @@ impl Global {
 
         let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
+
+        #[cfg(feature = "trace")]
+        if let Some(ref mut list) = cmd_buf_data.trace() {
+            list.push(TraceCommand::CopyTextureToTexture {
+                src: *source,
+                dst: *destination,
+                size: *copy_size,
+            });
+        }
 
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
             Ok(ArcCommand::CopyTextureToTexture {

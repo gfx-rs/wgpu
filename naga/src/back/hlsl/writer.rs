@@ -507,7 +507,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
             self.write_wrapped_functions(module, &ctx)?;
 
-            if ep.stage.compute_like() {
+            if ep.stage == ShaderStage::Compute {
                 // HLSL is calling workgroup size "num threads"
                 let num_threads = ep.workgroup_size;
                 writeln!(
@@ -569,14 +569,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         match *binding {
             Some(crate::Binding::BuiltIn(builtin)) if !is_subgroup_builtin_binding(binding) => {
-                if builtin == crate::BuiltIn::ViewIndex
-                    && self.options.shader_model < ShaderModel::V6_1
-                {
-                    return Err(Error::ShaderModelTooLow(
-                        "used @builtin(view_index) or SV_ViewID".to_string(),
-                        ShaderModel::V6_1,
-                    ));
-                }
                 let builtin_str = builtin.to_hlsl_str()?;
                 write!(self.out, " : {builtin_str}")?;
             }
@@ -975,7 +967,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_type(module, global.ty)?;
                 ""
             }
-            crate::AddressSpace::TaskPayload => unimplemented!(),
             crate::AddressSpace::Uniform => {
                 // constant buffer declarations are expected to be inlined, e.g.
                 // `cbuffer foo: register(b0) { field1: type1; }`
@@ -1773,7 +1764,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         module: &Module,
     ) -> bool {
         self.options.zero_initialize_workgroup_memory
-            && func_ctx.ty.is_compute_like_entry_point(module)
+            && func_ctx.ty.is_compute_entry_point(module)
             && module.global_variables.iter().any(|(handle, var)| {
                 !func_ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
             })
@@ -2608,19 +2599,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     writeln!(self.out, ".Abort();")?;
                 }
             },
-            Statement::MeshFunction(crate::MeshFunction::SetMeshOutputs {
-                vertex_count,
-                primitive_count,
-            }) => {
-                write!(self.out, "{level}SetMeshOutputCounts(")?;
-                self.write_expr(module, vertex_count, func_ctx)?;
-                write!(self.out, ", ")?;
-                self.write_expr(module, primitive_count, func_ctx)?;
-                write!(self.out, ");")?;
-            }
-            Statement::MeshFunction(
-                crate::MeshFunction::SetVertex { .. } | crate::MeshFunction::SetPrimitive { .. },
-            ) => unimplemented!(),
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let name = Baked(result).to_string();
@@ -3098,8 +3076,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 crate::AddressSpace::Function
                                 | crate::AddressSpace::Private
                                 | crate::AddressSpace::WorkGroup
-                                | crate::AddressSpace::PushConstant
-                                | crate::AddressSpace::TaskPayload,
+                                | crate::AddressSpace::PushConstant,
                             )
                             | None => true,
                             Some(crate::AddressSpace::Uniform) => {

@@ -133,7 +133,6 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Arc<Window>, wgpu::Color
                                         depth_stencil_attachment: None,
                                         timestamp_writes: None,
                                         occlusion_query_set: None,
-                                        multiview_mask: None,
                                     });
                             }
 

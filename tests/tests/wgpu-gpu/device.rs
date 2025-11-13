@@ -346,7 +346,6 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
-            multiview_mask: None,
         });
         drop(pass);
         ctx.queue.submit([encoder_for_render_pass.finish()]);
@@ -459,7 +458,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 fragment: None,
-                multiview_mask: None,
+                multiview: None,
                 cache: None,
             });
 
@@ -617,7 +616,7 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
                 primitive: wgpu::PrimitiveState::default(),
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
-                multiview_mask: None,
+                multiview: None,
                 cache: None,
             });
 

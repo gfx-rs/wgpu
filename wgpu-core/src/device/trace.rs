@@ -1,88 +1,100 @@
-#[cfg(feature = "trace")]
-mod record;
-
+use alloc::{string::String, vec::Vec};
 use core::{convert::Infallible, ops::Range};
 
-use alloc::{string::String, vec::Vec};
-use macro_rules_attribute::apply;
-
-use crate::{
-    command::{serde_object_reference_struct, BasePass, Command, ReferenceType, RenderCommand},
-    id::{markers, PointerId},
-    pipeline::GeneralRenderPipelineDescriptor,
-};
-
 #[cfg(feature = "trace")]
-pub use record::*;
+use {alloc::borrow::Cow, std::io::Write as _};
+
+use crate::{command::Command, id};
+
+//TODO: consider a readable Id that doesn't include the backend
 
 type FileName = String;
 
 pub const FILE_NAME: &str = "trace.ron";
 
+#[cfg(feature = "trace")]
+pub(crate) fn new_render_bundle_encoder_descriptor<'a>(
+    label: crate::Label<'a>,
+    context: &'a super::RenderPassContext,
+    depth_read_only: bool,
+    stencil_read_only: bool,
+) -> crate::command::RenderBundleEncoderDescriptor<'a> {
+    crate::command::RenderBundleEncoderDescriptor {
+        label,
+        color_formats: Cow::Borrowed(&context.attachments.colors),
+        depth_stencil: context.attachments.depth_stencil.map(|format| {
+            wgt::RenderBundleDepthStencil {
+                format,
+                depth_read_only,
+                stencil_read_only,
+            }
+        }),
+        sample_count: context.sample_count,
+        multiview: context.multiview,
+    }
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
-#[apply(serde_object_reference_struct)]
-pub enum Action<'a, R: ReferenceType> {
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Action<'a> {
     Init {
         desc: crate::device::DeviceDescriptor<'a>,
         backend: wgt::Backend,
     },
     ConfigureSurface(
-        R::Surface,
+        id::SurfaceId,
         wgt::SurfaceConfiguration<Vec<wgt::TextureFormat>>,
     ),
-    CreateBuffer(R::Buffer, crate::resource::BufferDescriptor<'a>),
-    FreeBuffer(R::Buffer),
-    DestroyBuffer(R::Buffer),
-    CreateTexture(R::Texture, crate::resource::TextureDescriptor<'a>),
-    FreeTexture(R::Texture),
-    DestroyTexture(R::Texture),
+    CreateBuffer(id::BufferId, crate::resource::BufferDescriptor<'a>),
+    FreeBuffer(id::BufferId),
+    DestroyBuffer(id::BufferId),
+    CreateTexture(id::TextureId, crate::resource::TextureDescriptor<'a>),
+    FreeTexture(id::TextureId),
+    DestroyTexture(id::TextureId),
     CreateTextureView {
-        id: R::TextureView,
-        parent: R::Texture,
+        id: id::TextureViewId,
+        parent_id: id::TextureId,
         desc: crate::resource::TextureViewDescriptor<'a>,
     },
-    DestroyTextureView(R::TextureView),
+    DestroyTextureView(id::TextureViewId),
     CreateExternalTexture {
-        id: R::ExternalTexture,
+        id: id::ExternalTextureId,
         desc: crate::resource::ExternalTextureDescriptor<'a>,
-        planes: alloc::boxed::Box<[R::TextureView]>,
+        planes: alloc::boxed::Box<[id::TextureViewId]>,
     },
-    FreeExternalTexture(R::ExternalTexture),
-    DestroyExternalTexture(R::ExternalTexture),
-    CreateSampler(
-        PointerId<markers::Sampler>,
-        crate::resource::SamplerDescriptor<'a>,
-    ),
-    DestroySampler(PointerId<markers::Sampler>),
+    FreeExternalTexture(id::ExternalTextureId),
+    DestroyExternalTexture(id::ExternalTextureId),
+    CreateSampler(id::SamplerId, crate::resource::SamplerDescriptor<'a>),
+    DestroySampler(id::SamplerId),
     GetSurfaceTexture {
-        id: R::Texture,
-        parent: R::Surface,
+        id: id::TextureId,
+        parent_id: id::SurfaceId,
     },
-    Present(R::Surface),
-    DiscardSurfaceTexture(R::Surface),
+    Present(id::SurfaceId),
+    DiscardSurfaceTexture(id::SurfaceId),
     CreateBindGroupLayout(
-        PointerId<markers::BindGroupLayout>,
+        id::BindGroupLayoutId,
         crate::binding_model::BindGroupLayoutDescriptor<'a>,
     ),
-    DestroyBindGroupLayout(PointerId<markers::BindGroupLayout>),
+    DestroyBindGroupLayout(id::BindGroupLayoutId),
     CreatePipelineLayout(
-        PointerId<markers::PipelineLayout>,
-        crate::binding_model::ResolvedPipelineLayoutDescriptor<
-            'a,
-            PointerId<markers::BindGroupLayout>,
-        >,
+        id::PipelineLayoutId,
+        crate::binding_model::PipelineLayoutDescriptor<'a>,
     ),
-    DestroyPipelineLayout(PointerId<markers::PipelineLayout>),
-    CreateBindGroup(PointerId<markers::BindGroup>, TraceBindGroupDescriptor<'a>),
-    DestroyBindGroup(PointerId<markers::BindGroup>),
+    DestroyPipelineLayout(id::PipelineLayoutId),
+    CreateBindGroup(
+        id::BindGroupId,
+        crate::binding_model::BindGroupDescriptor<'a>,
+    ),
+    DestroyBindGroup(id::BindGroupId),
     CreateShaderModule {
-        id: PointerId<markers::ShaderModule>,
+        id: id::ShaderModuleId,
         desc: crate::pipeline::ShaderModuleDescriptor<'a>,
         data: FileName,
     },
     CreateShaderModulePassthrough {
-        id: PointerId<markers::ShaderModule>,
+        id: id::ShaderModuleId,
         data: Vec<FileName>,
 
         entry_point: String,
@@ -90,88 +102,108 @@ pub enum Action<'a, R: ReferenceType> {
         num_workgroups: (u32, u32, u32),
         runtime_checks: wgt::ShaderRuntimeChecks,
     },
-    DestroyShaderModule(PointerId<markers::ShaderModule>),
+    DestroyShaderModule(id::ShaderModuleId),
     CreateComputePipeline {
-        id: PointerId<markers::ComputePipeline>,
-        desc: TraceComputePipelineDescriptor<'a>,
+        id: id::ComputePipelineId,
+        desc: crate::pipeline::ComputePipelineDescriptor<'a>,
     },
-    DestroyComputePipeline(PointerId<markers::ComputePipeline>),
-    CreateGeneralRenderPipeline {
-        id: PointerId<markers::RenderPipeline>,
-        desc: TraceGeneralRenderPipelineDescriptor<'a>,
+    DestroyComputePipeline(id::ComputePipelineId),
+    CreateRenderPipeline {
+        id: id::RenderPipelineId,
+        desc: crate::pipeline::RenderPipelineDescriptor<'a>,
     },
-    DestroyRenderPipeline(PointerId<markers::RenderPipeline>),
+    CreateMeshPipeline {
+        id: id::RenderPipelineId,
+        desc: crate::pipeline::MeshPipelineDescriptor<'a>,
+    },
+    DestroyRenderPipeline(id::RenderPipelineId),
     CreatePipelineCache {
-        id: PointerId<markers::PipelineCache>,
+        id: id::PipelineCacheId,
         desc: crate::pipeline::PipelineCacheDescriptor<'a>,
     },
-    DestroyPipelineCache(PointerId<markers::PipelineCache>),
+    DestroyPipelineCache(id::PipelineCacheId),
     CreateRenderBundle {
-        id: R::RenderBundle,
+        id: id::RenderBundleId,
         desc: crate::command::RenderBundleEncoderDescriptor<'a>,
-        base: BasePass<RenderCommand<R>, Infallible>,
+        base: crate::command::BasePass<crate::command::RenderCommand, Infallible>,
     },
-    DestroyRenderBundle(PointerId<markers::RenderBundle>),
+    DestroyRenderBundle(id::RenderBundleId),
     CreateQuerySet {
-        id: PointerId<markers::QuerySet>,
+        id: id::QuerySetId,
         desc: crate::resource::QuerySetDescriptor<'a>,
     },
-    DestroyQuerySet(PointerId<markers::QuerySet>),
+    DestroyQuerySet(id::QuerySetId),
     WriteBuffer {
-        id: R::Buffer,
+        id: id::BufferId,
         data: FileName,
         range: Range<wgt::BufferAddress>,
         queued: bool,
     },
     WriteTexture {
-        to: wgt::TexelCopyTextureInfo<R::Texture>,
+        to: wgt::TexelCopyTextureInfo<id::TextureId>,
         data: FileName,
         layout: wgt::TexelCopyBufferLayout,
         size: wgt::Extent3d,
     },
-    Submit(crate::SubmissionIndex, Vec<Command<R>>),
+    Submit(crate::SubmissionIndex, Vec<Command>),
     CreateBlas {
-        id: R::Blas,
+        id: id::BlasId,
         desc: crate::resource::BlasDescriptor<'a>,
         sizes: wgt::BlasGeometrySizeDescriptors,
     },
-    DestroyBlas(R::Blas),
+    DestroyBlas(id::BlasId),
     CreateTlas {
-        id: R::Tlas,
+        id: id::TlasId,
         desc: crate::resource::TlasDescriptor<'a>,
     },
-    DestroyTlas(R::Tlas),
+    DestroyTlas(id::TlasId),
 }
 
-/// cbindgen:ignore
-pub type TraceBindGroupDescriptor<'a> = crate::binding_model::BindGroupDescriptor<
-    'a,
-    PointerId<markers::BindGroupLayout>,
-    PointerId<markers::Buffer>,
-    PointerId<markers::Sampler>,
-    PointerId<markers::TextureView>,
-    PointerId<markers::Tlas>,
-    PointerId<markers::ExternalTexture>,
->;
+#[cfg(feature = "trace")]
+#[derive(Debug)]
+pub struct Trace {
+    path: std::path::PathBuf,
+    file: std::fs::File,
+    config: ron::ser::PrettyConfig,
+    binary_id: usize,
+}
 
-/// Not a public API. For use by `player` only.
-///
-/// cbindgen:ignore
-#[doc(hidden)]
-pub type TraceGeneralRenderPipelineDescriptor<'a> = GeneralRenderPipelineDescriptor<
-    'a,
-    PointerId<markers::PipelineLayout>,
-    PointerId<markers::ShaderModule>,
-    PointerId<markers::PipelineCache>,
->;
+#[cfg(feature = "trace")]
+impl Trace {
+    pub fn new(path: std::path::PathBuf) -> Result<Self, std::io::Error> {
+        log::info!("Tracing into '{path:?}'");
+        let mut file = std::fs::File::create(path.join(FILE_NAME))?;
+        file.write_all(b"[\n")?;
+        Ok(Self {
+            path,
+            file,
+            config: ron::ser::PrettyConfig::default(),
+            binary_id: 0,
+        })
+    }
 
-/// Not a public API. For use by `player` only.
-///
-/// cbindgen:ignore
-#[doc(hidden)]
-pub type TraceComputePipelineDescriptor<'a> = crate::pipeline::ComputePipelineDescriptor<
-    'a,
-    PointerId<markers::PipelineLayout>,
-    PointerId<markers::ShaderModule>,
-    PointerId<markers::PipelineCache>,
->;
+    pub fn make_binary(&mut self, kind: &str, data: &[u8]) -> String {
+        self.binary_id += 1;
+        let name = std::format!("data{}.{}", self.binary_id, kind);
+        let _ = std::fs::write(self.path.join(&name), data);
+        name
+    }
+
+    pub(crate) fn add(&mut self, action: Action) {
+        match ron::ser::to_string_pretty(&action, self.config.clone()) {
+            Ok(string) => {
+                let _ = writeln!(self.file, "{string},");
+            }
+            Err(e) => {
+                log::warn!("RON serialization failure: {e:?}");
+            }
+        }
+    }
+}
+
+#[cfg(feature = "trace")]
+impl Drop for Trace {
+    fn drop(&mut self) {
+        let _ = self.file.write_all(b"]");
+    }
+}

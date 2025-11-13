@@ -104,7 +104,7 @@ impl Example {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
+            multiview: None,
             cache: None,
         });
 
@@ -170,7 +170,6 @@ impl Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-                multiview_mask: None,
             });
             if let Some(ref query_sets) = query_sets {
                 rpass.write_timestamp(&query_sets.timestamp, timestamp_query_index_base);
@@ -306,7 +305,7 @@ impl crate::framework::Example for Example {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
+            multiview: None,
             cache: None,
         });
 
@@ -493,7 +492,6 @@ impl crate::framework::Example for Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-                multiview_mask: None,
             });
             rpass.set_pipeline(&self.draw_pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
@@ -530,14 +528,6 @@ pub static TEST_QUERY: crate::framework::ExampleTestParams = crate::framework::E
     height: 768,
     optional_features: QUERY_FEATURES,
     base_test_parameters: wgpu_test::TestParameters::default(),
-    // Somehow, this test on CI lavapipe reasonably often gets error of 0.025341, significantly higher
-    // than the comparison we usually do with mean 0.005. This only happens when the query is used.
-    comparisons: &[
-        wgpu_test::ComparisonType::Mean(0.03),
-        wgpu_test::ComparisonType::Percentile {
-            percentile: 0.99,
-            threshold: 0.1,
-        },
-    ],
+    comparisons: &[wgpu_test::ComparisonType::Mean(0.025)],
     _phantom: std::marker::PhantomData::<Example>,
 };

@@ -100,7 +100,7 @@ impl crate::framework::Example for Example {
                 bias: Default::default(),
             }),
             multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
+            multiview: None,
             cache: None,
         });
 
@@ -136,7 +136,7 @@ impl crate::framework::Example for Example {
                 bias: Default::default(),
             }),
             multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
+            multiview: None,
             cache: None,
         });
 
@@ -222,7 +222,6 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
-                multiview_mask: None,
             });
 
             rpass.set_stencil_reference(1);

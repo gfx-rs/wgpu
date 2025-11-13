@@ -106,7 +106,7 @@ async fn run_test(
                 write_mask: wgpu::ColorWrites::ALL,
             })],
         }),
-        multiview_mask: None,
+        multiview: None,
         cache: None,
     };
     let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
@@ -203,7 +203,6 @@ async fn run_test(
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-                multiview_mask: None,
             });
             rpass.set_pipeline(&pipeline);
             rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
@@ -319,7 +318,7 @@ async fn run_test_3d(ctx: TestingContext) {
                 write_mask: wgpu::ColorWrites::ALL,
             })],
         }),
-        multiview_mask: None,
+        multiview: None,
         cache: None,
     };
     let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
@@ -387,7 +386,6 @@ async fn run_test_3d(ctx: TestingContext) {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
-                multiview_mask: None,
             });
             rpass.set_pipeline(&pipeline);
             rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
