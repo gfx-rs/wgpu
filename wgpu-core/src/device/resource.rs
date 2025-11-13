@@ -25,7 +25,9 @@ use wgt::{
 use crate::device::trace;
 use crate::{
     api_log,
-    binding_model::{self, BindGroup, BindGroupLayout, BindGroupLayoutEntryError},
+    binding_model::{
+        self, BindGroup, BindGroupLateBufferBindingInfo, BindGroupLayout, BindGroupLayoutEntryError,
+    },
     command, conv,
     device::{
         bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
@@ -1360,8 +1362,25 @@ impl Device {
             }
         }
 
+        let mips = desc.mip_level_count;
+        let max_levels_allowed = desc.size.max_mips(desc.dimension).min(hal::MAX_MIP_LEVELS);
+        if mips == 0 || mips > max_levels_allowed {
+            return Err(CreateTextureError::InvalidMipLevelCount {
+                requested: mips,
+                maximum: max_levels_allowed,
+            });
+        }
+
         {
-            let (width_multiple, height_multiple) = desc.format.size_multiple_requirement();
+            let (mut width_multiple, mut height_multiple) = desc.format.size_multiple_requirement();
+
+            if desc.format.is_multi_planar_format() {
+                // TODO(https://github.com/gfx-rs/wgpu/issues/8491): fix
+                // `mip_level_size` calculation for these formats and relax this
+                // restriction.
+                width_multiple <<= desc.mip_level_count.saturating_sub(1);
+                height_multiple <<= desc.mip_level_count.saturating_sub(1);
+            }
 
             if desc.size.width % width_multiple != 0 {
                 return Err(CreateTextureError::InvalidDimension(
@@ -1454,15 +1473,6 @@ impl Device {
                         .supported_sample_counts(),
                 ));
             };
-        }
-
-        let mips = desc.mip_level_count;
-        let max_levels_allowed = desc.size.max_mips(desc.dimension).min(hal::MAX_MIP_LEVELS);
-        if mips == 0 || mips > max_levels_allowed {
-            return Err(CreateTextureError::InvalidMipLevelCount {
-                requested: mips,
-                maximum: max_levels_allowed,
-            });
         }
 
         let missing_allowed_usages = match desc.format.planes() {
@@ -3271,10 +3281,16 @@ impl Device {
             .map_err(|e| self.handle_hal_error(e))?;
 
         // collect in the order of BGL iteration
-        let late_buffer_binding_sizes = layout
+        let late_buffer_binding_infos = layout
             .entries
             .indices()
-            .flat_map(|binding| late_buffer_binding_sizes.get(&binding).cloned())
+            .flat_map(|binding| {
+                let size = late_buffer_binding_sizes.get(&binding).cloned()?;
+                Some(BindGroupLateBufferBindingInfo {
+                    binding_index: binding,
+                    size,
+                })
+            })
             .collect();
 
         let bind_group = BindGroup {
@@ -3287,7 +3303,7 @@ impl Device {
             used_buffer_ranges,
             used_texture_ranges,
             dynamic_binding_info,
-            late_buffer_binding_sizes,
+            late_buffer_binding_infos,
         };
 
         let bind_group = Arc::new(bind_group);

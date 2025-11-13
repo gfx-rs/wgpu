@@ -685,6 +685,11 @@ pub struct Limits {
     pub max_push_constant_size: u32,
     /// Maximum number of live non-sampler bindings.
     ///
+    /// <div class="warning">
+    /// The default value is **1_000_000**, On systems with integrated GPUs (iGPUs)—particularly on Windows using the D3D12
+    /// backend—this can lead to significant system RAM consumption since iGPUs share system memory directly with the CPU.
+    /// </div>
+    ///
     /// This limit only affects the d3d12 backend. Using a large number will allow the device
     /// to create many bind groups at the cost of a large up-front allocation at device creation.
     pub max_non_sampler_bindings: u32,
@@ -2879,6 +2884,20 @@ impl TextureFormat {
         }
     }
 
+    /// Returns the subsampling factor for the indicated plane of a multi-planar format.
+    #[must_use]
+    pub fn subsampling_factors(&self, plane: Option<u32>) -> (u32, u32) {
+        match *self {
+            Self::NV12 | Self::P010 => match plane {
+                Some(0) => (1, 1),
+                Some(1) => (2, 2),
+                Some(plane) => unreachable!("plane {plane} is not valid for {self:?}"),
+                None => unreachable!("the plane must be specified for multi-planar formats"),
+            },
+            _ => (1, 1),
+        }
+    }
+
     /// Returns `true` if the format has a color aspect
     #[must_use]
     pub fn has_color_aspect(&self) -> bool {
@@ -2908,6 +2927,10 @@ impl TextureFormat {
     }
 
     /// Returns the size multiple requirement for a texture using this format.
+    ///
+    /// `create_texture` currently enforces a stricter restriction than this for
+    /// mipmapped multi-planar formats.
+    /// TODO(<https://github.com/gfx-rs/wgpu/issues/8491>): Remove this note.
     #[must_use]
     pub fn size_multiple_requirement(&self) -> (u32, u32) {
         match *self {
@@ -5719,10 +5742,10 @@ bitflags::bitflags! {
         const TRANSIENT = 1 << 12;
         /// The combination of states that a texture may be in _at the same time_.
         /// cbindgen:ignore
-        const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits();
+        const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits() | Self::STORAGE_READ_ONLY.bits();
         /// The combination of states that a texture must exclusively be in.
         /// cbindgen:ignore
-        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
+        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is ordered, then if the texture state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
@@ -6184,9 +6207,17 @@ impl Extent3d {
     }
 
     /// Calculates the extent at a given mip level.
-    /// Does *not* account for memory size being a multiple of block size.
+    ///
+    /// This is a low-level helper for internal use.
+    ///
+    /// It does *not* account for memory size being a multiple of block size.
+    ///
+    /// TODO(<https://github.com/gfx-rs/wgpu/issues/8491>): It also does not
+    /// consider whether an even dimension is required due to chroma
+    /// subsampling, but it probably should.
     ///
     /// <https://gpuweb.github.io/gpuweb/#logical-miplevel-specific-texture-extent>
+    #[doc(hidden)]
     #[must_use]
     pub fn mip_level_size(&self, level: u32, dim: TextureDimension) -> Self {
         Self {
@@ -6457,20 +6488,26 @@ impl<L, V> TextureDescriptor<L, V> {
 
     /// Computes the render extent of this texture.
     ///
+    /// This is a low-level helper exported for use by wgpu-core.
+    ///
     /// <https://gpuweb.github.io/gpuweb/#abstract-opdef-compute-render-extent>
+    ///
+    /// # Panics
+    ///
+    /// If the mip level is out of range.
+    #[doc(hidden)]
     #[must_use]
     pub fn compute_render_extent(&self, mip_level: u32, plane: Option<u32>) -> Extent3d {
-        let width = self.size.width >> mip_level;
-        let height = self.size.height >> mip_level;
+        let Extent3d {
+            width,
+            height,
+            depth_or_array_layers: _,
+        } = self.mip_level_size(mip_level).expect("invalid mip level");
 
-        let (width, height) = match (self.format, plane) {
-            (TextureFormat::NV12 | TextureFormat::P010, Some(0)) => (width, height),
-            (TextureFormat::NV12 | TextureFormat::P010, Some(1)) => (width / 2, height / 2),
-            _ => {
-                debug_assert!(!self.format.is_multi_planar_format());
-                (width, height)
-            }
-        };
+        let (w_subsampling, h_subsampling) = self.format.subsampling_factors(plane);
+
+        let width = width / w_subsampling;
+        let height = height / h_subsampling;
 
         Extent3d {
             width,

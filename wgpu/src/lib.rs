@@ -1,8 +1,8 @@
 //! `wgpu` is a cross-platform, safe, pure-Rust graphics API. It runs natively on
 //! Vulkan, Metal, D3D12, and OpenGL; and on top of WebGL2 and WebGPU on wasm.
 //!
-//! The API is based on the [WebGPU standard][webgpu]. It serves as the core of the
-//! WebGPU integration in Firefox, Servo, and Deno.
+//! The API is based on the [WebGPU standard][webgpu], but is a fully native Rust library.
+//! It serves as the core of the WebGPU integration in Firefox, Servo, and Deno.
 //!
 //! [webgpu]: https://gpuweb.github.io/gpuweb/
 //!
@@ -10,14 +10,55 @@
 //!
 //! The main entry point to the API is the [`Instance`] type, from which you can create [`Adapter`], [`Device`], and [`Surface`].
 //!
-//! If you are new to `wgpu` and graphics programming, we recommend reading
-//! <https://sotrh.github.io/learn-wgpu/> and <https://webgpufundamentals.org/>. The latter is a WebGPU
-//! tutorial, but the concepts are nearly identical to `wgpu`.
+//! If you are new to `wgpu` and graphics programming, we recommend starting with [Learn Wgpu].
+//! <!-- Note, "Learn Wgpu" is using the capitalization style in their header, NOT our styling -->
+//!
+//! Additionally, [WebGPU Fundamentals] is a tutorial for WebGPU which is very similar to our API, minus differences between Rust and Javascript.
+//!
+//! We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) which has information on useful architecture patterns, debugging tips, and more getting started information.
 //!
 //! There are examples for this version [available on GitHub](https://github.com/gfx-rs/wgpu/tree/v27/examples#readme).
 //!
 //! The API is refcounted, so all handles are cloneable, and if you create a resource which references another,
 //! it will automatically keep dependent resources alive.
+//!
+//! `wgpu` uses the coordinate systems of D3D and Metal. Depth ranges from [0, 1].
+//!
+//! | Render                | Texture                |
+//! | --------------------- | ---------------------- |
+//! | ![render_coordinates] | ![texture_coordinates] |
+//!
+//! `wgpu`'s MSRV is **1.88**.
+//!
+//! [Learn Wgpu]: https://sotrh.github.io/learn-wgpu/
+//! [WebGPU Fundamentals]: https://webgpufundamentals.org/
+//! [render_coordinates]: https://raw.githubusercontent.com/gfx-rs/wgpu/refs/heads/v27/docs/render_coordinates.png
+//! [texture_coordinates]: https://raw.githubusercontent.com/gfx-rs/wgpu/refs/heads/v27/docs/texture_coordinates.png
+//!
+//! ## Extension Specifications
+//!
+//! While the core of `wgpu` is based on the WebGPU standard, we also support extensions that allow for features that the standard does not have yet.
+//! For high-level documentation on how to use these extensions, see documentation on [`Features`] or the relevant specification:
+//!
+//! 🧪EXPERIMENTAL🧪 APIs are subject to change and may allow undefined behavior if used incorrectly.
+//!
+//! - 🧪EXPERIMENTAL🧪 [Ray Tracing](https://github.com/gfx-rs/wgpu/blob/v27/docs/api-specs/ray_tracing.md).
+//! - 🧪EXPERIMENTAL🧪 [Mesh Shading](https://github.com/gfx-rs/wgpu/blob/v27/docs/api-specs/mesh_shading.md).
+//!
+//! ## Shader Support
+//!
+//! `wgpu` can consume shaders in [WGSL](https://gpuweb.github.io/gpuweb/wgsl/), SPIR-V, and GLSL.
+//! Both [HLSL](https://github.com/Microsoft/DirectXShaderCompiler) and [GLSL](https://github.com/KhronosGroup/glslang)
+//! have compilers to target SPIR-V. All of these shader languages can be used with any backend as we handle all of the conversions. Additionally, support for these shader inputs is not going away.
+//!
+//! While WebGPU does not support any shading language other than WGSL, we will automatically convert your
+//! non-WGSL shaders if you're running on WebGPU.
+//!
+//! WGSL is always supported by default, but GLSL and SPIR-V need features enabled to compile in support.
+//!
+//! To enable WGSL shaders, enable the `wgsl` feature of `wgpu` (enabled by default).
+//! To enable SPIR-V shaders, enable the `spirv` feature of `wgpu`.
+//! To enable GLSL shaders, enable the `glsl` feature of `wgpu`.
 //!
 //! ## Feature flags
 #![doc = document_features::document_features!()]
