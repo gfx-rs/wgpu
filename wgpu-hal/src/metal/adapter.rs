@@ -607,7 +607,6 @@ impl super::PrivateCapabilities {
 
         let argument_buffers = device.argument_buffers_support();
 
-        // Lmao
         let is_virtual = device.name().to_lowercase().contains("virtual");
 
         Self {
