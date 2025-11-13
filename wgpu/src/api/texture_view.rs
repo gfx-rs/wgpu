@@ -1,3 +1,6 @@
+#[cfg(wgpu_core)]
+use core::ops::Deref;
+
 use crate::*;
 
 /// Handle to a texture view.
@@ -12,6 +15,7 @@ use crate::*;
 #[derive(Debug, Clone)]
 pub struct TextureView {
     pub(crate) inner: dispatch::DispatchTextureView,
+    pub(crate) texture: Texture,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(TextureView: Send, Sync);
@@ -19,26 +23,62 @@ static_assertions::assert_impl_all!(TextureView: Send, Sync);
 crate::cmp::impl_eq_ord_hash_proxy!(TextureView => .inner);
 
 impl TextureView {
-    /// Returns the inner hal `TextureView` using a callback. The hal texture will be `None` if the
-    /// backend type argument does not match with this wgpu Texture
+    /// Returns the [`Texture`] that this `TextureView` refers to.
+    ///
+    /// All wgpu resources are refcounted, so you can own the returned [`Texture`]
+    /// by cloning it.
+    pub fn texture(&self) -> &Texture {
+        &self.texture
+    }
+
+    /// Get the [`wgpu_hal`] texture view from this `TextureView`.
+    ///
+    /// Find the Api struct corresponding to the active backend in [`wgpu_hal::api`],
+    /// and pass that struct to the to the `A` type parameter.
+    ///
+    /// Returns a guard that dereferences to the type of the hal backend
+    /// which implements [`A::TextureView`].
+    ///
+    /// # Types
+    ///
+    /// The returned type depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("TextureView")]
+    #[doc = crate::hal_type_metal!("TextureView")]
+    #[doc = crate::hal_type_dx12!("TextureView")]
+    #[doc = crate::hal_type_gles!("TextureView")]
+    ///
+    /// # Deadlocks
+    ///
+    /// - The returned guard holds a read-lock on a device-local "destruction"
+    ///   lock, which will cause all calls to `destroy` to block until the
+    ///   guard is released.
+    ///
+    /// # Errors
+    ///
+    /// This method will return None if:
+    /// - The texture view is not from the backend specified by `A`.
+    /// - The texture view is from the `webgpu` or `custom` backend.
+    /// - The texture this view points to has had [`Texture::destroy()`] called on it.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal `TextureView` must not be manually destroyed
+    /// - The returned resource must not be destroyed unless the guard
+    ///   is the last reference to it and it is not in use by the GPU.
+    ///   The guard and handle may be dropped at any time however.
+    /// - All the safety requirements of wgpu-hal must be upheld.
+    ///
+    /// [`A::TextureView`]: hal::Api::TextureView
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::TextureView>) -> R, R>(
-        &self,
-        hal_texture_view_callback: F,
-    ) -> R {
-        if let Some(core_view) = self.inner.as_core_opt() {
-            unsafe {
-                core_view
-                    .context
-                    .texture_view_as_hal::<A, F, R>(core_view, hal_texture_view_callback)
-            }
-        } else {
-            hal_texture_view_callback(None)
-        }
+    pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<impl Deref<Target = A::TextureView>> {
+        let view = self.inner.as_core_opt()?;
+        unsafe { view.context.texture_view_as_hal::<A>(view) }
+    }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of TextureView (if custom backend and is internally T)
+    pub fn as_custom<T: custom::TextureViewInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
     }
 }
 

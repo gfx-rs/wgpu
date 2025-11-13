@@ -17,6 +17,14 @@ static_assertions::assert_impl_all!(BindGroup: Send, Sync);
 
 crate::cmp::impl_eq_ord_hash_proxy!(BindGroup => .inner);
 
+impl BindGroup {
+    #[cfg(custom)]
+    /// Returns custom implementation of BindGroup (if custom backend and is internally T)
+    pub fn as_custom<T: custom::BindGroupInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
+}
+
 /// Resource to be bound by a [`BindGroup`] for use with a pipeline.
 ///
 /// The pipeline’s [`BindGroupLayout`] must contain a matching [`BindingType`].
@@ -73,6 +81,12 @@ pub enum BindingResource<'a> {
     ///   built using `build_acceleration_structures` a validation error is generated otherwise this is a part of the
     ///   safety section of `build_acceleration_structures_unsafe_tlas` and so undefined behavior occurs.
     AccelerationStructure(&'a Tlas),
+    /// Binding is backed by an external texture.
+    ///
+    /// [`Features::EXTERNAL_TEXTURE`] must be supported to use this feature.
+    ///
+    /// Corresponds to [`wgt::BindingType::ExternalTexture`].
+    ExternalTexture(&'a ExternalTexture),
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(BindingResource<'_>: Send, Sync);

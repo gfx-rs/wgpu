@@ -196,6 +196,8 @@ impl SurfaceWrapper {
             config.format = format;
             config.view_formats.push(format);
         };
+        config.present_mode = wgpu::PresentMode::Immediate;
+        config.desired_maximum_frame_latency = 3;
 
         surface.configure(&context.device, &config);
         self.config = Some(config);
@@ -247,7 +249,7 @@ impl SurfaceWrapper {
         }
     }
 
-    fn get(&self) -> Option<&Surface> {
+    fn get(&self) -> Option<&'_ Surface<'static>> {
         self.surface.as_ref()
     }
 
@@ -268,9 +270,9 @@ impl ExampleContext {
     async fn init_async<E: Example>(surface: &mut SurfaceWrapper, window: Arc<Window>) -> Self {
         log::info!("Initializing wgpu...");
 
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::from_env_or_default());
+        let instance_descriptor = wgpu::InstanceDescriptor::from_env_or_default();
+        let instance = wgpu::Instance::new(&instance_descriptor);
         surface.pre_adapter(&instance, window);
-
         let adapter = get_adapter_with_capabilities_or_from_env(
             &instance,
             &E::required_features(),
@@ -287,6 +289,7 @@ impl ExampleContext {
                 required_features: (E::optional_features() & adapter.features())
                     | E::required_features(),
                 required_limits: needed_limits,
+                experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
                 memory_hints: wgpu::MemoryHints::MemoryUsage,
                 trace: match std::env::var_os("WGPU_TRACE") {
                     Some(path) => wgpu::Trace::Directory(path.into()),
@@ -328,7 +331,7 @@ impl FrameCounter {
             let elapsed_ms = elapsed_secs * 1000.0;
             let frame_time = elapsed_ms / self.frame_count as f32;
             let fps = self.frame_count as f32 / elapsed_secs;
-            log::info!("Frame time {:.2}ms ({:.1} FPS)", frame_time, fps);
+            log::info!("Frame time {frame_time:.2}ms ({fps:.1} FPS)");
 
             self.last_printed_instant = new_instant;
             self.frame_count = 0;
@@ -596,7 +599,9 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
 
                 let dst_buffer_slice = dst_buffer.slice(..);
                 dst_buffer_slice.map_async(wgpu::MapMode::Read, |_| ());
-                ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+                ctx.async_poll(wgpu::PollType::wait_indefinitely())
+                    .await
+                    .unwrap();
                 let bytes = dst_buffer_slice.get_mapped_range().to_vec();
 
                 wgpu_test::image::compare_image_output(

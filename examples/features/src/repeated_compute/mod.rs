@@ -13,9 +13,11 @@ async fn run() {
     let mut numbers = [0u32; 256];
     let context = WgpuContext::new(size_of_val(&numbers)).await;
 
+    let mut rand = nanorand::WyRand::new();
+
     for _ in 0..10 {
         for p in numbers.iter_mut() {
-            *p = nanorand::tls_rng().generate::<u16>() as u32;
+            *p = rand.generate::<u16>() as u32;
         }
 
         compute(&mut numbers, &context).await;
@@ -103,7 +105,10 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     // One of those can be calling `Device::poll`. This isn't necessary on the web as devices
     // are polled automatically but natively, we need to make sure this happens manually.
     // `PollType::Wait` will cause the thread to wait on native but not on WebGpu.
-    context.device.poll(wgpu::PollType::wait()).unwrap();
+    context
+        .device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
     log::info!("Device polled.");
     // Now we await the receiving and panic if anything went wrong because we're lazy.
     receiver.recv_async().await.unwrap().unwrap();
@@ -162,6 +167,7 @@ impl WgpuContext {
                 label: None,
                 required_features: wgpu::Features::empty(),
                 required_limits: wgpu::Limits::downlevel_defaults(),
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 memory_hints: wgpu::MemoryHints::Performance,
                 trace: wgpu::Trace::Off,
             })

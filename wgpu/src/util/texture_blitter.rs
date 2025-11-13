@@ -130,7 +130,7 @@ impl<'a> TextureBlitterBuilder<'a> {
                         write_mask: ColorWrites::ALL,
                     })],
                 }),
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
 
@@ -199,6 +199,7 @@ impl TextureBlitter {
             label: Some("wgpu::util::TextureBlitter::pass"),
             color_attachments: &[Some(crate::RenderPassColorAttachment {
                 view: target,
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgt::Operations {
                     load: LoadOp::Load,
@@ -208,6 +209,7 @@ impl TextureBlitter {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
         pass.set_pipeline(&self.pipeline);
         pass.set_bind_group(0, &bind_group, &[]);

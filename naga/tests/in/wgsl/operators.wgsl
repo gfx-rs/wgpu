@@ -160,6 +160,14 @@ fn arithmetic() {
     let mul_vector1 = vec3f(two_f) * mat4x3f();
 
     let mul = mat4x3<f32>() * mat3x4<f32>();
+
+    // Arithmetic involving the minimum value i32 literal. What we're really testing here
+    // is how this literal is expressed by Naga backends. eg in Metal, `-2147483648` is
+    // silently promoted to a `long` which we don't want. The addition ensures this would
+    // be caught as a compiler error, as we bitcast the operands to unsigned which fails
+    // if the expression's type has an unexpected width.
+    var prevent_const_eval: i32;
+    var wgpu_7437 = prevent_const_eval + -2147483648;
 }
 
 fn bit() {
@@ -279,19 +287,6 @@ fn assignment() {
     vec0[one_i]--;
 }
 
-@compute @workgroup_size(1)
-fn main(@builtin(workgroup_id) id: vec3<u32>) {
-    builtins();
-    splat(f32(id.x), i32(id.y));
-    bool_cast(v_f32_one.xyz);
-
-    logical();
-    arithmetic();
-    bit();
-    comparison();
-    assignment();
-}
-
 fn negation_avoids_prefix_decrement() {
     let i = 1;
     let i0 = -i;
@@ -313,3 +308,20 @@ fn negation_avoids_prefix_decrement() {
     let f6 = - - -(- -f);
     let f7 = (- - - - -f);
 }
+
+@compute @workgroup_size(1)
+fn main(@builtin(workgroup_id) id: vec3<u32>) {
+    builtins();
+    splat(f32(id.x), i32(id.y));
+    splat_assignment();
+    bool_cast(v_f32_one.xyz);
+
+    logical();
+    arithmetic();
+    bit();
+    comparison();
+    assignment();
+
+    negation_avoids_prefix_decrement();
+}
+

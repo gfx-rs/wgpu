@@ -2035,8 +2035,10 @@ impl MacroCall {
             )?,
             MacroCall::Barrier => {
                 ctx.emit_restart();
-                ctx.body
-                    .push(crate::Statement::Barrier(crate::Barrier::all()), meta);
+                ctx.body.push(
+                    crate::Statement::ControlBarrier(crate::Barrier::all()),
+                    meta,
+                );
                 return Ok(None);
             }
             MacroCall::SmoothStep { splatted } => {
@@ -2083,6 +2085,7 @@ fn texture_call(
                 offset,
                 level,
                 depth_ref: comps.depth_ref,
+                clamp_to_edge: false,
             },
             meta,
         )?)
@@ -2135,6 +2138,7 @@ impl Frontend {
                 ImageClass::Depth { .. } => (true, false),
                 ImageClass::Storage { .. } => (false, true),
                 ImageClass::Sampled { .. } => (false, false),
+                ImageClass::External => unreachable!(),
             };
 
             let coordinate = match (image_size, coord_size) {
@@ -2256,6 +2260,7 @@ pub fn sampled_to_depth(
                 kind: ErrorKind::SemanticError("Not a texture".into()),
                 meta,
             }),
+            ImageClass::External => unreachable!(),
         },
         _ => errors.push(Error {
             kind: ErrorKind::SemanticError("Not a texture".into()),

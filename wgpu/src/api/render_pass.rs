@@ -1,6 +1,9 @@
-use core::ops::Range;
+use core::{num::NonZeroU32, ops::Range};
 
-use crate::*;
+use crate::{
+    api::{impl_deferred_command_buffer_actions, SharedDeferredCommandBufferActions},
+    *,
+};
 pub use wgt::{LoadOp, Operations, StoreOp};
 
 /// In-progress recording of a render pass: a list of render commands in a [`CommandEncoder`].
@@ -24,6 +27,7 @@ pub use wgt::{LoadOp, Operations, StoreOp};
 #[derive(Debug)]
 pub struct RenderPass<'encoder> {
     pub(crate) inner: dispatch::DispatchRenderPass,
+    pub(crate) actions: SharedDeferredCommandBufferActions,
 
     /// This lifetime is used to protect the [`CommandEncoder`] from being used
     /// while the pass is alive. This needs to be PhantomDrop to prevent the lifetime
@@ -52,6 +56,7 @@ impl RenderPass<'_> {
     pub fn forget_lifetime(self) -> RenderPass<'static> {
         RenderPass {
             inner: self.inner,
+            actions: self.actions,
             _encoder_guard: crate::api::PhantomDrop::default(),
         }
     }
@@ -100,7 +105,7 @@ impl RenderPass<'_> {
             &buffer_slice.buffer.inner,
             index_format,
             buffer_slice.offset,
-            buffer_slice.size,
+            Some(buffer_slice.size),
         );
     }
 
@@ -121,7 +126,7 @@ impl RenderPass<'_> {
             slot,
             &buffer_slice.buffer.inner,
             buffer_slice.offset,
-            buffer_slice.size,
+            Some(buffer_slice.size),
         );
     }
 
@@ -226,19 +231,44 @@ impl RenderPass<'_> {
         self.inner.draw_indexed(indices, base_vertex, instances);
     }
 
+    /// Draws using a mesh pipeline.
+    ///
+    /// The current pipeline must be a mesh pipeline.
+    ///
+    /// If the current pipeline has a task shader, run it with an workgroup for
+    /// every `vec3<u32>(i, j, k)` where `i`, `j`, and `k` are between `0` and
+    /// `group_count_x`, `group_count_y`, and `group_count_z`. The invocation with
+    /// index zero in each group is responsible for determining the mesh shader dispatch.
+    /// Its return value indicates the number of workgroups of mesh shaders to invoke. It also
+    /// passes a payload value for them to consume. Because each task workgroup is essentially
+    /// a mesh shader draw call, mesh workgroups dispatched by different task workgroups
+    /// cannot interact in any way, and `workgroup_id` corresponds to its location in the
+    /// calling specific task shader's dispatch group.
+    ///
+    /// If the current pipeline lacks a task shader, run its mesh shader with a
+    /// workgroup for every `vec3<u32>(i, j, k)` where `i`, `j`, and `k` are
+    /// between `0` and `group_count_x`, `group_count_y`, and `group_count_z`.
+    ///
+    /// Each mesh shader workgroup outputs a set of vertices and indices for primitives.
+    /// The indices outputted correspond to the vertices outputted by that same workgroup;
+    /// there is no global vertex buffer. These primitives are passed to the rasterizer and
+    /// essentially treated like a vertex shader output, except that the mesh shader may
+    /// choose to cull specific primitives or pass per-primitive non-interpolated values
+    /// to the fragment shader. As such, each primitive is then rendered with the current
+    /// pipeline's fragment shader, if present. Otherwise, [No Color Output mode] is used.
+    ///
+    /// [No Color Output mode]: https://www.w3.org/TR/webgpu/#no-color-output
+    pub fn draw_mesh_tasks(&mut self, group_count_x: u32, group_count_y: u32, group_count_z: u32) {
+        self.inner
+            .draw_mesh_tasks(group_count_x, group_count_y, group_count_z);
+    }
+
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     ///
     /// This is like calling [`RenderPass::draw`] but the contents of the call are specified in the `indirect_buffer`.
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     ///
-    /// Indirect drawing has some caveats depending on the features available. We are not currently able to validate
-    /// these and issue an error.
-    /// - If [`Features::INDIRECT_FIRST_INSTANCE`] is not present on the adapter,
-    ///   [`DrawIndirectArgs::first_instance`](crate::util::DrawIndirectArgs::first_instance) will be ignored.
-    /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW`] is not present on the adapter,
-    ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
-    ///
-    /// See details on the individual flags for more information.
+    /// Calling this requires the device support [`DownlevelFlags::INDIRECT_EXECUTION`].
     pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
         self.inner
             .draw_indirect(&indirect_buffer.inner, indirect_offset);
@@ -250,14 +280,7 @@ impl RenderPass<'_> {
     /// This is like calling [`RenderPass::draw_indexed`] but the contents of the call are specified in the `indirect_buffer`.
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     ///
-    /// Indirect drawing has some caveats depending on the features available. We are not currently able to validate
-    /// these and issue an error.
-    /// - If [`Features::INDIRECT_FIRST_INSTANCE`] is not present on the adapter,
-    ///   [`DrawIndexedIndirectArgs::first_instance`](crate::util::DrawIndexedIndirectArgs::first_instance) will be ignored.
-    /// - If [`DownlevelFlags::VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW`] is not present on the adapter,
-    ///   any use of `@builtin(vertex_index)` or `@builtin(instance_index)` in the vertex shader will have different values.
-    ///
-    /// See details on the individual flags for more information.
+    /// Calling this requires the device support [`DownlevelFlags::INDIRECT_EXECUTION`].
     pub fn draw_indexed_indirect(
         &mut self,
         indirect_buffer: &Buffer,
@@ -266,6 +289,27 @@ impl RenderPass<'_> {
         self.inner
             .draw_indexed_indirect(&indirect_buffer.inner, indirect_offset);
     }
+
+    /// Draws using a mesh pipeline,
+    /// based on the contents of the `indirect_buffer`
+    ///
+    /// This is like calling [`RenderPass::draw_mesh_tasks`] but the contents of the call are specified in the `indirect_buffer`.
+    /// The structure expected in the `indirect_buffer` must conform to [`DispatchIndirectArgs`](crate::util::DispatchIndirectArgs).
+    ///
+    /// Indirect drawing has some caveats depending on the features available. We are not currently able to validate
+    /// these and issue an error.
+    ///
+    /// See details on the individual flags for more information.
+    pub fn draw_mesh_tasks_indirect(
+        &mut self,
+        indirect_buffer: &Buffer,
+        indirect_offset: BufferAddress,
+    ) {
+        self.inner
+            .draw_mesh_tasks_indirect(&indirect_buffer.inner, indirect_offset);
+    }
+
+    impl_deferred_command_buffer_actions!();
 
     /// Execute a [render bundle][RenderBundle], which is a set of pre-recorded commands
     /// that can be run together.
@@ -280,10 +324,7 @@ impl RenderPass<'_> {
 
         self.inner.execute_bundles(&mut render_bundles);
     }
-}
 
-/// [`Features::MULTI_DRAW_INDIRECT`] must be enabled on the device in order to call these functions.
-impl RenderPass<'_> {
     /// Dispatches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     /// `count` draw calls are issued.
     ///
@@ -291,6 +332,8 @@ impl RenderPass<'_> {
     ///
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndirectArgs`](crate::util::DrawIndirectArgs).
     /// These draw structures are expected to be tightly packed.
+    ///
+    /// Calling this requires the device support [`DownlevelFlags::INDIRECT_EXECUTION`].
     ///
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
     /// It is not affected by changes to the state that are performed after it is called.
@@ -313,6 +356,8 @@ impl RenderPass<'_> {
     /// The structure expected in `indirect_buffer` must conform to [`DrawIndexedIndirectArgs`](crate::util::DrawIndexedIndirectArgs).
     /// These draw structures are expected to be tightly packed.
     ///
+    /// Calling this requires the device support [`DownlevelFlags::INDIRECT_EXECUTION`].
+    ///
     /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
     /// It is not affected by changes to the state that are performed after it is called.
     pub fn multi_draw_indexed_indirect(
@@ -323,6 +368,29 @@ impl RenderPass<'_> {
     ) {
         self.inner
             .multi_draw_indexed_indirect(&indirect_buffer.inner, indirect_offset, count);
+    }
+
+    /// Dispatches multiple draw calls based on the contents of the `indirect_buffer`.
+    /// `count` draw calls are issued.
+    ///
+    /// The structure expected in the `indirect_buffer` must conform to [`DispatchIndirectArgs`](crate::util::DispatchIndirectArgs).
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
+    pub fn multi_draw_mesh_tasks_indirect(
+        &mut self,
+        indirect_buffer: &Buffer,
+        indirect_offset: BufferAddress,
+        count: u32,
+    ) {
+        self.inner
+            .multi_draw_mesh_tasks_indirect(&indirect_buffer.inner, indirect_offset, count);
+    }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of RenderPass (if custom backend and is internally T)
+    pub fn as_custom<T: custom::RenderPassInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
     }
 }
 
@@ -400,6 +468,34 @@ impl RenderPass<'_> {
         max_count: u32,
     ) {
         self.inner.multi_draw_indexed_indirect_count(
+            &indirect_buffer.inner,
+            indirect_offset,
+            &count_buffer.inner,
+            count_offset,
+            max_count,
+        );
+    }
+
+    /// Dispatches multiple draw calls based on the contents of the `indirect_buffer`. The count buffer is read to determine how many draws to issue.
+    ///
+    /// The indirect buffer must be long enough to account for `max_count` draws, however only `count`
+    /// draws will be read. If `count` is greater than `max_count`, `max_count` will be used.
+    ///
+    /// The structure expected in the `indirect_buffer` must conform to [`DispatchIndirectArgs`](crate::util::DispatchIndirectArgs).
+    ///
+    /// These draw structures are expected to be tightly packed.
+    ///
+    /// This drawing command uses the current render state, as set by preceding `set_*()` methods.
+    /// It is not affected by changes to the state that are performed after it is called.
+    pub fn multi_draw_mesh_tasks_indirect_count(
+        &mut self,
+        indirect_buffer: &Buffer,
+        indirect_offset: BufferAddress,
+        count_buffer: &Buffer,
+        count_offset: BufferAddress,
+        max_count: u32,
+    ) {
+        self.inner.multi_draw_mesh_tasks_indirect_count(
             &indirect_buffer.inner,
             indirect_offset,
             &count_buffer.inner,
@@ -534,6 +630,8 @@ static_assertions::assert_impl_all!(RenderPassTimestampWrites<'_>: Send, Sync);
 pub struct RenderPassColorAttachment<'tex> {
     /// The view to use as an attachment.
     pub view: &'tex TextureView,
+    /// The depth slice index of a 3D view. It must not be provided if the view is not 3D.
+    pub depth_slice: Option<u32>,
     /// The view that will receive the resolved output if multisampling is used.
     ///
     /// If set, it is always written to, regardless of how [`Self::ops`] is configured.
@@ -582,6 +680,12 @@ pub struct RenderPassDescriptor<'a> {
     pub timestamp_writes: Option<RenderPassTimestampWrites<'a>>,
     /// Defines where the occlusion query results will be stored for this pass.
     pub occlusion_query_set: Option<&'a QuerySet>,
+    /// The mask of multiview image layers to use for this render pass. For example, if you wish
+    /// to render to the first 2 layers, you would use 3=0b11. If you wanted ro render to only the
+    /// 2nd layer, you would use 2=0b10. If you aren't using multiview this should be `None`.
+    ///
+    /// Note that setting bits higher than the number of texture layers is a validation error.
+    pub multiview_mask: Option<NonZeroU32>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(RenderPassDescriptor<'_>: Send, Sync);

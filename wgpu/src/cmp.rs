@@ -13,7 +13,7 @@ use core::{num::NonZeroU64, sync::atomic::Ordering};
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Identifier {
     inner: NonZeroU64,
 }

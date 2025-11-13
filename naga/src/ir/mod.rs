@@ -221,7 +221,7 @@ An override expression can be evaluated at pipeline creation time.
 
 mod block;
 
-use alloc::{string::String, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
 
 #[cfg(feature = "arbitrary")]
 use arbitrary::Arbitrary;
@@ -237,19 +237,27 @@ use crate::{FastIndexMap, NamedExpressions};
 
 pub use block::Block;
 
-/// Early fragment tests.
+/// Explicitly allows early depth/stencil tests.
 ///
-/// In a standard situation, if a driver determines that it is possible to switch on early depth test, it will.
+/// Normally, depth/stencil tests are performed after fragment shading. However, as an optimization,
+/// most drivers will move the depth/stencil tests before fragment shading if this does not
+/// have any observable consequences. This optimization is disabled under the following
+/// circumstances:
+///   - `discard` is called in the fragment shader.
+///   - The fragment shader writes to the depth buffer.
+///   - The fragment shader writes to any storage bindings.
 ///
-/// Typical situations when early depth test is switched off:
-///   - Calling `discard` in a shader.
-///   - Writing to the depth buffer, unless ConservativeDepth is enabled.
+/// When `EarlyDepthTest` is set, it is allowed to perform an early depth/stencil test even if the
+/// above conditions are not met. When [`EarlyDepthTest::Force`] is used, depth/stencil tests
+/// **must** be performed before fragment shading.
 ///
-/// To use in a shader:
+/// To force early depth/stencil tests in a shader:
 ///   - GLSL: `layout(early_fragment_tests) in;`
 ///   - HLSL: `Attribute earlydepthstencil`
 ///   - SPIR-V: `ExecutionMode EarlyFragmentTests`
-///   - WGSL: `@early_depth_test`
+///   - WGSL: `@early_depth_test(force)`
+///
+/// This may also be enabled in a shader by specifying a [`ConservativeDepth`].
 ///
 /// For more, see:
 ///   - <https://www.khronos.org/opengl/wiki/Early_Fragment_Test#Explicit_specification>
@@ -259,8 +267,24 @@ pub use block::Block;
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub struct EarlyDepthTest {
-    pub conservative: Option<ConservativeDepth>,
+pub enum EarlyDepthTest {
+    /// Requires depth/stencil tests to be performed before fragment shading.
+    ///
+    /// This will disable depth/stencil tests after fragment shading, so discarding the fragment
+    /// or overwriting the fragment depth will have no effect.
+    Force,
+
+    /// Allows an additional depth/stencil test to be performed before fragment shading.
+    ///
+    /// It is up to the driver to decide whether early tests are performed. Unlike `Force`, this
+    /// does not disable depth/stencil tests after fragment shading.
+    Allow {
+        /// Specifies restrictions on how the depth value can be modified within the fragment
+        /// shader.
+        ///
+        /// This may be taken into account when deciding whether to perform early tests.
+        conservative: ConservativeDepth,
+    },
 }
 
 /// Enables adjusting depth without disabling early Z.
@@ -296,13 +320,21 @@ pub enum ConservativeDepth {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-#[allow(missing_docs)] // The names are self evident
 pub enum ShaderStage {
+    /// A vertex shader, in a render pipeline.
     Vertex,
-    Fragment,
-    Compute,
+
+    /// A task shader, in a mesh render pipeline.
     Task,
+
+    /// A mesh shader, in a mesh render pipeline.
     Mesh,
+
+    /// A fragment shader, in a render pipeline.
+    Fragment,
+
+    /// Compute pipeline shader.
+    Compute,
 }
 
 /// Addressing space of variables.
@@ -323,8 +355,24 @@ pub enum AddressSpace {
     Storage { access: StorageAccess },
     /// Opaque handles, such as samplers and images.
     Handle,
+
     /// Push constants.
+    ///
+    /// A [`Module`] may contain at most one [`GlobalVariable`] in
+    /// this address space. Its contents are provided not by a buffer
+    /// but by `SetPushConstant` pass commands, allowing the CPU to
+    /// establish different values for each draw/dispatch.
+    ///
+    /// `PushConstant` variables may not contain `f16` values, even if
+    /// the [`SHADER_FLOAT16`] capability is enabled.
+    ///
+    /// Backends generally place tight limits on the size of
+    /// `PushConstant` variables.
+    ///
+    /// [`SHADER_FLOAT16`]: crate::valid::Capabilities::SHADER_FLOAT16
     PushConstant,
+    /// Task shader to mesh shader payload
+    TaskPayload,
 }
 
 /// Built-in inputs and outputs.
@@ -333,36 +381,75 @@ pub enum AddressSpace {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum BuiltIn {
+    /// Written in vertex/mesh shaders, read in fragment shaders
     Position { invariant: bool },
+    /// Read in task, mesh, vertex, and fragment shaders
     ViewIndex,
-    // vertex
+
+    /// Read in vertex shaders
     BaseInstance,
+    /// Read in vertex shaders
     BaseVertex,
+    /// Written in vertex & mesh shaders
     ClipDistance,
+    /// Written in vertex & mesh shaders
     CullDistance,
+    /// Read in vertex shaders
     InstanceIndex,
+    /// Written in vertex & mesh shaders
     PointSize,
+    /// Read in vertex shaders
     VertexIndex,
+    /// Read in vertex & task shaders, or mesh shaders in pipelines without task shaders
     DrawID,
-    // fragment
+
+    /// Written in fragment shaders
     FragDepth,
+    /// Read in fragment shaders
     PointCoord,
+    /// Read in fragment shaders
     FrontFacing,
+    /// Read in fragment shaders, in the future may written in mesh shaders
     PrimitiveIndex,
+    /// Read in fragment shaders
+    Barycentric,
+    /// Read in fragment shaders
     SampleIndex,
+    /// Read or written in fragment shaders
     SampleMask,
-    // compute
+
+    /// Read in compute, task, and mesh shaders
     GlobalInvocationId,
+    /// Read in compute, task, and mesh shaders
     LocalInvocationId,
+    /// Read in compute, task, and mesh shaders
     LocalInvocationIndex,
+    /// Read in compute, task, and mesh shaders
     WorkGroupId,
+    /// Read in compute, task, and mesh shaders
     WorkGroupSize,
+    /// Read in compute, task, and mesh shaders
     NumWorkGroups,
-    // subgroup
+
+    /// Read in compute, task, and mesh shaders
     NumSubgroups,
+    /// Read in compute, task, and mesh shaders
     SubgroupId,
+    /// Read in compute, fragment, task, and mesh shaders
     SubgroupSize,
+    /// Read in compute, fragment, task, and mesh shaders
     SubgroupInvocationId,
+
+    /// Written in task shaders
+    MeshTaskSize,
+    /// Written in mesh shaders
+    CullPrimitive,
+    /// Written in mesh shaders
+    PointIndex,
+    /// Written in mesh shaders
+    LineIndices,
+    /// Written in mesh shaders
+    TriangleIndices,
 }
 
 /// Number of bytes per scalar.
@@ -385,6 +472,18 @@ pub enum VectorSize {
 
 impl VectorSize {
     pub const MAX: usize = Self::Quad as usize;
+}
+
+impl From<VectorSize> for u8 {
+    fn from(size: VectorSize) -> u8 {
+        size as u8
+    }
+}
+
+impl From<VectorSize> for u32 {
+    fn from(size: VectorSize) -> u32 {
+        size as u32
+    }
 }
 
 /// Primitive type for a scalar.
@@ -616,6 +715,8 @@ pub enum ImageClass {
         /// Multi-sampled depth image.
         multi: bool,
     },
+    /// External texture.
+    External,
     /// Storage image.
     Storage {
         format: StorageFormat,
@@ -636,6 +737,15 @@ pub struct Type {
 }
 
 /// Enum with additional information, depending on the kind of type.
+///
+/// Comparison using `==` is not reliable in the case of [`Pointer`],
+/// [`ValuePointer`], or [`Struct`] variants. For these variants,
+/// use [`TypeInner::non_struct_equivalent`] or [`compare_types`].
+///
+/// [`compare_types`]: crate::proc::compare_types
+/// [`ValuePointer`]: TypeInner::ValuePointer
+/// [`Pointer`]: TypeInner::Pointer
+/// [`Struct`]: TypeInner::Struct
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
@@ -656,8 +766,9 @@ pub enum TypeInner {
     /// Pointer to another type.
     ///
     /// Pointers to scalars and vectors should be treated as equivalent to
-    /// [`ValuePointer`] types. Use the [`TypeInner::equivalent`] method to
-    /// compare types in a way that treats pointers correctly.
+    /// [`ValuePointer`] types. Use either [`TypeInner::non_struct_equivalent`]
+    /// or [`compare_types`] to compare types in a way that treats pointers
+    /// correctly.
     ///
     /// ## Pointers to non-`SIZED` types
     ///
@@ -679,6 +790,7 @@ pub enum TypeInner {
     /// [`ValuePointer`]: TypeInner::ValuePointer
     /// [`GlobalVariable`]: Expression::GlobalVariable
     /// [`AccessIndex`]: Expression::AccessIndex
+    /// [`compare_types`]: crate::proc::compare_types
     Pointer {
         base: Handle<Type>,
         space: AddressSpace,
@@ -690,12 +802,13 @@ pub enum TypeInner {
     /// `Scalar` or `Vector` type. This is for use in [`TypeResolution::Value`]
     /// variants; see the documentation for [`TypeResolution`] for details.
     ///
-    /// Use the [`TypeInner::equivalent`] method to compare types that could be
-    /// pointers, to ensure that `Pointer` and `ValuePointer` types are
-    /// recognized as equivalent.
+    /// Use [`TypeInner::non_struct_equivalent`] or [`compare_types`] to compare
+    /// types that could be pointers, to ensure that `Pointer` and
+    /// `ValuePointer` types are recognized as equivalent.
     ///
     /// [`TypeResolution`]: crate::proc::TypeResolution
     /// [`TypeResolution::Value`]: crate::proc::TypeResolution::Value
+    /// [`compare_types`]: crate::proc::compare_types
     ValuePointer {
         size: Option<VectorSize>,
         scalar: Scalar,
@@ -744,9 +857,15 @@ pub enum TypeInner {
     /// struct, which may be a dynamically sized [`Array`]. The
     /// `Struct` type itself is `SIZED` when all its members are `SIZED`.
     ///
+    /// Two structure types with different names are not equivalent. Because
+    /// this variant does not contain the name, it is not possible to use it
+    /// to compare struct types. Use [`compare_types`] to compare two types
+    /// that may be structs.
+    ///
     /// [`DATA`]: crate::valid::TypeFlags::DATA
     /// [`SIZED`]: crate::∅TypeFlags::SIZED
     /// [`Array`]: TypeInner::Array
+    /// [`compare_types`]: crate::proc::compare_types
     Struct {
         members: Vec<StructMember>,
         //TODO: should this be unaligned?
@@ -875,6 +994,9 @@ pub enum Binding {
 
     /// Indexed location.
     ///
+    /// This is a value passed to a [`Fragment`] shader from a [`Vertex`] or
+    /// [`Mesh`] shader.
+    ///
     /// Values passed from the [`Vertex`] stage to the [`Fragment`] stage must
     /// have their `interpolation` defaulted (i.e. not `None`) by the front end
     /// as appropriate for that language.
@@ -888,14 +1010,30 @@ pub enum Binding {
     /// interpolation must be `Flat`.
     ///
     /// [`Vertex`]: crate::ShaderStage::Vertex
+    /// [`Mesh`]: crate::ShaderStage::Mesh
     /// [`Fragment`]: crate::ShaderStage::Fragment
     Location {
         location: u32,
         interpolation: Option<Interpolation>,
         sampling: Option<Sampling>,
+
         /// Optional `blend_src` index used for dual source blending.
         /// See <https://www.w3.org/TR/WGSL/#attribute-blend_src>
         blend_src: Option<u32>,
+
+        /// Whether the binding is a per-primitive binding for use with mesh shaders.
+        ///
+        /// This must be `true` if this binding is a mesh shader primitive output, or such
+        /// an output's corresponding fragment shader input. It must be `false` otherwise.
+        ///
+        /// A stage's outputs must all have unique `location` numbers, regardless of
+        /// whether they are per-primitive; a mesh shader's per-vertex and per-primitive
+        /// outputs share the same location numbering space.
+        ///
+        /// Per-primitive values are not interpolated at all and are not dependent on the
+        /// vertices or pixel location. For example, it may be used to store a
+        /// non-interpolated normal vector.
+        per_primitive: bool,
     },
 }
 
@@ -1130,6 +1268,8 @@ pub enum MathFunction {
     Pow,
     // geometry
     Dot,
+    Dot4I8Packed,
+    Dot4U8Packed,
     Outer,
     Cross,
     Distance,
@@ -1167,6 +1307,8 @@ pub enum MathFunction {
     Pack2x16float,
     Pack4xI8,
     Pack4xU8,
+    Pack4xI8Clamp,
+    Pack4xU8Clamp,
     // data unpacking
     Unpack4x8snorm,
     Unpack4x8unorm,
@@ -1257,6 +1399,20 @@ pub enum GatherMode {
     ShuffleUp(Handle<Expression>),
     /// Each gathers from their lane xored with the given by the expression
     ShuffleXor(Handle<Expression>),
+    /// All gather from the same quad lane at the index given by the expression
+    QuadBroadcast(Handle<Expression>),
+    /// Each gathers from the opposite quad lane along the given direction
+    QuadSwap(Direction),
+}
+
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum Direction {
+    X = 0,
+    Y = 1,
+    Diagonal = 2,
 }
 
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -1449,6 +1605,10 @@ pub enum Expression {
         offset: Option<Handle<Expression>>,
         level: SampleLevel,
         depth_ref: Option<Handle<Expression>>,
+        /// Whether the sampling operation should clamp each component of
+        /// `coordinate` to the range `[half_texel, 1 - half_texel]`, regardless
+        /// of `sampler`.
+        clamp_to_edge: bool,
     },
 
     /// Load a texel from an image.
@@ -1632,10 +1792,12 @@ pub enum Expression {
         query: Handle<Expression>,
         committed: bool,
     },
+
     /// Result of a [`SubgroupBallot`] statement.
     ///
     /// [`SubgroupBallot`]: Statement::SubgroupBallot
     SubgroupBallotResult,
+
     /// Result of a [`SubgroupCollectiveOperation`] or [`SubgroupGather`] statement.
     ///
     /// [`SubgroupCollectiveOperation`]: Statement::SubgroupCollectiveOperation
@@ -1856,7 +2018,12 @@ pub enum Statement {
     /// Synchronize invocations within the work group.
     /// The `Barrier` flags control which memory accesses should be synchronized.
     /// If empty, this becomes purely an execution barrier.
-    Barrier(Barrier),
+    ControlBarrier(Barrier),
+
+    /// Synchronize invocations within the work group.
+    /// The `Barrier` flags control which memory accesses should be synchronized.
+    MemoryBarrier(Barrier),
+
     /// Stores a value at an address.
     ///
     /// For [`TypeInner::Atomic`] type behind the pointer, the value
@@ -2044,6 +2211,8 @@ pub enum Statement {
         /// The specific operation we're performing on `query`.
         fun: RayQueryFunction,
     },
+    /// A mesh shader intrinsic.
+    MeshFunction(MeshFunction),
     /// Calculate a bitmask using a boolean from each active thread in the subgroup
     SubgroupBallot {
         /// The [`SubgroupBallotResult`] expression representing this load's result.
@@ -2217,6 +2386,12 @@ pub struct EntryPoint {
     pub workgroup_size_overrides: Option<[Option<Handle<Expression>>; 3]>,
     /// The entrance function.
     pub function: Function,
+    /// Information for [`Mesh`] shaders.
+    ///
+    /// [`Mesh`]: ShaderStage::Mesh
+    pub mesh_info: Option<MeshStageInfo>,
+    /// The unique global variable used as a task payload from task shader to mesh shader
+    pub task_payload: Option<Handle<GlobalVariable>>,
 }
 
 /// Return types predeclared for the frexp, modf, and atomicCompareExchangeWeak built-in functions.
@@ -2262,6 +2437,51 @@ pub struct SpecialTypes {
     ///
     /// Call [`Module::generate_vertex_return_type`]
     pub ray_vertex_return: Option<Handle<Type>>,
+
+    /// Struct containing parameters required by some backends to emit code for
+    /// [`ImageClass::External`] textures.
+    ///
+    /// See `wgpu_core::device::resource::ExternalTextureParams` for the
+    /// documentation of each field.
+    ///
+    /// In WGSL, this type would be:
+    ///
+    /// ```ignore
+    /// struct NagaExternalTextureParams {         // align size offset
+    ///     yuv_conversion_matrix: mat4x4<f32>,    //    16   64      0
+    ///     gamut_conversion_matrix: mat3x3<f32>,  //    16   48     64
+    ///     src_tf: NagaExternalTextureTransferFn, //     4   16    112
+    ///     dst_tf: NagaExternalTextureTransferFn, //     4   16    128
+    ///     sample_transform: mat3x2<f32>,         //     8   24    144
+    ///     load_transform: mat3x2<f32>,           //     8   24    168
+    ///     size: vec2<u32>,                       //     8    8    192
+    ///     num_planes: u32,                       //     4    4    200
+    /// }                            // whole struct:    16  208
+    /// ```
+    ///
+    /// Call [`Module::generate_external_texture_types`] to populate this if
+    /// needed.
+    pub external_texture_params: Option<Handle<Type>>,
+
+    /// Struct describing a gamma encoding transfer function. Member of
+    /// `NagaExternalTextureParams`, describing how the backend should perform
+    /// color space conversion when sampling from [`ImageClass::External`]
+    /// textures.
+    ///
+    /// In WGSL, this type would be:
+    ///
+    /// ```ignore
+    /// struct NagaExternalTextureTransferFn { // align size offset
+    ///     a: f32,                            //     4    4      0
+    ///     b: f32,                            //     4    4      4
+    ///     g: f32,                            //     4    4      8
+    ///     k: f32,                            //     4    4     12
+    /// }                         // whole struct:    4   16
+    /// ```
+    ///
+    /// Call [`Module::generate_external_texture_types`] to populate this if
+    /// needed.
+    pub external_texture_transfer_function: Option<Handle<Type>>,
 
     /// Types for predeclared wgsl types instantiated on demand.
     ///
@@ -2324,6 +2544,88 @@ pub enum RayQueryIntersection {
     /// Intersecting with Axis Aligned Bounding Boxes.
     /// Matches `RayQueryCandidateIntersectionAABBKHR`.
     Aabb = 3,
+}
+
+/// Doc comments preceding items.
+///
+/// These can be used to generate automated documentation,
+/// IDE hover information or translate shaders with their context comments.
+#[derive(Debug, Default, Clone)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub struct DocComments {
+    pub types: FastIndexMap<Handle<Type>, Vec<String>>,
+    // The key is:
+    // - key.0: the handle to the Struct
+    // - key.1: the index of the `StructMember`.
+    pub struct_members: FastIndexMap<(Handle<Type>, usize), Vec<String>>,
+    pub entry_points: FastIndexMap<usize, Vec<String>>,
+    pub functions: FastIndexMap<Handle<Function>, Vec<String>>,
+    pub constants: FastIndexMap<Handle<Constant>, Vec<String>>,
+    pub global_variables: FastIndexMap<Handle<GlobalVariable>, Vec<String>>,
+    // Top level comments, appearing before any space.
+    pub module: Vec<String>,
+}
+
+/// The output topology for a mesh shader. Note that mesh shaders don't allow things like triangle-strips.
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum MeshOutputTopology {
+    /// Outputs individual vertices to be rendered as points.
+    Points,
+    /// Outputs groups of 2 vertices to be renderedas lines .
+    Lines,
+    /// Outputs groups of 3 vertices to be rendered as triangles.
+    Triangles,
+}
+
+/// Information specific to mesh shader entry points.
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+#[allow(dead_code)]
+pub struct MeshStageInfo {
+    /// The type of primitive outputted.
+    pub topology: MeshOutputTopology,
+    /// The maximum number of vertices a mesh shader may output.
+    pub max_vertices: u32,
+    /// If pipeline constants are used, the expressions that override `max_vertices`
+    pub max_vertices_override: Option<Handle<Expression>>,
+    /// The maximum number of primitives a mesh shader may output.
+    pub max_primitives: u32,
+    /// If pipeline constants are used, the expressions that override `max_primitives`
+    pub max_primitives_override: Option<Handle<Expression>>,
+    /// The type used by vertex outputs, i.e. what is passed to `setVertex`.
+    pub vertex_output_type: Handle<Type>,
+    /// The type used by primitive outputs, i.e. what is passed to `setPrimitive`.
+    pub primitive_output_type: Handle<Type>,
+}
+
+/// Mesh shader intrinsics
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum MeshFunction {
+    /// Sets the number of vertices and primitives that will be outputted.
+    SetMeshOutputs {
+        vertex_count: Handle<Expression>,
+        primitive_count: Handle<Expression>,
+    },
+    /// Sets the output vertex at a given index.
+    SetVertex {
+        index: Handle<Expression>,
+        value: Handle<Expression>,
+    },
+    /// Sets the output primitive at a given index.
+    SetPrimitive {
+        index: Handle<Expression>,
+        value: Handle<Expression>,
+    },
 }
 
 /// Shader module.
@@ -2411,4 +2713,6 @@ pub struct Module {
     /// See [`DiagnosticFilterNode`] for details on how the tree is represented and used in
     /// validation.
     pub diagnostic_filter_leaf: Option<Handle<DiagnosticFilterNode>>,
+    /// Doc comments.
+    pub doc_comments: Option<Box<DocComments>>,
 }

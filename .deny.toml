@@ -1,35 +1,49 @@
 [bans]
 multiple-versions = "deny"
 skip-tree = [
-    # We never enable loom in any of our dependencies but it causes dupes
-    { name = "loom", version = "0.7.2" },
     { name = "windows-sys", version = "0.45" },
     { name = "winit", version = "0.29" },
-    { name = "rustc_version", version = "0.2.3" },
-    { name = "miniz_oxide", version = "0.7.4" },
+    { name = "rustc-hash", version = "1.1.0" },
 
     # introduced by Deno, to be investigated
-    { name = "strum_macros", version = "0.25.3" },
     { name = "petgraph", version = "0.6.5" },
-    { name = "base64-simd", version = "0.7.0" },
-    { name = "bit-set", version = "0.5.3" },
-    { name = "bit-vec", version = "0.6.3" },
-    { name = "capacity_builder", version = "0.1.3" },
-    { name = "itertools", version = "0.10.5" },
 ]
 skip = [
-    # Strum uses an old version
-    { name = "heck", version = "0.4.0" },
+    # Flume uses an old version
+    { name = "nanorand", version = "0.7.0" },
+
     # Deno uses an old version
-    { name = "strum", version = "0.25.0" },
+    { name = "bincode", version = "1.3.3" },
+    { name = "which", version = "6.0.3" },
+
+    # Winit uses an old version
+    { name = "windows-sys", version = "0.52.0" },
+
+    # Loom uses a new windows version
+    { name = "windows", version = "0.61.1" },
+    { name = "windows-core", version = "0.61.2" },
+    { name = "windows-implement", version = "0.60.0" },
+    { name = "windows-interface", version = "0.59.1" },
+    { name = "windows-result", version = "0.3.4" },
+    { name = "windows-strings", version = "0.4.2" },
 ]
 wildcards = "deny"
 allow-wildcard-paths = true
 
 [advisories]
-# `paste` crate is no longer maintained https://rustsec.org/advisories/RUSTSEC-2024-0436
-# It's a dependency of `metal` (which is to be replaced with `objc2`) and a transitive dependency of `deno`.
-ignore = ["RUSTSEC-2024-0436"]
+ignore = [
+    # `paste` crate is no longer maintained https://rustsec.org/advisories/RUSTSEC-2024-0436
+    # It's a dependency of `metal` (which is to be replaced with `objc2-metal`), and a
+    # transitive dependency of `deno`. https://github.com/gfx-rs/wgpu/issues/7873
+    "RUSTSEC-2024-0436",
+    # `unic-*` crates are no longer maintained https://rustsec.org/advisories/RUSTSEC-2025-0100
+    # These are used via `deno`. https://github.com/gfx-rs/wgpu/issues/8393
+    "RUSTSEC-2025-0075",
+    "RUSTSEC-2025-0080",
+    "RUSTSEC-2025-0081",
+    "RUSTSEC-2025-0098",
+    "RUSTSEC-2025-0100",
+]
 
 [licenses]
 allow = [
@@ -42,7 +56,6 @@ allow = [
     "MPL-2.0",
     "MIT",
     "MIT-0",
-    "Unicode-DFS-2016",
     "Unicode-3.0",
     "Zlib",
 ]
@@ -50,11 +63,11 @@ private = { ignore = true }
 
 [sources]
 allow-git = [
-    # Waiting on releases; used in examples only
+    # Waiting on releases; used in examples/tests only
 ]
 unknown-registry = "deny"
 unknown-git = "deny"
 required-git-spec = "rev"
 
 [sources.allow-org]
-github = ["gfx-rs"]
+github = []

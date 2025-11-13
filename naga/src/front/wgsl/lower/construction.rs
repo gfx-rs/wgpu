@@ -167,11 +167,25 @@ impl<'source> Lowerer<'source, '_> {
             // Empty constructor
             (Components::None, dst_ty) => match dst_ty {
                 Constructor::Type((result_ty, _)) => {
-                    return ctx.append_expression(crate::Expression::ZeroValue(result_ty), span)
+                    expr = crate::Expression::ZeroValue(result_ty);
                 }
-                Constructor::PartialVector { .. }
-                | Constructor::PartialMatrix { .. }
-                | Constructor::PartialArray => {
+                Constructor::PartialVector { size } => {
+                    // vec2(), vec3(), vec4() return vectors of abstractInts; the same
+                    // is not true of the similar constructors for matrices or arrays.
+                    // See https://www.w3.org/TR/WGSL/#vec2-builtin et seq.
+                    let result_ty = ctx.module.types.insert(
+                        crate::Type {
+                            name: None,
+                            inner: crate::TypeInner::Vector {
+                                size,
+                                scalar: crate::Scalar::ABSTRACT_INT,
+                            },
+                        },
+                        span,
+                    );
+                    expr = crate::Expression::ZeroValue(result_ty);
+                }
+                Constructor::PartialMatrix { .. } | Constructor::PartialArray => {
                     // We have no arguments from which to infer the result type, so
                     // partial constructors aren't acceptable here.
                     return Err(Box::new(Error::TypeNotInferable(ty_span)));
@@ -536,8 +550,14 @@ impl<'source> Lowerer<'source, '_> {
             // ERRORS
 
             // Bad conversion (type cast)
-            (Components::One { span, ty_inner, .. }, constructor) => {
-                let from_type = ctx.type_inner_to_string(ty_inner);
+            (
+                Components::One {
+                    span, component, ..
+                },
+                constructor,
+            ) => {
+                let component_ty = &ctx.typifier()[component];
+                let from_type = ctx.type_resolution_to_string(component_ty);
                 return Err(Box::new(Error::BadTypeCast {
                     span,
                     from_type,

@@ -29,11 +29,14 @@ pub use analyzer::{ExpressionInfo, FunctionInfo, GlobalUse, Uniformity, Uniformi
 pub use compose::ComposeError;
 pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
-pub use function::{CallError, FunctionError, LocalVariableError};
+pub use function::{CallError, FunctionError, LocalVariableError, SubgroupError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
 pub use r#type::{Disalignment, PushConstantError, TypeError, TypeFlags, WidthError};
 
 use self::handles::InvalidHandleError;
+
+/// Maximum size of a type, in bytes.
+pub const MAX_TYPE_SIZE: u32 = 0x4000_0000; // 1GB
 
 bitflags::bitflags! {
     /// Validation flags.
@@ -128,13 +131,26 @@ bitflags::bitflags! {
         const CUBE_ARRAY_TEXTURES = 1 << 15;
         /// Support for 64-bit signed and unsigned integers.
         const SHADER_INT64 = 1 << 16;
-        /// Support for subgroup operations.
-        /// Implies support for subgroup operations in both fragment and compute stages,
-        /// but not necessarily in the vertex stage, which requires [`Capabilities::SUBGROUP_VERTEX_STAGE`].
+        /// Support for subgroup operations (except barriers) in fragment and compute shaders.
+        ///
+        /// Subgroup operations in the vertex stage require
+        /// [`Capabilities::SUBGROUP_VERTEX_STAGE`] in addition to `Capabilities::SUBGROUP`.
+        /// (But note that `create_validator` automatically sets
+        /// `Capabilities::SUBGROUP` whenever `Features::SUBGROUP_VERTEX` is
+        /// available.)
+        ///
+        /// Subgroup barriers require [`Capabilities::SUBGROUP_BARRIER`] in addition to
+        /// `Capabilities::SUBGROUP`.
         const SUBGROUP = 1 << 17;
-        /// Support for subgroup barriers.
+        /// Support for subgroup barriers in compute shaders.
+        ///
+        /// Requires [`Capabilities::SUBGROUP`]. Without it, enables nothing.
         const SUBGROUP_BARRIER = 1 << 18;
-        /// Support for subgroup operations in the vertex stage.
+        /// Support for subgroup operations (not including barriers) in the vertex stage.
+        ///
+        /// Without [`Capabilities::SUBGROUP`], enables nothing. (But note that
+        /// `create_validator` automatically sets `Capabilities::SUBGROUP`
+        /// whenever `Features::SUBGROUP_VERTEX` is available.)
         const SUBGROUP_VERTEX_STAGE = 1 << 19;
         /// Support for [`AtomicFunction::Min`] and [`AtomicFunction::Max`] on
         /// 64-bit integers in the [`Storage`] address space, when the return
@@ -165,6 +181,33 @@ bitflags::bitflags! {
         const RAY_HIT_VERTEX_POSITION = 1 << 25;
         /// Support for 16-bit floating-point types.
         const SHADER_FLOAT16 = 1 << 26;
+        /// Support for [`ImageClass::External`]
+        const TEXTURE_EXTERNAL = 1 << 27;
+        /// Support for `quantizeToF16`, `pack2x16float`, and `unpack2x16float`, which store
+        /// `f16`-precision values in `f32`s.
+        const SHADER_FLOAT16_IN_FLOAT32 = 1 << 28;
+        /// Support for fragment shader barycentric coordinates.
+        const SHADER_BARYCENTRICS = 1 << 29;
+        /// Support for task shaders, mesh shaders, and per-primitive fragment inputs
+        const MESH_SHADER = 1 << 30;
+    }
+}
+
+impl Capabilities {
+    /// Returns the extension corresponding to this capability, if there is one.
+    ///
+    /// This is used by integration tests.
+    #[cfg(feature = "wgsl-in")]
+    #[doc(hidden)]
+    pub const fn extension(&self) -> Option<crate::front::wgsl::ImplementedEnableExtension> {
+        use crate::front::wgsl::ImplementedEnableExtension as Ext;
+        match *self {
+            Self::DUAL_SOURCE_BLENDING => Some(Ext::DualSourceBlending),
+            // NOTE: `SHADER_FLOAT16_IN_FLOAT32` _does not_ require the `f16` extension
+            Self::SHADER_FLOAT16 => Some(Ext::F16),
+            Self::CLIP_DISTANCE => Some(Ext::ClipDistances),
+            _ => None,
+        }
     }
 }
 
@@ -180,7 +223,11 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
     pub struct SubgroupOperationSet: u8 {
-        /// Elect, Barrier
+        /// Barriers
+        // Possibly elections, when that is supported.
+        // https://github.com/gfx-rs/wgpu/issues/6042#issuecomment-3272603431
+        // Contrary to what the name "basic" suggests, HLSL/DX12 support the
+        // other subgroup operations, but do not support subgroup barriers.
         const BASIC = 1 << 0;
         /// Any, All
         const VOTE = 1 << 1;
@@ -195,8 +242,8 @@ bitflags::bitflags! {
         // We don't support these operations yet
         // /// Clustered
         // const CLUSTERED = 1 << 6;
-        // /// Quad supported
-        // const QUAD_FRAGMENT_COMPUTE = 1 << 7;
+        /// Quad supported
+        const QUAD_FRAGMENT_COMPUTE = 1 << 7;
         // /// Quad supported in all stages
         // const QUAD_ALL_STAGES = 1 << 8;
     }
@@ -221,6 +268,7 @@ impl super::GatherMode {
             Self::BroadcastFirst | Self::Broadcast(_) => S::BALLOT,
             Self::Shuffle(_) | Self::ShuffleXor(_) => S::SHUFFLE,
             Self::ShuffleUp(_) | Self::ShuffleDown(_) => S::SHUFFLE_RELATIVE,
+            Self::QuadBroadcast(_) | Self::QuadSwap(_) => S::QUAD_FRAGMENT_COMPUTE,
         }
     }
 }
@@ -234,10 +282,12 @@ bitflags::bitflags! {
         const VERTEX = 0x1;
         const FRAGMENT = 0x2;
         const COMPUTE = 0x4;
+        const MESH = 0x8;
+        const TASK = 0x10;
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct ModuleInfo {
@@ -453,11 +503,29 @@ impl crate::TypeInner {
 }
 
 impl Validator {
-    /// Construct a new validator instance.
+    /// Create a validator for Naga [`Module`]s.
+    ///
+    /// The `flags` argument indicates which stages of validation the
+    /// returned `Validator` should perform. Skipping stages can make
+    /// validation somewhat faster, but the validator may not reject some
+    /// invalid modules. Regardless of `flags`, validation always returns
+    /// a usable [`ModuleInfo`] value on success.
+    ///
+    /// If `flags` contains everything in `ValidationFlags::default()`,
+    /// then the returned Naga [`Validator`] will reject any [`Module`]
+    /// that would use capabilities not included in `capabilities`.
+    ///
+    /// [`Module`]: crate::Module
     pub fn new(flags: ValidationFlags, capabilities: Capabilities) -> Self {
         let subgroup_operations = if capabilities.contains(Capabilities::SUBGROUP) {
             use SubgroupOperationSet as S;
-            S::BASIC | S::VOTE | S::ARITHMETIC | S::BALLOT | S::SHUFFLE | S::SHUFFLE_RELATIVE
+            S::BASIC
+                | S::VOTE
+                | S::ARITHMETIC
+                | S::BALLOT
+                | S::SHUFFLE
+                | S::SHUFFLE_RELATIVE
+                | S::QUAD_FRAGMENT_COMPUTE
         } else {
             SubgroupOperationSet::empty()
         };
@@ -532,9 +600,7 @@ impl Validator {
             return Err(ConstantError::InitializerExprType);
         }
 
-        let decl_ty = &gctx.types[con.ty].inner;
-        let init_ty = mod_info[con.init].inner_with(gctx.types);
-        if !decl_ty.equivalent(init_ty, gctx.types) {
+        if !gctx.compare_types(&TypeResolution::Handle(con.ty), &mod_info[con.init]) {
             return Err(ConstantError::InvalidType);
         }
 
@@ -560,9 +626,8 @@ impl Validator {
             return Err(OverrideError::NonConstructibleType);
         }
 
-        let decl_ty = &gctx.types[o.ty].inner;
-        match decl_ty {
-            &crate::TypeInner::Scalar(
+        match gctx.types[o.ty].inner {
+            crate::TypeInner::Scalar(
                 crate::Scalar::BOOL
                 | crate::Scalar::I32
                 | crate::Scalar::U32
@@ -574,8 +639,7 @@ impl Validator {
         }
 
         if let Some(init) = o.init {
-            let init_ty = mod_info[init].inner_with(gctx.types);
-            if !decl_ty.equivalent(init_ty, gctx.types) {
+            if !gctx.compare_types(&TypeResolution::Handle(o.ty), &mod_info[init]) {
                 return Err(OverrideError::InvalidType);
             }
         } else if self.overrides_resolved {

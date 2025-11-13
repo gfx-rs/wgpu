@@ -13,7 +13,7 @@ use alloc::{sync::Arc, vec::Vec};
 use core::mem::ManuallyDrop;
 
 #[cfg(feature = "trace")]
-use crate::device::trace::Action;
+use crate::device::trace::{Action, IntoTrace};
 use crate::{
     conv,
     device::{Device, DeviceError, MissingDownlevelFlags, WaitIdleError},
@@ -24,7 +24,10 @@ use crate::{
 };
 
 use thiserror::Error;
-use wgt::SurfaceStatus as Status;
+use wgt::{
+    error::{ErrorType, WebGpuError},
+    SurfaceStatus as Status,
+};
 
 const FRAME_TIMEOUT_MS: u32 = 1000;
 
@@ -48,6 +51,19 @@ pub enum SurfaceError {
     AlreadyAcquired,
     #[error("Texture has been destroyed")]
     TextureDestroyed,
+}
+
+impl WebGpuError for SurfaceError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::Invalid
+            | Self::NotConfigured
+            | Self::AlreadyAcquired
+            | Self::TextureDestroyed => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -107,6 +123,27 @@ impl From<WaitIdleError> for ConfigureSurfaceError {
     }
 }
 
+impl WebGpuError for ConfigureSurfaceError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::MissingDownlevelFlags(e) => e,
+            Self::InvalidSurface
+            | Self::InvalidViewFormat(..)
+            | Self::PreviousOutputExists
+            | Self::GpuWaitTimeout
+            | Self::ZeroArea
+            | Self::TooLarge { .. }
+            | Self::UnsupportedQueueFamily
+            | Self::UnsupportedFormat { .. }
+            | Self::UnsupportedPresentMode { .. }
+            | Self::UnsupportedAlphaMode { .. }
+            | Self::UnsupportedUsage { .. } => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
+}
+
 pub type ResolvedSurfaceOutput = SurfaceOutput<Arc<resource::Texture>>;
 
 #[repr(C)]
@@ -140,7 +177,10 @@ impl Surface {
                 drop(fence);
 
                 let texture_desc = wgt::TextureDescriptor {
-                    label: Some(alloc::borrow::Cow::Borrowed("<Surface Texture>")),
+                    label: hal_label(
+                        Some(alloc::borrow::Cow::Borrowed("<Surface Texture>")),
+                        device.instance_flags,
+                    ),
                     size: wgt::Extent3d {
                         width: config.width,
                         height: config.height,
@@ -224,7 +264,7 @@ impl Surface {
                     }
                     hal::SurfaceError::Outdated => Status::Outdated,
                     hal::SurfaceError::Other(msg) => {
-                        log::error!("acquire error: {}", msg);
+                        log::error!("acquire error: {msg}");
                         Status::Lost
                     }
                 },
@@ -272,7 +312,7 @@ impl Surface {
                 }
                 hal::SurfaceError::Outdated => Ok(Status::Outdated),
                 hal::SurfaceError::Other(msg) => {
-                    log::error!("acquire error: {}", msg);
+                    log::error!("acquire error: {msg}");
                     Err(SurfaceError::Invalid)
                 }
             },
@@ -323,10 +363,12 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Some(present) = surface.presentation.lock().as_ref() {
             if let Some(ref mut trace) = *present.device.trace.lock() {
-                trace.add(Action::GetSurfaceTexture {
-                    id: fid.id(),
-                    parent_id: surface_id,
-                });
+                if let Some(texture) = present.acquired_texture.as_ref() {
+                    trace.add(Action::GetSurfaceTexture {
+                        id: texture.to_trace(),
+                        parent: surface.to_trace(),
+                    });
+                }
             }
         }
 
@@ -349,7 +391,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Some(present) = surface.presentation.lock().as_ref() {
             if let Some(ref mut trace) = *present.device.trace.lock() {
-                trace.add(Action::Present(surface_id));
+                trace.add(Action::Present(surface.to_trace()));
             }
         }
 
@@ -362,7 +404,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Some(present) = surface.presentation.lock().as_ref() {
             if let Some(ref mut trace) = *present.device.trace.lock() {
-                trace.add(Action::DiscardSurfaceTexture(surface_id));
+                trace.add(Action::DiscardSurfaceTexture(surface.to_trace()));
             }
         }
 

@@ -1,11 +1,15 @@
 [package]
 name = "wgpu-example-custom-backend"
 edition = "2021"
-rust-version = "1.84"
+rust-version = "1.88"
 publish = false
 
+[features]
+default = ["web"]
+web = ["wgpu/web"]
+
 [dependencies]
-wgpu = { version = "24.0.0", features = [
+wgpu = { version = "27.0.0", features = [
     "custom",
     "wgsl",
 ], default-features = false }

@@ -39,6 +39,14 @@ pub trait TypeContext {
         out: &mut W,
     ) -> core::fmt::Result;
 
+    /// Write a [`TypeInner::Struct`] for which we are unable to find a name.
+    ///
+    /// The names of struct types are only available if we have `Handle<Type>`,
+    /// not from [`TypeInner`]. For logging and debugging, it's fine to just
+    /// write something helpful to the developer, but for generating WGSL,
+    /// this should be unreachable.
+    fn write_unnamed_struct<W: Write>(&self, inner: &TypeInner, out: &mut W) -> core::fmt::Result;
+
     /// Write a [`TypeInner`] that has no representation as WGSL source,
     /// even including Naga extensions.
     ///
@@ -133,21 +141,52 @@ pub trait TypeContext {
         }
     }
 
+    fn write_type_conclusion<W: Write>(
+        &self,
+        conclusion: &crate::proc::Conclusion,
+        out: &mut W,
+    ) -> core::fmt::Result {
+        use crate::proc::Conclusion as Co;
+
+        match *conclusion {
+            Co::Value(ref inner) => self.write_type_inner(inner, out),
+            Co::Predeclared(ref predeclared) => out.write_str(&predeclared.struct_name()),
+        }
+    }
+
+    fn write_type_rule<W: Write>(
+        &self,
+        name: &str,
+        rule: &crate::proc::Rule,
+        out: &mut W,
+    ) -> core::fmt::Result {
+        write!(out, "fn {name}(")?;
+        for (i, arg) in rule.arguments.iter().enumerate() {
+            if i > 0 {
+                out.write_str(", ")?;
+            }
+            self.write_type_resolution(arg, out)?
+        }
+        out.write_str(") -> ")?;
+        self.write_type_conclusion(&rule.conclusion, out)?;
+        Ok(())
+    }
+
     fn type_to_string(&self, handle: Handle<crate::Type>) -> String {
         let mut buf = String::new();
         self.write_type(handle, &mut buf).unwrap();
         buf
     }
 
-    fn type_inner_to_string(&self, inner: &TypeInner) -> String {
-        let mut buf = String::new();
-        self.write_type_inner(inner, &mut buf).unwrap();
-        buf
-    }
-
     fn type_resolution_to_string(&self, resolution: &TypeResolution) -> String {
         let mut buf = String::new();
         self.write_type_resolution(resolution, &mut buf).unwrap();
+        buf
+    }
+
+    fn type_rule_to_string(&self, name: &str, rule: &crate::proc::Rule) -> String {
+        let mut buf = String::new();
+        self.write_type_rule(name, rule, &mut buf).unwrap();
         buf
     }
 }
@@ -210,6 +249,9 @@ where
                         out,
                         "texture_storage_{dim_str}{arrayed_str}<{format_str}{access_str}>"
                     )?;
+                }
+                Ic::External => {
+                    write!(out, "texture_external")?;
                 }
             }
         }
@@ -298,7 +340,7 @@ where
         } => {
             let (address, maybe_access) = address_space_str(space);
             if let Some(space) = address {
-                write!(out, "ptr<{}, ", space)?;
+                write!(out, "ptr<{space}, ")?;
                 ctx.write_scalar(scalar, out)?;
                 if let Some(access) = maybe_access {
                     write!(out, ", {access}")?;
@@ -329,14 +371,14 @@ where
         }
         TypeInner::AccelerationStructure { vertex_return } => {
             let caps = if vertex_return { "<vertex_return>" } else { "" };
-            write!(out, "acceleration_structure{}", caps)?
+            write!(out, "acceleration_structure{caps}")?
         }
         TypeInner::Struct { .. } => {
-            unreachable!("structs can only be referenced by name in WGSL");
+            ctx.write_unnamed_struct(inner, out)?;
         }
         TypeInner::RayQuery { vertex_return } => {
             let caps = if vertex_return { "<vertex_return>" } else { "" };
-            write!(out, "ray_query{}", caps)?
+            write!(out, "ray_query{caps}")?
         }
     }
 
@@ -354,5 +396,80 @@ enum WriteTypeError {
 impl From<core::fmt::Error> for WriteTypeError {
     fn from(err: core::fmt::Error) -> Self {
         Self::Format(err)
+    }
+}
+
+/// Format types as WGSL based on a [`GlobalCtx`].
+///
+/// This is probably good enough for diagnostic output, but it has some
+/// limitations:
+///
+/// - It does not apply [`Namer`] renamings, to avoid collisions.
+///
+/// - It generates invalid WGSL for anonymous struct types.
+///
+/// - It doesn't write the lengths of override-expression-sized arrays
+///   correctly, unless the expression is just the override identifier.
+///
+/// [`GlobalCtx`]: crate::proc::GlobalCtx
+/// [`Namer`]: crate::proc::Namer
+impl TypeContext for crate::proc::GlobalCtx<'_> {
+    fn lookup_type(&self, handle: Handle<crate::Type>) -> &crate::Type {
+        &self.types[handle]
+    }
+
+    fn type_name(&self, handle: Handle<crate::Type>) -> &str {
+        self.types[handle]
+            .name
+            .as_deref()
+            .unwrap_or("{anonymous type}")
+    }
+
+    fn write_unnamed_struct<W: Write>(&self, _: &TypeInner, out: &mut W) -> core::fmt::Result {
+        write!(out, "{{unnamed struct}}")
+    }
+
+    fn write_override<W: Write>(
+        &self,
+        handle: Handle<crate::Override>,
+        out: &mut W,
+    ) -> core::fmt::Result {
+        match self.overrides[handle].name {
+            Some(ref name) => out.write_str(name),
+            None => write!(out, "{{anonymous override {handle:?}}}"),
+        }
+    }
+}
+
+/// Format types as WGSL based on a `UniqueArena<Type>`.
+///
+/// This is probably only good enough for logging:
+///
+/// - It does not apply any kind of [`Namer`] renamings.
+///
+/// - It generates invalid WGSL for anonymous struct types.
+///
+/// - It doesn't write override-sized arrays properly.
+///
+/// [`Namer`]: crate::proc::Namer
+impl TypeContext for crate::UniqueArena<crate::Type> {
+    fn lookup_type(&self, handle: Handle<crate::Type>) -> &crate::Type {
+        &self[handle]
+    }
+
+    fn type_name(&self, handle: Handle<crate::Type>) -> &str {
+        self[handle].name.as_deref().unwrap_or("{anonymous type}")
+    }
+
+    fn write_unnamed_struct<W: Write>(&self, inner: &TypeInner, out: &mut W) -> core::fmt::Result {
+        write!(out, "{{unnamed struct {inner:?}}}")
+    }
+
+    fn write_override<W: Write>(
+        &self,
+        handle: Handle<crate::Override>,
+        out: &mut W,
+    ) -> core::fmt::Result {
+        write!(out, "{{override {handle:?}}}")
     }
 }

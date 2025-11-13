@@ -4,10 +4,10 @@ use crate::{
     AccelerationStructureBuildSizes, AccelerationStructureDescriptor, Api, BindGroupDescriptor,
     BindGroupLayoutDescriptor, BufferDescriptor, BufferMapping, CommandEncoderDescriptor,
     ComputePipelineDescriptor, Device, DeviceError, FenceValue,
-    GetAccelerationStructureBuildSizesDescriptor, Label, MemoryRange, MeshPipelineDescriptor,
-    PipelineCacheDescriptor, PipelineCacheError, PipelineError, PipelineLayoutDescriptor,
-    RenderPipelineDescriptor, SamplerDescriptor, ShaderError, ShaderInput, ShaderModuleDescriptor,
-    TextureDescriptor, TextureViewDescriptor, TlasInstance,
+    GetAccelerationStructureBuildSizesDescriptor, Label, MemoryRange, PipelineCacheDescriptor,
+    PipelineCacheError, PipelineError, PipelineLayoutDescriptor, RenderPipelineDescriptor,
+    SamplerDescriptor, ShaderError, ShaderInput, ShaderModuleDescriptor, TextureDescriptor,
+    TextureViewDescriptor, TlasInstance,
 };
 
 use super::{
@@ -100,14 +100,6 @@ pub trait DynDevice: DynResource {
             dyn DynPipelineCache,
         >,
     ) -> Result<Box<dyn DynRenderPipeline>, PipelineError>;
-    unsafe fn create_mesh_pipeline(
-        &self,
-        desc: &MeshPipelineDescriptor<
-            dyn DynPipelineLayout,
-            dyn DynShaderModule,
-            dyn DynPipelineCache,
-        >,
-    ) -> Result<Box<dyn DynRenderPipeline>, PipelineError>;
     unsafe fn destroy_render_pipeline(&self, pipeline: Box<dyn DynRenderPipeline>);
 
     unsafe fn create_compute_pipeline(
@@ -143,11 +135,11 @@ pub trait DynDevice: DynResource {
         &self,
         fence: &dyn DynFence,
         value: FenceValue,
-        timeout_ms: u32,
+        timeout: Option<core::time::Duration>,
     ) -> Result<bool, DeviceError>;
 
-    unsafe fn start_capture(&self) -> bool;
-    unsafe fn stop_capture(&self);
+    unsafe fn start_graphics_debugger_capture(&self) -> bool;
+    unsafe fn stop_graphics_debugger_capture(&self);
 
     unsafe fn pipeline_cache_get_data(&self, cache: &dyn DynPipelineCache) -> Option<Vec<u8>>;
 
@@ -171,6 +163,8 @@ pub trait DynDevice: DynResource {
 
     fn get_internal_counters(&self) -> wgt::HalCounters;
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport>;
+
+    fn check_if_oom(&self) -> Result<(), DeviceError>;
 }
 
 impl<D: Device + DynResource> DynDevice for D {
@@ -343,6 +337,11 @@ impl<D: Device + DynResource> DynDevice for D {
             .iter()
             .map(|a| a.expect_downcast_ref())
             .collect();
+        let external_textures: Vec<_> = desc
+            .external_textures
+            .iter()
+            .map(|et| et.clone().expect_downcast())
+            .collect();
 
         let desc = BindGroupDescriptor {
             label: desc.label.to_owned(),
@@ -352,6 +351,7 @@ impl<D: Device + DynResource> DynDevice for D {
             textures: &textures,
             entries: desc.entries,
             acceleration_structures: &acceleration_structures,
+            external_textures: &external_textures,
         };
 
         unsafe { D::create_bind_group(self, &desc) }
@@ -386,44 +386,32 @@ impl<D: Device + DynResource> DynDevice for D {
         let desc = RenderPipelineDescriptor {
             label: desc.label,
             layout: desc.layout.expect_downcast_ref(),
-            vertex_buffers: desc.vertex_buffers,
-            vertex_stage: desc.vertex_stage.clone().expect_downcast(),
+            vertex_processor: match &desc.vertex_processor {
+                crate::VertexProcessor::Standard {
+                    vertex_buffers,
+                    vertex_stage,
+                } => crate::VertexProcessor::Standard {
+                    vertex_buffers,
+                    vertex_stage: vertex_stage.clone().expect_downcast(),
+                },
+                crate::VertexProcessor::Mesh {
+                    task_stage: task,
+                    mesh_stage: mesh,
+                } => crate::VertexProcessor::Mesh {
+                    task_stage: task.as_ref().map(|a| a.clone().expect_downcast()),
+                    mesh_stage: mesh.clone().expect_downcast(),
+                },
+            },
             primitive: desc.primitive,
             depth_stencil: desc.depth_stencil.clone(),
             multisample: desc.multisample,
             fragment_stage: desc.fragment_stage.clone().map(|f| f.expect_downcast()),
             color_targets: desc.color_targets,
-            multiview: desc.multiview,
+            multiview_mask: desc.multiview_mask,
             cache: desc.cache.map(|c| c.expect_downcast_ref()),
         };
 
         unsafe { D::create_render_pipeline(self, &desc) }
-            .map(|b| -> Box<dyn DynRenderPipeline> { Box::new(b) })
-    }
-
-    unsafe fn create_mesh_pipeline(
-        &self,
-        desc: &MeshPipelineDescriptor<
-            dyn DynPipelineLayout,
-            dyn DynShaderModule,
-            dyn DynPipelineCache,
-        >,
-    ) -> Result<Box<dyn DynRenderPipeline>, PipelineError> {
-        let desc = MeshPipelineDescriptor {
-            label: desc.label,
-            layout: desc.layout.expect_downcast_ref(),
-            task_stage: desc.task_stage.clone().map(|f| f.expect_downcast()),
-            mesh_stage: desc.mesh_stage.clone().expect_downcast(),
-            primitive: desc.primitive,
-            depth_stencil: desc.depth_stencil.clone(),
-            multisample: desc.multisample,
-            fragment_stage: desc.fragment_stage.clone().map(|f| f.expect_downcast()),
-            color_targets: desc.color_targets,
-            multiview: desc.multiview,
-            cache: desc.cache.map(|c| c.expect_downcast_ref()),
-        };
-
-        unsafe { D::create_mesh_pipeline(self, &desc) }
             .map(|b| -> Box<dyn DynRenderPipeline> { Box::new(b) })
     }
 
@@ -498,18 +486,18 @@ impl<D: Device + DynResource> DynDevice for D {
         &self,
         fence: &dyn DynFence,
         value: FenceValue,
-        timeout_ms: u32,
+        timeout: Option<core::time::Duration>,
     ) -> Result<bool, DeviceError> {
         let fence = fence.expect_downcast_ref();
-        unsafe { D::wait(self, fence, value, timeout_ms) }
+        unsafe { D::wait(self, fence, value, timeout) }
     }
 
-    unsafe fn start_capture(&self) -> bool {
-        unsafe { D::start_capture(self) }
+    unsafe fn start_graphics_debugger_capture(&self) -> bool {
+        unsafe { D::start_graphics_debugger_capture(self) }
     }
 
-    unsafe fn stop_capture(&self) {
-        unsafe { D::stop_capture(self) }
+    unsafe fn stop_graphics_debugger_capture(&self) {
+        unsafe { D::stop_graphics_debugger_capture(self) }
     }
 
     unsafe fn pipeline_cache_get_data(&self, cache: &dyn DynPipelineCache) -> Option<Vec<u8>> {
@@ -562,5 +550,9 @@ impl<D: Device + DynResource> DynDevice for D {
 
     fn generate_allocator_report(&self) -> Option<wgt::AllocatorReport> {
         D::generate_allocator_report(self)
+    }
+
+    fn check_if_oom(&self) -> Result<(), DeviceError> {
+        D::check_if_oom(self)
     }
 }

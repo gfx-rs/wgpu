@@ -18,6 +18,11 @@ macro_rules! dyn_type {
             pub(crate) fn new<T: $interface>(t: T) -> Self {
                 Self(Arc::new(t))
             }
+
+            #[allow(clippy::allow_attributes, dead_code)]
+            pub(crate) fn downcast<T: $interface>(&self) -> Option<&T> {
+                self.0.as_ref().as_any().downcast_ref()
+            }
         }
 
         impl core::ops::Deref for $name {
@@ -46,6 +51,10 @@ macro_rules! dyn_type {
             pub(crate) fn new<T: $interface>(t: T) -> Self {
                 Self(Arc::new(t))
             }
+
+            pub(crate) fn downcast<T: $interface>(&self) -> Option<&T> {
+                self.0.as_ref().as_any().downcast_ref()
+            }
         }
 
         impl core::ops::Deref for $name {
@@ -70,6 +79,7 @@ dyn_type!(pub ref struct DynTextureView(dyn TextureViewInterface));
 dyn_type!(pub ref struct DynSampler(dyn SamplerInterface));
 dyn_type!(pub ref struct DynBuffer(dyn BufferInterface));
 dyn_type!(pub ref struct DynTexture(dyn TextureInterface));
+dyn_type!(pub ref struct DynExternalTexture(dyn ExternalTextureInterface));
 dyn_type!(pub ref struct DynBlas(dyn BlasInterface));
 dyn_type!(pub ref struct DynTlas(dyn TlasInterface));
 dyn_type!(pub ref struct DynQuerySet(dyn QuerySetInterface));
@@ -80,7 +90,7 @@ dyn_type!(pub ref struct DynPipelineCache(dyn PipelineCacheInterface));
 dyn_type!(pub mut struct DynCommandEncoder(dyn CommandEncoderInterface));
 dyn_type!(pub mut struct DynComputePass(dyn ComputePassInterface));
 dyn_type!(pub mut struct DynRenderPass(dyn RenderPassInterface));
-dyn_type!(pub ref struct DynCommandBuffer(dyn CommandBufferInterface));
+dyn_type!(pub mut struct DynCommandBuffer(dyn CommandBufferInterface));
 dyn_type!(pub mut struct DynRenderBundleEncoder(dyn RenderBundleEncoderInterface));
 dyn_type!(pub ref struct DynRenderBundle(dyn RenderBundleInterface));
 dyn_type!(pub ref struct DynSurface(dyn SurfaceInterface));

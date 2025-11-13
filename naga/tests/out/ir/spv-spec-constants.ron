@@ -1,0 +1,733 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Float,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 0,
+                space: Function,
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Bool,
+                width: 1,
+            )),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Bi,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 3,
+                space: Private,
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Tri,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 5,
+                space: Function,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 5,
+                space: Private,
+            ),
+        ),
+        (
+            name: Some("Sprite_size"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("size"),
+                        ty: 3,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 8,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 8,
+                space: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Sint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 3,
+                space: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Quad,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Array(
+                base: 0,
+                size: Constant(1),
+                stride: 4,
+            ),
+        ),
+        (
+            name: Some("gl_PerVertex"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("gl_Position"),
+                        ty: 12,
+                        binding: Some(BuiltIn(Position(
+                            invariant: false,
+                        ))),
+                        offset: 0,
+                    ),
+                    (
+                        name: Some("gl_PointSize"),
+                        ty: 0,
+                        binding: None,
+                        offset: 16,
+                    ),
+                    (
+                        name: Some("gl_ClipDistance"),
+                        ty: 14,
+                        binding: None,
+                        offset: 20,
+                    ),
+                    (
+                        name: Some("gl_CullDistance"),
+                        ty: 14,
+                        binding: None,
+                        offset: 24,
+                    ),
+                ],
+                span: 32,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 15,
+                space: Private,
+            ),
+        ),
+        (
+            name: None,
+            inner: Matrix(
+                columns: Quad,
+                rows: Quad,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: Some("Camera"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("ViewProj"),
+                        ty: 17,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 64,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 18,
+                space: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 17,
+                space: Uniform,
+            ),
+        ),
+        (
+            name: Some("Transform"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("Model"),
+                        ty: 17,
+                        binding: None,
+                        offset: 0,
+                    ),
+                ],
+                span: 64,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 21,
+                space: Uniform,
+            ),
+        ),
+        (
+            name: None,
+            inner: Pointer(
+                base: 12,
+                space: Private,
+            ),
+        ),
+        (
+            name: None,
+            inner: Struct(
+                members: [
+                    (
+                        name: None,
+                        ty: 3,
+                        binding: Some(Location(
+                            location: 0,
+                            interpolation: Some(Perspective),
+                            sampling: Some(Center),
+                            blend_src: None,
+                            per_primitive: false,
+                        )),
+                        offset: 0,
+                    ),
+                    (
+                        name: Some("gl_Position"),
+                        ty: 12,
+                        binding: Some(BuiltIn(Position(
+                            invariant: false,
+                        ))),
+                        offset: 16,
+                    ),
+                ],
+                span: 32,
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        ray_vertex_return: None,
+        external_texture_params: None,
+        external_texture_transfer_function: None,
+        predeclared_types: {},
+    ),
+    constants: [
+        (
+            name: None,
+            ty: 0,
+            init: 2,
+        ),
+        (
+            name: None,
+            ty: 0,
+            init: 3,
+        ),
+        (
+            name: None,
+            ty: 10,
+            init: 5,
+        ),
+        (
+            name: None,
+            ty: 13,
+            init: 6,
+        ),
+    ],
+    overrides: [
+        (
+            name: Some("TEST_CONSTANT"),
+            id: Some(0),
+            ty: 0,
+            init: Some(0),
+        ),
+        (
+            name: Some("TEST_CONSTANT_TRUE"),
+            id: Some(1),
+            ty: 2,
+            init: Some(1),
+        ),
+        (
+            name: Some("TEST_CONSTANT_FALSE"),
+            id: Some(2),
+            ty: 2,
+            init: Some(4),
+        ),
+    ],
+    global_variables: [
+        (
+            name: Some("v_Uv"),
+            space: Private,
+            binding: None,
+            ty: 3,
+            init: None,
+        ),
+        (
+            name: Some("Vertex_Uv"),
+            space: Private,
+            binding: None,
+            ty: 3,
+            init: None,
+        ),
+        (
+            name: Some("Vertex_Position"),
+            space: Private,
+            binding: None,
+            ty: 5,
+            init: None,
+        ),
+        (
+            name: Some(""),
+            space: Uniform,
+            binding: Some((
+                group: 2,
+                binding: 1,
+            )),
+            ty: 8,
+            init: None,
+        ),
+        (
+            name: Some(""),
+            space: Private,
+            binding: None,
+            ty: 15,
+            init: Some(13),
+        ),
+        (
+            name: Some(""),
+            space: Uniform,
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 18,
+            init: None,
+        ),
+        (
+            name: Some(""),
+            space: Uniform,
+            binding: Some((
+                group: 2,
+                binding: 0,
+            )),
+            ty: 21,
+            init: None,
+        ),
+        (
+            name: Some("Vertex_Normal"),
+            space: Private,
+            binding: None,
+            ty: 5,
+            init: None,
+        ),
+    ],
+    global_expressions: [
+        Literal(F32(64.0)),
+        Literal(Bool(true)),
+        Literal(F32(0.0)),
+        Literal(F32(1.0)),
+        Literal(Bool(false)),
+        Literal(I32(0)),
+        Literal(U32(1)),
+        Literal(F32(0.0)),
+        Literal(F32(1.0)),
+        Compose(
+            ty: 12,
+            components: [
+                7,
+                7,
+                7,
+                8,
+            ],
+        ),
+        Literal(F32(1.0)),
+        ZeroValue(14),
+        ZeroValue(14),
+        Compose(
+            ty: 15,
+            components: [
+                9,
+                10,
+                11,
+                12,
+            ],
+        ),
+    ],
+    functions: [
+        (
+            name: Some("main"),
+            arguments: [],
+            result: None,
+            local_variables: [
+                (
+                    name: Some("test_constant"),
+                    ty: 0,
+                    init: None,
+                ),
+                (
+                    name: Some("position"),
+                    ty: 5,
+                    init: None,
+                ),
+            ],
+            expressions: [
+                GlobalVariable(0),
+                GlobalVariable(7),
+                GlobalVariable(1),
+                GlobalVariable(5),
+                GlobalVariable(3),
+                GlobalVariable(2),
+                GlobalVariable(4),
+                GlobalVariable(6),
+                Constant(2),
+                Override(1),
+                Constant(1),
+                Constant(3),
+                Override(0),
+                Constant(0),
+                Override(2),
+                LocalVariable(0),
+                LocalVariable(1),
+                Select(
+                    condition: 9,
+                    accept: 10,
+                    reject: 13,
+                ),
+                Binary(
+                    op: Multiply,
+                    left: 12,
+                    right: 17,
+                ),
+                Select(
+                    condition: 14,
+                    accept: 10,
+                    reject: 13,
+                ),
+                Binary(
+                    op: Multiply,
+                    left: 18,
+                    right: 19,
+                ),
+                Load(
+                    pointer: 2,
+                ),
+                Load(
+                    pointer: 5,
+                ),
+                AccessIndex(
+                    base: 4,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 23,
+                ),
+                AccessIndex(
+                    base: 24,
+                    index: 0,
+                ),
+                AccessIndex(
+                    base: 24,
+                    index: 1,
+                ),
+                Compose(
+                    ty: 5,
+                    components: [
+                        25,
+                        26,
+                        10,
+                    ],
+                ),
+                Binary(
+                    op: Multiply,
+                    left: 22,
+                    right: 27,
+                ),
+                AccessIndex(
+                    base: 3,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 29,
+                ),
+                AccessIndex(
+                    base: 7,
+                    index: 0,
+                ),
+                Load(
+                    pointer: 31,
+                ),
+                Binary(
+                    op: Multiply,
+                    left: 30,
+                    right: 32,
+                ),
+                Load(
+                    pointer: 16,
+                ),
+                AccessIndex(
+                    base: 34,
+                    index: 0,
+                ),
+                AccessIndex(
+                    base: 34,
+                    index: 1,
+                ),
+                AccessIndex(
+                    base: 34,
+                    index: 2,
+                ),
+                Compose(
+                    ty: 12,
+                    components: [
+                        35,
+                        36,
+                        37,
+                        10,
+                    ],
+                ),
+                Binary(
+                    op: Multiply,
+                    left: 33,
+                    right: 38,
+                ),
+                Load(
+                    pointer: 15,
+                ),
+                Binary(
+                    op: Multiply,
+                    left: 39,
+                    right: 40,
+                ),
+                AccessIndex(
+                    base: 6,
+                    index: 0,
+                ),
+            ],
+            named_expressions: {},
+            body: [
+                Emit((
+                    start: 17,
+                    end: 21,
+                )),
+                Store(
+                    pointer: 15,
+                    value: 20,
+                ),
+                Emit((
+                    start: 21,
+                    end: 22,
+                )),
+                Store(
+                    pointer: 0,
+                    value: 21,
+                ),
+                Emit((
+                    start: 22,
+                    end: 29,
+                )),
+                Store(
+                    pointer: 16,
+                    value: 28,
+                ),
+                Emit((
+                    start: 29,
+                    end: 43,
+                )),
+                Store(
+                    pointer: 42,
+                    value: 41,
+                ),
+                Return(
+                    value: None,
+                ),
+            ],
+            diagnostic_filter_leaf: None,
+        ),
+    ],
+    entry_points: [
+        (
+            name: "main",
+            stage: Vertex,
+            early_depth_test: None,
+            workgroup_size: (0, 0, 0),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("main_wrap"),
+                arguments: [
+                    (
+                        name: Some("Vertex_Uv"),
+                        ty: 3,
+                        binding: Some(Location(
+                            location: 2,
+                            interpolation: None,
+                            sampling: None,
+                            blend_src: None,
+                            per_primitive: false,
+                        )),
+                    ),
+                    (
+                        name: Some("Vertex_Position"),
+                        ty: 5,
+                        binding: Some(Location(
+                            location: 0,
+                            interpolation: None,
+                            sampling: None,
+                            blend_src: None,
+                            per_primitive: false,
+                        )),
+                    ),
+                    (
+                        name: Some("Vertex_Normal"),
+                        ty: 5,
+                        binding: Some(Location(
+                            location: 1,
+                            interpolation: None,
+                            sampling: None,
+                            blend_src: None,
+                            per_primitive: false,
+                        )),
+                    ),
+                ],
+                result: Some((
+                    ty: 24,
+                    binding: None,
+                )),
+                local_variables: [],
+                expressions: [
+                    FunctionArgument(0),
+                    GlobalVariable(1),
+                    FunctionArgument(1),
+                    GlobalVariable(2),
+                    FunctionArgument(2),
+                    GlobalVariable(7),
+                    GlobalVariable(0),
+                    GlobalVariable(4),
+                    AccessIndex(
+                        base: 7,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 8,
+                        index: 1,
+                    ),
+                    Load(
+                        pointer: 9,
+                    ),
+                    Unary(
+                        op: Negate,
+                        expr: 10,
+                    ),
+                    Load(
+                        pointer: 6,
+                    ),
+                    Load(
+                        pointer: 8,
+                    ),
+                    Compose(
+                        ty: 24,
+                        components: [
+                            12,
+                            13,
+                        ],
+                    ),
+                ],
+                named_expressions: {},
+                body: [
+                    Store(
+                        pointer: 1,
+                        value: 0,
+                    ),
+                    Store(
+                        pointer: 3,
+                        value: 2,
+                    ),
+                    Store(
+                        pointer: 5,
+                        value: 4,
+                    ),
+                    Call(
+                        function: 0,
+                        arguments: [],
+                        result: None,
+                    ),
+                    Emit((
+                        start: 9,
+                        end: 12,
+                    )),
+                    Store(
+                        pointer: 9,
+                        value: 11,
+                    ),
+                    Emit((
+                        start: 12,
+                        end: 15,
+                    )),
+                    Return(
+                        value: Some(14),
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+            mesh_info: None,
+            task_payload: None,
+        ),
+    ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+    doc_comments: None,
+)

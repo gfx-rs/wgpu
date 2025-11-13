@@ -17,7 +17,7 @@
     ),
     allow(unused, clippy::let_and_return)
 )]
-#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![allow(
     // It is much clearer to assert negative conditions with eq! false
     clippy::bool_assert_comparison,
@@ -36,7 +36,9 @@
     // It gets in the way a lot and does not prevent bugs in practice.
     clippy::pattern_type_mismatch,
     // `wgpu-core` isn't entirely user-facing, so it's useful to document internal items.
-    rustdoc::private_intra_doc_links
+    rustdoc::private_intra_doc_links,
+    // We should investigate these.
+    clippy::result_large_err
 )]
 #![warn(
     clippy::alloc_instead_of_core,
@@ -65,13 +67,13 @@ extern crate std;
 extern crate wgpu_hal as hal;
 extern crate wgpu_types as wgt;
 
+mod as_hal;
 pub mod binding_model;
 pub mod command;
 mod conv;
 pub mod device;
 pub mod error;
 pub mod global;
-pub mod hal_api;
 mod hash_utils;
 pub mod hub;
 pub mod id;
@@ -89,6 +91,7 @@ pub mod registry;
 pub mod resource;
 mod snatch;
 pub mod storage;
+mod timestamp_normalization;
 mod track;
 mod weak_vec;
 // This is public for users who pre-compile shaders while still wanting to
@@ -138,7 +141,7 @@ impl<'a> LabelHelpers<'a> for Label<'a> {
     }
 }
 
-pub fn hal_label(opt: Option<&str>, flags: wgt::InstanceFlags) -> Option<&str> {
+pub fn hal_label<T: AsRef<str>>(opt: Option<T>, flags: wgt::InstanceFlags) -> Option<T> {
     if flags.contains(wgt::InstanceFlags::DISCARD_HAL_LABELS) {
         return None;
     }

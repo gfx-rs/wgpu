@@ -1,0 +1,82 @@
+(
+    features: "MAPPABLE_PRIMARY_BUFFERS | PIPELINE_STATISTICS_QUERY",
+    expectations: [
+        (
+            name: "Queried number of compute invocations is correct",
+            buffer: PointerId(0x10),
+            offset: 0,
+            data: U64([0x0, 0x2A]),
+        ),
+    ],
+    actions: [
+        CreatePipelineLayout(PointerId(0x10), (
+            label: Some("empty"),
+            bind_group_layouts: [],
+            push_constant_ranges: [],
+        )),
+        CreateShaderModule(
+            id: PointerId(0x10),
+            desc: (
+                label: None,
+                flags: (bits: 3),
+            ),
+            data: "empty.wgsl",
+        ),
+        CreateComputePipeline(
+            id: PointerId(0x10),
+            desc: (
+                label: None,
+                layout: Some(PointerId(0x10)),
+                stage: (
+                    module: PointerId(0x10),
+                    entry_point: None,
+                    constants: {},
+                    zero_initialize_workgroup_memory: true,
+                    vertex_pulling_transform: false,
+                ),
+            ),
+        ),
+        CreateQuerySet(
+            id: PointerId(0x10),
+            desc: (
+                label: Some("Compute Invocation QuerySet"),
+                count: 2,
+                ty: PipelineStatistics("FRAGMENT_SHADER_INVOCATIONS | COMPUTE_SHADER_INVOCATIONS"),
+            ),
+        ),
+        CreateBuffer(
+            PointerId(0x10),
+            (
+                label: Some("Compute Invocation Result Buffer"),
+                size: 16,
+                usage: "COPY_DST | MAP_READ | QUERY_RESOLVE",
+                mapped_at_creation: false,
+            ),
+        ),
+        Submit(1, [
+            RunComputePass(
+                pass: (
+                    commands: [
+                        SetPipeline(PointerId(0x10)),
+                        BeginPipelineStatisticsQuery(
+                            query_set: PointerId(0x10),
+                            query_index: 0,
+                        ),
+                        Dispatch((2, 3, 7,)),
+                        EndPipelineStatisticsQuery,
+                    ],
+                    dynamic_offsets: [],
+                    string_data: [],
+                    push_constant_data: [],
+                ),
+            ),
+            ResolveQuerySet(
+                query_set: PointerId(0x10),
+                start_query: 0,
+                query_count: 1,
+                destination: PointerId(0x10),
+                destination_offset: 0,
+            )
+        ]),
+    ],
+)

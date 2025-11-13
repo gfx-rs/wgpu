@@ -1,13 +1,13 @@
 [package]
 name = "wgpu-hal"
-version = "24.0.0"
-authors = ["gfx-rs developers"]
-edition = "2021"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
 description = "Hardware abstraction layer for wgpu, the cross-platform, safe, pure-rust graphics API"
-homepage = "https://wgpu.rs/"
-repository = "https://github.com/gfx-rs/wgpu"
-keywords = ["graphics"]
-license = "MIT OR Apache-2.0"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
 
 # Override the workspace's `rust-version` key. Firefox uses `cargo vendor` to
 # copy the crates it actually uses out of the workspace, so it's meaningful for
@@ -36,7 +36,8 @@ ignored = ["cfg_aliases"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
-    'cfg(web_sys_unstable_apis)', # web-sys uses this
+    'cfg(feature, values("cargo-clippy"))', # objc's `msg_send` macro injects this in our code https://github.com/SSheldon/rust-objc/issues/125
+    'cfg(web_sys_unstable_apis)',           # web-sys uses this
 ] }
 
 [lib]
@@ -81,7 +82,9 @@ metal = [
     "dep:log",
     "dep:metal",
     "dep:objc",
+    "dep:parking_lot",
     "dep:profiling",
+    "dep:smallvec",
 ]
 vulkan = [
     "naga/spv-out",
@@ -96,6 +99,7 @@ vulkan = [
     "dep:libloading",
     "dep:log",
     "dep:ordered-float",
+    "dep:parking_lot",
     "dep:profiling",
     "dep:smallvec",
     "dep:windows",
@@ -105,7 +109,6 @@ gles = [
     "naga/glsl-out",
     "dep:arrayvec",
     "dep:bytemuck",
-    "dep:cfg-if",
     "dep:glow",
     "dep:glutin_wgl_sys",
     "dep:hashbrown",
@@ -115,9 +118,11 @@ gles = [
     "dep:log",
     "dep:ndk-sys",
     "dep:objc",
+    "dep:parking_lot",
     "dep:profiling",
     "dep:wasm-bindgen",
     "dep:web-sys",
+    "wgpu-types/web",
     "windows/Win32_Graphics_OpenGL",
     "windows/Win32_Graphics_Gdi",
     "windows/Win32_System_LibraryLoader",
@@ -133,10 +138,14 @@ dx12 = [
     "dep:libloading",
     "dep:log",
     "dep:ordered-float",
+    "dep:once_cell",
+    "dep:parking_lot",
     "dep:profiling",
     "dep:range-alloc",
     "dep:windows-core",
+    "dep:gpu-allocator",
     "gpu-allocator/d3d12",
+    "windows/Win32_Devices_DeviceAndDriverInstallation",
     "windows/Win32_Graphics_Direct3D_Fxc",
     "windows/Win32_Graphics_Direct3D_Dxc",
     "windows/Win32_Graphics_Direct3D",
@@ -160,16 +169,12 @@ renderdoc = ["dep:libloading", "dep:renderdoc-sys", "dep:log"]
 fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
-portable-atomic = ["dep:portable-atomic"]
+portable-atomic = ["dep:portable-atomic", "dep:portable-atomic-util"]
 
 ###################################
 ### Internal Debugging Features ###
 ###################################
 
-# Panic when running into an out-of-memory error (for debugging purposes).
-#
-# Only affects the d3d12 and vulkan backends.
-oom_panic = []
 # Panic when running into a device lost error (for debugging purposes).
 # Only affects the d3d12 and vulkan backends.
 device_lost_panic = []
@@ -178,14 +183,8 @@ device_lost_panic = []
 #
 # Only affects the d3d12 and vulkan backends.
 internal_error_panic = []
-
-###################
-### Workarounds ###
-###################
-
-# objc's `msg_send` macro injects this in our code https://github.com/SSheldon/rust-objc/issues/125
-# You shouldn't ever enable this feature.
-cargo-clippy = []
+# Tracks validation errors in a `VALIDATION_CANARY` static.
+validation_canary = ["dep:parking_lot"]
 
 [[example]]
 name = "halmark"
@@ -200,12 +199,13 @@ required-features = ["gles"]
 
 [dependencies]
 naga.workspace = true
-wgpu-types.workspace = true
+wgpu-types = { workspace = true, default-features = false }
 
 # Dependencies in the lib and empty backend
 bitflags.workspace = true
+cfg-if.workspace = true
 raw-window-handle.workspace = true
-parking_lot.workspace = true
+parking_lot = { workspace = true, optional = true }
 thiserror.workspace = true
 
 # Target agnostic dependencies used only in backends.
@@ -213,14 +213,11 @@ arrayvec = { workspace = true, optional = true }
 bytemuck = { workspace = true, optional = true, features = ["derive"] }
 hashbrown = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
-once_cell = { workspace = true, optional = true }
 ordered-float = { workspace = true, optional = true }
 profiling = { workspace = true, optional = true, default-features = false }
-rustc-hash = { workspace = true, optional = true }
 
 # Backend: GLES
 glow = { workspace = true, optional = true }
-cfg-if = { workspace = true, optional = true }
 
 ########################
 ### Platform: Native ###
@@ -256,7 +253,8 @@ windows-core = { workspace = true, optional = true }
 # Backend: Dx12
 bit-set = { workspace = true, optional = true }
 range-alloc = { workspace = true, optional = true }
-gpu-allocator = { workspace = true, optional = true }
+gpu-allocator = { workspace = true, optional = true, features = ["d3d12"] }
+once_cell = { workspace = true, optional = true }
 # backend: GLES
 glutin_wgl_sys = { workspace = true, optional = true }
 
@@ -300,7 +298,7 @@ web-sys = { workspace = true, optional = true, features = [
     "WebGl2RenderingContext",
     "OffscreenCanvas",
 ] }
-js-sys = { workspace = true, optional = true, features = ["default"] }
+js-sys = { workspace = true, optional = true, default-features = true }
 
 ############################
 ### Platform: Emscripten ###
@@ -315,22 +313,27 @@ khronos-egl = { workspace = true, optional = true, features = [
 # Note: it's unused by emscripten, but we keep it to have single code base in egl.rs
 libloading = { workspace = true, optional = true }
 
-[target.'cfg(not(target_has_atomic = "64"))'.dependencies]
+[target.'cfg(any(not(target_has_atomic = "64"), not(target_has_atomic = "ptr")))'.dependencies]
 portable-atomic = { workspace = true, optional = true }
+
+[target.'cfg(not(target_has_atomic = "ptr"))'.dependencies]
+portable-atomic-util = { workspace = true, features = [
+    "alloc",
+], optional = true }
 
 [build-dependencies]
 cfg_aliases.workspace = true
 
 [dev-dependencies]
-cfg-if.workspace = true
 env_logger.workspace = true
-glam.workspace = true                               # for ray-traced-triangle example
-naga = { workspace = true, features = ["wgsl-in"] }
-winit.workspace = true                              # for "halmark" example
+glam.workspace = true                                            # for ray-traced-triangle example
+naga = { workspace = true, features = ["wgsl-in", "termcolor"] }
+winit.workspace = true                                           # for "halmark" example
 
 ### Platform: Windows + MacOS + Linux for "raw-gles" example ###
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos")))'.dev-dependencies]
 glutin-winit = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
 glutin = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
-rwh_05 = { version = "0.5", package = "raw-window-handle" }                      # temporary compatibility for glutin-winit
+# temporary compatibility for glutin-winit
+rwh_05.workspace = true
 winit = { workspace = true, features = ["rwh_05"] }

@@ -1,9 +1,11 @@
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
+#[cfg(wgpu_core)]
+use core::ops::Deref;
 use core::{error, fmt};
 
-use parking_lot::Mutex;
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
+use crate::util::Mutex;
 use crate::*;
 
 /// Describes a [`Surface`].
@@ -148,28 +150,50 @@ impl Surface<'_> {
             .ok_or(SurfaceError::Lost)
     }
 
-    /// Returns the inner hal Surface using a callback. The hal surface will be `None` if the
-    /// backend type argument does not match with this wgpu Surface
+    /// Get the [`wgpu_hal`] surface from this `Surface`.
+    ///
+    /// Find the Api struct corresponding to the active backend in [`wgpu_hal::api`],
+    /// and pass that struct to the to the `A` type parameter.
+    ///
+    /// Returns a guard that dereferences to the type of the hal backend
+    /// which implements [`A::Surface`].
+    ///
+    /// # Types
+    ///
+    /// The returned type depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Surface")]
+    #[doc = crate::hal_type_metal!("Surface")]
+    #[doc = crate::hal_type_dx12!("Surface")]
+    #[doc = crate::hal_type_gles!("Surface")]
+    ///
+    /// # Errors
+    ///
+    /// This method will return None if:
+    /// - The surface is not from the backend specified by `A`.
+    /// - The surface is from the `webgpu` or `custom` backend.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Surface must not be manually destroyed
+    /// - The returned resource must not be destroyed unless the guard
+    ///   is the last reference to it and it is not in use by the GPU.
+    ///   The guard and handle may be dropped at any time however.
+    /// - All the safety requirements of wgpu-hal must be upheld.
+    ///
+    /// [`A::Surface`]: hal::Api::Surface
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Surface>) -> R, R>(
+    pub unsafe fn as_hal<A: hal::Api>(
         &self,
-        hal_surface_callback: F,
-    ) -> R {
-        let core_surface = self.inner.as_core_opt();
+    ) -> Option<impl Deref<Target = A::Surface> + WasmNotSendSync> {
+        let core_surface = self.inner.as_core_opt()?;
 
-        if let Some(core_surface) = core_surface {
-            unsafe {
-                core_surface
-                    .context
-                    .surface_as_hal::<A, F, R>(core_surface, hal_surface_callback)
-            }
-        } else {
-            hal_surface_callback(None)
-        }
+        unsafe { core_surface.context.surface_as_hal::<A>(core_surface) }
+    }
+
+    #[cfg(custom)]
+    /// Returns custom implementation of Surface (if custom backend and is internally T)
+    pub fn as_custom<T: custom::SurfaceInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
     }
 }
 
@@ -237,7 +261,7 @@ pub enum SurfaceTarget<'window> {
     ///
     /// - On WebGL2: surface creation will return an error if the browser does not support WebGL2,
     ///   or declines to provide GPU access (such as due to a resource shortage).
-    #[cfg(any(webgpu, webgl))]
+    #[cfg(web)]
     Canvas(web_sys::HtmlCanvasElement),
 
     /// Surface from a `web_sys::OffscreenCanvas`.
@@ -249,7 +273,7 @@ pub enum SurfaceTarget<'window> {
     ///
     /// - On WebGL2: surface creation will return an error if the browser does not support WebGL2,
     ///   or declines to provide GPU access (such as due to a resource shortage).
-    #[cfg(any(webgpu, webgl))]
+    #[cfg(web)]
     OffscreenCanvas(web_sys::OffscreenCanvas),
 }
 
@@ -407,7 +431,10 @@ impl error::Error for CreateSurfaceError {
             #[cfg(wgpu_core)]
             CreateSurfaceErrorKind::Hal(e) => e.source(),
             CreateSurfaceErrorKind::Web(_) => None,
+            #[cfg(feature = "std")]
             CreateSurfaceErrorKind::RawHandle(e) => e.source(),
+            #[cfg(not(feature = "std"))]
+            CreateSurfaceErrorKind::RawHandle(_) => None,
         }
     }
 }

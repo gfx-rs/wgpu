@@ -2,35 +2,10 @@ use wgt::TextureFormatFeatures;
 
 use crate::resource::{self, TextureDescriptor};
 
-pub fn is_valid_copy_src_texture_format(
-    format: wgt::TextureFormat,
-    aspect: wgt::TextureAspect,
-) -> bool {
-    use wgt::TextureAspect as Ta;
-    use wgt::TextureFormat as Tf;
-    match (format, aspect) {
-        (Tf::Depth24Plus, _) | (Tf::Depth24PlusStencil8, Ta::DepthOnly) => false,
-        _ => true,
-    }
-}
+// Some core-only texture format helpers. The helper methods on `TextureFormat`
+// defined in wgpu-types may need to be modified along with the ones here.
 
-pub fn is_valid_copy_dst_texture_format(
-    format: wgt::TextureFormat,
-    aspect: wgt::TextureAspect,
-) -> bool {
-    use wgt::TextureAspect as Ta;
-    use wgt::TextureFormat as Tf;
-    match (format, aspect) {
-        (Tf::Depth24Plus | Tf::Depth32Float, _)
-        | (Tf::Depth24PlusStencil8 | Tf::Depth32FloatStencil8, Ta::DepthOnly) => false,
-        _ => true,
-    }
-}
-
-#[cfg_attr(
-    any(not(target_arch = "wasm32"), target_os = "emscripten"),
-    allow(unused)
-)]
+#[cfg_attr(any(not(webgl)), expect(unused))]
 pub fn is_valid_external_image_copy_dst_texture_format(format: wgt::TextureFormat) -> bool {
     use wgt::TextureFormat as Tf;
     match format {
@@ -136,7 +111,12 @@ pub fn map_texture_usage(
             flags.contains(wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE),
         );
     }
-    let is_color = aspect.contains(hal::FormatAspects::COLOR);
+    let is_color = aspect.intersects(
+        hal::FormatAspects::COLOR
+            | hal::FormatAspects::PLANE_0
+            | hal::FormatAspects::PLANE_1
+            | hal::FormatAspects::PLANE_2,
+    );
     u.set(
         wgt::TextureUses::COLOR_TARGET,
         usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) && is_color,
@@ -148,6 +128,10 @@ pub fn map_texture_usage(
     u.set(
         wgt::TextureUses::STORAGE_ATOMIC,
         usage.contains(wgt::TextureUsages::STORAGE_ATOMIC),
+    );
+    u.set(
+        wgt::TextureUses::TRANSIENT,
+        usage.contains(wgt::TextureUsages::TRANSIENT),
     );
     u
 }
@@ -207,6 +191,10 @@ pub fn map_texture_usage_from_hal(uses: wgt::TextureUses) -> wgt::TextureUsages 
     u.set(
         wgt::TextureUsages::STORAGE_ATOMIC,
         uses.contains(wgt::TextureUses::STORAGE_ATOMIC),
+    );
+    u.set(
+        wgt::TextureUsages::TRANSIENT,
+        uses.contains(wgt::TextureUses::TRANSIENT),
     );
     u
 }

@@ -33,7 +33,10 @@ var<uniform> uniforms: Uniforms;
 @group(0) @binding(1)
 var acc_struct: acceleration_structure;
 
-var<push_constant> light: vec3<f32>;
+struct PushConstants {
+    light: vec3<f32>,
+}
+var<push_constant> pc: PushConstants;
 
 const SURFACE_BRIGHTNESS = 0.5;
 
@@ -45,7 +48,7 @@ fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
 	let d = vertex.tex_coords * 2.0 - 1.0;
 
 	let origin = vertex.world_position;
-	let direction = normalize(light - vertex.world_position);
+	let direction = normalize(pc.light - vertex.world_position);
 
 	var normal: vec3<f32>;
 	let dir_cam = normalize(camera - vertex.world_position);

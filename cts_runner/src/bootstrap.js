@@ -29,6 +29,7 @@ import * as performance from "ext:deno_web/15_performance.js";
 import { loadWebGPU } from "ext:deno_webgpu/00_init.js";
 import * as imageData from "ext:deno_web/16_image_data.js";
 const webgpu = loadWebGPU();
+webgpu.initGPU();
 
 // imports needed to pass module evaluation
 import "ext:deno_url/01_urlpattern.js";
@@ -137,10 +138,6 @@ class Navigator {
   constructor() {
     webidl.illegalConstructor();
   }
-
-  [Symbol.for("Deno.customInspect")](inspect) {
-    return `${this.constructor.name} ${inspect({})}`;
-  }
 }
 const NavigatorPrototype = Navigator.prototype;
 
@@ -199,10 +196,13 @@ const windowOrWorkerGlobalScope = {
   GPUTextureUsage: util.nonEnumerable(webgpu.GPUTextureUsage),
   GPUTexture: util.nonEnumerable(webgpu.GPUTexture),
   GPUTextureView: util.nonEnumerable(webgpu.GPUTextureView),
+  GPUExternalTexture: util.nonEnumerable(webgpu.GPUExternalTexture),
   GPUSampler: util.nonEnumerable(webgpu.GPUSampler),
   GPUBindGroupLayout: util.nonEnumerable(webgpu.GPUBindGroupLayout),
   GPUPipelineLayout: util.nonEnumerable(webgpu.GPUPipelineLayout),
   GPUBindGroup: util.nonEnumerable(webgpu.GPUBindGroup),
+  GPUCompilationInfo: util.nonEnumerable(webgpu.GPUCompilationInfo),
+  GPUCompilationMessage: util.nonEnumerable(webgpu.GPUCompilationMessage),
   GPUShaderModule: util.nonEnumerable(webgpu.GPUShaderModule),
   GPUShaderStage: util.nonEnumerable(webgpu.GPUShaderStage),
   GPUComputePipeline: util.nonEnumerable(webgpu.GPUComputePipeline),
@@ -216,11 +216,32 @@ const windowOrWorkerGlobalScope = {
   GPURenderBundle: util.nonEnumerable(webgpu.GPURenderBundle),
   GPUQuerySet: util.nonEnumerable(webgpu.GPUQuerySet),
   GPUError: util.nonEnumerable(webgpu.GPUError),
+  GPUInternalError: util.nonEnumerable(webgpu.GPUInternalError),
   GPUValidationError: util.nonEnumerable(webgpu.GPUValidationError),
   GPUOutOfMemoryError: util.nonEnumerable(webgpu.GPUOutOfMemoryError),
+  GPUUncapturedErrorEvent: util.nonEnumerable(webgpu.GPUUncapturedErrorEvent),
 };
 
 windowOrWorkerGlobalScope.console.enumerable = false;
+
+// Print uncaptured WebGPU errors to stderr. This is useful when running
+// standalone JavaScript test snippets. It isn't needed for the CTS, because the
+// CTS uses error scopes. (The CTS also installs its own error handler with
+// `addEventListener`, so having this here may result in printing duplicate
+// errors from the CTS in some cases.) Printing uncaptured errors to stderr
+// isn't desired as built-in behavior in Deno, because the console is reserved
+// for the application.
+//
+// Note that catching an error here _does not_ result in a non-zero exit status.
+const requestDevice = webgpu.GPUAdapter.prototype.requestDevice;
+webgpu.GPUAdapter.prototype.requestDevice = function(desc) {
+    return requestDevice.call(this, desc).then((device) => {
+        device.onuncapturederror = (event) => {
+            core.print("cts_runner caught WebGPU error:" + event.error.message, true);
+        };
+        return device;
+    })
+};
 
 const mainRuntimeGlobalProperties = {
   Window: globalInterfaces.windowConstructorDescriptor,

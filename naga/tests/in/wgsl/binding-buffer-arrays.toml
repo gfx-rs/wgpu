@@ -9,5 +9,5 @@ image = "ReadZeroSkipWrite"
 version = [1, 1]
 
 [[spv.binding_map]]
-bind_target = { binding_array_size = 10 }
+bind_target = { descriptor_set = 0, binding = 0, binding_array_size = 10 }
 resource_binding = { group = 0, binding = 0 }

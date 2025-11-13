@@ -9,13 +9,13 @@ use hashbrown::hash_map::Entry;
 use crate::{
     device::Device,
     init_tracker::*,
-    resource::{DestroyedResourceError, ParentDevice, Texture, Trackable},
+    resource::{DestroyedResourceError, ParentDevice, RawResourceAccess, Texture, Trackable},
     snatch::SnatchGuard,
     track::{DeviceTracker, TextureTracker},
     FastHashMap,
 };
 
-use super::{clear::clear_texture, BakedCommands, ClearError};
+use super::{clear_texture, BakedCommands, ClearError};
 
 /// Surface that was discarded by `StoreOp::Discard` of a preceding renderpass.
 /// Any read access to this surface needs to be preceded by a texture initialization.
@@ -40,7 +40,7 @@ pub(crate) struct CommandBufferTextureMemoryActions {
 }
 
 impl CommandBufferTextureMemoryActions {
-    pub(crate) fn drain_init_actions(&mut self) -> Drain<TextureInitTrackerAction> {
+    pub(crate) fn drain_init_actions(&mut self) -> Drain<'_, TextureInitTrackerAction> {
         self.init_actions.drain(..)
     }
 
@@ -149,6 +149,7 @@ pub(crate) fn fixup_discarded_surfaces<InitIter: Iterator<Item = TextureSurfaceD
             &device.alignments,
             device.zero_buffer.as_ref(),
             snatch_guard,
+            device.instance_flags,
         )
         .unwrap();
     }
@@ -304,6 +305,7 @@ impl BakedCommands {
                     &device.alignments,
                     device.zero_buffer.as_ref(),
                     snatch_guard,
+                    device.instance_flags,
                 );
 
                 // A Texture can be destroyed between the command recording

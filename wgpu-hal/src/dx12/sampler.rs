@@ -2,7 +2,7 @@
 //!
 //! Nearly identical to the Vulkan sampler cache, with added descriptor heap management.
 
-use std::vec::Vec;
+use alloc::vec::Vec;
 
 use hashbrown::{hash_map::Entry, HashMap};
 
@@ -43,8 +43,8 @@ impl PartialEq for HashableSamplerDesc {
 
 impl Eq for HashableSamplerDesc {}
 
-impl std::hash::Hash for HashableSamplerDesc {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+impl core::hash::Hash for HashableSamplerDesc {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.0.Filter.0.hash(state);
         self.0.AddressU.0.hash(state);
         self.0.AddressV.0.hash(state);
@@ -226,8 +226,7 @@ impl SamplerHeap {
         let Entry::Occupied(mut hash_map_entry) = state.mapping.entry(HashableSamplerDesc(desc))
         else {
             log::error!(
-                "Tried to destroy a sampler that doesn't exist. Sampler description: {:#?}",
-                desc
+                "Tried to destroy a sampler that doesn't exist. Sampler description: {desc:#?}"
             );
             return;
         };

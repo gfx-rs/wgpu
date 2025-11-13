@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 // We won't bring StorageBuffer into scope as that might be too easy to confuse
-// with actual GPU-allocated WGPU storage buffers.
+// with actual GPU-allocated wgpu storage buffers.
 use encase::ShaderType;
 use winit::{
     event::{Event, KeyEvent, WindowEvent},
@@ -114,6 +114,7 @@ impl WgpuContext {
                 label: None,
                 required_features: wgpu::Features::empty(),
                 required_limits: wgpu::Limits::downlevel_defaults(),
+                experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 memory_hints: wgpu::MemoryHints::MemoryUsage,
                 trace: wgpu::Trace::Off,
             })
@@ -185,7 +186,7 @@ impl WgpuContext {
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
         let surface_config = surface
@@ -307,6 +308,7 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                                         color_attachments: &[Some(
                                             wgpu::RenderPassColorAttachment {
                                                 view: &view,
+                                                depth_slice: None,
                                                 resolve_target: None,
                                                 ops: wgpu::Operations {
                                                     load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
@@ -317,6 +319,7 @@ async fn run(event_loop: EventLoop<()>, window: Arc<Window>) {
                                         depth_stencil_attachment: None,
                                         occlusion_query_set: None,
                                         timestamp_writes: None,
+                                        multiview_mask: None,
                                     });
                                 render_pass.set_pipeline(&wgpu_context_ref.pipeline);
                                 // (9)

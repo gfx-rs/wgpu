@@ -62,8 +62,6 @@ in shaders, getting buffers and builtins to work correctly is a bit tricky.
 We never emulate `base_vertex` and gl_VertexID behaves as `@builtin(vertex_index)` does, so we
 never need to do anything about that.
 
-We always advertise support for `VERTEX_AND_INSTANCE_INDEX_RESPECTS_RESPECTIVE_FIRST_VALUE_IN_INDIRECT_DRAW`.
-
 ### GL 4.2+ with ARB_shader_draw_parameters
 
 - `@builtin(instance_index)` translates to `gl_InstanceID + gl_BaseInstance`
@@ -103,17 +101,17 @@ pub use fence::Fence;
 #[cfg(not(any(windows, webgl)))]
 pub use self::egl::{AdapterContext, AdapterContextLock};
 #[cfg(not(any(windows, webgl)))]
-use self::egl::{Instance, Surface};
+pub use self::egl::{Instance, Surface};
 
 #[cfg(webgl)]
 pub use self::web::AdapterContext;
 #[cfg(webgl)]
-use self::web::{Instance, Surface};
+pub use self::web::{Instance, Surface};
 
 #[cfg(windows)]
 use self::wgl::AdapterContext;
 #[cfg(windows)]
-use self::wgl::{Instance, Surface};
+pub use self::wgl::{Instance, Surface};
 
 use alloc::{boxed::Box, string::String, string::ToString as _, sync::Arc, vec::Vec};
 use core::{
@@ -143,6 +141,8 @@ const MAX_PUSH_CONSTANTS: usize = 64;
 const MAX_PUSH_CONSTANT_COMMANDS: usize = MAX_PUSH_CONSTANTS * crate::MAX_CONCURRENT_SHADER_STAGES;
 
 impl crate::Api for Api {
+    const VARIANT: wgt::Backend = wgt::Backend::Gl;
+
     type Instance = Instance;
     type Surface = Surface;
     type Adapter = Adapter;
@@ -368,8 +368,20 @@ pub enum TextureInner {
         target: BindTarget,
     },
     #[cfg(webgl)]
+    /// Render to a `WebGLFramebuffer`
+    ///
+    /// This is a web feature
     ExternalFramebuffer {
         inner: web_sys::WebGlFramebuffer,
+    },
+    #[cfg(native)]
+    /// Render to a `glow::NativeFramebuffer`
+    /// Useful when the framebuffer to draw to
+    /// has a non-zero framebuffer ID
+    ///
+    /// This is a native feature
+    ExternalNativeFramebuffer {
+        inner: glow::NativeFramebuffer,
     },
 }
 
@@ -387,6 +399,8 @@ impl TextureInner {
             Self::Texture { raw, target } => (raw, target),
             #[cfg(webgl)]
             Self::ExternalFramebuffer { .. } => panic!("Unexpected external framebuffer"),
+            #[cfg(native)]
+            Self::ExternalNativeFramebuffer { .. } => panic!("unexpected external framebuffer"),
         }
     }
 }
@@ -394,13 +408,16 @@ impl TextureInner {
 #[derive(Debug)]
 pub struct Texture {
     pub inner: TextureInner,
-    pub drop_guard: Option<crate::DropGuard>,
     pub mip_level_count: u32,
     pub array_layer_count: u32,
     pub format: wgt::TextureFormat,
     #[allow(unused)]
     pub format_desc: TextureFormatDesc,
     pub copy_size: CopyExtent,
+
+    // The `drop_guard` field must be the last field of this struct so it is dropped last.
+    // Do not add new fields after it.
+    pub drop_guard: Option<crate::DropGuard>,
 }
 
 impl crate::DynTexture for Texture {}
@@ -591,7 +608,7 @@ type ShaderId = u32;
 
 #[derive(Debug)]
 pub struct ShaderModule {
-    naga: crate::NagaShader,
+    source: crate::NagaShader,
     label: Option<String>,
     id: ShaderId,
 }
@@ -657,6 +674,7 @@ struct PipelineInner {
     sampler_map: SamplerBindMap,
     first_instance_location: Option<glow::UniformLocation>,
     push_constant_descs: ArrayVec<PushConstantDesc, MAX_PUSH_CONSTANT_COMMANDS>,
+    clip_distance_count: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -904,6 +922,7 @@ enum Command {
     BindAttachment {
         attachment: u32,
         view: TextureView,
+        depth_slice: Option<u32>,
     },
     ResolveAttachment {
         attachment: u32,
@@ -993,6 +1012,10 @@ enum Command {
         /// Offset from the start of the `data_bytes`
         offset: u32,
     },
+    SetClipDistances {
+        old_count: u32,
+        new_count: u32,
+    },
 }
 
 #[derive(Default)]
@@ -1080,14 +1103,11 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
     let _ = std::panic::catch_unwind(|| {
         log::log!(
             log_severity,
-            "GLES: [{}/{}] ID {} : {}",
-            source_str,
-            type_str,
-            id,
-            message
+            "GLES: [{source_str}/{type_str}] ID {id} : {message}"
         );
     });
 
+    #[cfg(feature = "validation_canary")]
     if cfg!(debug_assertions) && log_severity == log::Level::Error {
         // Set canary and continue
         crate::VALIDATION_CANARY.add(message.to_string());

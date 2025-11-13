@@ -161,7 +161,7 @@ impl Queries {
         self.destination_buffer
             .slice(..)
             .map_async(wgpu::MapMode::Read, |_| ());
-        device.poll(wgpu::PollType::wait()).unwrap();
+        device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
 
         let timestamps = {
             let timestamp_view = self
@@ -210,6 +210,7 @@ async fn run() {
             label: None,
             required_features: features,
             required_limits: wgpu::Limits::downlevel_defaults(),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Off,
         })
@@ -357,7 +358,7 @@ fn render_pass(
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     });
     let render_target = device.create_texture(&wgpu::TextureDescriptor {
@@ -380,6 +381,7 @@ fn render_pass(
         label: None,
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             view: &render_target_view,
+            depth_slice: None,
             resolve_target: None,
             ops: wgpu::Operations {
                 load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
@@ -393,6 +395,7 @@ fn render_pass(
             end_of_pass_write_index: Some(*next_unused_query + 1),
         }),
         occlusion_query_set: None,
+        multiview_mask: None,
     });
     *next_unused_query += 2;
 
@@ -425,13 +428,13 @@ pub fn main() {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration};
 
     use super::{submit_render_and_compute_pass_with_queries, QueryResults};
 
     #[gpu_test]
-    static TIMESTAMPS_PASS_BOUNDARIES: GpuTestConfiguration = GpuTestConfiguration::new()
+    pub static TIMESTAMPS_PASS_BOUNDARIES: GpuTestConfiguration = GpuTestConfiguration::new()
         .parameters(
             wgpu_test::TestParameters::default()
                 .limits(wgpu::Limits::downlevel_defaults())
@@ -440,7 +443,7 @@ mod tests {
         .run_sync(|ctx| test_timestamps(ctx, false, false));
 
     #[gpu_test]
-    static TIMESTAMPS_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new()
+    pub static TIMESTAMPS_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new()
         .parameters(
             wgpu_test::TestParameters::default()
                 .limits(wgpu::Limits::downlevel_defaults())
@@ -454,7 +457,7 @@ mod tests {
         .run_sync(|ctx| test_timestamps(ctx, true, false));
 
     #[gpu_test]
-    static TIMESTAMPS_PASSES: GpuTestConfiguration = GpuTestConfiguration::new()
+    pub static TIMESTAMPS_PASSES: GpuTestConfiguration = GpuTestConfiguration::new()
         .parameters(
             wgpu_test::TestParameters::default()
                 .limits(wgpu::Limits::downlevel_defaults())

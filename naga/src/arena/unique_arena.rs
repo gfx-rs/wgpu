@@ -16,7 +16,8 @@ use crate::{FastIndexSet, Span};
 /// The element type must implement `Eq` and `Hash`. Insertions of equivalent
 /// elements, according to `Eq`, all return the same `Handle`.
 ///
-/// Once inserted, elements may not be mutated.
+/// Once inserted, elements generally may not be mutated, although a `replace`
+/// method exists to support rare cases.
 ///
 /// `UniqueArena` is similar to [`Arena`]: If `Arena` is vector-like,
 /// `UniqueArena` is `HashSet`-like.
@@ -71,8 +72,7 @@ impl<T> UniqueArena<T> {
             .unwrap_or(&Span::default())
     }
 
-    #[cfg(feature = "compact")]
-    pub(crate) fn drain_all(&mut self) -> UniqueArenaDrain<T> {
+    pub(crate) fn drain_all(&mut self) -> UniqueArenaDrain<'_, T> {
         UniqueArenaDrain {
             inner_elts: self.set.drain(..),
             inner_spans: self.span_info.drain(..),
@@ -81,14 +81,12 @@ impl<T> UniqueArena<T> {
     }
 }
 
-#[cfg(feature = "compact")]
 pub struct UniqueArenaDrain<'a, T> {
     inner_elts: indexmap::set::Drain<'a, T>,
     inner_spans: alloc::vec::Drain<'a, Span>,
     index: Index,
 }
 
-#[cfg(feature = "compact")]
 impl<T> Iterator for UniqueArenaDrain<'_, T> {
     type Item = (Handle<T>, T, Span);
 

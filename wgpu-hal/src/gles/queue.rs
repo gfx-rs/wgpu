@@ -13,6 +13,18 @@ fn extract_marker<'a>(data: &'a [u8], range: &core::ops::Range<u32>) -> &'a str 
     core::str::from_utf8(&data[range.start as usize..range.end as usize]).unwrap()
 }
 
+fn to_debug_str(s: &str) -> &str {
+    // The spec mentions that if the length given to debug functions is negative,
+    // the implementation will access the ptr and look for a null that terminates
+    // the string but some implementations will try to access the ptr even if the
+    // length is 0.
+    if s.is_empty() {
+        "<empty>"
+    } else {
+        s
+    }
+}
+
 fn get_2d_target(target: u32, array_layer: u32) -> u32 {
     const CUBEMAP_FACES: [u32; 6] = [
         glow::TEXTURE_CUBE_MAP_POSITIVE_X,
@@ -98,6 +110,7 @@ impl super::Queue {
         fbo_target: u32,
         attachment: u32,
         view: &super::TextureView,
+        depth_slice: Option<u32>,
     ) {
         match view.inner {
             super::TextureInner::Renderbuffer { raw } => {
@@ -126,13 +139,18 @@ impl super::Queue {
                         )
                     };
                 } else if is_layered_target(target) {
+                    let layer = if target == glow::TEXTURE_3D {
+                        depth_slice.unwrap() as i32
+                    } else {
+                        view.array_layers.start as i32
+                    };
                     unsafe {
                         gl.framebuffer_texture_layer(
                             fbo_target,
                             attachment,
                             Some(raw),
                             view.mip_levels.start as i32,
-                            view.array_layers.start as i32,
+                            layer,
                         )
                     };
                 } else {
@@ -151,6 +169,10 @@ impl super::Queue {
             #[cfg(webgl)]
             super::TextureInner::ExternalFramebuffer { ref inner } => unsafe {
                 gl.bind_external_framebuffer(glow::FRAMEBUFFER, inner);
+            },
+            #[cfg(native)]
+            super::TextureInner::ExternalNativeFramebuffer { ref inner } => unsafe {
+                gl.bind_framebuffer(glow::FRAMEBUFFER, Some(*inner));
             },
         }
     }
@@ -1096,8 +1118,11 @@ impl super::Queue {
             C::BindAttachment {
                 attachment,
                 ref view,
+                depth_slice,
             } => {
-                unsafe { self.set_attachment(gl, glow::DRAW_FRAMEBUFFER, attachment, view) };
+                unsafe {
+                    self.set_attachment(gl, glow::DRAW_FRAMEBUFFER, attachment, view, depth_slice)
+                };
             }
             C::ResolveAttachment {
                 attachment,
@@ -1108,7 +1133,13 @@ impl super::Queue {
                 unsafe { gl.read_buffer(attachment) };
                 unsafe { gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(self.copy_fbo)) };
                 unsafe {
-                    self.set_attachment(gl, glow::DRAW_FRAMEBUFFER, glow::COLOR_ATTACHMENT0, dst)
+                    self.set_attachment(
+                        gl,
+                        glow::DRAW_FRAMEBUFFER,
+                        glow::COLOR_ATTACHMENT0,
+                        dst,
+                        None,
+                    )
                 };
                 unsafe {
                     gl.blit_framebuffer(
@@ -1567,7 +1598,7 @@ impl super::Queue {
                             glow::DEBUG_TYPE_MARKER,
                             DEBUG_ID,
                             glow::DEBUG_SEVERITY_NOTIFICATION,
-                            marker,
+                            to_debug_str(marker),
                         )
                     }
                 };
@@ -1580,7 +1611,11 @@ impl super::Queue {
                         .private_caps
                         .contains(PrivateCapabilities::DEBUG_FNS)
                     {
-                        gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, marker)
+                        gl.push_debug_group(
+                            glow::DEBUG_SOURCE_APPLICATION,
+                            DEBUG_ID,
+                            to_debug_str(marker),
+                        )
                     }
                 };
             }
@@ -1805,6 +1840,20 @@ impl super::Queue {
                     _ => panic!("Unsupported uniform datatype: {:?}!", uniform.ty),
                 }
             }
+            C::SetClipDistances {
+                old_count,
+                new_count,
+            } => {
+                // Disable clip planes that are no longer active
+                for i in new_count..old_count {
+                    unsafe { gl.disable(glow::CLIP_DISTANCE0 + i) };
+                }
+
+                // Enable clip planes that are now active
+                for i in old_count..new_count {
+                    unsafe { gl.enable(glow::CLIP_DISTANCE0 + i) };
+                }
+            }
         }
     }
 }
@@ -1832,7 +1881,13 @@ impl crate::Queue for super::Queue {
                     .private_caps
                     .contains(PrivateCapabilities::DEBUG_FNS)
                 {
-                    unsafe { gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, label) };
+                    unsafe {
+                        gl.push_debug_group(
+                            glow::DEBUG_SOURCE_APPLICATION,
+                            DEBUG_ID,
+                            to_debug_str(label),
+                        )
+                    };
                 }
             }
 

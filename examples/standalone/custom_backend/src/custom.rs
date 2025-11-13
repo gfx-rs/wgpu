@@ -3,9 +3,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use wgpu::custom::{
-    AdapterInterface, DeviceInterface, DispatchAdapter, DispatchDevice, DispatchQueue,
-    DispatchShaderModule, DispatchSurface, InstanceInterface, QueueInterface, RequestAdapterFuture,
-    ShaderModuleInterface,
+    AdapterInterface, ComputePipelineInterface, DeviceInterface, DispatchAdapter, DispatchBlas,
+    DispatchDevice, DispatchQueue, DispatchShaderModule, DispatchSurface, InstanceInterface,
+    QueueInterface, RequestAdapterFuture, ShaderModuleInterface,
 };
 
 #[derive(Debug, Clone)]
@@ -53,6 +53,13 @@ impl InstanceInterface for CustomInstance {
     }
 
     fn wgsl_language_features(&self) -> wgpu::WgslLanguageFeatures {
+        unimplemented!()
+    }
+
+    fn enumerate_adapters(
+        &self,
+        _backends: wgpu::Backends,
+    ) -> Pin<Box<dyn wgpu::custom::EnumerateAdapterFuture>> {
         unimplemented!()
     }
 }
@@ -126,9 +133,9 @@ impl DeviceInterface for CustomDevice {
         DispatchShaderModule::custom(CustomShaderModule(self.0.clone()))
     }
 
-    unsafe fn create_shader_module_spirv(
+    unsafe fn create_shader_module_passthrough(
         &self,
-        _desc: &wgpu::ShaderModuleDescriptorSpirV<'_>,
+        _desc: &wgpu::ShaderModuleDescriptorPassthrough<'_>,
     ) -> DispatchShaderModule {
         unimplemented!()
     }
@@ -161,11 +168,19 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
+    fn create_mesh_pipeline(
+        &self,
+        _desc: &wgpu::MeshPipelineDescriptor<'_>,
+    ) -> wgpu::custom::DispatchRenderPipeline {
+        unimplemented!()
+    }
+
     fn create_compute_pipeline(
         &self,
-        _desc: &wgpu::ComputePipelineDescriptor<'_>,
+        desc: &wgpu::ComputePipelineDescriptor<'_>,
     ) -> wgpu::custom::DispatchComputePipeline {
-        unimplemented!()
+        let module = desc.module.as_custom::<CustomShaderModule>().unwrap();
+        wgpu::custom::DispatchComputePipeline::custom(CustomComputePipeline(module.0.clone()))
     }
 
     unsafe fn create_pipeline_cache(
@@ -180,6 +195,14 @@ impl DeviceInterface for CustomDevice {
     }
 
     fn create_texture(&self, _desc: &wgpu::TextureDescriptor<'_>) -> wgpu::custom::DispatchTexture {
+        unimplemented!()
+    }
+
+    fn create_external_texture(
+        &self,
+        _desc: &wgpu::ExternalTextureDescriptor<'_>,
+        _planes: &[&wgpu::TextureView],
+    ) -> wgpu::custom::DispatchExternalTexture {
         unimplemented!()
     }
 
@@ -224,7 +247,7 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
-    fn on_uncaptured_error(&self, _handler: Box<dyn wgpu::UncapturedErrorHandler>) {
+    fn on_uncaptured_error(&self, _handler: Arc<dyn wgpu::UncapturedErrorHandler>) {
         unimplemented!()
     }
 
@@ -236,15 +259,18 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
-    fn start_capture(&self) {
+    unsafe fn start_graphics_debugger_capture(&self) {
         unimplemented!()
     }
 
-    fn stop_capture(&self) {
+    unsafe fn stop_graphics_debugger_capture(&self) {
         unimplemented!()
     }
 
-    fn poll(&self, _maintain: wgpu::PollType) -> Result<wgpu::PollStatus, wgpu::PollError> {
+    fn poll(
+        &self,
+        _maintain: wgpu::wgt::PollType<u64>,
+    ) -> Result<wgpu::PollStatus, wgpu::PollError> {
         unimplemented!()
     }
 
@@ -262,7 +288,7 @@ impl DeviceInterface for CustomDevice {
 }
 
 #[derive(Debug)]
-struct CustomShaderModule(Counter);
+pub struct CustomShaderModule(pub Counter);
 
 impl ShaderModuleInterface for CustomShaderModule {
     fn get_compilation_info(&self) -> Pin<Box<dyn wgpu::custom::ShaderCompilationInfoFuture>> {
@@ -333,13 +359,26 @@ impl QueueInterface for CustomQueue {
         unimplemented!()
     }
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(all(target_arch = "wasm32", feature = "web"))]
     fn copy_external_image_to_texture(
         &self,
         _source: &wgpu::CopyExternalImageSourceInfo,
         _dest: wgpu::CopyExternalImageDestInfo<&wgpu::Texture>,
         _size: wgpu::Extent3d,
     ) {
+        unimplemented!()
+    }
+
+    fn compact_blas(&self, _blas: &DispatchBlas) -> (Option<u64>, DispatchBlas) {
+        unimplemented!()
+    }
+}
+
+#[derive(Debug)]
+pub struct CustomComputePipeline(pub Counter);
+
+impl ComputePipelineInterface for CustomComputePipeline {
+    fn get_bind_group_layout(&self, _index: u32) -> wgpu::custom::DispatchBindGroupLayout {
         unimplemented!()
     }
 }

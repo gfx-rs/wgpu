@@ -237,7 +237,7 @@ impl Writer {
                 }
             };
 
-            body.push(Instruction::store(res_member.id, member_value_id, None));
+            self.store_io_with_f16_polyfill(body, res_member.id, member_value_id);
 
             match res_member.built_in {
                 Some(crate::BuiltIn::Position { .. })
@@ -675,7 +675,7 @@ impl BlockContext<'_> {
                         load_id
                     }
                     ref other => {
-                        log::error!("Unable to access index of {:?}", other);
+                        log::error!("Unable to access index of {other:?}");
                         return Err(Error::FeatureNotImplemented("access index for type"));
                     }
                 }
@@ -1126,6 +1126,14 @@ impl BlockContext<'_> {
                                 arg1_id,
                                 size as u32,
                                 block,
+                                |result_id, composite_id, index| {
+                                    Instruction::composite_extract(
+                                        result_type_id,
+                                        result_id,
+                                        composite_id,
+                                        &[index],
+                                    )
+                                },
                             );
                             self.cached[expr_handle] = id;
                             return Ok(());
@@ -1134,6 +1142,97 @@ impl BlockContext<'_> {
                             "Correct TypeInner for dot product should be already validated"
                         ),
                     },
+                    fun @ (Mf::Dot4I8Packed | Mf::Dot4U8Packed) => {
+                        if self
+                            .writer
+                            .require_all(&[
+                                spirv::Capability::DotProduct,
+                                spirv::Capability::DotProductInput4x8BitPacked,
+                            ])
+                            .is_ok()
+                        {
+                            // Write optimized code using `PackedVectorFormat4x8Bit`.
+                            if self.writer.lang_version() < (1, 6) {
+                                // SPIR-V 1.6 supports the required capabilities natively, so the extension
+                                // is only required for earlier versions. See right column of
+                                // <https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#OpSDot>.
+                                self.writer.use_extension("SPV_KHR_integer_dot_product");
+                            }
+
+                            let op = match fun {
+                                Mf::Dot4I8Packed => spirv::Op::SDot,
+                                Mf::Dot4U8Packed => spirv::Op::UDot,
+                                _ => unreachable!(),
+                            };
+
+                            block.body.push(Instruction::ternary(
+                                op,
+                                result_type_id,
+                                id,
+                                arg0_id,
+                                arg1_id,
+                                spirv::PackedVectorFormat::PackedVectorFormat4x8Bit as Word,
+                            ));
+                        } else {
+                            // Fall back to a polyfill since `PackedVectorFormat4x8Bit` is not available.
+                            let (extract_op, arg0_id, arg1_id) = match fun {
+                                Mf::Dot4U8Packed => (spirv::Op::BitFieldUExtract, arg0_id, arg1_id),
+                                Mf::Dot4I8Packed => {
+                                    // Convert both packed arguments to signed integers so that we can apply the
+                                    // `BitFieldSExtract` operation on them in `write_dot_product` below.
+                                    let new_arg0_id = self.gen_id();
+                                    block.body.push(Instruction::unary(
+                                        spirv::Op::Bitcast,
+                                        result_type_id,
+                                        new_arg0_id,
+                                        arg0_id,
+                                    ));
+
+                                    let new_arg1_id = self.gen_id();
+                                    block.body.push(Instruction::unary(
+                                        spirv::Op::Bitcast,
+                                        result_type_id,
+                                        new_arg1_id,
+                                        arg1_id,
+                                    ));
+
+                                    (spirv::Op::BitFieldSExtract, new_arg0_id, new_arg1_id)
+                                }
+                                _ => unreachable!(),
+                            };
+
+                            let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
+
+                            const VEC_LENGTH: u8 = 4;
+                            let bit_shifts: [_; VEC_LENGTH as usize] =
+                                core::array::from_fn(|index| {
+                                    self.writer
+                                        .get_constant_scalar(crate::Literal::U32(index as u32 * 8))
+                                });
+
+                            self.write_dot_product(
+                                id,
+                                result_type_id,
+                                arg0_id,
+                                arg1_id,
+                                VEC_LENGTH as Word,
+                                block,
+                                |result_id, composite_id, index| {
+                                    Instruction::ternary(
+                                        extract_op,
+                                        result_type_id,
+                                        result_id,
+                                        composite_id,
+                                        bit_shifts[index as usize],
+                                        eight,
+                                    )
+                                },
+                            );
+                        }
+
+                        self.cached[expr_handle] = id;
+                        return Ok(());
+                    }
                     Mf::Outer => MathOp::Custom(Instruction::binary(
                         spirv::Op::OuterProduct,
                         result_type_id,
@@ -1452,77 +1551,30 @@ impl BlockContext<'_> {
                     Mf::Pack2x16float => MathOp::Ext(spirv::GLOp::PackHalf2x16),
                     Mf::Pack2x16unorm => MathOp::Ext(spirv::GLOp::PackUnorm2x16),
                     Mf::Pack2x16snorm => MathOp::Ext(spirv::GLOp::PackSnorm2x16),
-                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8) => {
-                        let (int_type, is_signed) = match fun {
-                            Mf::Pack4xI8 => (crate::ScalarKind::Sint, true),
-                            Mf::Pack4xU8 => (crate::ScalarKind::Uint, false),
-                            _ => unreachable!(),
-                        };
-                        let uint_type_id =
-                            self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::U32));
+                    fun @ (Mf::Pack4xI8 | Mf::Pack4xU8 | Mf::Pack4xI8Clamp | Mf::Pack4xU8Clamp) => {
+                        let is_signed = matches!(fun, Mf::Pack4xI8 | Mf::Pack4xI8Clamp);
+                        let should_clamp = matches!(fun, Mf::Pack4xI8Clamp | Mf::Pack4xU8Clamp);
 
-                        let int_type_id =
-                            self.get_numeric_type_id(NumericType::Scalar(crate::Scalar {
-                                kind: int_type,
-                                width: 4,
-                            }));
-
-                        let mut last_instruction = Instruction::new(spirv::Op::Nop);
-
-                        let zero = self.writer.get_constant_scalar(crate::Literal::U32(0));
-                        let mut preresult = zero;
-                        block
-                            .body
-                            .reserve(usize::from(VEC_LENGTH) * (2 + usize::from(is_signed)));
-
-                        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
-                        const VEC_LENGTH: u8 = 4;
-                        for i in 0..u32::from(VEC_LENGTH) {
-                            let offset =
-                                self.writer.get_constant_scalar(crate::Literal::U32(i * 8));
-                            let mut extracted = self.gen_id();
-                            block.body.push(Instruction::binary(
-                                spirv::Op::CompositeExtract,
-                                int_type_id,
-                                extracted,
-                                arg0_id,
-                                i,
-                            ));
-                            if is_signed {
-                                let casted = self.gen_id();
-                                block.body.push(Instruction::unary(
-                                    spirv::Op::Bitcast,
-                                    uint_type_id,
-                                    casted,
-                                    extracted,
-                                ));
-                                extracted = casted;
-                            }
-                            let is_last = i == u32::from(VEC_LENGTH - 1);
-                            if is_last {
-                                last_instruction = Instruction::quaternary(
-                                    spirv::Op::BitFieldInsert,
+                        let last_instruction =
+                            if self.writer.require_all(&[spirv::Capability::Int8]).is_ok() {
+                                self.write_pack4x8_optimized(
+                                    block,
                                     result_type_id,
+                                    arg0_id,
                                     id,
-                                    preresult,
-                                    extracted,
-                                    offset,
-                                    eight,
+                                    is_signed,
+                                    should_clamp,
                                 )
                             } else {
-                                let new_preresult = self.gen_id();
-                                block.body.push(Instruction::quaternary(
-                                    spirv::Op::BitFieldInsert,
+                                self.write_pack4x8_polyfill(
+                                    block,
                                     result_type_id,
-                                    new_preresult,
-                                    preresult,
-                                    extracted,
-                                    offset,
-                                    eight,
-                                ));
-                                preresult = new_preresult;
-                            }
-                        }
+                                    arg0_id,
+                                    id,
+                                    is_signed,
+                                    should_clamp,
+                                )
+                            };
 
                         MathOp::Custom(last_instruction)
                     }
@@ -1532,59 +1584,28 @@ impl BlockContext<'_> {
                     Mf::Unpack2x16unorm => MathOp::Ext(spirv::GLOp::UnpackUnorm2x16),
                     Mf::Unpack2x16snorm => MathOp::Ext(spirv::GLOp::UnpackSnorm2x16),
                     fun @ (Mf::Unpack4xI8 | Mf::Unpack4xU8) => {
-                        let (int_type, extract_op, is_signed) = match fun {
-                            Mf::Unpack4xI8 => {
-                                (crate::ScalarKind::Sint, spirv::Op::BitFieldSExtract, true)
-                            }
-                            Mf::Unpack4xU8 => {
-                                (crate::ScalarKind::Uint, spirv::Op::BitFieldUExtract, false)
-                            }
-                            _ => unreachable!(),
-                        };
+                        let is_signed = matches!(fun, Mf::Unpack4xI8);
 
-                        let sint_type_id =
-                            self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::I32));
+                        let last_instruction =
+                            if self.writer.require_all(&[spirv::Capability::Int8]).is_ok() {
+                                self.write_unpack4x8_optimized(
+                                    block,
+                                    result_type_id,
+                                    arg0_id,
+                                    id,
+                                    is_signed,
+                                )
+                            } else {
+                                self.write_unpack4x8_polyfill(
+                                    block,
+                                    result_type_id,
+                                    arg0_id,
+                                    id,
+                                    is_signed,
+                                )
+                            };
 
-                        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
-                        let int_type_id =
-                            self.get_numeric_type_id(NumericType::Scalar(crate::Scalar {
-                                kind: int_type,
-                                width: 4,
-                            }));
-                        block
-                            .body
-                            .reserve(usize::from(VEC_LENGTH) * 2 + usize::from(is_signed));
-                        let arg_id = if is_signed {
-                            let new_arg_id = self.gen_id();
-                            block.body.push(Instruction::unary(
-                                spirv::Op::Bitcast,
-                                sint_type_id,
-                                new_arg_id,
-                                arg0_id,
-                            ));
-                            new_arg_id
-                        } else {
-                            arg0_id
-                        };
-
-                        const VEC_LENGTH: u8 = 4;
-                        let parts: [_; VEC_LENGTH as usize] =
-                            core::array::from_fn(|_| self.gen_id());
-                        for (i, part_id) in parts.into_iter().enumerate() {
-                            let index = self
-                                .writer
-                                .get_constant_scalar(crate::Literal::U32(i as u32 * 8));
-                            block.body.push(Instruction::ternary(
-                                extract_op,
-                                int_type_id,
-                                part_id,
-                                arg_id,
-                                index,
-                                eight,
-                            ));
-                        }
-
-                        MathOp::Custom(Instruction::composite_construct(result_type_id, id, &parts))
+                        MathOp::Custom(last_instruction)
                     }
                 };
 
@@ -1640,6 +1661,7 @@ impl BlockContext<'_> {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge,
             } => self.write_image_sample(
                 result_type_id,
                 image,
@@ -1650,6 +1672,7 @@ impl BlockContext<'_> {
                 offset,
                 level,
                 depth_ref,
+                clamp_to_edge,
                 block,
             )?,
             crate::Expression::Select {
@@ -1870,7 +1893,7 @@ impl BlockContext<'_> {
             crate::TypeInner::Scalar(scalar) => (scalar, None),
             crate::TypeInner::Vector { scalar, size } => (scalar, Some(size)),
             ref other => {
-                log::error!("As source {:?}", other);
+                log::error!("As source {other:?}");
                 return Err(Error::Validation("Unexpected Expression::As source"));
             }
         };
@@ -2540,6 +2563,12 @@ impl BlockContext<'_> {
     }
 
     /// Build the instructions for the arithmetic expression of a dot product
+    ///
+    /// The argument `extractor` is a function that maps `(result_id,
+    /// composite_id, index)` to an instruction that extracts the `index`th
+    /// entry of the value with ID `composite_id` and assigns it to the slot
+    /// with id `result_id` (which must have type `result_type_id`).
+    #[expect(clippy::too_many_arguments)]
     fn write_dot_product(
         &mut self,
         result_id: Word,
@@ -2548,25 +2577,16 @@ impl BlockContext<'_> {
         arg1_id: Word,
         size: u32,
         block: &mut Block,
+        extractor: impl Fn(Word, Word, Word) -> Instruction,
     ) {
         let mut partial_sum = self.writer.get_constant_null(result_type_id);
         let last_component = size - 1;
         for index in 0..=last_component {
             // compute the product of the current components
             let a_id = self.gen_id();
-            block.body.push(Instruction::composite_extract(
-                result_type_id,
-                a_id,
-                arg0_id,
-                &[index],
-            ));
+            block.body.push(extractor(a_id, arg0_id, index));
             let b_id = self.gen_id();
-            block.body.push(Instruction::composite_extract(
-                result_type_id,
-                b_id,
-                arg1_id,
-                &[index],
-            ));
+            block.body.push(extractor(b_id, arg1_id, index));
             let prod_id = self.gen_id();
             block.body.push(Instruction::binary(
                 spirv::Op::IMul,
@@ -2594,6 +2614,288 @@ impl BlockContext<'_> {
             // set the id of the result as the previous partial sum
             partial_sum = id;
         }
+    }
+
+    /// Emit code for `pack4x{I,U}8[Clamp]` if capability "Int8" is available.
+    fn write_pack4x8_optimized(
+        &mut self,
+        block: &mut Block,
+        result_type_id: u32,
+        arg0_id: u32,
+        id: u32,
+        is_signed: bool,
+        should_clamp: bool,
+    ) -> Instruction {
+        let int_type = if is_signed {
+            crate::ScalarKind::Sint
+        } else {
+            crate::ScalarKind::Uint
+        };
+        let wide_vector_type = NumericType::Vector {
+            size: crate::VectorSize::Quad,
+            scalar: crate::Scalar {
+                kind: int_type,
+                width: 4,
+            },
+        };
+        let wide_vector_type_id = self.get_numeric_type_id(wide_vector_type);
+        let packed_vector_type_id = self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Quad,
+            scalar: crate::Scalar {
+                kind: crate::ScalarKind::Uint,
+                width: 1,
+            },
+        });
+
+        let mut wide_vector = arg0_id;
+        if should_clamp {
+            let (min, max, clamp_op) = if is_signed {
+                (
+                    crate::Literal::I32(-128),
+                    crate::Literal::I32(127),
+                    spirv::GLOp::SClamp,
+                )
+            } else {
+                (
+                    crate::Literal::U32(0),
+                    crate::Literal::U32(255),
+                    spirv::GLOp::UClamp,
+                )
+            };
+            let [min, max] = [min, max].map(|lit| {
+                let scalar = self.writer.get_constant_scalar(lit);
+                self.writer.get_constant_composite(
+                    LookupType::Local(LocalType::Numeric(wide_vector_type)),
+                    &[scalar; 4],
+                )
+            });
+
+            let clamp_id = self.gen_id();
+            block.body.push(Instruction::ext_inst(
+                self.writer.gl450_ext_inst_id,
+                clamp_op,
+                wide_vector_type_id,
+                clamp_id,
+                &[wide_vector, min, max],
+            ));
+
+            wide_vector = clamp_id;
+        }
+
+        let packed_vector = self.gen_id();
+        block.body.push(Instruction::unary(
+            spirv::Op::UConvert, // We truncate, so `UConvert` and `SConvert` behave identically.
+            packed_vector_type_id,
+            packed_vector,
+            wide_vector,
+        ));
+
+        // The SPIR-V spec [1] defines the bit order for bit casting between a vector
+        // and a scalar precisely as required by the WGSL spec [2].
+        // [1]: https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#OpBitcast
+        // [2]: https://www.w3.org/TR/WGSL/#pack4xI8-builtin
+        Instruction::unary(spirv::Op::Bitcast, result_type_id, id, packed_vector)
+    }
+
+    /// Emit code for `pack4x{I,U}8[Clamp]` if capability "Int8" is not available.
+    fn write_pack4x8_polyfill(
+        &mut self,
+        block: &mut Block,
+        result_type_id: u32,
+        arg0_id: u32,
+        id: u32,
+        is_signed: bool,
+        should_clamp: bool,
+    ) -> Instruction {
+        let int_type = if is_signed {
+            crate::ScalarKind::Sint
+        } else {
+            crate::ScalarKind::Uint
+        };
+        let uint_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::U32));
+        let int_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar {
+            kind: int_type,
+            width: 4,
+        }));
+
+        let mut last_instruction = Instruction::new(spirv::Op::Nop);
+
+        let zero = self.writer.get_constant_scalar(crate::Literal::U32(0));
+        let mut preresult = zero;
+        block
+            .body
+            .reserve(usize::from(VEC_LENGTH) * (2 + usize::from(is_signed)));
+
+        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
+        const VEC_LENGTH: u8 = 4;
+        for i in 0..u32::from(VEC_LENGTH) {
+            let offset = self.writer.get_constant_scalar(crate::Literal::U32(i * 8));
+            let mut extracted = self.gen_id();
+            block.body.push(Instruction::binary(
+                spirv::Op::CompositeExtract,
+                int_type_id,
+                extracted,
+                arg0_id,
+                i,
+            ));
+            if is_signed {
+                let casted = self.gen_id();
+                block.body.push(Instruction::unary(
+                    spirv::Op::Bitcast,
+                    uint_type_id,
+                    casted,
+                    extracted,
+                ));
+                extracted = casted;
+            }
+            if should_clamp {
+                let (min, max, clamp_op) = if is_signed {
+                    (
+                        crate::Literal::I32(-128),
+                        crate::Literal::I32(127),
+                        spirv::GLOp::SClamp,
+                    )
+                } else {
+                    (
+                        crate::Literal::U32(0),
+                        crate::Literal::U32(255),
+                        spirv::GLOp::UClamp,
+                    )
+                };
+                let [min, max] = [min, max].map(|lit| self.writer.get_constant_scalar(lit));
+
+                let clamp_id = self.gen_id();
+                block.body.push(Instruction::ext_inst(
+                    self.writer.gl450_ext_inst_id,
+                    clamp_op,
+                    result_type_id,
+                    clamp_id,
+                    &[extracted, min, max],
+                ));
+
+                extracted = clamp_id;
+            }
+            let is_last = i == u32::from(VEC_LENGTH - 1);
+            if is_last {
+                last_instruction = Instruction::quaternary(
+                    spirv::Op::BitFieldInsert,
+                    result_type_id,
+                    id,
+                    preresult,
+                    extracted,
+                    offset,
+                    eight,
+                )
+            } else {
+                let new_preresult = self.gen_id();
+                block.body.push(Instruction::quaternary(
+                    spirv::Op::BitFieldInsert,
+                    result_type_id,
+                    new_preresult,
+                    preresult,
+                    extracted,
+                    offset,
+                    eight,
+                ));
+                preresult = new_preresult;
+            }
+        }
+        last_instruction
+    }
+
+    /// Emit code for `unpack4x{I,U}8` if capability "Int8" is available.
+    fn write_unpack4x8_optimized(
+        &mut self,
+        block: &mut Block,
+        result_type_id: u32,
+        arg0_id: u32,
+        id: u32,
+        is_signed: bool,
+    ) -> Instruction {
+        let (int_type, convert_op) = if is_signed {
+            (crate::ScalarKind::Sint, spirv::Op::SConvert)
+        } else {
+            (crate::ScalarKind::Uint, spirv::Op::UConvert)
+        };
+
+        let packed_vector_type_id = self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Quad,
+            scalar: crate::Scalar {
+                kind: int_type,
+                width: 1,
+            },
+        });
+
+        // The SPIR-V spec [1] defines the bit order for bit casting between a vector
+        // and a scalar precisely as required by the WGSL spec [2].
+        // [1]: https://registry.khronos.org/SPIR-V/specs/unified1/SPIRV.html#OpBitcast
+        // [2]: https://www.w3.org/TR/WGSL/#pack4xI8-builtin
+        let packed_vector = self.gen_id();
+        block.body.push(Instruction::unary(
+            spirv::Op::Bitcast,
+            packed_vector_type_id,
+            packed_vector,
+            arg0_id,
+        ));
+
+        Instruction::unary(convert_op, result_type_id, id, packed_vector)
+    }
+
+    /// Emit code for `unpack4x{I,U}8` if capability "Int8" is not available.
+    fn write_unpack4x8_polyfill(
+        &mut self,
+        block: &mut Block,
+        result_type_id: u32,
+        arg0_id: u32,
+        id: u32,
+        is_signed: bool,
+    ) -> Instruction {
+        let (int_type, extract_op) = if is_signed {
+            (crate::ScalarKind::Sint, spirv::Op::BitFieldSExtract)
+        } else {
+            (crate::ScalarKind::Uint, spirv::Op::BitFieldUExtract)
+        };
+
+        let sint_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::I32));
+
+        let eight = self.writer.get_constant_scalar(crate::Literal::U32(8));
+        let int_type_id = self.get_numeric_type_id(NumericType::Scalar(crate::Scalar {
+            kind: int_type,
+            width: 4,
+        }));
+        block
+            .body
+            .reserve(usize::from(VEC_LENGTH) * 2 + usize::from(is_signed));
+        let arg_id = if is_signed {
+            let new_arg_id = self.gen_id();
+            block.body.push(Instruction::unary(
+                spirv::Op::Bitcast,
+                sint_type_id,
+                new_arg_id,
+                arg0_id,
+            ));
+            new_arg_id
+        } else {
+            arg0_id
+        };
+
+        const VEC_LENGTH: u8 = 4;
+        let parts: [_; VEC_LENGTH as usize] = core::array::from_fn(|_| self.gen_id());
+        for (i, part_id) in parts.into_iter().enumerate() {
+            let index = self
+                .writer
+                .get_constant_scalar(crate::Literal::U32(i as u32 * 8));
+            block.body.push(Instruction::ternary(
+                extract_op,
+                int_type_id,
+                part_id,
+                arg_id,
+                index,
+                eight,
+            ));
+        }
+
+        Instruction::composite_construct(result_type_id, id, &parts)
     }
 
     /// Generate one or more SPIR-V blocks for `naga_block`.
@@ -2677,62 +2979,69 @@ impl BlockContext<'_> {
                     ref accept,
                     ref reject,
                 } => {
-                    let condition_id = self.cached[condition];
+                    // In spirv 1.6, in a conditional branch the two block ids
+                    // of the branches can't have the same label. If `accept`
+                    // and `reject` are both empty (e.g. in `if (condition) {}`)
+                    // merge id will be both labels. Because both branches are
+                    // empty, we can skip the if statement.
+                    if !(accept.is_empty() && reject.is_empty()) {
+                        let condition_id = self.cached[condition];
 
-                    let merge_id = self.gen_id();
-                    block.body.push(Instruction::selection_merge(
-                        merge_id,
-                        spirv::SelectionControl::NONE,
-                    ));
+                        let merge_id = self.gen_id();
+                        block.body.push(Instruction::selection_merge(
+                            merge_id,
+                            spirv::SelectionControl::NONE,
+                        ));
 
-                    let accept_id = if accept.is_empty() {
-                        None
-                    } else {
-                        Some(self.gen_id())
-                    };
-                    let reject_id = if reject.is_empty() {
-                        None
-                    } else {
-                        Some(self.gen_id())
-                    };
+                        let accept_id = if accept.is_empty() {
+                            None
+                        } else {
+                            Some(self.gen_id())
+                        };
+                        let reject_id = if reject.is_empty() {
+                            None
+                        } else {
+                            Some(self.gen_id())
+                        };
 
-                    self.function.consume(
-                        block,
-                        Instruction::branch_conditional(
-                            condition_id,
-                            accept_id.unwrap_or(merge_id),
-                            reject_id.unwrap_or(merge_id),
-                        ),
-                    );
+                        self.function.consume(
+                            block,
+                            Instruction::branch_conditional(
+                                condition_id,
+                                accept_id.unwrap_or(merge_id),
+                                reject_id.unwrap_or(merge_id),
+                            ),
+                        );
 
-                    if let Some(block_id) = accept_id {
-                        // We can ignore the `BlockExitDisposition` returned here because,
-                        // even if `merge_id` is not actually reachable, it is always
-                        // referred to by the `OpSelectionMerge` instruction we emitted
-                        // earlier.
-                        let _ = self.write_block(
-                            block_id,
-                            accept,
-                            BlockExit::Branch { target: merge_id },
-                            loop_context,
-                            debug_info,
-                        )?;
+                        if let Some(block_id) = accept_id {
+                            // We can ignore the `BlockExitDisposition` returned here because,
+                            // even if `merge_id` is not actually reachable, it is always
+                            // referred to by the `OpSelectionMerge` instruction we emitted
+                            // earlier.
+                            let _ = self.write_block(
+                                block_id,
+                                accept,
+                                BlockExit::Branch { target: merge_id },
+                                loop_context,
+                                debug_info,
+                            )?;
+                        }
+                        if let Some(block_id) = reject_id {
+                            // We can ignore the `BlockExitDisposition` returned here because,
+                            // even if `merge_id` is not actually reachable, it is always
+                            // referred to by the `OpSelectionMerge` instruction we emitted
+                            // earlier.
+                            let _ = self.write_block(
+                                block_id,
+                                reject,
+                                BlockExit::Branch { target: merge_id },
+                                loop_context,
+                                debug_info,
+                            )?;
+                        }
+
+                        block = Block::new(merge_id);
                     }
-                    if let Some(block_id) = reject_id {
-                        // We can ignore the `BlockExitDisposition` returned here because,
-                        // even if `merge_id` is not actually reachable, it is always
-                        // referred to by the `OpSelectionMerge` instruction we emitted
-                        // earlier.
-                        let _ = self.write_block(
-                            block_id,
-                            reject,
-                            BlockExit::Branch { target: merge_id },
-                            loop_context,
-                            debug_info,
-                        )?;
-                    }
-
-                    block = Block::new(merge_id);
                 }
                 Statement::Switch {
                     selector,
@@ -2940,8 +3249,11 @@ impl BlockContext<'_> {
                     self.function.consume(block, Instruction::kill());
                     return Ok(BlockExitDisposition::Discarded);
                 }
-                Statement::Barrier(flags) => {
-                    self.writer.write_barrier(flags, &mut block);
+                Statement::ControlBarrier(flags) => {
+                    self.writer.write_control_barrier(flags, &mut block);
+                }
+                Statement::MemoryBarrier(flags) => {
+                    self.writer.write_memory_barrier(flags, &mut block);
                 }
                 Statement::Store { pointer, value } => {
                     let value_id = self.cached[value];
@@ -3231,6 +3543,7 @@ impl BlockContext<'_> {
                                 }
                                 _ => unimplemented!(),
                             };
+
                             let mut cas_instr = Instruction::new(spirv::Op::AtomicCompareExchange);
                             cas_instr.set_type(scalar_type_id);
                             cas_instr.set_result(cas_result_id);
@@ -3276,7 +3589,7 @@ impl BlockContext<'_> {
                 }
                 Statement::WorkGroupUniformLoad { pointer, result } => {
                     self.writer
-                        .write_barrier(crate::Barrier::WORK_GROUP, &mut block);
+                        .write_control_barrier(crate::Barrier::WORK_GROUP, &mut block);
                     let result_type_id = self.get_expression_type_id(&self.fun_info[result].ty);
                     // Embed the body of
                     match self.write_access_chain(
@@ -3316,7 +3629,7 @@ impl BlockContext<'_> {
                         }
                     }
                     self.writer
-                        .write_barrier(crate::Barrier::WORK_GROUP, &mut block);
+                        .write_control_barrier(crate::Barrier::WORK_GROUP, &mut block);
                 }
                 Statement::RayQuery { query, ref fun } => {
                     self.write_ray_query_function(query, fun, &mut block);
@@ -3342,6 +3655,7 @@ impl BlockContext<'_> {
                 } => {
                     self.write_subgroup_gather(mode, argument, result, &mut block)?;
                 }
+                Statement::MeshFunction(_) => unreachable!(),
             }
         }
 

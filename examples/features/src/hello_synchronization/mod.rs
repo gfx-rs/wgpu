@@ -16,6 +16,7 @@ async fn run() {
             label: None,
             required_features: wgpu::Features::empty(),
             required_limits: wgpu::Limits::downlevel_defaults(),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::Performance,
             trace: wgpu::Trace::Off,
         })
@@ -28,13 +29,13 @@ async fn run() {
     } = execute(&device, &queue, ARR_SIZE).await;
 
     // Print data
-    log::info!("Patient results: {:?}", patient_workgroup_results);
+    log::info!("Patient results: {patient_workgroup_results:?}");
     if !patient_workgroup_results.iter().any(|e| *e != 16) {
         log::info!("patient_main was patient.");
     } else {
         log::error!("patient_main was not patient!");
     }
-    log::info!("Hasty results: {:?}", hasty_workgroup_results);
+    log::info!("Hasty results: {hasty_workgroup_results:?}");
     if hasty_workgroup_results.iter().any(|e| *e != 16) {
         log::info!("hasty_main was not patient.");
     } else {
@@ -181,7 +182,7 @@ async fn get_data<T: bytemuck::Pod>(
     let buffer_slice = staging_buffer.slice(..);
     let (sender, receiver) = flume::bounded(1);
     buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap());
-    device.poll(wgpu::PollType::wait()).unwrap();
+    device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
     receiver.recv_async().await.unwrap().unwrap();
     output.copy_from_slice(bytemuck::cast_slice(&buffer_slice.get_mapped_range()[..]));
     staging_buffer.unmap();
@@ -208,4 +209,4 @@ pub fn main() {
 }
 
 #[cfg(test)]
-mod tests;
+pub mod tests;

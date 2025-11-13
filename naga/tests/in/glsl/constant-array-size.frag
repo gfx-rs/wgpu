@@ -13,4 +13,6 @@ vec4 function() {
     return sum;
 }
 
-void main() {}
+void main() {
+    function();
+}

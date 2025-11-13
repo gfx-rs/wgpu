@@ -30,7 +30,7 @@ pub(crate) fn validate(cmd: ValidateSubcommand) -> anyhow::Result<()> {
                     Ok(result) => result,
                     Err(payload) => Err(match payload.downcast_ref::<&str>() {
                         Some(message) => {
-                            anyhow::anyhow!("Validation job thread panicked: {}", message)
+                            anyhow::anyhow!("Validation job thread panicked: {message}")
                         }
                         None => anyhow::anyhow!("Validation job thread panicked"),
                     }),
@@ -46,7 +46,7 @@ pub(crate) fn validate(cmd: ValidateSubcommand) -> anyhow::Result<()> {
         if let Err(error) = result {
             all_good = false;
             progress_bar.suspend(|| {
-                log::error!("{:#}", error);
+                log::error!("{error:#}");
             });
         }
         progress_bar.inc(1);
@@ -60,7 +60,7 @@ pub(crate) fn validate(cmd: ValidateSubcommand) -> anyhow::Result<()> {
     );
 
     if let Err(error) = enqueuing_thread.join().unwrap() {
-        bail!("Error enqueuing jobs:\n{:#}", error);
+        bail!("Error enqueuing jobs:\n{error:#}");
     }
 
     Ok(())
@@ -280,9 +280,11 @@ fn validate_metal(path: &Path, xcrun: &str) -> anyhow::Result<()> {
     } else {
         format!("-std={language}")
     };
+    let warnings_as_errors = ["-Werror=constant-conversion"];
     EasyCommand::new(xcrun, |cmd| {
         cmd.args(["-sdk", "macosx", "metal", "-mmacosx-version-min=10.11"])
             .arg(std_arg)
+            .args(warnings_as_errors)
             .args(["-x", "metal", &*path.to_string_lossy(), "-o", "/dev/null"])
     })
     .success()

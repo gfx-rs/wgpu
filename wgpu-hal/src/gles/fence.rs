@@ -102,7 +102,7 @@ impl Fence {
         &self,
         gl: &glow::Context,
         wait_value: crate::FenceValue,
-        timeout_ns: u64,
+        timeout_ns: u32,
     ) -> Result<bool, crate::DeviceError> {
         let last_completed = self.last_completed.load(Ordering::Acquire);
 
@@ -134,7 +134,7 @@ impl Fence {
             gl.client_wait_sync(
                 gl_fence.sync,
                 glow::SYNC_FLUSH_COMMANDS_BIT,
-                timeout_ns as i32,
+                timeout_ns.min(i32::MAX as u32) as i32,
             )
         };
 

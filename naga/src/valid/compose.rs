@@ -32,10 +32,7 @@ pub fn validate_compose(
                     } if comp_scalar == scalar => comp_size as u32,
                     ref other => {
                         log::error!(
-                            "Vector component[{}] type {:?}, building {:?}",
-                            index,
-                            other,
-                            scalar
+                            "Vector component[{index}] type {other:?}, building {scalar:?}"
                         );
                         return Err(ComposeError::ComponentType {
                             index: index as u32,
@@ -65,7 +62,7 @@ pub fn validate_compose(
             }
             for (index, comp_res) in component_resolutions.enumerate() {
                 if comp_res.inner_with(gctx.types) != &inner {
-                    log::error!("Matrix component[{}] type {:?}", index, comp_res);
+                    log::error!("Matrix component[{index}] type {comp_res:?}");
                     return Err(ComposeError::ComponentType {
                         index: index as u32,
                     });
@@ -84,12 +81,8 @@ pub fn validate_compose(
                 });
             }
             for (index, comp_res) in component_resolutions.enumerate() {
-                let base_inner = &gctx.types[base].inner;
-                let comp_res_inner = comp_res.inner_with(gctx.types);
-                // We don't support arrays of pointers, but it seems best not to
-                // embed that assumption here, so use `TypeInner::equivalent`.
-                if !base_inner.equivalent(comp_res_inner, gctx.types) {
-                    log::error!("Array component[{}] type {:?}", index, comp_res);
+                if !gctx.compare_types(&TypeResolution::Handle(base), &comp_res) {
+                    log::error!("Array component[{index}] type {comp_res:?}");
                     return Err(ComposeError::ComponentType {
                         index: index as u32,
                     });
@@ -105,12 +98,8 @@ pub fn validate_compose(
             }
             for (index, (member, comp_res)) in members.iter().zip(component_resolutions).enumerate()
             {
-                let member_inner = &gctx.types[member.ty].inner;
-                let comp_res_inner = comp_res.inner_with(gctx.types);
-                // We don't support pointers in structs, but it seems best not to embed
-                // that assumption here, so use `TypeInner::equivalent`.
-                if !comp_res_inner.equivalent(member_inner, gctx.types) {
-                    log::error!("Struct component[{}] type {:?}", index, comp_res);
+                if !gctx.compare_types(&TypeResolution::Handle(member.ty), &comp_res) {
+                    log::error!("Struct component[{index}] type {comp_res:?}");
                     return Err(ComposeError::ComponentType {
                         index: index as u32,
                     });
@@ -118,7 +107,7 @@ pub fn validate_compose(
             }
         }
         ref other => {
-            log::error!("Composing of {:?}", other);
+            log::error!("Composing of {other:?}");
             return Err(ComposeError::Type(self_ty_handle));
         }
     }

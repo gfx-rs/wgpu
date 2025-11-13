@@ -358,7 +358,7 @@ impl crate::framework::Example for Example {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None
         });
 
@@ -392,6 +392,7 @@ impl crate::framework::Example for Example {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view,
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
@@ -401,6 +402,7 @@ impl crate::framework::Example for Example {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         rpass.set_pipeline(&self.pipeline);
@@ -429,44 +431,35 @@ pub fn main() {
 }
 
 #[cfg(test)]
-fn test_parameters() -> wgpu_test::TestParameters {
-    wgpu_test::TestParameters::default()
-        // https://github.com/gfx-rs/wgpu/issues/7287
-        .expect_fail(wgpu_test::FailureCase::backend_adapter(
-            wgpu::Backends::METAL,
-            "Apple M",
-        ))
-}
-
-#[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "texture-arrays",
     image_path: "/examples/features/src/texture_arrays/screenshot.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::empty(),
-    base_test_parameters: test_parameters(),
+    base_test_parameters: wgpu_test::TestParameters::default(),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
     _phantom: std::marker::PhantomData::<Example>,
 };
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST_UNIFORM: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
-    name: "texture-arrays-uniform",
-    image_path: "/examples/features/src/texture_arrays/screenshot.png",
-    width: 1024,
-    height: 768,
-    optional_features: wgpu::Features::empty(),
-    base_test_parameters: test_parameters(),
-    comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
-    _phantom: std::marker::PhantomData::<Example>,
-};
+pub static TEST_UNIFORM: crate::framework::ExampleTestParams =
+    crate::framework::ExampleTestParams {
+        name: "texture-arrays-uniform",
+        image_path: "/examples/features/src/texture_arrays/screenshot.png",
+        width: 1024,
+        height: 768,
+        optional_features: wgpu::Features::empty(),
+        base_test_parameters: wgpu_test::TestParameters::default(),
+        comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
+        _phantom: std::marker::PhantomData::<Example>,
+    };
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST_NON_UNIFORM: crate::framework::ExampleTestParams =
+pub static TEST_NON_UNIFORM: crate::framework::ExampleTestParams =
     crate::framework::ExampleTestParams {
         name: "texture-arrays-non-uniform",
         image_path: "/examples/features/src/texture_arrays/screenshot.png",
@@ -474,7 +467,7 @@ static TEST_NON_UNIFORM: crate::framework::ExampleTestParams =
         height: 768,
         optional_features:
             wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-        base_test_parameters: test_parameters(),
+        base_test_parameters: wgpu_test::TestParameters::default(),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
         _phantom: std::marker::PhantomData::<Example>,
     };

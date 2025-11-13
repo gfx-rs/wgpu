@@ -256,7 +256,7 @@ impl crate::framework::Example for Example {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -298,7 +298,7 @@ impl crate::framework::Example for Example {
                 },
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
             Some(pipeline_wire)
@@ -341,6 +341,7 @@ impl crate::framework::Example for Example {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
@@ -355,6 +356,7 @@ impl crate::framework::Example for Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             rpass.push_debug_group("Prepare data for draw.");
             rpass.set_pipeline(&self.pipeline);
@@ -380,7 +382,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "cube",
     // Generated on 1080ti on Vk/Windows
     image_path: "/examples/features/src/cube/screenshot.png",
@@ -396,7 +398,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST_LINES: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST_LINES: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "cube-lines",
     // Generated on 1080ti on Vk/Windows
     image_path: "/examples/features/src/cube/screenshot-lines.png",

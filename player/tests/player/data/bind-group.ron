@@ -1,0 +1,84 @@
+(
+    features: "",
+    expectations: [], //not crash!
+    actions: [
+        CreateBuffer(PointerId(0x10), (
+            label: None,
+            size: 16,
+            usage: "UNIFORM",
+            mapped_at_creation: false,
+        )),
+        CreateBindGroupLayout(PointerId(0x10), (
+            label: None,
+            entries: [
+                (
+                    binding: 0,
+                    visibility: "VERTEX | FRAGMENT",
+                    ty: Buffer(
+                        ty: Uniform,
+                    ),
+                ),
+            ],
+        )),
+        CreateBindGroup(PointerId(0x10), (
+            label: None,
+            layout: PointerId(0x10),
+            entries: [
+                (
+                    binding: 0,
+                    resource: Buffer((
+                        buffer: PointerId(0x10),
+                        offset: 0,
+                        size: None,
+                    )),
+                )
+            ],
+        )),
+        CreatePipelineLayout(PointerId(0x10), (
+            label: Some("empty"),
+            bind_group_layouts: [
+                PointerId(0x10),
+            ],
+            push_constant_ranges: [],
+        )),
+        CreateShaderModule(
+            id: PointerId(0x10),
+            desc: (
+                label: None,
+                flags: (bits: 3),
+            ),
+            data: "empty.wgsl",
+        ),
+        CreateComputePipeline(
+            id: PointerId(0x10),
+            desc: (
+                label: None,
+                layout: Some(PointerId(0x10)),
+                stage: (
+                    module: PointerId(0x10),
+                    entry_point: None,
+                    constants: {},
+                    zero_initialize_workgroup_memory: true,
+                    vertex_pulling_transform: false,
+                ),
+            ),
+        ),
+        Submit(1, [
+            RunComputePass(
+                pass: (
+                    commands: [
+                        SetBindGroup(
+                            index: 0,
+                            num_dynamic_offsets: 0,
+                            bind_group: Some(PointerId(0x10)),
+                        ),
+                        SetPipeline(PointerId(0x10)),
+                    ],
+                    dynamic_offsets: [],
+                    string_data: [],
+                    push_constant_data: [],
+                ),
+            ),
+        ]),
+    ],
+)

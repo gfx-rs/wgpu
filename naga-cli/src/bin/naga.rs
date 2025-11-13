@@ -42,7 +42,15 @@ struct Args {
     #[argh(option)]
     block_ctx_dir: Option<String>,
 
-    /// the shader entrypoint to use when compiling to GLSL
+    /// the shader entrypoint.
+    ///
+    /// When specified along with the `--compact` option, anything not reachable
+    /// from the selected entry point will not appear in the output module.
+    ///
+    /// When specified without the `--compact` option, alternate entry points
+    /// will not appear in the output module, and other declarations referenced
+    /// by alternate entrypoints may or may not appear, depending on whether
+    /// the module contains overrides.
     #[argh(option)]
     entry_point: Option<String>,
 
@@ -55,6 +63,12 @@ struct Args {
     /// May be `50`, `51`, or `60`
     #[argh(option)]
     shader_model: Option<ShaderModelArg>,
+
+    /// the SPIR-V version to use if targeting SPIR-V
+    ///
+    /// For example, 1.0, 1.4, etc
+    #[argh(option)]
+    spirv_version: Option<SpirvVersionArg>,
 
     /// the shader stage, for example 'frag', 'vert', or 'compute'.
     /// if the shader stage is unspecified it will be derived from
@@ -91,6 +105,9 @@ struct Args {
     ///
     /// Output files will reflect the compacted IR. If you want to see the IR as
     /// it was before compaction, use the `--before-compaction` option.
+    ///
+    /// Even when this option is not active, compaction may still occur as part
+    /// of override processing.
     #[argh(switch)]
     compact: bool,
 
@@ -175,6 +192,22 @@ impl FromStr for ShaderModelArg {
             "67" => ShaderModel::V6_7,
             _ => return Err(format!("Invalid value for --shader-model: {s}")),
         }))
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SpirvVersionArg(u8, u8);
+
+impl FromStr for SpirvVersionArg {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let dot = s
+            .find(".")
+            .ok_or_else(|| "Missing dot separator".to_owned())?;
+        let major = s[..dot].parse::<u8>().map_err(|e| e.to_string())?;
+        let minor = s[dot + 1..].parse::<u8>().map_err(|e| e.to_string())?;
+        Ok(Self(major, minor))
     }
 }
 
@@ -319,6 +352,14 @@ struct Parameters<'a> {
     input_kind: Option<InputKind>,
     shader_stage: Option<ShaderStage>,
     defines: FastHashMap<String, String>,
+
+    /// We use this copy of `args.compact` to know whether we should pass the
+    /// entrypoint to `process_overrides`, which will result in removal from
+    /// the module of anything not reachable from that entry point.
+    ///
+    /// When we don't know an entrypoint, we still compact the module as a whole
+    /// if `args.compact` is set, but we don't use this copy for anything.
+    compact: bool,
 }
 
 trait PrettyResult {
@@ -381,7 +422,16 @@ fn run() -> anyhow::Result<()> {
         .init();
 
     // Parse commandline arguments
-    let args: Args = argh::from_env();
+    let args = {
+        let mut args: Args = argh::from_env();
+
+        if args.before_compaction.is_some() {
+            args.compact = true;
+        }
+
+        args
+    };
+
     if args.version {
         println!("{}", env!("CARGO_PKG_VERSION"));
         return Ok(());
@@ -424,7 +474,7 @@ fn run() -> anyhow::Result<()> {
     params.spv_in = naga::front::spv::Options {
         adjust_coordinate_space: !args.keep_coordinate_space,
         strict_capabilities: false,
-        block_ctx_dump_prefix: args.block_ctx_dir.clone().map(std::path::PathBuf::from),
+        block_ctx_dump_prefix: args.block_ctx_dir.clone(),
     };
 
     params.entry_point.clone_from(&args.entry_point);
@@ -436,6 +486,9 @@ fn run() -> anyhow::Result<()> {
     }
     if let Some(ref version) = args.metal_version {
         params.msl.lang_version = version.0;
+    }
+    if let Some(ref version) = args.spirv_version {
+        params.spv_out.lang_version = (version.0, version.1);
     }
     params.keep_coordinate_space = args.keep_coordinate_space;
 
@@ -451,8 +504,10 @@ fn run() -> anyhow::Result<()> {
         !params.keep_coordinate_space,
     );
 
+    params.compact = args.compact;
+
     if args.bulk_validate {
-        return bulk_validate(args, &params);
+        return bulk_validate(&args, &params);
     }
 
     let mut files = args.files.iter();
@@ -467,6 +522,8 @@ fn run() -> anyhow::Result<()> {
     } else {
         return Err(CliError("Input file path is not specified").into());
     };
+
+    let file_name = input_path.to_string_lossy();
 
     params.input_kind = args.input_kind;
     params.shader_stage = args.shader_stage;
@@ -486,7 +543,7 @@ fn run() -> anyhow::Result<()> {
                 .set(naga::back::spv::WriterFlags::DEBUG, true);
             params.spv_out.debug_info = Some(naga::back::spv::DebugInfo {
                 source_code: input_text,
-                file_name: input_path,
+                file_name: &file_name,
                 language,
             })
         } else {
@@ -509,7 +566,8 @@ fn run() -> anyhow::Result<()> {
                 let missing = match Path::new(path).extension().and_then(|ex| ex.to_str()) {
                     Some("wgsl") => C::CLIP_DISTANCE | C::CULL_DISTANCE,
                     Some("metal") => C::CULL_DISTANCE,
-                    _ => C::empty(),
+                    Some("hlsl") => C::empty(),
+                    _ => C::TEXTURE_EXTERNAL,
                 };
                 caps & !missing
             });
@@ -534,7 +592,11 @@ fn run() -> anyhow::Result<()> {
     };
 
     // Compact the module, if requested.
-    let info = if args.compact || args.before_compaction.is_some() {
+    //
+    // Note that when output is to a non-WGSL shader language, we will call
+    // `process_overrides`, which does its own compaction even if it is not
+    // explicitly requested on the command line.
+    let info = if args.compact {
         // Compact only if validation succeeded. Otherwise, compaction may panic.
         if info.is_some() {
             // Write out the module state before compaction, if requested.
@@ -542,7 +604,7 @@ fn run() -> anyhow::Result<()> {
                 write_output(&module, &info, &params, before_compaction)?;
             }
 
-            naga::compact::compact(&mut module);
+            naga::compact::compact(&mut module, KeepUnused::No);
 
             // Re-validate the IR after compaction.
             match naga::valid::Validator::new(params.validation_flags, validation_caps)
@@ -609,7 +671,7 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
 
     Ok(match input_kind {
         InputKind::Bincode => Parsed {
-            module: bincode::deserialize(&input)?,
+            module: bincode::serde::decode_from_slice(&input, bincode::config::standard())?.0,
             input_text: None,
             language: naga::back::spv::SourceLanguage::Unknown,
         },
@@ -686,6 +748,16 @@ fn write_output(
     params: &Parameters,
     output_path: &str,
 ) -> anyhow::Result<()> {
+    let entry_point = params.entry_point.as_deref().map(|name| {
+        let ep_index = module
+            .entry_points
+            .iter()
+            .position(|ep| ep.name == *name)
+            .expect("Unable to find the entry point");
+
+        (module.entry_points[ep_index].stage, name)
+    });
+
     match Path::new(&output_path)
         .extension()
         .ok_or(CliError("Output filename has no extension"))?
@@ -703,8 +775,8 @@ fn write_output(
             }
         }
         "bin" => {
-            let file = fs::File::create(output_path)?;
-            bincode::serialize_into(file, module)?;
+            let mut file = fs::File::create(output_path)?;
+            bincode::serde::encode_into_std_write(module, &mut file, bincode::config::standard())?;
         }
         "metal" => {
             use naga::back::msl;
@@ -717,9 +789,13 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) =
-                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
-                    .unwrap_pretty();
+            let (module, info) = naga::back::pipeline_constants::process_overrides(
+                module,
+                info,
+                entry_point.filter(|_| params.compact),
+                &params.overrides,
+            )
+            .unwrap_pretty();
 
             let pipeline_options = msl::PipelineOptions::default();
             let (msl, _) =
@@ -729,34 +805,26 @@ fn write_output(
         "spv" => {
             use naga::back::spv;
 
-            let pipeline_options_owned;
-            let pipeline_options = match params.entry_point {
-                Some(ref name) => {
-                    let ep_index = module
-                        .entry_points
-                        .iter()
-                        .position(|ep| ep.name == *name)
-                        .expect("Unable to find the entry point");
-                    pipeline_options_owned = spv::PipelineOptions {
-                        entry_point: name.clone(),
-                        shader_stage: module.entry_points[ep_index].stage,
-                    };
-                    Some(&pipeline_options_owned)
-                }
-                None => None,
-            };
+            let pipeline_options = entry_point.map(|(shader_stage, name)| spv::PipelineOptions {
+                entry_point: name.to_owned(),
+                shader_stage,
+            });
 
             let info = info.as_ref().ok_or(CliError(
                 "Generating SPIR-V output requires validation to \
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) =
-                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
-                    .unwrap_pretty();
+            let (module, info) = naga::back::pipeline_constants::process_overrides(
+                module,
+                info,
+                entry_point.filter(|_| params.compact),
+                &params.overrides,
+            )
+            .unwrap_pretty();
 
-            let spv =
-                spv::write_vec(&module, &info, &params.spv_out, pipeline_options).unwrap_pretty();
+            let spv = spv::write_vec(&module, &info, &params.spv_out, pipeline_options.as_ref())
+                .unwrap_pretty();
             let bytes = spv
                 .iter()
                 .fold(Vec::with_capacity(spv.len() * 4), |mut v, w| {
@@ -769,17 +837,30 @@ fn write_output(
         stage @ ("vert" | "frag" | "comp") => {
             use naga::back::glsl;
 
+            let file_ext_stage = match stage {
+                "vert" => naga::ShaderStage::Vertex,
+                "frag" => naga::ShaderStage::Fragment,
+                "comp" => naga::ShaderStage::Compute,
+                _ => unreachable!(),
+            };
+
+            let (ep_stage, ep_name) = match entry_point {
+                Some((stage, name)) => {
+                    if stage != file_ext_stage {
+                        eprintln!(
+                            "warning: the shader stage `{stage:?}` of the selected entry point \
+                                `{name}` in the input file does not match the shader stage \
+                                implied by the file name",
+                        );
+                    }
+                    (stage, name.to_string())
+                }
+                _ => (file_ext_stage, "main".to_string()),
+            };
+
             let pipeline_options = glsl::PipelineOptions {
-                entry_point: match params.entry_point {
-                    Some(ref name) => name.clone(),
-                    None => "main".to_string(),
-                },
-                shader_stage: match stage {
-                    "vert" => naga::ShaderStage::Vertex,
-                    "frag" => naga::ShaderStage::Fragment,
-                    "comp" => naga::ShaderStage::Compute,
-                    _ => unreachable!(),
-                },
+                entry_point: ep_name,
+                shader_stage: ep_stage,
                 multiview: None,
             };
 
@@ -788,9 +869,13 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) =
-                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
-                    .unwrap_pretty();
+            let (module, info) = naga::back::pipeline_constants::process_overrides(
+                module,
+                info,
+                entry_point.filter(|_| params.compact),
+                &params.overrides,
+            )
+            .unwrap_pretty();
 
             let mut buffer = String::new();
             let mut writer = glsl::Writer::new(
@@ -819,12 +904,17 @@ fn write_output(
                  succeed, and it failed in a previous step",
             ))?;
 
-            let (module, info) =
-                naga::back::pipeline_constants::process_overrides(module, info, &params.overrides)
-                    .unwrap_pretty();
+            let (module, info) = naga::back::pipeline_constants::process_overrides(
+                module,
+                info,
+                entry_point.filter(|_| params.compact),
+                &params.overrides,
+            )
+            .unwrap_pretty();
 
             let mut buffer = String::new();
-            let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl);
+            let pipeline_options = Default::default();
+            let mut writer = hlsl::Writer::new(&mut buffer, &params.hlsl, &pipeline_options);
             writer.write(&module, &info, None).unwrap_pretty();
             fs::write(output_path, buffer)?;
         }
@@ -850,9 +940,9 @@ fn write_output(
     Ok(())
 }
 
-fn bulk_validate(args: Args, params: &Parameters) -> anyhow::Result<()> {
+fn bulk_validate(args: &Args, params: &Parameters) -> anyhow::Result<()> {
     let mut invalid = vec![];
-    for input_path in args.files {
+    for input_path in &args.files {
         let path = Path::new(&input_path);
         let input = fs::read(path)?;
 
@@ -905,4 +995,4 @@ fn bulk_validate(args: Args, params: &Parameters) -> anyhow::Result<()> {
 }
 
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
-use naga::FastHashMap;
+use naga::{compact::KeepUnused, FastHashMap};

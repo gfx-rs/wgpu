@@ -72,11 +72,10 @@ Otherwise, we pass a range corresponding only to the current bind group.
 
 !*/
 
-#![allow(clippy::std_instead_of_alloc, clippy::std_instead_of_core)]
-
 mod adapter;
 mod command;
 mod conv;
+mod dcomp;
 mod descriptor;
 mod device;
 mod instance;
@@ -86,19 +85,27 @@ mod suballocation;
 mod types;
 mod view;
 
-use std::{borrow::ToOwned as _, ffi, fmt, mem, num::NonZeroU32, ops::Deref, sync::Arc, vec::Vec};
+use alloc::{borrow::ToOwned as _, string::String, sync::Arc, vec::Vec};
+use core::{ffi, fmt, mem, ops::Deref};
 
 use arrayvec::ArrayVec;
+use hashbrown::HashMap;
 use parking_lot::{Mutex, RwLock};
+use suballocation::Allocator;
 use windows::{
     core::{Free, Interface},
     Win32::{
         Foundation,
-        Graphics::{Direct3D, Direct3D12, DirectComposition, Dxgi},
+        Graphics::{
+            Direct3D,
+            Direct3D12::{self, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT},
+            DirectComposition, Dxgi,
+        },
         System::Threading,
     },
 };
 
+use self::dcomp::DCompLib;
 use crate::auxil::{
     self,
     dxgi::{
@@ -115,7 +122,7 @@ struct DynLib {
 impl DynLib {
     unsafe fn new<P>(filename: P) -> Result<Self, libloading::Error>
     where
-        P: AsRef<ffi::OsStr>,
+        P: AsRef<std::ffi::OsStr>,
     {
         unsafe { libloading::Library::new(filename) }.map(|inner| Self { inner })
     }
@@ -153,10 +160,10 @@ impl D3D12Lib {
     ) -> Result<Option<Direct3D12::ID3D12Device>, crate::DeviceError> {
         // Calls windows::Win32::Graphics::Direct3D12::D3D12CreateDevice on d3d12.dll
         type Fun = extern "system" fn(
-            padapter: *mut core::ffi::c_void,
+            padapter: *mut ffi::c_void,
             minimumfeaturelevel: Direct3D::D3D_FEATURE_LEVEL,
             riid: *const windows_core::GUID,
-            ppdevice: *mut *mut core::ffi::c_void,
+            ppdevice: *mut *mut ffi::c_void,
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> =
             unsafe { self.lib.get(c"D3D12CreateDevice".to_bytes()) }?;
@@ -196,8 +203,8 @@ impl D3D12Lib {
         type Fun = extern "system" fn(
             prootsignature: *const Direct3D12::D3D12_ROOT_SIGNATURE_DESC,
             version: Direct3D12::D3D_ROOT_SIGNATURE_VERSION,
-            ppblob: *mut *mut core::ffi::c_void,
-            pperrorblob: *mut *mut core::ffi::c_void,
+            ppblob: *mut *mut ffi::c_void,
+            pperrorblob: *mut *mut ffi::c_void,
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> =
             unsafe { self.lib.get(c"D3D12SerializeRootSignature".to_bytes()) }?;
@@ -237,7 +244,7 @@ impl D3D12Lib {
         // Calls windows::Win32::Graphics::Direct3D12::D3D12GetDebugInterface on d3d12.dll
         type Fun = extern "system" fn(
             riid: *const windows_core::GUID,
-            ppvdebug: *mut *mut core::ffi::c_void,
+            ppvdebug: *mut *mut ffi::c_void,
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> =
             unsafe { self.lib.get(c"D3D12GetDebugInterface".to_bytes()) }?;
@@ -275,7 +282,7 @@ impl DxgiLib {
         type Fun = extern "system" fn(
             flags: u32,
             riid: *const windows_core::GUID,
-            pdebug: *mut *mut core::ffi::c_void,
+            pdebug: *mut *mut ffi::c_void,
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> =
             unsafe { self.lib.get(c"DXGIGetDebugInterface1".to_bytes()) }?;
@@ -305,7 +312,7 @@ impl DxgiLib {
         type Fun = extern "system" fn(
             flags: Dxgi::DXGI_CREATE_FACTORY_FLAGS,
             riid: *const windows_core::GUID,
-            ppfactory: *mut *mut core::ffi::c_void,
+            ppfactory: *mut *mut ffi::c_void,
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> =
             unsafe { self.lib.get(c"CreateDXGIFactory2".to_bytes()) }?;
@@ -328,7 +335,7 @@ impl DxgiLib {
         // Calls windows::Win32::Graphics::Dxgi::CreateDXGIFactory1 on dxgi.dll
         type Fun = extern "system" fn(
             riid: *const windows_core::GUID,
-            ppfactory: *mut *mut core::ffi::c_void,
+            ppfactory: *mut *mut ffi::c_void,
         ) -> windows_core::HRESULT;
         let func: libloading::Symbol<Fun> =
             unsafe { self.lib.get(c"CreateDXGIFactory1".to_bytes()) }?;
@@ -384,7 +391,7 @@ impl Deref for D3DBlob {
 
 impl D3DBlob {
     unsafe fn as_slice(&self) -> &[u8] {
-        unsafe { std::slice::from_raw_parts(self.GetBufferPointer().cast(), self.GetBufferSize()) }
+        unsafe { core::slice::from_raw_parts(self.GetBufferPointer().cast(), self.GetBufferSize()) }
     }
 
     unsafe fn as_c_str(&self) -> Result<&ffi::CStr, ffi::FromBytesUntilNulError> {
@@ -396,6 +403,8 @@ impl D3DBlob {
 pub struct Api;
 
 impl crate::Api for Api {
+    const VARIANT: wgt::Backend = wgt::Backend::Dx12;
+
     type Instance = Instance;
     type Surface = Surface;
     type Adapter = Adapter;
@@ -456,13 +465,22 @@ pub struct Instance {
     factory: DxgiFactory,
     factory_media: Option<Dxgi::IDXGIFactoryMedia>,
     library: Arc<D3D12Lib>,
+    dcomp_lib: Arc<DCompLib>,
     supports_allow_tearing: bool,
+    presentation_system: wgt::Dx12SwapchainKind,
     _lib_dxgi: DxgiLib,
     flags: wgt::InstanceFlags,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    memory_budget_thresholds: wgt::MemoryBudgetThresholds,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
+    options: wgt::Dx12BackendOptions,
 }
 
 impl Instance {
+    /// Get the raw DXGI factory associated with this instance.
+    pub unsafe fn raw_factory4(&self) -> &Dxgi::IDXGIFactory4 {
+        self.factory.deref()
+    }
+
     pub unsafe fn create_surface_from_visual(&self, visual: *mut ffi::c_void) -> Surface {
         let visual = unsafe { DirectComposition::IDCompositionVisual::from_raw_borrowed(&visual) }
             .expect("COM pointer should not be NULL");
@@ -472,6 +490,7 @@ impl Instance {
             target: SurfaceTarget::Visual(visual.to_owned()),
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: RwLock::new(None),
+            options: self.options.clone(),
         }
     }
 
@@ -489,6 +508,7 @@ impl Instance {
             target: SurfaceTarget::SurfaceHandle(surface_handle),
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: RwLock::new(None),
+            options: self.options.clone(),
         }
     }
 
@@ -505,6 +525,7 @@ impl Instance {
             target: SurfaceTarget::SwapChainPanel(swap_chain_panel.to_owned()),
             supports_allow_tearing: self.supports_allow_tearing,
             swap_chain: RwLock::new(None),
+            options: self.options.clone(),
         }
     }
 }
@@ -519,7 +540,7 @@ struct SwapChain {
     // when the swapchain is destroyed
     resources: Vec<Direct3D12::ID3D12Resource>,
     /// Handle is freed in [`Self::release_resources()`]
-    waitable: Foundation::HANDLE,
+    waitable: Option<Foundation::HANDLE>,
     acquired_count: usize,
     present_mode: wgt::PresentMode,
     format: wgt::TextureFormat,
@@ -529,6 +550,11 @@ struct SwapChain {
 enum SurfaceTarget {
     /// Borrowed, lifetime externally managed
     WndHandle(Foundation::HWND),
+    /// `handle` is borrowed, lifetime externally managed
+    VisualFromWndHandle {
+        handle: Foundation::HWND,
+        dcomp_state: Mutex<dcomp::DCompState>,
+    },
     Visual(DirectComposition::IDCompositionVisual),
     /// Borrowed, lifetime externally managed
     SurfaceHandle(Foundation::HANDLE),
@@ -541,10 +567,23 @@ pub struct Surface {
     target: SurfaceTarget,
     supports_allow_tearing: bool,
     swap_chain: RwLock<Option<SwapChain>>,
+    options: wgt::Dx12BackendOptions,
 }
 
 unsafe impl Send for Surface {}
 unsafe impl Sync for Surface {}
+
+impl Surface {
+    pub fn swap_chain(&self) -> Option<Dxgi::IDXGISwapChain3> {
+        Some(self.swap_chain.read().as_ref()?.raw.clone())
+    }
+
+    /// Returns the waitable handle associated with this swap chain, if any.
+    /// Handle is only valid while the swap chain is alive.
+    pub unsafe fn waitable_handle(&self) -> Option<Foundation::HANDLE> {
+        self.swap_chain.read().as_ref()?.waitable
+    }
+}
 
 #[derive(Debug, Clone, Copy)]
 enum MemoryArchitecture {
@@ -566,6 +605,17 @@ struct PrivateCapabilities {
     suballocation_supported: bool,
     shader_model: naga::back::hlsl::ShaderModel,
     max_sampler_descriptor_heap_size: u32,
+    unrestricted_buffer_texture_copy_pitch_supported: bool,
+}
+
+impl PrivateCapabilities {
+    fn texture_data_placement_alignment(&self) -> u64 {
+        if self.unrestricted_buffer_texture_copy_pitch_supported {
+            4
+        } else {
+            D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT.into()
+        }
+    }
 }
 
 #[derive(Default)]
@@ -579,16 +629,25 @@ pub struct Adapter {
     raw: DxgiAdapter,
     device: Direct3D12::ID3D12Device,
     library: Arc<D3D12Lib>,
+    dcomp_lib: Arc<DCompLib>,
     private_caps: PrivateCapabilities,
     presentation_timer: auxil::dxgi::time::PresentationTimer,
     // Note: this isn't used right now, but we'll need it later.
     #[allow(unused)]
     workarounds: Workarounds,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    memory_budget_thresholds: wgt::MemoryBudgetThresholds,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
+    options: wgt::Dx12BackendOptions,
 }
 
 unsafe impl Send for Adapter {}
 unsafe impl Sync for Adapter {}
+
+impl Adapter {
+    pub fn as_raw(&self) -> &Dxgi::IDXGIAdapter3 {
+        &self.raw
+    }
+}
 
 struct Event(pub Foundation::HANDLE);
 impl Event {
@@ -609,21 +668,23 @@ impl Drop for Event {
 /// Helper structure for waiting for GPU.
 struct Idler {
     fence: Direct3D12::ID3D12Fence,
-    event: Event,
 }
 
 #[derive(Debug, Clone)]
 struct CommandSignatures {
     draw: Direct3D12::ID3D12CommandSignature,
     draw_indexed: Direct3D12::ID3D12CommandSignature,
+    draw_mesh: Option<Direct3D12::ID3D12CommandSignature>,
     dispatch: Direct3D12::ID3D12CommandSignature,
 }
 
 struct DeviceShared {
+    adapter: DxgiAdapter,
     zero_buffer: Direct3D12::ID3D12Resource,
     cmd_signatures: CommandSignatures,
     heap_views: descriptor::GeneralHeap,
     sampler_heap: sampler::SamplerHeap,
+    private_caps: PrivateCapabilities,
 }
 
 unsafe impl Send for DeviceShared {}
@@ -633,20 +694,22 @@ pub struct Device {
     raw: Direct3D12::ID3D12Device,
     present_queue: Direct3D12::ID3D12CommandQueue,
     idler: Idler,
-    private_caps: PrivateCapabilities,
     features: wgt::Features,
     shared: Arc<DeviceShared>,
+    options: wgt::Dx12BackendOptions,
     // CPU only pools
-    rtv_pool: Mutex<descriptor::CpuPool>,
+    rtv_pool: Arc<Mutex<descriptor::CpuPool>>,
     dsv_pool: Mutex<descriptor::CpuPool>,
     srv_uav_pool: Mutex<descriptor::CpuPool>,
     // library
     library: Arc<D3D12Lib>,
+    dcomp_lib: Arc<DCompLib>,
     #[cfg(feature = "renderdoc")]
     render_doc: auxil::renderdoc::RenderDoc,
     null_rtv_handle: descriptor::Handle,
-    mem_allocator: Mutex<suballocation::GpuAllocatorWrapper>,
-    dxc_container: Option<Arc<shader_compilation::DxcContainer>>,
+    mem_allocator: Allocator,
+    compiler_container: Arc<shader_compilation::CompilerContainer>,
+    shader_cache: Mutex<ShaderCache>,
     counters: Arc<wgt::HalCounters>,
 }
 
@@ -654,6 +717,7 @@ impl Drop for Device {
     fn drop(&mut self) {
         self.rtv_pool.lock().free_handle(self.null_rtv_handle);
         if self
+            .shared
             .private_caps
             .instance_flags
             .contains(wgt::InstanceFlags::VALIDATION)
@@ -786,6 +850,13 @@ pub struct CommandEncoder {
     allocator: Direct3D12::ID3D12CommandAllocator,
     device: Direct3D12::ID3D12Device,
     shared: Arc<DeviceShared>,
+    mem_allocator: Allocator,
+
+    rtv_pool: Arc<Mutex<descriptor::CpuPool>>,
+    temp_rtv_handles: Vec<descriptor::Handle>,
+
+    intermediate_copy_bufs: Vec<Buffer>,
+
     null_rtv_handle: descriptor::Handle,
     list: Option<Direct3D12::ID3D12GraphicsCommandList>,
     free_lists: Vec<Direct3D12::ID3D12GraphicsCommandList>,
@@ -824,8 +895,11 @@ unsafe impl Sync for CommandBuffer {}
 #[derive(Debug)]
 pub struct Buffer {
     resource: Direct3D12::ID3D12Resource,
+    // While the allocation also has _a_ size, it may not
+    // be the same as the original size of the buffer,
+    // as the allocation size varies for assorted reasons.
     size: wgt::BufferAddress,
-    allocation: Option<suballocation::AllocationWrapper>,
+    allocation: suballocation::Allocation,
 }
 
 unsafe impl Send for Buffer {}
@@ -855,7 +929,7 @@ pub struct Texture {
     size: wgt::Extent3d,
     mip_level_count: u32,
     sample_count: u32,
-    allocation: Option<suballocation::AllocationWrapper>,
+    allocation: suballocation::Allocation,
 }
 
 impl Texture {
@@ -867,7 +941,7 @@ impl Texture {
 impl crate::DynTexture for Texture {}
 impl crate::DynSurfaceTexture for Texture {}
 
-impl std::borrow::Borrow<dyn crate::DynTexture> for Texture {
+impl core::borrow::Borrow<dyn crate::DynTexture> for Texture {
     fn borrow(&self) -> &dyn crate::DynTexture {
         self
     }
@@ -903,8 +977,10 @@ impl Texture {
 pub struct TextureView {
     raw_format: Dxgi::Common::DXGI_FORMAT,
     aspects: crate::FormatAspects,
-    /// only used by resolve
-    target_base: (Direct3D12::ID3D12Resource, u32),
+    dimension: wgt::TextureViewDimension,
+    texture: Direct3D12::ID3D12Resource,
+    subresource_index: u32,
+    mip_slice: u32,
     handle_srv: Option<descriptor::Handle>,
     handle_uav: Option<descriptor::Handle>,
     handle_rtv: Option<descriptor::Handle>,
@@ -974,7 +1050,7 @@ enum DynamicBuffer {
 #[derive(Debug)]
 struct SamplerIndexBuffer {
     buffer: Direct3D12::ID3D12Resource,
-    allocation: Option<suballocation::AllocationWrapper>,
+    allocation: suballocation::Allocation,
 }
 
 #[derive(Debug)]
@@ -1007,13 +1083,13 @@ struct BindGroupInfo {
 #[derive(Debug, Clone)]
 struct RootConstantInfo {
     root_index: RootIndex,
-    range: std::ops::Range<u32>,
+    range: core::ops::Range<u32>,
 }
 
 #[derive(Debug, Clone)]
 struct DynamicStorageBufferOffsets {
     root_index: RootIndex,
-    range: std::ops::Range<usize>,
+    range: core::ops::Range<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -1050,16 +1126,39 @@ impl crate::DynPipelineLayout for PipelineLayout {}
 
 #[derive(Debug)]
 pub struct ShaderModule {
-    naga: crate::NagaShader,
-    raw_name: Option<ffi::CString>,
+    source: ShaderModuleSource,
+    raw_name: Option<alloc::ffi::CString>,
     runtime_checks: wgt::ShaderRuntimeChecks,
 }
 
 impl crate::DynShaderModule for ShaderModule {}
 
+#[derive(Default)]
+pub struct ShaderCache {
+    nr_of_shaders_compiled: u32,
+    entries: HashMap<ShaderCacheKey, ShaderCacheValue>,
+}
+
+#[derive(PartialEq, Eq, Hash)]
+pub(super) struct ShaderCacheKey {
+    source: String,
+    entry_point: String,
+    stage: naga::ShaderStage,
+    shader_model: naga::back::hlsl::ShaderModel,
+}
+
+pub(super) struct ShaderCacheValue {
+    /// This is the value of [`ShaderCache::nr_of_shaders_compiled`]
+    /// at the time the cache entry was last used.
+    last_used: u32,
+    shader: CompiledShader,
+}
+
+#[derive(Clone)]
 pub(super) enum CompiledShader {
     Dxc(Direct3D::Dxc::IDxcBlob),
     Fxc(Direct3D::ID3DBlob),
+    Precompiled(Vec<u8>),
 }
 
 impl CompiledShader {
@@ -1073,10 +1172,12 @@ impl CompiledShader {
                 pShaderBytecode: unsafe { shader.GetBufferPointer() },
                 BytecodeLength: unsafe { shader.GetBufferSize() },
             },
+            CompiledShader::Precompiled(shader) => Direct3D12::D3D12_SHADER_BYTECODE {
+                pShaderBytecode: shader.as_ptr().cast(),
+                BytecodeLength: shader.len(),
+            },
         }
     }
-
-    unsafe fn destroy(self) {}
 }
 
 #[derive(Debug)]
@@ -1084,7 +1185,7 @@ pub struct RenderPipeline {
     raw: Direct3D12::ID3D12PipelineState,
     layout: PipelineLayoutShared,
     topology: Direct3D::D3D_PRIMITIVE_TOPOLOGY,
-    vertex_strides: [Option<NonZeroU32>; crate::MAX_VERTEX_BUFFERS],
+    vertex_strides: [Option<u32>; crate::MAX_VERTEX_BUFFERS],
 }
 
 impl crate::DynRenderPipeline for RenderPipeline {}
@@ -1111,33 +1212,42 @@ impl crate::DynPipelineCache for PipelineCache {}
 #[derive(Debug)]
 pub struct AccelerationStructure {
     resource: Direct3D12::ID3D12Resource,
-    allocation: Option<suballocation::AllocationWrapper>,
+    allocation: suballocation::Allocation,
 }
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
 
 impl SwapChain {
     unsafe fn release_resources(mut self) -> Dxgi::IDXGISwapChain3 {
-        unsafe { Foundation::HANDLE::free(&mut self.waitable) };
+        if let Some(mut waitable) = self.waitable.take() {
+            unsafe { Foundation::HANDLE::free(&mut waitable) };
+        }
         self.raw
     }
 
     unsafe fn wait(
         &mut self,
-        timeout: Option<std::time::Duration>,
+        timeout: Option<core::time::Duration>,
     ) -> Result<bool, crate::SurfaceError> {
         let timeout_ms = match timeout {
             Some(duration) => duration.as_millis() as u32,
             None => Threading::INFINITE,
         };
-        match unsafe { Threading::WaitForSingleObject(self.waitable, timeout_ms) } {
-            Foundation::WAIT_ABANDONED | Foundation::WAIT_FAILED => Err(crate::SurfaceError::Lost),
-            Foundation::WAIT_OBJECT_0 => Ok(true),
-            Foundation::WAIT_TIMEOUT => Ok(false),
-            other => {
-                log::error!("Unexpected wait status: 0x{:x?}", other);
-                Err(crate::SurfaceError::Lost)
+
+        if let Some(waitable) = self.waitable {
+            match unsafe { Threading::WaitForSingleObject(waitable, timeout_ms) } {
+                Foundation::WAIT_ABANDONED | Foundation::WAIT_FAILED => {
+                    Err(crate::SurfaceError::Lost)
+                }
+                Foundation::WAIT_OBJECT_0 => Ok(true),
+                Foundation::WAIT_TIMEOUT => Ok(false),
+                other => {
+                    log::error!("Unexpected wait status: 0x{other:x?}");
+                    Err(crate::SurfaceError::Lost)
+                }
             }
+        } else {
+            Ok(true)
         }
     }
 }
@@ -1215,7 +1325,9 @@ impl crate::Surface for Surface {
                     Flags: flags.0 as u32,
                 };
                 let swap_chain1 = match self.target {
-                    SurfaceTarget::Visual(_) | SurfaceTarget::SwapChainPanel(_) => {
+                    SurfaceTarget::Visual(_)
+                    | SurfaceTarget::VisualFromWndHandle { .. }
+                    | SurfaceTarget::SwapChainPanel(_) => {
                         profiling::scope!("IDXGIFactory2::CreateSwapChainForComposition");
                         unsafe {
                             self.factory.CreateSwapChainForComposition(
@@ -1256,12 +1368,40 @@ impl crate::Surface for Surface {
                 };
 
                 let swap_chain1 = swap_chain1.map_err(|err| {
-                    log::error!("SwapChain creation error: {}", err);
+                    log::error!("SwapChain creation error: {err}");
                     crate::SurfaceError::Other("swapchain creation")
                 })?;
 
                 match &self.target {
                     SurfaceTarget::WndHandle(_) | SurfaceTarget::SurfaceHandle(_) => {}
+                    SurfaceTarget::VisualFromWndHandle {
+                        handle,
+                        dcomp_state,
+                    } => {
+                        let mut dcomp_state = dcomp_state.lock();
+                        let dcomp_state =
+                            unsafe { dcomp_state.get_or_init(&device.dcomp_lib, handle) }?;
+                        // Set the new swap chain as the content for the backing visual
+                        // and commit the changes to the composition visual tree.
+                        {
+                            profiling::scope!("IDCompositionVisual::SetContent");
+                            unsafe { dcomp_state.visual.SetContent(&swap_chain1) }.map_err(
+                                |err| {
+                                    log::error!("IDCompositionVisual::SetContent failed: {err}");
+                                    crate::SurfaceError::Other("IDCompositionVisual::SetContent")
+                                },
+                            )?;
+                        }
+
+                        // Commit the changes to the composition device.
+                        {
+                            profiling::scope!("IDCompositionDevice::Commit");
+                            unsafe { dcomp_state.device.Commit() }.map_err(|err| {
+                                log::error!("IDCompositionDevice::Commit failed: {err}");
+                                crate::SurfaceError::Other("IDCompositionDevice::Commit")
+                            })?;
+                        }
+                    }
                     SurfaceTarget::Visual(visual) => {
                         if let Err(err) = unsafe { visual.SetContent(&swap_chain1) } {
                             log::error!("Unable to SetContent: {err}");
@@ -1299,13 +1439,21 @@ impl crate::Surface for Surface {
                 .into_device_result("MakeWindowAssociation")?;
             }
             SurfaceTarget::Visual(_)
+            | SurfaceTarget::VisualFromWndHandle { .. }
             | SurfaceTarget::SurfaceHandle(_)
             | SurfaceTarget::SwapChainPanel(_) => {}
         }
 
         unsafe { swap_chain.SetMaximumFrameLatency(config.maximum_frame_latency) }
             .into_device_result("SetMaximumFrameLatency")?;
-        let waitable = unsafe { swap_chain.GetFrameLatencyWaitableObject() };
+
+        let waitable = match device.options.latency_waitable_object {
+            wgt::Dx12UseFrameLatencyWaitableObject::None => None,
+            wgt::Dx12UseFrameLatencyWaitableObject::Wait
+            | wgt::Dx12UseFrameLatencyWaitableObject::DontWait => {
+                Some(unsafe { swap_chain.GetFrameLatencyWaitableObject() })
+            }
+        };
 
         let mut resources = Vec::with_capacity(swap_chain_buffer as usize);
         for i in 0..swap_chain_buffer {
@@ -1346,13 +1494,19 @@ impl crate::Surface for Surface {
 
     unsafe fn acquire_texture(
         &self,
-        timeout: Option<std::time::Duration>,
+        timeout: Option<core::time::Duration>,
         _fence: &Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<Api>>, crate::SurfaceError> {
         let mut swapchain = self.swap_chain.write();
         let sc = swapchain.as_mut().unwrap();
 
-        unsafe { sc.wait(timeout) }?;
+        match self.options.latency_waitable_object {
+            wgt::Dx12UseFrameLatencyWaitableObject::None
+            | wgt::Dx12UseFrameLatencyWaitableObject::DontWait => {}
+            wgt::Dx12UseFrameLatencyWaitableObject::Wait => {
+                unsafe { sc.wait(timeout) }?;
+            }
+        }
 
         let base_index = unsafe { sc.raw.GetCurrentBackBufferIndex() } as usize;
         let index = (base_index + sc.acquired_count) % sc.resources.len();
@@ -1365,7 +1519,10 @@ impl crate::Surface for Surface {
             size: sc.size,
             mip_level_count: 1,
             sample_count: 1,
-            allocation: None,
+            allocation: suballocation::Allocation::none(
+                suballocation::AllocationType::Texture,
+                sc.format.theoretical_memory_footprint(sc.size),
+            ),
         };
         Ok(Some(crate::AcquiredSurfaceTexture {
             texture,
@@ -1438,5 +1595,138 @@ impl crate::Queue for Queue {
     unsafe fn get_timestamp_period(&self) -> f32 {
         let frequency = unsafe { self.raw.GetTimestampFrequency() }.expect("GetTimestampFrequency");
         (1_000_000_000.0 / frequency as f64) as f32
+    }
+}
+#[derive(Debug)]
+pub struct DxilPassthroughShader {
+    pub shader: Vec<u8>,
+    pub entry_point: String,
+    pub num_workgroups: (u32, u32, u32),
+}
+
+#[derive(Debug)]
+pub struct HlslPassthroughShader {
+    pub shader: String,
+    pub entry_point: String,
+    pub num_workgroups: (u32, u32, u32),
+}
+
+#[derive(Debug)]
+pub enum ShaderModuleSource {
+    Naga(crate::NagaShader),
+    DxilPassthrough(DxilPassthroughShader),
+    HlslPassthrough(HlslPassthroughShader),
+}
+
+#[repr(C)]
+#[derive(Debug)]
+struct MeshShaderPipelineStateStream {
+    root_signature: *mut Direct3D12::ID3D12RootSignature,
+    task_shader: Direct3D12::D3D12_SHADER_BYTECODE,
+    mesh_shader: Direct3D12::D3D12_SHADER_BYTECODE,
+    pixel_shader: Direct3D12::D3D12_SHADER_BYTECODE,
+    blend_state: Direct3D12::D3D12_BLEND_DESC,
+    sample_mask: u32,
+    rasterizer_state: Direct3D12::D3D12_RASTERIZER_DESC,
+    depth_stencil_state: Direct3D12::D3D12_DEPTH_STENCIL_DESC,
+    primitive_topology_type: Direct3D12::D3D12_PRIMITIVE_TOPOLOGY_TYPE,
+    rtv_formats: Direct3D12::D3D12_RT_FORMAT_ARRAY,
+    dsv_format: Dxgi::Common::DXGI_FORMAT,
+    sample_desc: Dxgi::Common::DXGI_SAMPLE_DESC,
+    node_mask: u32,
+    cached_pso: Direct3D12::D3D12_CACHED_PIPELINE_STATE,
+    flags: Direct3D12::D3D12_PIPELINE_STATE_FLAGS,
+}
+impl MeshShaderPipelineStateStream {
+    /// # Safety
+    ///
+    /// Returned bytes contain pointers into this struct, for them to be valid,
+    /// this struct may be at the same location. As if `as_bytes<'a>(&'a self) -> Vec<u8> + 'a`
+    pub unsafe fn to_bytes(&self) -> Vec<u8> {
+        use Direct3D12::*;
+        let mut bytes = Vec::new();
+
+        macro_rules! push_subobject {
+            ($subobject_type:expr, $data:expr) => {{
+                // Ensure 8-byte alignment for the subobject start
+                let alignment = 8;
+                let aligned_length = bytes.len().next_multiple_of(alignment);
+                bytes.resize(aligned_length, 0);
+
+                // Append the type tag (u32)
+                let tag: u32 = $subobject_type.0 as u32;
+                bytes.extend_from_slice(&tag.to_ne_bytes());
+
+                // Align the data
+                let obj_align = align_of_val(&$data);
+                let data_start = bytes.len().next_multiple_of(obj_align);
+                bytes.resize(data_start, 0);
+
+                // Append the data itself
+                #[allow(clippy::ptr_as_ptr, trivial_casts)]
+                let data_ptr = &$data as *const _ as *const u8;
+                let data_size = size_of_val(&$data);
+                let slice = unsafe { core::slice::from_raw_parts(data_ptr, data_size) };
+                bytes.extend_from_slice(slice);
+            }};
+        }
+        push_subobject!(
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE,
+            self.root_signature
+        );
+        if !self.task_shader.pShaderBytecode.is_null() {
+            push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS, self.task_shader);
+        }
+        push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS, self.mesh_shader);
+        if !self.pixel_shader.pShaderBytecode.is_null() {
+            push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS, self.pixel_shader);
+        }
+        push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND, self.blend_state);
+        push_subobject!(
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK,
+            self.sample_mask
+        );
+        push_subobject!(
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER,
+            self.rasterizer_state
+        );
+        push_subobject!(
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL,
+            self.depth_stencil_state
+        );
+        push_subobject!(
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY,
+            self.primitive_topology_type
+        );
+        if self.rtv_formats.NumRenderTargets != 0 {
+            push_subobject!(
+                D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS,
+                self.rtv_formats
+            );
+        }
+        if self.dsv_format != Dxgi::Common::DXGI_FORMAT_UNKNOWN {
+            push_subobject!(
+                D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT,
+                self.dsv_format
+            );
+        }
+        push_subobject!(
+            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC,
+            self.sample_desc
+        );
+        if self.node_mask != 0 {
+            push_subobject!(
+                D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK,
+                self.node_mask
+            );
+        }
+        if !self.cached_pso.pCachedBlob.is_null() {
+            push_subobject!(
+                D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CACHED_PSO,
+                self.cached_pso
+            );
+        }
+        push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS, self.flags);
+        bytes
     }
 }

@@ -89,6 +89,7 @@ impl super::AdapterShared {
                 glow::UNSIGNED_INT_24_8,
             ),
             Tf::NV12 => unreachable!(),
+            Tf::P010 => unreachable!(),
             Tf::Rgb9e5Ufloat => (glow::RGB9_E5, glow::RGB, glow::UNSIGNED_INT_5_9_9_9_REV),
             Tf::Bc1RgbaUnorm => (glow::COMPRESSED_RGBA_S3TC_DXT1_EXT, glow::RGBA, 0),
             Tf::Bc1RgbaUnormSrgb => (glow::COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT, glow::RGBA, 0),
@@ -237,9 +238,10 @@ pub(super) fn describe_vertex_format(vertex_format: wgt::VertexFormat) -> super:
 pub fn map_filter_modes(
     min: wgt::FilterMode,
     mag: wgt::FilterMode,
-    mip: wgt::FilterMode,
+    mip: wgt::MipmapFilterMode,
 ) -> (u32, u32) {
     use wgt::FilterMode as Fm;
+    use wgt::MipmapFilterMode as Mfm;
 
     let mag_filter = match mag {
         Fm::Nearest => glow::NEAREST,
@@ -247,10 +249,10 @@ pub fn map_filter_modes(
     };
 
     let min_filter = match (min, mip) {
-        (Fm::Nearest, Fm::Nearest) => glow::NEAREST_MIPMAP_NEAREST,
-        (Fm::Nearest, Fm::Linear) => glow::NEAREST_MIPMAP_LINEAR,
-        (Fm::Linear, Fm::Nearest) => glow::LINEAR_MIPMAP_NEAREST,
-        (Fm::Linear, Fm::Linear) => glow::LINEAR_MIPMAP_LINEAR,
+        (Fm::Nearest, Mfm::Nearest) => glow::NEAREST_MIPMAP_NEAREST,
+        (Fm::Nearest, Mfm::Linear) => glow::NEAREST_MIPMAP_LINEAR,
+        (Fm::Linear, Mfm::Nearest) => glow::LINEAR_MIPMAP_NEAREST,
+        (Fm::Linear, Mfm::Linear) => glow::LINEAR_MIPMAP_LINEAR,
     };
 
     (min_filter, mag_filter)

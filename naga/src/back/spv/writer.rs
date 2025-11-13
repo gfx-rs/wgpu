@@ -1,8 +1,4 @@
-use alloc::{
-    string::{String, ToString},
-    vec,
-    vec::Vec,
-};
+use alloc::{string::String, vec, vec::Vec};
 
 use hashbrown::hash_map::Entry;
 use spirv::Word;
@@ -60,7 +56,6 @@ impl Writer {
         if major != 1 {
             return Err(Error::UnsupportedVersion(major, minor));
         }
-        let raw_version = ((major as u32) << 16) | ((minor as u32) << 8);
 
         let mut capabilities_used = crate::FastIndexSet::default();
         capabilities_used.insert(spirv::Capability::Shader);
@@ -70,7 +65,7 @@ impl Writer {
         let void_type = id_gen.next();
 
         Ok(Writer {
-            physical_layout: PhysicalLayout::new(raw_version),
+            physical_layout: PhysicalLayout::new(major, minor),
             logical_layout: LogicalLayout::default(),
             id_gen,
             capabilities_available: options.capabilities.clone(),
@@ -82,6 +77,7 @@ impl Writer {
             bounds_check_policies: options.bounds_check_policies,
             zero_initialize_workgroup_memory: options.zero_initialize_workgroup_memory,
             force_loop_bounding: options.force_loop_bounding,
+            use_storage_input_output_16: options.use_storage_input_output_16,
             void_type,
             lookup_type: crate::FastHashMap::default(),
             lookup_function: crate::FastHashMap::default(),
@@ -90,12 +86,40 @@ impl Writer {
             constant_ids: HandleVec::new(),
             cached_constants: crate::FastHashMap::default(),
             global_variables: HandleVec::new(),
+            fake_missing_bindings: options.fake_missing_bindings,
             binding_map: options.binding_map.clone(),
             saved_cached: CachedExpressions::default(),
             gl450_ext_inst_id,
             temp_list: Vec::new(),
-            ray_get_intersection_function: None,
+            ray_get_committed_intersection_function: None,
+            ray_get_candidate_intersection_function: None,
+            io_f16_polyfills: super::f16_polyfill::F16IoPolyfill::new(
+                options.use_storage_input_output_16,
+            ),
         })
+    }
+
+    pub fn set_options(&mut self, options: &Options) -> Result<(), Error> {
+        let (major, minor) = options.lang_version;
+        if major != 1 {
+            return Err(Error::UnsupportedVersion(major, minor));
+        }
+        self.physical_layout = PhysicalLayout::new(major, minor);
+        self.capabilities_available = options.capabilities.clone();
+        self.flags = options.flags;
+        self.bounds_check_policies = options.bounds_check_policies;
+        self.zero_initialize_workgroup_memory = options.zero_initialize_workgroup_memory;
+        self.force_loop_bounding = options.force_loop_bounding;
+        self.use_storage_input_output_16 = options.use_storage_input_output_16;
+        self.binding_map = options.binding_map.clone();
+        self.io_f16_polyfills =
+            super::f16_polyfill::F16IoPolyfill::new(options.use_storage_input_output_16);
+        Ok(())
+    }
+
+    /// Returns `(major, minor)` of the SPIR-V language version.
+    pub const fn lang_version(&self) -> (u8, u8) {
+        self.physical_layout.lang_version()
     }
 
     /// Reset `Writer` to its initial state, retaining any allocations.
@@ -123,7 +147,9 @@ impl Writer {
             bounds_check_policies: self.bounds_check_policies,
             zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
             force_loop_bounding: self.force_loop_bounding,
+            use_storage_input_output_16: self.use_storage_input_output_16,
             capabilities_available: take(&mut self.capabilities_available),
+            fake_missing_bindings: self.fake_missing_bindings,
             binding_map: take(&mut self.binding_map),
 
             // Initialized afresh:
@@ -147,7 +173,9 @@ impl Writer {
             global_variables: take(&mut self.global_variables).recycle(),
             saved_cached: take(&mut self.saved_cached).recycle(),
             temp_list: take(&mut self.temp_list).recycle(),
-            ray_get_intersection_function: None,
+            ray_get_candidate_intersection_function: None,
+            ray_get_committed_intersection_function: None,
+            io_f16_polyfills: take(&mut self.io_f16_polyfills).recycle(),
         };
 
         *self = fresh;
@@ -198,6 +226,43 @@ impl Writer {
                 Ok(())
             }
         }
+    }
+
+    /// Indicate that the code requires all of the listed capabilities.
+    ///
+    /// If all entries of `capabilities` appear in the available capabilities
+    /// specified in the [`Options`] from which this `Writer` was created
+    /// (including the case where [`Options::capabilities`] is `None`), add
+    /// them all to this `Writer`'s [`capabilities_used`] table, and return
+    /// `Ok(())`. If at least one of the listed capabilities is not available,
+    /// do not add anything to the `capabilities_used` table, and return the
+    /// first unavailable requested capability, wrapped in `Err()`.
+    ///
+    /// This method is does not return an [`enum@Error`] in case of failure
+    /// because it may be used in cases where the caller can recover (e.g.,
+    /// with a polyfill) if the requested capabilities are not available. In
+    /// this case, it would be unnecessary work to find *all* the unavailable
+    /// requested capabilities, and to allocate a `Vec` for them, just so we
+    /// could return an [`Error::MissingCapabilities`]).
+    ///
+    /// [`capabilities_used`]: Writer::capabilities_used
+    pub(super) fn require_all(
+        &mut self,
+        capabilities: &[spirv::Capability],
+    ) -> Result<(), spirv::Capability> {
+        if let Some(ref available) = self.capabilities_available {
+            for requested in capabilities {
+                if !available.contains(requested) {
+                    return Err(*requested);
+                }
+            }
+        }
+
+        for requested in capabilities {
+            self.capabilities_used.insert(*requested);
+        }
+
+        Ok(())
     }
 
     /// Indicate that the code uses the given extension.
@@ -258,25 +323,9 @@ impl Writer {
         self.get_pointer_type_id(base_id, class)
     }
 
-    pub(super) fn get_ray_query_pointer_id(&mut self, module: &crate::Module) -> Word {
-        let rq_ty = module
-            .types
-            .get(&crate::Type {
-                name: None,
-                inner: crate::TypeInner::RayQuery {
-                    vertex_return: false,
-                },
-            })
-            .or_else(|| {
-                module.types.get(&crate::Type {
-                    name: None,
-                    inner: crate::TypeInner::RayQuery {
-                        vertex_return: true,
-                    },
-                })
-            })
-            .expect("ray_query type should have been populated by the variable passed into this!");
-        self.get_handle_pointer_type_id(rq_ty, spirv::StorageClass::Function)
+    pub(super) fn get_ray_query_pointer_id(&mut self) -> Word {
+        let rq_id = self.get_type_id(LookupType::Local(LocalType::RayQuery));
+        self.get_pointer_type_id(rq_id, spirv::StorageClass::Function)
     }
 
     /// Return a SPIR-V type for a pointer to `resolution`.
@@ -308,6 +357,13 @@ impl Writer {
         self.get_numeric_type_id(NumericType::Vector {
             size: crate::VectorSize::Bi,
             scalar: crate::Scalar::U32,
+        })
+    }
+
+    pub(super) fn get_vec2f_type_id(&mut self) -> Word {
+        self.get_numeric_type_id(NumericType::Vector {
+            size: crate::VectorSize::Bi,
+            scalar: crate::Scalar::F32,
         })
     }
 
@@ -412,6 +468,26 @@ impl Writer {
             | crate::TypeInner::Struct { .. }
             | crate::TypeInner::BindingArray { .. } => return None,
         })
+    }
+
+    /// Resolve the [`BindingInfo`] for a [`crate::ResourceBinding`] from the
+    /// provided [`Writer::binding_map`].
+    ///
+    /// If the specified resource is not present in the binding map this will
+    /// return an error, unless [`Writer::fake_missing_bindings`] is set.
+    fn resolve_resource_binding(
+        &self,
+        res_binding: &crate::ResourceBinding,
+    ) -> Result<BindingInfo, Error> {
+        match self.binding_map.get(res_binding) {
+            Some(target) => Ok(*target),
+            None if self.fake_missing_bindings => Ok(BindingInfo {
+                descriptor_set: res_binding.group,
+                binding: res_binding.binding,
+                binding_array_size: None,
+            }),
+            None => Err(Error::MissingBinding(*res_binding)),
+        }
     }
 
     /// Emits code for any wrapper functions required by the expressions in ir_function.
@@ -695,10 +771,11 @@ impl Writer {
                         binding,
                     )?;
                     iface.varying_ids.push(varying_id);
-                    let id = self.id_gen.next();
-                    prelude
-                        .body
-                        .push(Instruction::load(argument_type_id, id, varying_id, None));
+                    let id = self.load_io_with_f16_polyfill(
+                        &mut prelude.body,
+                        varying_id,
+                        argument_type_id,
+                    );
 
                     if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationId) {
                         local_invocation_id = Some(id);
@@ -723,13 +800,11 @@ impl Writer {
                             binding,
                         )?;
                         iface.varying_ids.push(varying_id);
-                        let id = self.id_gen.next();
-                        prelude
-                            .body
-                            .push(Instruction::load(type_id, id, varying_id, None));
+                        let id =
+                            self.load_io_with_f16_polyfill(&mut prelude.body, varying_id, type_id);
                         constituent_ids.push(id);
 
-                        if binding == &crate::Binding::BuiltIn(crate::BuiltIn::GlobalInvocationId) {
+                        if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationId) {
                             local_invocation_id = Some(id);
                         }
                     }
@@ -1019,7 +1094,10 @@ impl Writer {
                     super::ZeroInitializeWorkgroupMemoryMode::Polyfill,
                     Some(
                         ref mut interface @ FunctionInterface {
-                            stage: crate::ShaderStage::Compute,
+                            stage:
+                                crate::ShaderStage::Compute
+                                | crate::ShaderStage::Mesh
+                                | crate::ShaderStage::Task,
                             ..
                         },
                     ),
@@ -1090,6 +1168,35 @@ impl Writer {
             crate::ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
             crate::ShaderStage::Fragment => {
                 self.write_execution_mode(function_id, spirv::ExecutionMode::OriginUpperLeft)?;
+                match entry_point.early_depth_test {
+                    Some(crate::EarlyDepthTest::Force) => {
+                        self.write_execution_mode(
+                            function_id,
+                            spirv::ExecutionMode::EarlyFragmentTests,
+                        )?;
+                    }
+                    Some(crate::EarlyDepthTest::Allow { conservative }) => {
+                        // TODO: Consider emitting EarlyAndLateFragmentTestsAMD here, if available.
+                        // https://github.khronos.org/SPIRV-Registry/extensions/AMD/SPV_AMD_shader_early_and_late_fragment_tests.html
+                        // This permits early depth tests even if the shader writes to a storage
+                        // binding
+                        match conservative {
+                            crate::ConservativeDepth::GreaterEqual => self.write_execution_mode(
+                                function_id,
+                                spirv::ExecutionMode::DepthGreater,
+                            )?,
+                            crate::ConservativeDepth::LessEqual => self.write_execution_mode(
+                                function_id,
+                                spirv::ExecutionMode::DepthLess,
+                            )?,
+                            crate::ConservativeDepth::Unchanged => self.write_execution_mode(
+                                function_id,
+                                spirv::ExecutionMode::DepthUnchanged,
+                            )?,
+                        }
+                    }
+                    None => {}
+                }
                 if let Some(ref result) = entry_point.function.result {
                     if contains_builtin(
                         result.binding.as_ref(),
@@ -1160,8 +1267,10 @@ impl Writer {
                         .insert(spirv::Capability::StorageBuffer16BitAccess);
                     self.capabilities_used
                         .insert(spirv::Capability::UniformAndStorageBuffer16BitAccess);
-                    self.capabilities_used
-                        .insert(spirv::Capability::StorageInputOutput16);
+                    if self.use_storage_input_output_16 {
+                        self.capabilities_used
+                            .insert(spirv::Capability::StorageInputOutput16);
+                    }
                 }
                 Instruction::type_float(id, bits)
             }
@@ -1186,6 +1295,7 @@ impl Writer {
                         self.request_image_format_capabilities(format.into())?;
                         false
                     }
+                    crate::ImageClass::External => unimplemented!(),
                 };
 
                 match dim {
@@ -1639,9 +1749,11 @@ impl Writer {
         Ok(id)
     }
 
-    pub(super) fn write_barrier(&mut self, flags: crate::Barrier, block: &mut Block) {
+    pub(super) fn write_control_barrier(&mut self, flags: crate::Barrier, block: &mut Block) {
         let memory_scope = if flags.contains(crate::Barrier::STORAGE) {
             spirv::Scope::Device
+        } else if flags.contains(crate::Barrier::SUB_GROUP) {
+            spirv::Scope::Subgroup
         } else {
             spirv::Scope::Workgroup
         };
@@ -1653,6 +1765,10 @@ impl Writer {
         semantics.set(
             spirv::MemorySemantics::WORKGROUP_MEMORY,
             flags.contains(crate::Barrier::WORK_GROUP),
+        );
+        semantics.set(
+            spirv::MemorySemantics::SUBGROUP_MEMORY,
+            flags.contains(crate::Barrier::SUB_GROUP),
         );
         semantics.set(
             spirv::MemorySemantics::IMAGE_MEMORY,
@@ -1670,6 +1786,37 @@ impl Writer {
             mem_scope_id,
             semantics_id,
         ));
+    }
+
+    pub(super) fn write_memory_barrier(&mut self, flags: crate::Barrier, block: &mut Block) {
+        let mut semantics = spirv::MemorySemantics::ACQUIRE_RELEASE;
+        semantics.set(
+            spirv::MemorySemantics::UNIFORM_MEMORY,
+            flags.contains(crate::Barrier::STORAGE),
+        );
+        semantics.set(
+            spirv::MemorySemantics::WORKGROUP_MEMORY,
+            flags.contains(crate::Barrier::WORK_GROUP),
+        );
+        semantics.set(
+            spirv::MemorySemantics::SUBGROUP_MEMORY,
+            flags.contains(crate::Barrier::SUB_GROUP),
+        );
+        semantics.set(
+            spirv::MemorySemantics::IMAGE_MEMORY,
+            flags.contains(crate::Barrier::TEXTURE),
+        );
+        let mem_scope_id = if flags.contains(crate::Barrier::STORAGE) {
+            self.get_index_constant(spirv::Scope::Device as u32)
+        } else if flags.contains(crate::Barrier::SUB_GROUP) {
+            self.get_index_constant(spirv::Scope::Subgroup as u32)
+        } else {
+            self.get_index_constant(spirv::Scope::Workgroup as u32)
+        };
+        let semantics_id = self.get_index_constant(semantics.bits());
+        block
+            .body
+            .push(Instruction::memory_barrier(mem_scope_id, semantics_id));
     }
 
     fn generate_workgroup_vars_init_block(
@@ -1772,7 +1919,7 @@ impl Writer {
 
         let mut post_if_block = Block::new(merge_id);
 
-        self.write_barrier(crate::Barrier::WORK_GROUP, &mut post_if_block);
+        self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut post_if_block);
 
         let next_id = self.id_gen.next();
         function.consume(post_if_block, Instruction::branch(next_id));
@@ -1807,8 +1954,26 @@ impl Writer {
         ty: Handle<crate::Type>,
         binding: &crate::Binding,
     ) -> Result<Word, Error> {
+        use crate::TypeInner;
+
         let id = self.id_gen.next();
-        let pointer_type_id = self.get_handle_pointer_type_id(ty, class);
+        let ty_inner = &ir_module.types[ty].inner;
+        let needs_polyfill = self.needs_f16_polyfill(ty_inner);
+
+        let pointer_type_id = if needs_polyfill {
+            let f32_value_local =
+                super::f16_polyfill::F16IoPolyfill::create_polyfill_type(ty_inner)
+                    .expect("needs_polyfill returned true but create_polyfill_type returned None");
+
+            let f32_type_id = self.get_localtype_id(f32_value_local);
+            let ptr_id = self.get_pointer_type_id(f32_type_id, class);
+            self.io_f16_polyfills.register_io_var(id, f32_type_id);
+
+            ptr_id
+        } else {
+            self.get_handle_pointer_type_id(ty, class)
+        };
+
         Instruction::variable(pointer_type_id, id, class, None)
             .to_words(&mut self.logical_layout.declarations);
 
@@ -1829,6 +1994,7 @@ impl Writer {
                 interpolation,
                 sampling,
                 blend_src,
+                per_primitive: _,
             } => {
                 self.decorate(id, Decoration::Location, &[location]);
 
@@ -1927,6 +2093,14 @@ impl Writer {
                         )?;
                         BuiltIn::PrimitiveId
                     }
+                    Bi::Barycentric => {
+                        self.require_any(
+                            "`barycentric` built-in",
+                            &[spirv::Capability::FragmentBarycentricKHR],
+                        )?;
+                        self.use_extension("SPV_KHR_fragment_shader_barycentric");
+                        BuiltIn::BaryCoordKHR
+                    }
                     Bi::SampleIndex => {
                         self.require_any(
                             "`sample_index` built-in",
@@ -1978,6 +2152,11 @@ impl Writer {
                         )?;
                         BuiltIn::SubgroupLocalInvocationId
                     }
+                    Bi::MeshTaskSize
+                    | Bi::CullPrimitive
+                    | Bi::PointIndex
+                    | Bi::LineIndices
+                    | Bi::TriangleIndices => unreachable!(),
                 };
 
                 self.decorate(id, Decoration::BuiltIn, &[built_in as u32]);
@@ -1991,8 +2170,9 @@ impl Writer {
                 // > shader, must be decorated Flat
                 if class == spirv::StorageClass::Input && stage == crate::ShaderStage::Fragment {
                     let is_flat = match ir_module.types[ty].inner {
-                        crate::TypeInner::Scalar(scalar)
-                        | crate::TypeInner::Vector { scalar, .. } => match scalar.kind {
+                        TypeInner::Scalar(scalar) | TypeInner::Vector { scalar, .. } => match scalar
+                            .kind
+                        {
                             Sk::Uint | Sk::Sint | Sk::Bool => true,
                             Sk::Float => false,
                             Sk::AbstractInt | Sk::AbstractFloat => {
@@ -2012,6 +2192,49 @@ impl Writer {
         }
 
         Ok(id)
+    }
+
+    /// Load an IO variable, converting from `f32` to `f16` if polyfill is active.
+    /// Returns the id of the loaded value matching `target_type_id`.
+    pub(super) fn load_io_with_f16_polyfill(
+        &mut self,
+        body: &mut Vec<Instruction>,
+        varying_id: Word,
+        target_type_id: Word,
+    ) -> Word {
+        let tmp = self.id_gen.next();
+        if let Some(f32_ty) = self.io_f16_polyfills.get_f32_io_type(varying_id) {
+            body.push(Instruction::load(f32_ty, tmp, varying_id, None));
+            let converted = self.id_gen.next();
+            super::f16_polyfill::F16IoPolyfill::emit_f32_to_f16_conversion(
+                tmp,
+                target_type_id,
+                converted,
+                body,
+            );
+            converted
+        } else {
+            body.push(Instruction::load(target_type_id, tmp, varying_id, None));
+            tmp
+        }
+    }
+
+    /// Store an IO variable, converting from `f16` to `f32` if polyfill is active.
+    pub(super) fn store_io_with_f16_polyfill(
+        &mut self,
+        body: &mut Vec<Instruction>,
+        varying_id: Word,
+        value_id: Word,
+    ) {
+        if let Some(f32_ty) = self.io_f16_polyfills.get_f32_io_type(varying_id) {
+            let converted = self.id_gen.next();
+            super::f16_polyfill::F16IoPolyfill::emit_f16_to_f32_conversion(
+                value_id, f32_ty, converted, body,
+            );
+            body.push(Instruction::store(varying_id, converted, None));
+        } else {
+            body.push(Instruction::store(varying_id, value_id, None));
+        }
     }
 
     fn write_global_variable(
@@ -2056,13 +2279,11 @@ impl Writer {
         // and it is failing on 0.
         let mut substitute_inner_type_lookup = None;
         if let Some(ref res_binding) = global_variable.binding {
-            self.decorate(id, Decoration::DescriptorSet, &[res_binding.group]);
-            self.decorate(id, Decoration::Binding, &[res_binding.binding]);
+            let bind_target = self.resolve_resource_binding(res_binding)?;
+            self.decorate(id, Decoration::DescriptorSet, &[bind_target.descriptor_set]);
+            self.decorate(id, Decoration::Binding, &[bind_target.binding]);
 
-            if let Some(&BindingInfo {
-                binding_array_size: Some(remapped_binding_array_size),
-            }) = self.binding_map.get(res_binding)
-            {
+            if let Some(remapped_binding_array_size) = bind_target.binding_array_size {
                 if let crate::TypeInner::BindingArray { base, .. } =
                     ir_module.types[global_variable.ty].inner
                 {
@@ -2314,10 +2535,8 @@ impl Writer {
         if self.flags.contains(WriterFlags::DEBUG) {
             if let Some(debug_info) = debug_info.as_ref() {
                 let source_file_id = self.id_gen.next();
-                self.debugs.push(Instruction::string(
-                    &debug_info.file_name.display().to_string(),
-                    source_file_id,
-                ));
+                self.debugs
+                    .push(Instruction::string(debug_info.file_name, source_file_id));
 
                 debug_info_inner = Some(DebugInfoInner {
                     source_code: debug_info.source_code,
@@ -2486,6 +2705,10 @@ impl Writer {
         self.use_extension("SPV_EXT_descriptor_indexing");
         self.decorate(id, spirv::Decoration::NonUniform, &[]);
         Ok(())
+    }
+
+    pub(super) fn needs_f16_polyfill(&self, ty_inner: &crate::TypeInner) -> bool {
+        self.io_f16_polyfills.needs_polyfill(ty_inner)
     }
 }
 

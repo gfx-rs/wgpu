@@ -104,7 +104,7 @@ impl Example {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -117,7 +117,7 @@ impl Example {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
 
@@ -160,6 +160,7 @@ impl Example {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &views[target_mip],
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
@@ -169,6 +170,7 @@ impl Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             if let Some(ref query_sets) = query_sets {
                 rpass.write_timestamp(&query_sets.timestamp, timestamp_query_index_base);
@@ -267,7 +269,7 @@ impl crate::framework::Example for Example {
             address_mode_w: wgpu::AddressMode::Repeat,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
             ..Default::default()
         });
         let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
@@ -304,7 +306,7 @@ impl crate::framework::Example for Example {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -410,7 +412,7 @@ impl crate::framework::Example for Example {
                 .slice(..)
                 .map_async(wgpu::MapMode::Read, |_| ());
             // Wait for device to be done rendering mipmaps
-            device.poll(wgpu::PollType::wait()).unwrap();
+            device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
             // This is guaranteed to be ready.
             let timestamp_view = query_sets
                 .mapping_buffer
@@ -481,6 +483,7 @@ impl crate::framework::Example for Example {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(clear_color),
@@ -490,6 +493,7 @@ impl crate::framework::Example for Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             rpass.set_pipeline(&self.draw_pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
@@ -506,7 +510,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "mipmap",
     image_path: "/examples/features/src/mipmap/screenshot.png",
     width: 1024,
@@ -519,13 +523,21 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST_QUERY: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST_QUERY: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "mipmap-query",
     image_path: "/examples/features/src/mipmap/screenshot_query.png",
     width: 1024,
     height: 768,
     optional_features: QUERY_FEATURES,
     base_test_parameters: wgpu_test::TestParameters::default(),
-    comparisons: &[wgpu_test::ComparisonType::Mean(0.025)],
+    // Somehow, this test on CI lavapipe reasonably often gets error of 0.025341, significantly higher
+    // than the comparison we usually do with mean 0.005. This only happens when the query is used.
+    comparisons: &[
+        wgpu_test::ComparisonType::Mean(0.03),
+        wgpu_test::ComparisonType::Percentile {
+            percentile: 0.99,
+            threshold: 0.1,
+        },
+    ],
     _phantom: std::marker::PhantomData::<Example>,
 };

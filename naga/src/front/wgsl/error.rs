@@ -2,6 +2,7 @@
 
 use crate::common::wgsl::TryToWgsl;
 use crate::diagnostic_filter::ConflictingDiagnosticRuleError;
+use crate::error::replace_control_chars;
 use crate::proc::{Alignment, ConstantEvaluatorError, ResolveError};
 use crate::{Scalar, SourceLocation, Span};
 
@@ -14,7 +15,6 @@ use super::parse::lexer::Token;
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::term;
-use codespan_reporting::term::termcolor::{ColorChoice, NoColor, StandardStream};
 use thiserror::Error;
 
 use alloc::{
@@ -68,19 +68,29 @@ impl ParseError {
     }
 
     /// Emits a summary of the error to standard error stream.
+    #[cfg(feature = "stderr")]
     pub fn emit_to_stderr(&self, source: &str) {
         self.emit_to_stderr_with_path(source, "wgsl")
     }
 
     /// Emits a summary of the error to standard error stream.
+    #[cfg(feature = "stderr")]
     pub fn emit_to_stderr_with_path<P>(&self, source: &str, path: P)
     where
         P: AsRef<std::path::Path>,
     {
         let path = path.as_ref().display().to_string();
-        let files = SimpleFile::new(path, source);
+        let files = SimpleFile::new(path, replace_control_chars(source));
         let config = term::Config::default();
-        let writer = StandardStream::stderr(ColorChoice::Auto);
+
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "termcolor")] {
+                let writer = term::termcolor::StandardStream::stderr(term::termcolor::ColorChoice::Auto);
+            } else {
+                let writer = std::io::stderr();
+            }
+        }
+
         term::emit(&mut writer.lock(), &config, &files, &self.diagnostic())
             .expect("cannot write error");
     }
@@ -96,11 +106,13 @@ impl ParseError {
         P: AsRef<std::path::Path>,
     {
         let path = path.as_ref().display().to_string();
-        let files = SimpleFile::new(path, source);
+        let files = SimpleFile::new(path, replace_control_chars(source));
         let config = term::Config::default();
-        let mut writer = NoColor::new(Vec::new());
-        term::emit(&mut writer, &config, &files, &self.diagnostic()).expect("cannot write error");
-        String::from_utf8(writer.into_inner()).unwrap()
+
+        let mut writer = crate::error::DiagnosticBuffer::new();
+        term::emit(writer.inner_mut(), &config, &files, &self.diagnostic())
+            .expect("cannot write error");
+        writer.into_string()
     }
 
     /// Returns a [`SourceLocation`] for the first label in the error message.
@@ -115,11 +127,7 @@ impl core::fmt::Display for ParseError {
     }
 }
 
-impl core::error::Error for ParseError {
-    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
-        None
-    }
-}
+impl core::error::Error for ParseError {}
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ExpectedToken<'a> {
@@ -176,6 +184,7 @@ pub(crate) enum Error<'a> {
         from_type: String,
         to_type: String,
     },
+    NotStorageTexture(Span),
     BadTextureSampleType {
         span: Span,
         scalar: Scalar,
@@ -271,6 +280,75 @@ pub(crate) enum Error<'a> {
         expected: Range<u32>,
         found: u32,
     },
+    /// No overload of this function accepts this many arguments.
+    TooManyArguments {
+        /// The name of the function being called.
+        function: String,
+
+        /// The function name in the call expression.
+        call_span: Span,
+
+        /// The first argument that is unacceptable.
+        arg_span: Span,
+
+        /// Maximum number of arguments accepted by any overload of
+        /// this function.
+        max_arguments: u32,
+    },
+    /// A value passed to a builtin function has a type that is not
+    /// accepted by any overload of the function.
+    WrongArgumentType {
+        /// The name of the function being called.
+        function: String,
+
+        /// The function name in the call expression.
+        call_span: Span,
+
+        /// The first argument whose type is unacceptable.
+        arg_span: Span,
+
+        /// The index of the first argument whose type is unacceptable.
+        arg_index: u32,
+
+        /// That argument's actual type.
+        arg_ty: String,
+
+        /// The set of argument types that would have been accepted for
+        /// this argument, given the prior arguments.
+        allowed: Vec<String>,
+    },
+    /// A value passed to a builtin function has a type that is not
+    /// accepted, given the earlier arguments' types.
+    InconsistentArgumentType {
+        /// The name of the function being called.
+        function: String,
+
+        /// The function name in the call expression.
+        call_span: Span,
+
+        /// The first unacceptable argument.
+        arg_span: Span,
+
+        /// The index of the first unacceptable argument.
+        arg_index: u32,
+
+        /// The actual type of the first unacceptable argument.
+        arg_ty: String,
+
+        /// The prior argument whose type made the `arg_span` argument
+        /// unacceptable.
+        inconsistent_span: Span,
+
+        /// The index of the `inconsistent_span` argument.
+        inconsistent_index: u32,
+
+        /// The type of the `inconsistent_span` argument.
+        inconsistent_ty: String,
+
+        /// The types that would have been accepted instead of the
+        /// first unacceptable argument.
+        allowed: Vec<String>,
+    },
     FunctionReturnsVoid(Span),
     FunctionMustUseUnused(Span),
     FunctionMustUseReturnsVoid(Span, Span),
@@ -317,6 +395,22 @@ pub(crate) enum Error<'a> {
     DiagnosticAttributeNotSupported {
         on_what: DiagnosticAttributeNotSupportedPosition,
         spans: Vec<Span>,
+    },
+    SelectUnexpectedArgumentType {
+        arg_span: Span,
+        arg_type: String,
+    },
+    SelectRejectAndAcceptHaveNoCommonType {
+        reject_span: Span,
+        reject_type: String,
+        accept_span: Span,
+        accept_type: String,
+    },
+    StructMemberTooLarge {
+        member_name_span: Span,
+    },
+    TypeTooLarge {
+        span: Span,
     },
 }
 
@@ -388,6 +482,8 @@ impl<'a> Error<'a> {
                         Token::Arrow => "->".to_string(),
                         Token::Unknown(c) => format!("unknown (`{c}`)"),
                         Token::Trivia => "trivia".to_string(),
+                        Token::DocComment(s) => format!("doc comment ('{s}')"),
+                        Token::ModuleDocComment(s) => format!("module doc comment ('{s}')"),
                         Token::End => "end".to_string(),
                     },
                     ExpectedToken::Identifier => "identifier".to_string(),
@@ -402,7 +498,8 @@ impl<'a> Error<'a> {
                         "workgroup size separator (`,`) or a closing parenthesis".to_string()
                     }
                     ExpectedToken::GlobalItem => concat!(
-                        "global item (`struct`, `const`, `var`, `alias`, `fn`, `diagnostic`, `enable`, `requires`, `;`) ",
+                        "global item (`struct`, `const`, `var`, `alias`, ",
+                        "`fn`, `diagnostic`, `enable`, `requires`, `;`) ",
                         "or the end of the file"
                     )
                     .to_string(),
@@ -465,6 +562,11 @@ impl<'a> Error<'a> {
                 message: format!("unknown scalar type: `{}`", &source[bad_span]),
                 labels: vec![(bad_span, "unknown scalar type".into())],
                 notes: vec!["Valid scalar types are f32, f64, i32, u32, bool".into()],
+            },
+            Error::NotStorageTexture(bad_span) => ParseError {
+                message: "textureStore can only be applied to storage textures".to_string(),
+                labels: vec![(bad_span, "not a storage texture".into())],
+                notes: vec![],
             },
             Error::BadTextureSampleType { span, scalar } => ParseError {
                 message: format!(
@@ -591,7 +693,7 @@ impl<'a> Error<'a> {
                 notes: vec![],
             },
             Error::UnknownEnableExtension(span, word) => ParseError {
-                message: format!("unknown enable-extension `{}`", word),
+                message: format!("unknown enable-extension `{word}`"),
                 labels: vec![(span, "".into())],
                 notes: vec![
                     "See available extensions at <https://www.w3.org/TR/WGSL/#enable-extension>."
@@ -831,6 +933,74 @@ impl<'a> Error<'a> {
                 labels: vec![(span, "wrong number of arguments".into())],
                 notes: vec![],
             },
+            Error::TooManyArguments {
+                ref function,
+                call_span,
+                arg_span,
+                max_arguments,
+            } => ParseError {
+                message: format!("too many arguments passed to `{function}`"),
+                labels: vec![
+                    (call_span, "".into()),
+                    (arg_span, format!("unexpected argument #{}", max_arguments + 1).into())
+                ],
+                notes: vec![
+                    format!("The `{function}` function accepts at most {max_arguments} argument(s)")
+                ],
+            },
+            Error::WrongArgumentType {
+                ref function,
+                call_span,
+                arg_span,
+                arg_index,
+                ref arg_ty,
+                ref allowed,
+            } => {
+                let message = format!(
+                    "wrong type passed as argument #{} to `{function}`",
+                    arg_index + 1,
+                );
+                let labels = vec![
+                    (call_span, "".into()),
+                    (arg_span, format!("argument #{} has type `{arg_ty}`", arg_index + 1).into())
+                ];
+
+                let mut notes = vec![];
+                notes.push(format!("`{function}` accepts the following types for argument #{}:", arg_index + 1));
+                notes.extend(allowed.iter().map(|ty| format!("allowed type: {ty}")));
+
+                ParseError { message, labels, notes }
+            },
+            Error::InconsistentArgumentType {
+                ref function,
+                call_span,
+                arg_span,
+                arg_index,
+                ref arg_ty,
+                inconsistent_span,
+                inconsistent_index,
+                ref inconsistent_ty,
+                ref allowed
+            } => {
+                let message = format!(
+                    "inconsistent type passed as argument #{} to `{function}`",
+                    arg_index + 1,
+                );
+                let labels = vec![
+                    (call_span, "".into()),
+                    (arg_span, format!("argument #{} has type {arg_ty}", arg_index + 1).into()),
+                    (inconsistent_span, format!(
+                        "this argument has type {inconsistent_ty}, which constrains subsequent arguments"
+                    ).into()),
+                ];
+                let mut notes = vec![
+                    format!("Because argument #{} has type {inconsistent_ty}, only the following types", inconsistent_index + 1),
+                    format!("(or types that automatically convert to them) are accepted for argument #{}:", arg_index + 1),
+                ];
+                notes.extend(allowed.iter().map(|ty| format!("allowed type: {ty}")));
+
+                ParseError { message, labels, notes }
+            }
             Error::FunctionReturnsVoid(span) => ParseError {
                 message: "function does not return any value".to_string(),
                 labels: vec![(span, "".into())],
@@ -911,8 +1081,7 @@ impl<'a> Error<'a> {
                 } = **error;
                 ParseError {
                     message: format!(
-                        "automatic conversions cannot convert `{}` to `{}`",
-                        source_type, dest_type
+                        "automatic conversions cannot convert `{source_type}` to `{dest_type}`"
                     ),
                     labels: vec![
                         (
@@ -936,15 +1105,13 @@ impl<'a> Error<'a> {
                 } = **error;
                 ParseError {
                     message: format!(
-                        "automatic conversions cannot convert elements of `{}` to `{}`",
-                        source_type, dest_scalar
+                        "automatic conversions cannot convert elements of `{source_type}` to `{dest_scalar}`"
                     ),
                     labels: vec![
                         (
                             dest_span,
                             format!(
-                                "a value with elements of type {} is required here",
-                                dest_scalar
+                                "a value with elements of type {dest_scalar} is required here"
                             )
                             .into(),
                         ),
@@ -1185,6 +1352,40 @@ impl<'a> Error<'a> {
                     ],
                 }
             }
+            Error::SelectUnexpectedArgumentType { arg_span, ref arg_type } => ParseError {
+                message: "unexpected argument type for `select` call".into(),
+                labels: vec![(arg_span, format!("this value of type {arg_type}").into())],
+                notes: vec!["expected a scalar or a `vecN` of scalars".into()],
+            },
+            Error::SelectRejectAndAcceptHaveNoCommonType {
+                reject_span,
+                ref reject_type,
+                accept_span,
+                ref accept_type,
+            } => ParseError {
+                message: "type mismatch for reject and accept values in `select` call".into(),
+                labels: vec![
+                    (reject_span, format!("reject value of type {reject_type}").into()),
+                    (accept_span, format!("accept value of type {accept_type}").into()),
+                ],
+                notes: vec![],
+            },
+            Error::StructMemberTooLarge { member_name_span } => ParseError {
+                message: "struct member is too large".into(),
+                labels: vec![(member_name_span, "this member exceeds the maximum size".into())],
+                notes: vec![format!(
+                    "the maximum size is {} bytes",
+                    crate::valid::MAX_TYPE_SIZE
+                )],
+            },
+            Error::TypeTooLarge { span } => ParseError {
+                message: "type is too large".into(),
+                labels: vec![(span, "this type exceeds the maximum size".into())],
+                notes: vec![format!(
+                    "the maximum size is {} bytes",
+                    crate::valid::MAX_TYPE_SIZE
+                )],
+            },
         }
     }
 }

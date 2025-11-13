@@ -1138,6 +1138,12 @@ impl super::Instruction {
         instruction.add_operand(semantics_id);
         instruction
     }
+    pub(super) fn memory_barrier(mem_scope_id: Word, semantics_id: Word) -> Self {
+        let mut instruction = Self::new(Op::MemoryBarrier);
+        instruction.add_operand(mem_scope_id);
+        instruction.add_operand(semantics_id);
+        instruction
+    }
 
     // Group Instructions
 
@@ -1202,6 +1208,22 @@ impl super::Instruction {
             instruction.add_operand(group_op as u32);
         }
         instruction.add_operand(value);
+
+        instruction
+    }
+    pub(super) fn group_non_uniform_quad_swap(
+        result_type_id: Word,
+        id: Word,
+        exec_scope_id: Word,
+        value: Word,
+        direction: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::GroupNonUniformQuadSwap);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(exec_scope_id);
+        instruction.add_operand(value);
+        instruction.add_operand(direction);
 
         instruction
     }

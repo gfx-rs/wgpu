@@ -1,0 +1,338 @@
+// language: metal1.2
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct _mslBufferSizes {
+    uint size1;
+};
+
+struct GlobalConst {
+    uint a;
+    char _pad1[12];
+    metal::packed_uint3 b;
+    int c;
+};
+struct AlignedWrapper {
+    int value;
+    char _pad1[4];
+};
+struct type_6 {
+    metal::float2x2 inner[2];
+};
+struct type_8 {
+    metal::atomic_int inner[10];
+};
+struct type_10 {
+    metal::uint2 inner[2];
+};
+typedef AlignedWrapper type_11[1];
+struct Bar {
+    metal::float4x3 _matrix;
+    type_6 matrix_array;
+    metal::atomic_int atom;
+    type_8 atom_arr;
+    char _pad4[4];
+    type_10 arr;
+    type_11 data;
+    char _pad6[8];
+};
+struct Baz {
+    metal::float3x2 m;
+};
+struct type_15 {
+    metal::float4x2 inner[2];
+};
+struct MatCx2InArray {
+    type_15 am;
+};
+struct type_17 {
+    float inner[10];
+};
+struct type_18 {
+    type_17 inner[5];
+};
+struct type_20 {
+    int inner[5];
+};
+struct type_22 {
+    metal::float4 inner[2];
+};
+struct AssignToMember {
+    uint x;
+};
+struct type_25 {
+    uint inner[4];
+};
+struct type_28 {
+    bool inner[1];
+};
+struct S {
+    int m;
+};
+struct Inner {
+    int delicious;
+};
+struct Outer {
+    Inner om_nom_nom;
+    uint thing;
+};
+
+void test_matrix_within_struct_accesses(
+    constant Baz& baz
+) {
+    int idx = 1;
+    Baz t = Baz {metal::float3x2(metal::float2(1.0), metal::float2(2.0), metal::float2(3.0))};
+    int _e3 = idx;
+    idx = as_type<int>(as_type<uint>(_e3) - as_type<uint>(1));
+    metal::float3x2 l0_ = baz.m;
+    metal::float2 l1_ = baz.m[0];
+    int _e14 = idx;
+    metal::float2 l2_ = baz.m[_e14];
+    float l3_ = baz.m[0].y;
+    int _e25 = idx;
+    float l4_ = baz.m[0][_e25];
+    int _e30 = idx;
+    float l5_ = baz.m[_e30].y;
+    int _e36 = idx;
+    int _e38 = idx;
+    float l6_ = baz.m[_e36][_e38];
+    int _e51 = idx;
+    idx = as_type<int>(as_type<uint>(_e51) + as_type<uint>(1));
+    t.m = metal::float3x2(metal::float2(6.0), metal::float2(5.0), metal::float2(4.0));
+    t.m[0] = metal::float2(9.0);
+    int _e66 = idx;
+    t.m[_e66] = metal::float2(90.0);
+    t.m[0].y = 10.0;
+    int _e76 = idx;
+    t.m[0][_e76] = 20.0;
+    int _e80 = idx;
+    t.m[_e80].y = 30.0;
+    int _e85 = idx;
+    int _e87 = idx;
+    t.m[_e85][_e87] = 40.0;
+    return;
+}
+
+void test_matrix_within_array_within_struct_accesses(
+    constant MatCx2InArray& nested_mat_cx2_
+) {
+    int idx_1 = 1;
+    MatCx2InArray t_1 = MatCx2InArray {type_15 {}};
+    int _e3 = idx_1;
+    idx_1 = as_type<int>(as_type<uint>(_e3) - as_type<uint>(1));
+    type_15 l0_1 = nested_mat_cx2_.am;
+    metal::float4x2 l1_1 = nested_mat_cx2_.am.inner[0];
+    metal::float2 l2_1 = nested_mat_cx2_.am.inner[0][0];
+    int _e20 = idx_1;
+    metal::float2 l3_1 = nested_mat_cx2_.am.inner[0][_e20];
+    float l4_1 = nested_mat_cx2_.am.inner[0][0].y;
+    int _e33 = idx_1;
+    float l5_1 = nested_mat_cx2_.am.inner[0][0][_e33];
+    int _e39 = idx_1;
+    float l6_1 = nested_mat_cx2_.am.inner[0][_e39].y;
+    int _e46 = idx_1;
+    int _e48 = idx_1;
+    float l7_ = nested_mat_cx2_.am.inner[0][_e46][_e48];
+    int _e55 = idx_1;
+    idx_1 = as_type<int>(as_type<uint>(_e55) + as_type<uint>(1));
+    t_1.am = type_15 {};
+    t_1.am.inner[0] = metal::float4x2(metal::float2(8.0), metal::float2(7.0), metal::float2(6.0), metal::float2(5.0));
+    t_1.am.inner[0][0] = metal::float2(9.0);
+    int _e77 = idx_1;
+    t_1.am.inner[0][_e77] = metal::float2(90.0);
+    t_1.am.inner[0][0].y = 10.0;
+    int _e89 = idx_1;
+    t_1.am.inner[0][0][_e89] = 20.0;
+    int _e94 = idx_1;
+    t_1.am.inner[0][_e94].y = 30.0;
+    int _e100 = idx_1;
+    int _e102 = idx_1;
+    t_1.am.inner[0][_e100][_e102] = 40.0;
+    return;
+}
+
+float read_from_private(
+    thread float& foo_1
+) {
+    float _e1 = foo_1;
+    return _e1;
+}
+
+float test_arr_as_arg(
+    type_18 a
+) {
+    return a.inner[4].inner[9];
+}
+
+void assign_through_ptr_fn(
+    thread uint& p
+) {
+    p = 42u;
+    return;
+}
+
+void assign_array_through_ptr_fn(
+    thread type_22& foo_2
+) {
+    foo_2 = type_22 {metal::float4(1.0), metal::float4(2.0)};
+    return;
+}
+
+void assign_through_ptr(
+) {
+    uint val = 33u;
+    type_22 arr = type_22 {metal::float4(6.0), metal::float4(7.0)};
+    assign_through_ptr_fn(val);
+    assign_array_through_ptr_fn(arr);
+    return;
+}
+
+uint fetch_arg_ptr_member(
+    thread AssignToMember& p_1
+) {
+    uint _e2 = p_1.x;
+    return _e2;
+}
+
+void assign_to_arg_ptr_member(
+    thread AssignToMember& p_2
+) {
+    p_2.x = 10u;
+    return;
+}
+
+uint fetch_arg_ptr_array_element(
+    thread type_25& p_3
+) {
+    uint _e2 = p_3.inner[1];
+    return _e2;
+}
+
+void assign_to_arg_ptr_array_element(
+    thread type_25& p_4
+) {
+    p_4.inner[1] = 10u;
+    return;
+}
+
+void assign_to_ptr_components(
+) {
+    AssignToMember s1_ = {};
+    type_25 a1_ = {};
+    assign_to_arg_ptr_member(s1_);
+    uint _e1 = fetch_arg_ptr_member(s1_);
+    assign_to_arg_ptr_array_element(a1_);
+    uint _e3 = fetch_arg_ptr_array_element(a1_);
+    return;
+}
+
+bool index_ptr(
+    bool value
+) {
+    type_28 a_1 = {};
+    a_1 = type_28 {value};
+    bool _e4 = a_1.inner[0];
+    return _e4;
+}
+
+int member_ptr(
+) {
+    S s = S {42};
+    int _e4 = s.m;
+    return _e4;
+}
+
+int let_members_of_members(
+) {
+    Inner inner_1 = Outer {}.om_nom_nom;
+    int delishus_1 = Outer {}.om_nom_nom.delicious;
+    if (Outer {}.thing != static_cast<uint>(delishus_1)) {
+    }
+    return Outer {}.om_nom_nom.delicious;
+}
+
+int var_members_of_members(
+) {
+    Outer thing = Outer {};
+    Inner inner = {};
+    int delishus = {};
+    Inner _e3 = thing.om_nom_nom;
+    inner = _e3;
+    int _e6 = inner.delicious;
+    delishus = _e6;
+    uint _e9 = thing.thing;
+    int _e10 = delishus;
+    if (_e9 != static_cast<uint>(_e10)) {
+    }
+    int _e15 = thing.om_nom_nom.delicious;
+    return _e15;
+}
+int naga_f2i32(float value) {
+    return static_cast<int>(metal::clamp(value, -2147483600.0, 2147483500.0));
+}
+
+
+struct foo_vertInput {
+};
+struct foo_vertOutput {
+    metal::float4 member [[position]];
+};
+vertex foo_vertOutput foo_vert(
+  uint vi [[vertex_id]]
+, device Bar const& bar [[buffer(0)]]
+, constant Baz& baz [[buffer(1)]]
+, device metal::int2 const& qux [[buffer(2)]]
+, constant MatCx2InArray& nested_mat_cx2_ [[buffer(3)]]
+, constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
+) {
+    GlobalConst msl_padding_global_const = GlobalConst {0u, {}, metal::uint3(0u, 0u, 0u), 0};
+    float foo = 0.0;
+    type_20 c2_ = {};
+    float baz_1 = foo;
+    foo = 1.0;
+    GlobalConst phony = msl_padding_global_const;
+    test_matrix_within_struct_accesses(baz);
+    test_matrix_within_array_within_struct_accesses(nested_mat_cx2_);
+    metal::float4x3 _matrix = bar._matrix;
+    type_10 arr_1 = bar.arr;
+    float b = bar._matrix[3u].x;
+    int a_2 = bar.data[(1 + (_buffer_sizes.size1 - 160 - 8) / 8) - 2u].value;
+    metal::int2 c = qux;
+    float _e35 = read_from_private(foo);
+    c2_ = type_20 {a_2, naga_f2i32(b), 3, 4, 5};
+    c2_.inner[vi + 1u] = 42;
+    int value_1 = c2_.inner[vi];
+    float _e49 = test_arr_as_arg(type_18 {});
+    return foo_vertOutput { metal::float4(_matrix * static_cast<metal::float4>(metal::int4(value_1)), 2.0) };
+}
+
+
+struct foo_fragOutput {
+    metal::float4 member_1 [[color(0)]];
+};
+fragment foo_fragOutput foo_frag(
+  device Bar& bar [[buffer(0)]]
+, device metal::int2& qux [[buffer(2)]]
+, constant _mslBufferSizes& _buffer_sizes [[buffer(24)]]
+) {
+    bar._matrix[1].z = 1.0;
+    bar._matrix = metal::float4x3(metal::float3(0.0), metal::float3(1.0), metal::float3(2.0), metal::float3(3.0));
+    bar.arr = type_10 {metal::uint2(0u), metal::uint2(1u)};
+    bar.data[1].value = 1;
+    qux = metal::int2 {};
+    return foo_fragOutput { metal::float4(0.0) };
+}
+
+
+kernel void foo_compute(
+) {
+    assign_through_ptr();
+    assign_to_ptr_components();
+    bool _e1 = index_ptr(true);
+    int _e2 = member_ptr();
+    int _e3 = let_members_of_members();
+    int _e4 = var_members_of_members();
+    return;
+}

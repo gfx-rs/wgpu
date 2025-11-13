@@ -33,19 +33,20 @@ webgpu = ["wgpu/webgpu"]
 [dependencies]
 bytemuck.workspace = true
 cfg-if.workspace = true
-encase = { workspace = true, features = ["glam"] }
+encase = { workspace = true }
 flume.workspace = true
-glam = { workspace = true, features = ["bytemuck"] }
+getrandom = { workspace = true, features = ["wasm_js"] }
+glam = { workspace = true, features = ["bytemuck", "encase"] }
 ktx2.workspace = true
 log.workspace = true
-nanorand.workspace = true
+nanorand = { workspace = true, features = ["getrandom"] }
 noise.workspace = true
 obj.workspace = true
 png.workspace = true
 pollster.workspace = true
 web-time.workspace = true
-wgpu.workspace = true
 wgpu-types = { workspace = true, features = [
+    "std",
     "trace", # TODO(#5974): this should be a dep on wgpu/trace and not wgpu-types at all
 ] }
 winit.workspace = true
@@ -55,6 +56,7 @@ wgpu-test.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger.workspace = true
+wgpu.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook.workspace = true
@@ -62,6 +64,10 @@ console_log.workspace = true
 fern.workspace = true
 wasm-bindgen.workspace = true
 wasm-bindgen-futures.workspace = true
+wgpu = { path = "../../wgpu", default-features = false, features = [
+    "wgsl",
+    "std",
+] }
 # We need these features in the framework examples and tests
 web-sys = { workspace = true, features = [
     "Location",

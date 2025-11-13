@@ -11,8 +11,6 @@ Backend functions that export shader [`Module`](super::Module)s into binary and 
 
 use alloc::string::String;
 
-use crate::proc::ExpressionKindTracker;
-
 #[cfg(dot_out)]
 pub mod dot;
 #[cfg(glsl_out)]
@@ -48,6 +46,13 @@ pub type NeedBakeExpressions = crate::FastHashSet<crate::Handle<crate::Expressio
 ///
 /// [`Expression`]: crate::Expression
 /// [`Handle`]: crate::Handle
+#[cfg_attr(
+    not(any(glsl_out, hlsl_out, msl_out, wgsl_out)),
+    allow(
+        dead_code,
+        reason = "shared helpers can be dead if none of the enabled backends need it"
+    )
+)]
 struct Baked(crate::Handle<crate::Expression>);
 
 impl core::fmt::Display for Baked {
@@ -81,6 +86,33 @@ impl core::fmt::Display for Level {
     }
 }
 
+/// Locate the entry point(s) to write.
+///
+/// If `entry_point` is given, and the specified entry point exists, returns a
+/// length-1 `Range` containing the index of that entry point.  If no
+/// `entry_point` is given, returns the complete range of entry point indices.
+/// If `entry_point` is given but does not exist, returns an error.
+#[cfg(any(hlsl_out, msl_out))]
+fn get_entry_points(
+    module: &crate::ir::Module,
+    entry_point: Option<&(crate::ir::ShaderStage, String)>,
+) -> Result<core::ops::Range<usize>, (crate::ir::ShaderStage, String)> {
+    use alloc::borrow::ToOwned;
+
+    if let Some(&(stage, ref name)) = entry_point {
+        let Some(ep_index) = module
+            .entry_points
+            .iter()
+            .position(|ep| ep.stage == stage && ep.name == *name)
+        else {
+            return Err((stage, name.to_owned()));
+        };
+        Ok(ep_index..ep_index + 1)
+    } else {
+        Ok(0..module.entry_points.len())
+    }
+}
+
 /// Whether we're generating an entry point or a regular function.
 ///
 /// Backend languages often require different code for a [`Function`]
@@ -107,11 +139,11 @@ pub enum FunctionType {
 }
 
 impl FunctionType {
-    /// Returns true if the function is an entry point for a compute shader.
-    pub fn is_compute_entry_point(&self, module: &crate::Module) -> bool {
+    /// Returns true if the function is an entry point for a compute-like shader.
+    pub fn is_compute_like_entry_point(&self, module: &crate::Module) -> bool {
         match *self {
             FunctionType::EntryPoint(index) => {
-                module.entry_points[index as usize].stage == crate::ShaderStage::Compute
+                module.entry_points[index as usize].stage.compute_like()
             }
             FunctionType::Function(_) => false,
         }
@@ -128,8 +160,6 @@ pub struct FunctionCtx<'a> {
     pub expressions: &'a crate::Arena<crate::Expression>,
     /// Map of expressions that have associated variable names
     pub named_expressions: &'a crate::NamedExpressions,
-    /// For constness checks
-    pub expr_kind_tracker: ExpressionKindTracker,
 }
 
 impl FunctionCtx<'_> {
@@ -162,6 +192,31 @@ impl FunctionCtx<'_> {
             FunctionType::Function(handle) => crate::proc::NameKey::FunctionArgument(handle, arg),
             FunctionType::EntryPoint(ep_index) => {
                 crate::proc::NameKey::EntryPointArgument(ep_index, arg)
+            }
+        }
+    }
+
+    /// Helper method that generates a [`NameKey`](crate::proc::NameKey) for an external texture
+    /// function argument.
+    ///
+    /// # Panics
+    /// - If the function arguments are less or equal to `arg`
+    /// - If `self.ty` is not `FunctionType::Function`.
+    pub const fn external_texture_argument_key(
+        &self,
+        arg: u32,
+        external_texture_key: crate::proc::ExternalTextureNameKey,
+    ) -> crate::proc::NameKey {
+        match self.ty {
+            FunctionType::Function(handle) => {
+                crate::proc::NameKey::ExternalTextureFunctionArgument(
+                    handle,
+                    arg,
+                    external_texture_key,
+                )
+            }
+            FunctionType::EntryPoint(_) => {
+                panic!("External textures cannot be used as arguments to entry points")
             }
         }
     }

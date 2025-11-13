@@ -2,7 +2,7 @@
 Type generators.
 */
 
-use alloc::{format, string::ToString, vec};
+use alloc::{string::ToString, vec};
 
 use crate::{arena::Handle, span::Span};
 
@@ -276,6 +276,179 @@ impl crate::Module {
         handle
     }
 
+    /// Generate [`SpecialTypes::external_texture_params`] and
+    /// [`SpecialTypes::external_texture_transfer_function`].
+    ///
+    /// Other than the WGSL backend, every backend that supports external
+    /// textures does so by lowering them to a set of ordinary textures and
+    /// some parameters saying how to sample from them. These types are used
+    /// for said parameters. Note that they are not used by the IR, but
+    /// generated purely as a convenience for the backends.
+    ///
+    /// [`SpecialTypes::external_texture_params`]: crate::ir::SpecialTypes::external_texture_params
+    /// [`SpecialTypes::external_texture_transfer_function`]: crate::ir::SpecialTypes::external_texture_transfer_function
+    pub fn generate_external_texture_types(&mut self) {
+        if self.special_types.external_texture_params.is_some() {
+            return;
+        }
+
+        let ty_f32 = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Scalar(crate::Scalar::F32),
+            },
+            Span::UNDEFINED,
+        );
+        let ty_u32 = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Scalar(crate::Scalar::U32),
+            },
+            Span::UNDEFINED,
+        );
+        let ty_vec2u = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Vector {
+                    size: crate::VectorSize::Bi,
+                    scalar: crate::Scalar::U32,
+                },
+            },
+            Span::UNDEFINED,
+        );
+        let ty_mat3x2f = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Matrix {
+                    columns: crate::VectorSize::Tri,
+                    rows: crate::VectorSize::Bi,
+                    scalar: crate::Scalar::F32,
+                },
+            },
+            Span::UNDEFINED,
+        );
+        let ty_mat3x3f = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Matrix {
+                    columns: crate::VectorSize::Tri,
+                    rows: crate::VectorSize::Tri,
+                    scalar: crate::Scalar::F32,
+                },
+            },
+            Span::UNDEFINED,
+        );
+        let ty_mat4x4f = self.types.insert(
+            crate::Type {
+                name: None,
+                inner: crate::TypeInner::Matrix {
+                    columns: crate::VectorSize::Quad,
+                    rows: crate::VectorSize::Quad,
+                    scalar: crate::Scalar::F32,
+                },
+            },
+            Span::UNDEFINED,
+        );
+
+        let transfer_fn_handle = self.types.insert(
+            crate::Type {
+                name: Some("NagaExternalTextureTransferFn".to_string()),
+                inner: crate::TypeInner::Struct {
+                    members: vec![
+                        crate::StructMember {
+                            name: Some("a".to_string()),
+                            ty: ty_f32,
+                            binding: None,
+                            offset: 0,
+                        },
+                        crate::StructMember {
+                            name: Some("b".to_string()),
+                            ty: ty_f32,
+                            binding: None,
+                            offset: 4,
+                        },
+                        crate::StructMember {
+                            name: Some("g".to_string()),
+                            ty: ty_f32,
+                            binding: None,
+                            offset: 8,
+                        },
+                        crate::StructMember {
+                            name: Some("k".to_string()),
+                            ty: ty_f32,
+                            binding: None,
+                            offset: 12,
+                        },
+                    ],
+                    span: 16,
+                },
+            },
+            Span::UNDEFINED,
+        );
+        self.special_types.external_texture_transfer_function = Some(transfer_fn_handle);
+
+        let params_handle = self.types.insert(
+            crate::Type {
+                name: Some("NagaExternalTextureParams".to_string()),
+                inner: crate::TypeInner::Struct {
+                    members: vec![
+                        crate::StructMember {
+                            name: Some("yuv_conversion_matrix".to_string()),
+                            ty: ty_mat4x4f,
+                            binding: None,
+                            offset: 0,
+                        },
+                        crate::StructMember {
+                            name: Some("gamut_conversion_matrix".to_string()),
+                            ty: ty_mat3x3f,
+                            binding: None,
+                            offset: 64,
+                        },
+                        crate::StructMember {
+                            name: Some("src_tf".to_string()),
+                            ty: transfer_fn_handle,
+                            binding: None,
+                            offset: 112,
+                        },
+                        crate::StructMember {
+                            name: Some("dst_tf".to_string()),
+                            ty: transfer_fn_handle,
+                            binding: None,
+                            offset: 128,
+                        },
+                        crate::StructMember {
+                            name: Some("sample_transform".to_string()),
+                            ty: ty_mat3x2f,
+                            binding: None,
+                            offset: 144,
+                        },
+                        crate::StructMember {
+                            name: Some("load_transform".to_string()),
+                            ty: ty_mat3x2f,
+                            binding: None,
+                            offset: 168,
+                        },
+                        crate::StructMember {
+                            name: Some("size".to_string()),
+                            ty: ty_vec2u,
+                            binding: None,
+                            offset: 192,
+                        },
+                        crate::StructMember {
+                            name: Some("num_planes".to_string()),
+                            ty: ty_u32,
+                            binding: None,
+                            offset: 200,
+                        },
+                    ],
+                    span: 208,
+                },
+            },
+            Span::UNDEFINED,
+        );
+        self.special_types.external_texture_params = Some(params_handle);
+    }
+
     /// Populate this module's [`SpecialTypes::predeclared_types`] type and return the handle.
     ///
     /// [`SpecialTypes::predeclared_types`]: crate::SpecialTypes::predeclared_types
@@ -283,12 +456,11 @@ impl crate::Module {
         &mut self,
         special_type: crate::PredeclaredType,
     ) -> Handle<crate::Type> {
-        use core::fmt::Write;
-
         if let Some(value) = self.special_types.predeclared_types.get(&special_type) {
             return *value;
         }
 
+        let name = special_type.struct_name();
         let ty = match special_type {
             crate::PredeclaredType::AtomicCompareExchangeWeakResult(scalar) => {
                 let bool_ty = self.types.insert(
@@ -307,10 +479,7 @@ impl crate::Module {
                 );
 
                 crate::Type {
-                    name: Some(format!(
-                        "__atomic_compare_exchange_result<{:?},{}>",
-                        scalar.kind, scalar.width,
-                    )),
+                    name: Some(name),
                     inner: crate::TypeInner::Struct {
                         members: vec![
                             crate::StructMember {
@@ -352,14 +521,8 @@ impl crate::Module {
                     (float_ty, scalar.width as u32)
                 };
 
-                let mut type_name = "__modf_result_".to_string();
-                if let Some(size) = size {
-                    let _ = write!(type_name, "vec{}_", size as u8);
-                }
-                let _ = write!(type_name, "f{}", scalar.width * 8);
-
                 crate::Type {
-                    name: Some(type_name),
+                    name: Some(name),
                     inner: crate::TypeInner::Struct {
                         members: vec![
                             crate::StructMember {
@@ -425,14 +588,8 @@ impl crate::Module {
                     (float_ty, int_ty, scalar.width as u32)
                 };
 
-                let mut type_name = "__frexp_result_".to_string();
-                if let Some(size) = size {
-                    let _ = write!(type_name, "vec{}_", size as u8);
-                }
-                let _ = write!(type_name, "f{}", scalar.width * 8);
-
                 crate::Type {
-                    name: Some(type_name),
+                    name: Some(name),
                     inner: crate::TypeInner::Struct {
                         members: vec![
                             crate::StructMember {

@@ -9,17 +9,19 @@ use alloc::{
 
 use hashbrown::HashMap;
 use thiserror::Error;
+use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
     api_log, api_log_debug,
     device::{queue::Queue, resource::Device, DeviceDescriptor, DeviceError},
     global::Global,
-    hal_api::HalApi,
     id::{markers, AdapterId, DeviceId, QueueId, SurfaceId},
     lock::{rank, Mutex},
     present::Presentation,
     resource::ResourceType,
-    resource_log, DOWNLEVEL_WARNING_MESSAGE,
+    resource_log,
+    timestamp_normalization::TimestampNormalizerInitError,
+    DOWNLEVEL_WARNING_MESSAGE,
 };
 
 use wgt::{Backend, Backends, PowerPreference};
@@ -33,6 +35,12 @@ pub struct FailedLimit {
     name: Cow<'static, str>,
     requested: u64,
     allowed: u64,
+}
+
+impl WebGpuError for FailedLimit {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
 }
 
 fn check_limits(requested: &wgt::Limits, allowed: &wgt::Limits) -> Vec<FailedLimit> {
@@ -80,7 +88,7 @@ pub struct Instance {
     /// `instance_per_backend` instead.
     supported_backends: Backends,
 
-    flags: wgt::InstanceFlags,
+    pub flags: wgt::InstanceFlags,
 }
 
 impl Instance {
@@ -108,7 +116,7 @@ impl Instance {
     }
 
     /// Helper for `Instance::new()`; attempts to add a single `wgpu-hal` backend to this instance.
-    fn try_add_hal<A: HalApi>(&mut self, _: A, instance_desc: &wgt::InstanceDescriptor) {
+    fn try_add_hal<A: hal::Api>(&mut self, _: A, instance_desc: &wgt::InstanceDescriptor) {
         // Whether or not the backend was requested, and whether or not it succeeds,
         // note that we *could* try it.
         self.supported_backends |= A::VARIANT.into();
@@ -121,6 +129,7 @@ impl Instance {
         let hal_desc = hal::InstanceDescriptor {
             name: "wgpu",
             flags: self.flags,
+            memory_budget_thresholds: instance_desc.memory_budget_thresholds,
             backend_options: instance_desc.backend_options.clone(),
         };
 
@@ -141,7 +150,7 @@ impl Instance {
         }
     }
 
-    pub(crate) fn from_hal_instance<A: HalApi>(
+    pub(crate) fn from_hal_instance<A: hal::Api>(
         name: String,
         hal_instance: <A as hal::Api>::Instance,
     ) -> Self {
@@ -165,7 +174,7 @@ impl Instance {
     /// # Safety
     ///
     /// - The raw instance handle returned must not be manually destroyed.
-    pub unsafe fn as_hal<A: HalApi>(&self) -> Option<&A::Instance> {
+    pub unsafe fn as_hal<A: hal::Api>(&self) -> Option<&A::Instance> {
         self.raw(A::VARIANT).map(|instance| {
             instance
                 .as_any()
@@ -211,9 +220,7 @@ impl Instance {
                 }
                 Err(err) => {
                     log::debug!(
-                        "Instance::create_surface: failed to create surface for {:?}: {:?}",
-                        backend,
-                        err
+                        "Instance::create_surface: failed to create surface for {backend:?}: {err:?}"
                     );
                     errors.insert(*backend, err);
                 }
@@ -406,7 +413,7 @@ impl Instance {
         {
             // NOTE: We might be using `profiling` without any features. The empty backend of this
             // macro emits no code, so unused code linting changes depending on the backend.
-            profiling::scope!("enumerating", &*format!("{:?}", _backend));
+            profiling::scope!("enumerating", &*alloc::format!("{_backend:?}"));
 
             let hal_adapters = unsafe { instance.enumerate_adapters(None) };
             for raw in hal_adapters {
@@ -443,14 +450,23 @@ impl Instance {
             let mut backend_adapters =
                 unsafe { instance.enumerate_adapters(compatible_hal_surface) };
             if backend_adapters.is_empty() {
+                log::debug!("enabled backend `{backend:?}` has no adapters");
                 no_adapter_backends |= Backends::from(backend);
                 // by continuing, we avoid setting the further error bits below
                 continue;
             }
 
             if desc.force_fallback_adapter {
-                backend_adapters.retain(|exposed| exposed.info.device_type == wgt::DeviceType::Cpu);
+                log::debug!("Filtering `{backend:?}` for `force_fallback_adapter`");
+                backend_adapters.retain(|exposed| {
+                    let keep = exposed.info.device_type == wgt::DeviceType::Cpu;
+                    if !keep {
+                        log::debug!("* Eliminating adapter `{}`", exposed.info.name);
+                    }
+                    keep
+                });
                 if backend_adapters.is_empty() {
+                    log::debug!("* Backend `{backend:?}` has no fallback adapters");
                     no_fallback_backends |= Backends::from(backend);
                     continue;
                 }
@@ -683,7 +699,7 @@ impl Adapter {
             ),
         );
         allowed_usages.set(
-            wgt::TextureUsages::RENDER_ATTACHMENT,
+            wgt::TextureUsages::RENDER_ATTACHMENT | wgt::TextureUsages::TRANSIENT,
             caps.intersects(Tfc::COLOR_ATTACHMENT | Tfc::DEPTH_STENCIL_ATTACHMENT),
         );
         allowed_usages.set(
@@ -760,10 +776,11 @@ impl Adapter {
         let device = Device::new(hal_device.device, self, desc, instance_flags)?;
         let device = Arc::new(device);
 
-        let queue = Queue::new(device.clone(), hal_device.queue)?;
+        let queue = Queue::new(device.clone(), hal_device.queue, instance_flags)?;
         let queue = Arc::new(queue);
 
         device.set_queue(&queue);
+        device.late_init_resources_with_queue()?;
 
         Ok((device, queue))
     }
@@ -780,16 +797,24 @@ impl Adapter {
             ));
         }
 
+        // Check if experimental features are permitted to be enabled.
+        if desc
+            .required_features
+            .intersects(wgt::Features::all_experimental_mask())
+            && !desc.experimental_features.is_enabled()
+        {
+            return Err(RequestDeviceError::ExperimentalFeaturesNotEnabled(
+                desc.required_features
+                    .intersection(wgt::Features::all_experimental_mask()),
+            ));
+        }
+
         let caps = &self.raw.capabilities;
         if Backends::PRIMARY.contains(Backends::from(self.backend()))
             && !caps.downlevel.is_webgpu_compliant()
         {
             let missing_flags = wgt::DownlevelFlags::compliant() - caps.downlevel.flags;
-            log::warn!(
-                "Missing downlevel flags: {:?}\n{}",
-                missing_flags,
-                DOWNLEVEL_WARNING_MESSAGE
-            );
+            log::warn!("Missing downlevel flags: {missing_flags:?}\n{DOWNLEVEL_WARNING_MESSAGE}");
             log::warn!("{:#?}", caps.downlevel);
         }
 
@@ -835,7 +860,6 @@ pub enum GetSurfaceSupportError {
 }
 
 #[derive(Clone, Debug, Error)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Error when requesting a device from the adapter
 #[non_exhaustive]
 pub enum RequestDeviceError {
@@ -843,8 +867,14 @@ pub enum RequestDeviceError {
     Device(#[from] DeviceError),
     #[error(transparent)]
     LimitsExceeded(#[from] FailedLimit),
-    #[error("Unsupported features were requested: {0:?}")]
+    #[error("Failed to initialize Timestamp Normalizer")]
+    TimestampNormalizerInitFailed(#[from] TimestampNormalizerInitError),
+    #[error("Unsupported features were requested: {0}")]
     UnsupportedFeature(wgt::Features),
+    #[error(
+        "Some experimental features, {0}, were requested, but experimental features are not enabled"
+    )]
+    ExperimentalFeaturesNotEnabled(wgt::Features),
 }
 
 #[derive(Clone, Debug, Error)]

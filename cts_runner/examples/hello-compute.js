@@ -112,8 +112,8 @@ function isTypedArrayEqual(a, b) {
 const actual = new Uint32Array(data);
 const expected = new Uint32Array([0, 2, 7, 55]);
 
-console.error("actual", actual);
-console.error("expected", expected);
+console.log("actual", actual);
+console.log("expected", expected);
 
 if (!isTypedArrayEqual(actual, expected)) {
   throw new TypeError("Actual does not equal expected!");

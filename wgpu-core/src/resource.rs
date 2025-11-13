@@ -2,34 +2,33 @@ use alloc::{borrow::Cow, borrow::ToOwned as _, boxed::Box, string::String, sync:
 use core::{
     borrow::Borrow,
     fmt,
-    mem::{self, ManuallyDrop},
+    mem::{self, size_of, ManuallyDrop},
     num::NonZeroU64,
     ops::Range,
     ptr::NonNull,
 };
-
 use smallvec::SmallVec;
 use thiserror::Error;
-use wgt::TextureSelector;
+use wgt::{
+    error::{ErrorType, WebGpuError},
+    TextureSelector,
+};
 
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    binding_model::BindGroup,
+    binding_model::{BindGroup, BindingError},
     device::{
         queue, resource::DeferredDestroy, BufferMapPendingClosure, Device, DeviceError,
         DeviceMismatch, HostMap, MissingDownlevelFlags, MissingFeatures,
     },
-    global::Global,
-    hal_api::HalApi,
-    id::{
-        AdapterId, BufferId, CommandEncoderId, DeviceId, QueueId, SurfaceId, TextureId,
-        TextureViewId,
-    },
+    hal_label,
     init_tracker::{BufferInitTracker, TextureInitTracker},
     lock::{rank, Mutex, RwLock},
+    ray_tracing::{BlasCompactReadyPendingClosure, BlasPrepareCompactError},
     resource_log,
     snatch::{SnatchGuard, Snatchable},
+    timestamp_normalization::TimestampNormalizationBindGroup,
     track::{SharedTrackerIndexAllocator, TrackerIndex},
     weak_vec::WeakVec,
     Label, LabelHelpers, SubmissionIndex,
@@ -135,6 +134,29 @@ macro_rules! impl_parent_device {
             }
         }
     };
+}
+
+/// Allow access to the hal resource as guarded by the `SnatchGuard`.
+pub trait RawResourceAccess: ParentDevice {
+    type DynResource: hal::DynResource + ?Sized;
+
+    /// Get access to the raw resource if it is not destroyed.
+    ///
+    /// Returns `None` if the resource has been destroyed. This method
+    /// does not allocate in either case.
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource>;
+
+    /// Get access to the raw resource if it is not destroyed.
+    ///
+    /// Returns a full error if the resource has been destroyed. This
+    /// method allocates a label in the error case.
+    fn try_raw<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&'a Self::DynResource, DestroyedResourceError> {
+        self.raw(guard)
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+    }
 }
 
 pub trait ResourceType {
@@ -281,6 +303,30 @@ pub enum BufferAccessError {
     InvalidResource(#[from] InvalidResourceError),
 }
 
+impl WebGpuError for BufferAccessError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::InvalidResource(e) => e,
+            Self::DestroyedResource(e) => e,
+
+            Self::Failed
+            | Self::AlreadyMapped
+            | Self::MapAlreadyPending
+            | Self::MissingBufferUsage(_)
+            | Self::NotMapped
+            | Self::UnalignedRange
+            | Self::UnalignedOffset { .. }
+            | Self::UnalignedRangeSize { .. }
+            | Self::OutOfBoundsUnderrun { .. }
+            | Self::OutOfBoundsOverrun { .. }
+            | Self::NegativeRange { .. }
+            | Self::MapAborted => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[error("Usage flags {actual:?} of {res} do not contain required usage flags {expected:?}")]
@@ -288,6 +334,12 @@ pub struct MissingBufferUsageError {
     pub(crate) res: ResourceErrorIdent,
     pub(crate) actual: wgt::BufferUsages,
     pub(crate) expected: wgt::BufferUsages,
+}
+
+impl WebGpuError for MissingBufferUsageError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
 }
 
 #[derive(Clone, Debug, Error)]
@@ -298,15 +350,33 @@ pub struct MissingTextureUsageError {
     pub(crate) expected: wgt::TextureUsages,
 }
 
+impl WebGpuError for MissingTextureUsageError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[error("{0} has been destroyed")]
 pub struct DestroyedResourceError(pub ResourceErrorIdent);
 
+impl WebGpuError for DestroyedResourceError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[error("{0} is invalid")]
 pub struct InvalidResourceError(pub ResourceErrorIdent);
+
+impl WebGpuError for InvalidResourceError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
 
 pub enum Fallible<T: ParentDevice> {
     Valid(Arc<T>),
@@ -366,14 +436,20 @@ pub struct Buffer {
     pub(crate) tracking_data: TrackingData,
     pub(crate) map_state: Mutex<BufferMapState>,
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
+    pub(crate) timestamp_normalization_bind_group: Snatchable<TimestampNormalizationBindGroup>,
     pub(crate) indirect_validation_bind_groups: Snatchable<crate::indirect_validation::BindGroups>,
 }
 
 impl Drop for Buffer {
     fn drop(&mut self) {
+        if let Some(raw) = self.timestamp_normalization_bind_group.take() {
+            raw.dispose(self.device.raw());
+        }
+
         if let Some(raw) = self.indirect_validation_bind_groups.take() {
             raw.dispose(self.device.raw());
         }
+
         if let Some(raw) = self.raw.take() {
             resource_log!("Destroy raw {}", self.error_ident());
             unsafe {
@@ -383,24 +459,18 @@ impl Drop for Buffer {
     }
 }
 
-impl Buffer {
-    pub(crate) fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a dyn hal::DynBuffer> {
+impl RawResourceAccess for Buffer {
+    type DynResource = dyn hal::DynBuffer;
+
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
         self.raw.get(guard).map(|b| b.as_ref())
     }
+}
 
-    pub(crate) fn try_raw<'a>(
-        &'a self,
-        guard: &'a SnatchGuard,
-    ) -> Result<&'a dyn hal::DynBuffer, DestroyedResourceError> {
-        self.raw
-            .get(guard)
-            .map(|raw| raw.as_ref())
-            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
-    }
-
-    pub(crate) fn check_destroyed<'a>(
-        &'a self,
-        guard: &'a SnatchGuard,
+impl Buffer {
+    pub(crate) fn check_destroyed(
+        &self,
+        guard: &SnatchGuard,
     ) -> Result<(), DestroyedResourceError> {
         self.raw
             .get(guard)
@@ -425,9 +495,85 @@ impl Buffer {
         }
     }
 
+    /// Resolve the size of a binding for buffer with `offset` and `size`.
+    ///
+    /// If `size` is `None`, then the remainder of the buffer starting from
+    /// `offset` is used.
+    ///
+    /// If the binding would overflow the buffer, then an error is returned.
+    ///
+    /// Zero-size bindings are permitted here for historical reasons. Although
+    /// zero-size bindings are permitted by WebGPU, they are not permitted by
+    /// some backends. See [`Buffer::binding`] and
+    /// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
+    pub fn resolve_binding_size(
+        &self,
+        offset: wgt::BufferAddress,
+        binding_size: Option<wgt::BufferSize>,
+    ) -> Result<u64, BindingError> {
+        let buffer_size = self.size;
+
+        match binding_size {
+            Some(binding_size) => match offset.checked_add(binding_size.get()) {
+                Some(end) if end <= buffer_size => Ok(binding_size.get()),
+                _ => Err(BindingError::BindingRangeTooLarge {
+                    buffer: self.error_ident(),
+                    offset,
+                    binding_size: binding_size.get(),
+                    buffer_size,
+                }),
+            },
+            None => {
+                buffer_size
+                    .checked_sub(offset)
+                    .ok_or_else(|| BindingError::BindingOffsetTooLarge {
+                        buffer: self.error_ident(),
+                        offset,
+                        buffer_size,
+                    })
+            }
+        }
+    }
+
+    /// Create a new [`hal::BufferBinding`] for the buffer with `offset` and
+    /// `binding_size`.
+    ///
+    /// If `binding_size` is `None`, then the remainder of the buffer starting
+    /// from `offset` is used.
+    ///
+    /// If the binding would overflow the buffer, then an error is returned.
+    ///
+    /// A zero-size binding at the end of the buffer is permitted here for historical reasons. Although
+    /// zero-size bindings are permitted by WebGPU, they are not permitted by
+    /// some backends. The zero-size binding need to be quashed or remapped to a
+    /// non-zero size, either universally in wgpu-core, or in specific backends
+    /// that do not support them. See
+    /// [#3170](https://github.com/gfx-rs/wgpu/issues/3170).
+    ///
+    /// Although it seems like it would be simpler and safer to use the resolved
+    /// size in the returned [`hal::BufferBinding`], doing this (and removing
+    /// redundant logic in backends to resolve the implicit size) was observed
+    /// to cause problems in certain CTS tests, so an implicit size
+    /// specification is preserved in the output.
+    pub fn binding<'a>(
+        &'a self,
+        offset: wgt::BufferAddress,
+        binding_size: Option<wgt::BufferSize>,
+        snatch_guard: &'a SnatchGuard,
+    ) -> Result<(hal::BufferBinding<'a, dyn hal::DynBuffer>, u64), BindingError> {
+        let buf_raw = self.try_raw(snatch_guard)?;
+        let resolved_size = self.resolve_binding_size(offset, binding_size)?;
+        // SAFETY: The offset and size passed to hal::BufferBinding::new_unchecked must
+        // define a binding contained within the buffer.
+        Ok((
+            hal::BufferBinding::new_unchecked(buf_raw, offset, binding_size),
+            resolved_size,
+        ))
+    }
+
     /// Returns the mapping callback in case of error so that the callback can be fired outside
     /// of the locks that are held in this function.
-    pub(crate) fn map_async(
+    pub fn map_async(
         self: &Arc<Self>,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
@@ -531,6 +677,72 @@ impl Buffer {
         Ok(submit_index)
     }
 
+    pub fn get_mapped_range(
+        self: &Arc<Self>,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferAddress>,
+    ) -> Result<(NonNull<u8>, u64), BufferAccessError> {
+        {
+            let snatch_guard = self.device.snatchable_lock.read();
+            self.check_destroyed(&snatch_guard)?;
+        }
+
+        let range_size = if let Some(size) = size {
+            size
+        } else {
+            self.size.saturating_sub(offset)
+        };
+
+        if offset % wgt::MAP_ALIGNMENT != 0 {
+            return Err(BufferAccessError::UnalignedOffset { offset });
+        }
+        if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            return Err(BufferAccessError::UnalignedRangeSize { range_size });
+        }
+        let map_state = &*self.map_state.lock();
+        match *map_state {
+            BufferMapState::Init { ref staging_buffer } => {
+                // offset (u64) can not be < 0, so no need to validate the lower bound
+                if offset + range_size > self.size {
+                    return Err(BufferAccessError::OutOfBoundsOverrun {
+                        index: offset + range_size - 1,
+                        max: self.size,
+                    });
+                }
+                let ptr = unsafe { staging_buffer.ptr() };
+                let ptr = unsafe { NonNull::new_unchecked(ptr.as_ptr().offset(offset as isize)) };
+                Ok((ptr, range_size))
+            }
+            BufferMapState::Active {
+                ref mapping,
+                ref range,
+                ..
+            } => {
+                if offset < range.start {
+                    return Err(BufferAccessError::OutOfBoundsUnderrun {
+                        index: offset,
+                        min: range.start,
+                    });
+                }
+                if offset + range_size > range.end {
+                    return Err(BufferAccessError::OutOfBoundsOverrun {
+                        index: offset + range_size - 1,
+                        max: range.end,
+                    });
+                }
+                // ptr points to the beginning of the range we mapped in map_async
+                // rather than the beginning of the buffer.
+                let relative_offset = (offset - range.start) as isize;
+                unsafe {
+                    Ok((
+                        NonNull::new_unchecked(mapping.ptr.as_ptr().offset(relative_offset)),
+                        range_size,
+                    ))
+                }
+            }
+            BufferMapState::Idle | BufferMapState::Waiting(_) => Err(BufferAccessError::NotMapped),
+        }
+    }
     /// This function returns [`None`] only if [`Self::map_state`] is not [`BufferMapState::Waiting`].
     #[must_use]
     pub(crate) fn map(&self, snatch_guard: &SnatchGuard) -> Option<BufferMapPendingClosure> {
@@ -585,14 +797,8 @@ impl Buffer {
     }
 
     // Note: This must not be called while holding a lock.
-    pub(crate) fn unmap(
-        self: &Arc<Self>,
-        #[cfg(feature = "trace")] buffer_id: BufferId,
-    ) -> Result<(), BufferAccessError> {
-        if let Some((mut operation, status)) = self.unmap_inner(
-            #[cfg(feature = "trace")]
-            buffer_id,
-        )? {
+    pub fn unmap(self: &Arc<Self>) -> Result<(), BufferAccessError> {
+        if let Some((mut operation, status)) = self.unmap_inner()? {
             if let Some(callback) = operation.callback.take() {
                 callback(status);
             }
@@ -601,10 +807,7 @@ impl Buffer {
         Ok(())
     }
 
-    fn unmap_inner(
-        self: &Arc<Self>,
-        #[cfg(feature = "trace")] buffer_id: BufferId,
-    ) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
+    fn unmap_inner(self: &Arc<Self>) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
         let device = &self.device;
         let snatch_guard = device.snatchable_lock.read();
         let raw_buf = self.try_raw(&snatch_guard)?;
@@ -612,9 +815,11 @@ impl Buffer {
             BufferMapState::Init { staging_buffer } => {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut trace) = *device.trace.lock() {
+                    use crate::device::trace::IntoTrace;
+
                     let data = trace.make_binary("bin", staging_buffer.get_data());
                     trace.add(trace::Action::WriteBuffer {
-                        id: buffer_id,
+                        id: self.to_trace(),
                         data,
                         range: 0..self.size,
                         queued: true,
@@ -670,16 +875,18 @@ impl Buffer {
                 range,
                 host,
             } => {
-                #[allow(clippy::collapsible_if)]
+                #[cfg_attr(not(feature = "trace"), expect(clippy::collapsible_if))]
                 if host == HostMap::Write {
                     #[cfg(feature = "trace")]
                     if let Some(ref mut trace) = *device.trace.lock() {
+                        use crate::device::trace::IntoTrace;
+
                         let size = range.end - range.start;
                         let data = trace.make_binary("bin", unsafe {
                             core::slice::from_raw_parts(mapping.ptr.as_ptr(), size as usize)
                         });
                         trace.add(trace::Action::WriteBuffer {
-                            id: buffer_id,
+                            id: self.to_trace(),
                             data,
                             range: range.clone(),
                             queued: false,
@@ -695,7 +902,7 @@ impl Buffer {
         Ok(None)
     }
 
-    pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
+    pub fn destroy(self: &Arc<Self>) {
         let device = &self.device;
 
         let temp = {
@@ -704,9 +911,14 @@ impl Buffer {
             let raw = match self.raw.snatch(&mut snatch_guard) {
                 Some(raw) => raw,
                 None => {
-                    return Err(DestroyError::AlreadyDestroyed);
+                    // Per spec, it is valid to call `destroy` multiple times.
+                    return;
                 }
             };
+
+            let timestamp_normalization_bind_group = self
+                .timestamp_normalization_bind_group
+                .snatch(&mut snatch_guard);
 
             let indirect_validation_bind_groups = self
                 .indirect_validation_bind_groups
@@ -724,6 +936,7 @@ impl Buffer {
                 device: Arc::clone(&self.device),
                 label: self.label().to_owned(),
                 bind_groups,
+                timestamp_normalization_bind_group,
                 indirect_validation_bind_groups,
             })
         };
@@ -740,8 +953,6 @@ impl Buffer {
                 }
             }
         }
-
-        Ok(())
     }
 }
 
@@ -762,6 +973,8 @@ pub enum CreateBufferError {
     MaxBufferSize { requested: u64, maximum: u64 },
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
     #[error("Failed to create bind group for indirect buffer validation: {0}")]
     IndirectValidationBindGroup(DeviceError),
 }
@@ -772,6 +985,24 @@ crate::impl_parent_device!(Buffer);
 crate::impl_storage_item!(Buffer);
 crate::impl_trackable!(Buffer);
 
+impl WebGpuError for CreateBufferError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::AccessError(e) => e,
+            Self::MissingDownlevelFlags(e) => e,
+            Self::IndirectValidationBindGroup(e) => e,
+            Self::MissingFeatures(e) => e,
+
+            Self::UnalignedSize
+            | Self::InvalidUsage(_)
+            | Self::UsageMismatch(_)
+            | Self::MaxBufferSize { .. } => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
+}
+
 /// A buffer that has been marked as destroyed and is staged for actual deletion soon.
 #[derive(Debug)]
 pub struct DestroyedBuffer {
@@ -779,6 +1010,7 @@ pub struct DestroyedBuffer {
     device: Arc<Device>,
     label: String,
     bind_groups: WeakVec<BindGroup>,
+    timestamp_normalization_bind_group: Option<TimestampNormalizationBindGroup>,
     indirect_validation_bind_groups: Option<crate::indirect_validation::BindGroups>,
 }
 
@@ -795,6 +1027,10 @@ impl Drop for DestroyedBuffer {
             &mut self.bind_groups,
         )));
         drop(deferred);
+
+        if let Some(raw) = self.timestamp_normalization_bind_group.take() {
+            raw.dispose(self.device.raw());
+        }
 
         if let Some(raw) = self.indirect_validation_bind_groups.take() {
             raw.dispose(self.device.raw());
@@ -829,9 +1065,9 @@ unsafe impl Sync for StagingBuffer {}
 /// freed once their associated operation's queue submission has finished
 /// execution.
 ///
-/// [`queue_create_staging_buffer`]: Global::queue_create_staging_buffer
-/// [`queue_write_staging_buffer`]: Global::queue_write_staging_buffer
-/// [`queue_write_texture`]: Global::queue_write_texture
+/// [`queue_create_staging_buffer`]: crate::global::Global::queue_create_staging_buffer
+/// [`queue_write_staging_buffer`]: crate::global::Global::queue_write_staging_buffer
+/// [`queue_write_texture`]: crate::global::Global::queue_write_texture
 /// [`Device::pending_writes`]: crate::device::Device
 #[derive(Debug)]
 pub struct StagingBuffer {
@@ -846,7 +1082,7 @@ impl StagingBuffer {
     pub(crate) fn new(device: &Arc<Device>, size: wgt::BufferSize) -> Result<Self, DeviceError> {
         profiling::scope!("StagingBuffer::new");
         let stage_desc = hal::BufferDescriptor {
-            label: crate::hal_label(Some("(wgpu internal) Staging"), device.instance_flags),
+            label: hal_label(Some("(wgpu internal) Staging"), device.instance_flags),
             size: size.get(),
             usage: wgt::BufferUses::MAP_WRITE | wgt::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT,
@@ -905,6 +1141,13 @@ impl StagingBuffer {
         size: usize,
     ) {
         unsafe {
+            debug_assert!(
+                (src_offset + size as isize) as usize <= data.len(),
+                "src_offset + size must be in-bounds: src_offset = {}, size = {}, data.len() = {}",
+                src_offset,
+                size,
+                data.len()
+            );
             core::ptr::copy_nonoverlapping(
                 data.as_ptr().offset(src_offset),
                 self.ptr.as_ptr().offset(dst_offset),
@@ -1009,7 +1252,7 @@ pub struct Texture {
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
-    pub(crate) clear_mode: TextureClearMode,
+    pub(crate) clear_mode: RwLock<TextureClearMode>,
     pub(crate) views: Mutex<WeakVec<TextureView>>,
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
 }
@@ -1044,7 +1287,7 @@ impl Texture {
             },
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(device.tracker_indices.textures.clone()),
-            clear_mode,
+            clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
         }
@@ -1070,7 +1313,7 @@ impl Texture {
 
 impl Drop for Texture {
     fn drop(&mut self) {
-        match self.clear_mode {
+        match *self.clear_mode.write() {
             TextureClearMode::Surface {
                 ref mut clear_view, ..
             } => {
@@ -1104,6 +1347,14 @@ impl Drop for Texture {
     }
 }
 
+impl RawResourceAccess for Texture {
+    type DynResource = dyn hal::DynTexture;
+
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
+        self.inner.get(guard).map(|t| t.raw())
+    }
+}
+
 impl Texture {
     pub(crate) fn try_inner<'a>(
         &'a self,
@@ -1114,20 +1365,13 @@ impl Texture {
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 
-    pub(crate) fn raw<'a>(
-        &'a self,
-        snatch_guard: &'a SnatchGuard,
-    ) -> Option<&'a dyn hal::DynTexture> {
-        Some(self.inner.get(snatch_guard)?.raw())
-    }
-
-    pub(crate) fn try_raw<'a>(
-        &'a self,
-        guard: &'a SnatchGuard,
-    ) -> Result<&'a dyn hal::DynTexture, DestroyedResourceError> {
+    pub(crate) fn check_destroyed(
+        &self,
+        guard: &SnatchGuard,
+    ) -> Result<(), DestroyedResourceError> {
         self.inner
             .get(guard)
-            .map(|t| t.raw())
+            .map(|_| ())
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
 
@@ -1160,17 +1404,18 @@ impl Texture {
         }
     }
 
-    pub(crate) fn destroy(self: &Arc<Self>) -> Result<(), DestroyError> {
+    pub fn destroy(self: &Arc<Self>) {
         let device = &self.device;
 
         let temp = {
             let raw = match self.inner.snatch(&mut device.snatchable_lock.write()) {
                 Some(TextureInner::Native { raw }) => raw,
                 Some(TextureInner::Surface { .. }) => {
-                    return Ok(());
+                    return;
                 }
                 None => {
-                    return Err(DestroyError::AlreadyDestroyed);
+                    // Per spec, it is valid to call `destroy` multiple times.
+                    return;
                 }
             };
 
@@ -1187,6 +1432,7 @@ impl Texture {
             queue::TempResource::DestroyedTexture(DestroyedTexture {
                 raw: ManuallyDrop::new(raw),
                 views,
+                clear_mode: mem::replace(&mut *self.clear_mode.write(), TextureClearMode::None),
                 bind_groups,
                 device: Arc::clone(&self.device),
                 label: self.label().to_owned(),
@@ -1205,195 +1451,6 @@ impl Texture {
                 }
             }
         }
-
-        Ok(())
-    }
-}
-
-impl Global {
-    /// # Safety
-    ///
-    /// - The raw buffer handle must not be manually destroyed
-    pub unsafe fn buffer_as_hal<A: HalApi, F: FnOnce(Option<&A::Buffer>) -> R, R>(
-        &self,
-        id: BufferId,
-        hal_buffer_callback: F,
-    ) -> R {
-        profiling::scope!("Buffer::as_hal");
-
-        let hub = &self.hub;
-
-        if let Ok(buffer) = hub.buffers.get(id).get() {
-            let snatch_guard = buffer.device.snatchable_lock.read();
-            let hal_buffer = buffer
-                .raw(&snatch_guard)
-                .and_then(|b| b.as_any().downcast_ref());
-            hal_buffer_callback(hal_buffer)
-        } else {
-            hal_buffer_callback(None)
-        }
-    }
-
-    /// # Safety
-    ///
-    /// - The raw texture handle must not be manually destroyed
-    pub unsafe fn texture_as_hal<A: HalApi, F: FnOnce(Option<&A::Texture>) -> R, R>(
-        &self,
-        id: TextureId,
-        hal_texture_callback: F,
-    ) -> R {
-        profiling::scope!("Texture::as_hal");
-
-        let hub = &self.hub;
-
-        if let Ok(texture) = hub.textures.get(id).get() {
-            let snatch_guard = texture.device.snatchable_lock.read();
-            let hal_texture = texture.raw(&snatch_guard);
-            let hal_texture = hal_texture
-                .as_ref()
-                .and_then(|it| it.as_any().downcast_ref());
-            hal_texture_callback(hal_texture)
-        } else {
-            hal_texture_callback(None)
-        }
-    }
-
-    /// # Safety
-    ///
-    /// - The raw texture view handle must not be manually destroyed
-    pub unsafe fn texture_view_as_hal<A: HalApi, F: FnOnce(Option<&A::TextureView>) -> R, R>(
-        &self,
-        id: TextureViewId,
-        hal_texture_view_callback: F,
-    ) -> R {
-        profiling::scope!("TextureView::as_hal");
-
-        let hub = &self.hub;
-
-        if let Ok(texture_view) = hub.texture_views.get(id).get() {
-            let snatch_guard = texture_view.device.snatchable_lock.read();
-            let hal_texture_view = texture_view.raw(&snatch_guard);
-            let hal_texture_view = hal_texture_view
-                .as_ref()
-                .and_then(|it| it.as_any().downcast_ref());
-            hal_texture_view_callback(hal_texture_view)
-        } else {
-            hal_texture_view_callback(None)
-        }
-    }
-
-    /// # Safety
-    ///
-    /// - The raw adapter handle must not be manually destroyed
-    pub unsafe fn adapter_as_hal<A: HalApi, F: FnOnce(Option<&A::Adapter>) -> R, R>(
-        &self,
-        id: AdapterId,
-        hal_adapter_callback: F,
-    ) -> R {
-        profiling::scope!("Adapter::as_hal");
-
-        let hub = &self.hub;
-        let adapter = hub.adapters.get(id);
-        let hal_adapter = adapter.raw.adapter.as_any().downcast_ref();
-
-        hal_adapter_callback(hal_adapter)
-    }
-
-    /// # Safety
-    ///
-    /// - The raw device handle must not be manually destroyed
-    pub unsafe fn device_as_hal<A: HalApi, F: FnOnce(Option<&A::Device>) -> R, R>(
-        &self,
-        id: DeviceId,
-        hal_device_callback: F,
-    ) -> R {
-        profiling::scope!("Device::as_hal");
-
-        let device = self.hub.devices.get(id);
-        let hal_device = device.raw().as_any().downcast_ref();
-
-        hal_device_callback(hal_device)
-    }
-
-    /// # Safety
-    ///
-    /// - The raw fence handle must not be manually destroyed
-    pub unsafe fn device_fence_as_hal<A: HalApi, F: FnOnce(Option<&A::Fence>) -> R, R>(
-        &self,
-        id: DeviceId,
-        hal_fence_callback: F,
-    ) -> R {
-        profiling::scope!("Device::fence_as_hal");
-
-        let device = self.hub.devices.get(id);
-        let fence = device.fence.read();
-        hal_fence_callback(fence.as_any().downcast_ref())
-    }
-
-    /// # Safety
-    /// - The raw surface handle must not be manually destroyed
-    pub unsafe fn surface_as_hal<A: HalApi, F: FnOnce(Option<&A::Surface>) -> R, R>(
-        &self,
-        id: SurfaceId,
-        hal_surface_callback: F,
-    ) -> R {
-        profiling::scope!("Surface::as_hal");
-
-        let surface = self.surfaces.get(id);
-        let hal_surface = surface
-            .raw(A::VARIANT)
-            .and_then(|surface| surface.as_any().downcast_ref());
-
-        hal_surface_callback(hal_surface)
-    }
-
-    /// # Safety
-    ///
-    /// - The raw command encoder handle must not be manually destroyed
-    pub unsafe fn command_encoder_as_hal_mut<
-        A: HalApi,
-        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
-        R,
-    >(
-        &self,
-        id: CommandEncoderId,
-        hal_command_encoder_callback: F,
-    ) -> R {
-        profiling::scope!("CommandEncoder::as_hal");
-
-        let hub = &self.hub;
-
-        let cmd_buf = hub.command_buffers.get(id.into_command_buffer_id());
-        let mut cmd_buf_data = cmd_buf.data.lock();
-        let cmd_buf_data_guard = cmd_buf_data.record();
-
-        if let Ok(mut cmd_buf_data_guard) = cmd_buf_data_guard {
-            let cmd_buf_raw = cmd_buf_data_guard
-                .encoder
-                .open()
-                .ok()
-                .and_then(|encoder| encoder.as_any_mut().downcast_mut());
-            let ret = hal_command_encoder_callback(cmd_buf_raw);
-            cmd_buf_data_guard.mark_successful();
-            ret
-        } else {
-            hal_command_encoder_callback(None)
-        }
-    }
-
-    /// # Safety
-    ///
-    /// - The raw queue handle must not be manually destroyed
-    pub unsafe fn queue_as_hal<A: HalApi, F, R>(&self, id: QueueId, hal_queue_callback: F) -> R
-    where
-        F: FnOnce(Option<&A::Queue>) -> R,
-    {
-        profiling::scope!("Queue::as_hal");
-
-        let queue = self.hub.queues.get(id);
-        let hal_queue = queue.raw().as_any().downcast_ref();
-
-        hal_queue_callback(hal_queue)
     }
 }
 
@@ -1402,6 +1459,7 @@ impl Global {
 pub struct DestroyedTexture {
     raw: ManuallyDrop<Box<dyn hal::DynTexture>>,
     views: WeakVec<TextureView>,
+    clear_mode: TextureClearMode,
     bind_groups: WeakVec<BindGroup>,
     device: Arc<Device>,
     label: String,
@@ -1423,6 +1481,20 @@ impl Drop for DestroyedTexture {
             &mut self.bind_groups,
         )));
         drop(deferred);
+
+        match mem::replace(&mut self.clear_mode, TextureClearMode::None) {
+            TextureClearMode::RenderPass { clear_views, .. } => {
+                for clear_view in clear_views {
+                    let raw = ManuallyDrop::into_inner(clear_view);
+                    unsafe { self.device.raw().destroy_texture_view(raw) };
+                }
+            }
+            TextureClearMode::Surface { clear_view } => {
+                let raw = ManuallyDrop::into_inner(clear_view);
+                unsafe { self.device.raw().destroy_texture_view(raw) };
+            }
+            _ => (),
+        }
 
         resource_log!("Destroy raw Texture (destroyed) {:?}", self.label());
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
@@ -1483,6 +1555,12 @@ pub enum TextureDimensionError {
     MultisampledDepthOrArrayLayer(u32),
 }
 
+impl WebGpuError for TextureDimensionError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        ErrorType::Validation
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum CreateTextureError {
@@ -1492,6 +1570,8 @@ pub enum CreateTextureError {
     CreateTextureView(#[from] CreateTextureViewError),
     #[error("Invalid usage flags {0:?}")]
     InvalidUsage(wgt::TextureUsages),
+    #[error("Texture usage {0:?} is not compatible with texture usage {1:?}")]
+    IncompatibleUsage(wgt::TextureUsages, wgt::TextureUsages),
     #[error(transparent)]
     InvalidDimension(#[from] TextureDimensionError),
     #[error("Depth texture ({1:?}) can't be created as {0:?}")]
@@ -1534,6 +1614,32 @@ crate::impl_trackable!(Texture);
 impl Borrow<TextureSelector> for Texture {
     fn borrow(&self) -> &TextureSelector {
         &self.full_range
+    }
+}
+
+impl WebGpuError for CreateTextureError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::CreateTextureView(e) => e,
+            Self::InvalidDimension(e) => e,
+            Self::MissingFeatures(_, e) => e,
+            Self::MissingDownlevelFlags(e) => e,
+
+            Self::InvalidUsage(_)
+            | Self::IncompatibleUsage(_, _)
+            | Self::InvalidDepthDimension(_, _)
+            | Self::InvalidCompressedDimension(_, _)
+            | Self::InvalidMipLevelCount { .. }
+            | Self::InvalidFormatUsages(_, _, _)
+            | Self::InvalidViewFormat(_, _)
+            | Self::InvalidDimensionUsages(_, _)
+            | Self::InvalidMultisampledStorageBinding
+            | Self::InvalidMultisampledFormat(_)
+            | Self::InvalidSampleCount(..)
+            | Self::MultisampledNotRenderAttachment => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
     }
 }
 
@@ -1609,7 +1715,6 @@ pub struct TextureView {
     pub(crate) selector: TextureSelector,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
-    pub(crate) tracking_data: TrackingData,
 }
 
 impl Drop for TextureView {
@@ -1623,24 +1728,25 @@ impl Drop for TextureView {
     }
 }
 
-impl TextureView {
-    pub(crate) fn raw<'a>(
-        &'a self,
-        snatch_guard: &'a SnatchGuard,
-    ) -> Option<&'a dyn hal::DynTextureView> {
-        self.raw.get(snatch_guard).map(|it| it.as_ref())
+impl RawResourceAccess for TextureView {
+    type DynResource = dyn hal::DynTextureView;
+
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
+        self.raw.get(guard).map(|it| it.as_ref())
     }
 
-    pub(crate) fn try_raw<'a>(
+    fn try_raw<'a>(
         &'a self,
         guard: &'a SnatchGuard,
-    ) -> Result<&'a dyn hal::DynTextureView, DestroyedResourceError> {
-        self.raw
-            .get(guard)
-            .map(|it| it.as_ref())
+    ) -> Result<&'a Self::DynResource, DestroyedResourceError> {
+        self.parent.check_destroyed(guard)?;
+
+        self.raw(guard)
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
     }
+}
 
+impl TextureView {
     /// Checks that the given texture usage contains the required texture usage,
     /// returns an error otherwise.
     pub(crate) fn check_usage(
@@ -1671,20 +1777,22 @@ pub enum CreateTextureViewError {
         view: wgt::TextureViewDimension,
         texture: wgt::TextureDimension,
     },
-    #[error("Texture view format `{0:?}` is not renderable")]
+    #[error("Texture view format `{0:?}` cannot be used as a render attachment. Make sure the format supports RENDER_ATTACHMENT usage and required device features are enabled.")]
     TextureViewFormatNotRenderable(wgt::TextureFormat),
-    #[error("Texture view format `{0:?}` is not storage bindable")]
+    #[error("Texture view format `{0:?}` cannot be used as a storage binding. Make sure the format supports STORAGE usage and required device features are enabled.")]
     TextureViewFormatNotStorage(wgt::TextureFormat),
-    #[error("Invalid texture view usage `{view:?}` with texture of usage `{texture:?}`")]
+    #[error("Texture view usages (`{view:?}`) must be a subset of the texture's original usages (`{texture:?}`)")]
     InvalidTextureViewUsage {
         view: wgt::TextureUsages,
         texture: wgt::TextureUsages,
     },
-    #[error("Invalid texture view dimension `{0:?}` of a multisampled texture")]
+    #[error("Texture view dimension `{0:?}` cannot be used with a multisampled texture")]
     InvalidMultisampledTextureViewDimension(wgt::TextureViewDimension),
-    #[error("Invalid texture depth `{depth}` for texture view of dimension `Cubemap`. Cubemap views must use images of size 6.")]
+    #[error(
+        "TextureView has an arrayLayerCount of {depth}. Views of type `Cube` must have arrayLayerCount of 6."
+    )]
     InvalidCubemapTextureDepth { depth: u32 },
-    #[error("Invalid texture depth `{depth}` for texture view of dimension `CubemapArray`. Cubemap views must use images with sizes which are a multiple of 6.")]
+    #[error("TextureView has an arrayLayerCount of {depth}. Views of type `CubeArray` must have an arrayLayerCount that is a multiple of 6.")]
     InvalidCubemapArrayTextureDepth { depth: u32 },
     #[error("Source texture width and height must be equal for a texture view of dimension `Cube`/`CubeArray`")]
     InvalidCubeTextureViewSize,
@@ -1693,22 +1801,41 @@ pub enum CreateTextureViewError {
     #[error("Array layer count is 0")]
     ZeroArrayLayerCount,
     #[error(
-        "TextureView mip level count + base mip level {requested} must be <= Texture mip level count {total}"
+        "TextureView spans mip levels [{base_mip_level}, {end_mip_level}) \
+        (mipLevelCount {mip_level_count}) but the texture view only has {total} total mip levels",
+        end_mip_level = base_mip_level + mip_level_count
     )]
-    TooManyMipLevels { requested: u32, total: u32 },
-    #[error("TextureView array layer count + base array layer {requested} must be <= Texture depth/array layer count {total}")]
-    TooManyArrayLayers { requested: u32, total: u32 },
+    TooManyMipLevels {
+        base_mip_level: u32,
+        mip_level_count: u32,
+        total: u32,
+    },
+    #[error(
+        "TextureView spans array layers [{base_array_layer}, {end_array_layer}) \
+         (arrayLayerCount {array_layer_count}) but the texture view only has {total} total layers",
+        end_array_layer = base_array_layer + array_layer_count
+    )]
+    TooManyArrayLayers {
+        base_array_layer: u32,
+        array_layer_count: u32,
+        total: u32,
+    },
     #[error("Requested array layer count {requested} is not valid for the target view dimension {dim:?}")]
     InvalidArrayLayerCount {
         requested: u32,
         dim: wgt::TextureViewDimension,
     },
-    #[error("Aspect {requested_aspect:?} is not in the source texture format {texture_format:?}")]
+    #[error(
+        "Aspect {requested_aspect:?} is not a valid aspect of the source texture format {texture_format:?}"
+    )]
     InvalidAspect {
         texture_format: wgt::TextureFormat,
         requested_aspect: wgt::TextureAspect,
     },
-    #[error("Unable to view texture {texture:?} as {view:?}")]
+    #[error(
+        "Trying to create a view of format {view:?} of a texture with format {texture:?}, \
+         but this view format is not present in the texture's viewFormat array"
+    )]
     FormatReinterpretation {
         texture: wgt::TextureFormat,
         view: wgt::TextureFormat,
@@ -1719,6 +1846,33 @@ pub enum CreateTextureViewError {
     MissingFeatures(#[from] MissingFeatures),
 }
 
+impl WebGpuError for CreateTextureViewError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        match self {
+            Self::Device(e) => e.webgpu_error_type(),
+
+            Self::InvalidTextureViewDimension { .. }
+            | Self::InvalidResource(_)
+            | Self::InvalidMultisampledTextureViewDimension(_)
+            | Self::InvalidCubemapTextureDepth { .. }
+            | Self::InvalidCubemapArrayTextureDepth { .. }
+            | Self::InvalidCubeTextureViewSize
+            | Self::ZeroMipLevelCount
+            | Self::ZeroArrayLayerCount
+            | Self::TooManyMipLevels { .. }
+            | Self::TooManyArrayLayers { .. }
+            | Self::InvalidArrayLayerCount { .. }
+            | Self::InvalidAspect { .. }
+            | Self::FormatReinterpretation { .. }
+            | Self::DestroyedResource(_)
+            | Self::TextureViewFormatNotRenderable(_)
+            | Self::TextureViewFormatNotStorage(_)
+            | Self::InvalidTextureViewUsage { .. }
+            | Self::MissingFeatures(_) => ErrorType::Validation,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum TextureViewDestroyError {}
@@ -1727,7 +1881,100 @@ crate::impl_resource_type!(TextureView);
 crate::impl_labeled!(TextureView);
 crate::impl_parent_device!(TextureView);
 crate::impl_storage_item!(TextureView);
-crate::impl_trackable!(TextureView);
+
+pub type ExternalTextureDescriptor<'a> = wgt::ExternalTextureDescriptor<Label<'a>>;
+
+#[derive(Debug)]
+pub struct ExternalTexture {
+    pub(crate) device: Arc<Device>,
+    /// Between 1 and 3 (inclusive) planes of texture data.
+    pub(crate) planes: arrayvec::ArrayVec<Arc<TextureView>, 3>,
+    /// Buffer containing a [`crate::device::resource::ExternalTextureParams`]
+    /// describing the external texture.
+    pub(crate) params: Arc<Buffer>,
+    /// The `label` from the descriptor used to create the resource.
+    pub(crate) label: String,
+    pub(crate) tracking_data: TrackingData,
+}
+
+impl Drop for ExternalTexture {
+    fn drop(&mut self) {
+        resource_log!("Destroy raw {}", self.error_ident());
+    }
+}
+
+impl ExternalTexture {
+    pub fn destroy(self: &Arc<Self>) {
+        self.params.destroy();
+    }
+}
+
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
+pub enum CreateExternalTextureError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error(transparent)]
+    MissingFeatures(#[from] MissingFeatures),
+    #[error(transparent)]
+    InvalidResource(#[from] InvalidResourceError),
+    #[error(transparent)]
+    CreateBuffer(#[from] CreateBufferError),
+    #[error(transparent)]
+    QueueWrite(#[from] queue::QueueWriteError),
+    #[error("External texture format {format:?} expects {expected} planes, but given {provided}")]
+    IncorrectPlaneCount {
+        format: wgt::ExternalTextureFormat,
+        expected: usize,
+        provided: usize,
+    },
+    #[error("External texture planes cannot be multisampled, but given view with samples = {0}")]
+    InvalidPlaneMultisample(u32),
+    #[error("External texture planes expect a filterable float sample type, but given view with format {format:?} (sample type {sample_type:?})")]
+    InvalidPlaneSampleType {
+        format: wgt::TextureFormat,
+        sample_type: wgt::TextureSampleType,
+    },
+    #[error("External texture planes expect 2D dimension, but given view with dimension = {0:?}")]
+    InvalidPlaneDimension(wgt::TextureViewDimension),
+    #[error(transparent)]
+    MissingTextureUsage(#[from] MissingTextureUsageError),
+    #[error("External texture format {format:?} plane {plane} expects format with {expected} components but given view with format {provided:?} ({} components)",
+        provided.components())]
+    InvalidPlaneFormat {
+        format: wgt::ExternalTextureFormat,
+        plane: usize,
+        expected: u8,
+        provided: wgt::TextureFormat,
+    },
+}
+
+impl WebGpuError for CreateExternalTextureError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            CreateExternalTextureError::Device(e) => e,
+            CreateExternalTextureError::MissingFeatures(e) => e,
+            CreateExternalTextureError::InvalidResource(e) => e,
+            CreateExternalTextureError::CreateBuffer(e) => e,
+            CreateExternalTextureError::QueueWrite(e) => e,
+            CreateExternalTextureError::MissingTextureUsage(e) => e,
+            CreateExternalTextureError::IncorrectPlaneCount { .. }
+            | CreateExternalTextureError::InvalidPlaneMultisample(_)
+            | CreateExternalTextureError::InvalidPlaneSampleType { .. }
+            | CreateExternalTextureError::InvalidPlaneDimension(_)
+            | CreateExternalTextureError::InvalidPlaneFormat { .. } => {
+                return ErrorType::Validation
+            }
+        };
+        e.webgpu_error_type()
+    }
+}
+
+crate::impl_resource_type!(ExternalTexture);
+crate::impl_labeled!(ExternalTexture);
+crate::impl_parent_device!(ExternalTexture);
+crate::impl_storage_item!(ExternalTexture);
+crate::impl_trackable!(ExternalTexture);
 
 /// Describes a [`Sampler`]
 #[derive(Clone, Debug, PartialEq)]
@@ -1744,7 +1991,7 @@ pub struct SamplerDescriptor<'a> {
     /// How to filter the texture when it needs to be minified (made smaller)
     pub min_filter: wgt::FilterMode,
     /// How to filter between mip map levels
-    pub mipmap_filter: wgt::FilterMode,
+    pub mipmap_filter: wgt::MipmapFilterMode,
     /// Minimum level of detail (i.e. mip level) to use
     pub lod_min_clamp: f32,
     /// Maximum level of detail (i.e. mip level) to use
@@ -1825,6 +2072,12 @@ pub enum CreateSamplerError {
         filter_mode: wgt::FilterMode,
         anisotropic_clamp: u16,
     },
+    #[error("Invalid filter mode for {filter_type:?}: {filter_mode:?}. When anistropic clamp is not 1 (it is {anisotropic_clamp}), all filter modes must be linear.")]
+    InvalidMipmapFilterModeWithAnisotropy {
+        filter_type: SamplerFilterErrorType,
+        filter_mode: wgt::MipmapFilterMode,
+        anisotropic_clamp: u16,
+    },
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
 }
@@ -1834,6 +2087,22 @@ crate::impl_labeled!(Sampler);
 crate::impl_parent_device!(Sampler);
 crate::impl_storage_item!(Sampler);
 crate::impl_trackable!(Sampler);
+
+impl WebGpuError for CreateSamplerError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::MissingFeatures(e) => e,
+
+            Self::InvalidLodMinClamp(_)
+            | Self::InvalidLodMaxClamp { .. }
+            | Self::InvalidAnisotropy(_)
+            | Self::InvalidFilterModeWithAnisotropy { .. }
+            | Self::InvalidMipmapFilterModeWithAnisotropy { .. } => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
+}
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
@@ -1846,6 +2115,18 @@ pub enum CreateQuerySetError {
     TooManyQueries { count: u32, maximum: u32 },
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+}
+
+impl WebGpuError for CreateQuerySetError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::MissingFeatures(e) => e,
+
+            Self::TooManyQueries { .. } | Self::ZeroCount => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
 }
 
 pub type QuerySetDescriptor<'a> = wgt::QuerySetDescriptor<Label<'a>>;
@@ -1883,24 +2164,47 @@ impl QuerySet {
     }
 }
 
-#[derive(Clone, Debug, Error)]
-#[non_exhaustive]
-pub enum DestroyError {
-    #[error("Resource is already destroyed")]
-    AlreadyDestroyed,
-    #[error(transparent)]
-    InvalidResource(#[from] InvalidResourceError),
-}
-
 pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
 pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
 
-pub(crate) trait AccelerationStructure: Trackable {
-    fn try_raw<'a>(
-        &'a self,
-        guard: &'a SnatchGuard,
-    ) -> Result<&'a dyn hal::DynAccelerationStructure, DestroyedResourceError>;
+pub type BlasPrepareCompactResult = Result<(), BlasPrepareCompactError>;
+
+#[cfg(send_sync)]
+pub type BlasCompactCallback = Box<dyn FnOnce(BlasPrepareCompactResult) + Send + 'static>;
+#[cfg(not(send_sync))]
+pub type BlasCompactCallback = Box<dyn FnOnce(BlasPrepareCompactResult) + 'static>;
+
+pub(crate) struct BlasPendingCompact {
+    pub(crate) op: Option<BlasCompactCallback>,
+    // hold the parent alive while the mapping is active
+    pub(crate) _parent_blas: Arc<Blas>,
 }
+
+impl fmt::Debug for BlasPendingCompact {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BlasPendingCompact")
+            .field("op", &())
+            .field("_parent_blas", &self._parent_blas)
+            .finish()
+    }
+}
+
+#[derive(Debug)]
+pub(crate) enum BlasCompactState {
+    /// Created from a compact operation.
+    Compacted,
+    /// Waiting for GPU to be done before mapping to get compacted size
+    Waiting(BlasPendingCompact),
+    /// Ready to be compacted
+    Ready { size: wgt::BufferAddress },
+    /// Ready to prepare to compact.
+    Idle,
+}
+
+#[cfg(send_sync)]
+unsafe impl Send for BlasCompactState {}
+#[cfg(send_sync)]
+unsafe impl Sync for BlasCompactState {}
 
 #[derive(Debug)]
 pub struct Blas {
@@ -1915,29 +2219,135 @@ pub struct Blas {
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
+    pub(crate) compaction_buffer: Option<ManuallyDrop<Box<dyn hal::DynBuffer>>>,
+    pub(crate) compacted_state: Mutex<BlasCompactState>,
 }
 
 impl Drop for Blas {
     fn drop(&mut self) {
         resource_log!("Destroy raw {}", self.error_ident());
-        // SAFETY: We are in the Drop impl, and we don't use self.raw anymore after this point.
+        // SAFETY: We are in the Drop impl, and we don't use self.raw or self.compaction_buffer anymore after this point.
         if let Some(raw) = self.raw.take() {
             unsafe {
                 self.device.raw().destroy_acceleration_structure(raw);
             }
         }
+        if let Some(mut raw) = self.compaction_buffer.take() {
+            unsafe {
+                self.device
+                    .raw()
+                    .destroy_buffer(ManuallyDrop::take(&mut raw))
+            }
+        }
     }
 }
 
-impl AccelerationStructure for Blas {
-    fn try_raw<'a>(
-        &'a self,
-        guard: &'a SnatchGuard,
-    ) -> Result<&'a dyn hal::DynAccelerationStructure, DestroyedResourceError> {
-        self.raw
-            .get(guard)
-            .map(|raw| raw.as_ref())
-            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+impl RawResourceAccess for Blas {
+    type DynResource = dyn hal::DynAccelerationStructure;
+
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
+        self.raw.get(guard).map(|it| it.as_ref())
+    }
+}
+
+impl Blas {
+    pub(crate) fn prepare_compact_async(
+        self: &Arc<Self>,
+        op: Option<BlasCompactCallback>,
+    ) -> Result<SubmissionIndex, (Option<BlasCompactCallback>, BlasPrepareCompactError)> {
+        let device = &self.device;
+        if let Err(e) = device.check_is_valid() {
+            return Err((op, e.into()));
+        }
+
+        if self.built_index.read().is_none() {
+            return Err((op, BlasPrepareCompactError::NotBuilt));
+        }
+
+        if !self
+            .flags
+            .contains(wgt::AccelerationStructureFlags::ALLOW_COMPACTION)
+        {
+            return Err((op, BlasPrepareCompactError::CompactionUnsupported));
+        }
+
+        let mut state = self.compacted_state.lock();
+        *state = match *state {
+            BlasCompactState::Compacted => {
+                return Err((op, BlasPrepareCompactError::DoubleCompaction))
+            }
+            BlasCompactState::Waiting(_) => {
+                return Err((op, BlasPrepareCompactError::CompactionPreparingAlready))
+            }
+            BlasCompactState::Ready { .. } => {
+                return Err((op, BlasPrepareCompactError::CompactionPreparingAlready))
+            }
+            BlasCompactState::Idle => BlasCompactState::Waiting(BlasPendingCompact {
+                op,
+                _parent_blas: self.clone(),
+            }),
+        };
+
+        let submit_index = if let Some(queue) = device.get_queue() {
+            queue.lock_life().prepare_compact(self).unwrap_or(0) // '0' means no wait is necessary
+        } else {
+            // We can safely unwrap below since we just set the `compacted_state` to `BlasCompactState::Waiting`.
+            let (mut callback, status) = self.read_back_compact_size().unwrap();
+            if let Some(callback) = callback.take() {
+                callback(status);
+            }
+            0
+        };
+
+        Ok(submit_index)
+    }
+
+    /// This function returns [`None`] only if [`Self::compacted_state`] is not [`BlasCompactState::Waiting`].
+    #[must_use]
+    pub(crate) fn read_back_compact_size(&self) -> Option<BlasCompactReadyPendingClosure> {
+        let mut state = self.compacted_state.lock();
+        let pending_compact = match mem::replace(&mut *state, BlasCompactState::Idle) {
+            BlasCompactState::Waiting(pending_mapping) => pending_mapping,
+            // Compaction cancelled e.g. by rebuild
+            BlasCompactState::Idle => return None,
+            BlasCompactState::Ready { .. } => {
+                unreachable!("This should be validated out by `prepare_for_compaction`")
+            }
+            _ => panic!("No pending mapping."),
+        };
+        let status = {
+            let compaction_buffer = self.compaction_buffer.as_ref().unwrap().as_ref();
+            unsafe {
+                let map_res = self.device.raw().map_buffer(
+                    compaction_buffer,
+                    0..size_of::<wgpu_types::BufferAddress>() as wgt::BufferAddress,
+                );
+                match map_res {
+                    Ok(mapping) => {
+                        if !mapping.is_coherent {
+                            // Clippy complains about this because it might not be intended, but
+                            // this is intentional.
+                            #[expect(clippy::single_range_in_vec_init)]
+                            self.device.raw().flush_mapped_ranges(
+                                compaction_buffer,
+                                &[0..size_of::<wgpu_types::BufferAddress>() as wgt::BufferAddress],
+                            );
+                        }
+                        let size = core::ptr::read_unaligned(
+                            mapping.ptr.as_ptr().cast::<wgt::BufferAddress>(),
+                        );
+                        self.device.raw().unmap_buffer(compaction_buffer);
+                        if self.size_info.acceleration_structure_size != 0 {
+                            debug_assert_ne!(size, 0);
+                        }
+                        *state = BlasCompactState::Ready { size };
+                        Ok(())
+                    }
+                    Err(err) => Err(BlasPrepareCompactError::from(DeviceError::from_hal(err))),
+                }
+            }
+        };
+        Some((pending_compact.op, status))
     }
 }
 
@@ -1976,15 +2386,11 @@ impl Drop for Tlas {
     }
 }
 
-impl AccelerationStructure for Tlas {
-    fn try_raw<'a>(
-        &'a self,
-        guard: &'a SnatchGuard,
-    ) -> Result<&'a dyn hal::DynAccelerationStructure, DestroyedResourceError> {
-        self.raw
-            .get(guard)
-            .map(|raw| raw.as_ref())
-            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+impl RawResourceAccess for Tlas {
+    type DynResource = dyn hal::DynAccelerationStructure;
+
+    fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
+        self.raw.get(guard).map(|raw| raw.as_ref())
     }
 }
 

@@ -15,6 +15,14 @@ static_assertions::assert_impl_all!(PipelineLayout: Send, Sync);
 
 crate::cmp::impl_eq_ord_hash_proxy!(PipelineLayout => .inner);
 
+impl PipelineLayout {
+    #[cfg(custom)]
+    /// Returns custom implementation of PipelineLayout (if custom backend and is internally T)
+    pub fn as_custom<T: custom::PipelineLayoutInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
+}
+
 /// Describes a [`PipelineLayout`].
 ///
 /// For use with [`Device::create_pipeline_layout`].

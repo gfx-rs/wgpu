@@ -1,0 +1,93 @@
+; SPIR-V
+; Version: 1.5
+; Generator: Khronos Slang Compiler; 0
+; Bound: 65
+; Schema: 0
+               OpCapability StorageImageMultisample
+               OpCapability Shader
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint Fragment %fs_main "main" %texture %entryPointParam_fs_main %gl_FragCoord
+               OpExecutionMode %fs_main OriginUpperLeft
+               OpSource Slang 1
+               OpName %index "index"
+               OpName %index "index"
+               OpName %color "color"
+               OpName %color "color"
+               OpName %color_0 "color"
+               OpName %entryPointParam_fs_main "entryPointParam_fs_main"
+               OpName %texture "texture"
+               OpName %sampled "sampled"
+               OpName %color_1 "color"
+               OpName %fs_main "fs_main"
+               OpDecorate %gl_FragCoord BuiltIn FragCoord
+               OpDecorate %entryPointParam_fs_main Location 0
+               OpDecorate %texture Binding 0
+               OpDecorate %texture DescriptorSet 0
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+        %int = OpTypeInt 32 1
+%_ptr_Function_int = OpTypePointer Function %int
+      %float = OpTypeFloat 32
+    %v4float = OpTypeVector %float 4
+%_ptr_Function_v4float = OpTypePointer Function %v4float
+%_ptr_Input_v4float = OpTypePointer Input %v4float
+    %v2float = OpTypeVector %float 2
+      %v2int = OpTypeVector %int 2
+      %int_0 = OpConstant %int 0
+       %bool = OpTypeBool
+      %int_8 = OpConstant %int 8
+%_ptr_Output_v4float = OpTypePointer Output %v4float
+         %45 = OpTypeImage %float 2D 2 0 1 1 Unknown
+%_ptr_UniformConstant_45 = OpTypePointer UniformConstant %45
+      %int_1 = OpConstant %int 1
+%gl_FragCoord = OpVariable %_ptr_Input_v4float Input
+%entryPointParam_fs_main = OpVariable %_ptr_Output_v4float Output
+    %texture = OpVariable %_ptr_UniformConstant_45 UniformConstant
+%float_0_125 = OpConstant %float 0.125
+         %64 = OpConstantComposite %v4float %float_0_125 %float_0_125 %float_0_125 %float_0_125
+    %fs_main = OpFunction %void None %3
+          %4 = OpLabel
+      %index = OpVariable %_ptr_Function_int Function
+      %color = OpVariable %_ptr_Function_v4float Function
+         %22 = OpLoad %v4float %gl_FragCoord
+         %26 = OpVectorShuffle %v2float %22 %22 0 1
+         %28 = OpConvertFToS %v2int %26
+               OpStore %index %int_0
+               OpBranch %12
+         %12 = OpLabel
+               OpLoopMerge %17 %21 None
+               OpBranch %13
+         %13 = OpLabel
+               OpBranch %14
+         %14 = OpLabel
+               OpBranch %15
+         %15 = OpLabel
+         %31 = OpLoad %int %index
+         %33 = OpSLessThan %bool %31 %int_8
+               OpSelectionMerge %18 None
+               OpBranchConditional %33 %18 %16
+         %16 = OpLabel
+               OpBranch %17
+         %18 = OpLabel
+         %46 = OpLoad %45 %texture
+         %49 = OpLoad %int %index
+    %sampled = OpImageFetch %v4float %46 %28 Sample %49
+         %52 = OpLoad %v4float %color
+    %color_1 = OpFAdd %v4float %52 %sampled
+               OpBranch %19
+         %19 = OpLabel
+               OpBranch %20
+         %20 = OpLabel
+         %56 = OpLoad %int %index
+         %57 = OpIAdd %int %56 %int_1
+               OpStore %index %57
+               OpStore %color %color_1
+               OpBranch %21
+         %21 = OpLabel
+               OpBranch %12
+         %17 = OpLabel
+         %37 = OpLoad %v4float %color
+    %color_0 = OpFMul %v4float %37 %64
+               OpStore %entryPointParam_fs_main %color_0
+               OpReturn
+               OpFunctionEnd

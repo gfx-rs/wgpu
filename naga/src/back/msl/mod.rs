@@ -29,6 +29,43 @@ holding the result.
 [msl]: https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
 [all-atom]: crate::valid::Capabilities::SHADER_INT64_ATOMIC_ALL_OPS
 
+## Pointer-typed bounds-checked expressions and OOB locals
+
+MSL (unlike HLSL and GLSL) has native support for pointer-typed function
+arguments. When the [`BoundsCheckPolicy`] is `ReadZeroSkipWrite` and an
+out-of-bounds index expression is used for such an argument, our strategy is to
+pass a pointer to a dummy variable. These dummy variables are called "OOB
+locals". We emit at most one OOB local per function for each type, since all
+expressions producing a result of that type can share the same OOB local. (Note
+that the OOB local mechanism is not actually implementing "skip write", nor even
+"read zero" in some cases of read-after-write, but doing so would require
+additional effort and the difference is unlikely to matter.)
+
+[`BoundsCheckPolicy`]: crate::proc::BoundsCheckPolicy
+
+## External textures
+
+Support for [`crate::ImageClass::External`] textures is implemented by lowering
+each external texture global variable to 3 `texture2d<float, sample>`s, and a
+constant buffer of type `NagaExternalTextureParams`. This provides up to 3
+planes of texture data (for example single planar RGBA, or separate Y, Cb, and
+Cr planes), and the parameters buffer containing information describing how to
+handle these correctly. The bind target to use for each of these globals is
+specified via the [`BindTarget::external_texture`] field of the relevant
+entries in [`EntryPointResources::resources`].
+
+External textures are supported by WGSL's `textureDimensions()`,
+`textureLoad()`, and `textureSampleBaseClampToEdge()` built-in functions. These
+are implemented using helper functions. See the following functions for how
+these are generated:
+ * `Writer::write_wrapped_image_query`
+ * `Writer::write_wrapped_image_load`
+ * `Writer::write_wrapped_image_sample`
+
+The lowered global variables for each external texture global are passed to the
+entry point as separate arguments (see "Entry points" above). However, they are
+then wrapped in a struct to allow them to be conveniently passed to user
+defined and helper functions. See `writer::EXTERNAL_TEXTURE_WRAPPER_STRUCT`.
 */
 
 use alloc::{
@@ -38,7 +75,7 @@ use alloc::{
 };
 use core::fmt::{Error as FmtError, Write};
 
-use crate::{arena::Handle, proc::index, valid::ModuleInfo};
+use crate::{arena::Handle, ir, proc::index, valid::ModuleInfo};
 
 mod keywords;
 pub mod sampler;
@@ -57,6 +94,19 @@ pub enum BindSamplerTarget {
     Inline(InlineSamplerIndex),
 }
 
+/// Binding information for a Naga [`External`] image global variable.
+///
+/// See the module documentation's section on external textures for details.
+///
+/// [`External`]: crate::ir::ImageClass::External
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct BindExternalTextureTarget {
+    pub planes: [Slot; 3],
+    pub params: Slot,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
@@ -65,12 +115,12 @@ pub struct BindTarget {
     pub buffer: Option<Slot>,
     pub texture: Option<Slot>,
     pub sampler: Option<BindSamplerTarget>,
+    pub external_texture: Option<BindExternalTextureTarget>,
     pub mutable: bool,
 }
 
-#[cfg(any(feature = "serialize", feature = "deserialize"))]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg(feature = "deserialize")]
+#[derive(serde::Deserialize)]
 struct BindingMapSerialization {
     resource_binding: crate::ResourceBinding,
     bind_target: BindTarget,
@@ -170,7 +220,7 @@ pub enum Error {
     #[error("can not use writeable storage buffers in fragment stage prior to MSL 1.2")]
     UnsupportedWriteableStorageBuffer,
     #[error("can not use writeable storage textures in {0:?} stage prior to MSL 1.2")]
-    UnsupportedWriteableStorageTexture(crate::ShaderStage),
+    UnsupportedWriteableStorageTexture(ir::ShaderStage),
     #[error("can not use read-write storage textures prior to MSL 1.2")]
     UnsupportedRWStorageTexture,
     #[error("array of '{0}' is not supported for target MSL version")]
@@ -185,6 +235,8 @@ pub enum Error {
     UnsupportedBitCast(crate::TypeInner),
     #[error(transparent)]
     ResolveArraySizeError(#[from] crate::proc::ResolveArraySizeError),
+    #[error("entry point with stage {0:?} and name '{1}' not found")]
+    EntryPointNotFound(ir::ShaderStage, String),
 }
 
 #[derive(Clone, Debug, PartialEq, thiserror::Error)]
@@ -365,6 +417,17 @@ pub enum VertexFormat {
     Unorm8x4Bgra = 44,
 }
 
+/// Defines how to advance the data in vertex buffers.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub enum VertexBufferStepMode {
+    Constant,
+    #[default]
+    ByVertex,
+    ByInstance,
+}
+
 /// A mapping of vertex buffers and their attributes to shader
 /// locations.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -393,9 +456,8 @@ pub struct VertexBufferMapping {
     pub id: u32,
     /// Size of the structure in bytes
     pub stride: u32,
-    /// True if the buffer is indexed by vertex, false if indexed
-    /// by instance.
-    pub indexed_by_vertex: bool,
+    /// Vertex buffer step mode
+    pub step_mode: VertexBufferStepMode,
     /// Vec of the attributes within the structure
     pub attributes: Vec<AttributeMapping>,
 }
@@ -406,6 +468,15 @@ pub struct VertexBufferMapping {
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 #[cfg_attr(feature = "deserialize", serde(default))]
 pub struct PipelineOptions {
+    /// The entry point to write.
+    ///
+    /// Entry points are identified by a shader stage specification,
+    /// and a name.
+    ///
+    /// If `None`, all entry points will be written. If `Some` and the entry
+    /// point is not found, an error will be thrown while writing.
+    pub entry_point: Option<(ir::ShaderStage, String)>,
+
     /// Allow `BuiltIn::PointSize` and inject it if doesn't exist.
     ///
     /// Metal doesn't like this for non-point primitive topologies and requires it for
@@ -455,9 +526,20 @@ impl Options {
                         return Err(Error::UnsupportedAttribute("instance_id".to_string()));
                     }
                     // macOS: Since Metal 2.2
-                    // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/naga/issues/2164)
-                    crate::BuiltIn::PrimitiveIndex if self.lang_version < (2, 2) => {
+                    // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/wgpu/issues/4414)
+                    crate::BuiltIn::PrimitiveIndex if self.lang_version < (2, 3) => {
                         return Err(Error::UnsupportedAttribute("primitive_id".to_string()));
+                    }
+                    // macOS: since Metal 2.3
+                    // iOS: Since Metal 2.2
+                    // https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=114
+                    crate::BuiltIn::ViewIndex if self.lang_version < (2, 2) => {
+                        return Err(Error::UnsupportedAttribute("amplification_id".to_string()));
+                    }
+                    // macOS: Since Metal 2.2
+                    // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/wgpu/issues/4414)
+                    crate::BuiltIn::Barycentric if self.lang_version < (2, 3) => {
+                        return Err(Error::UnsupportedAttribute("barycentric_coord".to_string()));
                     }
                     _ => {}
                 }
@@ -469,6 +551,7 @@ impl Options {
                 interpolation,
                 sampling,
                 blend_src,
+                per_primitive: _,
             } => match mode {
                 LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(location)),
                 LocationMode::FragmentOutput => {
@@ -597,6 +680,7 @@ impl ResolvedBinding {
                 let name = match built_in {
                     Bi::Position { invariant: false } => "position",
                     Bi::Position { invariant: true } => "position, invariant",
+                    Bi::ViewIndex => "amplification_id",
                     // vertex
                     Bi::BaseInstance => "base_instance",
                     Bi::BaseVertex => "base_vertex",
@@ -609,6 +693,7 @@ impl ResolvedBinding {
                     Bi::PointCoord => "point_coord",
                     Bi::FrontFacing => "front_facing",
                     Bi::PrimitiveIndex => "primitive_id",
+                    Bi::Barycentric => "barycentric_coord",
                     Bi::SampleIndex => "sample_id",
                     Bi::SampleMask => "sample_mask",
                     // compute
@@ -623,9 +708,13 @@ impl ResolvedBinding {
                     Bi::SubgroupId => "simdgroup_index_in_threadgroup",
                     Bi::SubgroupSize => "threads_per_simdgroup",
                     Bi::SubgroupInvocationId => "thread_index_in_simdgroup",
-                    Bi::CullDistance | Bi::ViewIndex | Bi::DrawID => {
+                    Bi::CullDistance | Bi::DrawID => {
                         return Err(Error::UnsupportedBuiltIn(built_in))
                     }
+                    Bi::CullPrimitive => "primitive_culled",
+                    // TODO: figure out how to make this written as a function call
+                    Bi::PointIndex | Bi::LineIndices | Bi::TriangleIndices => unimplemented!(),
+                    Bi::MeshTaskSize => unreachable!(),
                 };
                 write!(out, "{name}")?;
             }
@@ -723,5 +812,5 @@ pub fn write_string(
 
 #[test]
 fn test_error_size() {
-    assert_eq!(size_of::<Error>(), 32);
+    assert_eq!(size_of::<Error>(), 40);
 }

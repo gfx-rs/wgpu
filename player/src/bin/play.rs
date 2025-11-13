@@ -5,12 +5,15 @@ fn main() {
     extern crate wgpu_core as wgc;
     extern crate wgpu_types as wgt;
 
-    use player::GlobalPlay as _;
+    use player::Player;
     use wgc::device::trace;
+    use wgpu_core::command::PointerReferences;
 
     use std::{
         fs,
         path::{Path, PathBuf},
+        process::exit,
+        sync::Arc,
     };
 
     #[cfg(feature = "winit")]
@@ -28,14 +31,29 @@ fn main() {
     //TODO: setting for the backend bits
     //TODO: setting for the target frame, or controls
 
-    let dir = match std::env::args().nth(1) {
-        Some(arg) if Path::new(&arg).is_dir() => PathBuf::from(arg),
-        _ => panic!("Provide the dir path as the parameter"),
+    const HELP: &str = "\
+    Usage: play <trace directory> | <trace file>\n\
+    \n\
+    Play a wgpu trace from the specified file or directory. If the trace contains\n\
+    buffers, textures, or shaders, the directory form must be used.\n";
+
+    let (dir, trace) = match std::env::args().nth(1) {
+        Some(arg) if Path::new(&arg).is_dir() => (
+            PathBuf::from(arg.clone()),
+            PathBuf::from(arg).join(trace::FILE_NAME),
+        ),
+        Some(arg) if Path::new(&arg).is_file() => {
+            (PathBuf::from("/nonexistent"), PathBuf::from(arg))
+        }
+        _ => {
+            eprintln!("{HELP}");
+            exit(1);
+        }
     };
 
-    log::info!("Loading trace '{:?}'", dir);
-    let file = fs::File::open(dir.join(trace::FILE_NAME)).unwrap();
-    let mut actions: Vec<trace::Action> = ron::de::from_reader(file).unwrap();
+    log::info!("Loading trace '{trace:?}'");
+    let file = fs::File::open(trace).unwrap();
+    let mut actions: Vec<trace::Action<PointerReferences>> = ron::de::from_reader(file).unwrap();
     actions.reverse(); // allows us to pop from the top
     log::info!("Found {} actions", actions.len());
 
@@ -51,62 +69,63 @@ fn main() {
         .build(&event_loop)
         .unwrap();
 
-    let global = wgc::global::Global::new("player", &wgt::InstanceDescriptor::default());
-    let mut command_buffer_id_manager = wgc::identity::IdentityManager::new();
+    let instance_desc = wgt::InstanceDescriptor::from_env_or_default();
+    let instance = wgc::instance::Instance::new("player", &instance_desc);
 
     #[cfg(feature = "winit")]
     let surface = unsafe {
-        global.instance_create_surface(
+        instance.create_surface(
             window.display_handle().unwrap().into(),
             window.window_handle().unwrap().into(),
-            Some(wgc::id::Id::zip(0, 1)),
         )
     }
     .unwrap();
 
-    let (device, queue) = match actions.pop() {
-        Some(trace::Action::Init { desc, backend }) => {
-            log::info!("Initializing the device for backend: {:?}", backend);
-            let adapter = global
-                .request_adapter(
-                    &wgc::instance::RequestAdapterOptions {
-                        power_preference: wgt::PowerPreference::None,
-                        force_fallback_adapter: false,
-                        #[cfg(feature = "winit")]
-                        compatible_surface: Some(surface),
-                        #[cfg(not(feature = "winit"))]
-                        compatible_surface: None,
-                    },
-                    wgt::Backends::from(backend),
-                    Some(wgc::id::AdapterId::zip(0, 1)),
-                )
-                .expect("Unable to find an adapter for selected backend");
-
-            let info = global.adapter_get_info(adapter);
-            log::info!("Picked '{}'", info.name);
-            let device_id = wgc::id::Id::zip(0, 1);
-            let queue_id = wgc::id::Id::zip(0, 1);
-            let res =
-                global.adapter_request_device(adapter, &desc, Some(device_id), Some(queue_id));
-            if let Err(e) = res {
-                panic!("{e:?}");
+    let (backends, device_desc) =
+        match actions.pop_if(|action| matches!(action, trace::Action::Init { .. })) {
+            Some(trace::Action::Init { desc, backend }) => {
+                log::info!("Initializing the device for backend: {backend:?}");
+                (wgt::Backends::from(backend), desc)
             }
-            (device_id, queue_id)
-        }
-        _ => panic!("Expected Action::Init"),
-    };
+            Some(_) => unreachable!(),
+            None => (wgt::Backends::all(), wgt::DeviceDescriptor::default()),
+        };
+
+    let adapter = Arc::new(
+        instance
+            .request_adapter(
+                &wgt::RequestAdapterOptions {
+                    #[cfg(feature = "winit")]
+                    compatible_surface: Some(&surface),
+                    #[cfg(not(feature = "winit"))]
+                    compatible_surface: None,
+                    ..Default::default()
+                },
+                backends,
+            )
+            .expect("Unable to obtain an adapter"),
+    );
+
+    let info = adapter.get_info();
+    log::info!("Using '{}'", info.name);
+
+    let (device, queue) = adapter
+        .create_device_and_queue(&device_desc, instance_desc.flags)
+        .unwrap();
+
+    let mut player = Player::default();
 
     log::info!("Executing actions");
     #[cfg(not(feature = "winit"))]
     {
-        global.device_start_capture(device);
+        unsafe { device.start_graphics_debugger_capture() };
 
         while let Some(action) = actions.pop() {
-            global.process(device, queue, action, &dir, &mut command_buffer_id_manager);
+            player.process(&device, &queue, action, &dir);
         }
 
-        global.device_stop_capture(device);
-        global.device_poll(device, wgt::PollType::wait()).unwrap();
+        unsafe { device.stop_graphics_debugger_capture() };
+        device.poll(wgt::PollType::wait_indefinitely()).unwrap();
     }
     #[cfg(feature = "winit")]
     {
@@ -140,36 +159,29 @@ fn main() {
                                         resize_config = Some(config);
                                         target.exit();
                                     } else {
-                                        let error =
-                                            global.surface_configure(surface, device, &config);
+                                        let error = device.configure_surface(&surface, &config);
                                         if let Some(e) = error {
-                                            panic!("{:?}", e);
+                                            panic!("{e:?}");
                                         }
                                     }
                                 }
-                                Some(trace::Action::Present(id)) => {
+                                Some(trace::Action::Present(_id)) => {
                                     frame_count += 1;
-                                    log::debug!("Presenting frame {}", frame_count);
-                                    global.surface_present(id).unwrap();
+                                    log::debug!("Presenting frame {frame_count}");
+                                    surface.present().unwrap();
                                     target.exit();
                                 }
-                                Some(trace::Action::DiscardSurfaceTexture(id)) => {
-                                    log::debug!("Discarding frame {}", frame_count);
-                                    global.surface_texture_discard(id).unwrap();
+                                Some(trace::Action::DiscardSurfaceTexture(_id)) => {
+                                    log::debug!("Discarding frame {frame_count}");
+                                    surface.discard().unwrap();
                                     target.exit();
                                 }
                                 Some(action) => {
-                                    global.process(
-                                        device,
-                                        queue,
-                                        action,
-                                        &dir,
-                                        &mut command_buffer_id_manager,
-                                    );
+                                    player.process(&device, &queue, action, &dir);
                                 }
                                 None => {
                                     if !done {
-                                        println!("Finished the end at frame {}", frame_count);
+                                        println!("Finished the end at frame {frame_count}");
                                         done = true;
                                     }
                                     target.exit();
@@ -178,9 +190,9 @@ fn main() {
                         }
                         WindowEvent::Resized(_) => {
                             if let Some(config) = resize_config.take() {
-                                let error = global.surface_configure(surface, device, &config);
+                                let error = device.configure_surface(&surface, &config);
                                 if let Some(e) = error {
-                                    panic!("{:?}", e);
+                                    panic!("{e:?}");
                                 }
                             }
                         }
@@ -198,7 +210,7 @@ fn main() {
                     },
                     Event::LoopExiting => {
                         log::info!("Closing");
-                        global.device_poll(device, wgt::PollType::wait()).unwrap();
+                        device.poll(wgt::PollType::wait_indefinitely()).unwrap();
                     }
                     _ => {}
                 }

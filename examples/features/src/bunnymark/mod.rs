@@ -112,6 +112,7 @@ impl Example {
                 label: None,
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(clear_color),
@@ -121,6 +122,7 @@ impl Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.global_group, &[]);
@@ -228,7 +230,7 @@ impl crate::framework::Example for Example {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -236,7 +238,10 @@ impl crate::framework::Example for Example {
             let img_data = include_bytes!("../../../../logo.png");
             let decoder = png::Decoder::new(std::io::Cursor::new(img_data));
             let mut reader = decoder.read_info().unwrap();
-            let mut buf = vec![0; reader.output_buffer_size()];
+            let buf_len = reader
+                .output_buffer_size()
+                .expect("output buffer would not fit in memory");
+            let mut buf = vec![0; buf_len];
             let info = reader.next_frame(&mut buf).unwrap();
 
             let size = wgpu::Extent3d {
@@ -274,7 +279,7 @@ impl crate::framework::Example for Example {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
 
@@ -433,7 +438,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "bunnymark",
     image_path: "/examples/features/src/bunnymark/screenshot.png",
     width: 1024,

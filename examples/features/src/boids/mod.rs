@@ -148,7 +148,7 @@ impl crate::framework::Example for Example {
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -263,11 +263,10 @@ impl crate::framework::Example for Example {
         // create render pass descriptor and its color attachments
         let color_attachments = [Some(wgpu::RenderPassColorAttachment {
             view,
+            depth_slice: None,
             resolve_target: None,
             ops: wgpu::Operations {
-                // Not clearing here in order to test wgpu's zero texture initialization on a surface texture.
-                // Users should avoid loading uninitialized memory since this can cause additional overhead.
-                load: wgpu::LoadOp::Load,
+                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                 store: wgpu::StoreOp::Store,
             },
         })];
@@ -277,6 +276,7 @@ impl crate::framework::Example for Example {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         };
 
         // get command encoder
@@ -324,7 +324,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "boids",
     // Generated on 1080ti on Vk/Windows
     image_path: "/examples/features/src/boids/screenshot.png",

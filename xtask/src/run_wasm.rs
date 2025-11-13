@@ -1,13 +1,19 @@
-use anyhow::Context;
+use std::ffi::OsString;
 
+use anyhow::Context;
 use pico_args::Arguments;
 use xshell::Shell;
 
-use crate::util::{check_all_programs, Program};
+use crate::util::{check_all_programs, flatten_args, Program};
 
-pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
+pub(crate) fn run_wasm(
+    shell: Shell,
+    mut args: Arguments,
+    passthrough_args: Option<Vec<OsString>>,
+) -> anyhow::Result<()> {
     let should_serve = !args.contains("--no-serve");
     let release = args.contains("--release");
+    let cargo_args = flatten_args(args, passthrough_args);
 
     let mut programs_needed = vec![Program {
         crate_name: "wasm-bindgen-cli",
@@ -28,11 +34,9 @@ pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> 
 
     log::info!("building webgpu examples");
 
-    let cargo_args = args.finish();
-
     xshell::cmd!(
         shell,
-        "cargo build --target wasm32-unknown-unknown --bin wgpu-examples --no-default-features --features webgpu {release_flag...}"
+        "cargo build --target wasm32-unknown-unknown -p wgpu-examples --no-default-features --features webgpu {release_flag...}"
     )
     .args(&cargo_args)
     .quiet()
@@ -53,7 +57,7 @@ pub(crate) fn run_wasm(shell: Shell, mut args: Arguments) -> anyhow::Result<()> 
 
     xshell::cmd!(
         shell,
-        "cargo build --target wasm32-unknown-unknown --bin wgpu-examples --no-default-features --features webgl {release_flag...}"
+        "cargo build --target wasm32-unknown-unknown -p wgpu-examples --no-default-features --features webgl {release_flag...}"
     )
     .args(&cargo_args)
     .quiet()

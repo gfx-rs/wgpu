@@ -121,7 +121,7 @@ impl MultiTargetRenderer {
             address_mode_w: wgpu::AddressMode::Repeat,
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
 
@@ -161,7 +161,7 @@ impl MultiTargetRenderer {
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -182,6 +182,7 @@ impl MultiTargetRenderer {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
         rpass.set_pipeline(&self.pipeline);
         rpass.set_bind_group(0, &self.bindgroup, &[]);
@@ -240,7 +241,7 @@ impl TargetRenderer {
             address_mode_w: wgpu::AddressMode::Repeat,
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
 
@@ -266,7 +267,7 @@ impl TargetRenderer {
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -329,6 +330,7 @@ impl TargetRenderer {
             label: None,
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: surface_view,
+                depth_slice: None,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
@@ -338,6 +340,7 @@ impl TargetRenderer {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
         rpass.set_pipeline(&self.pipeline);
         rpass.set_bind_group(0, &self.bindgroup_left, &[]);
@@ -454,12 +457,12 @@ impl crate::framework::Example for Example {
             // output textures:
             &[
                 Some(wgpu::ColorTargetState {
-                    format: config.format,
+                    format: config.view_formats[0],
                     blend: None,
                     write_mask: Default::default(),
                 }),
                 Some(wgpu::ColorTargetState {
-                    format: config.format,
+                    format: config.view_formats[0],
                     blend: None,
                     write_mask: Default::default(),
                 }),
@@ -468,10 +471,11 @@ impl crate::framework::Example for Example {
 
         // create our target textures that will receive the simultaneous rendering:
         let texture_targets =
-            TextureTargets::new(device, config.format, config.width, config.height);
+            TextureTargets::new(device, config.view_formats[0], config.width, config.height);
 
         // helper renderer that displays the results in 2 separate viewports:
-        let drawer = TargetRenderer::init(device, &shader, config.format, &texture_targets);
+        let drawer =
+            TargetRenderer::init(device, &shader, config.view_formats[0], &texture_targets);
 
         Self {
             texture_targets,
@@ -491,7 +495,7 @@ impl crate::framework::Example for Example {
         self.screen_width = config.width;
         self.screen_height = config.height;
         self.texture_targets =
-            TextureTargets::new(device, config.format, config.width, config.height);
+            TextureTargets::new(device, config.view_formats[0], config.width, config.height);
         self.drawer.rebuild_resources(device, &self.texture_targets);
     }
 
@@ -507,11 +511,13 @@ impl crate::framework::Example for Example {
             &[
                 Some(wgpu::RenderPassColorAttachment {
                     view: &self.texture_targets.red_view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: Default::default(),
                 }),
                 Some(wgpu::RenderPassColorAttachment {
                     view: &self.texture_targets.green_view,
+                    depth_slice: None,
                     resolve_target: None,
                     ops: Default::default(),
                 }),
@@ -532,7 +538,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: EXAMPLE_NAME,
     image_path: "/examples/features/src/multiple_render_targets/screenshot.png",
     width: 1024,

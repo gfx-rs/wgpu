@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use custom::Counter;
+use custom::{Counter, CustomShaderModule};
 use wgpu::{DeviceDescriptor, RequestAdapterOptions};
 
 mod custom;
@@ -31,12 +31,26 @@ async fn main() {
             .unwrap();
         assert_eq!(counter.count(), 5);
 
-        let _module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shader"),
             source: wgpu::ShaderSource::Dummy(PhantomData),
         });
 
+        let custom_module = module.as_custom::<CustomShaderModule>().unwrap();
+        assert_eq!(custom_module.0.count(), 6);
+        let _module_clone = module.clone();
         assert_eq!(counter.count(), 6);
+
+        let _pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: None,
+            layout: None,
+            module: &module,
+            entry_point: None,
+            compilation_options: Default::default(),
+            cache: None,
+        });
+
+        assert_eq!(counter.count(), 7);
     }
     assert_eq!(counter.count(), 1);
 }

@@ -5,8 +5,10 @@
 mod constant_evaluator;
 mod emitter;
 pub mod index;
+mod keyword_set;
 mod layouter;
 mod namer;
+mod overloads;
 mod terminator;
 mod type_methods;
 mod typifier;
@@ -16,12 +18,14 @@ pub use constant_evaluator::{
 };
 pub use emitter::Emitter;
 pub use index::{BoundsCheckPolicies, BoundsCheckPolicy, IndexableLength, IndexableLengthError};
+pub use keyword_set::{CaseInsensitiveKeywordSet, KeywordSet};
 pub use layouter::{Alignment, LayoutError, LayoutErrorInner, Layouter, TypeLayout};
-pub use namer::{EntryPointIndex, NameKey, Namer};
+pub use namer::{EntryPointIndex, ExternalTextureNameKey, NameKey, Namer};
+pub use overloads::{Conclusion, MissingSpecialType, OverloadSet, Rule};
 pub use terminator::ensure_block_returns;
 use thiserror::Error;
 pub use type_methods::min_max_float_representable_by;
-pub use typifier::{ResolveContext, ResolveError, TypeResolution};
+pub use typifier::{compare_types, ResolveContext, ResolveError, TypeResolution};
 
 impl From<super::StorageFormat> for super::Scalar {
     fn from(format: super::StorageFormat) -> Self {
@@ -119,6 +123,8 @@ impl crate::Literal {
             (value, crate::ScalarKind::Sint, 8) => Some(Self::I64(value as _)),
             (1, crate::ScalarKind::Bool, crate::BOOL_WIDTH) => Some(Self::Bool(true)),
             (0, crate::ScalarKind::Bool, crate::BOOL_WIDTH) => Some(Self::Bool(false)),
+            (value, crate::ScalarKind::AbstractInt, 8) => Some(Self::AbstractInt(value as _)),
+            (value, crate::ScalarKind::AbstractFloat, 8) => Some(Self::AbstractFloat(value as _)),
             _ => None,
         }
     }
@@ -173,6 +179,9 @@ impl super::AddressSpace {
             crate::AddressSpace::Storage { access } => access,
             crate::AddressSpace::Handle => Sa::LOAD,
             crate::AddressSpace::PushConstant => Sa::LOAD,
+            // TaskPayload isn't always writable, but this is checked for elsewhere,
+            // when not using multiple payloads and matching the entry payload is checked.
+            crate::AddressSpace::TaskPayload => Sa::LOAD | Sa::STORE,
         }
     }
 }
@@ -219,6 +228,8 @@ impl super::MathFunction {
             Self::Pow => 2,
             // geometry
             Self::Dot => 2,
+            Self::Dot4I8Packed => 2,
+            Self::Dot4U8Packed => 2,
             Self::Outer => 2,
             Self::Cross => 2,
             Self::Distance => 2,
@@ -256,6 +267,8 @@ impl super::MathFunction {
             Self::Pack2x16float => 1,
             Self::Pack4xI8 => 1,
             Self::Pack4xU8 => 1,
+            Self::Pack4xI8Clamp => 1,
+            Self::Pack4xU8Clamp => 1,
             // data unpacking
             Self::Unpack4x8snorm => 1,
             Self::Unpack4x8unorm => 1,
@@ -375,6 +388,7 @@ impl super::ImageClass {
         match self {
             crate::ImageClass::Sampled { multi, .. } | crate::ImageClass::Depth { multi } => multi,
             crate::ImageClass::Storage { .. } => false,
+            crate::ImageClass::External => false,
         }
     }
 
@@ -382,6 +396,7 @@ impl super::ImageClass {
         match self {
             crate::ImageClass::Sampled { multi, .. } | crate::ImageClass::Depth { multi } => !multi,
             crate::ImageClass::Storage { .. } => false,
+            crate::ImageClass::External => false,
         }
     }
 
@@ -398,6 +413,10 @@ impl crate::Module {
             overrides: &self.overrides,
             global_expressions: &self.global_expressions,
         }
+    }
+
+    pub fn compare_types(&self, lhs: &TypeResolution, rhs: &TypeResolution) -> bool {
+        compare_types(lhs, rhs, &self.types)
     }
 }
 
@@ -486,6 +505,10 @@ impl GlobalCtx<'_> {
             }
             _ => get(*self, handle, arena),
         }
+    }
+
+    pub fn compare_types(&self, lhs: &TypeResolution, rhs: &TypeResolution) -> bool {
+        compare_types(lhs, rhs, self.types)
     }
 }
 
@@ -606,6 +629,15 @@ pub fn flatten_compose<'arenas>(
         .flat_map(move |component| flatten_compose(component, is_vector, expressions))
         .flat_map(move |component| flatten_splat(component, is_vector, expressions))
         .take(size)
+}
+
+impl super::ShaderStage {
+    pub const fn compute_like(self) -> bool {
+        match self {
+            Self::Vertex | Self::Fragment => false,
+            Self::Compute | Self::Task | Self::Mesh => true,
+        }
+    }
 }
 
 #[test]

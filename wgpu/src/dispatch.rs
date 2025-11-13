@@ -12,7 +12,7 @@
 #![allow(clippy::too_many_arguments)] // It's fine.
 #![allow(missing_docs, clippy::missing_safety_doc)] // Interfaces are not documented
 
-use crate::{WasmNotSend, WasmNotSendSync};
+use crate::{Blas, Tlas, WasmNotSend, WasmNotSendSync};
 
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::{any::Any, fmt::Debug, future::Future, hash::Hash, ops::Range, pin::Pin};
@@ -39,6 +39,7 @@ trait_alias!(RequestAdapterFuture: Future<Output = Result<DispatchAdapter, wgt::
 trait_alias!(RequestDeviceFuture: Future<Output = Result<(DispatchDevice, DispatchQueue), crate::RequestDeviceError>> + WasmNotSend + 'static);
 trait_alias!(PopErrorScopeFuture: Future<Output = Option<crate::Error>> + WasmNotSend + 'static);
 trait_alias!(ShaderCompilationInfoFuture: Future<Output = crate::CompilationInfo> + WasmNotSend + 'static);
+trait_alias!(EnumerateAdapterFuture: Future<Output = Vec<DispatchAdapter>> + WasmNotSend + 'static);
 
 // We can't use trait aliases here, as you can't convert from a dyn Trait to dyn Supertrait _yet_.
 #[cfg(send_sync)]
@@ -54,8 +55,25 @@ pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>)
 #[cfg(not(send_sync))]
 pub type BufferMapCallback = Box<dyn FnOnce(Result<(), crate::BufferAsyncError>) + 'static>;
 
+#[cfg(send_sync)]
+pub type BlasCompactCallback = Box<dyn FnOnce(Result<(), crate::BlasAsyncError>) + Send + 'static>;
+#[cfg(not(send_sync))]
+pub type BlasCompactCallback = Box<dyn FnOnce(Result<(), crate::BlasAsyncError>) + 'static>;
+
+// remove when rust 1.86
+#[cfg_attr(not(custom), expect(dead_code))]
+pub trait AsAny {
+    fn as_any(&self) -> &dyn Any;
+}
+
+impl<T: 'static> AsAny for T {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 // Common traits on all the interface traits
-trait_alias!(CommonTraits: Any + Debug + WasmNotSendSync);
+trait_alias!(CommonTraits: AsAny + Any + Debug + WasmNotSendSync);
 
 pub trait InstanceInterface: CommonTraits {
     fn new(desc: &crate::InstanceDescriptor) -> Self
@@ -76,6 +94,9 @@ pub trait InstanceInterface: CommonTraits {
 
     #[cfg(feature = "wgsl")]
     fn wgsl_language_features(&self) -> crate::WgslLanguageFeatures;
+
+    fn enumerate_adapters(&self, backends: crate::Backends)
+        -> Pin<Box<dyn EnumerateAdapterFuture>>;
 }
 
 pub trait AdapterInterface: CommonTraits {
@@ -111,10 +132,12 @@ pub trait DeviceInterface: CommonTraits {
         desc: crate::ShaderModuleDescriptor<'_>,
         shader_bound_checks: crate::ShaderRuntimeChecks,
     ) -> DispatchShaderModule;
-    unsafe fn create_shader_module_spirv(
+
+    unsafe fn create_shader_module_passthrough(
         &self,
-        desc: &crate::ShaderModuleDescriptorSpirV<'_>,
+        desc: &crate::ShaderModuleDescriptorPassthrough<'_>,
     ) -> DispatchShaderModule;
+
     fn create_bind_group_layout(
         &self,
         desc: &crate::BindGroupLayoutDescriptor<'_>,
@@ -128,6 +151,10 @@ pub trait DeviceInterface: CommonTraits {
         &self,
         desc: &crate::RenderPipelineDescriptor<'_>,
     ) -> DispatchRenderPipeline;
+    fn create_mesh_pipeline(
+        &self,
+        desc: &crate::MeshPipelineDescriptor<'_>,
+    ) -> DispatchRenderPipeline;
     fn create_compute_pipeline(
         &self,
         desc: &crate::ComputePipelineDescriptor<'_>,
@@ -138,6 +165,11 @@ pub trait DeviceInterface: CommonTraits {
     ) -> DispatchPipelineCache;
     fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> DispatchBuffer;
     fn create_texture(&self, desc: &crate::TextureDescriptor<'_>) -> DispatchTexture;
+    fn create_external_texture(
+        &self,
+        desc: &crate::ExternalTextureDescriptor<'_>,
+        planes: &[&crate::TextureView],
+    ) -> DispatchExternalTexture;
     fn create_blas(
         &self,
         desc: &crate::CreateBlasDescriptor<'_>,
@@ -157,14 +189,14 @@ pub trait DeviceInterface: CommonTraits {
 
     fn set_device_lost_callback(&self, device_lost_callback: BoxDeviceLostCallback);
 
-    fn on_uncaptured_error(&self, handler: Box<dyn crate::UncapturedErrorHandler>);
+    fn on_uncaptured_error(&self, handler: Arc<dyn crate::UncapturedErrorHandler>);
     fn push_error_scope(&self, filter: crate::ErrorFilter);
     fn pop_error_scope(&self) -> Pin<Box<dyn PopErrorScopeFuture>>;
 
-    fn start_capture(&self);
-    fn stop_capture(&self);
+    unsafe fn start_graphics_debugger_capture(&self);
+    unsafe fn stop_graphics_debugger_capture(&self);
 
-    fn poll(&self, poll_type: crate::PollType) -> Result<crate::PollStatus, crate::PollError>;
+    fn poll(&self, poll_type: wgt::PollType<u64>) -> Result<crate::PollStatus, crate::PollError>;
 
     fn get_internal_counters(&self) -> crate::InternalCounters;
     fn generate_allocator_report(&self) -> Option<crate::AllocatorReport>;
@@ -196,7 +228,7 @@ pub trait QueueInterface: CommonTraits {
         data_layout: crate::TexelCopyBufferLayout,
         size: crate::Extent3d,
     );
-    #[cfg(any(webgpu, webgl))]
+    #[cfg(web)]
     fn copy_external_image_to_texture(
         &self,
         source: &crate::CopyExternalImageSourceInfo,
@@ -204,10 +236,13 @@ pub trait QueueInterface: CommonTraits {
         size: crate::Extent3d,
     );
 
+    /// Submit must always drain the iterator, even in the case of error.
     fn submit(&self, command_buffers: &mut dyn Iterator<Item = DispatchCommandBuffer>) -> u64;
 
     fn get_timestamp_period(&self) -> f32;
     fn on_submitted_work_done(&self, callback: BoxSubmittedWorkDoneCallback);
+
+    fn compact_blas(&self, blas: &DispatchBlas) -> (Option<u64>, DispatchBlas);
 }
 
 pub trait ShaderModuleInterface: CommonTraits {
@@ -226,11 +261,6 @@ pub trait BufferInterface: CommonTraits {
     );
     fn get_mapped_range(&self, sub_range: Range<crate::BufferAddress>)
         -> DispatchBufferMappedRange;
-    #[cfg(webgpu)]
-    fn get_mapped_range_as_array_buffer(
-        &self,
-        sub_range: Range<crate::BufferAddress>,
-    ) -> Option<js_sys::ArrayBuffer>;
 
     fn unmap(&self);
 
@@ -241,7 +271,13 @@ pub trait TextureInterface: CommonTraits {
 
     fn destroy(&self);
 }
-pub trait BlasInterface: CommonTraits {}
+pub trait ExternalTextureInterface: CommonTraits {
+    fn destroy(&self);
+}
+pub trait BlasInterface: CommonTraits {
+    fn prepare_compact_async(&self, callback: BlasCompactCallback);
+    fn ready_for_compaction(&self) -> bool;
+}
 pub trait TlasInterface: CommonTraits {}
 pub trait QuerySetInterface: CommonTraits {}
 pub trait PipelineLayoutInterface: CommonTraits {}
@@ -261,7 +297,7 @@ pub trait CommandEncoderInterface: CommonTraits {
         source_offset: crate::BufferAddress,
         destination: &DispatchBuffer,
         destination_offset: crate::BufferAddress,
-        copy_size: crate::BufferAddress,
+        copy_size: Option<crate::BufferAddress>,
     );
     fn copy_buffer_to_texture(
         &self,
@@ -311,16 +347,16 @@ pub trait CommandEncoderInterface: CommonTraits {
         destination: &DispatchBuffer,
         destination_offset: crate::BufferAddress,
     );
-
-    fn build_acceleration_structures_unsafe_tlas<'a>(
+    fn mark_acceleration_structures_built<'a>(
         &self,
-        blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        tlas: &mut dyn Iterator<Item = &'a crate::TlasBuildEntry<'a>>,
+        blas: &mut dyn Iterator<Item = &'a Blas>,
+        tlas: &mut dyn Iterator<Item = &'a Tlas>,
     );
+
     fn build_acceleration_structures<'a>(
         &self,
         blas: &mut dyn Iterator<Item = &'a crate::BlasBuildEntry<'a>>,
-        tlas: &mut dyn Iterator<Item = &'a crate::TlasPackage>,
+        tlas: &mut dyn Iterator<Item = &'a crate::Tlas>,
     );
 
     fn transition_resources<'a>(
@@ -393,12 +429,18 @@ pub trait RenderPassInterface: CommonTraits {
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>);
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>);
+    fn draw_mesh_tasks(&mut self, group_count_x: u32, group_count_y: u32, group_count_z: u32);
     fn draw_indirect(
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
     );
     fn draw_indexed_indirect(
+        &mut self,
+        indirect_buffer: &DispatchBuffer,
+        indirect_offset: crate::BufferAddress,
+    );
+    fn draw_mesh_tasks_indirect(
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
@@ -424,7 +466,21 @@ pub trait RenderPassInterface: CommonTraits {
         count_buffer_offset: crate::BufferAddress,
         max_count: u32,
     );
+    fn multi_draw_mesh_tasks_indirect(
+        &mut self,
+        indirect_buffer: &DispatchBuffer,
+        indirect_offset: crate::BufferAddress,
+        count: u32,
+    );
     fn multi_draw_indexed_indirect_count(
+        &mut self,
+        indirect_buffer: &DispatchBuffer,
+        indirect_offset: crate::BufferAddress,
+        count_buffer: &DispatchBuffer,
+        count_buffer_offset: crate::BufferAddress,
+        max_count: u32,
+    );
+    fn multi_draw_mesh_tasks_indirect_count(
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
@@ -520,6 +576,9 @@ pub trait QueueWriteBufferInterface: CommonTraits {
 pub trait BufferMappedRangeInterface: CommonTraits {
     fn slice(&self) -> &[u8];
     fn slice_mut(&mut self) -> &mut [u8];
+
+    #[cfg(webgpu)]
+    fn as_uint8array(&self) -> &js_sys::Uint8Array;
 }
 
 /// Generates Dispatch types for each of the interfaces. Each type is a wrapper around the
@@ -541,7 +600,7 @@ macro_rules! dispatch_types {
             #[cfg(wgpu_core)]
             Core(Arc<$core_type>),
             #[cfg(webgpu)]
-            WebGPU(Arc<$webgpu_type>),
+            WebGPU($webgpu_type),
             #[allow(clippy::allow_attributes, private_interfaces)]
             #[cfg(custom)]
             Custom($custom_type),
@@ -564,6 +623,16 @@ macro_rules! dispatch_types {
             pub fn as_core_opt(&self) -> Option<&$core_type> {
                 match self {
                     Self::Core(value) => Some(value),
+                    _ => None,
+                }
+            }
+
+            #[cfg(custom)]
+            #[inline]
+            #[allow(clippy::allow_attributes, unused)]
+            pub fn as_custom<T: $interface>(&self) -> Option<&T> {
+                match self {
+                    Self::Custom(value) => value.downcast(),
                     _ => None,
                 }
             }
@@ -607,7 +676,7 @@ macro_rules! dispatch_types {
         impl From<$webgpu_type> for $name {
             #[inline]
             fn from(value: $webgpu_type) -> Self {
-                Self::WebGPU(Arc::new(value))
+                Self::WebGPU(value)
             }
         }
 
@@ -620,7 +689,7 @@ macro_rules! dispatch_types {
                     #[cfg(wgpu_core)]
                     Self::Core(value) => value.as_ref(),
                     #[cfg(webgpu)]
-                    Self::WebGPU(value) => value.as_ref(),
+                    Self::WebGPU(value) => value,
                     #[cfg(custom)]
                     Self::Custom(value) => value.deref(),
                     #[cfg(not(any(wgpu_core, webgpu)))]
@@ -682,6 +751,16 @@ macro_rules! dispatch_types {
             ) -> Option<&mut $core_type> {
                 match self {
                     Self::Core(value) => Some(value),
+                    _ => None,
+                }
+            }
+
+            #[cfg(custom)]
+            #[inline]
+            #[allow(clippy::allow_attributes, unused)]
+            pub fn as_custom<T: $interface>(&self) -> Option<&T> {
+                match self {
+                    Self::Custom(value) => value.downcast(),
                     _ => None,
                 }
             }
@@ -798,6 +877,7 @@ dispatch_types! {ref type DispatchTextureView: TextureViewInterface = CoreTextur
 dispatch_types! {ref type DispatchSampler: SamplerInterface = CoreSampler, WebSampler, DynSampler}
 dispatch_types! {ref type DispatchBuffer: BufferInterface = CoreBuffer, WebBuffer, DynBuffer}
 dispatch_types! {ref type DispatchTexture: TextureInterface = CoreTexture, WebTexture, DynTexture}
+dispatch_types! {ref type DispatchExternalTexture: ExternalTextureInterface = CoreExternalTexture, WebExternalTexture, DynExternalTexture}
 dispatch_types! {ref type DispatchBlas: BlasInterface = CoreBlas, WebBlas, DynBlas}
 dispatch_types! {ref type DispatchTlas: TlasInterface = CoreTlas, WebTlas, DynTlas}
 dispatch_types! {ref type DispatchQuerySet: QuerySetInterface = CoreQuerySet, WebQuerySet, DynQuerySet}
@@ -808,7 +888,7 @@ dispatch_types! {ref type DispatchPipelineCache: PipelineCacheInterface = CorePi
 dispatch_types! {mut type DispatchCommandEncoder: CommandEncoderInterface = CoreCommandEncoder, WebCommandEncoder, DynCommandEncoder}
 dispatch_types! {mut type DispatchComputePass: ComputePassInterface = CoreComputePass, WebComputePassEncoder, DynComputePass}
 dispatch_types! {mut type DispatchRenderPass: RenderPassInterface = CoreRenderPass, WebRenderPassEncoder, DynRenderPass}
-dispatch_types! {ref type DispatchCommandBuffer: CommandBufferInterface = CoreCommandBuffer, WebCommandBuffer, DynCommandBuffer}
+dispatch_types! {mut type DispatchCommandBuffer: CommandBufferInterface = CoreCommandBuffer, WebCommandBuffer, DynCommandBuffer}
 dispatch_types! {mut type DispatchRenderBundleEncoder: RenderBundleEncoderInterface = CoreRenderBundleEncoder, WebRenderBundleEncoder, DynRenderBundleEncoder}
 dispatch_types! {ref type DispatchRenderBundle: RenderBundleInterface = CoreRenderBundle, WebRenderBundle, DynRenderBundle}
 dispatch_types! {ref type DispatchSurface: SurfaceInterface = CoreSurface, WebSurface, DynSurface}

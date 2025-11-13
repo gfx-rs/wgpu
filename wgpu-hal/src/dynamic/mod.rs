@@ -23,7 +23,8 @@ use wgt::WasmNotSendSync;
 use crate::{
     AccelerationStructureAABBs, AccelerationStructureEntries, AccelerationStructureInstances,
     AccelerationStructureTriangleIndices, AccelerationStructureTriangleTransform,
-    AccelerationStructureTriangles, BufferBinding, ProgrammableStage, TextureBinding,
+    AccelerationStructureTriangles, BufferBinding, ExternalTextureBinding, ProgrammableStage,
+    TextureBinding,
 };
 
 /// Base trait for all resources, allows downcasting via [`Any`].
@@ -140,6 +141,16 @@ impl<'a> TextureBinding<'a, dyn DynTextureView> {
             view: self.view.expect_downcast_ref(),
             usage: self.usage,
         }
+    }
+}
+
+impl<'a> ExternalTextureBinding<'a, dyn DynBuffer, dyn DynTextureView> {
+    pub fn expect_downcast<B: DynBuffer, T: DynTextureView>(
+        self,
+    ) -> ExternalTextureBinding<'a, B, T> {
+        let planes = self.planes.map(|plane| plane.expect_downcast());
+        let params = self.params.expect_downcast();
+        ExternalTextureBinding { planes, params }
     }
 }
 

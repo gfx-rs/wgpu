@@ -560,7 +560,7 @@ impl Frontend {
                 continue;
             }
 
-            log::trace!("Testing overload {}", overload_idx);
+            log::trace!("Testing overload {overload_idx}");
 
             // Stores whether the current overload matches exactly the function call
             let mut exact = true;
@@ -592,10 +592,7 @@ impl Frontend {
                 let call_arg_ty = ctx.get_type(call_argument.0);
 
                 log::trace!(
-                    "Testing parameter {}\n\tOverload = {:?}\n\tCall = {:?}",
-                    i,
-                    overload_param_ty,
-                    call_arg_ty
+                    "Testing parameter {i}\n\tOverload = {overload_param_ty:?}\n\tCall = {call_arg_ty:?}"
                 );
 
                 // Storage images cannot be directly compared since while the access is part of the
@@ -641,8 +638,7 @@ impl Frontend {
                         self.errors.push(Error {
                             kind: ErrorKind::SemanticError(
                                 format!(
-                                    "'{}': image needs {:?} access but only {:?} was provided",
-                                    name, overload_access, call_access
+                                    "'{name}': image needs {overload_access:?} access but only {call_access:?} was provided"
                                 )
                                 .into(),
                             ),
@@ -1370,7 +1366,7 @@ impl Frontend {
         ctx.module.entry_points.push(EntryPoint {
             name: "main".to_string(),
             stage: self.meta.stage,
-            early_depth_test: Some(crate::EarlyDepthTest { conservative: None })
+            early_depth_test: Some(crate::EarlyDepthTest::Force)
                 .filter(|_| self.meta.early_fragment_tests),
             workgroup_size: self.meta.workgroup_size,
             workgroup_size_overrides: None,
@@ -1381,6 +1377,8 @@ impl Frontend {
                 result: ty.map(|ty| FunctionResult { ty, binding: None }),
                 ..Default::default()
             },
+            mesh_info: None,
+            task_payload: None,
         });
 
         Ok(())
@@ -1450,6 +1448,7 @@ impl Context<'_> {
                         interpolation,
                         sampling: None,
                         blend_src: None,
+                        per_primitive: false,
                     };
                     location += 1;
 
@@ -1486,6 +1485,7 @@ impl Context<'_> {
                                 interpolation,
                                 sampling: None,
                                 blend_src: None,
+                                per_primitive: false,
                             };
                             location += 1;
                             binding

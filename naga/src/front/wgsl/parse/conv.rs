@@ -20,17 +20,23 @@ pub fn map_address_space(word: &str, span: Span) -> Result<'_, crate::AddressSpa
     }
 }
 
-pub fn map_built_in(word: &str, span: Span) -> Result<'_, crate::BuiltIn> {
-    Ok(match word {
+pub fn map_built_in(
+    enable_extensions: &EnableExtensions,
+    word: &str,
+    span: Span,
+) -> Result<'static, crate::BuiltIn> {
+    let built_in = match word {
         "position" => crate::BuiltIn::Position { invariant: false },
         // vertex
         "vertex_index" => crate::BuiltIn::VertexIndex,
         "instance_index" => crate::BuiltIn::InstanceIndex,
         "view_index" => crate::BuiltIn::ViewIndex,
+        "clip_distances" => crate::BuiltIn::ClipDistance,
         // fragment
         "front_facing" => crate::BuiltIn::FrontFacing,
         "frag_depth" => crate::BuiltIn::FragDepth,
         "primitive_index" => crate::BuiltIn::PrimitiveIndex,
+        "barycentric" => crate::BuiltIn::Barycentric,
         "sample_index" => crate::BuiltIn::SampleIndex,
         "sample_mask" => crate::BuiltIn::SampleMask,
         // compute
@@ -45,7 +51,19 @@ pub fn map_built_in(word: &str, span: Span) -> Result<'_, crate::BuiltIn> {
         "subgroup_size" => crate::BuiltIn::SubgroupSize,
         "subgroup_invocation_id" => crate::BuiltIn::SubgroupInvocationId,
         _ => return Err(Box::new(Error::UnknownBuiltin(span))),
-    })
+    };
+    match built_in {
+        crate::BuiltIn::ClipDistance => {
+            if !enable_extensions.contains(ImplementedEnableExtension::ClipDistances) {
+                return Err(Box::new(Error::EnableExtensionNotEnabled {
+                    span,
+                    kind: ImplementedEnableExtension::ClipDistances.into(),
+                }));
+            }
+        }
+        _ => {}
+    }
+    Ok(built_in)
 }
 
 pub fn map_interpolation(word: &str, span: Span) -> Result<'_, crate::Interpolation> {
@@ -98,7 +116,7 @@ pub fn map_storage_format(word: &str, span: Span) -> Result<'_, crate::StorageFo
         "rgba8sint" => Sf::Rgba8Sint,
         "rgb10a2uint" => Sf::Rgb10a2Uint,
         "rgb10a2unorm" => Sf::Rgb10a2Unorm,
-        "rg11b10float" => Sf::Rg11b10Ufloat,
+        "rg11b10ufloat" => Sf::Rg11b10Ufloat,
         "r64uint" => Sf::R64Uint,
         "rg32uint" => Sf::Rg32Uint,
         "rg32sint" => Sf::Rg32Sint,
@@ -236,6 +254,8 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
         "pow" => Mf::Pow,
         // geometry
         "dot" => Mf::Dot,
+        "dot4I8Packed" => Mf::Dot4I8Packed,
+        "dot4U8Packed" => Mf::Dot4U8Packed,
         "cross" => Mf::Cross,
         "distance" => Mf::Distance,
         "length" => Mf::Length,
@@ -271,6 +291,8 @@ pub fn map_standard_fun(word: &str) -> Option<crate::MathFunction> {
         "pack2x16float" => Mf::Pack2x16float,
         "pack4xI8" => Mf::Pack4xI8,
         "pack4xU8" => Mf::Pack4xU8,
+        "pack4xI8Clamp" => Mf::Pack4xI8Clamp,
+        "pack4xU8Clamp" => Mf::Pack4xU8Clamp,
         // data unpacking
         "unpack4x8snorm" => Mf::Unpack4x8snorm,
         "unpack4x8unorm" => Mf::Unpack4x8unorm,

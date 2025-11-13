@@ -1,0 +1,36 @@
+[package]
+name = "naga-test"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "common code for naga tests"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+
+[features]
+
+[dependencies]
+naga = { workspace = true, features = [
+    "serialize",
+    "deserialize",
+    "glsl-in",
+    "glsl-out",
+    "spv-in",
+    "spv-out",
+    "wgsl-in",
+    "wgsl-out",
+    "msl-out",
+    "dot-out",
+    "hlsl-out",
+] }
+spirv = { workspace = true, features = ["deserialize"] }
+ron.workspace = true
+toml.workspace = true
+bitflags.workspace = true
+serde_json.workspace = true
+serde.workspace = true

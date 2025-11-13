@@ -1,4 +1,5 @@
-use std::{fmt, vec::Vec};
+use alloc::vec::Vec;
+use core::fmt;
 
 use bit_set::BitSet;
 use parking_lot::Mutex;
@@ -95,7 +96,7 @@ impl GeneralHeap {
 
     pub(super) fn allocate_slice(&self, count: u64) -> Result<DescriptorIndex, crate::DeviceError> {
         let range = self.ranges.lock().allocate_range(count).map_err(|err| {
-            log::error!("Unable to allocate descriptors: {:?}", err);
+            log::error!("Unable to allocate descriptors: {err:?}");
             crate::DeviceError::OutOfMemory
         })?;
         Ok(range.start)

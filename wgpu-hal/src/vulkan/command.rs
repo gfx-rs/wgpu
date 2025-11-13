@@ -1,9 +1,8 @@
 use super::conv;
-
 use arrayvec::ArrayVec;
 use ash::vk;
-
-use std::{mem, ops::Range};
+use core::{mem, ops::Range};
+use hashbrown::hash_map::Entry;
 
 const ALLOCATION_GRANULARITY: u32 = 16;
 const DST_IMAGE_LAYOUT: vk::ImageLayout = vk::ImageLayout::TRANSFER_DST_OPTIMAL;
@@ -51,6 +50,69 @@ impl super::CommandEncoder {
                 );
             }
         }
+    }
+
+    fn make_framebuffer(
+        &mut self,
+        key: super::FramebufferKey,
+    ) -> Result<vk::Framebuffer, crate::DeviceError> {
+        Ok(match self.framebuffers.entry(key) {
+            Entry::Occupied(e) => *e.get(),
+            Entry::Vacant(e) => {
+                let super::FramebufferKey {
+                    raw_pass,
+                    ref attachment_views,
+                    attachment_identities: _,
+                    extent,
+                } = *e.key();
+
+                let vk_info = vk::FramebufferCreateInfo::default()
+                    .render_pass(raw_pass)
+                    .width(extent.width)
+                    .height(extent.height)
+                    .layers(extent.depth_or_array_layers)
+                    .attachments(attachment_views);
+
+                let raw = unsafe { self.device.raw.create_framebuffer(&vk_info, None).unwrap() };
+                *e.insert(raw)
+            }
+        })
+    }
+
+    fn make_temp_texture_view(
+        &mut self,
+        key: super::TempTextureViewKey,
+    ) -> Result<super::IdentifiedTextureView, crate::DeviceError> {
+        Ok(match self.temp_texture_views.entry(key) {
+            Entry::Occupied(e) => *e.get(),
+            Entry::Vacant(e) => {
+                let super::TempTextureViewKey {
+                    texture,
+                    texture_identity: _,
+                    format,
+                    mip_level,
+                    depth_slice,
+                } = *e.key();
+
+                let vk_info = vk::ImageViewCreateInfo::default()
+                    .image(texture)
+                    .view_type(vk::ImageViewType::TYPE_2D)
+                    .format(format)
+                    .subresource_range(vk::ImageSubresourceRange {
+                        aspect_mask: vk::ImageAspectFlags::COLOR,
+                        base_mip_level: mip_level,
+                        level_count: 1,
+                        base_array_layer: depth_slice,
+                        layer_count: 1,
+                    });
+                let raw = unsafe { self.device.raw.create_image_view(&vk_info, None) }
+                    .map_err(super::map_host_device_oom_and_ioca_err)?;
+
+                let identity = self.device.texture_view_identity_factory.next();
+
+                *e.insert(super::IdentifiedTextureView { raw, identity })
+            }
+        })
     }
 }
 
@@ -118,6 +180,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.free
             .extend(cmd_bufs.into_iter().map(|cmd_buf| cmd_buf.raw));
         self.free.append(&mut self.discarded);
+        // Delete framebuffers from the framebuffer cache
+        for (_, framebuffer) in self.framebuffers.drain() {
+            unsafe { self.device.raw.destroy_framebuffer(framebuffer, None) };
+        }
         let _ = unsafe {
             self.device
                 .raw
@@ -564,7 +630,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                                 .first_vertex(triangles.first_vertex);
                         } else {
                             range = range
-                                .primitive_count(triangles.vertex_count)
+                                .primitive_count(triangles.vertex_count / 3)
                                 .first_vertex(triangles.first_vertex);
                         }
 
@@ -711,46 +777,53 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn begin_render_pass(
         &mut self,
         desc: &crate::RenderPassDescriptor<super::QuerySet, super::TextureView>,
-    ) {
+    ) -> Result<(), crate::DeviceError> {
         let mut vk_clear_values =
             ArrayVec::<vk::ClearValue, { super::MAX_TOTAL_ATTACHMENTS }>::new();
-        let mut vk_image_views = ArrayVec::<vk::ImageView, { super::MAX_TOTAL_ATTACHMENTS }>::new();
-        let mut rp_key = super::RenderPassKey::default();
-        let mut fb_key = super::FramebufferKey {
-            attachments: ArrayVec::default(),
-            extent: desc.extent,
+        let mut rp_key = super::RenderPassKey {
+            colors: ArrayVec::default(),
+            depth_stencil: None,
             sample_count: desc.sample_count,
+            multiview_mask: desc.multiview_mask,
         };
-        let caps = &self.device.private_caps;
+        let mut fb_key = super::FramebufferKey {
+            raw_pass: vk::RenderPass::null(),
+            attachment_views: ArrayVec::default(),
+            attachment_identities: ArrayVec::default(),
+            extent: desc.extent,
+        };
 
         for cat in desc.color_attachments {
             if let Some(cat) = cat.as_ref() {
+                let color_view = if cat.target.view.dimension == wgt::TextureViewDimension::D3 {
+                    let key = super::TempTextureViewKey {
+                        texture: cat.target.view.raw_texture,
+                        texture_identity: cat.target.view.texture_identity,
+                        format: cat.target.view.raw_format,
+                        mip_level: cat.target.view.base_mip_level,
+                        depth_slice: cat.depth_slice.unwrap(),
+                    };
+                    self.make_temp_texture_view(key)?
+                } else {
+                    cat.target.view.identified_raw_view()
+                };
+
                 vk_clear_values.push(vk::ClearValue {
                     color: unsafe { cat.make_vk_clear_color() },
                 });
-                vk_image_views.push(cat.target.view.raw);
                 let color = super::ColorAttachmentKey {
-                    base: cat.target.make_attachment_key(cat.ops, caps),
-                    resolve: cat.resolve_target.as_ref().map(|target| {
-                        target.make_attachment_key(crate::AttachmentOps::STORE, caps)
-                    }),
+                    base: cat.target.make_attachment_key(cat.ops),
+                    resolve: cat
+                        .resolve_target
+                        .as_ref()
+                        .map(|target| target.make_attachment_key(crate::AttachmentOps::STORE)),
                 };
 
                 rp_key.colors.push(Some(color));
-                fb_key.attachments.push(cat.target.view.attachment.clone());
+                fb_key.push_view(color_view);
                 if let Some(ref at) = cat.resolve_target {
                     vk_clear_values.push(unsafe { mem::zeroed() });
-                    vk_image_views.push(at.view.raw);
-                    fb_key.attachments.push(at.view.attachment.clone());
-                }
-
-                // Assert this attachment is valid for the detected multiview, as a sanity check
-                // The driver crash for this is really bad on AMD, so the check is worth it
-                if let Some(multiview) = desc.multiview {
-                    assert_eq!(cat.target.view.layers, multiview);
-                    if let Some(ref resolve_target) = cat.resolve_target {
-                        assert_eq!(resolve_target.view.layers, multiview);
-                    }
+                    fb_key.push_view(at.view.identified_raw_view());
                 }
             } else {
                 rp_key.colors.push(None);
@@ -763,21 +836,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     stencil: ds.clear_value.1,
                 },
             });
-            vk_image_views.push(ds.target.view.raw);
             rp_key.depth_stencil = Some(super::DepthStencilAttachmentKey {
-                base: ds.target.make_attachment_key(ds.depth_ops, caps),
+                base: ds.target.make_attachment_key(ds.depth_ops),
                 stencil_ops: ds.stencil_ops,
             });
-            fb_key.attachments.push(ds.target.view.attachment.clone());
-
-            // Assert this attachment is valid for the detected multiview, as a sanity check
-            // The driver crash for this is really bad on AMD, so the check is worth it
-            if let Some(multiview) = desc.multiview {
-                assert_eq!(ds.target.view.layers, multiview);
-            }
+            fb_key.push_view(ds.target.view.identified_raw_view());
         }
-        rp_key.sample_count = fb_key.sample_count;
-        rp_key.multiview = desc.multiview;
 
         let render_area = vk::Rect2D {
             offset: vk::Offset2D { x: 0, y: 0 },
@@ -788,11 +852,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
         let vk_viewports = [vk::Viewport {
             x: 0.0,
-            y: if self.device.private_caps.flip_y_requires_shift {
-                desc.extent.height as f32
-            } else {
-                0.0
-            },
+            y: desc.extent.height as f32,
             width: desc.extent.width as f32,
             height: -(desc.extent.height as f32),
             min_depth: 0.0,
@@ -800,24 +860,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }];
 
         let raw_pass = self.device.make_render_pass(rp_key).unwrap();
-        let raw_framebuffer = self
-            .device
-            .make_framebuffer(fb_key, raw_pass, desc.label)
-            .unwrap();
+        fb_key.raw_pass = raw_pass;
+        let raw_framebuffer = self.make_framebuffer(fb_key).unwrap();
 
-        let mut vk_info = vk::RenderPassBeginInfo::default()
+        let vk_info = vk::RenderPassBeginInfo::default()
             .render_pass(raw_pass)
             .render_area(render_area)
             .clear_values(&vk_clear_values)
             .framebuffer(raw_framebuffer);
-        let mut vk_attachment_info = if caps.imageless_framebuffers {
-            Some(vk::RenderPassAttachmentBeginInfo::default().attachments(&vk_image_views))
-        } else {
-            None
-        };
-        if let Some(attachment_info) = vk_attachment_info.as_mut() {
-            vk_info = vk_info.push_next(attachment_info);
-        }
 
         if let Some(label) = desc.label {
             unsafe { self.begin_debug_marker(label) };
@@ -851,6 +901,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
         };
 
         self.bind_point = vk::PipelineBindPoint::GRAPHICS;
+
+        Ok(())
     }
     unsafe fn end_render_pass(&mut self) {
         unsafe {
@@ -927,6 +979,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         unsafe {
+            self.current_pipeline_is_multiview = pipeline.is_multiview;
             self.device.raw.cmd_bind_pipeline(
                 self.active,
                 vk::PipelineBindPoint::GRAPHICS,
@@ -965,11 +1018,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {
         let vk_viewports = [vk::Viewport {
             x: rect.x,
-            y: if self.device.private_caps.flip_y_requires_shift {
-                rect.y + rect.h
-            } else {
-                rect.y
-            },
+            y: rect.y + rect.h,
             width: rect.w,
             height: -rect.h, // flip Y
             min_depth: depth_range.start,
@@ -1018,6 +1067,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         first_instance: u32,
         instance_count: u32,
     ) {
+        if self.current_pipeline_is_multiview
+            && (first_instance as u64 + instance_count as u64 - 1)
+                > self.device.private_caps.multiview_instance_index_limit as u64
+        {
+            panic!("This vulkan device is affected by [#8333](https://github.com/gfx-rs/wgpu/issues/8333)");
+        }
         unsafe {
             self.device.raw.cmd_draw(
                 self.active,
@@ -1036,6 +1091,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         first_instance: u32,
         instance_count: u32,
     ) {
+        if self.current_pipeline_is_multiview
+            && (first_instance as u64 + instance_count as u64 - 1)
+                > self.device.private_caps.multiview_instance_index_limit as u64
+        {
+            panic!("This vulkan device is affected by [#8333](https://github.com/gfx-rs/wgpu/issues/8333)");
+        }
         unsafe {
             self.device.raw.cmd_draw_indexed(
                 self.active,
@@ -1083,15 +1144,29 @@ impl crate::CommandEncoder for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        unsafe {
-            self.device.raw.cmd_draw_indexed_indirect(
-                self.active,
-                buffer.raw,
-                offset,
-                draw_count,
-                size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
-            )
-        };
+        if draw_count >= 1 && self.device.private_caps.multi_draw_indirect {
+            unsafe {
+                self.device.raw.cmd_draw_indexed_indirect(
+                    self.active,
+                    buffer.raw,
+                    offset,
+                    draw_count,
+                    size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
+                )
+            };
+        } else {
+            for _ in 0..draw_count {
+                unsafe {
+                    self.device.raw.cmd_draw_indexed_indirect(
+                        self.active,
+                        buffer.raw,
+                        offset,
+                        1,
+                        size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
+                    )
+                };
+            }
+        }
     }
     unsafe fn draw_mesh_tasks_indirect(
         &mut self,
@@ -1277,7 +1352,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     self.active,
                     &vk::CopyAccelerationStructureInfoKHR {
                         s_type: vk::StructureType::COPY_ACCELERATION_STRUCTURE_INFO_KHR,
-                        p_next: std::ptr::null(),
+                        p_next: core::ptr::null(),
                         src: src.raw,
                         dst: dst.raw,
                         mode,

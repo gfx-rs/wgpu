@@ -1,7 +1,7 @@
 use alloc::boxed::Box;
 use core::ops::{Deref, DerefMut};
 
-use crate::*;
+use crate::{api::DeferredCommandBufferActions, *};
 
 /// Handle to a command queue on a device.
 ///
@@ -19,6 +19,22 @@ static_assertions::assert_impl_all!(Queue: Send, Sync);
 
 crate::cmp::impl_eq_ord_hash_proxy!(Queue => .inner);
 
+impl Queue {
+    #[cfg(custom)]
+    /// Returns custom implementation of Queue (if custom backend and is internally T)
+    pub fn as_custom<T: custom::QueueInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
+
+    #[cfg(custom)]
+    /// Creates Queue from custom implementation
+    pub fn from_custom<T: custom::QueueInterface>(queue: T) -> Self {
+        Self {
+            inner: dispatch::DispatchQueue::custom(queue),
+        }
+    }
+}
+
 /// Identifier for a particular call to [`Queue::submit`]. Can be used
 /// as part of an argument to [`Device::poll`] to block for a particular
 /// submission to finish.
@@ -27,20 +43,11 @@ crate::cmp::impl_eq_ord_hash_proxy!(Queue => .inner);
 /// There is no analogue in the WebGPU specification.
 #[derive(Debug, Clone)]
 pub struct SubmissionIndex {
-    #[cfg_attr(
-        all(
-            target_arch = "wasm32",
-            not(target_os = "emscripten"),
-            not(feature = "webgl"),
-        ),
-        expect(dead_code)
-    )]
     pub(crate) index: u64,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(SubmissionIndex: Send, Sync);
 
-pub use wgt::PollType as MaintainBase;
 /// Passed to [`Device::poll`] to control how and if it should block.
 pub type PollType = wgt::PollType<SubmissionIndex>;
 #[cfg(send_sync)]
@@ -51,16 +58,24 @@ static_assertions::assert_impl_all!(PollType: Send, Sync);
 /// Reading into this buffer won't yield the contents of the buffer from the
 /// GPU and is likely to be slow. Because of this, although [`AsMut`] is
 /// implemented for this type, [`AsRef`] is not.
-pub struct QueueWriteBufferView<'a> {
-    queue: &'a Queue,
-    buffer: &'a Buffer,
+pub struct QueueWriteBufferView {
+    queue: Queue,
+    buffer: Buffer,
     offset: BufferAddress,
     inner: dispatch::DispatchQueueWriteBuffer,
 }
 #[cfg(send_sync)]
-static_assertions::assert_impl_all!(QueueWriteBufferView<'_>: Send, Sync);
+static_assertions::assert_impl_all!(QueueWriteBufferView: Send, Sync);
 
-impl Deref for QueueWriteBufferView<'_> {
+impl QueueWriteBufferView {
+    #[cfg(custom)]
+    /// Returns custom implementation of QueueWriteBufferView (if custom backend and is internally T)
+    pub fn as_custom<T: custom::QueueWriteBufferInterface>(&self) -> Option<&T> {
+        self.inner.as_custom()
+    }
+}
+
+impl Deref for QueueWriteBufferView {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
@@ -69,19 +84,19 @@ impl Deref for QueueWriteBufferView<'_> {
     }
 }
 
-impl DerefMut for QueueWriteBufferView<'_> {
+impl DerefMut for QueueWriteBufferView {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner.slice_mut()
     }
 }
 
-impl AsMut<[u8]> for QueueWriteBufferView<'_> {
+impl AsMut<[u8]> for QueueWriteBufferView {
     fn as_mut(&mut self) -> &mut [u8] {
         self.inner.slice_mut()
     }
 }
 
-impl Drop for QueueWriteBufferView<'_> {
+impl Drop for QueueWriteBufferView {
     fn drop(&mut self) {
         self.queue
             .inner
@@ -90,14 +105,6 @@ impl Drop for QueueWriteBufferView<'_> {
 }
 
 impl Queue {
-    #[cfg(custom)]
-    /// Creates Queue from custom implementation
-    pub fn from_custom<T: custom::QueueInterface>(queue: T) -> Self {
-        Self {
-            inner: dispatch::DispatchQueue::custom(queue),
-        }
-    }
-
     /// Copies the bytes of `data` into `buffer` starting at `offset`.
     ///
     /// The data must be written fully in-bounds, that is, `offset + data.len() <= buffer.len()`.
@@ -175,19 +182,19 @@ impl Queue {
     ///   allocations, you might be able to use [`StagingBelt`](crate::util::StagingBelt),
     ///   or buffers you explicitly create, map, and unmap yourself.
     #[must_use]
-    pub fn write_buffer_with<'a>(
-        &'a self,
-        buffer: &'a Buffer,
+    pub fn write_buffer_with(
+        &self,
+        buffer: &Buffer,
         offset: BufferAddress,
         size: BufferSize,
-    ) -> Option<QueueWriteBufferView<'a>> {
+    ) -> Option<QueueWriteBufferView> {
         profiling::scope!("Queue::write_buffer_with");
         self.inner
             .validate_write_buffer(&buffer.inner, offset, size)?;
         let staging_buffer = self.inner.create_staging_buffer(size)?;
         Some(QueueWriteBufferView {
-            queue: self,
-            buffer,
+            queue: self.clone(),
+            buffer: buffer.clone(),
             offset,
             inner: staging_buffer,
         })
@@ -225,7 +232,7 @@ impl Queue {
     }
 
     /// Schedule a copy of data from `image` into `texture`.
-    #[cfg(any(webgpu, webgl))]
+    #[cfg(web)]
     pub fn copy_external_image_to_texture(
         &self,
         source: &wgt::CopyExternalImageSourceInfo,
@@ -241,9 +248,18 @@ impl Queue {
         &self,
         command_buffers: I,
     ) -> SubmissionIndex {
-        let mut command_buffers = command_buffers.into_iter().map(|comb| comb.buffer);
+        // As submit drains the iterator (even on error), collect deferred actions
+        // from each CommandBuffer along the way.
+        let mut actions = DeferredCommandBufferActions::default();
 
+        let mut command_buffers = command_buffers.into_iter().map(|comb| {
+            actions.append(&mut comb.actions.lock());
+            comb.buffer
+        });
         let index = self.inner.submit(&mut command_buffers);
+
+        // Execute all deferred actions after submit.
+        actions.execute(&self.inner);
 
         SubmissionIndex { index }
     }
@@ -258,40 +274,75 @@ impl Queue {
         self.inner.get_timestamp_period()
     }
 
-    /// Registers a callback when the previous call to submit finishes running on the gpu. This callback
-    /// being called implies that all mapped buffer callbacks which were registered before this call will
-    /// have been called.
+    /// Registers a callback that is invoked when the previous [`Queue::submit`] finishes executing
+    /// on the GPU. When this callback runs, all mapped-buffer callbacks registered for the same
+    /// submission are guaranteed to have been called.
     ///
-    /// For the callback to complete, either `queue.submit(..)`, `instance.poll_all(..)`, or `device.poll(..)`
-    /// must be called elsewhere in the runtime, possibly integrated into an event loop or run on a separate thread.
+    /// For the callback to run, either [`queue.submit(..)`][q::s], [`instance.poll_all(..)`][i::p_a],
+    /// or [`device.poll(..)`][d::p] must be called elsewhere in the runtime, possibly integrated into
+    /// an event loop or run on a separate thread.
     ///
-    /// The callback will be called on the thread that first calls the above functions after the gpu work
-    /// has completed. There are no restrictions on the code you can run in the callback, however on native the
-    /// call to the function will not complete until the callback returns, so prefer keeping callbacks short
-    /// and used to set flags, send messages, etc.
+    /// The callback runs on the thread that first calls one of the above functions after the GPU work
+    /// completes. There are no restrictions on the code you can run in the callback; however, on native
+    /// the polling call will not return until the callback finishes, so keep callbacks short (set flags,
+    /// send messages, etc.).
+    ///
+    /// [q::s]: Queue::submit
+    /// [i::p_a]: Instance::poll_all
+    /// [d::p]: Device::poll
     pub fn on_submitted_work_done(&self, callback: impl FnOnce() + Send + 'static) {
         self.inner.on_submitted_work_done(Box::new(callback));
     }
 
-    /// Returns the inner hal Queue using a callback. The hal queue will be `None` if the
-    /// backend type argument does not match with this wgpu Queue
+    /// Get the [`wgpu_hal`] device from this `Queue`.
+    ///
+    /// Find the Api struct corresponding to the active backend in [`wgpu_hal::api`],
+    /// and pass that struct to the to the `A` type parameter.
+    ///
+    /// Returns a guard that dereferences to the type of the hal backend
+    /// which implements [`A::Queue`].
+    ///
+    /// # Types
+    ///
+    /// The returned type depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Queue")]
+    #[doc = crate::hal_type_metal!("Queue")]
+    #[doc = crate::hal_type_dx12!("Queue")]
+    #[doc = crate::hal_type_gles!("Queue")]
+    ///
+    /// # Errors
+    ///
+    /// This method will return None if:
+    /// - The queue is not from the backend specified by `A`.
+    /// - The queue is from the `webgpu` or `custom` backend.
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal Queue must not be manually destroyed
+    /// - The returned resource must not be destroyed unless the guard
+    ///   is the last reference to it and it is not in use by the GPU.
+    ///   The guard and handle may be dropped at any time however.
+    /// - All the safety requirements of wgpu-hal must be upheld.
+    ///
+    /// [`A::Queue`]: hal::Api::Queue
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi, F: FnOnce(Option<&A::Queue>) -> R, R>(
+    pub unsafe fn as_hal<A: hal::Api>(
         &self,
-        hal_queue_callback: F,
-    ) -> R {
-        if let Some(core_queue) = self.inner.as_core_opt() {
-            unsafe {
-                core_queue
-                    .context
-                    .queue_as_hal::<A, F, R>(core_queue, hal_queue_callback)
-            }
-        } else {
-            hal_queue_callback(None)
+    ) -> Option<impl Deref<Target = A::Queue> + WasmNotSendSync> {
+        let queue = self.inner.as_core_opt()?;
+        unsafe { queue.context.queue_as_hal::<A>(queue) }
+    }
+
+    /// Compact a BLAS, it must have had [`Blas::prepare_compaction_async`] called on it and had the
+    /// callback provided called.
+    ///
+    /// The returned BLAS is more restricted than a normal BLAS because it may not be rebuilt or
+    /// compacted.
+    pub fn compact_blas(&self, blas: &Blas) -> Blas {
+        let (handle, dispatch) = self.inner.compact_blas(&blas.inner);
+        Blas {
+            handle,
+            inner: dispatch,
         }
     }
 }

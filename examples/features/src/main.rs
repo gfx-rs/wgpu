@@ -182,6 +182,18 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgl: false,  // No Ray-tracing extensions
         webgpu: false, // No Ray-tracing extensions (yet)
     },
+    ExampleDesc {
+        name: "mesh_shader",
+        function: wgpu_examples::mesh_shader::main,
+        webgl: false,
+        webgpu: false,
+    },
+    ExampleDesc {
+        name: "multiview",
+        function: wgpu_examples::multiview::main,
+        webgl: false,
+        webgpu: false,
+    },
 ];
 
 fn get_example_name() -> Option<String> {

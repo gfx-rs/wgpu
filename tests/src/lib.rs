@@ -17,9 +17,9 @@ mod run;
 pub use init::initialize_html_canvas;
 
 pub use self::image::ComparisonType;
-pub use config::GpuTestConfiguration;
+pub use config::{GpuTestConfiguration, GpuTestInitializer};
 #[doc(hidden)]
-pub use ctor::ctor;
+pub use ctor;
 pub use expectations::{FailureApplicationReasons, FailureBehavior, FailureCase, FailureReason};
 pub use init::{initialize_adapter, initialize_device, initialize_instance};
 pub use params::TestParameters;
@@ -27,10 +27,17 @@ pub use run::{execute_test, TestingContext};
 pub use wgpu_macros::gpu_test;
 
 /// Run some code in an error scope and assert that validation fails.
+///
+/// Note that errors related to commands for the GPU (i.e. raised by methods on
+/// GPUCommandEncoder, GPURenderPassEncoder, GPUComputePassEncoder,
+/// GPURenderBundleEncoder) are usually not raised immediately. They are raised
+/// only when `finish()` is called on the command encoder. Tests of such error
+/// cases should call `fail` with a closure that calls `finish()`, not with a
+/// closure that encodes the actual command.
 pub fn fail<T>(
     device: &wgpu::Device,
     callback: impl FnOnce() -> T,
-    expected_msg_substring: Option<&'static str>,
+    expected_msg_substring: Option<&str>,
 ) -> T {
     device.push_error_scope(wgpu::ErrorFilter::Validation);
     let result = callback();
@@ -83,9 +90,12 @@ pub fn fail_if<T>(
     }
 }
 
-/// Returns true if the provided callback fails validation.
-pub fn did_fail<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> (bool, T) {
-    device.push_error_scope(wgpu::ErrorFilter::Validation);
+fn did_fill_error_scope<T>(
+    device: &wgpu::Device,
+    callback: impl FnOnce() -> T,
+    filter: wgpu::ErrorFilter,
+) -> (bool, T) {
+    device.push_error_scope(filter);
     let result = callback();
     let validation_error = pollster::block_on(device.pop_error_scope());
     let failed = validation_error.is_some();
@@ -93,18 +103,33 @@ pub fn did_fail<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> (bool
     (failed, result)
 }
 
+/// Returns true if the provided callback fails validation.
+pub fn did_fail<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> (bool, T) {
+    did_fill_error_scope(device, callback, wgpu::ErrorFilter::Validation)
+}
+
+/// Returns true if the provided callback encounters an out-of-memory error.
+pub fn did_oom<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> (bool, T) {
+    did_fill_error_scope(device, callback, wgpu::ErrorFilter::OutOfMemory)
+}
+
 /// Adds the necessary main function for our gpu test harness.
+///
+/// Takes a single argument which is an expression that evaluates to `Vec<wgpu_test::GpuTestInitializer>`.
 #[macro_export]
 macro_rules! gpu_test_main {
-    () => {
+    ($tests: expr) => {
         #[cfg(target_arch = "wasm32")]
         wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
         #[cfg(target_arch = "wasm32")]
-        fn main() {}
+        fn main() {
+            // Ensure that value is used so that warnings don't happen.
+            let _ = $tests;
+        }
 
         #[cfg(not(target_arch = "wasm32"))]
         fn main() -> $crate::native::MainResult {
-            $crate::native::main()
+            $crate::native::main($tests)
         }
     };
 }
