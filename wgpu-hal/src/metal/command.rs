@@ -824,44 +824,40 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let bg_info = &layout.bind_group_infos[group_index as usize];
         let render_encoder = self.state.render.clone();
         let compute_encoder = self.state.compute.clone();
-        let mut update_stage =
-            |stage: naga::ShaderStage,
-             render_encoder: Option<&metal::RenderCommandEncoder>,
-             compute_encoder: Option<&metal::ComputeCommandEncoder>,
-             index_base: super::ResourceData<u32>| {
-                self.update_bind_group_state(
-                    stage,
-                    render_encoder,
-                    compute_encoder,
-                    index_base,
-                    bg_info,
-                    dynamic_offsets,
-                    group_index,
-                    group,
-                );
-            };
         if let Some(encoder) = render_encoder {
-            update_stage(
+            self.update_bind_group_state(
                 naga::ShaderStage::Vertex,
                 Some(&encoder),
                 None,
                 // All zeros, as vs comes first
                 super::ResourceData::default(),
+                bg_info,
+                dynamic_offsets,
+                group_index,
+                group,
             );
-            update_stage(
+            self.update_bind_group_state(
                 naga::ShaderStage::Task,
                 Some(&encoder),
                 None,
                 // All zeros, as ts comes first
                 super::ResourceData::default(),
+                bg_info,
+                dynamic_offsets,
+                group_index,
+                group,
             );
-            update_stage(
+            self.update_bind_group_state(
                 naga::ShaderStage::Mesh,
                 Some(&encoder),
                 None,
                 group.counters.ts.clone(),
+                bg_info,
+                dynamic_offsets,
+                group_index,
+                group,
             );
-            update_stage(
+            self.update_bind_group_state(
                 naga::ShaderStage::Fragment,
                 Some(&encoder),
                 None,
@@ -876,6 +872,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         + group.counters.ts.samplers
                         + group.counters.ms.samplers,
                 },
+                bg_info,
+                dynamic_offsets,
+                group_index,
+                group,
             );
             // Call useResource on all textures and buffers used indirectly so they are alive
             for (resource, use_info) in group.resources_to_use.iter() {
@@ -883,7 +883,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             }
         }
         if let Some(encoder) = compute_encoder {
-            update_stage(
+            self.update_bind_group_state(
                 naga::ShaderStage::Compute,
                 None,
                 Some(&encoder),
@@ -901,6 +901,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         + group.counters.ms.samplers
                         + group.counters.fs.samplers,
                 },
+                bg_info,
+                dynamic_offsets,
+                group_index,
+                group,
             );
             // Call useResource on all textures and buffers used indirectly so they are alive
             for (resource, use_info) in group.resources_to_use.iter() {
