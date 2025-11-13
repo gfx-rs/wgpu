@@ -685,6 +685,11 @@ pub struct Limits {
     pub max_push_constant_size: u32,
     /// Maximum number of live non-sampler bindings.
     ///
+    /// <div class="warning">
+    /// The default value is **1_000_000**, On systems with integrated GPUs (iGPUs)—particularly on Windows using the D3D12
+    /// backend—this can lead to significant system RAM consumption since iGPUs share system memory directly with the CPU.
+    /// </div>
+    ///
     /// This limit only affects the d3d12 backend. Using a large number will allow the device
     /// to create many bind groups at the cost of a large up-front allocation at device creation.
     pub max_non_sampler_bindings: u32,
