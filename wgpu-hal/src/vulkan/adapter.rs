@@ -917,6 +917,10 @@ impl PhysicalDeviceFeatures {
             F::EXPERIMENTAL_MESH_SHADER,
             caps.supports_extension(ext::mesh_shader::NAME),
         );
+        features.set(
+            F::EXPERIMENTAL_MESH_SHADER_POINTS,
+            caps.supports_extension(ext::mesh_shader::NAME),
+        );
         if let Some(ref mesh_shader) = self.mesh_shader {
             features.set(
                 F::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,

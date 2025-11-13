@@ -2608,19 +2608,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     writeln!(self.out, ".Abort();")?;
                 }
             },
-            Statement::MeshFunction(crate::MeshFunction::SetMeshOutputs {
-                vertex_count,
-                primitive_count,
-            }) => {
-                write!(self.out, "{level}SetMeshOutputCounts(")?;
-                self.write_expr(module, vertex_count, func_ctx)?;
-                write!(self.out, ", ")?;
-                self.write_expr(module, primitive_count, func_ctx)?;
-                write!(self.out, ");")?;
-            }
-            Statement::MeshFunction(
-                crate::MeshFunction::SetVertex { .. } | crate::MeshFunction::SetPrimitive { .. },
-            ) => unimplemented!(),
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let name = Baked(result).to_string();

@@ -406,6 +406,9 @@ pub(crate) enum Error<'a> {
         accept_span: Span,
         accept_type: String,
     },
+    ExpectedGlobalVariable {
+        name_span: Span,
+    },
     StructMemberTooLarge {
         member_name_span: Span,
     },
@@ -1368,6 +1371,11 @@ impl<'a> Error<'a> {
                     (reject_span, format!("reject value of type {reject_type}").into()),
                     (accept_span, format!("accept value of type {accept_type}").into()),
                 ],
+                notes: vec![],
+            },
+            Error::ExpectedGlobalVariable { name_span } => ParseError {
+                message: "expected global variable".to_string(),
+                labels: vec![(name_span, "variable used here".into())],
                 notes: vec![],
             },
             Error::StructMemberTooLarge { member_name_span } => ParseError {

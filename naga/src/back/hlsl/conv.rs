@@ -187,7 +187,11 @@ impl crate::BuiltIn {
             }
             Self::CullPrimitive => "SV_CullPrimitive",
             Self::PointIndex | Self::LineIndices | Self::TriangleIndices => unimplemented!(),
-            Self::MeshTaskSize => unreachable!(),
+            Self::MeshTaskSize
+            | Self::VertexCount
+            | Self::PrimitiveCount
+            | Self::Vertices
+            | Self::Primitives => unreachable!(),
         })
     }
 }

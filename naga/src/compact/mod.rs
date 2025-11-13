@@ -132,6 +132,46 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
                 }
             }
 
+            if let Some(task_payload) = e.task_payload {
+                module_tracer.global_variables_used.insert(task_payload);
+            }
+            if let Some(ref mesh_info) = e.mesh_info {
+                module_tracer
+                    .global_variables_used
+                    .insert(mesh_info.output_variable);
+                module_tracer
+                    .types_used
+                    .insert(mesh_info.vertex_output_type);
+                module_tracer
+                    .types_used
+                    .insert(mesh_info.primitive_output_type);
+                if let Some(max_vertices_override) = mesh_info.max_vertices_override {
+                    module_tracer
+                        .global_expressions_used
+                        .insert(max_vertices_override);
+                }
+                if let Some(max_primitives_override) = mesh_info.max_primitives_override {
+                    module_tracer
+                        .global_expressions_used
+                        .insert(max_primitives_override);
+                }
+            }
+            if e.stage == crate::ShaderStage::Task || e.stage == crate::ShaderStage::Mesh {
+                // u32 should always be there if the module is valid, as it is e.g. the type of some expressions
+                let u32_type = module
+                    .types
+                    .iter()
+                    .find_map(|tuple| {
+                        if tuple.1.inner == crate::TypeInner::Scalar(crate::Scalar::U32) {
+                            Some(tuple.0)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap();
+                module_tracer.types_used.insert(u32_type);
+            }
+
             let mut used = module_tracer.as_function(&e.function);
             used.trace();
             FunctionMap::from(used)
@@ -218,45 +258,6 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
             if ty.name.is_some() {
                 module_tracer.types_used.insert(handle);
             }
-        }
-    }
-
-    for entry in &module.entry_points {
-        if let Some(task_payload) = entry.task_payload {
-            module_tracer.global_variables_used.insert(task_payload);
-        }
-        if let Some(ref mesh_info) = entry.mesh_info {
-            module_tracer
-                .types_used
-                .insert(mesh_info.vertex_output_type);
-            module_tracer
-                .types_used
-                .insert(mesh_info.primitive_output_type);
-            if let Some(max_vertices_override) = mesh_info.max_vertices_override {
-                module_tracer
-                    .global_expressions_used
-                    .insert(max_vertices_override);
-            }
-            if let Some(max_primitives_override) = mesh_info.max_primitives_override {
-                module_tracer
-                    .global_expressions_used
-                    .insert(max_primitives_override);
-            }
-        }
-        if entry.stage == crate::ShaderStage::Task || entry.stage == crate::ShaderStage::Mesh {
-            // u32 should always be there if the module is valid, as it is e.g. the type of some expressions
-            let u32_type = module
-                .types
-                .iter()
-                .find_map(|tuple| {
-                    if tuple.1.inner == crate::TypeInner::Scalar(crate::Scalar::U32) {
-                        Some(tuple.0)
-                    } else {
-                        None
-                    }
-                })
-                .unwrap();
-            module_tracer.types_used.insert(u32_type);
         }
     }
 
@@ -385,6 +386,7 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
             module_map.globals.adjust(task_payload);
         }
         if let Some(ref mut mesh_info) = entry.mesh_info {
+            module_map.globals.adjust(&mut mesh_info.output_variable);
             module_map.types.adjust(&mut mesh_info.vertex_output_type);
             module_map
                 .types

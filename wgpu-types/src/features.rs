@@ -1254,6 +1254,16 @@ bitflags_array! {
         ///
         /// While metal supports this in theory, the behavior of `view_index` differs from vulkan and dx12 so the feature isn't exposed.
         const SELECTIVE_MULTIVIEW = 1 << 54;
+
+        /// Enables the use of point-primitive outputs from mesh shaders. Making use of this feature also requires enabling
+        /// `Features::EXPERIMENTAL_MESH_SHADER`.
+        ///
+        /// Supported platforms
+        /// - Vulkan
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const EXPERIMENTAL_MESH_SHADER_POINTS = 1 << 55;
     }
 
     /// Features that are not guaranteed to be supported.
@@ -1531,6 +1541,7 @@ impl Features {
         Self::from_bits_truncate(FeatureBits([
             FeaturesWGPU::EXPERIMENTAL_MESH_SHADER.bits()
                 | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_MULTIVIEW.bits()
+                | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_POINTS.bits()
                 | FeaturesWGPU::EXPERIMENTAL_RAY_QUERY.bits()
                 | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
                 | FeaturesWGPU::EXPERIMENTAL_PASSTHROUGH_SHADERS.bits(),

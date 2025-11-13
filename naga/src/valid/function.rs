@@ -1547,41 +1547,6 @@ impl super::Validator {
                         crate::RayQueryFunction::Terminate => {}
                     }
                 }
-                S::MeshFunction(func) => {
-                    let ensure_u32 =
-                        |expr: Handle<crate::Expression>| -> Result<(), WithSpan<FunctionError>> {
-                            let u32_ty = TypeResolution::Value(Ti::Scalar(crate::Scalar::U32));
-                            let ty = context
-                                .resolve_type_impl(expr, &self.valid_expression_set)
-                                .map_err_inner(|source| {
-                                    FunctionError::Expression {
-                                        source,
-                                        handle: expr,
-                                    }
-                                    .with_span_handle(expr, context.expressions)
-                                })?;
-                            if !context.compare_types(&u32_ty, ty) {
-                                return Err(FunctionError::InvalidMeshFunctionCall(expr)
-                                    .with_span_handle(expr, context.expressions));
-                            }
-                            Ok(())
-                        };
-                    match func {
-                        crate::MeshFunction::SetMeshOutputs {
-                            vertex_count,
-                            primitive_count,
-                        } => {
-                            ensure_u32(vertex_count)?;
-                            ensure_u32(primitive_count)?;
-                        }
-                        crate::MeshFunction::SetVertex { index, value: _ }
-                        | crate::MeshFunction::SetPrimitive { index, value: _ } => {
-                            ensure_u32(index)?;
-                            // Value is validated elsewhere (since the value type isn't known ahead of time but must match for all calls
-                            // in a function or the function's called functions)
-                        }
-                    }
-                }
                 S::SubgroupBallot { result, predicate } => {
                     stages &= self.subgroup_stages;
                     if !self.capabilities.contains(super::Capabilities::SUBGROUP) {
