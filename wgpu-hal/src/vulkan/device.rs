@@ -762,6 +762,7 @@ impl super::Device {
                 };
                 let needs_temp_options = !runtime_checks.bounds_checks
                     || !runtime_checks.force_loop_bounding
+                    || !runtime_checks.ray_query_initialization_tracking
                     || !binding_map.is_empty()
                     || naga_shader.debug_source.is_some()
                     || !stage.zero_initialize_workgroup_memory;
@@ -778,6 +779,9 @@ impl super::Device {
                     }
                     if !runtime_checks.force_loop_bounding {
                         temp_options.force_loop_bounding = false;
+                    }
+                    if !runtime_checks.ray_query_initialization_tracking {
+                        temp_options.ray_query_initialization_tracking = false;
                     }
                     if !binding_map.is_empty() {
                         temp_options.binding_map = binding_map.clone();
