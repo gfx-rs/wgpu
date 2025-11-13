@@ -1118,6 +1118,42 @@ impl crate::Device for super::Device {
                 Standard(metal::RenderPipelineDescriptor),
                 Mesh(metal::MeshRenderPipelineDescriptor),
             }
+            macro_rules! descriptor_fn {
+                ($descriptor:ident . $method:ident $( ( $($args:expr),* ) )? ) => {
+                    match $descriptor {
+                        MetalGenericRenderPipelineDescriptor::Standard(ref inner) => inner.$method$(($($args),*))?,
+                        MetalGenericRenderPipelineDescriptor::Mesh(ref inner) => inner.$method$(($($args),*))?,
+                    }
+                };
+            }
+            impl MetalGenericRenderPipelineDescriptor {
+                fn set_fragment_function(&self, function: Option<&metal::FunctionRef>) {
+                    descriptor_fn!(self.set_fragment_function(function));
+                }
+                fn fragment_buffers(&self) -> Option<&metal::PipelineBufferDescriptorArrayRef> {
+                    descriptor_fn!(self.fragment_buffers())
+                }
+                fn set_depth_attachment_pixel_format(&self, pixel_format: MTLPixelFormat) {
+                    descriptor_fn!(self.set_depth_attachment_pixel_format(pixel_format));
+                }
+                fn color_attachments(
+                    &self,
+                ) -> &metal::RenderPipelineColorAttachmentDescriptorArrayRef {
+                    descriptor_fn!(self.color_attachments())
+                }
+                fn set_stencil_attachment_pixel_format(&self, pixel_format: MTLPixelFormat) {
+                    descriptor_fn!(self.set_stencil_attachment_pixel_format(pixel_format));
+                }
+                fn set_alpha_to_coverage_enabled(&self, enabled: bool) {
+                    descriptor_fn!(self.set_alpha_to_coverage_enabled(enabled));
+                }
+                fn set_label(&self, label: &str) {
+                    descriptor_fn!(self.set_label(label));
+                }
+                fn set_max_vertex_amplification_count(&self, count: metal::NSUInteger) {
+                    descriptor_fn!(self.set_max_vertex_amplification_count(count))
+                }
+            }
 
             let (primitive_class, raw_primitive_type) =
                 conv::map_primitive_topology(desc.primitive.topology);
@@ -1333,17 +1369,6 @@ impl crate::Device for super::Device {
                 }
             };
 
-            // Standard and mesh render pipeline descriptors don't inherit from the same interface, despite sharing
-            // many methods. This function lets us call a function by name on whichever descriptor we are using.
-            macro_rules! descriptor_fn {
-                ($descriptor:ident . $method:ident $( ( $($args:expr),* ) )? ) => {
-                    match $descriptor {
-                        MetalGenericRenderPipelineDescriptor::Standard(ref inner) => inner.$method$(($($args),*))?,
-                        MetalGenericRenderPipelineDescriptor::Mesh(ref inner) => inner.$method$(($($args),*))?,
-                    }
-                };
-            }
-
             let raw_triangle_fill_mode = match desc.primitive.polygon_mode {
                 wgt::PolygonMode::Fill => MTLTriangleFillMode::Fill,
                 wgt::PolygonMode::Line => MTLTriangleFillMode::Lines,
@@ -1364,10 +1389,10 @@ impl crate::Device for super::Device {
                         naga::ShaderStage::Fragment,
                     )?;
 
-                    descriptor_fn!(descriptor.set_fragment_function(Some(&fs.function)));
+                    descriptor.set_fragment_function(Some(&fs.function));
                     if self.shared.private_caps.supports_mutability {
                         Self::set_buffers_mutability(
-                            descriptor_fn!(descriptor.fragment_buffers()).unwrap(),
+                            descriptor.fragment_buffers().unwrap(),
                             fs.immutable_buffer_mask,
                         );
                     }
@@ -1386,8 +1411,7 @@ impl crate::Device for super::Device {
                     // TODO: This is a workaround for what appears to be a Metal validation bug
                     // A pixel format is required even though no attachments are provided
                     if desc.color_targets.is_empty() && desc.depth_stencil.is_none() {
-                        descriptor_fn!(descriptor
-                            .set_depth_attachment_pixel_format(MTLPixelFormat::Depth32Float));
+                        descriptor.set_depth_attachment_pixel_format(MTLPixelFormat::Depth32Float);
                     }
                     None
                 }
@@ -1395,9 +1419,7 @@ impl crate::Device for super::Device {
 
             // Setup pipeline color attachments
             for (i, ct) in desc.color_targets.iter().enumerate() {
-                let at_descriptor = descriptor_fn!(descriptor.color_attachments())
-                    .object_at(i as u64)
-                    .unwrap();
+                let at_descriptor = descriptor.color_attachments().object_at(i as u64).unwrap();
                 let ct = if let Some(color_target) = ct.as_ref() {
                     color_target
                 } else {
@@ -1430,10 +1452,10 @@ impl crate::Device for super::Device {
                     let raw_format = self.shared.private_caps.map_format(ds.format);
                     let aspects = crate::FormatAspects::from(ds.format);
                     if aspects.contains(crate::FormatAspects::DEPTH) {
-                        descriptor_fn!(descriptor.set_depth_attachment_pixel_format(raw_format));
+                        descriptor.set_depth_attachment_pixel_format(raw_format);
                     }
                     if aspects.contains(crate::FormatAspects::STENCIL) {
-                        descriptor_fn!(descriptor.set_stencil_attachment_pixel_format(raw_format));
+                        descriptor.set_stencil_attachment_pixel_format(raw_format);
                     }
 
                     let ds_descriptor = create_depth_stencil_desc(ds);
@@ -1458,19 +1480,17 @@ impl crate::Device for super::Device {
                         inner.set_raster_sample_count(desc.multisample.count as u64);
                     }
                 }
-                descriptor_fn!(descriptor
-                    .set_alpha_to_coverage_enabled(desc.multisample.alpha_to_coverage_enabled));
+                descriptor
+                    .set_alpha_to_coverage_enabled(desc.multisample.alpha_to_coverage_enabled);
                 //descriptor.set_alpha_to_one_enabled(desc.multisample.alpha_to_one_enabled);
             }
 
             // Set debug label
             if let Some(name) = desc.label {
-                descriptor_fn!(descriptor.set_label(name));
+                descriptor.set_label(name);
             }
             if let Some(mv) = desc.multiview_mask {
-                descriptor_fn!(
-                    descriptor.set_max_vertex_amplification_count(mv.get().count_ones() as u64)
-                );
+                descriptor.set_max_vertex_amplification_count(mv.get().count_ones() as u64);
             }
 
             // Create the pipeline from descriptor
