@@ -118,7 +118,7 @@ An example of using mesh shaders to render a single triangle can be seen [here](
 
 The majority of changes relating to mesh shaders will be in WGSL and `naga`.
 
-Using any of these features in a `wgsl` program will require adding the `enable mesh_shading` directive to the top of a program.
+Using any of these features in a `wgsl` program will require adding the `enable wgpu_mesh_shader;` directive to the top of a program.
 
 Two new shader stages will be added to `WGSL`. Fragment shaders are also modified slightly. Both task shaders and mesh shaders are allowed to use any compute-available functionality, including subgroup operations.
 
@@ -192,7 +192,7 @@ The primitive state is part of the fragment input and must match the output of t
 The following is a full example of WGSL shaders that could be used to create a mesh shader pipeline, showing off many of the features.
 
 ```wgsl
-enable mesh_shading;
+enable wgpu_mesh_shader;
 
 const positions = array(
     vec4(0., 1., 0., 1.),

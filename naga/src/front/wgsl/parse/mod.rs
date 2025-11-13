@@ -242,11 +242,11 @@ impl<'a> BindingParser<'a> {
             "per_primitive" => {
                 if !lexer
                     .enable_extensions
-                    .contains(ImplementedEnableExtension::MeshShader)
+                    .contains(ImplementedEnableExtension::WgpuMeshShader)
                 {
                     return Err(Box::new(Error::EnableExtensionNotEnabled {
                         span: name_span,
-                        kind: ImplementedEnableExtension::MeshShader.into(),
+                        kind: ImplementedEnableExtension::WgpuMeshShader.into(),
                     }));
                 }
                 self.per_primitive.set((), name_span)?;
@@ -2876,11 +2876,11 @@ impl Parser {
                 "task" => {
                     if !lexer
                         .enable_extensions
-                        .contains(ImplementedEnableExtension::MeshShader)
+                        .contains(ImplementedEnableExtension::WgpuMeshShader)
                     {
                         return Err(Box::new(Error::EnableExtensionNotEnabled {
                             span: name_span,
-                            kind: ImplementedEnableExtension::MeshShader.into(),
+                            kind: ImplementedEnableExtension::WgpuMeshShader.into(),
                         }));
                     }
                     stage.set(ShaderStage::Task, name_span)?;
@@ -2889,11 +2889,11 @@ impl Parser {
                 "mesh" => {
                     if !lexer
                         .enable_extensions
-                        .contains(ImplementedEnableExtension::MeshShader)
+                        .contains(ImplementedEnableExtension::WgpuMeshShader)
                     {
                         return Err(Box::new(Error::EnableExtensionNotEnabled {
                             span: name_span,
-                            kind: ImplementedEnableExtension::MeshShader.into(),
+                            kind: ImplementedEnableExtension::WgpuMeshShader.into(),
                         }));
                     }
                     stage.set(ShaderStage::Mesh, name_span)?;
@@ -2906,11 +2906,11 @@ impl Parser {
                 "payload" => {
                     if !lexer
                         .enable_extensions
-                        .contains(ImplementedEnableExtension::MeshShader)
+                        .contains(ImplementedEnableExtension::WgpuMeshShader)
                     {
                         return Err(Box::new(Error::EnableExtensionNotEnabled {
                             span: name_span,
-                            kind: ImplementedEnableExtension::MeshShader.into(),
+                            kind: ImplementedEnableExtension::WgpuMeshShader.into(),
                         }));
                     }
                     lexer.expect(Token::Paren('('))?;

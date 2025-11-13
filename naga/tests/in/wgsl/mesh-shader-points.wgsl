@@ -1,7 +1,7 @@
 // An empty WGSL shader to check that task payload/mesh output
 // are still properly written without being used in the shader
 
-enable mesh_shading;
+enable wgpu_mesh_shader;
 
 struct TaskPayload {
     dummy: u32,
