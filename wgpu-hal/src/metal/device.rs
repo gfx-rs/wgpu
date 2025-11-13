@@ -18,11 +18,6 @@ use metal::{
 
 type DeviceResult<T> = Result<T, crate::DeviceError>;
 
-enum MetalGenericRenderPipelineDescriptor {
-    Standard(metal::RenderPipelineDescriptor),
-    Mesh(metal::MeshRenderPipelineDescriptor),
-}
-
 struct CompiledShader {
     library: metal::Library,
     function: metal::Function,
@@ -1119,6 +1114,11 @@ impl crate::Device for super::Device {
         >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         objc::rc::autoreleasepool(|| {
+            enum MetalGenericRenderPipelineDescriptor {
+                Standard(metal::RenderPipelineDescriptor),
+                Mesh(metal::MeshRenderPipelineDescriptor),
+            }
+
             let (primitive_class, raw_primitive_type) =
                 conv::map_primitive_topology(desc.primitive.topology);
 
@@ -1336,8 +1336,8 @@ impl crate::Device for super::Device {
             // Standard and mesh render pipeline descriptors don't inherit from the same interface, despite sharing
             // many methods. This function lets us call a function by name on whichever descriptor we are using.
             macro_rules! descriptor_fn {
-                ($method:ident $( ( $($args:expr),* ) )? ) => {
-                    match descriptor {
+                ($descriptor:ident . $method:ident $( ( $($args:expr),* ) )? ) => {
+                    match $descriptor {
                         MetalGenericRenderPipelineDescriptor::Standard(ref inner) => inner.$method$(($($args),*))?,
                         MetalGenericRenderPipelineDescriptor::Mesh(ref inner) => inner.$method$(($($args),*))?,
                     }
@@ -1364,10 +1364,10 @@ impl crate::Device for super::Device {
                         naga::ShaderStage::Fragment,
                     )?;
 
-                    descriptor_fn!(set_fragment_function(Some(&fs.function)));
+                    descriptor_fn!(descriptor.set_fragment_function(Some(&fs.function)));
                     if self.shared.private_caps.supports_mutability {
                         Self::set_buffers_mutability(
-                            descriptor_fn!(fragment_buffers()).unwrap(),
+                            descriptor_fn!(descriptor.fragment_buffers()).unwrap(),
                             fs.immutable_buffer_mask,
                         );
                     }
@@ -1386,9 +1386,8 @@ impl crate::Device for super::Device {
                     // TODO: This is a workaround for what appears to be a Metal validation bug
                     // A pixel format is required even though no attachments are provided
                     if desc.color_targets.is_empty() && desc.depth_stencil.is_none() {
-                        descriptor_fn!(set_depth_attachment_pixel_format(
-                            MTLPixelFormat::Depth32Float
-                        ));
+                        descriptor_fn!(descriptor
+                            .set_depth_attachment_pixel_format(MTLPixelFormat::Depth32Float));
                     }
                     None
                 }
@@ -1396,7 +1395,7 @@ impl crate::Device for super::Device {
 
             // Setup pipeline color attachments
             for (i, ct) in desc.color_targets.iter().enumerate() {
-                let at_descriptor = descriptor_fn!(color_attachments())
+                let at_descriptor = descriptor_fn!(descriptor.color_attachments())
                     .object_at(i as u64)
                     .unwrap();
                 let ct = if let Some(color_target) = ct.as_ref() {
@@ -1431,10 +1430,10 @@ impl crate::Device for super::Device {
                     let raw_format = self.shared.private_caps.map_format(ds.format);
                     let aspects = crate::FormatAspects::from(ds.format);
                     if aspects.contains(crate::FormatAspects::DEPTH) {
-                        descriptor_fn!(set_depth_attachment_pixel_format(raw_format));
+                        descriptor_fn!(descriptor.set_depth_attachment_pixel_format(raw_format));
                     }
                     if aspects.contains(crate::FormatAspects::STENCIL) {
-                        descriptor_fn!(set_stencil_attachment_pixel_format(raw_format));
+                        descriptor_fn!(descriptor.set_stencil_attachment_pixel_format(raw_format));
                     }
 
                     let ds_descriptor = create_depth_stencil_desc(ds);
@@ -1459,20 +1458,19 @@ impl crate::Device for super::Device {
                         inner.set_raster_sample_count(desc.multisample.count as u64);
                     }
                 }
-                descriptor_fn!(set_alpha_to_coverage_enabled(
-                    desc.multisample.alpha_to_coverage_enabled
-                ));
+                descriptor_fn!(descriptor
+                    .set_alpha_to_coverage_enabled(desc.multisample.alpha_to_coverage_enabled));
                 //descriptor.set_alpha_to_one_enabled(desc.multisample.alpha_to_one_enabled);
             }
 
             // Set debug label
             if let Some(name) = desc.label {
-                descriptor_fn!(set_label(name));
+                descriptor_fn!(descriptor.set_label(name));
             }
             if let Some(mv) = desc.multiview_mask {
-                descriptor_fn!(set_max_vertex_amplification_count(
-                    mv.get().count_ones() as u64
-                ));
+                descriptor_fn!(
+                    descriptor.set_max_vertex_amplification_count(mv.get().count_ones() as u64)
+                );
             }
 
             // Create the pipeline from descriptor

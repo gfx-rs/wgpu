@@ -1351,7 +1351,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         _count_offset: wgt::BufferAddress,
         _max_count: u32,
     ) {
-        //TODO
+        unreachable!()
     }
 
     // compute
