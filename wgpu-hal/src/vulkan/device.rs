@@ -488,11 +488,14 @@ impl super::Device {
     /// - If `drop_callback` is [`None`], wgpu-hal will take ownership of `vk_image`. If
     ///   `drop_callback` is [`Some`], `vk_image` must be valid until the callback is called.
     /// - If the `ImageCreateFlags` does not contain `MUTABLE_FORMAT`, the `view_formats` of `desc` must be empty.
+    /// - If `external_memory` is [`Some`], wgpu-hal will take ownership of the memory (which is presumed to back
+    ///   `vk_image`). If `external_memory` is [`None`], the memory must be valid until `drop_callback` is called.
     pub unsafe fn texture_from_raw(
         &self,
         vk_image: vk::Image,
         desc: &crate::TextureDescriptor,
         drop_callback: Option<crate::DropCallback>,
+        external_memory: Option<vk::DeviceMemory>,
     ) -> super::Texture {
         let mut raw_flags = vk::ImageCreateFlags::empty();
         let mut view_formats = vec![];
@@ -518,7 +521,7 @@ impl super::Device {
         super::Texture {
             raw: vk_image,
             drop_guard,
-            external_memory: None,
+            external_memory,
             block: None,
             format: desc.format,
             copy_size: desc.copy_extent(),

@@ -123,6 +123,7 @@ By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206
 - Validation errors from `CommandEncoder::finish()` will report the label of the invalid encoder. By @kpreid in [#8449](https://github.com/gfx-rs/wgpu/pull/8449).
 - Corrected documentation of the minimum alignment of the *end* of a mapped range of a buffer (it is 4, not 8). By @kpreid in [#8450](https://github.com/gfx-rs/wgpu/pull/8450).
 - `util::StagingBelt` now takes a `Device` when it is created instead of when it is used. By @kpreid in [#8462](https://github.com/gfx-rs/wgpu/pull/8462).
+- `wgpu_hal::vulkan::Device::texture_from_raw` now takes an `external_memory` argument. By @s-ol in [#8512](https://github.com/gfx-rs/wgpu/pull/8512)
 
 ### Bug Fixes
 
