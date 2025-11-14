@@ -305,9 +305,9 @@ mod tests {
     fn stream() {
         let mut stream = RenderPipelineStateStream::new();
 
-        stream.add_object(&42u16);
-        stream.add_object(&84u32);
-        stream.add_object(&168u64);
+        stream.add_object(42u16);
+        stream.add_object(84u32);
+        stream.add_object(168u64);
 
         assert_eq!(stream.bytes.len(), 32);
 
