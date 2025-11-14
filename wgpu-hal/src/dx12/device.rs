@@ -26,8 +26,9 @@ use crate::{
         dxgi::{name::ObjectExt as _, result::HResult as _},
     },
     dx12::{
-        borrow_optional_interface_temporarily, shader_compilation, suballocation, DCompLib,
-        DynamicStorageBufferOffsets, Event, ShaderCacheKey, ShaderCacheValue,
+        borrow_optional_interface_temporarily, pipeline_desc::RenderPipelineStateStreamDesc,
+        shader_compilation, suballocation, DCompLib, DynamicStorageBufferOffsets, Event,
+        ShaderCacheKey, ShaderCacheValue,
     },
     AccelerationStructureEntries, TlasInstance,
 };
@@ -1866,8 +1867,6 @@ impl crate::Device for super::Device {
         >,
     ) -> Result<super::RenderPipeline, crate::PipelineError> {
         let mut shader_stages = wgt::ShaderStages::empty();
-        let root_signature =
-            unsafe { borrow_optional_interface_temporarily(&desc.layout.shared.signature) };
         let (topology_class, topology) = conv::map_topology(desc.primitive.topology);
         let mut rtv_formats = [Dxgi::Common::DXGI_FORMAT_UNKNOWN;
             Direct3D12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as usize];
@@ -1907,6 +1906,7 @@ impl crate::Device for super::Device {
                 Direct3D12::D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
             },
         };
+
         let blob_fs = match desc.fragment_stage {
             Some(ref stage) => {
                 shader_stages |= wgt::ShaderStages::FRAGMENT;
@@ -1918,7 +1918,6 @@ impl crate::Device for super::Device {
             Some(shader) => shader.create_native_shader(),
             None => Direct3D12::D3D12_SHADER_BYTECODE::default(),
         };
-        let mut vertex_strides = [None; crate::MAX_VERTEX_BUFFERS];
         let stream_output = Direct3D12::D3D12_STREAM_OUTPUT_DESC {
             pSODeclaration: ptr::null(),
             NumEntries: 0,
@@ -1953,20 +1952,51 @@ impl crate::Device for super::Device {
         };
         let flags = Direct3D12::D3D12_PIPELINE_STATE_FLAG_NONE;
 
-        let raw: Direct3D12::ID3D12PipelineState = match &desc.vertex_processor {
+        let mut stream_desc = RenderPipelineStateStreamDesc {
+            // Shared by vertex and mesh pipelines
+            root_signature: desc.layout.shared.signature.as_ref(),
+            pixel_shader,
+            blend_state,
+            sample_mask: desc.multisample.mask as u32,
+            rasterizer_state,
+            depth_stencil_state,
+            primitive_topology_type: topology_class,
+            rtv_formats: Direct3D12::D3D12_RT_FORMAT_ARRAY {
+                RTFormats: rtv_formats,
+                NumRenderTargets: desc.color_targets.len() as u32,
+            },
+            dsv_format,
+            sample_desc,
+            node_mask: 0,
+            cached_pso,
+            flags,
+
+            // Optional data that depends on the pipeline type (vertex vs mesh).
+            vertex_shader: Default::default(),
+            input_layout: Default::default(),
+            index_buffer_strip_cut_value: Default::default(),
+            stream_output,
+            task_shader: Default::default(),
+            mesh_shader: Default::default(),
+        };
+        let mut input_element_descs = Vec::new();
+        let blob_vs;
+        let blob_ts;
+        let blob_ms;
+        let mut vertex_strides = [None; crate::MAX_VERTEX_BUFFERS];
+        match &desc.vertex_processor {
             &crate::VertexProcessor::Standard {
                 vertex_buffers,
                 ref vertex_stage,
             } => {
                 shader_stages |= wgt::ShaderStages::VERTEX;
-                let blob_vs = self.load_shader(
+                blob_vs = Some(self.load_shader(
                     vertex_stage,
                     desc.layout,
                     naga::ShaderStage::Vertex,
                     desc.fragment_stage.as_ref(),
-                )?;
+                )?);
 
-                let mut input_element_descs = Vec::new();
                 for (i, (stride, vbuf)) in vertex_strides.iter_mut().zip(vertex_buffers).enumerate()
                 {
                     *stride = Some(vbuf.array_stride as u32);
@@ -1990,54 +2020,37 @@ impl crate::Device for super::Device {
                         });
                     }
                 }
-                let raw_desc = Direct3D12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
-                    pRootSignature: root_signature,
-                    VS: blob_vs.create_native_shader(),
-                    PS: pixel_shader,
-                    GS: Direct3D12::D3D12_SHADER_BYTECODE::default(),
-                    DS: Direct3D12::D3D12_SHADER_BYTECODE::default(),
-                    HS: Direct3D12::D3D12_SHADER_BYTECODE::default(),
-                    StreamOutput: stream_output,
-                    BlendState: blend_state,
-                    SampleMask: desc.multisample.mask as u32,
-                    RasterizerState: rasterizer_state,
-                    DepthStencilState: depth_stencil_state,
-                    InputLayout: Direct3D12::D3D12_INPUT_LAYOUT_DESC {
-                        pInputElementDescs: if input_element_descs.is_empty() {
-                            ptr::null()
-                        } else {
-                            input_element_descs.as_ptr()
-                        },
-                        NumElements: input_element_descs.len() as u32,
+                stream_desc.vertex_shader = blob_vs.as_ref().unwrap().create_native_shader();
+                stream_desc.input_layout = Direct3D12::D3D12_INPUT_LAYOUT_DESC {
+                    pInputElementDescs: if input_element_descs.is_empty() {
+                        ptr::null()
+                    } else {
+                        input_element_descs.as_ptr()
                     },
-                    IBStripCutValue: match desc.primitive.strip_index_format {
-                        Some(wgt::IndexFormat::Uint16) => {
-                            Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFF
-                        }
-                        Some(wgt::IndexFormat::Uint32) => {
-                            Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF
-                        }
-                        None => Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
-                    },
-                    PrimitiveTopologyType: topology_class,
-                    NumRenderTargets: desc.color_targets.len() as u32,
-                    RTVFormats: rtv_formats,
-                    DSVFormat: dsv_format,
-                    SampleDesc: sample_desc,
-                    NodeMask: 0,
-                    CachedPSO: cached_pso,
-                    Flags: flags,
+                    NumElements: input_element_descs.len() as u32,
                 };
-                unsafe {
-                    profiling::scope!("ID3D12Device::CreateGraphicsPipelineState");
-                    self.raw.CreateGraphicsPipelineState(&raw_desc)
-                }
+                stream_desc.index_buffer_strip_cut_value = match desc.primitive.strip_index_format {
+                    Some(wgt::IndexFormat::Uint16) => {
+                        Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFF
+                    }
+                    Some(wgt::IndexFormat::Uint32) => {
+                        Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF
+                    }
+                    None => Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
+                };
+                stream_desc.stream_output = Direct3D12::D3D12_STREAM_OUTPUT_DESC {
+                    pSODeclaration: ptr::null(),
+                    NumEntries: 0,
+                    pBufferStrides: ptr::null(),
+                    NumStrides: 0,
+                    RasterizedStream: 0,
+                };
             }
             crate::VertexProcessor::Mesh {
                 task_stage,
                 mesh_stage,
             } => {
-                let blob_ts = if let Some(ts) = task_stage {
+                blob_ts = if let Some(ts) = task_stage {
                     shader_stages |= wgt::ShaderStages::TASK;
                     Some(self.load_shader(
                         ts,
@@ -2054,48 +2067,36 @@ impl crate::Device for super::Device {
                     Default::default()
                 };
                 shader_stages |= wgt::ShaderStages::MESH;
-                let blob_ms = self.load_shader(
+                blob_ms = Some(self.load_shader(
                     mesh_stage,
                     desc.layout,
                     naga::ShaderStage::Mesh,
                     desc.fragment_stage.as_ref(),
-                )?;
-                let desc = super::MeshShaderPipelineStateStream {
-                    root_signature: root_signature
-                        .as_ref()
-                        .map(|a| a.as_raw().cast())
-                        .unwrap_or(ptr::null_mut()),
-                    task_shader,
-                    pixel_shader,
-                    mesh_shader: blob_ms.create_native_shader(),
-                    blend_state,
-                    sample_mask: desc.multisample.mask as u32,
-                    rasterizer_state,
-                    depth_stencil_state,
-                    primitive_topology_type: topology_class,
-                    rtv_formats: Direct3D12::D3D12_RT_FORMAT_ARRAY {
-                        RTFormats: rtv_formats,
-                        NumRenderTargets: desc.color_targets.len() as u32,
-                    },
-                    dsv_format,
-                    sample_desc,
-                    node_mask: 0,
-                    cached_pso,
-                    flags,
-                };
-                let mut raw_desc = unsafe { desc.to_bytes() };
-                let stream_desc = Direct3D12::D3D12_PIPELINE_STATE_STREAM_DESC {
-                    SizeInBytes: raw_desc.len(),
-                    pPipelineStateSubobjectStream: raw_desc.as_mut_ptr().cast(),
-                };
-                let device: Direct3D12::ID3D12Device2 = self.raw.cast().unwrap();
+                )?);
+                stream_desc.task_shader = task_shader;
+                stream_desc.mesh_shader = blob_ms.as_ref().unwrap().create_native_shader();
+            }
+        };
+        let raw: Direct3D12::ID3D12PipelineState =
+            // If stream descriptors are available, use them as they are more flexible.
+            if let Ok(device) = self.raw.cast::<Direct3D12::ID3D12Device2>() {
+                // Prefer stream descs where possible
+                let mut stream = stream_desc.to_stream();
                 unsafe {
                     profiling::scope!("ID3D12Device2::CreatePipelineState");
-                    device.CreatePipelineState(&stream_desc)
+                    stream.create_pipeline_state(&device).map_err(|err| {
+                        crate::PipelineError::Linkage(shader_stages, err.to_string())
+                    })?
                 }
-            }
-        }
-        .map_err(|err| crate::PipelineError::Linkage(shader_stages, err.to_string()))?;
+            } else {
+                unsafe {
+                    // Safety: `stream_desc` entirely outlives the `desc`.
+                    let desc = stream_desc.to_graphics_pipeline_descriptor();
+                    self.raw.CreateGraphicsPipelineState(&desc).map_err(|err| {
+                        crate::PipelineError::Linkage(shader_stages, err.to_string())
+                    })?
+                }
+            };
 
         if let Some(label) = desc.label {
             raw.set_name(label)?;
