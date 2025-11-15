@@ -558,10 +558,22 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 for (i, cat) in desc.color_attachments.iter().enumerate() {
                     if let Some(cat) = cat.as_ref() {
                         let attachment = glow::COLOR_ATTACHMENT0 + i as u32;
+                        if let Some(ref rat) = cat.resolve_target {
+                            if self.private_caps.contains(super::PrivateCapabilities::MULTISAMPLED_RENDER_TO_TEXTURE) && cat.target.usage.contains(wgt::TextureUses::TRANSIENT) {
+                                self.cmd_buffer.commands.push(C::BindAttachment {
+                                    attachment,
+                                    view: rat.view.clone(),
+                                    depth_slice: None,
+                                    sample_count: desc.sample_count,
+                                });
+                                continue;
+                            }
+                        }
                         self.cmd_buffer.commands.push(C::BindAttachment {
                             attachment,
                             view: cat.target.view.clone(),
                             depth_slice: cat.depth_slice,
+                            sample_count: 1,
                         });
                         if let Some(ref rat) = cat.resolve_target {
                             self.state
@@ -584,6 +596,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         attachment,
                         view: dsat.target.view.clone(),
                         depth_slice: None,
+                        sample_count: 1,
                     });
                     if aspects.contains(crate::FormatAspects::DEPTH)
                         && !dsat.depth_ops.contains(crate::AttachmentOps::STORE)
