@@ -917,6 +917,10 @@ impl PhysicalDeviceFeatures {
             F::EXPERIMENTAL_MESH_SHADER,
             caps.supports_extension(ext::mesh_shader::NAME),
         );
+        features.set(
+            F::EXPERIMENTAL_MESH_SHADER_POINTS,
+            caps.supports_extension(ext::mesh_shader::NAME),
+        );
         if let Some(ref mesh_shader) = self.mesh_shader {
             features.set(
                 F::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
@@ -2215,6 +2219,12 @@ impl super::Adapter {
                 // But this requires cloning the `spv::Options` struct, which has heap allocations.
                 true, // could check `super::Workarounds::SEPARATE_ENTRY_POINTS`
             );
+            flags.set(
+                spv::WriterFlags::PRINT_ON_RAY_QUERY_INITIALIZATION_FAIL,
+                self.instance.flags.contains(wgt::InstanceFlags::DEBUG)
+                    && (self.instance.instance_api_version >= vk::API_VERSION_1_3
+                        || enabled_extensions.contains(&khr::shader_non_semantic_info::NAME)),
+            );
             if features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
                 capabilities.push(spv::Capability::RayQueryKHR);
             }
@@ -2273,6 +2283,7 @@ impl super::Adapter {
                     spv::ZeroInitializeWorkgroupMemoryMode::Polyfill
                 },
                 force_loop_bounding: true,
+                ray_query_initialization_tracking: true,
                 use_storage_input_output_16: features.contains(wgt::Features::SHADER_F16)
                     && self.phd_features.supports_storage_input_output_16(),
                 fake_missing_bindings: false,

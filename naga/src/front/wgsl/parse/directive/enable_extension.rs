@@ -10,6 +10,7 @@ use alloc::boxed::Box;
 /// Tracks the status of every enable-extension known to Naga.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EnableExtensions {
+    wgpu_mesh_shader: bool,
     dual_source_blending: bool,
     /// Whether `enable f16;` was written earlier in the shader module.
     f16: bool,
@@ -19,6 +20,7 @@ pub struct EnableExtensions {
 impl EnableExtensions {
     pub(crate) const fn empty() -> Self {
         Self {
+            wgpu_mesh_shader: false,
             f16: false,
             dual_source_blending: false,
             clip_distances: false,
@@ -28,6 +30,7 @@ impl EnableExtensions {
     /// Add an enable-extension to the set requested by a module.
     pub(crate) fn add(&mut self, ext: ImplementedEnableExtension) {
         let field = match ext {
+            ImplementedEnableExtension::WgpuMeshShader => &mut self.wgpu_mesh_shader,
             ImplementedEnableExtension::DualSourceBlending => &mut self.dual_source_blending,
             ImplementedEnableExtension::F16 => &mut self.f16,
             ImplementedEnableExtension::ClipDistances => &mut self.clip_distances,
@@ -38,6 +41,7 @@ impl EnableExtensions {
     /// Query whether an enable-extension tracked here has been requested.
     pub(crate) const fn contains(&self, ext: ImplementedEnableExtension) -> bool {
         match ext {
+            ImplementedEnableExtension::WgpuMeshShader => self.wgpu_mesh_shader,
             ImplementedEnableExtension::DualSourceBlending => self.dual_source_blending,
             ImplementedEnableExtension::F16 => self.f16,
             ImplementedEnableExtension::ClipDistances => self.clip_distances,
@@ -70,6 +74,7 @@ impl EnableExtension {
     const F16: &'static str = "f16";
     const CLIP_DISTANCES: &'static str = "clip_distances";
     const DUAL_SOURCE_BLENDING: &'static str = "dual_source_blending";
+    const MESH_SHADER: &'static str = "wgpu_mesh_shader";
     const SUBGROUPS: &'static str = "subgroups";
     const PRIMITIVE_INDEX: &'static str = "primitive_index";
 
@@ -81,6 +86,7 @@ impl EnableExtension {
             Self::DUAL_SOURCE_BLENDING => {
                 Self::Implemented(ImplementedEnableExtension::DualSourceBlending)
             }
+            Self::MESH_SHADER => Self::Implemented(ImplementedEnableExtension::WgpuMeshShader),
             Self::SUBGROUPS => Self::Unimplemented(UnimplementedEnableExtension::Subgroups),
             Self::PRIMITIVE_INDEX => {
                 Self::Unimplemented(UnimplementedEnableExtension::PrimitiveIndex)
@@ -93,6 +99,7 @@ impl EnableExtension {
     pub const fn to_ident(self) -> &'static str {
         match self {
             Self::Implemented(kind) => match kind {
+                ImplementedEnableExtension::WgpuMeshShader => Self::MESH_SHADER,
                 ImplementedEnableExtension::DualSourceBlending => Self::DUAL_SOURCE_BLENDING,
                 ImplementedEnableExtension::F16 => Self::F16,
                 ImplementedEnableExtension::ClipDistances => Self::CLIP_DISTANCES,
@@ -126,6 +133,8 @@ pub enum ImplementedEnableExtension {
     ///
     /// [`enable clip_distances;`]: https://www.w3.org/TR/WGSL/#extension-clip_distances
     ClipDistances,
+    /// Enables the `wgpu_mesh_shader` extension, native only
+    WgpuMeshShader,
 }
 
 /// A variant of [`EnableExtension::Unimplemented`].

@@ -27,8 +27,9 @@ use crate::{
         dxgi::{name::ObjectExt as _, result::HResult as _},
     },
     dx12::{
-        borrow_optional_interface_temporarily, shader_compilation, suballocation, DCompLib,
-        DynamicStorageBufferOffsets, Event, ShaderCacheKey, ShaderCacheValue,
+        borrow_optional_interface_temporarily, pipeline_desc::RenderPipelineStateStreamDesc,
+        shader_compilation, suballocation, DCompLib, DynamicStorageBufferOffsets, Event,
+        ShaderCacheKey, ShaderCacheValue,
     },
     AccelerationStructureEntries, TlasInstance,
 };
@@ -291,6 +292,7 @@ impl super::Device {
             || stage.module.runtime_checks.bounds_checks != layout.naga_options.restrict_indexing
             || stage.module.runtime_checks.force_loop_bounding
                 != layout.naga_options.force_loop_bounding;
+        // Note: ray query initialization tracking not yet implemented
         let mut temp_options;
         let naga_options = if needs_temp_options {
             temp_options = layout.naga_options.clone();
@@ -1967,14 +1969,9 @@ impl crate::Device for super::Device {
             }
         }
 
-        let mut stream_desc = super::RenderPipelineStateStreamDesc {
+        let mut stream_desc = RenderPipelineStateStreamDesc {
             // Shared by vertex and mesh pipelines
-            root_signature: desc
-                .layout
-                .shared
-                .signature
-                .as_ref()
-                .map(core::pin::Pin::new),
+            root_signature: desc.layout.shared.signature.as_ref(),
             pixel_shader,
             blend_state,
             sample_mask: desc.multisample.mask as u32,
@@ -2108,23 +2105,20 @@ impl crate::Device for super::Device {
             }
         };
         let raw: Direct3D12::ID3D12PipelineState =
+            // If stream descriptors are available, use them as they are more flexible.
             if let Ok(device) = self.raw.cast::<Direct3D12::ID3D12Device2>() {
                 // Prefer stream descs where possible
-                let mut raw_desc = unsafe { stream_desc.to_bytes() };
-                let stream_desc = Direct3D12::D3D12_PIPELINE_STATE_STREAM_DESC {
-                    SizeInBytes: raw_desc.len(),
-                    pPipelineStateSubobjectStream: raw_desc.as_mut_ptr().cast(),
-                };
+                let mut stream = stream_desc.to_stream();
                 unsafe {
                     profiling::scope!("ID3D12Device2::CreatePipelineState");
-                    device.CreatePipelineState(&stream_desc).map_err(|err| {
+                    stream.create_pipeline_state(&device).map_err(|err| {
                         crate::PipelineError::Linkage(shader_stages, err.to_string())
                     })?
                 }
             } else {
-                // Use standard but less flexible descriptor elsewhere
-                let desc = stream_desc.to_graphics_pipeline_descriptor();
                 unsafe {
+                    // Safety: `stream_desc` entirely outlives the `desc`.
+                    let desc = stream_desc.to_graphics_pipeline_descriptor();
                     self.raw.CreateGraphicsPipelineState(&desc).map_err(|err| {
                         crate::PipelineError::Linkage(shader_stages, err.to_string())
                     })?

@@ -860,26 +860,6 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 crate::RayQueryFunction::Terminate => {}
             }
         }
-        Statement::MeshFunction(crate::MeshFunction::SetMeshOutputs {
-            ref mut vertex_count,
-            ref mut primitive_count,
-        }) => {
-            adjust(vertex_count);
-            adjust(primitive_count);
-        }
-        Statement::MeshFunction(
-            crate::MeshFunction::SetVertex {
-                ref mut index,
-                ref mut value,
-            }
-            | crate::MeshFunction::SetPrimitive {
-                ref mut index,
-                ref mut value,
-            },
-        ) => {
-            adjust(index);
-            adjust(value);
-        }
         Statement::Break
         | Statement::Continue
         | Statement::Kill

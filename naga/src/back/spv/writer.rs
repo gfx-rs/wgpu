@@ -35,6 +35,12 @@ impl Function {
                 for local_var in self.variables.values() {
                     local_var.instruction.to_words(sink);
                 }
+                for local_var in self.ray_query_initialization_tracker_variables.values() {
+                    local_var.instruction.to_words(sink);
+                }
+                for local_var in self.ray_query_t_max_tracker_variables.values() {
+                    local_var.instruction.to_words(sink);
+                }
                 for local_var in self.force_loop_bounding_vars.iter() {
                     local_var.instruction.to_words(sink);
                 }
@@ -71,12 +77,14 @@ impl Writer {
             capabilities_available: options.capabilities.clone(),
             capabilities_used,
             extensions_used: crate::FastIndexSet::default(),
+            debug_strings: vec![],
             debugs: vec![],
             annotations: vec![],
             flags: options.flags,
             bounds_check_policies: options.bounds_check_policies,
             zero_initialize_workgroup_memory: options.zero_initialize_workgroup_memory,
             force_loop_bounding: options.force_loop_bounding,
+            ray_query_initialization_tracking: options.ray_query_initialization_tracking,
             use_storage_input_output_16: options.use_storage_input_output_16,
             void_type,
             lookup_type: crate::FastHashMap::default(),
@@ -91,11 +99,11 @@ impl Writer {
             saved_cached: CachedExpressions::default(),
             gl450_ext_inst_id,
             temp_list: Vec::new(),
-            ray_get_committed_intersection_function: None,
-            ray_get_candidate_intersection_function: None,
+            ray_query_functions: crate::FastHashMap::default(),
             io_f16_polyfills: super::f16_polyfill::F16IoPolyfill::new(
                 options.use_storage_input_output_16,
             ),
+            debug_printf: None,
         })
     }
 
@@ -147,6 +155,7 @@ impl Writer {
             bounds_check_policies: self.bounds_check_policies,
             zero_initialize_workgroup_memory: self.zero_initialize_workgroup_memory,
             force_loop_bounding: self.force_loop_bounding,
+            ray_query_initialization_tracking: self.ray_query_initialization_tracking,
             use_storage_input_output_16: self.use_storage_input_output_16,
             capabilities_available: take(&mut self.capabilities_available),
             fake_missing_bindings: self.fake_missing_bindings,
@@ -162,6 +171,7 @@ impl Writer {
             extensions_used: take(&mut self.extensions_used).recycle(),
             physical_layout: self.physical_layout.clone().recycle(),
             logical_layout: take(&mut self.logical_layout).recycle(),
+            debug_strings: take(&mut self.debug_strings).recycle(),
             debugs: take(&mut self.debugs).recycle(),
             annotations: take(&mut self.annotations).recycle(),
             lookup_type: take(&mut self.lookup_type).recycle(),
@@ -173,9 +183,9 @@ impl Writer {
             global_variables: take(&mut self.global_variables).recycle(),
             saved_cached: take(&mut self.saved_cached).recycle(),
             temp_list: take(&mut self.temp_list).recycle(),
-            ray_get_candidate_intersection_function: None,
-            ray_get_committed_intersection_function: None,
+            ray_query_functions: take(&mut self.ray_query_functions).recycle(),
             io_f16_polyfills: take(&mut self.io_f16_polyfills).recycle(),
+            debug_printf: None,
         };
 
         *self = fresh;
@@ -1022,6 +1032,7 @@ impl Writer {
             expression_constness: super::ExpressionConstnessTracker::from_arena(
                 &ir_function.expressions,
             ),
+            ray_query_tracker_expr: crate::FastHashMap::default(),
         };
 
         // fill up the pre-emitted and const expressions
@@ -1063,6 +1074,58 @@ impl Writer {
                 .function
                 .variables
                 .insert(handle, LocalVariable { id, instruction });
+
+            if let crate::TypeInner::RayQuery { .. } = ir_module.types[variable.ty].inner {
+                // Don't refactor this into a struct: Although spirv itself allows opaque types in structs,
+                // the vulkan environment for spirv does not. Putting ray queries into structs can cause
+                // confusing bugs.
+                let u32_type_id = context.writer.get_u32_type_id();
+                let ptr_u32_type_id = context
+                    .writer
+                    .get_pointer_type_id(u32_type_id, spirv::StorageClass::Function);
+                let tracker_id = context.gen_id();
+                let tracker_init_id = context
+                    .writer
+                    .get_constant_scalar(crate::Literal::U32(super::RayQueryPoint::empty().bits()));
+                let tracker_instruction = Instruction::variable(
+                    ptr_u32_type_id,
+                    tracker_id,
+                    spirv::StorageClass::Function,
+                    Some(tracker_init_id),
+                );
+
+                context
+                    .function
+                    .ray_query_initialization_tracker_variables
+                    .insert(
+                        handle,
+                        LocalVariable {
+                            id: tracker_id,
+                            instruction: tracker_instruction,
+                        },
+                    );
+                let f32_type_id = context.writer.get_f32_type_id();
+                let ptr_f32_type_id = context
+                    .writer
+                    .get_pointer_type_id(f32_type_id, spirv::StorageClass::Function);
+                let t_max_tracker_id = context.gen_id();
+                let t_max_tracker_init_id =
+                    context.writer.get_constant_scalar(crate::Literal::F32(0.0));
+                let t_max_tracker_instruction = Instruction::variable(
+                    ptr_f32_type_id,
+                    t_max_tracker_id,
+                    spirv::StorageClass::Function,
+                    Some(t_max_tracker_init_id),
+                );
+
+                context.function.ray_query_t_max_tracker_variables.insert(
+                    handle,
+                    LocalVariable {
+                        id: t_max_tracker_id,
+                        instruction: t_max_tracker_instruction,
+                    },
+                );
+            }
         }
 
         for (handle, expr) in ir_function.expressions.iter() {
@@ -2156,7 +2219,11 @@ impl Writer {
                     | Bi::CullPrimitive
                     | Bi::PointIndex
                     | Bi::LineIndices
-                    | Bi::TriangleIndices => unreachable!(),
+                    | Bi::TriangleIndices
+                    | Bi::VertexCount
+                    | Bi::PrimitiveCount
+                    | Bi::Vertices
+                    | Bi::Primitives => unreachable!(),
                 };
 
                 self.decorate(id, Decoration::BuiltIn, &[built_in as u32]);
@@ -2651,6 +2718,10 @@ impl Writer {
         Instruction::memory_model(addressing_model, memory_model)
             .to_words(&mut self.logical_layout.memory_model);
 
+        for debug_string in self.debug_strings.iter() {
+            debug_string.to_words(&mut self.logical_layout.debugs);
+        }
+
         if self.flags.contains(WriterFlags::DEBUG) {
             for debug in self.debugs.iter() {
                 debug.to_words(&mut self.logical_layout.debugs);
@@ -2709,6 +2780,40 @@ impl Writer {
 
     pub(super) fn needs_f16_polyfill(&self, ty_inner: &crate::TypeInner) -> bool {
         self.io_f16_polyfills.needs_polyfill(ty_inner)
+    }
+
+    pub(super) fn write_debug_printf(
+        &mut self,
+        block: &mut Block,
+        string: &str,
+        format_params: &[Word],
+    ) {
+        if self.debug_printf.is_none() {
+            self.use_extension("SPV_KHR_non_semantic_info");
+            let import_id = self.id_gen.next();
+            Instruction::ext_inst_import(import_id, "NonSemantic.DebugPrintf")
+                .to_words(&mut self.logical_layout.ext_inst_imports);
+            self.debug_printf = Some(import_id)
+        }
+
+        let import_id = self.debug_printf.unwrap();
+
+        let string_id = self.id_gen.next();
+        self.debug_strings
+            .push(Instruction::string(string, string_id));
+
+        let mut operands = Vec::with_capacity(1 + format_params.len());
+        operands.push(string_id);
+        operands.extend(format_params.iter());
+
+        let print_id = self.id_gen.next();
+        block.body.push(Instruction::ext_inst(
+            import_id,
+            1,
+            self.void_type,
+            print_id,
+            &operands,
+        ));
     }
 }
 

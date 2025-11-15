@@ -128,6 +128,8 @@ pub struct EntryPoint<'a> {
     pub stage: crate::ShaderStage,
     pub early_depth_test: Option<crate::EarlyDepthTest>,
     pub workgroup_size: Option<[Option<Handle<Expression<'a>>>; 3]>,
+    pub mesh_output_variable: Option<(&'a str, Span)>,
+    pub task_payload: Option<(&'a str, Span)>,
 }
 
 #[cfg(doc)]
@@ -152,6 +154,7 @@ pub enum Binding<'a> {
         interpolation: Option<crate::Interpolation>,
         sampling: Option<crate::Sampling>,
         blend_src: Option<Handle<Expression<'a>>>,
+        per_primitive: bool,
     },
 }
 

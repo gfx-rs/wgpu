@@ -409,7 +409,7 @@ pub enum BuiltIn {
     PointCoord,
     /// Read in fragment shaders
     FrontFacing,
-    /// Read in fragment shaders, in the future may written in mesh shaders
+    /// Read in fragment shaders, written in mesh shaders
     PrimitiveIndex,
     /// Read in fragment shaders
     Barycentric,
@@ -450,6 +450,15 @@ pub enum BuiltIn {
     LineIndices,
     /// Written in mesh shaders
     TriangleIndices,
+
+    /// Written to a workgroup variable in mesh shaders
+    VertexCount,
+    /// Written to a workgroup variable in mesh shaders
+    Vertices,
+    /// Written to a workgroup variable in mesh shaders
+    PrimitiveCount,
+    /// Written to a workgroup variable in mesh shaders
+    Primitives,
 }
 
 /// Number of bytes per scalar.
@@ -2211,8 +2220,6 @@ pub enum Statement {
         /// The specific operation we're performing on `query`.
         fun: RayQueryFunction,
     },
-    /// A mesh shader intrinsic.
-    MeshFunction(MeshFunction),
     /// Calculate a bitmask using a boolean from each active thread in the subgroup
     SubgroupBallot {
         /// The [`SubgroupBallotResult`] expression representing this load's result.
@@ -2569,7 +2576,7 @@ pub struct DocComments {
 }
 
 /// The output topology for a mesh shader. Note that mesh shaders don't allow things like triangle-strips.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
@@ -2583,7 +2590,7 @@ pub enum MeshOutputTopology {
 }
 
 /// Information specific to mesh shader entry points.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
@@ -2603,29 +2610,8 @@ pub struct MeshStageInfo {
     pub vertex_output_type: Handle<Type>,
     /// The type used by primitive outputs, i.e. what is passed to `setPrimitive`.
     pub primitive_output_type: Handle<Type>,
-}
-
-/// Mesh shader intrinsics
-#[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub enum MeshFunction {
-    /// Sets the number of vertices and primitives that will be outputted.
-    SetMeshOutputs {
-        vertex_count: Handle<Expression>,
-        primitive_count: Handle<Expression>,
-    },
-    /// Sets the output vertex at a given index.
-    SetVertex {
-        index: Handle<Expression>,
-        value: Handle<Expression>,
-    },
-    /// Sets the output primitive at a given index.
-    SetPrimitive {
-        index: Handle<Expression>,
-        value: Handle<Expression>,
-    },
+    /// The global variable holding the outputted vertices, primitives, and counts
+    pub output_variable: Handle<GlobalVariable>,
 }
 
 /// Shader module.

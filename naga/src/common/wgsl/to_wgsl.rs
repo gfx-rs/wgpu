@@ -194,7 +194,11 @@ impl TryToWgsl for crate::BuiltIn {
             | Bi::TriangleIndices
             | Bi::LineIndices
             | Bi::MeshTaskSize
-            | Bi::PointIndex => return None,
+            | Bi::PointIndex
+            | Bi::VertexCount
+            | Bi::PrimitiveCount
+            | Bi::Vertices
+            | Bi::Primitives => return None,
         })
     }
 }

@@ -28,10 +28,13 @@ We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) which has information on u
 
 ### Need Help? Want to Contribute? 
 
-The wgpu community uses Matrix to discuss.
+The wgpu community uses Matrix and Discord to discuss.
 
 - [![`#wgpu:matrix.org`](https://img.shields.io/static/v1?label=wgpu-devs&message=%23wgpu&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu:matrix.org) - discussion of wgpu's development.
 - [![`#wgpu-users:matrix.org`](https://img.shields.io/static/v1?label=wgpu-users&message=%23wgpu-users&color=blueviolet&logo=matrix)](https://matrix.to/#/#wgpu-users:matrix.org) - discussion of using the library and the surrounding ecosystem.
+- [![#wgpu on the Rust Gamedev Discord](https://img.shields.io/discord/676678179678715904?logo=discord&logoColor=E0E3FF&label=%23wgpu&color=5865F2)
+](https://discord.gg/X3MYBNXUMJ) - Dedicated support channel on the Rust Gamedev Discord.
+
 
 ### Other Languages
 

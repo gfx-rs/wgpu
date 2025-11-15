@@ -514,6 +514,14 @@ pub fn create_validator(
         Caps::SHADER_BARYCENTRICS,
         features.intersects(wgt::Features::SHADER_BARYCENTRICS),
     );
+    caps.set(
+        Caps::MESH_SHADER,
+        features.intersects(wgt::Features::EXPERIMENTAL_MESH_SHADER),
+    );
+    caps.set(
+        Caps::MESH_SHADER_POINT_TOPOLOGY,
+        features.intersects(wgt::Features::EXPERIMENTAL_MESH_SHADER_POINTS),
+    );
 
     naga::valid::Validator::new(flags, caps)
 }

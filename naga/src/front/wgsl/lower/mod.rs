@@ -1479,47 +1479,93 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .collect();
 
         if let Some(ref entry) = f.entry_point {
-            let workgroup_size_info = if let Some(workgroup_size) = entry.workgroup_size {
-                // TODO: replace with try_map once stabilized
-                let mut workgroup_size_out = [1; 3];
-                let mut workgroup_size_overrides_out = [None; 3];
-                for (i, size) in workgroup_size.into_iter().enumerate() {
-                    if let Some(size_expr) = size {
-                        match self.const_u32(size_expr, &mut ctx.as_const()) {
-                            Ok(value) => {
-                                workgroup_size_out[i] = value.0;
-                            }
-                            Err(err) => {
-                                if let Error::ConstantEvaluatorError(ref ty, _) = *err {
-                                    match **ty {
-                                        proc::ConstantEvaluatorError::OverrideExpr => {
-                                            workgroup_size_overrides_out[i] =
-                                                Some(self.workgroup_size_override(
-                                                    size_expr,
-                                                    &mut ctx.as_override(),
-                                                )?);
+            let (workgroup_size, workgroup_size_overrides) =
+                if let Some(workgroup_size) = entry.workgroup_size {
+                    // TODO: replace with try_map once stabilized
+                    let mut workgroup_size_out = [1; 3];
+                    let mut workgroup_size_overrides_out = [None; 3];
+                    for (i, size) in workgroup_size.into_iter().enumerate() {
+                        if let Some(size_expr) = size {
+                            match self.const_u32(size_expr, &mut ctx.as_const()) {
+                                Ok(value) => {
+                                    workgroup_size_out[i] = value.0;
+                                }
+                                Err(err) => {
+                                    if let Error::ConstantEvaluatorError(ref ty, _) = *err {
+                                        match **ty {
+                                            proc::ConstantEvaluatorError::OverrideExpr => {
+                                                workgroup_size_overrides_out[i] =
+                                                    Some(self.workgroup_size_override(
+                                                        size_expr,
+                                                        &mut ctx.as_override(),
+                                                    )?);
+                                            }
+                                            _ => {
+                                                return Err(err);
+                                            }
                                         }
-                                        _ => {
-                                            return Err(err);
-                                        }
+                                    } else {
+                                        return Err(err);
                                     }
-                                } else {
-                                    return Err(err);
                                 }
                             }
                         }
                     }
-                }
-                if workgroup_size_overrides_out.iter().all(|x| x.is_none()) {
-                    (workgroup_size_out, None)
+                    if workgroup_size_overrides_out.iter().all(|x| x.is_none()) {
+                        (workgroup_size_out, None)
+                    } else {
+                        (workgroup_size_out, Some(workgroup_size_overrides_out))
+                    }
                 } else {
-                    (workgroup_size_out, Some(workgroup_size_overrides_out))
+                    ([0; 3], None)
+                };
+
+            let mesh_info = if let Some((var_name, var_span)) = entry.mesh_output_variable {
+                let var = match ctx.globals.get(var_name) {
+                    Some(&LoweredGlobalDecl::Var(handle)) => handle,
+                    Some(_) => {
+                        return Err(Box::new(Error::ExpectedGlobalVariable {
+                            name_span: var_span,
+                        }))
+                    }
+                    None => return Err(Box::new(Error::UnknownIdent(var_span, var_name))),
+                };
+
+                let mut info = ctx.module.analyze_mesh_shader_info(var);
+                if let Some(h) = info.1[0] {
+                    info.0.max_vertices_override = Some(
+                        ctx.module
+                            .global_expressions
+                            .append(crate::Expression::Override(h), Span::UNDEFINED),
+                    );
                 }
+                if let Some(h) = info.1[1] {
+                    info.0.max_primitives_override = Some(
+                        ctx.module
+                            .global_expressions
+                            .append(crate::Expression::Override(h), Span::UNDEFINED),
+                    );
+                }
+
+                Some(info.0)
             } else {
-                ([0; 3], None)
+                None
             };
 
-            let (workgroup_size, workgroup_size_overrides) = workgroup_size_info;
+            let task_payload = if let Some((var_name, var_span)) = entry.task_payload {
+                Some(match ctx.globals.get(var_name) {
+                    Some(&LoweredGlobalDecl::Var(handle)) => handle,
+                    Some(_) => {
+                        return Err(Box::new(Error::ExpectedGlobalVariable {
+                            name_span: var_span,
+                        }))
+                    }
+                    None => return Err(Box::new(Error::UnknownIdent(var_span, var_name))),
+                })
+            } else {
+                None
+            };
+
             ctx.module.entry_points.push(ir::EntryPoint {
                 name: f.name.name.to_string(),
                 stage: entry.stage,
@@ -1527,8 +1573,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 workgroup_size,
                 workgroup_size_overrides,
                 function,
-                mesh_info: None,
-                task_payload: None,
+                mesh_info,
+                task_payload,
             });
             Ok(LoweredGlobalDecl::EntryPoint(
                 ctx.module.entry_points.len() - 1,
@@ -4059,6 +4105,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 interpolation,
                 sampling,
                 blend_src,
+                per_primitive,
             }) => {
                 let blend_src = if let Some(blend_src) = blend_src {
                     Some(self.const_u32(blend_src, &mut ctx.as_const())?.0)
@@ -4071,7 +4118,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     interpolation,
                     sampling,
                     blend_src,
-                    per_primitive: false,
+                    per_primitive,
                 };
                 binding.apply_default_interpolation(&ctx.module.types[ty].inner);
                 Some(binding)

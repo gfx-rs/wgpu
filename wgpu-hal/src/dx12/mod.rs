@@ -1616,32 +1616,3 @@ pub enum ShaderModuleSource {
     DxilPassthrough(DxilPassthroughShader),
     HlslPassthrough(HlslPassthroughShader),
 }
-
-#[repr(C)]
-#[derive(Debug)]
-struct RenderPipelineStateStreamDesc<'a> {
-    root_signature: Option<core::pin::Pin<&'a Direct3D12::ID3D12RootSignature>>,
-    pixel_shader: Direct3D12::D3D12_SHADER_BYTECODE,
-    blend_state: Direct3D12::D3D12_BLEND_DESC,
-    sample_mask: u32,
-    rasterizer_state: Direct3D12::D3D12_RASTERIZER_DESC,
-    depth_stencil_state: Direct3D12::D3D12_DEPTH_STENCIL_DESC,
-    primitive_topology_type: Direct3D12::D3D12_PRIMITIVE_TOPOLOGY_TYPE,
-    rtv_formats: Direct3D12::D3D12_RT_FORMAT_ARRAY,
-    dsv_format: Dxgi::Common::DXGI_FORMAT,
-    sample_desc: Dxgi::Common::DXGI_SAMPLE_DESC,
-    node_mask: u32,
-    cached_pso: Direct3D12::D3D12_CACHED_PIPELINE_STATE,
-    flags: Direct3D12::D3D12_PIPELINE_STATE_FLAGS,
-    view_instancing: Option<Direct3D12::D3D12_VIEW_INSTANCING_DESC>,
-
-    // Vertex pipeline specific
-    vertex_shader: Direct3D12::D3D12_SHADER_BYTECODE,
-    input_layout: Direct3D12::D3D12_INPUT_LAYOUT_DESC,
-    index_buffer_strip_cut_value: Direct3D12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE,
-    stream_output: Direct3D12::D3D12_STREAM_OUTPUT_DESC,
-
-    // Mesh pipeline specific
-    task_shader: Direct3D12::D3D12_SHADER_BYTECODE,
-    mesh_shader: Direct3D12::D3D12_SHADER_BYTECODE,
-}

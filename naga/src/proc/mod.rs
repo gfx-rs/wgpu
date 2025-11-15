@@ -27,6 +27,8 @@ use thiserror::Error;
 pub use type_methods::min_max_float_representable_by;
 pub use typifier::{compare_types, ResolveContext, ResolveError, TypeResolution};
 
+use crate::non_max_u32::NonMaxU32;
+
 impl From<super::StorageFormat> for super::Scalar {
     fn from(format: super::StorageFormat) -> Self {
         use super::{ScalarKind as Sk, StorageFormat as Sf};
@@ -652,4 +654,179 @@ fn test_matrix_size() {
         .size(module.to_ctx()),
         48,
     );
+}
+
+impl crate::Module {
+    /// Extracts mesh shader info from a mesh output global variable. Used in frontends
+    /// and by validators. This only validates the output variable itself, and not the
+    /// vertex and primitive output types.
+    ///
+    /// The output contains the extracted mesh stage info, with overrides unset,
+    /// and then the overrides separately. This is because the overrides should be
+    /// treated as expressions elsewhere, but that requires mutably modifying the
+    /// module and the expressions should only be created at parse time, not validation
+    /// time.
+    #[allow(clippy::type_complexity)]
+    pub fn analyze_mesh_shader_info(
+        &self,
+        gv: crate::Handle<crate::GlobalVariable>,
+    ) -> (
+        crate::MeshStageInfo,
+        [Option<crate::Handle<crate::Override>>; 2],
+        Option<crate::WithSpan<crate::valid::EntryPointError>>,
+    ) {
+        use crate::span::AddSpan;
+        use crate::valid::EntryPointError;
+        #[derive(Default)]
+        struct OutError {
+            pub inner: Option<EntryPointError>,
+        }
+        impl OutError {
+            pub fn set(&mut self, err: EntryPointError) {
+                if self.inner.is_none() {
+                    self.inner = Some(err);
+                }
+            }
+        }
+
+        // Used to temporarily initialize stuff
+        let null_type = crate::Handle::new(NonMaxU32::new(0).unwrap());
+        let mut output = crate::MeshStageInfo {
+            topology: crate::MeshOutputTopology::Triangles,
+            max_vertices: 0,
+            max_vertices_override: None,
+            max_primitives: 0,
+            max_primitives_override: None,
+            vertex_output_type: null_type,
+            primitive_output_type: null_type,
+            output_variable: gv,
+        };
+        // Stores the error to output, if any.
+        let mut error = OutError::default();
+        let r#type = &self.types[self.global_variables[gv].ty].inner;
+
+        let mut topology = output.topology;
+        // Max, max override, type
+        let mut vertex_info = (0, None, null_type);
+        let mut primitive_info = (0, None, null_type);
+
+        match r#type {
+            &crate::TypeInner::Struct { ref members, .. } => {
+                let mut builtins = crate::FastHashSet::default();
+                for member in members {
+                    match member.binding {
+                        Some(crate::Binding::BuiltIn(crate::BuiltIn::VertexCount)) => {
+                            // Must have type u32
+                            if self.types[member.ty].inner.scalar() != Some(crate::Scalar::U32) {
+                                error.set(EntryPointError::BadMeshOutputVariableField);
+                            }
+                            // Each builtin should only occur once
+                            if builtins.contains(&crate::BuiltIn::VertexCount) {
+                                error.set(EntryPointError::BadMeshOutputVariableType);
+                            }
+                            builtins.insert(crate::BuiltIn::VertexCount);
+                        }
+                        Some(crate::Binding::BuiltIn(crate::BuiltIn::PrimitiveCount)) => {
+                            // Must have type u32
+                            if self.types[member.ty].inner.scalar() != Some(crate::Scalar::U32) {
+                                error.set(EntryPointError::BadMeshOutputVariableField);
+                            }
+                            // Each builtin should only occur once
+                            if builtins.contains(&crate::BuiltIn::PrimitiveCount) {
+                                error.set(EntryPointError::BadMeshOutputVariableType);
+                            }
+                            builtins.insert(crate::BuiltIn::PrimitiveCount);
+                        }
+                        Some(crate::Binding::BuiltIn(
+                            crate::BuiltIn::Vertices | crate::BuiltIn::Primitives,
+                        )) => {
+                            let ty = &self.types[member.ty].inner;
+                            // Analyze the array type to determine size and vertex/primitive type
+                            let (a, b, c) = match ty {
+                                &crate::TypeInner::Array { base, size, .. } => {
+                                    let ty = base;
+                                    let (max, max_override) = match size {
+                                        crate::ArraySize::Constant(a) => (a.get(), None),
+                                        crate::ArraySize::Pending(o) => (0, Some(o)),
+                                        crate::ArraySize::Dynamic => {
+                                            error.set(EntryPointError::BadMeshOutputVariableField);
+                                            (0, None)
+                                        }
+                                    };
+                                    (max, max_override, ty)
+                                }
+                                _ => {
+                                    error.set(EntryPointError::BadMeshOutputVariableField);
+                                    (0, None, null_type)
+                                }
+                            };
+                            if matches!(
+                                member.binding,
+                                Some(crate::Binding::BuiltIn(crate::BuiltIn::Primitives))
+                            ) {
+                                // Primitives require special analysis to determine topology
+                                primitive_info = (a, b, c);
+                                match self.types[c].inner {
+                                    crate::TypeInner::Struct { ref members, .. } => {
+                                        for member in members {
+                                            match member.binding {
+                                                Some(crate::Binding::BuiltIn(
+                                                    crate::BuiltIn::PointIndex,
+                                                )) => {
+                                                    topology = crate::MeshOutputTopology::Points;
+                                                }
+                                                Some(crate::Binding::BuiltIn(
+                                                    crate::BuiltIn::LineIndices,
+                                                )) => {
+                                                    topology = crate::MeshOutputTopology::Lines;
+                                                }
+                                                Some(crate::Binding::BuiltIn(
+                                                    crate::BuiltIn::TriangleIndices,
+                                                )) => {
+                                                    topology = crate::MeshOutputTopology::Triangles;
+                                                }
+                                                _ => (),
+                                            }
+                                        }
+                                    }
+                                    _ => (),
+                                }
+                                // Each builtin should only occur once
+                                if builtins.contains(&crate::BuiltIn::Primitives) {
+                                    error.set(EntryPointError::BadMeshOutputVariableType);
+                                }
+                                builtins.insert(crate::BuiltIn::Primitives);
+                            } else {
+                                vertex_info = (a, b, c);
+                                // Each builtin should only occur once
+                                if builtins.contains(&crate::BuiltIn::Vertices) {
+                                    error.set(EntryPointError::BadMeshOutputVariableType);
+                                }
+                                builtins.insert(crate::BuiltIn::Vertices);
+                            }
+                        }
+                        _ => error.set(EntryPointError::BadMeshOutputVariableType),
+                    }
+                }
+                output = crate::MeshStageInfo {
+                    topology,
+                    max_vertices: vertex_info.0,
+                    max_vertices_override: None,
+                    vertex_output_type: vertex_info.2,
+                    max_primitives: primitive_info.0,
+                    max_primitives_override: None,
+                    primitive_output_type: primitive_info.2,
+                    ..output
+                }
+            }
+            _ => error.set(EntryPointError::BadMeshOutputVariableType),
+        }
+        (
+            output,
+            [vertex_info.1, primitive_info.1],
+            error
+                .inner
+                .map(|a| a.with_span_handle(self.global_variables[gv].ty, &self.types)),
+        )
+    }
 }

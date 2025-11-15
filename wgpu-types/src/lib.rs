@@ -7977,6 +7977,20 @@ pub struct ShaderRuntimeChecks {
     /// conclusions about other safety-critical code paths. This option SHOULD NOT be disabled
     /// when running untrusted code.
     pub force_loop_bounding: bool,
+    /// If false, the caller **MUST** ensure that in all passed shaders every function operating
+    /// on a ray query must obey these rules (functions using wgsl naming)
+    /// - `rayQueryInitialize` must have called before `rayQueryProceed`
+    /// - `rayQueryProceed` must have been called, returned true and have hit an AABB before
+    ///   `rayQueryGenerateIntersection` is called
+    /// - `rayQueryProceed` must have been called, returned true and have hit a triangle before
+    ///   `rayQueryConfirmIntersection` is called
+    /// - `rayQueryProceed` must have been called and have returned true before `rayQueryTerminate`,
+    ///   `getCandidateHitVertexPositions` or `rayQueryGetCandidateIntersection` is called
+    /// - `rayQueryProceed` must have been called and have returned false before `rayQueryGetCommittedIntersection`
+    ///   or `getCommittedHitVertexPositions` are called
+    ///
+    /// It is the aim that these cases will not cause UB if this is set to true, but currently this will still happen on DX12 and Metal.
+    pub ray_query_initialization_tracking: bool,
 }
 
 impl ShaderRuntimeChecks {
@@ -8009,6 +8023,7 @@ impl ShaderRuntimeChecks {
         Self {
             bounds_checks: all_checks,
             force_loop_bounding: all_checks,
+            ray_query_initialization_tracking: all_checks,
         }
     }
 }
