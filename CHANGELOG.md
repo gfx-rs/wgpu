@@ -163,6 +163,10 @@ By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206
 
 - Fixed a bug where the texture aspect was not passed through when calling `copy_texture_to_buffer` in WebGPU, causing the copy to fail for depth/stencil textures. By @Tim-Evans-Seequent in [#8445](https://github.com/gfx-rs/wgpu/pull/8445).
 
+#### GLES
+
+- Fix race when downloading texture from compute shader pass. By @SpeedCrash100 in [#8527](https://github.com/gfx-rs/wgpu/pull/8527)
+
 #### hal
 
 - `DropCallback`s are now called after dropping all other fields of their parent structs. By @jerzywilczek in [#8353](https://github.com/gfx-rs/wgpu/pull/8353)
