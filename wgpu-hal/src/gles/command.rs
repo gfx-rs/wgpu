@@ -558,8 +558,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 for (i, cat) in desc.color_attachments.iter().enumerate() {
                     if let Some(cat) = cat.as_ref() {
                         let attachment = glow::COLOR_ATTACHMENT0 + i as u32;
+                        // Try to use the multisampled render-to-texture extension to avoid resolving
                         if let Some(ref rat) = cat.resolve_target {
-                            if self.private_caps.contains(super::PrivateCapabilities::MULTISAMPLED_RENDER_TO_TEXTURE) && cat.target.usage.contains(wgt::TextureUses::TRANSIENT) {
+                            if matches!(rat.view.inner, super::TextureInner::Texture { .. })
+                                && self.private_caps.contains(
+                                    super::PrivateCapabilities::MULTISAMPLED_RENDER_TO_TEXTURE,
+                                )
+                                && !cat.ops.contains(crate::AttachmentOps::STORE)
+                                // Extension specifies that only COLOR_ATTACHMENT0 is valid
+                                && i == 0
+                            {
                                 self.cmd_buffer.commands.push(C::BindAttachment {
                                     attachment,
                                     view: rat.view.clone(),

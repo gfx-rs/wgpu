@@ -158,7 +158,14 @@ impl super::Queue {
                     unsafe {
                         assert_eq!(view.mip_levels.len(), 1);
                         if sample_count != 1 {
-                            gl.framebuffer_texture_2d_multisample(fbo_target, attachment, get_2d_target(target, view.array_layers.start), Some(raw), view.mip_levels.start as i32, sample_count as i32)
+                            gl.framebuffer_texture_2d_multisample(
+                                fbo_target,
+                                attachment,
+                                get_2d_target(target, view.array_layers.start),
+                                Some(raw),
+                                view.mip_levels.start as i32,
+                                sample_count as i32,
+                            )
                         } else {
                             gl.framebuffer_texture_2d(
                                 fbo_target,
@@ -1127,7 +1134,14 @@ impl super::Queue {
                 sample_count,
             } => {
                 unsafe {
-                    self.set_attachment(gl, glow::DRAW_FRAMEBUFFER, attachment, view, depth_slice, sample_count)
+                    self.set_attachment(
+                        gl,
+                        glow::DRAW_FRAMEBUFFER,
+                        attachment,
+                        view,
+                        depth_slice,
+                        sample_count,
+                    )
                 };
             }
             C::ResolveAttachment {
