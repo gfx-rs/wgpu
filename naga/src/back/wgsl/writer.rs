@@ -8,7 +8,7 @@ use core::fmt::Write;
 
 use super::Error;
 use super::ToWgslIfImplemented as _;
-use crate::{GlobalVariable, back::wgsl::polyfill::InversePolyfill, common::wgsl::TypeContext};
+use crate::{back::wgsl::polyfill::InversePolyfill, common::wgsl::TypeContext};
 use crate::{
     back::{self, Baked},
     common::{
@@ -203,6 +203,7 @@ impl<W: Write> Writer<W> {
 
         // Write all entry points
         for (index, ep) in module.entry_points.iter().enumerate() {
+            let mut mesh_output_name = None;
             let attributes = match ep.stage {
                 ShaderStage::Vertex | ShaderStage::Fragment => vec![Attribute::Stage(ep.stage)],
                 ShaderStage::Compute => vec![
@@ -210,8 +211,17 @@ impl<W: Write> Writer<W> {
                     Attribute::WorkGroupSize(ep.workgroup_size),
                 ],
                 ShaderStage::Mesh => {
+                    mesh_output_name = Some(
+                        module.global_variables[ep.mesh_info.as_ref().unwrap().output_variable]
+                            .name
+                            .clone()
+                            .unwrap(),
+                    );
                     if ep.task_payload.is_some() {
-                        let payload_name = module.global_variables[ep.task_payload.unwrap()].name.clone().unwrap();
+                        let payload_name = module.global_variables[ep.task_payload.unwrap()]
+                            .name
+                            .clone()
+                            .unwrap();
                         vec![
                             Attribute::Stage(ShaderStage::Mesh),
                             Attribute::MeshTaskPayload(payload_name),
@@ -223,18 +233,20 @@ impl<W: Write> Writer<W> {
                             Attribute::WorkGroupSize(ep.workgroup_size),
                         ]
                     }
-                },
+                }
                 ShaderStage::Task => {
-                    let payload_name = module.global_variables[ep.task_payload.unwrap()].name.clone().unwrap();
+                    let payload_name = module.global_variables[ep.task_payload.unwrap()]
+                        .name
+                        .clone()
+                        .unwrap();
                     vec![
                         Attribute::Stage(ShaderStage::Task),
                         Attribute::MeshTaskPayload(payload_name),
                         Attribute::WorkGroupSize(ep.workgroup_size),
                     ]
-                },
+                }
             };
-
-            self.write_attributes(&attributes)?;
+            self.write_attributes(&attributes, mesh_output_name)?;
             // Add a newline after attribute
             writeln!(self.out)?;
 
@@ -353,7 +365,7 @@ impl<W: Write> Writer<W> {
         for (index, arg) in func.arguments.iter().enumerate() {
             // Write argument attribute if a binding is present
             if let Some(ref binding) = arg.binding {
-                self.write_attributes(&map_binding_to_attribute(binding))?;
+                self.write_attributes(&map_binding_to_attribute(binding), None)?;
             }
             // Write argument name
             let argument_name = &self.names[&func_ctx.argument_key(index as u32)];
@@ -373,7 +385,7 @@ impl<W: Write> Writer<W> {
         if let Some(ref result) = func.result {
             write!(self.out, " -> ")?;
             if let Some(ref binding) = result.binding {
-                self.write_attributes(&map_binding_to_attribute(binding))?;
+                self.write_attributes(&map_binding_to_attribute(binding), None)?;
             }
             self.write_type(module, result.ty)?;
         }
@@ -426,7 +438,11 @@ impl<W: Write> Writer<W> {
     }
 
     /// Helper method to write a attribute
-    fn write_attributes(&mut self, attributes: &[Attribute]) -> BackendResult {
+    fn write_attributes(
+        &mut self,
+        attributes: &[Attribute],
+        mesh_output_variable: Option<String>,
+    ) -> BackendResult {
         for attribute in attributes {
             match *attribute {
                 Attribute::Location(id) => write!(self.out, "@location({id}) ")?,
@@ -443,7 +459,16 @@ impl<W: Write> Writer<W> {
                         ShaderStage::Task => "task",
                         ShaderStage::Mesh => "mesh",
                     };
-                    write!(self.out, "@{stage_str} ")?;
+
+                    if shader_stage == ShaderStage::Mesh {
+                        write!(
+                            self.out,
+                            "@{stage_str}({})",
+                            mesh_output_variable.as_ref().unwrap()
+                        )?;
+                    } else {
+                        write!(self.out, "@{stage_str} ")?;
+                    }
                 }
                 Attribute::WorkGroupSize(size) => {
                     write!(
@@ -503,7 +528,7 @@ impl<W: Write> Writer<W> {
             // The indentation is only for readability
             write!(self.out, "{}", back::INDENT)?;
             if let Some(ref binding) = member.binding {
-                self.write_attributes(&map_binding_to_attribute(binding))?;
+                self.write_attributes(&map_binding_to_attribute(binding), None)?;
             }
             // Write struct member name and type
             let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
@@ -1753,10 +1778,13 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         // Write group and binding attributes if present
         if let Some(ref binding) = global.binding {
-            self.write_attributes(&[
-                Attribute::Group(binding.group),
-                Attribute::Binding(binding.binding),
-            ])?;
+            self.write_attributes(
+                &[
+                    Attribute::Group(binding.group),
+                    Attribute::Binding(binding.binding),
+                ],
+                None,
+            )?;
             writeln!(self.out)?;
         }
 
@@ -1865,8 +1893,8 @@ fn map_binding_to_attribute(binding: &crate::Binding) -> Vec<Attribute> {
             sampling,
             blend_src: None,
             per_primitive,
-        } =>{
-            if per_primitive{
+        } => {
+            if per_primitive {
                 vec![
                     Attribute::PerPrimitive,
                     Attribute::Location(location),
