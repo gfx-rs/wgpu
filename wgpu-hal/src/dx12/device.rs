@@ -1953,8 +1953,7 @@ impl crate::Device for super::Device {
         };
         let flags = Direct3D12::D3D12_PIPELINE_STATE_FLAG_NONE;
 
-        let mut view_instancing =
-            core::pin::pin!(ArrayVec::<Direct3D12::D3D12_VIEW_INSTANCE_LOCATION, 32>::new());
+        let mut view_instancing = ArrayVec::<Direct3D12::D3D12_VIEW_INSTANCE_LOCATION, 32>::new();
         if let Some(mask) = desc.multiview_mask {
             let mask = mask.get();
             // This array is just what _could_ be rendered to. We actually apply the mask at
@@ -1968,6 +1967,9 @@ impl crate::Device for super::Device {
                 });
             }
         }
+
+        // Borrow view instancing slice, so we can be sure that it won't be moved while we have pointers into this buffer.
+        let view_instancing_slice = view_instancing.as_slice();
 
         let mut stream_desc = RenderPipelineStateStreamDesc {
             // Shared by vertex and mesh pipelines
@@ -1987,10 +1989,10 @@ impl crate::Device for super::Device {
             node_mask: 0,
             cached_pso,
             flags,
-            view_instancing: if !view_instancing.is_empty() {
+            view_instancing: if !view_instancing_slice.is_empty() {
                 Some(Direct3D12::D3D12_VIEW_INSTANCING_DESC {
-                    ViewInstanceCount: view_instancing.len() as u32,
-                    pViewInstanceLocations: view_instancing.as_ptr(),
+                    ViewInstanceCount: view_instancing_slice.len() as u32,
+                    pViewInstanceLocations: view_instancing_slice.as_ptr(),
                     // This lets us hide/mask certain values later, at renderpass creation time.
                     Flags: Direct3D12::D3D12_VIEW_INSTANCING_FLAG_ENABLE_VIEW_INSTANCE_MASKING,
                 })
