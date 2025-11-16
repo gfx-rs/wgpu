@@ -312,11 +312,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
         for bar in barriers {
             // GLES only synchronizes storage -> anything explicitly
             // if shader writes to a texture then barriers should be placed
-            if !bar
-                .usage
-                .from
-                .intersects(wgt::TextureUses::STORAGE_READ_WRITE | wgt::TextureUses::STORAGE_WRITE_ONLY)
-            {
+            if !bar.usage.from.intersects(
+                wgt::TextureUses::STORAGE_READ_WRITE | wgt::TextureUses::STORAGE_WRITE_ONLY,
+            ) {
                 continue;
             }
             // unlike buffers, there is no need for a concrete texture
