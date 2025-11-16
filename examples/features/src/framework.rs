@@ -282,6 +282,9 @@ impl ExampleContext {
         // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the surface.
         let needed_limits = E::required_limits().using_resolution(adapter.limits());
 
+        let info = adapter.get_info();
+        log::info!("Selected adapter: {} ({:?})", info.name, info.backend);
+
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: None,
