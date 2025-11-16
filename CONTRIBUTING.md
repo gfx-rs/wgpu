@@ -38,6 +38,11 @@ The wgpu project has multiple official platforms for community engagement:
   tag people from whom you would like attention, esp. to follow-up after a day
   or so if you do not get a response to your contributions.
 
+- The [#wgpu channel on the Rust Gamedev Discord](https://discord.gg/X3MYBNXUMJ)
+  is dedicated to information chat about both contributing and using the project. Not
+  all of the developers are on Discord, but this is monitored by the maintainers. Similar
+  in place to the Matrix channels.
+
 - [GitHub issues] are used to discuss open development questions and track work
   the community intends to complete; this might include:
 

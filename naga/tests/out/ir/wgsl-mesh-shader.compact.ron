@@ -94,7 +94,7 @@
             inner: Struct(
                 members: [
                     (
-                        name: Some("index"),
+                        name: Some("indices"),
                         ty: 6,
                         binding: Some(BuiltIn(TriangleIndices)),
                         offset: 0,
@@ -267,7 +267,7 @@
                         index: 1,
                     ),
                     Literal(Bool(true)),
-                    Literal(U32(3)),
+                    Literal(U32(1)),
                     Literal(U32(1)),
                     Literal(U32(1)),
                     Compose(

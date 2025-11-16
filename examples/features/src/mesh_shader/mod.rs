@@ -61,6 +61,18 @@ fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::Sh
     }
 }
 
+fn compile_msl(device: &wgpu::Device, entry: &str) -> wgpu::ShaderModule {
+    unsafe {
+        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
+            entry_point: entry.to_owned(),
+            label: None,
+            msl: Some(std::borrow::Cow::Borrowed(include_str!("shader.metal"))),
+            num_workgroups: (1, 1, 1),
+            ..Default::default()
+        })
+    }
+}
+
 pub struct Example {
     pipeline: wgpu::RenderPipeline,
 }
@@ -71,20 +83,23 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
-        let (ts, ms, fs) = if adapter.get_info().backend == wgpu::Backend::Vulkan {
-            (
+        let (ts, ms, fs) = match adapter.get_info().backend {
+            wgpu::Backend::Vulkan => (
                 compile_glsl(device, "task"),
                 compile_glsl(device, "mesh"),
                 compile_glsl(device, "frag"),
-            )
-        } else if adapter.get_info().backend == wgpu::Backend::Dx12 {
-            (
+            ),
+            wgpu::Backend::Dx12 => (
                 compile_hlsl(device, "Task", "as"),
                 compile_hlsl(device, "Mesh", "ms"),
                 compile_hlsl(device, "Frag", "ps"),
-            )
-        } else {
-            panic!("Example can only run on vulkan or dx12");
+            ),
+            wgpu::Backend::Metal => (
+                compile_msl(device, "taskShader"),
+                compile_msl(device, "meshShader"),
+                compile_msl(device, "fragShader"),
+            ),
+            _ => panic!("Example can currently only run on vulkan, dx12 or metal"),
         };
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
@@ -179,3 +194,21 @@ impl crate::framework::Example for Example {
 pub fn main() {
     crate::framework::run::<Example>("mesh_shader");
 }
+
+#[cfg(test)]
+#[wgpu_test::gpu_test]
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+    name: "mesh_shader",
+    image_path: "/examples/features/src/mesh_shader/screenshot.png",
+    width: 1024,
+    height: 768,
+    optional_features: wgpu::Features::default(),
+    base_test_parameters: wgpu_test::TestParameters::default()
+        .features(
+            wgpu::Features::EXPERIMENTAL_MESH_SHADER
+                | wgpu::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS,
+        )
+        .limits(wgpu::Limits::defaults().using_recommended_minimum_mesh_shader_values()),
+    comparisons: &[wgpu_test::ComparisonType::Mean(0.01)],
+    _phantom: std::marker::PhantomData::<Example>,
+};

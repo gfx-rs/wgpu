@@ -98,8 +98,6 @@ pub enum VaryingError {
     InvalidPerPrimitive,
     #[error("Non-builtin members of a mesh primitive output struct must be decorated with `@per_primitive`")]
     MissingPerPrimitive,
-    #[error("The `MESH_SHADER` capability must be enabled to use per-primitive fragment inputs.")]
-    PerPrimitiveNotAllowed,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -131,6 +129,9 @@ pub enum EntryPointError {
     InvalidIntegerInterpolation { location: u32 },
     #[error(transparent)]
     Function(#[from] FunctionError),
+    #[error("Capability {0:?} is not supported")]
+    UnsupportedCapability(Capabilities),
+
     #[error("mesh shader entry point missing mesh shader attributes")]
     ExpectedMeshShaderAttributes,
     #[error("Non mesh shader entry point cannot have mesh shader attributes")]
@@ -145,11 +146,6 @@ pub enum EntryPointError {
     WrongTaskShaderEntryResult,
     #[error("Task shaders must declare a task payload output")]
     ExpectedTaskPayload,
-    #[error(
-        "The `MESH_SHADER` capability must be enabled to compile mesh shaders and task shaders"
-    )]
-    MeshShaderCapabilityDisabled,
-
     #[error(
         "Mesh shader output variable must be a struct with fields that are all allowed builtins"
     )]
@@ -166,6 +162,8 @@ pub enum EntryPointError {
     InvalidMeshPrimitiveOutputType,
     #[error("Mesh output global variable must live in the workgroup address space")]
     WrongMeshOutputAddressSpace,
+    #[error("Task payload must be at least 4 bytes, but is {0} bytes")]
+    TaskPayloadTooSmall(u32),
 }
 
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
@@ -319,7 +317,10 @@ impl VaryingContext<'_> {
                         *ty_inner == Ti::Scalar(crate::Scalar::BOOL),
                     ),
                     Bi::PrimitiveIndex => (
-                        self.stage == St::Fragment && !self.output,
+                        (self.stage == St::Fragment && !self.output)
+                            || (self.stage == St::Mesh
+                                && self.output
+                                && self.mesh_output_type == MeshOutputType::PrimitiveOutput),
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
                     Bi::Barycentric => (
@@ -402,6 +403,24 @@ impl VaryingContext<'_> {
                         (false, true)
                     }
                 };
+                match built_in {
+                    Bi::CullPrimitive
+                    | Bi::PointIndex
+                    | Bi::LineIndices
+                    | Bi::TriangleIndices
+                    | Bi::MeshTaskSize
+                    | Bi::VertexCount
+                    | Bi::PrimitiveCount
+                    | Bi::Vertices
+                    | Bi::Primitives => {
+                        if !self.capabilities.contains(Capabilities::MESH_SHADER) {
+                            return Err(VaryingError::UnsupportedCapability(
+                                Capabilities::MESH_SHADER,
+                            ));
+                        }
+                    }
+                    _ => (),
+                }
 
                 if !visible {
                     return Err(VaryingError::InvalidBuiltInStage(built_in));
@@ -419,7 +438,9 @@ impl VaryingContext<'_> {
                 per_primitive,
             } => {
                 if per_primitive && !self.capabilities.contains(Capabilities::MESH_SHADER) {
-                    return Err(VaryingError::PerPrimitiveNotAllowed);
+                    return Err(VaryingError::UnsupportedCapability(
+                        Capabilities::MESH_SHADER,
+                    ));
                 }
                 // Only IO-shareable types may be stored in locations.
                 if !self.type_info[ty.index()]
@@ -847,7 +868,9 @@ impl super::Validator {
             crate::ShaderStage::Task | crate::ShaderStage::Mesh
         ) && !self.capabilities.contains(Capabilities::MESH_SHADER)
         {
-            return Err(EntryPointError::MeshShaderCapabilityDisabled.with_span());
+            return Err(
+                EntryPointError::UnsupportedCapability(Capabilities::MESH_SHADER).with_span(),
+            );
         }
         if ep.early_depth_test.is_some() {
             let required = Capabilities::EARLY_DEPTH_TEST;
@@ -912,6 +935,9 @@ impl super::Validator {
                             .with_span_handle(handle, &module.global_variables));
                     }
                     info.insert_global_use(GlobalUse::READ, handle);
+                }
+                if let Some(ref mesh_info) = ep.mesh_info {
+                    info.insert_global_use(GlobalUse::READ, mesh_info.output_variable);
                 }
             }
 
@@ -1032,6 +1058,11 @@ impl super::Validator {
                     return Err(EntryPointError::WrongTaskPayloadUsed
                         .with_span_handle(var_handle, &module.global_variables));
                 }
+                let size = module.types[var.ty].inner.size(module.to_ctx());
+                if size < 4 {
+                    return Err(EntryPointError::TaskPayloadTooSmall(size)
+                        .with_span_handle(var_handle, &module.global_variables));
+                }
             }
 
             let allowed_usage = match var.space {
@@ -1116,6 +1147,16 @@ impl super::Validator {
             implied.0.max_primitives_override = mesh_info.max_primitives_override;
             if implied.0 != *mesh_info {
                 return Err(EntryPointError::BadMeshOutputVariableType.with_span());
+            }
+            if mesh_info.topology == crate::MeshOutputTopology::Points
+                && !self
+                    .capabilities
+                    .contains(Capabilities::MESH_SHADER_POINT_TOPOLOGY)
+            {
+                return Err(EntryPointError::UnsupportedCapability(
+                    Capabilities::MESH_SHADER_POINT_TOPOLOGY,
+                )
+                .with_span());
             }
 
             self.validate_mesh_output_type(

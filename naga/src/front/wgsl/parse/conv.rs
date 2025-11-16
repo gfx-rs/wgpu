@@ -21,12 +21,12 @@ pub fn map_address_space<'a>(
         "push_constant" => Ok(crate::AddressSpace::PushConstant),
         "function" => Ok(crate::AddressSpace::Function),
         "task_payload" => {
-            if enable_extensions.contains(ImplementedEnableExtension::MeshShader) {
+            if enable_extensions.contains(ImplementedEnableExtension::WgpuMeshShader) {
                 Ok(crate::AddressSpace::TaskPayload)
             } else {
                 Err(Box::new(Error::EnableExtensionNotEnabled {
                     span,
-                    kind: ImplementedEnableExtension::MeshShader.into(),
+                    kind: ImplementedEnableExtension::WgpuMeshShader.into(),
                 }))
             }
         }
@@ -94,10 +94,10 @@ pub fn map_built_in(
         | crate::BuiltIn::Vertices
         | crate::BuiltIn::PrimitiveCount
         | crate::BuiltIn::Primitives => {
-            if !enable_extensions.contains(ImplementedEnableExtension::MeshShader) {
+            if !enable_extensions.contains(ImplementedEnableExtension::WgpuMeshShader) {
                 return Err(Box::new(Error::EnableExtensionNotEnabled {
                     span,
-                    kind: ImplementedEnableExtension::MeshShader.into(),
+                    kind: ImplementedEnableExtension::WgpuMeshShader.into(),
                 }));
             }
         }

@@ -488,11 +488,14 @@ impl super::Device {
     /// - If `drop_callback` is [`None`], wgpu-hal will take ownership of `vk_image`. If
     ///   `drop_callback` is [`Some`], `vk_image` must be valid until the callback is called.
     /// - If the `ImageCreateFlags` does not contain `MUTABLE_FORMAT`, the `view_formats` of `desc` must be empty.
+    /// - If `external_memory` is [`Some`], wgpu-hal will take ownership of the memory (which is presumed to back
+    ///   `vk_image`). If `external_memory` is [`None`], the memory must be valid until `drop_callback` is called.
     pub unsafe fn texture_from_raw(
         &self,
         vk_image: vk::Image,
         desc: &crate::TextureDescriptor,
         drop_callback: Option<crate::DropCallback>,
+        external_memory: Option<vk::DeviceMemory>,
     ) -> super::Texture {
         let mut raw_flags = vk::ImageCreateFlags::empty();
         let mut view_formats = vec![];
@@ -518,7 +521,7 @@ impl super::Device {
         super::Texture {
             raw: vk_image,
             drop_guard,
-            external_memory: None,
+            external_memory,
             block: None,
             format: desc.format,
             copy_size: desc.copy_extent(),
@@ -759,6 +762,7 @@ impl super::Device {
                 };
                 let needs_temp_options = !runtime_checks.bounds_checks
                     || !runtime_checks.force_loop_bounding
+                    || !runtime_checks.ray_query_initialization_tracking
                     || !binding_map.is_empty()
                     || naga_shader.debug_source.is_some()
                     || !stage.zero_initialize_workgroup_memory;
@@ -775,6 +779,9 @@ impl super::Device {
                     }
                     if !runtime_checks.force_loop_bounding {
                         temp_options.force_loop_bounding = false;
+                    }
+                    if !runtime_checks.ray_query_initialization_tracking {
+                        temp_options.ray_query_initialization_tracking = false;
                     }
                     if !binding_map.is_empty() {
                         temp_options.binding_map = binding_map.clone();

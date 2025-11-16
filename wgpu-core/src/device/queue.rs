@@ -648,6 +648,9 @@ impl Queue {
         buffer_offset: u64,
         buffer_size: wgt::BufferSize,
     ) -> Result<(), TransferError> {
+        if !matches!(&*buffer.map_state.lock(), BufferMapState::Idle) {
+            return Err(TransferError::BufferNotAvailable);
+        }
         buffer.check_usage(wgt::BufferUsages::COPY_DST)?;
         if buffer_size.get() % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(TransferError::UnalignedCopySize(buffer_size.get()));
@@ -1798,9 +1801,13 @@ fn validate_command_buffer(
                 }
             }
         }
+        // WebGPU requires that we check every bind group referenced during
+        // encoding, even ones that may have been replaced before being used.
+        // TODO(<https://github.com/gfx-rs/wgpu/issues/8510>): Optimize this.
         {
             profiling::scope!("bind groups");
             for bind_group in &cmd_buf_data.trackers.bind_groups {
+                // This checks the bind group and all resources it references.
                 bind_group.try_raw(snatch_guard)?;
             }
         }

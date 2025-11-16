@@ -233,7 +233,7 @@
             global_uses: [
                 ("READ"),
                 ("WRITE"),
-                ("WRITE"),
+                ("READ | WRITE"),
             ],
             expressions: [
                 (

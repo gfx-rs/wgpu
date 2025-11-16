@@ -157,11 +157,25 @@ impl Queries {
         );
     }
 
-    fn wait_for_results(&self, device: &wgpu::Device) -> Vec<u64> {
+    fn wait_for_results(&self, device: &wgpu::Device, is_test_on_metal: bool) -> Vec<u64> {
         self.destination_buffer
             .slice(..)
             .map_async(wgpu::MapMode::Read, |_| ());
-        device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+        let poll_type = if is_test_on_metal {
+            // Use a short timeout because the `timestamps_encoder` test (which
+            // is also marked as flaky) has been observed to hang on Metal.
+            //
+            // Note that a timeout here is *not* considered an error. In this
+            // particular case that is what we want, but in general, waits in
+            // tests should probably treat a timeout as an error.
+            wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: Some(std::time::Duration::from_secs(5)),
+            }
+        } else {
+            wgpu::PollType::wait_indefinitely()
+        };
+        device.poll(poll_type).unwrap();
 
         let timestamps = {
             let timestamp_view = self
@@ -218,7 +232,7 @@ async fn run() {
         .unwrap();
 
     let queries = submit_render_and_compute_pass_with_queries(&device, &queue);
-    let raw_results = queries.wait_for_results(&device);
+    let raw_results = queries.wait_for_results(&device, false);
     println!("Raw timestamp buffer contents: {raw_results:?}");
     QueryResults::from_raw_results(raw_results, timestamps_inside_passes).print(&queue);
 }
@@ -452,6 +466,8 @@ pub mod tests {
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
                 )
                 // see https://github.com/gfx-rs/wgpu/issues/2521
+                // If marking this test non-flaky, also consider removing the silent
+                // timeout in `wait_for_results`.
                 .expect_fail(FailureCase::always().panic("unexpected timestamp").flaky()),
         )
         .run_sync(|ctx| test_timestamps(ctx, true, false));
@@ -467,6 +483,8 @@ pub mod tests {
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
                 )
                 // see https://github.com/gfx-rs/wgpu/issues/2521
+                // If marking this test non-flaky, also consider removing the silent
+                // timeout in `wait_for_results`.
                 .expect_fail(FailureCase::always().panic("unexpected timestamp").flaky()),
         )
         .run_sync(|ctx| test_timestamps(ctx, true, true));
@@ -476,8 +494,9 @@ pub mod tests {
         timestamps_on_encoder: bool,
         timestamps_inside_passes: bool,
     ) {
+        let is_metal = ctx.adapter.get_info().backend == wgpu::Backend::Metal;
         let queries = submit_render_and_compute_pass_with_queries(&ctx.device, &ctx.queue);
-        let raw_results = queries.wait_for_results(&ctx.device);
+        let raw_results = queries.wait_for_results(&ctx.device, is_metal);
         let QueryResults {
             encoder_timestamps,
             render_start_end_timestamps,

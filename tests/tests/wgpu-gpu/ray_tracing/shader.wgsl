@@ -49,3 +49,77 @@ fn all_of_struct() {
         intersection.object_to_world,
     );
 }
+
+struct MaybeInvalidValues {
+    nan: f32,
+    inf: f32,
+}
+
+@group(0) @binding(1)
+var<storage> invalid_values: MaybeInvalidValues;
+
+@workgroup_size(1)
+@compute
+fn invalid_usages() {
+    {
+        var rq: ray_query;
+        // no initialize
+        rayQueryProceed(&rq);
+        let intersection = rayQueryGetCommittedIntersection(&rq);
+    }
+    {
+        var rq: ray_query;
+        rayQueryInitialize(&rq, acc_struct, RayDesc(0u, 0xFFu, 0.001, 100000.0, vec3f(0.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0)));
+        // no proceed
+        let intersection = rayQueryGetCommittedIntersection(&rq);
+    }
+    {
+        var rq: ray_query;
+        rayQueryInitialize(&rq, acc_struct, RayDesc(0u, 0xFFu, 0.001, 100000.0, vec3f(0.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0)));
+        rayQueryProceed(&rq);
+        // The acceleration structure has been set up to not generate an intersections, meaning it will be a committed intersection, not candidate.
+        let intersection = rayQueryGetCandidateIntersection(&rq);
+    }
+    {
+        var rq: ray_query;
+        // NaN in origin
+        rayQueryInitialize(&rq, acc_struct, RayDesc(0u, 0xFFu, 0.001, 100000.0, vec3f(0.0, invalid_values.nan, 0.0), vec3f(0.0, 0.0, 1.0)));
+        rayQueryProceed(&rq);
+        let intersection = rayQueryGetCommittedIntersection(&rq);
+    }
+    {
+        var rq: ray_query;
+        // Inf in origin
+        rayQueryInitialize(&rq, acc_struct, RayDesc(0u, 0xFFu, 0.001, 100000.0, vec3f(0.0, invalid_values.inf, 0.0), vec3f(0.0, 0.0, 1.0)));
+        rayQueryProceed(&rq);
+        let intersection = rayQueryGetCommittedIntersection(&rq);
+    }
+    {
+        var rq: ray_query;
+        // NaN in direction
+        rayQueryInitialize(&rq, acc_struct, RayDesc(0u, 0xFFu, 0.001, 100000.0, vec3f(0.0, 0.0, 0.0), vec3f(0.0, invalid_values.nan, 1.0)));
+        rayQueryProceed(&rq);
+        let intersection = rayQueryGetCommittedIntersection(&rq);
+    }
+    {
+        var rq: ray_query;
+        // Inf in direction
+        rayQueryInitialize(&rq, acc_struct, RayDesc(0u, 0xFFu, 0.001, 100000.0, vec3f(0.0, 0.0, 0.0), vec3f(0.0, invalid_values.inf, 1.0)));
+        rayQueryProceed(&rq);
+        let intersection = rayQueryGetCommittedIntersection(&rq);
+    }
+    {
+        var rq: ray_query;
+        // t_min greater than t_max
+        rayQueryInitialize(&rq, acc_struct, RayDesc(0u, 0xFFu, 100000.0, 0.1, vec3f(0.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0)));
+        rayQueryProceed(&rq);
+        let intersection = rayQueryGetCommittedIntersection(&rq);
+    }
+    {
+        var rq: ray_query;
+        // t_min less than 0
+        rayQueryInitialize(&rq, acc_struct, RayDesc(0u, 0xFFu, -0.001, 100000.0, vec3f(0.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0)));
+        rayQueryProceed(&rq);
+        let intersection = rayQueryGetCommittedIntersection(&rq);
+    }
+}

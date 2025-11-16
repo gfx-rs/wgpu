@@ -3,11 +3,10 @@
 🧪Experimental🧪
 
 `wgpu` supports an experimental version of mesh shading when `Features::EXPERIMENTAL_MESH_SHADER` is enabled.
-Currently `naga` has no support for parsing or writing mesh shaders.
-For this reason, all shaders must be created with `Device::create_shader_module_passthrough`.
+The status of the implementation is documented in [the mesh-shading issue](https://github.com/gfx-rs/wgpu/issues/7197).
 
 **Note**: The features documented here may have major bugs in them and are expected to be subject
-to breaking changes, suggestions for the API exposed by this should be posted on [the mesh-shading issue](https://github.com/gfx-rs/wgpu/issues/7197).
+to breaking changes. Suggestions for the API exposed by this should be posted on the issue above.
 
 ## Mesh shaders overview
 
@@ -83,10 +82,9 @@ An example of using mesh shaders to render a single triangle can be seen [here](
 ### Features
 * Using mesh shaders requires enabling `Features::EXPERIMENTAL_MESH_SHADER`.
 * Using mesh shaders with multiview requires enabling `Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW`.
-* Currently, only triangle rendering is tested
-* Line rendering is supported but untested
-* Point rendering is supported on vulkan. It is impossible on DirectX. Metal support hasn't been checked.
+* Using mesh shaders with point primitives requires enabling `Features::EXPERIMENTAL_MESH_SHADER_POINTS`.
 * Queries are unsupported
+* Primitive index support will be added once support lands in for them in general.
 
 ### Limits
 
@@ -96,12 +94,6 @@ An example of using mesh shaders to render a single triangle can be seen [here](
 * `Limits::max_task_workgroups_per_dimension` - the maximum for each of the 3 workgroup dimensions in a `draw_mesh_tasks` command. Each dimension passed must be less than or equal to this limit.
 * `max_mesh_multiview_count` - The maximum number of views used when multiview rendering with a mesh shader pipeline.
 * `max_mesh_output_layers` - the maximum number of output layers for a mesh shader pipeline.
-
-### Backend specific information
-* Only Vulkan is currently supported.
-* DirectX 12 doesn't support point rendering.
-* DirectX 12 support is planned.
-* Metal support is desired but not currently planned.
 
 ## Naga implementation
 
@@ -126,7 +118,7 @@ An example of using mesh shaders to render a single triangle can be seen [here](
 
 The majority of changes relating to mesh shaders will be in WGSL and `naga`.
 
-Using any of these features in a `wgsl` program will require adding the `enable mesh_shading` directive to the top of a program.
+Using any of these features in a `wgsl` program will require adding the `enable wgpu_mesh_shader;` directive to the top of a program.
 
 Two new shader stages will be added to `WGSL`. Fragment shaders are also modified slightly. Both task shaders and mesh shaders are allowed to use any compute-available functionality, including subgroup operations.
 
@@ -136,12 +128,14 @@ A function with the `@task` attribute is a **task shader entry point**. A mesh s
 
 A task shader entry point must have a `@workgroup_size` attribute, meeting the same requirements as one appearing on a compute shader entry point.
 
-A task shader entry point must also have a `@payload(G)` property, where `G` is the name of a global variable in the `task_payload` address space. Each task shader workgroup has its own instance of this variable, visible to all invocations in the workgroup. Whatever value the workgroup collectively stores in that global variable becomes the **task payload**, and is provided to all invocations in the mesh shader grid dispatched for the workgroup.
+A task shader entry point must also have a `@payload(G)` property, where `G` is the name of a global variable in the `task_payload` address space. Each task shader workgroup has its own instance of this variable, visible to all invocations in the workgroup. Whatever value the workgroup collectively stores in that global variable becomes the **task payload**, and is provided to all invocations in the mesh shader grid dispatched for the workgroup. A task payload variable must be at least 4 bytes in size.
 
 A task shader entry point must return a `vec3<u32>` value. The return value of each workgroup's first invocation (that is, the one whose `local_invocation_index` is `0`) is taken as the size of a **mesh shader grid** to dispatch, measured in workgroups. (If the task shader entry point returns `vec3(0, 0, 0)`, then no mesh shaders are dispatched.) Mesh shader grids are described in the next section.
 
 Each task shader workgroup dispatches an independent mesh shader grid: in mesh shader invocations, `@builtin` values like `workgroup_id` and `global_invocation_id` describe the position of the workgroup and invocation within that grid;
 and `@builtin(num_workgroups)` matches the task shader workgroup's return value. Mesh shaders dispatched for other task shader workgroups are not included in the count. If it is necessary for a mesh shader to know which task shader workgroup dispatched it, the task shader can include its own workgroup id in the task payload.
+
+Task shaders must return a value of type `vec3<u32>` decorated with `@builtin(mesh_task_size)`.
 
 Task shaders can use compute and subgroup builtin inputs, in addition to `view_index` and `draw_id`.
 
@@ -151,7 +145,7 @@ A function with the `@mesh` attribute is a **mesh shader entry point**. Mesh sha
 
 Like compute shaders, mesh shaders are invoked in a grid of workgroups, called a **mesh shader grid**. If the mesh shader pipeline has a task shader, then each task shader workgroup determines the size of a mesh shader grid to be dispatched, as described above. Otherwise, the three-component size passed to `draw_mesh_tasks`, or drawn from the indirect buffer for its indirect variants, specifies the size of the mesh shader grid directly, as the number of workgroups along each of the grid's three axes.
 
-If the mesh shader pipeline has a task shader entry point, then the pipeline's mesh shader entry point must also have a `@payload(G)` attribute, naming the same variable, and the sizes must match. Mesh shader invocations can read, but not write, this variable, which is initialized to whatever value was written to it by the task shader workgroup that dispatched this mesh shader grid.
+If the mesh shader pipeline has a task shader entry point, then the pipeline's mesh shader entry point must also have a `@payload(G)` attribute, and the sizes of the variables must match. Mesh shader invocations can read from, but not write to, this variable, which is initialized to whatever value was written to it by the task shader workgroup that dispatched this mesh shader grid.
 
 If the mesh shader pipeline does not have a task shader entry point, then the mesh shader entry point must not have any `@payload` attribute.
 
@@ -183,6 +177,8 @@ The primitive output type `P` must be a struct type, every member of which eithe
 
 The `@location` attributes of `P` and `V` must not overlap, since they are merged to produce the user-defined inputs to the fragment shader.
 
+Mesh shaders may write to the `primitive_index` builtin. This is treated just like a field decorated with `@location`, so if the mesh shader outputs `primitive_index` the fragment shader must input it, and if the fragment shader inputs it, the mesh shader must write it (unlike vertex shader pipelines).
+
 Mesh shaders can use compute and mesh shader builtin inputs, in addition to `view_index`, and if no task shader is present, `draw_id`.
 
 ### Fragment shader
@@ -196,7 +192,7 @@ The primitive state is part of the fragment input and must match the output of t
 The following is a full example of WGSL shaders that could be used to create a mesh shader pipeline, showing off many of the features.
 
 ```wgsl
-enable mesh_shading;
+enable wgpu_mesh_shader;
 
 const positions = array(
     vec4(0., 1., 0., 1.),
@@ -208,24 +204,26 @@ const colors = array(
     vec4(0., 0., 1., 1.),
     vec4(1., 0., 0., 1.)
 );
+
 struct TaskPayload {
     colorMask: vec4<f32>,
     visible: bool,
 }
-var<task_payload> taskPayload: TaskPayload;
-var<workgroup> workgroupData: f32;
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) color: vec4<f32>,
 }
 struct PrimitiveOutput {
-    @builtin(triangle_indices) index: vec3<u32>,
+    @builtin(triangle_indices) indices: vec3<u32>,
     @builtin(cull_primitive) cull: bool,
     @per_primitive @location(1) colorMask: vec4<f32>,
 }
 struct PrimitiveInput {
     @per_primitive @location(1) colorMask: vec4<f32>,
 }
+
+var<task_payload> taskPayload: TaskPayload;
+var<workgroup> workgroupData: f32;
 
 @task
 @payload(taskPayload)
@@ -234,7 +232,7 @@ fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
     workgroupData = 1.0;
     taskPayload.colorMask = vec4(1.0, 1.0, 0.0, 1.0);
     taskPayload.visible = true;
-    return vec3(3, 1, 1);
+    return vec3(1, 1, 1);
 }
 
 struct MeshOutput {
@@ -243,8 +241,8 @@ struct MeshOutput {
     @builtin(vertex_count) vertex_count: u32,
     @builtin(primitive_count) primitive_count: u32,
 }
-
 var<workgroup> mesh_output: MeshOutput;
+
 @mesh(mesh_output)
 @payload(taskPayload)
 @workgroup_size(1)
@@ -262,10 +260,11 @@ fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocati
     mesh_output.vertices[2].position = positions[2];
     mesh_output.vertices[2].color = colors[2] * taskPayload.colorMask;
 
-    mesh_output.primitives[0].index = vec3<u32>(0, 1, 2);
+    mesh_output.primitives[0].indices = vec3<u32>(0, 1, 2);
     mesh_output.primitives[0].cull = !taskPayload.visible;
     mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
 }
+
 @fragment
 fn fs_main(vertex: VertexOutput, primitive: PrimitiveInput) -> @location(0) vec4<f32> {
     return vertex.color * primitive.colorMask;

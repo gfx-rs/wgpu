@@ -354,7 +354,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 drop(pass);
                 let _ = encoder.finish();
             },
-            Some("buffer is bound with size 16 where the shader expects 32 in group[0] compact index 0"),
+            Some("In bind group index 0, the buffer bound at binding index 0 is bound with size 16 where the shader expects 32"),
         );
     });
 
