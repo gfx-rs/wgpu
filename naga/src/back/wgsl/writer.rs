@@ -300,6 +300,23 @@ impl<W: Write> Writer<W> {
                             crate::Binding::BuiltIn(crate::BuiltIn::ClipDistance) => {
                                 needs_clip_distances = true;
                             }
+                            crate::Binding::Location {
+                                per_primitive: true,
+                                ..
+                            } => {
+                                needs_mesh_shaders = true;
+                            }
+                            crate::Binding::BuiltIn(
+                                crate::BuiltIn::MeshTaskSize
+                                | crate::BuiltIn::CullPrimitive
+                                | crate::BuiltIn::PointIndex
+                                | crate::BuiltIn::LineIndices
+                                | crate::BuiltIn::TriangleIndices
+                                | crate::BuiltIn::VertexCount
+                                | crate::BuiltIn::Vertices
+                                | crate::BuiltIn::PrimitiveCount
+                                | crate::BuiltIn::Primitives,
+                            ) => {}
                             _ => {}
                         }
                     }
