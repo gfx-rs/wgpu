@@ -2303,7 +2303,7 @@ impl dispatch::DeviceInterface for WebDevice {
         let mapped_desc = webgpu_sys::GpuTextureDescriptor::new(
             map_texture_format(desc.format),
             &map_extent_3d(desc.size),
-            desc.usage.bits(),
+            (desc.usage - crate::TextureUsages::TRANSIENT).bits(),
         );
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
