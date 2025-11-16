@@ -1286,7 +1286,12 @@ impl Writer {
                 .to_words(&mut self.logical_layout.execution_modes);
                 spirv::ExecutionModel::GLCompute
             }
-            crate::ShaderStage::Task | crate::ShaderStage::Mesh => unreachable!(),
+            crate::ShaderStage::Task
+            | crate::ShaderStage::Mesh
+            | crate::ShaderStage::RayGeneration
+            | crate::ShaderStage::AnyHit
+            | crate::ShaderStage::ClosestHit
+            | crate::ShaderStage::Miss => unreachable!(),
         };
         //self.check(exec_model.required_capabilities())?;
 
@@ -2223,7 +2228,20 @@ impl Writer {
                     | Bi::VertexCount
                     | Bi::PrimitiveCount
                     | Bi::Vertices
-                    | Bi::Primitives => unreachable!(),
+                    | Bi::Primitives
+                    | Bi::RayInvocationId
+                    | Bi::NumRayInvocations
+                    | Bi::InstanceCustomData
+                    | Bi::GeometryIndex
+                    | Bi::WorldRayOrigin
+                    | Bi::WorldRayDirection
+                    | Bi::ObjectRayOrigin
+                    | Bi::ObjectRayDirection
+                    | Bi::RayTmin
+                    | Bi::RayTCurrentMax
+                    | Bi::ObjectToWorld
+                    | Bi::WorldToObject
+                    | Bi::HitKind => unreachable!(),
                 };
 
                 self.decorate(id, Decoration::BuiltIn, &[built_in as u32]);

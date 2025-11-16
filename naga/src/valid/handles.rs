@@ -850,6 +850,18 @@ impl super::Validator {
                 validate_expr(result)?;
                 Ok(())
             }
+            crate::Statement::RayPipelineFunction(fun) => match fun {
+                crate::RayPipelineFunction::TraceRay {
+                    acceleration_structure,
+                    descriptor,
+                    payload,
+                } => {
+                    validate_expr(acceleration_structure)?;
+                    validate_expr(descriptor)?;
+                    validate_expr(payload)?;
+                    Ok(())
+                }
+            },
             crate::Statement::Break
             | crate::Statement::Continue
             | crate::Statement::Kill

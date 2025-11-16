@@ -1638,6 +1638,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 function,
                 mesh_info,
                 task_payload,
+                ray_incoming_payload: None,
             });
             Ok(LoweredGlobalDecl::EntryPoint(
                 ctx.module.entry_points.len() - 1,

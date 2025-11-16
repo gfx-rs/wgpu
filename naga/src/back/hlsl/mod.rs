@@ -285,6 +285,7 @@ impl crate::ShaderStage {
             Self::Compute => "cs",
             Self::Task => "as",
             Self::Mesh => "ms",
+            Self::RayGeneration | Self::AnyHit | Self::ClosestHit | Self::Miss => "lib",
         }
     }
 }

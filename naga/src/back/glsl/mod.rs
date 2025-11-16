@@ -140,7 +140,10 @@ impl crate::AddressSpace {
             | crate::AddressSpace::Storage { .. }
             | crate::AddressSpace::Handle
             | crate::AddressSpace::PushConstant
-            | crate::AddressSpace::TaskPayload => false,
+            | crate::AddressSpace::TaskPayload
+            // just a default impl, not really supported
+            | crate::AddressSpace::RayPayload
+            | crate::AddressSpace::IncomingRayPayload => false,
         }
     }
 }
@@ -504,7 +507,15 @@ impl fmt::Display for VaryingName<'_> {
                     (ShaderStage::Vertex, true) | (ShaderStage::Fragment, false) => "vs2fs",
                     // fragment to pipeline
                     (ShaderStage::Fragment, true) => "fs2p",
-                    (ShaderStage::Task | ShaderStage::Mesh, _) => unreachable!(),
+                    (
+                        ShaderStage::Task
+                        | ShaderStage::Mesh
+                        | ShaderStage::RayGeneration
+                        | ShaderStage::AnyHit
+                        | ShaderStage::ClosestHit
+                        | ShaderStage::Miss,
+                        _,
+                    ) => unreachable!(),
                 };
                 write!(f, "_{prefix}_location{location}",)
             }
@@ -521,7 +532,12 @@ impl ShaderStage {
             ShaderStage::Compute => "cs",
             ShaderStage::Fragment => "fs",
             ShaderStage::Vertex => "vs",
-            ShaderStage::Task | ShaderStage::Mesh => unreachable!(),
+            ShaderStage::Task
+            | ShaderStage::Mesh
+            | ShaderStage::RayGeneration
+            | ShaderStage::AnyHit
+            | ShaderStage::ClosestHit
+            | ShaderStage::Miss => unreachable!(),
         }
     }
 }
@@ -1309,6 +1325,10 @@ impl<'a, W: Write> Writer<'a, W> {
             crate::AddressSpace::Function => unreachable!(),
             // Textures and samplers are handled directly in `Writer::write`.
             crate::AddressSpace::Handle => unreachable!(),
+            // ray tracing pipelines unsupported
+            crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload => {
+                unreachable!()
+            }
         }
 
         Ok(())
@@ -1675,7 +1695,12 @@ impl<'a, W: Write> Writer<'a, W> {
             ShaderStage::Vertex => output,
             ShaderStage::Fragment => !output,
             ShaderStage::Compute => false,
-            ShaderStage::Task | ShaderStage::Mesh => unreachable!(),
+            ShaderStage::Task
+            | ShaderStage::Mesh
+            | ShaderStage::RayGeneration
+            | ShaderStage::AnyHit
+            | ShaderStage::ClosestHit
+            | ShaderStage::Miss => unreachable!(),
         };
 
         // Write the I/O locations, if allowed
@@ -2810,6 +2835,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
                 writeln!(self.out, ");")?;
             }
+            Statement::RayPipelineFunction(_) => unimplemented!(),
         }
 
         Ok(())
@@ -5269,7 +5295,20 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
         | Bi::VertexCount
         | Bi::PrimitiveCount
         | Bi::Vertices
-        | Bi::Primitives => {
+        | Bi::Primitives
+        | Bi::RayInvocationId
+        | Bi::NumRayInvocations
+        | Bi::InstanceCustomData
+        | Bi::GeometryIndex
+        | Bi::WorldRayOrigin
+        | Bi::WorldRayDirection
+        | Bi::ObjectRayOrigin
+        | Bi::ObjectRayDirection
+        | Bi::RayTmin
+        | Bi::RayTCurrentMax
+        | Bi::ObjectToWorld
+        | Bi::WorldToObject
+        | Bi::HitKind => {
             unimplemented!()
         }
     }
@@ -5287,7 +5326,7 @@ const fn glsl_storage_qualifier(space: crate::AddressSpace) -> Option<&'static s
         As::Handle => Some("uniform"),
         As::WorkGroup => Some("shared"),
         As::PushConstant => Some("uniform"),
-        As::TaskPayload => unreachable!(),
+        As::TaskPayload | As::RayPayload | As::IncomingRayPayload => unreachable!(),
     }
 }
 

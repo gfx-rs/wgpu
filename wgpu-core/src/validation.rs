@@ -1301,7 +1301,7 @@ impl Interface {
                                     }
                                     naga::ShaderStage::Compute => (false, 0),
                                     // TODO: add validation for these, see https://github.com/gfx-rs/wgpu/issues/8003
-                                    naga::ShaderStage::Task | naga::ShaderStage::Mesh => {
+                                    naga::ShaderStage::Task | naga::ShaderStage::Mesh | naga::ShaderStage::RayGeneration | naga::ShaderStage::AnyHit | naga::ShaderStage::ClosestHit | naga::ShaderStage::Miss => {
                                         unreachable!()
                                     }
                                 };

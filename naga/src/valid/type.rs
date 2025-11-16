@@ -219,7 +219,7 @@ fn check_member_layout(
 const fn ptr_space_argument_flag(space: crate::AddressSpace) -> TypeFlags {
     use crate::AddressSpace as As;
     match space {
-        As::Function | As::Private => TypeFlags::ARGUMENT,
+        As::Function | As::Private | As::RayPayload | As::IncomingRayPayload => TypeFlags::ARGUMENT,
         As::Uniform
         | As::Storage { .. }
         | As::Handle

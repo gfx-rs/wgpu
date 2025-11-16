@@ -152,6 +152,17 @@ impl FunctionTracer<'_> {
                         self.expressions_used.insert(argument);
                         self.expressions_used.insert(result);
                     }
+                    St::RayPipelineFunction(func) => match func {
+                        crate::RayPipelineFunction::TraceRay {
+                            acceleration_structure,
+                            descriptor,
+                            payload,
+                        } => {
+                            self.expressions_used.insert(acceleration_structure);
+                            self.expressions_used.insert(descriptor);
+                            self.expressions_used.insert(payload);
+                        }
+                    },
 
                     // Trivial statements.
                     St::Break
@@ -371,6 +382,17 @@ impl FunctionMap {
                         adjust(argument);
                         adjust(result);
                     }
+                    St::RayPipelineFunction(ref mut func) => match func {
+                        crate::RayPipelineFunction::TraceRay {
+                            ref mut acceleration_structure,
+                            ref mut descriptor,
+                            ref mut payload,
+                        } => {
+                            adjust(acceleration_structure);
+                            adjust(descriptor);
+                            adjust(payload);
+                        }
+                    },
 
                     // Trivial statements.
                     St::Break

@@ -3679,6 +3679,7 @@ impl BlockContext<'_> {
                 } => {
                     self.write_subgroup_gather(mode, argument, result, &mut block)?;
                 }
+                Statement::RayPipelineFunction(_) => unreachable!(),
             }
         }
 

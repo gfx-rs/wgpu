@@ -1379,6 +1379,7 @@ impl Frontend {
             },
             mesh_info: None,
             task_payload: None,
+            ray_incoming_payload: None,
         });
 
         Ok(())

@@ -207,7 +207,12 @@ impl<W: Write> Writer<W> {
                     Attribute::Stage(ShaderStage::Compute),
                     Attribute::WorkGroupSize(ep.workgroup_size),
                 ],
-                ShaderStage::Mesh | ShaderStage::Task => unreachable!(),
+                ShaderStage::Mesh
+                | ShaderStage::Task
+                | ShaderStage::RayGeneration
+                | ShaderStage::AnyHit
+                | ShaderStage::ClosestHit
+                | ShaderStage::Miss => unreachable!(),
             };
 
             self.write_attributes(&attributes)?;
@@ -403,7 +408,12 @@ impl<W: Write> Writer<W> {
                         ShaderStage::Vertex => "vertex",
                         ShaderStage::Fragment => "fragment",
                         ShaderStage::Compute => "compute",
-                        ShaderStage::Task | ShaderStage::Mesh => unreachable!(),
+                        ShaderStage::Task
+                        | ShaderStage::Mesh
+                        | ShaderStage::RayGeneration
+                        | ShaderStage::AnyHit
+                        | ShaderStage::ClosestHit
+                        | ShaderStage::Miss => unreachable!(),
                     };
                     write!(self.out, "@{stage_str} ")?;
                 }
@@ -984,6 +994,7 @@ impl<W: Write> Writer<W> {
                 }
                 writeln!(self.out, ");")?;
             }
+            Statement::RayPipelineFunction(_) => unreachable!(),
         }
 
         Ok(())

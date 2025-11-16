@@ -596,7 +596,9 @@ impl crate::AddressSpace {
             | Self::WorkGroup
             | Self::PushConstant
             | Self::Handle
-            | Self::TaskPayload => true,
+            | Self::TaskPayload
+            | Self::RayPayload
+            | Self::IncomingRayPayload => true,
             Self::Function => false,
         }
     }
@@ -609,7 +611,7 @@ impl crate::AddressSpace {
             // may end up with "const" even if the binding is read-write,
             // and that should be OK.
             Self::Storage { .. } => true,
-            Self::TaskPayload => unimplemented!(),
+            Self::TaskPayload | Self::RayPayload | Self::IncomingRayPayload => unimplemented!(),
             // These should always be read-write.
             Self::Private | Self::WorkGroup => false,
             // These translate to `constant` address space, no need for qualifiers.
@@ -624,9 +626,13 @@ impl crate::AddressSpace {
             Self::Handle => None,
             Self::Uniform | Self::PushConstant => Some("constant"),
             Self::Storage { .. } => Some("device"),
-            Self::Private | Self::Function => Some("thread"),
+            // note for `RayPayload`, this probably needs to be emulated as a
+            // private variable, as metal has essentially an inout input
+            // for where it is passed.
+            Self::Private | Self::Function | Self::RayPayload => Some("thread"),
             Self::WorkGroup => Some("threadgroup"),
             Self::TaskPayload => Some("object_data"),
+            Self::IncomingRayPayload => Some("ray_data"),
         }
     }
 }
@@ -4194,6 +4200,7 @@ impl<W: Write> Writer<W> {
                     }
                     writeln!(self.out, ");")?;
                 }
+                crate::Statement::RayPipelineFunction(_) => unreachable!(),
             }
         }
 
@@ -6672,6 +6679,10 @@ template <typename A>
                     false,
                 ),
                 crate::ShaderStage::Task | crate::ShaderStage::Mesh => unimplemented!(),
+                crate::ShaderStage::RayGeneration
+                | crate::ShaderStage::AnyHit
+                | crate::ShaderStage::ClosestHit
+                | crate::ShaderStage::Miss => unimplemented!(),
             };
 
             // Should this entry point be modified to do vertex pulling?
@@ -6744,6 +6755,8 @@ template <typename A>
                         crate::AddressSpace::Function
                         | crate::AddressSpace::Private
                         | crate::AddressSpace::WorkGroup => {}
+                        crate::AddressSpace::RayPayload
+                        | crate::AddressSpace::IncomingRayPayload => unimplemented!(),
                     }
                 }
                 if needs_buffer_sizes {

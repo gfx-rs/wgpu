@@ -198,7 +198,20 @@ impl TryToWgsl for crate::BuiltIn {
             | Bi::VertexCount
             | Bi::PrimitiveCount
             | Bi::Vertices
-            | Bi::Primitives => return None,
+            | Bi::Primitives
+            | Bi::RayInvocationId
+            | Bi::NumRayInvocations
+            | Bi::InstanceCustomData
+            | Bi::GeometryIndex
+            | Bi::WorldRayOrigin
+            | Bi::WorldRayDirection
+            | Bi::ObjectRayOrigin
+            | Bi::ObjectRayDirection
+            | Bi::RayTmin
+            | Bi::RayTCurrentMax
+            | Bi::ObjectToWorld
+            | Bi::WorldToObject
+            | Bi::HitKind => return None,
         })
     }
 }
@@ -363,6 +376,7 @@ pub const fn address_space_str(
             As::Handle => return (None, None),
             As::Function => "function",
             As::TaskPayload => return (None, None),
+            As::IncomingRayPayload | As::RayPayload => return (None, None),
         }),
         None,
     )

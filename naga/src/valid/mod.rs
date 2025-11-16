@@ -192,6 +192,8 @@ bitflags::bitflags! {
         const MESH_SHADER = 1 << 30;
         /// Support for mesh shaders which output points.
         const MESH_SHADER_POINT_TOPOLOGY = 1 << 30;
+        /// Support for ray generation, any hit, closest hit, and miss shaders.
+        const RAY_TRACING_PIPELINE = 1 << 31;
     }
 }
 
@@ -282,12 +284,16 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub struct ShaderStages: u8 {
+    pub struct ShaderStages: u16 {
         const VERTEX = 0x1;
         const FRAGMENT = 0x2;
         const COMPUTE = 0x4;
         const MESH = 0x8;
         const TASK = 0x10;
+        const RAY_GENERATION = 0x20;
+        const ANY_HIT = 0x40;
+        const CLOSEST_HIT = 0x80;
+        const MISS = 0x100;
     }
 }
 
@@ -362,6 +368,19 @@ pub struct Validator {
     /// [`Expression`]: crate::Expression
     /// [`Statement`]: crate::Statement
     needs_visit: HandleSet<crate::Expression>,
+
+    /// Whether any trace rays call doesn't get called with an acceleration structure
+    /// with vertex return. This is in case another shader uses a vertex return only
+    /// builtin. If inner option is `Some`, then the span is of one of the `traceRay`
+    /// calls with a acceleration structure without vertex return. If the inner option
+    /// is `None` then the shader only uses acceleration structures with vertex return
+    /// in its trace ray calls. If the outer option is `None`, there are no `traceRay`
+    /// calls.
+    trace_rays_no_vertex_return: Option<Option<crate::Span>>,
+
+    /// The type of the ray payload, this must always be the same type in a particular
+    /// entrypoint
+    trace_rays_payload_type: Option<Handle<crate::Type>>,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -560,6 +579,8 @@ impl Validator {
             override_ids: FastHashSet::default(),
             overrides_resolved: false,
             needs_visit: HandleSet::new(),
+            trace_rays_no_vertex_return: None,
+            trace_rays_payload_type: None,
         }
     }
 
