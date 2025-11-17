@@ -316,7 +316,9 @@ impl<W: Write> Writer<W> {
                                 | crate::BuiltIn::Vertices
                                 | crate::BuiltIn::PrimitiveCount
                                 | crate::BuiltIn::Primitives,
-                            ) => {}
+                            ) => {
+                                needs_mesh_shaders = true;
+                            }
                             _ => {}
                         }
                     }
