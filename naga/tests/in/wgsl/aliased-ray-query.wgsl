@@ -1,3 +1,5 @@
+enable wgpu_ray_query;
+
 alias rq = ray_query;
 
 @group(0) @binding(0)

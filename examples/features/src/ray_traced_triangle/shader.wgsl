@@ -1,5 +1,7 @@
 // duplicate of hal's ray-traced triangle shader
 
+enable wgpu_ray_query;
+
 struct Uniforms {
     view_inv: mat4x4<f32>,
     proj_inv: mat4x4<f32>,
