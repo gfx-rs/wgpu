@@ -482,7 +482,7 @@ impl<W: Write> Writer<W> {
                     if shader_stage == ShaderStage::Mesh {
                         write!(
                             self.out,
-                            "@{stage_str}({})",
+                            "@{stage_str}({}) ",
                             mesh_output_variable.as_ref().unwrap()
                         )?;
                     } else {
