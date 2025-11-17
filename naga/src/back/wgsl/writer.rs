@@ -33,7 +33,7 @@ enum Attribute {
     BlendSrc(u32),
     Stage(ShaderStage),
     WorkGroupSize([u32; 3]),
-    MeshTaskPayload(String),
+    TaskPayload(String),
     PerPrimitive,
 }
 
@@ -217,23 +217,19 @@ impl<W: Write> Writer<W> {
                             .clone()
                             .unwrap(),
                     );
+                    let mut mesh_attrs = vec![
+                            Attribute::Stage(ShaderStage::Mesh),
+                            Attribute::WorkGroupSize(ep.workgroup_size),
+                    ];
                     if ep.task_payload.is_some() {
                         let payload_name = module.global_variables[ep.task_payload.unwrap()]
                             .name
                             .clone()
                             .unwrap();
-                        vec![
-                            Attribute::Stage(ShaderStage::Mesh),
-                            Attribute::MeshTaskPayload(payload_name),
-                            Attribute::WorkGroupSize(ep.workgroup_size),
-                        ]
-                    } else {
-                        vec![
-                            Attribute::Stage(ShaderStage::Mesh),
-                            Attribute::WorkGroupSize(ep.workgroup_size),
-                        ]
+                        mesh_attrs.push(Attribute::TaskPayload(payload_name));
                     }
-                }
+                    mesh_attrs
+                } 
                 ShaderStage::Task => {
                     let payload_name = module.global_variables[ep.task_payload.unwrap()]
                         .name
@@ -241,7 +237,7 @@ impl<W: Write> Writer<W> {
                         .unwrap();
                     vec![
                         Attribute::Stage(ShaderStage::Task),
-                        Attribute::MeshTaskPayload(payload_name),
+                        Attribute::TaskPayload(payload_name),
                         Attribute::WorkGroupSize(ep.workgroup_size),
                     ]
                 }
@@ -515,7 +511,7 @@ impl<W: Write> Writer<W> {
                         write!(self.out, "@interpolate({interpolation}) ")?;
                     }
                 }
-                Attribute::MeshTaskPayload(ref payload_name) => {
+                Attribute::TaskPayload(ref payload_name) => {
                     write!(self.out, "@payload({payload_name}) ")?;
                 }
                 Attribute::PerPrimitive => write!(self.out, "@per_primitive ")?,
@@ -1913,18 +1909,14 @@ fn map_binding_to_attribute(binding: &crate::Binding) -> Vec<Attribute> {
             blend_src: None,
             per_primitive,
         } => {
+            let mut attrs = vec![
+                    Attribute::Location(location),
+                    Attribute::Interpolate(interpolation, sampling),
+            ];
             if per_primitive {
-                vec![
-                    Attribute::PerPrimitive,
-                    Attribute::Location(location),
-                    Attribute::Interpolate(interpolation, sampling),
-                ]
-            } else {
-                vec![
-                    Attribute::Location(location),
-                    Attribute::Interpolate(interpolation, sampling),
-                ]
+                attrs.push(Attribute::PerPrimitive);
             }
+            attrs
         }
         crate::Binding::Location {
             location,
@@ -1933,20 +1925,15 @@ fn map_binding_to_attribute(binding: &crate::Binding) -> Vec<Attribute> {
             blend_src: Some(blend_src),
             per_primitive,
         } => {
+            let mut attrs = vec![
+                    Attribute::Location(location),
+                    Attribute::BlendSrc(blend_src),
+                    Attribute::Interpolate(interpolation, sampling),
+            ];
             if per_primitive {
-                vec![
-                    Attribute::PerPrimitive,
-                    Attribute::Location(location),
-                    Attribute::BlendSrc(blend_src),
-                    Attribute::Interpolate(interpolation, sampling),
-                ]
-            } else {
-                vec![
-                    Attribute::Location(location),
-                    Attribute::BlendSrc(blend_src),
-                    Attribute::Interpolate(interpolation, sampling),
-                ]
+                attrs.push(Attribute::PerPrimitive);
             }
+            attrs
         }
     }
 }
