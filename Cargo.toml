@@ -200,7 +200,7 @@ which = "8"
 xshell = "0.2.2"
 
 # Metal dependencies
-metal = { git = "https://github.com/msvbg/metal-rs", branch = "gpu_resource_id_for_buffer" }
+metal = "0.32"
 block = "0.1.6"
 core-graphics-types = "0.2"
 objc = "0.2.5"
