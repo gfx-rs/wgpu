@@ -33,6 +33,7 @@ enum Attribute {
     BlendSrc(u32),
     Stage(ShaderStage),
     WorkGroupSize([u32; 3]),
+    MeshStage(String),
     TaskPayload(String),
     PerPrimitive,
 }
@@ -203,7 +204,6 @@ impl<W: Write> Writer<W> {
 
         // Write all entry points
         for (index, ep) in module.entry_points.iter().enumerate() {
-            let mut mesh_output_name = None;
             let attributes = match ep.stage {
                 ShaderStage::Vertex | ShaderStage::Fragment => vec![Attribute::Stage(ep.stage)],
                 ShaderStage::Compute => vec![
@@ -211,14 +211,12 @@ impl<W: Write> Writer<W> {
                     Attribute::WorkGroupSize(ep.workgroup_size),
                 ],
                 ShaderStage::Mesh => {
-                    mesh_output_name = Some(
-                        module.global_variables[ep.mesh_info.as_ref().unwrap().output_variable]
+                    let mesh_output_name = module.global_variables[ep.mesh_info.as_ref().unwrap().output_variable]
                             .name
                             .clone()
-                            .unwrap(),
-                    );
+                            .unwrap();
                     let mut mesh_attrs = vec![
-                            Attribute::Stage(ShaderStage::Mesh),
+                            Attribute::MeshStage(mesh_output_name),
                             Attribute::WorkGroupSize(ep.workgroup_size),
                     ];
                     if ep.task_payload.is_some() {
@@ -242,7 +240,7 @@ impl<W: Write> Writer<W> {
                     ]
                 }
             };
-            self.write_attributes(&attributes, mesh_output_name)?;
+            self.write_attributes(&attributes)?;
             // Add a newline after attribute
             writeln!(self.out)?;
 
@@ -380,7 +378,7 @@ impl<W: Write> Writer<W> {
         for (index, arg) in func.arguments.iter().enumerate() {
             // Write argument attribute if a binding is present
             if let Some(ref binding) = arg.binding {
-                self.write_attributes(&map_binding_to_attribute(binding), None)?;
+                self.write_attributes(&map_binding_to_attribute(binding))?;
             }
             // Write argument name
             let argument_name = &self.names[&func_ctx.argument_key(index as u32)];
@@ -400,7 +398,7 @@ impl<W: Write> Writer<W> {
         if let Some(ref result) = func.result {
             write!(self.out, " -> ")?;
             if let Some(ref binding) = result.binding {
-                self.write_attributes(&map_binding_to_attribute(binding), None)?;
+                self.write_attributes(&map_binding_to_attribute(binding))?;
             }
             self.write_type(module, result.ty)?;
         }
@@ -456,7 +454,6 @@ impl<W: Write> Writer<W> {
     fn write_attributes(
         &mut self,
         attributes: &[Attribute],
-        mesh_output_variable: Option<String>,
     ) -> BackendResult {
         for attribute in attributes {
             match *attribute {
@@ -475,13 +472,7 @@ impl<W: Write> Writer<W> {
                         ShaderStage::Mesh => "mesh",
                     };
 
-                    if shader_stage == ShaderStage::Mesh {
-                        write!(
-                            self.out,
-                            "@{stage_str}({}) ",
-                            mesh_output_variable.as_ref().unwrap()
-                        )?;
-                    } else {
+                    if shader_stage != ShaderStage::Mesh {
                         write!(self.out, "@{stage_str} ")?;
                     }
                 }
@@ -510,6 +501,9 @@ impl<W: Write> Writer<W> {
                             .to_wgsl();
                         write!(self.out, "@interpolate({interpolation}) ")?;
                     }
+                }
+                Attribute::MeshStage(ref name) => {
+                    write!(self.out, "@mesh({name}) ")?;
                 }
                 Attribute::TaskPayload(ref payload_name) => {
                     write!(self.out, "@payload({payload_name}) ")?;
@@ -543,7 +537,7 @@ impl<W: Write> Writer<W> {
             // The indentation is only for readability
             write!(self.out, "{}", back::INDENT)?;
             if let Some(ref binding) = member.binding {
-                self.write_attributes(&map_binding_to_attribute(binding), None)?;
+                self.write_attributes(&map_binding_to_attribute(binding))?;
             }
             // Write struct member name and type
             let member_name = &self.names[&NameKey::StructMember(handle, index as u32)];
