@@ -1,2 +1,2 @@
 god_mode = true
-targets = "IR | ANALYSIS"
+targets = "IR | ANALYSIS | WGSL"
