@@ -211,13 +211,14 @@ impl<W: Write> Writer<W> {
                     Attribute::WorkGroupSize(ep.workgroup_size),
                 ],
                 ShaderStage::Mesh => {
-                    let mesh_output_name = module.global_variables[ep.mesh_info.as_ref().unwrap().output_variable]
-                            .name
-                            .clone()
-                            .unwrap();
+                    let mesh_output_name = module.global_variables
+                        [ep.mesh_info.as_ref().unwrap().output_variable]
+                        .name
+                        .clone()
+                        .unwrap();
                     let mut mesh_attrs = vec![
-                            Attribute::MeshStage(mesh_output_name),
-                            Attribute::WorkGroupSize(ep.workgroup_size),
+                        Attribute::MeshStage(mesh_output_name),
+                        Attribute::WorkGroupSize(ep.workgroup_size),
                     ];
                     if ep.task_payload.is_some() {
                         let payload_name = module.global_variables[ep.task_payload.unwrap()]
@@ -227,7 +228,7 @@ impl<W: Write> Writer<W> {
                         mesh_attrs.push(Attribute::TaskPayload(payload_name));
                     }
                     mesh_attrs
-                } 
+                }
                 ShaderStage::Task => {
                     let payload_name = module.global_variables[ep.task_payload.unwrap()]
                         .name
@@ -451,10 +452,7 @@ impl<W: Write> Writer<W> {
     }
 
     /// Helper method to write a attribute
-    fn write_attributes(
-        &mut self,
-        attributes: &[Attribute],
-    ) -> BackendResult {
+    fn write_attributes(&mut self, attributes: &[Attribute]) -> BackendResult {
         for attribute in attributes {
             match *attribute {
                 Attribute::Location(id) => write!(self.out, "@location({id}) ")?,
@@ -1787,13 +1785,10 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         // Write group and binding attributes if present
         if let Some(ref binding) = global.binding {
-            self.write_attributes(
-                &[
-                    Attribute::Group(binding.group),
-                    Attribute::Binding(binding.binding),
-                ],
-                None,
-            )?;
+            self.write_attributes(&[
+                Attribute::Group(binding.group),
+                Attribute::Binding(binding.binding),
+            ])?;
             writeln!(self.out)?;
         }
 
@@ -1904,8 +1899,8 @@ fn map_binding_to_attribute(binding: &crate::Binding) -> Vec<Attribute> {
             per_primitive,
         } => {
             let mut attrs = vec![
-                    Attribute::Location(location),
-                    Attribute::Interpolate(interpolation, sampling),
+                Attribute::Location(location),
+                Attribute::Interpolate(interpolation, sampling),
             ];
             if per_primitive {
                 attrs.push(Attribute::PerPrimitive);
@@ -1920,9 +1915,9 @@ fn map_binding_to_attribute(binding: &crate::Binding) -> Vec<Attribute> {
             per_primitive,
         } => {
             let mut attrs = vec![
-                    Attribute::Location(location),
-                    Attribute::BlendSrc(blend_src),
-                    Attribute::Interpolate(interpolation, sampling),
+                Attribute::Location(location),
+                Attribute::BlendSrc(blend_src),
+                Attribute::Interpolate(interpolation, sampling),
             ];
             if per_primitive {
                 attrs.push(Attribute::PerPrimitive);
