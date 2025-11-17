@@ -221,7 +221,7 @@ windows-core = { version = "0.62", default-features = false }
 
 # Gles dependencies
 khronos-egl = "6"
-glow = { git = "https://github.com/opstic/glow", branch = "multisampled_render_to_texture" }
+glow = "0.16"
 glutin = { version = "0.31", default-features = false }
 glutin-winit = { version = "0.4", default-features = false }
 glutin_wgl_sys = "0.6"

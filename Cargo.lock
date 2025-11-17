@@ -1741,7 +1741,8 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 [[package]]
 name = "glow"
 version = "0.16.0"
-source = "git+https://github.com/opstic/glow?branch=multisampled_render_to_texture#0273b1a321c47c88b1e6709fa043a53340bce113"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c5e5ea60d70410161c8bf5da3fdfeaa1c72ed2c15f8bbb9d19fe3a4fad085f08"
 dependencies = [
  "js-sys",
  "slotmap",
