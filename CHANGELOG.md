@@ -109,7 +109,7 @@ By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206
 
 - Added support for transient textures on Vulkan and Metal. By @opstic in [#8247](https://github.com/gfx-rs/wgpu/pull/8247)
 - Implement shader triangle barycentric coordinate builtins. By @atlv24 in [#8320](https://github.com/gfx-rs/wgpu/pull/8320).
-- Added support for binding arrays of storage buffers and storage textures on Metal. By @msvbg in [#8464](https://github.com/gfx-rs/wgpu/pull/8464)
+- Added support for binding arrays of storage textures on Metal. By @msvbg in [#8464](https://github.com/gfx-rs/wgpu/pull/8464)
 
 ### Changes
 
