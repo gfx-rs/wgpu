@@ -115,6 +115,7 @@ By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206
 
 #### General
 
+- Require new enable extensions when using ray queries and position fetch (`wgpu_ray_query`, `wgpu_ray_query_vertex_return`). By @Vecvec in [#8545](https://github.com/gfx-rs/wgpu/pull/8545).
 - Lower `max_blas_primitive_count` due to a bug in llvmpipe. By @Vecvec in [#8446](https://github.com/gfx-rs/wgpu/pull/8446).
 - Texture now has `from_custom`. By @R-Cramer4 in [#8315](https://github.com/gfx-rs/wgpu/pull/8315).
 - Using both the wgpu command encoding APIs and `CommandEncoder::as_hal_mut` on the same encoder will now result in a panic.
