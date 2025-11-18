@@ -99,7 +99,11 @@ jobs:
         if: matrix.os == 'ubuntu-24.04'
         uses: ./.github/actions/install-mesa
 
-      - name: run CTS
+      - name: Test cts_runner
+        shell: bash
+        run: cargo --locked xtask test --llvm-cov -p cts_runner
+
+      - name: Run CTS
         shell: bash
         run: cargo --locked xtask cts --llvm-cov --backend ${{ matrix.backend }}
 
