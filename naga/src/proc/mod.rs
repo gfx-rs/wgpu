@@ -24,7 +24,9 @@ pub use namer::{EntryPointIndex, ExternalTextureNameKey, NameKey, Namer};
 pub use overloads::{Conclusion, MissingSpecialType, OverloadSet, Rule};
 pub use terminator::ensure_block_returns;
 use thiserror::Error;
-pub use type_methods::min_max_float_representable_by;
+pub use type_methods::{
+    concrete_int_scalars, min_max_float_representable_by, vector_size_str, vector_sizes,
+};
 pub use typifier::{compare_types, ResolveContext, ResolveError, TypeResolution};
 
 use crate::non_max_u32::NonMaxU32;
