@@ -1,15 +1,15 @@
-name: 'Install Mesa'
-description: 'Install Mesa'
+name: "Install Mesa"
+description: "Install Mesa"
 inputs:
   # Sourced from https://archive.mesa3d.org/. Bumping this requires
   # updating the mesa build in https://github.com/gfx-rs/ci-build and creating a new release.
   version:
-    default: '24.3.4'
+    default: "25.2.6"
   # Corresponds to https://github.com/gfx-rs/ci-build/releases
   ci-binary-build:
-    default: 'build20'
+    default: "build25"
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: (Linux) Install Mesa
       if: runner.os == 'Linux'
