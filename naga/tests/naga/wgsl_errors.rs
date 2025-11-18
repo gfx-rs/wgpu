@@ -4283,3 +4283,99 @@ fn source_with_control_char() {
 ",
     );
 }
+
+#[test]
+fn ray_query_enable_extension() {
+    check_extension_validation!(
+        Capabilities::RAY_QUERY,
+        r#"fn foo() {
+            var a: ray_query;
+        }
+        "#,
+        r#"error: the `wgpu_ray_query` enable extension is not enabled
+  ┌─ wgsl:2:20
+  │
+2 │             var a: ray_query;
+  │                    ^^^^^^^^^ the `wgpu_ray_query` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_query;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::MissingCapability(Capabilities::RAY_QUERY),
+            ..
+        })
+    );
+
+    check_extension_validation!(
+        Capabilities::RAY_QUERY,
+        r#"@group(0) @binding(0)
+        var acc_struct: acceleration_structure;
+        "#,
+        r#"error: the `wgpu_ray_query` enable extension is not enabled
+  ┌─ wgsl:2:25
+  │
+2 │         var acc_struct: acceleration_structure;
+  │                         ^^^^^^^^^^^^^^^^^^^^^^ the `wgpu_ray_query` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_query;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::MissingCapability(Capabilities::RAY_QUERY),
+            ..
+        })
+    );
+}
+
+#[test]
+fn ray_query_vertex_return_enable_extension() {
+    check_extension_validation!(
+        Capabilities::RAY_HIT_VERTEX_POSITION,
+        r#"enable wgpu_ray_query;
+
+        fn foo() {
+            var a: ray_query<vertex_return>;
+        }
+        "#,
+        r#"error: the `wgpu_ray_query_vertex_return` enable extension is not enabled
+  ┌─ wgsl:4:20
+  │
+4 │             var a: ray_query<vertex_return>;
+  │                    ^^^^^^^^^ the `wgpu_ray_query_vertex_return` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_query_vertex_return;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::MissingCapability(
+                Capabilities::RAY_HIT_VERTEX_POSITION
+            ),
+            ..
+        })
+    );
+
+    check_extension_validation!(
+        Capabilities::RAY_HIT_VERTEX_POSITION,
+        r#"enable wgpu_ray_query;
+        
+        @group(0) @binding(0)
+        var acc_struct: acceleration_structure<vertex_return>;
+        "#,
+        r#"error: the `wgpu_ray_query_vertex_return` enable extension is not enabled
+  ┌─ wgsl:4:25
+  │
+4 │         var acc_struct: acceleration_structure<vertex_return>;
+  │                         ^^^^^^^^^^^^^^^^^^^^^^ the `wgpu_ray_query_vertex_return` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_query_vertex_return;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::MissingCapability(
+                Capabilities::RAY_HIT_VERTEX_POSITION
+            ),
+            ..
+        })
+    );
+}
