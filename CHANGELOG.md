@@ -61,6 +61,23 @@ By @R-Cramer4 in [#8230](https://github.com/gfx-rs/wgpu/pull/8230)
 
 [kek]: https://web.archive.org/web/20250923122958/https://knowyourmeme.com/memes/kek
 
+#### New `LoadOp::DontCare`
+
+In the case where a renderpass unconditionally writes to all pixels in the rendertarget, 
+`Load` can cause unnecessary memory traffic, and `Clear` can spend time unnecessarily
+clearing the rendertargets. `DontCare` is a new `LoadOp` which will leave the contents 
+of the rendertarget undefined. Because this could lead to undefined behavior, this API
+requires that the user gives an unsafe token to use the api.
+
+While you can use this unconditionally, on platforms where `DontCare` is not available,
+it will internally use a different load op.
+
+```rust
+load: LoadOp::DontCare(unsafe { wgpu::LoadOpDontCare::enabled() })
+```
+
+By @cwfitzgerald in [#8549](https://github.com/gfx-rs/wgpu/pull/8549)
+
 #### `MipmapFilterMode` is split from `FilterMode`
 
 This is a breaking change that aligns wgpu with spec.

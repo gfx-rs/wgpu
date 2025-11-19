@@ -670,9 +670,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     }
                     let load_action = if at.ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
-                    } else {
+                    } else if at.ops.contains(crate::AttachmentOps::LOAD_DONT_CARE) {
+                        MTLLoadAction::DontCare
+                    } else if at.ops.contains(crate::AttachmentOps::LOAD_CLEAR) {
                         at_descriptor.set_clear_color(conv::map_clear_color(&at.clear_value));
                         MTLLoadAction::Clear
+                    } else {
+                        unreachable!()
                     };
                     let store_action = conv::map_store_action(
                         at.ops.contains(crate::AttachmentOps::STORE),
@@ -690,9 +694,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
                     let load_action = if at.depth_ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
-                    } else {
+                    } else if at.depth_ops.contains(crate::AttachmentOps::LOAD_DONT_CARE) {
+                        MTLLoadAction::DontCare
+                    } else if at.depth_ops.contains(crate::AttachmentOps::LOAD_CLEAR) {
                         at_descriptor.set_clear_depth(at.clear_value.0 as f64);
                         MTLLoadAction::Clear
+                    } else {
+                        unreachable!();
                     };
                     let store_action = if at.depth_ops.contains(crate::AttachmentOps::STORE) {
                         MTLStoreAction::Store
@@ -713,9 +721,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
                     let load_action = if at.stencil_ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
-                    } else {
+                    } else if at
+                        .stencil_ops
+                        .contains(crate::AttachmentOps::LOAD_DONT_CARE)
+                    {
+                        MTLLoadAction::DontCare
+                    } else if at.stencil_ops.contains(crate::AttachmentOps::LOAD_CLEAR) {
                         at_descriptor.set_clear_stencil(at.clear_value.1);
                         MTLLoadAction::Clear
+                    } else {
+                        unreachable!()
                     };
                     let store_action = if at.stencil_ops.contains(crate::AttachmentOps::STORE) {
                         MTLStoreAction::Store

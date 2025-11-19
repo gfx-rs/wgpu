@@ -1751,13 +1751,22 @@ bitflags!(
     }
 );
 
-//TODO: it's not intuitive for the backends to consider `LOAD` being optional.
-
 bitflags!(
+    /// Attachment load and store operations.
+    ///
+    /// There must be at least one flag from the LOAD group and one from the STORE group set.
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct AttachmentOps: u8 {
+        /// Load the existing contents of the attachment.
         const LOAD = 1 << 0;
-        const STORE = 1 << 1;
+        /// Clear the attachment to a specified value.
+        const LOAD_CLEAR = 1 << 1;
+        /// The contents of the attachment are undefined.
+        const LOAD_DONT_CARE = 1 << 2;
+        /// Store the contents of the attachment.
+        const STORE = 1 << 3;
+        /// The contents of the attachment are undefined after the pass.
+        const STORE_DISCARD = 1 << 4;
     }
 );
 

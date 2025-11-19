@@ -5,7 +5,7 @@ use bytemuck::{Pod, Zeroable};
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
 
-use crate::link_to_wgpu_docs;
+use crate::{link_to_wgpu_docs, LoadOpDontCare};
 
 #[cfg(doc)]
 use crate::{Features, TextureFormat};
@@ -697,6 +697,24 @@ pub enum LoadOp<V> {
     Clear(V) = 0,
     /// Loads the existing value for this attachment into the render pass.
     Load = 1,
+    /// The render target has undefined contents at the start of the render pass.
+    /// This may lead to undefined behavior if you read from the any of the
+    /// render target pixels without first writing to them.
+    ///
+    /// Blending also becomes undefined behavior if the source
+    /// pixels are undefined.
+    ///
+    /// This is the fastest option on all GPUs if you always overwrite all pixels
+    /// in the render target after this load operation.
+    ///
+    /// Backends that don't support `DontCare` internally, will pick a different (unspecified)
+    /// load op instead.
+    ///
+    /// # Safety
+    ///
+    /// - All pixels in the render target must be written to before
+    ///   any read or a [`StoreOp::Store`] occurs.
+    DontCare(#[cfg_attr(feature = "serde", serde(skip))] LoadOpDontCare) = 2,
 }
 
 impl<V> LoadOp<V> {
@@ -704,7 +722,9 @@ impl<V> LoadOp<V> {
     pub fn eq_variant<T>(&self, other: LoadOp<T>) -> bool {
         matches!(
             (self, other),
-            (LoadOp::Clear(_), LoadOp::Clear(_)) | (LoadOp::Load, LoadOp::Load)
+            (LoadOp::Clear(_), LoadOp::Clear(_))
+                | (LoadOp::Load, LoadOp::Load)
+                | (LoadOp::DontCare(_), LoadOp::DontCare(_))
         )
     }
 }

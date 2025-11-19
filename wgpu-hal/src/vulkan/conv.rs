@@ -452,13 +452,19 @@ pub fn map_attachment_ops(
 ) -> (vk::AttachmentLoadOp, vk::AttachmentStoreOp) {
     let load_op = if op.contains(crate::AttachmentOps::LOAD) {
         vk::AttachmentLoadOp::LOAD
-    } else {
+    } else if op.contains(crate::AttachmentOps::LOAD_DONT_CARE) {
+        vk::AttachmentLoadOp::DONT_CARE
+    } else if op.contains(crate::AttachmentOps::LOAD_CLEAR) {
         vk::AttachmentLoadOp::CLEAR
+    } else {
+        unreachable!()
     };
     let store_op = if op.contains(crate::AttachmentOps::STORE) {
         vk::AttachmentStoreOp::STORE
-    } else {
+    } else if op.contains(crate::AttachmentOps::STORE_DISCARD) {
         vk::AttachmentStoreOp::DONT_CARE
+    } else {
+        unreachable!()
     };
     (load_op, store_op)
 }
