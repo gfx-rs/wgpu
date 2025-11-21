@@ -317,31 +317,81 @@ impl Instance {
     ) -> Result<Surface, CreateSurfaceError> {
         profiling::scope!("Instance::create_surface_metal");
 
-        let instance = unsafe { self.as_hal::<hal::api::Metal>() }
-            .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Metal))?;
+        // HashMap unused in Metal-only path
+        #[allow(unused_mut)]
+        let mut errors = HashMap::default();
+        let mut surface_per_backend: HashMap<Backend, Box<dyn hal::DynSurface>> =
+            HashMap::default();
 
-        let layer = layer.cast();
-        // SAFETY: We do this cast and deref. (rather than using `metal` to get the
-        // object we want) to avoid direct coupling on the `metal` crate.
-        //
-        // To wit, this pointer…
-        //
-        // - …is properly aligned.
-        // - …is dereferenceable to a `MetalLayerRef` as an invariant of the `metal`
-        //   field.
-        // - …points to an _initialized_ `MetalLayerRef`.
-        // - …is only ever aliased via an immutable reference that lives within this
-        //   lexical scope.
-        let layer = unsafe { &*layer };
-        let raw_surface: Box<dyn hal::DynSurface> =
-            Box::new(instance.create_surface_from_layer(layer));
+        for (backend, instance) in &self.instance_per_backend {
+            match *backend {
+                #[cfg(vulkan)]
+                Backend::Vulkan => {
+                    // Downcast to Vulkan instance
+                    let vk_instance = instance
+                        .as_any()
+                        .downcast_ref::<hal::vulkan::Instance>()
+                        .expect("Backend mismatch");
 
-        let surface = Surface {
-            presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
-            surface_per_backend: core::iter::once((Backend::Metal, raw_surface)).collect(),
-        };
+                    if let Some(mut layer) = core::ptr::NonNull::new(layer) {
+                        unsafe {
+                            match vk_instance.create_surface_from_layer(layer.as_mut()) {
+                                Ok(raw) => {
+                                    surface_per_backend.insert(*backend, Box::new(raw));
+                                }
+                                Err(err) => {
+                                    log::debug!(
+                                    "Instance::create_surface_metal: failed to create Vulkan surface: {err:?}"
+                                );
+                                    errors.insert(*backend, err);
+                                }
+                            }
+                        }
+                    }
+                }
+                #[cfg(metal)]
+                Backend::Metal => {
+                    // Downcast to Metal instance
+                    let metal_instance = instance
+                        .as_any()
+                        .downcast_ref::<hal::metal::Instance>()
+                        .expect("Backend mismatch");
 
-        Ok(surface)
+                    let layer_ref = layer.cast();
+                    // SAFETY: We do this cast and deref. (rather than using `metal` to get the
+                    // object we want) to avoid direct coupling on the `metal` crate.
+                    //
+                    // To wit, this pointer…
+                    //
+                    // - …is properly aligned.
+                    // - …is dereferenceable to a `MetalLayerRef` as an invariant of the `metal`
+                    //   field.
+                    // - …points to an _initialized_ `MetalLayerRef`.
+                    // - …is only ever aliased via an immutable reference that lives within this
+                    //   lexical scope.
+                    let layer_ref = unsafe { &*layer_ref };
+                    let raw = metal_instance.create_surface_from_layer(layer_ref);
+                    surface_per_backend.insert(*backend, Box::new(raw));
+                }
+                _ => {
+                    // Other backends don't support Metal layer input
+                    continue;
+                }
+            }
+        }
+
+        if surface_per_backend.is_empty() {
+            Err(CreateSurfaceError::FailedToCreateSurfaceForAnyBackend(
+                errors,
+            ))
+        } else {
+            let surface = Surface {
+                presentation: Mutex::new(rank::SURFACE_PRESENTATION, None),
+                surface_per_backend,
+            };
+
+            Ok(surface)
+        }
     }
 
     #[cfg(dx12)]

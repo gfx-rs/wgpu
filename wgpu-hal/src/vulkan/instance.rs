@@ -520,23 +520,31 @@ impl super::Instance {
         &self,
         view: core::ptr::NonNull<c_void>,
     ) -> Result<super::Surface, crate::InstanceError> {
+        let layer = unsafe { crate::metal::Surface::get_metal_layer(view.cast()) };
+        // NOTE: The layer is retained by Vulkan's `vkCreateMetalSurfaceEXT`,
+        // so no need to retain it beyond the scope of this function.
+        let layer_ptr = (*layer).cast();
+
+        self.create_surface_from_layer(layer_ptr)
+    }
+
+    #[cfg(metal)]
+    pub fn create_surface_from_layer(
+        &self,
+        layer: *mut vk::CAMetalLayer,
+    ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&ext::metal_surface::NAME) {
             return Err(crate::InstanceError::new(String::from(
                 "Vulkan driver does not support VK_EXT_metal_surface",
             )));
         }
 
-        let layer = unsafe { crate::metal::Surface::get_metal_layer(view.cast()) };
-        // NOTE: The layer is retained by Vulkan's `vkCreateMetalSurfaceEXT`,
-        // so no need to retain it beyond the scope of this function.
-        let layer_ptr = (*layer).cast();
-
         let surface = {
             let metal_loader =
                 ext::metal_surface::Instance::new(&self.shared.entry, &self.shared.raw);
             let vk_info = vk::MetalSurfaceCreateInfoEXT::default()
                 .flags(vk::MetalSurfaceCreateFlagsEXT::empty())
-                .layer(layer_ptr);
+                .layer(layer);
 
             unsafe { metal_loader.create_metal_surface(&vk_info, None).unwrap() }
         };
