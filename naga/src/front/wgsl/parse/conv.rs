@@ -30,6 +30,26 @@ pub fn map_address_space<'a>(
                 }))
             }
         }
+        "ray_payload" => {
+            if enable_extensions.contains(ImplementedEnableExtension::WgpuRayTracingPipeline) {
+                Ok(crate::AddressSpace::RayPayload)
+            } else {
+                Err(Box::new(Error::EnableExtensionNotEnabled {
+                    span,
+                    kind: ImplementedEnableExtension::WgpuRayTracingPipeline.into(),
+                }))
+            }
+        }
+        "incoming_ray_payload" => {
+            if enable_extensions.contains(ImplementedEnableExtension::WgpuRayTracingPipeline) {
+                Ok(crate::AddressSpace::IncomingRayPayload)
+            } else {
+                Err(Box::new(Error::EnableExtensionNotEnabled {
+                    span,
+                    kind: ImplementedEnableExtension::WgpuRayTracingPipeline.into(),
+                }))
+            }
+        }
         _ => Err(Box::new(Error::UnknownAddressSpace(span))),
     }
 }
@@ -75,6 +95,20 @@ pub fn map_built_in(
         "vertices" => crate::BuiltIn::Vertices,
         "primitive_count" => crate::BuiltIn::PrimitiveCount,
         "primitives" => crate::BuiltIn::Primitives,
+        // ray tracing pipeline
+        "ray_invocation_id" => crate::BuiltIn::RayInvocationId,
+        "num_ray_invocations" => crate::BuiltIn::NumRayInvocations,
+        "instance_custom_data" => crate::BuiltIn::InstanceCustomData,
+        "geometry_index" => crate::BuiltIn::GeometryIndex,
+        "world_ray_origin" => crate::BuiltIn::WorldRayOrigin,
+        "world_ray_direction" => crate::BuiltIn::WorldRayDirection,
+        "object_ray_origin" => crate::BuiltIn::ObjectRayOrigin,
+        "object_ray_direction" => crate::BuiltIn::ObjectRayDirection,
+        "ray_t_min" => crate::BuiltIn::RayTmin,
+        "ray_t_current_max" => crate::BuiltIn::RayTCurrentMax,
+        "object_to_world" => crate::BuiltIn::ObjectToWorld,
+        "world_to_object" => crate::BuiltIn::WorldToObject,
+        "hit_kind" => crate::BuiltIn::HitKind,
         _ => return Err(Box::new(Error::UnknownBuiltin(span))),
     };
     match built_in {

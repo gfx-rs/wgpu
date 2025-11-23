@@ -1933,7 +1933,11 @@ impl Parser {
                 if !lexer
                     .enable_extensions
                     .contains(ImplementedEnableExtension::WgpuRayQuery)
+                    && !lexer
+                        .enable_extensions
+                        .contains(ImplementedEnableExtension::WgpuRayTracingPipeline)
                 {
+                    // maybe we want a multi enable extension error?
                     return Err(Box::new(Error::EnableExtensionNotEnabled {
                         kind: EnableExtension::Implemented(
                             ImplementedEnableExtension::WgpuRayQuery,
@@ -2877,13 +2881,18 @@ impl Parser {
         // read attributes
         let mut binding = None;
         let mut stage = ParsedAttribute::default();
-        let mut compute_like_span = Span::new(0, 0);
+        // Span in case we need to report an error for a shader stage missing something (e.g. its workgroup size).
+        // Doesn't need to be set in the vertex and fragment stages because they don't have errors like that.
+        let mut shader_stage_error_span = Span::new(0, 0);
         let mut workgroup_size = ParsedAttribute::default();
         let mut early_depth_test = ParsedAttribute::default();
         let (mut bind_index, mut bind_group) =
             (ParsedAttribute::default(), ParsedAttribute::default());
         let mut id = ParsedAttribute::default();
+        // the payload variable for a mesh shader
         let mut payload = ParsedAttribute::default();
+        // the incoming payload from a traceRay call
+        let mut incoming_payload = ParsedAttribute::default();
         let mut mesh_output = ParsedAttribute::default();
 
         let mut must_use: ParsedAttribute<Span> = ParsedAttribute::default();
@@ -2943,7 +2952,7 @@ impl Parser {
                 }
                 "compute" => {
                     stage.set(ShaderStage::Compute, name_span)?;
-                    compute_like_span = name_span;
+                    shader_stage_error_span = name_span;
                 }
                 "task" => {
                     if !lexer
@@ -2956,7 +2965,7 @@ impl Parser {
                         }));
                     }
                     stage.set(ShaderStage::Task, name_span)?;
-                    compute_like_span = name_span;
+                    shader_stage_error_span = name_span;
                 }
                 "mesh" => {
                     if !lexer
@@ -2969,11 +2978,62 @@ impl Parser {
                         }));
                     }
                     stage.set(ShaderStage::Mesh, name_span)?;
-                    compute_like_span = name_span;
+                    shader_stage_error_span = name_span;
 
                     lexer.expect(Token::Paren('('))?;
                     mesh_output.set(lexer.next_ident_with_span()?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;
+                }
+                "ray_generation" => {
+                    if !lexer
+                        .enable_extensions
+                        .contains(ImplementedEnableExtension::WgpuRayTracingPipeline)
+                    {
+                        return Err(Box::new(Error::EnableExtensionNotEnabled {
+                            span: name_span,
+                            kind: ImplementedEnableExtension::WgpuRayTracingPipeline.into(),
+                        }));
+                    }
+                    stage.set(ShaderStage::RayGeneration, name_span)?;
+                }
+                "any_hit" => {
+                    if !lexer
+                        .enable_extensions
+                        .contains(ImplementedEnableExtension::WgpuRayTracingPipeline)
+                    {
+                        return Err(Box::new(Error::EnableExtensionNotEnabled {
+                            span: name_span,
+                            kind: ImplementedEnableExtension::WgpuRayTracingPipeline.into(),
+                        }));
+                    }
+                    stage.set(ShaderStage::AnyHit, name_span)?;
+                    shader_stage_error_span = name_span;
+                }
+                "closest_hit" => {
+                    if !lexer
+                        .enable_extensions
+                        .contains(ImplementedEnableExtension::WgpuRayTracingPipeline)
+                    {
+                        return Err(Box::new(Error::EnableExtensionNotEnabled {
+                            span: name_span,
+                            kind: ImplementedEnableExtension::WgpuRayTracingPipeline.into(),
+                        }));
+                    }
+                    stage.set(ShaderStage::ClosestHit, name_span)?;
+                    shader_stage_error_span = name_span;
+                }
+                "miss" => {
+                    if !lexer
+                        .enable_extensions
+                        .contains(ImplementedEnableExtension::WgpuRayTracingPipeline)
+                    {
+                        return Err(Box::new(Error::EnableExtensionNotEnabled {
+                            span: name_span,
+                            kind: ImplementedEnableExtension::WgpuRayTracingPipeline.into(),
+                        }));
+                    }
+                    stage.set(ShaderStage::Miss, name_span)?;
+                    shader_stage_error_span = name_span;
                 }
                 "payload" => {
                     if !lexer
@@ -2987,6 +3047,20 @@ impl Parser {
                     }
                     lexer.expect(Token::Paren('('))?;
                     payload.set(lexer.next_ident_with_span()?, name_span)?;
+                    lexer.expect(Token::Paren(')'))?;
+                }
+                "incoming_payload" => {
+                    if !lexer
+                        .enable_extensions
+                        .contains(ImplementedEnableExtension::WgpuRayTracingPipeline)
+                    {
+                        return Err(Box::new(Error::EnableExtensionNotEnabled {
+                            span: name_span,
+                            kind: ImplementedEnableExtension::WgpuRayTracingPipeline.into(),
+                        }));
+                    }
+                    lexer.expect(Token::Paren('('))?;
+                    incoming_payload.set(lexer.next_ident_with_span()?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;
                 }
                 "workgroup_size" => {
@@ -3154,7 +3228,20 @@ impl Parser {
                 Some(ast::GlobalDeclKind::Fn(ast::Function {
                     entry_point: if let Some(stage) = stage.value {
                         if stage.compute_like() && workgroup_size.value.is_none() {
-                            return Err(Box::new(Error::MissingWorkgroupSize(compute_like_span)));
+                            return Err(Box::new(Error::MissingWorkgroupSize(
+                                shader_stage_error_span,
+                            )));
+                        }
+
+                        match stage {
+                            ShaderStage::AnyHit | ShaderStage::ClosestHit | ShaderStage::Miss => {
+                                if incoming_payload.value.is_none() {
+                                    return Err(Box::new(Error::MissingIncomingPayload(
+                                        shader_stage_error_span,
+                                    )));
+                                }
+                            }
+                            _ => {}
                         }
 
                         Some(ast::EntryPoint {
@@ -3163,6 +3250,7 @@ impl Parser {
                             workgroup_size: workgroup_size.value,
                             mesh_output_variable: mesh_output.value,
                             task_payload: payload.value,
+                            ray_incoming_payload: incoming_payload.value,
                         })
                     } else {
                         None

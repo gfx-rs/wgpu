@@ -415,6 +415,7 @@ pub(crate) enum Error<'a> {
     TypeTooLarge {
         span: Span,
     },
+    MissingIncomingPayload(Span),
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -1393,6 +1394,14 @@ impl<'a> Error<'a> {
                     "the maximum size is {} bytes",
                     crate::valid::MAX_TYPE_SIZE
                 )],
+            },
+            Error::MissingIncomingPayload(span) => ParseError {
+                message: "incoming payload is missing on ray hit or miss shader entry point".to_string(),
+                labels: vec![(
+                    span,
+                    "must be paired with a `@incoming_payload` attribute".into(),
+                )],
+                notes: vec![],
             },
         }
     }
