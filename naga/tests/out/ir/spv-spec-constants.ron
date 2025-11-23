@@ -725,6 +725,7 @@
             ),
             mesh_info: None,
             task_payload: None,
+            ray_incoming_payload: None,
         ),
     ],
     diagnostic_filters: [],

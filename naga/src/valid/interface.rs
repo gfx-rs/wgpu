@@ -1315,7 +1315,7 @@ impl super::Validator {
                 }
                 crate::AddressSpace::PushConstant => GlobalUse::READ,
                 crate::AddressSpace::RayPayload => {
-                    if matches!(ep.stage, crate::ShaderStage::RayGeneration | crate::ShaderStage::ClosestHit | crate::ShaderStage::Miss) {
+                    if !matches!(ep.stage, crate::ShaderStage::RayGeneration | crate::ShaderStage::ClosestHit | crate::ShaderStage::Miss) {
                         return Err(EntryPointError::RayPayloadInInvalidStage.with_span_handle(var_handle, &module.global_variables));
                     }
                     GlobalUse::READ

@@ -204,6 +204,7 @@
             ),
             mesh_info: None,
             task_payload: Some(0),
+            ray_incoming_payload: None,
         ),
         (
             name: "ms_main",
@@ -236,6 +237,7 @@
                 output_variable: 1,
             )),
             task_payload: Some(0),
+            ray_incoming_payload: None,
         ),
     ],
     diagnostic_filters: [],
