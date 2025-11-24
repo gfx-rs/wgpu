@@ -93,8 +93,10 @@ fn render(/*whatever args you need to render*/) {
 
 ## `naga`'s raytracing API:
 
-`naga` supports ray queries (also known as inline raytracing) only. Ray tracing pipelines are currently unsupported.
+`naga` supports ray queries (also known as inline raytracing). Ray tracing pipelines are currently in development.
 Naming is mostly taken from vulkan.
+
+### Ray Queries
 
 ```wgsl
 // - Initializes the `ray_query` to check where (if anywhere) the ray defined by `ray_desc` hits in `acceleration_structure
@@ -145,7 +147,7 @@ getCandidateHitVertexPositions(rq: ptr<function, ray_query<vertex_return>>) -> a
 
 > [!CAUTION]
 >
-> ### ⚠️Undefined behavior ⚠️:
+> #### ⚠️Undefined behavior ⚠️:
 > - Calling `rayQueryGetCommittedIntersection` or `rayQueryGetCandidateIntersection` when `rayQueryProceed` has not been
 > called on this ray query since it was initialized (or if the ray query has not been previously initialized).
 > - Calling `rayQueryGetCommittedIntersection` when `rayQueryProceed`'s latest return on this ray query is considered
@@ -267,4 +269,38 @@ const RAY_QUERY_INTERSECTION_GENERATED = 2;
 // The ray hit a AABB, this will only happen in a candidate intersection
 // if the ray intersects the bounding box for a custom object.
 const RAY_QUERY_INTERSECTION_AABB = 3;
+```
+
+### Ray Tracing Pipelines
+
+Functions
+```wgsl
+// Begins to check where (if anywhere) the ray defined by `ray_desc` hits in `acceleration_structure` calling through the `any_hit` shaders and `closest_hit` shader if something was hit or the `miss` shader if no hit was found
+traceRay<T>(acceleration_structure: acceleration_structure, ray_desc: RayDesc, payload: ptr<ray_payload, T>)
+```
+
+> [!CAUTION]
+>
+> #### ⚠️Undefined behavior ⚠️:
+> Calling `traceRay` inside another `traceRay` more than `max_recursion_depth` times
+>
+> *this is only known undefined behaviour, and will be worked around in the future.
+
+New shader stages
+```wgsl
+// First stage to be called, allowed to call `traceRay`
+@ray_generation
+fn rg() {}
+
+// Stage called on any hit that is not opaque, not allowed to call `traceRay`
+@any_hit
+fn ah() {}
+
+// Stage called on the closest hit, allowed to call `traceRay`
+@closest_hit
+fn ch() {}
+
+// Stage call if there was never a hit, allowed to call `traceRay`
+@miss
+fn miss() {}
 ```
