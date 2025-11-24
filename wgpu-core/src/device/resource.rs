@@ -1432,11 +1432,9 @@ impl Device {
             }
 
             if desc.dimension != wgt::TextureDimension::D2 {
-                return Err(CreateTextureError::InvalidDimension(
-                    TextureDimensionError::InvalidMultisampledDimension(
-                        desc.dimension,
-                        desc.sample_count,
-                    ),
+                return Err(CreateTextureError::InvalidMultisampledDimension(
+                    desc.dimension,
+                    desc.sample_count,
                 ));
             }
 
