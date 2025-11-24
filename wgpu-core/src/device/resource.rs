@@ -1431,11 +1431,9 @@ impl Device {
                 });
             }
 
-            if desc.size.depth_or_array_layers != 1 {
+            if desc.dimension != wgt::TextureDimension::D2 {
                 return Err(CreateTextureError::InvalidDimension(
-                    TextureDimensionError::MultisampledDepthOrArrayLayer(
-                        desc.size.depth_or_array_layers,
-                    ),
+                    TextureDimensionError::MultisampledDepthOrArrayLayer(desc.sample_count),
                 ));
             }
 

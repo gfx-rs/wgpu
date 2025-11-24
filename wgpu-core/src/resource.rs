@@ -1551,7 +1551,7 @@ pub enum TextureDimensionError {
         multiple: u32,
         format: wgt::TextureFormat,
     },
-    #[error("Multisampled texture depth or array layers must be 1, got {0}")]
+    #[error("3D texture multisample count must be 1, got {0}")]
     MultisampledDepthOrArrayLayer(u32),
 }
 
