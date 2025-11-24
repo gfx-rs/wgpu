@@ -1037,6 +1037,8 @@ pub(super) fn copy_buffer_to_buffer(
         .into());
     }
 
+    // This must happen after parameter validation (so that errors are reported
+    // as required by the spec), but before any side effects.
     if size == 0 {
         log::trace!("Ignoring copy_buffer_to_buffer of size 0");
         return Ok(());
@@ -1255,6 +1257,8 @@ pub(super) fn copy_texture_to_buffer(
         .check_usage(BufferUsages::COPY_DST)
         .map_err(TransferError::MissingBufferUsage)?;
 
+    // This must happen after parameter validation (so that errors are reported
+    // as required by the spec), but before any side effects.
     if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
         log::trace!("Ignoring copy_texture_to_buffer of size 0");
         return Ok(());
@@ -1376,12 +1380,6 @@ pub(super) fn copy_texture_to_texture(
         .into());
     }
 
-    // Handle texture init *before* dealing with barrier transitions so we
-    // have an easier time inserting "immediate-inits" that may be required
-    // by prior discards in rare cases.
-    handle_src_texture_init(state, source, copy_size, src_texture)?;
-    handle_dst_texture_init(state, destination, copy_size, dst_texture)?;
-
     let src_raw = src_texture.try_raw(state.snatch_guard)?;
     src_texture
         .check_usage(TextureUsages::COPY_SRC)
@@ -1391,10 +1389,18 @@ pub(super) fn copy_texture_to_texture(
         .check_usage(TextureUsages::COPY_DST)
         .map_err(TransferError::MissingTextureUsage)?;
 
+    // This must happen after parameter validation (so that errors are reported
+    // as required by the spec), but before any side effects.
     if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
         log::trace!("Ignoring copy_texture_to_texture of size 0");
         return Ok(());
     }
+
+    // Handle texture init *before* dealing with barrier transitions so we
+    // have an easier time inserting "immediate-inits" that may be required
+    // by prior discards in rare cases.
+    handle_src_texture_init(state, source, copy_size, src_texture)?;
+    handle_dst_texture_init(state, destination, copy_size, dst_texture)?;
 
     let src_pending =
         state

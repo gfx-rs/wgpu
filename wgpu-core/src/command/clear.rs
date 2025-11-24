@@ -189,6 +189,8 @@ pub(super) fn clear_buffer(
         });
     }
 
+    // This must happen after parameter validation (so that errors are reported
+    // as required by the spec), but before any side effects.
     if offset == end_offset {
         log::trace!("Ignoring fill_buffer of size 0");
         return Ok(());
