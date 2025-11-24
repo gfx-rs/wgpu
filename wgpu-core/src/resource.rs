@@ -1551,8 +1551,6 @@ pub enum TextureDimensionError {
         multiple: u32,
         format: wgt::TextureFormat,
     },
-    #[error("3D texture multisample count must be 1, got {0}")]
-    MultisampledDepthOrArrayLayer(u32),
 }
 
 impl WebGpuError for TextureDimensionError {
@@ -1597,6 +1595,8 @@ pub enum CreateTextureError {
     InvalidMultisampledFormat(wgt::TextureFormat),
     #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarantees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
     InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
+    #[error("1D/3D texture multisample count must be 1, got {0}")]
+    Non2DMultisampledTexture(u32),
     #[error("Multisampled textures must have RENDER_ATTACHMENT usage")]
     MultisampledNotRenderAttachment,
     #[error("Texture format {0:?} can't be used due to missing features")]
@@ -1637,7 +1637,8 @@ impl WebGpuError for CreateTextureError {
             | Self::InvalidMultisampledStorageBinding
             | Self::InvalidMultisampledFormat(_)
             | Self::InvalidSampleCount(..)
-            | Self::MultisampledNotRenderAttachment => return ErrorType::Validation,
+            | Self::MultisampledNotRenderAttachment
+            | Self::Non2DMultisampledTexture(_) => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }

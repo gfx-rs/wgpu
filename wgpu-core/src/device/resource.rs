@@ -1432,8 +1432,8 @@ impl Device {
             }
 
             if desc.dimension != wgt::TextureDimension::D2 {
-                return Err(CreateTextureError::InvalidDimension(
-                    TextureDimensionError::MultisampledDepthOrArrayLayer(desc.sample_count),
+                return Err(CreateTextureError::Non2DMultisampledTexture(
+                    desc.sample_count,
                 ));
             }
 
