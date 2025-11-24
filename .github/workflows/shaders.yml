@@ -25,7 +25,7 @@ jobs:
     name: "Validate: HLSL"
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Debug symbols to `line-tables-only`
         shell: bash
@@ -69,7 +69,7 @@ jobs:
     name: "Validate: MSL"
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Debug symbols to line-tables-only
         shell: bash
@@ -91,7 +91,7 @@ jobs:
     name: "Validate: SPIR-V/GLSL/DOT/WGSL"
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Install Vulkan SDK
         uses: ./.github/actions/install-vulkan-sdk

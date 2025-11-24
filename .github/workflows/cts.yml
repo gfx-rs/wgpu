@@ -55,7 +55,7 @@ jobs:
 
     steps:
       - name: checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install Repo MSRV toolchain
         run: |
