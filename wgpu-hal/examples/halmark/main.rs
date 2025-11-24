@@ -149,6 +149,7 @@ impl<A: hal::Api> Example<A> {
                 height: window_size.1,
                 depth_or_array_layers: 1,
             },
+            set_web_canvas_size: false,
             usage: wgpu_types::TextureUses::COLOR_TARGET,
             view_formats: vec![],
         };

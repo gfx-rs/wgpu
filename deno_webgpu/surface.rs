@@ -81,6 +81,7 @@ impl GPUCanvasContext {
       format,
       width: *self.width.borrow(),
       height: *self.height.borrow(),
+      set_web_canvas_size: false, // GPUCanvasConfiguration does not contain width,height
       present_mode: configuration
         .present_mode
         .map(Into::into)

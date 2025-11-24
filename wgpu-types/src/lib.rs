@@ -5842,6 +5842,29 @@ pub struct SurfaceConfiguration<V> {
     /// but platform-specific, and may change in the future (currently macOS
     /// scales the surface, other platforms may do something else).
     pub height: u32,
+    /// Whether, when the [`Surface`] being configured refers to a HTML `<canvas>` element,
+    /// the `width` and `height` of this configuration are used to set the `width` and `height`
+    /// attributes of the canvas element.
+    ///
+    /// This option is ignored by all backends except for WebGPU and WebGL 2.
+    ///
+    /// Set this to `true` if you wish this configuration to control the resolution of
+    /// the image rendered to the canvas.
+    /// If you are also using DOM layout information to determine
+    /// the width and height you provide here, then you must ensure that the computed size of the
+    /// canvas element is being controlled by explicit CSS (such as
+    /// `#my-canvas { width: 100%; height: 100%; }`)
+    /// rather than intrinsic size, as otherwise, you will get runaway resizing if
+    /// `window.devicePixelRatio` is not equal to 1.
+    ///
+    /// Set this to `false` if the canvas `width` and `height` are being managed by other code or
+    /// static HTML, if your code does not know whether it is rendering to a canvas or how that
+    /// canvas is being managed, or if you want behavior maximally like the WebGPU API
+    /// (which does not accept a size in `GPUCanvasConfiguration`).
+    ///
+    /// If you are writing code that is not going to be used in a web page, or if you do not
+    /// understand what to put here, `false` is the safe default choice.
+    pub set_web_canvas_size: bool,
     /// Presentation mode of the swap chain. Fifo is the only mode guaranteed to be supported.
     /// `FifoRelaxed`, `Immediate`, and `Mailbox` will crash if unsupported, while `AutoVsync` and
     /// `AutoNoVsync` will gracefully do a designed sets of fallbacks if their primary modes are
@@ -5900,6 +5923,7 @@ impl<V: Clone> SurfaceConfiguration<V> {
             format: self.format,
             width: self.width,
             height: self.height,
+            set_web_canvas_size: self.set_web_canvas_size,
             present_mode: self.present_mode,
             desired_maximum_frame_latency: self.desired_maximum_frame_latency,
             alpha_mode: self.alpha_mode,
