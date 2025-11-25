@@ -758,6 +758,11 @@ impl Adapter {
             caps.contains(Tfc::MULTISAMPLE_RESOLVE),
         );
 
+        flags.set(
+            wgt::TextureFormatFeatureFlags::MULTISAMPLE_ARRAY,
+            caps.contains(Tfc::MULTISAMPLE_ARRAY),
+        );
+
         wgt::TextureFormatFeatures {
             allowed_usages,
             flags,

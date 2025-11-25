@@ -2616,6 +2616,9 @@ impl crate::Adapter for super::Adapter {
         // Vulkan is very permissive about MSAA
         flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.is_compressed());
 
+        // Unless we're on a portability subset, this is always allowed
+        flags.set(Tfc::MULTISAMPLE_ARRAY, true);
+
         // get the supported sample counts
         let format_aspect = crate::FormatAspects::from(format);
         let limits = self.phd_capabilities.properties.limits;

@@ -1678,6 +1678,9 @@ bitflags!(
         const COPY_SRC = 1 << 15;
         /// Format can be copied to.
         const COPY_DST = 1 << 16;
+
+        /// Format can be used with both multisample and array at the same time.
+        const MULTISAMPLE_ARRAY = 1 << 17;
     }
 );
 

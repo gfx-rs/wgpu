@@ -2058,6 +2058,9 @@ bitflags::bitflags! {
         const STORAGE_ATOMIC = 1 << 9;
         /// If not present, the texture can't be blended into the render target.
         const BLENDABLE = 1 << 10;
+        /// Allows a 2D texture of this format to have a `sample_count` higher than 1, and more
+        /// than 1 array layer at the same time.
+        const MULTISAMPLE_ARRAY = 1 << 11;
     }
 }
 
