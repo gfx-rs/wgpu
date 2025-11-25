@@ -227,8 +227,8 @@ pub enum FunctionError {
     InvalidMeshShaderOutputType(Handle<crate::Expression>),
     #[error("The payload type passed to `traceRay` must be a pointer")]
     InvalidPayloadType,
-    #[error("The payload type passed to `traceRay` must be a pointer with an adress space of `ray_payload` or `incoming_ray_payload`, instead got {0:?}")]
-    InvalidPayloadAdressSpace(crate::AddressSpace),
+    #[error("The payload type passed to `traceRay` must be a pointer with an address space of `ray_payload` or `incoming_ray_payload`, instead got {0:?}")]
+    InvalidPayloadAddressSpace(crate::AddressSpace),
     #[error("The payload type ({0:?}) passed to `traceRay` does not match the previous one {1:?}")]
     MismatchedPayloadType(Handle<crate::Type>, Handle<crate::Type>),
 }
@@ -1665,7 +1665,7 @@ impl super::Validator {
                                     AddressSpace::RayPayload | AddressSpace::IncomingRayPayload => {
                                     }
                                     space => {
-                                        return Err(FunctionError::InvalidPayloadAdressSpace(space)
+                                        return Err(FunctionError::InvalidPayloadAddressSpace(space)
                                             .with_span_handle(payload, context.expressions))
                                     }
                                 }
