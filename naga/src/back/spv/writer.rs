@@ -1570,9 +1570,9 @@ impl Writer {
                     .writer
                     .get_pointer_type_id(u32_type_id, spirv::StorageClass::Function);
                 let tracker_id = context.gen_id();
-                let tracker_init_id = context
-                    .writer
-                    .get_constant_scalar(crate::Literal::U32(super::RayQueryPoint::empty().bits()));
+                let tracker_init_id = context.writer.get_constant_scalar(crate::Literal::U32(
+                    crate::back::RayQueryPoint::empty().bits(),
+                ));
                 let tracker_instruction = Instruction::variable(
                     ptr_u32_type_id,
                     tracker_id,

@@ -61,6 +61,26 @@ impl core::fmt::Display for Baked {
     }
 }
 
+bitflags::bitflags! {
+    /// How far through a ray query are we
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    #[cfg_attr(
+        not(any(hlsl_out, spv_out)),
+        allow(
+            dead_code,
+            reason = "shared helpers can be dead if none of the enabled backends need it"
+        )
+    )]
+    pub(super) struct RayQueryPoint: u32 {
+        /// Ray query has been successfully initialized.
+        const INITIALIZED = 1 << 0;
+        /// Proceed has been called on ray query.
+        const PROCEED = 1 << 1;
+        /// Proceed has returned false (have finished traversal).
+        const FINISHED_TRAVERSAL = 1 << 2;
+    }
+}
+
 /// Specifies the values of pipeline-overridable constants in the shader module.
 ///
 /// If an `@id` attribute was specified on the declaration,
