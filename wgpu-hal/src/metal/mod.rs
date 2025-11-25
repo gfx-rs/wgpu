@@ -631,6 +631,10 @@ impl<T> ops::Index<naga::ShaderStage> for MultiStageData<T> {
             naga::ShaderStage::Compute => &self.cs,
             naga::ShaderStage::Task => &self.ts,
             naga::ShaderStage::Mesh => &self.ms,
+            naga::ShaderStage::RayGeneration
+            | naga::ShaderStage::AnyHit
+            | naga::ShaderStage::ClosestHit
+            | naga::ShaderStage::Miss => unimplemented!(),
         }
     }
 }

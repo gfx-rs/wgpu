@@ -1169,15 +1169,15 @@ impl FunctionInfo {
                     FunctionUniformity::new()
                 }
                 S::RayPipelineFunction(ref fun) => {
-                    match fun {
+                    match *fun {
                         crate::RayPipelineFunction::TraceRay {
                             acceleration_structure,
                             descriptor,
                             payload,
                         } => {
-                            let _ = self.add_ref(*acceleration_structure);
-                            let _ = self.add_ref(*descriptor);
-                            let _ = self.add_ref(*payload);
+                            let _ = self.add_ref(acceleration_structure);
+                            let _ = self.add_ref(descriptor);
+                            let _ = self.add_ref(payload);
                         }
                     }
                     FunctionUniformity::new()

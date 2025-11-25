@@ -164,6 +164,10 @@ impl super::CommandEncoder {
             naga::ShaderStage::Task => &bg_info.base_resource_indices.ts,
             naga::ShaderStage::Mesh => &bg_info.base_resource_indices.ms,
             naga::ShaderStage::Compute => &bg_info.base_resource_indices.cs,
+            naga::ShaderStage::RayGeneration
+            | naga::ShaderStage::AnyHit
+            | naga::ShaderStage::ClosestHit
+            | naga::ShaderStage::Miss => unimplemented!(),
         };
         let buffers = match stage {
             naga::ShaderStage::Vertex => group.counters.vs.buffers,
@@ -171,6 +175,10 @@ impl super::CommandEncoder {
             naga::ShaderStage::Task => group.counters.ts.buffers,
             naga::ShaderStage::Mesh => group.counters.ms.buffers,
             naga::ShaderStage::Compute => group.counters.cs.buffers,
+            naga::ShaderStage::RayGeneration
+            | naga::ShaderStage::AnyHit
+            | naga::ShaderStage::ClosestHit
+            | naga::ShaderStage::Miss => unimplemented!(),
         };
         let mut changes_sizes_buffer = false;
         for index in 0..buffers {
@@ -190,6 +198,10 @@ impl super::CommandEncoder {
                 naga::ShaderStage::Task => render_encoder.unwrap().set_object_buffer(a1, a2, a3),
                 naga::ShaderStage::Mesh => render_encoder.unwrap().set_mesh_buffer(a1, a2, a3),
                 naga::ShaderStage::Compute => compute_encoder.unwrap().set_buffer(a1, a2, a3),
+                naga::ShaderStage::RayGeneration
+                | naga::ShaderStage::AnyHit
+                | naga::ShaderStage::ClosestHit
+                | naga::ShaderStage::Miss => unimplemented!(),
             }
             if let Some(size) = buf.binding_size {
                 let br = naga::ResourceBinding {
@@ -218,6 +230,10 @@ impl super::CommandEncoder {
                     naga::ShaderStage::Task => render_encoder.unwrap().set_object_bytes(a1, a2, a3),
                     naga::ShaderStage::Mesh => render_encoder.unwrap().set_mesh_bytes(a1, a2, a3),
                     naga::ShaderStage::Compute => compute_encoder.unwrap().set_bytes(a1, a2, a3),
+                    naga::ShaderStage::RayGeneration
+                    | naga::ShaderStage::AnyHit
+                    | naga::ShaderStage::ClosestHit
+                    | naga::ShaderStage::Miss => unimplemented!(),
                 }
             }
         }
@@ -227,6 +243,10 @@ impl super::CommandEncoder {
             naga::ShaderStage::Task => group.counters.ts.samplers,
             naga::ShaderStage::Mesh => group.counters.ms.samplers,
             naga::ShaderStage::Compute => group.counters.cs.samplers,
+            naga::ShaderStage::RayGeneration
+            | naga::ShaderStage::AnyHit
+            | naga::ShaderStage::ClosestHit
+            | naga::ShaderStage::Miss => unimplemented!(),
         };
         for index in 0..samplers {
             let res = group.samplers[(index_base.samplers + index) as usize];
@@ -242,6 +262,10 @@ impl super::CommandEncoder {
                 naga::ShaderStage::Task => render_encoder.unwrap().set_object_sampler_state(a1, a2),
                 naga::ShaderStage::Mesh => render_encoder.unwrap().set_mesh_sampler_state(a1, a2),
                 naga::ShaderStage::Compute => compute_encoder.unwrap().set_sampler_state(a1, a2),
+                naga::ShaderStage::RayGeneration
+                | naga::ShaderStage::AnyHit
+                | naga::ShaderStage::ClosestHit
+                | naga::ShaderStage::Miss => unimplemented!(),
             }
         }
 
@@ -251,6 +275,10 @@ impl super::CommandEncoder {
             naga::ShaderStage::Task => group.counters.ts.textures,
             naga::ShaderStage::Mesh => group.counters.ms.textures,
             naga::ShaderStage::Compute => group.counters.cs.textures,
+            naga::ShaderStage::RayGeneration
+            | naga::ShaderStage::AnyHit
+            | naga::ShaderStage::ClosestHit
+            | naga::ShaderStage::Miss => unimplemented!(),
         };
         for index in 0..textures {
             let res = group.textures[(index_base.textures + index) as usize];
@@ -262,6 +290,10 @@ impl super::CommandEncoder {
                 naga::ShaderStage::Task => render_encoder.unwrap().set_object_texture(a1, a2),
                 naga::ShaderStage::Mesh => render_encoder.unwrap().set_mesh_texture(a1, a2),
                 naga::ShaderStage::Compute => compute_encoder.unwrap().set_texture(a1, a2),
+                naga::ShaderStage::RayGeneration
+                | naga::ShaderStage::AnyHit
+                | naga::ShaderStage::ClosestHit
+                | naga::ShaderStage::Miss => unimplemented!(),
             }
         }
     }

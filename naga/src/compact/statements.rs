@@ -382,7 +382,7 @@ impl FunctionMap {
                         adjust(argument);
                         adjust(result);
                     }
-                    St::RayPipelineFunction(ref mut func) => match func {
+                    St::RayPipelineFunction(ref mut func) => match *func {
                         crate::RayPipelineFunction::TraceRay {
                             ref mut acceleration_structure,
                             ref mut descriptor,

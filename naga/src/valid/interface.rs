@@ -735,7 +735,12 @@ impl VaryingContext<'_> {
                 let needs_interpolation = match self.stage {
                     crate::ShaderStage::Vertex => self.output,
                     crate::ShaderStage::Fragment => !self.output && !per_primitive,
-                    crate::ShaderStage::Compute | crate::ShaderStage::Task | crate::ShaderStage::RayGeneration | crate::ShaderStage::AnyHit | crate::ShaderStage::ClosestHit | crate::ShaderStage::Miss => false,
+                    crate::ShaderStage::Compute
+                    | crate::ShaderStage::Task
+                    | crate::ShaderStage::RayGeneration
+                    | crate::ShaderStage::AnyHit
+                    | crate::ShaderStage::ClosestHit
+                    | crate::ShaderStage::Miss => false,
                     crate::ShaderStage::Mesh => self.output,
                 };
 
@@ -962,15 +967,15 @@ impl super::Validator {
                 )
             }
             crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload => {
-                if !self.capabilities.contains(Capabilities::RAY_TRACING_PIPELINE) {
+                if !self
+                    .capabilities
+                    .contains(Capabilities::RAY_TRACING_PIPELINE)
+                {
                     return Err(GlobalVariableError::UnsupportedCapability(
                         Capabilities::PUSH_CONSTANT,
                     ));
                 }
-                (
-                    TypeFlags::DATA | TypeFlags::SIZED,
-                    false,
-                )
+                (TypeFlags::DATA | TypeFlags::SIZED, false)
             }
         };
 
@@ -1315,20 +1320,28 @@ impl super::Validator {
                 }
                 crate::AddressSpace::PushConstant => GlobalUse::READ,
                 crate::AddressSpace::RayPayload => {
-                    if !matches!(ep.stage, crate::ShaderStage::RayGeneration | crate::ShaderStage::ClosestHit | crate::ShaderStage::Miss) {
-                        return Err(EntryPointError::RayPayloadInInvalidStage.with_span_handle(var_handle, &module.global_variables));
+                    if !matches!(
+                        ep.stage,
+                        crate::ShaderStage::RayGeneration
+                            | crate::ShaderStage::ClosestHit
+                            | crate::ShaderStage::Miss
+                    ) {
+                        return Err(EntryPointError::RayPayloadInInvalidStage
+                            .with_span_handle(var_handle, &module.global_variables));
                     }
-                    GlobalUse::READ
-                        | GlobalUse::QUERY
-                        | GlobalUse::WRITE
+                    GlobalUse::READ | GlobalUse::QUERY | GlobalUse::WRITE
                 }
                 crate::AddressSpace::IncomingRayPayload => {
-                    if !matches!(ep.stage, crate::ShaderStage::AnyHit | crate::ShaderStage::ClosestHit | crate::ShaderStage::Miss) {
-                        return Err(EntryPointError::IncomingRayPayloadInInvalidStage.with_span_handle(var_handle, &module.global_variables));
+                    if !matches!(
+                        ep.stage,
+                        crate::ShaderStage::AnyHit
+                            | crate::ShaderStage::ClosestHit
+                            | crate::ShaderStage::Miss
+                    ) {
+                        return Err(EntryPointError::IncomingRayPayloadInInvalidStage
+                            .with_span_handle(var_handle, &module.global_variables));
                     }
-                    GlobalUse::READ
-                        | GlobalUse::QUERY
-                        | GlobalUse::WRITE
+                    GlobalUse::READ | GlobalUse::QUERY | GlobalUse::WRITE
                 }
             };
             if !allowed_usage.contains(usage) {

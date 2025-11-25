@@ -99,7 +99,12 @@ impl CompilationContext<'_> {
                     unsafe { gl.bind_frag_data_location(program, location.location, &name) }
                 }
                 naga::ShaderStage::Compute => {}
-                naga::ShaderStage::Task | naga::ShaderStage::Mesh | naga::ShaderStage::RayGeneration | naga::ShaderStage::AnyHit | naga::ShaderStage::ClosestHit | naga::ShaderStage::Miss => unreachable!(),
+                naga::ShaderStage::Task
+                | naga::ShaderStage::Mesh
+                | naga::ShaderStage::RayGeneration
+                | naga::ShaderStage::AnyHit
+                | naga::ShaderStage::ClosestHit
+                | naga::ShaderStage::Miss => unreachable!(),
             }
         }
 
@@ -175,7 +180,12 @@ impl super::Device {
             naga::ShaderStage::Vertex => glow::VERTEX_SHADER,
             naga::ShaderStage::Fragment => glow::FRAGMENT_SHADER,
             naga::ShaderStage::Compute => glow::COMPUTE_SHADER,
-            naga::ShaderStage::Task | naga::ShaderStage::Mesh | naga::ShaderStage::RayGeneration | naga::ShaderStage::AnyHit | naga::ShaderStage::ClosestHit | naga::ShaderStage::Miss => unreachable!(),
+            naga::ShaderStage::Task
+            | naga::ShaderStage::Mesh
+            | naga::ShaderStage::RayGeneration
+            | naga::ShaderStage::AnyHit
+            | naga::ShaderStage::ClosestHit
+            | naga::ShaderStage::Miss => unreachable!(),
         };
 
         let raw = unsafe { gl.create_shader(target) }.unwrap();

@@ -860,7 +860,7 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 crate::RayQueryFunction::Terminate => {}
             }
         }
-        Statement::RayPipelineFunction(ref mut func) => match func {
+        Statement::RayPipelineFunction(ref mut func) => match *func {
             crate::RayPipelineFunction::TraceRay {
                 ref mut acceleration_structure,
                 ref mut descriptor,
