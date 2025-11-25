@@ -2678,7 +2678,7 @@ pub struct MeshStageInfo {
     pub output_variable: Handle<GlobalVariable>,
 }
 
-/// Ray tracing pipeine intrinsics
+/// Ray tracing pipeline intrinsics
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
