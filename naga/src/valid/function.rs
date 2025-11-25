@@ -1665,8 +1665,10 @@ impl super::Validator {
                                     AddressSpace::RayPayload | AddressSpace::IncomingRayPayload => {
                                     }
                                     space => {
-                                        return Err(FunctionError::InvalidPayloadAddressSpace(space)
-                                            .with_span_handle(payload, context.expressions))
+                                        return Err(FunctionError::InvalidPayloadAddressSpace(
+                                            space,
+                                        )
+                                        .with_span_handle(payload, context.expressions))
                                     }
                                 }
                                 base
