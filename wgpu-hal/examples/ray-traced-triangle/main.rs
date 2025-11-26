@@ -246,6 +246,7 @@ impl<A: hal::Api> Example<A> {
                 },
                 ..Default::default()
             },
+            telemetry: None,
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let surface = {

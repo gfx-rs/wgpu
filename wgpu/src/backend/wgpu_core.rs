@@ -784,7 +784,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
     where
         Self: Sized,
     {
-        Self(Arc::new(wgc::global::Global::new("wgpu", desc)))
+        Self(Arc::new(wgc::global::Global::new("wgpu", desc, None)))
     }
 
     unsafe fn create_surface(

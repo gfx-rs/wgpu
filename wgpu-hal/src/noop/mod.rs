@@ -98,6 +98,7 @@ impl crate::Instance for Context {
             name: _,
             flags: _,
             memory_budget_thresholds: _,
+            telemetry: _,
         } = *desc;
         if enable {
             Ok(Context)

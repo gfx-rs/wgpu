@@ -1876,6 +1876,7 @@ pub struct InstanceDescriptor<'a> {
     pub flags: wgt::InstanceFlags,
     pub memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     pub backend_options: wgt::BackendOptions,
+    pub telemetry: Option<Telemetry>,
 }
 
 #[derive(Clone, Debug)]
@@ -2800,4 +2801,23 @@ pub struct TlasInstance {
     pub custom_data: u32,
     pub mask: u8,
     pub blas_address: u64,
+}
+
+#[cfg(dx12)]
+pub enum D3D12ExposeAdapterResult {
+    CreateDeviceError(dx12::CreateDeviceError),
+    ResourceBindingTier2Requirement,
+    ShaderModel6Requirement,
+    Success(dx12::FeatureLevel, dx12::ShaderModel),
+}
+
+/// Pluggable telemetry, mainly to be used by Firefox.
+#[derive(Debug, Clone, Copy)]
+pub struct Telemetry {
+    #[cfg(dx12)]
+    pub d3d12_expose_adapter: fn(
+        desc: &windows::Win32::Graphics::Dxgi::DXGI_ADAPTER_DESC2,
+        driver_version: [u16; 4],
+        result: D3D12ExposeAdapterResult,
+    ),
 }
