@@ -539,6 +539,9 @@ pub struct Options {
     /// If set, loops will have code injected into them, forcing the compiler
     /// to think the number of iterations is bounded.
     pub force_loop_bounding: bool,
+    /// if set, ray queries will get a variable to track their state to prevent
+    /// misuse.
+    pub ray_query_initialization_tracking: bool,
 }
 
 impl Default for Options {
@@ -556,6 +559,7 @@ impl Default for Options {
             zero_initialize_workgroup_memory: true,
             restrict_indexing: true,
             force_loop_bounding: true,
+            ray_query_initialization_tracking: true,
         }
     }
 }

@@ -1,9 +1,29 @@
+use alloc::{format, string::String, vec, vec::Vec};
 use core::fmt::Write;
 
-use crate::back::hlsl::BackendResult;
+use crate::{
+    back::{hlsl::BackendResult, Level},
+    Handle,
+};
 use crate::{RayQueryIntersection, TypeInner};
 
 impl<W: Write> super::Writer<'_, W> {
+    // https://sakibsaikia.github.io/graphics/2022/01/04/Nan-Checks-In-HLSL.html suggests that isnan may not work, unsure if this has changed.
+    fn write_not_finite(&mut self, expr: &str) -> BackendResult {
+        self.write_contains_flags(&format!("asuint({expr})"), 0x7f800000)
+    }
+
+    fn write_nan(&mut self, expr: &str) -> BackendResult {
+        self.write_not_finite(expr)?;
+        write!(self.out, " && ((asuint({expr}) & 0x7fffff) != 0)")?;
+        Ok(())
+    }
+
+    fn write_contains_flags(&mut self, expr: &str, flags: u32) -> BackendResult {
+        write!(self.out, "(({expr} & {flags}) == {flags})")?;
+        Ok(())
+    }
+
     // constructs hlsl RayDesc from wgsl RayDesc
     pub(super) fn write_ray_desc_from_ray_desc_constructor_function(
         &mut self,
@@ -169,6 +189,147 @@ impl<W: Write> super::Writer<'_, W> {
         writeln!(self.out, "    return ret;")?;
         writeln!(self.out, "}}")?;
         writeln!(self.out)?;
+        Ok(())
+    }
+
+    #[expect(clippy::too_many_arguments)]
+    pub(super) fn write_initialize_function(
+        &mut self,
+        module: &crate::Module,
+        mut level: Level,
+        query: Handle<crate::Expression>,
+        acceleration_structure: Handle<crate::Expression>,
+        descriptor: Handle<crate::Expression>,
+        rq_tracker: &str,
+        func_ctx: &crate::back::FunctionCtx<'_>,
+    ) -> BackendResult {
+        let base_level = level;
+
+        // This prevents variables flowing down a level and causing compile errors.
+        writeln!(self.out, "{level}{{")?;
+        level = level.next();
+        write!(self.out, "{level}")?;
+        self.write_type(
+            module,
+            module
+                .special_types
+                .ray_desc
+                .expect("should have been generated"),
+        )?;
+        write!(self.out, " naga_desc = ")?;
+        self.write_expr(module, descriptor, func_ctx)?;
+        writeln!(self.out, ";")?;
+
+        if self.options.ray_query_initialization_tracking {
+            // Validate ray extents https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#ray-extents
+
+            // just for convenience
+            writeln!(self.out, "{level}float naga_tmin = naga_desc.tmin;")?;
+            writeln!(self.out, "{level}float naga_tmax = naga_desc.tmax;")?;
+            writeln!(self.out, "{level}float3 naga_origin = naga_desc.origin;")?;
+            writeln!(self.out, "{level}float3 naga_dir = naga_desc.dir;")?;
+            writeln!(self.out, "{level}uint naga_flags = naga_desc.flags;")?;
+            write!(
+                self.out,
+                "{level}bool naga_tmin_valid = (naga_tmin >= 0.0) && (naga_tmin <= naga_tmax) && !("
+            )?;
+            self.write_nan("naga_tmin")?;
+            writeln!(self.out, ");")?;
+            write!(self.out, "{level}bool naga_tmax_valid = !")?;
+            self.write_nan("naga_tmax")?;
+            writeln!(self.out, ";")?;
+            // Unlike Vulkan it seems that for DX12, it seems only NaN components of the origin and direction are invalid
+            write!(self.out, "{level}bool naga_origin_valid = !any(")?;
+            self.write_nan("naga_origin")?;
+            writeln!(self.out, ");")?;
+            write!(self.out, "{level}bool naga_dir_valid = !any(")?;
+            self.write_nan("naga_dir")?;
+            writeln!(self.out, ");")?;
+            write!(self.out, "{level}bool naga_contains_opaque = ")?;
+            self.write_contains_flags("naga_flags", crate::RayFlag::FORCE_OPAQUE.bits())?;
+            writeln!(self.out, ";")?;
+            write!(self.out, "{level}bool naga_contains_no_opaque = ")?;
+            self.write_contains_flags("naga_flags", crate::RayFlag::FORCE_NO_OPAQUE.bits())?;
+            writeln!(self.out, ";")?;
+            write!(self.out, "{level}bool naga_contains_cull_opaque = ")?;
+            self.write_contains_flags("naga_flags", crate::RayFlag::CULL_OPAQUE.bits())?;
+            writeln!(self.out, ";")?;
+            write!(self.out, "{level}bool naga_contains_cull_no_opaque = ")?;
+            self.write_contains_flags("naga_flags", crate::RayFlag::CULL_NO_OPAQUE.bits())?;
+            writeln!(self.out, ";")?;
+            write!(self.out, "{level}bool naga_contains_cull_front = ")?;
+            self.write_contains_flags("naga_flags", crate::RayFlag::CULL_FRONT_FACING.bits())?;
+            writeln!(self.out, ";")?;
+            write!(self.out, "{level}bool naga_contains_cull_back = ")?;
+            self.write_contains_flags("naga_flags", crate::RayFlag::CULL_BACK_FACING.bits())?;
+            writeln!(self.out, ";")?;
+            write!(self.out, "{level}bool naga_contains_skip_triangles = ")?;
+            self.write_contains_flags("naga_flags", crate::RayFlag::SKIP_TRIANGLES.bits())?;
+            writeln!(self.out, ";")?;
+            write!(self.out, "{level}bool naga_contains_skip_aabbs = ")?;
+            self.write_contains_flags("naga_flags", crate::RayFlag::SKIP_AABBS.bits())?;
+            writeln!(self.out, ";")?;
+            // A textified version of the same in the spirv writer
+            fn less_than_two_true(mut bools: Vec<&str>) -> Result<String, super::Error> {
+                assert!(bools.len() > 1, "Must have multiple booleans!");
+                let mut final_expr = String::new();
+                while let Some(last_bool) = bools.pop() {
+                    for &bool in &bools {
+                        if !final_expr.is_empty() {
+                            final_expr.push_str("||");
+                        }
+                        write!(final_expr, " ({last_bool} && {bool}) ")?;
+                    }
+                }
+                Ok(final_expr)
+            }
+            writeln!(
+                self.out,
+                "{level}bool naga_contains_skip_triangles_aabbs = {};",
+                less_than_two_true(vec![
+                    "naga_contains_skip_triangles",
+                    "naga_contains_skip_aabbs"
+                ])?
+            )?;
+            writeln!(
+                self.out,
+                "{level}bool naga_contains_skip_triangles_cull = {};",
+                less_than_two_true(vec![
+                    "naga_contains_skip_triangles",
+                    "naga_contains_cull_back",
+                    "naga_contains_cull_front"
+                ])?
+            )?;
+            writeln!(
+                self.out,
+                "{level}bool naga_contains_multiple_opaque = {};",
+                less_than_two_true(vec![
+                    "naga_contains_opaque",
+                    "naga_contains_no_opaque",
+                    "naga_contains_cull_opaque",
+                    "naga_contains_cull_no_opaque"
+                ])?
+            )?;
+            writeln!(
+                self.out,
+                "{level}if (naga_tmin_valid && naga_tmax_valid && naga_origin_valid && naga_dir_valid && !(naga_contains_skip_triangles_aabbs || naga_contains_skip_triangles_cull || naga_contains_multiple_opaque)) {{"
+            )?;
+            level = level.next();
+            writeln!(
+                self.out,
+                "{level}{rq_tracker} = {rq_tracker} | {};",
+                crate::back::RayQueryPoint::INITIALIZED.bits()
+            )?;
+        }
+        write!(self.out, "{level}")?;
+        self.write_expr(module, query, func_ctx)?;
+        write!(self.out, ".TraceRayInline(")?;
+        self.write_expr(module, acceleration_structure, func_ctx)?;
+        writeln!(
+            self.out,
+            ", naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));"
+        )?;
+        writeln!(self.out, "{base_level}}}}}")?;
         Ok(())
     }
 }
