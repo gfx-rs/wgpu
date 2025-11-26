@@ -1,4 +1,9 @@
-use alloc::{format, string::{String, ToString}, vec, vec::Vec};
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 use core::fmt::Write;
 
 use crate::{
@@ -394,15 +399,14 @@ impl<W: Write> super::Writer<'_, W> {
         if self.options.ray_query_initialization_tracking {
             writeln!(self.out, "{level}{{")?;
             level = level.next();
-            write!(
-                self.out,
-                "{level}bool naga_has_initialized = ")?;
+            write!(self.out, "{level}bool naga_has_initialized = ")?;
             self.write_contains_flags(rq_tracker, crate::back::RayQueryPoint::INITIALIZED.bits())?;
             writeln!(self.out, ";")?;
-            write!(
-                self.out,
-                "{level}bool naga_has_finished = ")?;
-            self.write_contains_flags(rq_tracker, crate::back::RayQueryPoint::FINISHED_TRAVERSAL.bits())?;
+            write!(self.out, "{level}bool naga_has_finished = ")?;
+            self.write_contains_flags(
+                rq_tracker,
+                crate::back::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+            )?;
             writeln!(self.out, ";")?;
             writeln!(
                 self.out,

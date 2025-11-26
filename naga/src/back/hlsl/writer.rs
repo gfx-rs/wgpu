@@ -2616,7 +2616,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         )?;
                     }
                     RayQueryFunction::Proceed { result } => {
-                        self.write_proceed(module, level, query, result, &tracker_expr_name, func_ctx)?;
+                        self.write_proceed(
+                            module,
+                            level,
+                            query,
+                            result,
+                            &tracker_expr_name,
+                            func_ctx,
+                        )?;
                     }
                     RayQueryFunction::GenerateIntersection { hit_t } => {
                         write!(self.out, "{level}")?;
@@ -4305,8 +4312,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
             Expression::RayQueryGetIntersection { query, committed } => {
                 // For reasoning, see write_stmt
-                let Expression::LocalVariable(query_var) = func_ctx.expressions[query]
-                else {
+                let Expression::LocalVariable(query_var) = func_ctx.expressions[query] else {
                     unreachable!()
                 };
 
