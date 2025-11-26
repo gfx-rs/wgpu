@@ -2645,9 +2645,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         )?;
                     }
                     RayQueryFunction::Terminate => {
-                        write!(self.out, "{level}")?;
-                        self.write_expr(module, query, func_ctx)?;
-                        writeln!(self.out, ".Abort();")?;
+                        self.write_terminate(module, level, query, &tracker_expr_name, func_ctx)?;
                     }
                 }
             }

@@ -125,7 +125,9 @@ void main_candidate()
             }}
             return;
         } else {
-            rq_1.Abort();
+            if (((naga_query_init_tracker_for_rq_1 & 1) == 1)) {
+                rq_1.Abort();
+            }
             return;
         }
     }

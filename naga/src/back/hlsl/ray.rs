@@ -528,4 +528,33 @@ impl<W: Write> super::Writer<'_, W> {
         }
         Ok(())
     }
+
+    pub(super) fn write_terminate(
+        &mut self,
+        module: &crate::Module,
+        mut level: Level,
+        query: Handle<crate::Expression>,
+        rq_tracker: &str,
+        func_ctx: &crate::back::FunctionCtx<'_>,
+    ) -> BackendResult {
+        let base_level = level;
+        if self.options.ray_query_initialization_tracking {
+            write!(self.out, "{level}if (")?;
+            // RayQuery::Abort() can be called any time after RayQuery::TraceRayInline() has been called.
+            // from https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#rayquery-abort
+            self.write_contains_flags(rq_tracker, crate::back::RayQueryPoint::INITIALIZED.bits())?;
+            writeln!(self.out, ") {{")?;
+            level = level.next();
+        }
+
+        write!(self.out, "{level}")?;
+        self.write_expr(module, query, func_ctx)?;
+        writeln!(self.out, ".Abort();")?;
+
+        if self.options.ray_query_initialization_tracking {
+            writeln!(self.out, "{base_level}}}")?;
+        }
+
+        Ok(())
+    }
 }

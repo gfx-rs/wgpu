@@ -232,7 +232,9 @@ void main_candidate()
             }}
             return;
         } else {
-            rq.Abort();
+            if (((naga_query_init_tracker_for_rq & 1) == 1)) {
+                rq.Abort();
+            }
             return;
         }
     }
