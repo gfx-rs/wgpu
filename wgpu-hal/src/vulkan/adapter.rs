@@ -2621,7 +2621,7 @@ impl crate::Adapter for super::Adapter {
         // We could query and enable `multisampleArrayImage` on
         // `VkPhysicalDevicePortabilitySubsetFeaturesKHR`, but for now it's just disabled.
         #[cfg(not(target_vendor = "apple"))]
-        flags.set(Tfc::MULTISAMPLE_ARRAY, true);
+        flags.set(Tfc::MULTISAMPLE_ARRAY, !format.is_compressed());
 
         // get the supported sample counts
         let format_aspect = crate::FormatAspects::from(format);
