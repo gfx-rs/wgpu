@@ -54,60 +54,81 @@ impl<W: Write> super::Writer<'_, W> {
                 vertex_return: false,
             },
         )?;
-        writeln!(self.out, " rq) {{")?;
+        write!(self.out, " rq, ")?;
+        self.write_value_type(module, &TypeInner::Scalar(crate::Scalar::U32))?;
+        writeln!(self.out, " rq_tracker) {{")?;
         write!(self.out, "    ")?;
         self.write_type(module, module.special_types.ray_intersection.unwrap())?;
         write!(self.out, " ret = (")?;
         self.write_type(module, module.special_types.ray_intersection.unwrap())?;
         writeln!(self.out, ")0;")?;
-        writeln!(self.out, "    ret.kind = rq.CommittedStatus();")?;
+        let mut extra_level = Level(0);
+        if self.options.ray_query_initialization_tracking {
+            // *Technically*, `CommittedStatus` is valid as long as the ray query is initialized, but the metal backend
+            // doesn't support this function unless it has finished traversal, so to encourage portable behaviour we
+            // disallow it here too.
+            write!(self.out, "    if (")?;
+            self.write_contains_flags(
+                "rq_tracker",
+                crate::back::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+            )?;
+            writeln!(self.out, ") {{")?;
+            extra_level = extra_level.next();
+        }
         writeln!(
             self.out,
-            "    if( rq.CommittedStatus() == COMMITTED_NOTHING) {{}} else {{"
-        )?;
-        writeln!(self.out, "        ret.t = rq.CommittedRayT();")?;
-        writeln!(
-            self.out,
-            "        ret.instance_custom_data = rq.CommittedInstanceID();"
-        )?;
-        writeln!(
-            self.out,
-            "        ret.instance_index = rq.CommittedInstanceIndex();"
-        )?;
-        writeln!(
-            self.out,
-            "        ret.sbt_record_offset = rq.CommittedInstanceContributionToHitGroupIndex();"
-        )?;
-        writeln!(
-            self.out,
-            "        ret.geometry_index = rq.CommittedGeometryIndex();"
+            "    {extra_level}ret.kind = rq.CommittedStatus();"
         )?;
         writeln!(
             self.out,
-            "        ret.primitive_index = rq.CommittedPrimitiveIndex();"
+            "    {extra_level}if( rq.CommittedStatus() == COMMITTED_NOTHING) {{}} else {{"
+        )?;
+        writeln!(self.out, "        {extra_level}ret.t = rq.CommittedRayT();")?;
+        writeln!(
+            self.out,
+            "        {extra_level}ret.instance_custom_data = rq.CommittedInstanceID();"
         )?;
         writeln!(
             self.out,
-            "        if( rq.CommittedStatus() == COMMITTED_TRIANGLE_HIT ) {{"
+            "        {extra_level}ret.instance_index = rq.CommittedInstanceIndex();"
         )?;
         writeln!(
             self.out,
-            "            ret.barycentrics = rq.CommittedTriangleBarycentrics();"
+            "        {extra_level}ret.sbt_record_offset = rq.CommittedInstanceContributionToHitGroupIndex();"
         )?;
         writeln!(
             self.out,
-            "            ret.front_face = rq.CommittedTriangleFrontFace();"
-        )?;
-        writeln!(self.out, "        }}")?;
-        writeln!(
-            self.out,
-            "        ret.object_to_world = rq.CommittedObjectToWorld4x3();"
+            "        {extra_level}ret.geometry_index = rq.CommittedGeometryIndex();"
         )?;
         writeln!(
             self.out,
-            "        ret.world_to_object = rq.CommittedWorldToObject4x3();"
+            "        {extra_level}ret.primitive_index = rq.CommittedPrimitiveIndex();"
         )?;
-        writeln!(self.out, "    }}")?;
+        writeln!(
+            self.out,
+            "        {extra_level}if( rq.CommittedStatus() == COMMITTED_TRIANGLE_HIT ) {{"
+        )?;
+        writeln!(
+            self.out,
+            "            {extra_level}ret.barycentrics = rq.CommittedTriangleBarycentrics();"
+        )?;
+        writeln!(
+            self.out,
+            "            {extra_level}ret.front_face = rq.CommittedTriangleFrontFace();"
+        )?;
+        writeln!(self.out, "        {extra_level}}}")?;
+        writeln!(
+            self.out,
+            "        {extra_level}ret.object_to_world = rq.CommittedObjectToWorld4x3();"
+        )?;
+        writeln!(
+            self.out,
+            "        {extra_level}ret.world_to_object = rq.CommittedWorldToObject4x3();"
+        )?;
+        writeln!(self.out, "    {extra_level}}}")?;
+        if self.options.ray_query_initialization_tracking {
+            writeln!(self.out, "    }}")?;
+        }
         writeln!(self.out, "    return ret;")?;
         writeln!(self.out, "}}")?;
         writeln!(self.out)?;
@@ -125,67 +146,90 @@ impl<W: Write> super::Writer<'_, W> {
                 vertex_return: false,
             },
         )?;
-        writeln!(self.out, " rq) {{")?;
+        write!(self.out, " rq, ")?;
+        self.write_value_type(module, &TypeInner::Scalar(crate::Scalar::U32))?;
+        writeln!(self.out, " rq_tracker) {{")?;
         write!(self.out, "    ")?;
         self.write_type(module, module.special_types.ray_intersection.unwrap())?;
         write!(self.out, " ret = (")?;
         self.write_type(module, module.special_types.ray_intersection.unwrap())?;
         writeln!(self.out, ")0;")?;
-        writeln!(self.out, "    CANDIDATE_TYPE kind = rq.CandidateType();")?;
+        let mut extra_level = Level(0);
+        if self.options.ray_query_initialization_tracking {
+            write!(self.out, "    if (")?;
+            self.write_contains_flags("rq_tracker", crate::back::RayQueryPoint::PROCEED.bits())?;
+            write!(self.out, " && !")?;
+            self.write_contains_flags(
+                "rq_tracker",
+                crate::back::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+            )?;
+            writeln!(self.out, ") {{")?;
+            extra_level = extra_level.next();
+        }
         writeln!(
             self.out,
-            "    if (kind == CANDIDATE_NON_OPAQUE_TRIANGLE) {{"
+            "    {extra_level}CANDIDATE_TYPE kind = rq.CandidateType();"
         )?;
         writeln!(
             self.out,
-            "        ret.kind = {};",
+            "    {extra_level}if (kind == CANDIDATE_NON_OPAQUE_TRIANGLE) {{"
+        )?;
+        writeln!(
+            self.out,
+            "        {extra_level}ret.kind = {};",
             RayQueryIntersection::Triangle as u32
         )?;
-        writeln!(self.out, "        ret.t = rq.CandidateTriangleRayT();")?;
         writeln!(
             self.out,
-            "        ret.barycentrics = rq.CandidateTriangleBarycentrics();"
+            "        {extra_level}ret.t = rq.CandidateTriangleRayT();"
         )?;
         writeln!(
             self.out,
-            "        ret.front_face = rq.CandidateTriangleFrontFace();"
+            "        {extra_level}ret.barycentrics = rq.CandidateTriangleBarycentrics();"
         )?;
-        writeln!(self.out, "    }} else {{")?;
         writeln!(
             self.out,
-            "        ret.kind = {};",
+            "        {extra_level}ret.front_face = rq.CandidateTriangleFrontFace();"
+        )?;
+        writeln!(self.out, "    {extra_level}}} else {{")?;
+        writeln!(
+            self.out,
+            "        {extra_level}ret.kind = {};",
             RayQueryIntersection::Aabb as u32
         )?;
-        writeln!(self.out, "    }}")?;
+        writeln!(self.out, "    {extra_level}}}")?;
 
         writeln!(
             self.out,
-            "    ret.instance_custom_data = rq.CandidateInstanceID();"
+            "    {extra_level}ret.instance_custom_data = rq.CandidateInstanceID();"
         )?;
         writeln!(
             self.out,
-            "    ret.instance_index = rq.CandidateInstanceIndex();"
+            "    {extra_level}ret.instance_index = rq.CandidateInstanceIndex();"
         )?;
         writeln!(
             self.out,
-            "    ret.sbt_record_offset = rq.CandidateInstanceContributionToHitGroupIndex();"
+            "    {extra_level}ret.sbt_record_offset = rq.CandidateInstanceContributionToHitGroupIndex();"
         )?;
         writeln!(
             self.out,
-            "    ret.geometry_index = rq.CandidateGeometryIndex();"
+            "    {extra_level}ret.geometry_index = rq.CandidateGeometryIndex();"
         )?;
         writeln!(
             self.out,
-            "    ret.primitive_index = rq.CandidatePrimitiveIndex();"
+            "    {extra_level}ret.primitive_index = rq.CandidatePrimitiveIndex();"
         )?;
         writeln!(
             self.out,
-            "    ret.object_to_world = rq.CandidateObjectToWorld4x3();"
+            "    {extra_level}ret.object_to_world = rq.CandidateObjectToWorld4x3();"
         )?;
         writeln!(
             self.out,
-            "    ret.world_to_object = rq.CandidateWorldToObject4x3();"
+            "    {extra_level}ret.world_to_object = rq.CandidateWorldToObject4x3();"
         )?;
+        if self.options.ray_query_initialization_tracking {
+            writeln!(self.out, "    }}")?;
+        }
         writeln!(self.out, "    return ret;")?;
         writeln!(self.out, "}}")?;
         writeln!(self.out)?;

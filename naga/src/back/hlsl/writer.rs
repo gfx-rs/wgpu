@@ -4304,14 +4304,25 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ")")?
             }
             Expression::RayQueryGetIntersection { query, committed } => {
+                // For reasoning, see write_stmt
+                let Expression::LocalVariable(query_var) = func_ctx.expressions[query]
+                else {
+                    unreachable!()
+                };
+
+                let tracker_expr_name = format!(
+                    "{RAY_QUERY_TRACKER_VARIABLE_PREFIX}{}",
+                    self.names[&func_ctx.name_key(query_var)]
+                );
+
                 if committed {
                     write!(self.out, "GetCommittedIntersection(")?;
                     self.write_expr(module, query, func_ctx)?;
-                    write!(self.out, ")")?;
+                    write!(self.out, ", {tracker_expr_name})")?;
                 } else {
                     write!(self.out, "GetCandidateIntersection(")?;
                     self.write_expr(module, query, func_ctx)?;
-                    write!(self.out, ")")?;
+                    write!(self.out, ", {tracker_expr_name})")?;
                 }
             }
             // Not supported yet

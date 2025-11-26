@@ -49,24 +49,26 @@ RayDesc_ ConstructRayDesc_(uint arg0, uint arg1, float arg2, float arg3, float3 
     return ret;
 }
 
-RayIntersection GetCandidateIntersection(RayQuery<RAY_FLAG_NONE> rq) {
+RayIntersection GetCandidateIntersection(RayQuery<RAY_FLAG_NONE> rq, uint rq_tracker) {
     RayIntersection ret = (RayIntersection)0;
-    CANDIDATE_TYPE kind = rq.CandidateType();
-    if (kind == CANDIDATE_NON_OPAQUE_TRIANGLE) {
-        ret.kind = 1;
-        ret.t = rq.CandidateTriangleRayT();
-        ret.barycentrics = rq.CandidateTriangleBarycentrics();
-        ret.front_face = rq.CandidateTriangleFrontFace();
-    } else {
-        ret.kind = 3;
+    if (((rq_tracker & 2) == 2) && !((rq_tracker & 4) == 4)) {
+        CANDIDATE_TYPE kind = rq.CandidateType();
+        if (kind == CANDIDATE_NON_OPAQUE_TRIANGLE) {
+            ret.kind = 1;
+            ret.t = rq.CandidateTriangleRayT();
+            ret.barycentrics = rq.CandidateTriangleBarycentrics();
+            ret.front_face = rq.CandidateTriangleFrontFace();
+        } else {
+            ret.kind = 3;
+        }
+        ret.instance_custom_data = rq.CandidateInstanceID();
+        ret.instance_index = rq.CandidateInstanceIndex();
+        ret.sbt_record_offset = rq.CandidateInstanceContributionToHitGroupIndex();
+        ret.geometry_index = rq.CandidateGeometryIndex();
+        ret.primitive_index = rq.CandidatePrimitiveIndex();
+        ret.object_to_world = rq.CandidateObjectToWorld4x3();
+        ret.world_to_object = rq.CandidateWorldToObject4x3();
     }
-    ret.instance_custom_data = rq.CandidateInstanceID();
-    ret.instance_index = rq.CandidateInstanceIndex();
-    ret.sbt_record_offset = rq.CandidateInstanceContributionToHitGroupIndex();
-    ret.geometry_index = rq.CandidateGeometryIndex();
-    ret.primitive_index = rq.CandidatePrimitiveIndex();
-    ret.object_to_world = rq.CandidateObjectToWorld4x3();
-    ret.world_to_object = rq.CandidateWorldToObject4x3();
     return ret;
 }
 
@@ -104,7 +106,7 @@ void main_candidate()
             naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 1;
             rq_1.TraceRayInline(acc_struct, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
     }}
-    RayIntersection intersection = GetCandidateIntersection(rq_1);
+    RayIntersection intersection = GetCandidateIntersection(rq_1, naga_query_init_tracker_for_rq_1);
     if ((intersection.kind == 3u)) {
         rq_1.CommitProceduralPrimitiveHit(10.0);
         return;
