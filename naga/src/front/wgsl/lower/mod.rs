@@ -932,15 +932,6 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     fn ensure_type_exists(&mut self, inner: ir::TypeInner) -> Handle<ir::Type> {
         self.as_global().ensure_type_exists(None, inner)
     }
-
-    fn _get_runtime_expression(&self, expr: Handle<ir::Expression>) -> &ir::Expression {
-        match self.expr_type {
-            ExpressionContextType::Runtime(ref ctx) => &ctx.function.expressions[expr],
-            ExpressionContextType::Constant(_) | ExpressionContextType::Override => {
-                unreachable!()
-            }
-        }
-    }
 }
 
 struct ArgumentContext<'ctx, 'source> {

@@ -872,21 +872,6 @@ impl super::Validator {
                             (&Ti::Matrix { columns, .. }, &Ti::Matrix { rows, .. }) => {
                                 columns == rows
                             }
-                            // Coop matrix * coop matrix.
-                            (
-                                &Ti::CooperativeMatrix {
-                                    columns,
-                                    scalar: scalar1,
-                                    role: role1,
-                                    ..
-                                },
-                                &Ti::CooperativeMatrix {
-                                    rows,
-                                    scalar: scalar2,
-                                    role: role2,
-                                    ..
-                                },
-                            ) => columns == rows && scalar1 == scalar2 && role1 == role2,
                             // Scalar * coop matrix.
                             (&Ti::Scalar(s1), &Ti::CooperativeMatrix { scalar: s2, .. })
                             | (&Ti::CooperativeMatrix { scalar: s1, .. }, &Ti::Scalar(s2)) => {

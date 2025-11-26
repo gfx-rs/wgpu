@@ -1475,7 +1475,7 @@ impl Parser {
         Ok((ty, span))
     }
 
-    /// Parses `<T,R>`, returning (T, span of T, R, span of R)
+    /// Parses `<T,R>`, returning (T, span of T, R)
     fn cooperative_scalar_and_role<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,

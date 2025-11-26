@@ -1,8 +1,8 @@
-targets = "IR | SPIRV | METAL | WGSL"
+targets = "SPIRV | METAL | WGSL"
 capabilities = "COOPERATIVE_MATRIX"
 
 [spv]
-debug = true
+debug = false
 version = [1, 4]
 
 [msl]
