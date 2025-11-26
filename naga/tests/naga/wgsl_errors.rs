@@ -1029,7 +1029,10 @@ macro_rules! check_one_validation {
 /// NOTE: The only reason we don't use a function for this is because we need to syntactically
 /// re-use `$val_err_pat`.
 macro_rules! check_extension_validation {
-    ( $caps:expr, $source:expr, $parse_err:expr, $val_err_pat:pat ) => {
+    ( $caps:expr, $source:expr, $parse_err:expr, $val_err_pat:pat $(, $other_caps:expr)? ) => {
+        #[allow(unused_mut, unused_assignments)]
+        let mut other_caps = naga::valid::Capabilities::empty();
+        $(other_caps = $other_caps;)?
         let caps = $caps;
         let source = $source;
         let mut ext = None;
@@ -1081,7 +1084,9 @@ macro_rules! check_extension_validation {
         };
 
         // Second check, for the expected validation error when the capability is not present
-        let error = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), !caps)
+        // Don't check with explicitly allowed caps, as certain things (currently just
+        // `acceleration_structure`s) can be enabled by multiple extensions
+        let error = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), !(caps | other_caps))
             .validate(&module)
             .map_err(|e| e.into_inner()); // TODO(https://github.com/gfx-rs/wgpu/issues/8153): Add tests for spans
         #[allow(clippy::redundant_pattern_matching)]
@@ -4285,7 +4290,7 @@ fn source_with_control_char() {
 }
 
 #[test]
-fn ray_query_enable_extension() {
+fn ray_types_enable_extension() {
     check_extension_validation!(
         Capabilities::RAY_QUERY,
         r#"fn foo() {
@@ -4307,6 +4312,7 @@ fn ray_query_enable_extension() {
         })
     );
 
+    // can be enabled by either of these extensions
     check_extension_validation!(
         Capabilities::RAY_QUERY,
         r#"@group(0) @binding(0)
@@ -4324,7 +4330,28 @@ fn ray_query_enable_extension() {
         Err(naga::valid::ValidationError::Type {
             source: naga::valid::TypeError::MissingCapability(Capabilities::RAY_QUERY),
             ..
-        })
+        }),
+        Capabilities::RAY_TRACING_PIPELINE
+    );
+    check_extension_validation!(
+        Capabilities::RAY_TRACING_PIPELINE,
+        r#"@group(0) @binding(0)
+        var acc_struct: acceleration_structure;
+        "#,
+        r#"error: the `wgpu_ray_query` enable extension is not enabled
+  ┌─ wgsl:2:25
+  │
+2 │         var acc_struct: acceleration_structure;
+  │                         ^^^^^^^^^^^^^^^^^^^^^^ the `wgpu_ray_query` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_query;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::MissingCapability(Capabilities::RAY_QUERY),
+            ..
+        }),
+        Capabilities::RAY_QUERY
     );
 }
 
