@@ -1,8 +1,8 @@
-use alloc::{format, string::String, vec, vec::Vec};
+use alloc::{format, string::{String, ToString}, vec, vec::Vec};
 use core::fmt::Write;
 
 use crate::{
-    back::{hlsl::BackendResult, Level},
+    back::{hlsl::BackendResult, Baked, Level},
     Handle,
 };
 use crate::{RayQueryIntersection, TypeInner};
@@ -330,6 +330,63 @@ impl<W: Write> super::Writer<'_, W> {
             ", naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));"
         )?;
         writeln!(self.out, "{base_level}}}}}")?;
+        Ok(())
+    }
+
+    pub(super) fn write_proceed(
+        &mut self,
+        module: &crate::Module,
+        mut level: Level,
+        query: Handle<crate::Expression>,
+        result: Handle<crate::Expression>,
+        rq_tracker: &str,
+        func_ctx: &crate::back::FunctionCtx<'_>,
+    ) -> BackendResult {
+        let base_level = level;
+        write!(self.out, "{level}")?;
+        let name = Baked(result).to_string();
+        writeln!(self.out, "bool {name} = false;")?;
+        // This prevents variables flowing down a level and causing compile errors.
+        if self.options.ray_query_initialization_tracking {
+            writeln!(self.out, "{level}{{")?;
+            level = level.next();
+            write!(
+                self.out,
+                "{level}bool naga_has_initialized = ")?;
+            self.write_contains_flags(rq_tracker, crate::back::RayQueryPoint::INITIALIZED.bits())?;
+            writeln!(self.out, ";")?;
+            write!(
+                self.out,
+                "{level}bool naga_has_finished = ")?;
+            self.write_contains_flags(rq_tracker, crate::back::RayQueryPoint::FINISHED_TRAVERSAL.bits())?;
+            writeln!(self.out, ";")?;
+            writeln!(
+                self.out,
+                "{level}if (naga_has_initialized && !naga_has_finished) {{"
+            )?;
+            level = level.next();
+        }
+
+        write!(self.out, "{level}{name} = ")?;
+        self.write_expr(module, query, func_ctx)?;
+        writeln!(self.out, ".Proceed();")?;
+
+        if self.options.ray_query_initialization_tracking {
+            writeln!(
+                self.out,
+                "{level}{rq_tracker} = {rq_tracker} | {};",
+                crate::back::RayQueryPoint::INITIALIZED.bits()
+            )?;
+            writeln!(
+                self.out,
+                "{level}if (!{name}) {{ {rq_tracker} = {rq_tracker} | {}; }}",
+                crate::back::RayQueryPoint::FINISHED_TRAVERSAL.bits()
+            )?;
+            writeln!(self.out, "{base_level}}}}}")?;
+        }
+
+        self.named_expressions.insert(result, name);
+
         Ok(())
     }
 }

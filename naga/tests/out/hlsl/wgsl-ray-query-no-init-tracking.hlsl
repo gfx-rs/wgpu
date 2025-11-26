@@ -114,7 +114,15 @@ RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructu
     while(true) {
         if (all(loop_bound == uint2(0u, 0u))) { break; }
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
-        const bool _e9 = rq_1.Proceed();
+        bool _e9 = false;
+        {
+            bool naga_has_initialized = ((naga_query_init_tracker_for_rq_1 & 1) == 1);
+            bool naga_has_finished = ((naga_query_init_tracker_for_rq_1 & 4) == 4);
+            if (naga_has_initialized && !naga_has_finished) {
+                _e9 = rq_1.Proceed();
+                naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 1;
+                if (!_e9) { naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 4; }
+        }}
         if (_e9) {
         } else {
             break;

@@ -2616,12 +2616,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         )?;
                     }
                     RayQueryFunction::Proceed { result } => {
-                        write!(self.out, "{level}")?;
-                        let name = Baked(result).to_string();
-                        write!(self.out, "const bool {name} = ")?;
-                        self.named_expressions.insert(result, name);
-                        self.write_expr(module, query, func_ctx)?;
-                        writeln!(self.out, ".Proceed();")?;
+                        self.write_proceed(module, level, query, result, &tracker_expr_name, func_ctx)?;
                     }
                     RayQueryFunction::GenerateIntersection { hit_t } => {
                         write!(self.out, "{level}")?;
