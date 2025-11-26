@@ -339,7 +339,7 @@ pub enum StageError {
     TooManyMeshPrimitives { limit: u32, value: u32 },
     #[error("Mesh or task shaders are limited to {limit} bytes of task payload, but the shader has a task payload of size {value}")]
     TaskPayloadTooLarge { limit: u32, value: u32 },
-    #[error("Mesh shader's task payload has size {shader:?}, which doesn't match input from previous stage {input:?}")]
+    #[error("Mesh shader's task payload has size ({shader:?}), which doesn't match the payload declared in the task stage ({input:?})")]
     TaskPayloadMustMatch {
         input: Option<u32>,
         shader: Option<u32>,
