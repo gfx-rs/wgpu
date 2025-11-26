@@ -437,4 +437,95 @@ impl<W: Write> super::Writer<'_, W> {
 
         Ok(())
     }
+
+    pub(super) fn write_generate_intersection(
+        &mut self,
+        module: &crate::Module,
+        mut level: Level,
+        query: Handle<crate::Expression>,
+        hit_t: Handle<crate::Expression>,
+        rq_tracker: &str,
+        func_ctx: &crate::back::FunctionCtx<'_>,
+    ) -> BackendResult {
+        let base_level = level;
+        if self.options.ray_query_initialization_tracking {
+            write!(self.out, "{level}if (")?;
+            self.write_contains_flags(rq_tracker, crate::back::RayQueryPoint::PROCEED.bits())?;
+            write!(self.out, " && !")?;
+            self.write_contains_flags(
+                rq_tracker,
+                crate::back::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+            )?;
+            writeln!(self.out, ") {{")?;
+            level = level.next();
+            write!(self.out, "{level}CANDIDATE_TYPE naga_kind = ")?;
+            self.write_expr(module, query, func_ctx)?;
+            writeln!(self.out, ".CandidateType();")?;
+            write!(self.out, "{level}float naga_tmin = ")?;
+            self.write_expr(module, query, func_ctx)?;
+            writeln!(self.out, ".RayTMin();")?;
+            write!(self.out, "{level}float naga_tcurrentmax = ")?;
+            self.write_expr(module, query, func_ctx)?;
+            // This gets initialized to tmax and is updated after each intersection is committed so is valid to call.
+            // Note: there is a bug in DXC's spirv backend that makes this technically UB in spirv, but HLSL backend
+            // is intended for DXIL, so it should be fine (hopefully).
+            writeln!(self.out, ".CommittedRayT();")?;
+            write!(
+                self.out,
+                "{level}if ((naga_kind == CANDIDATE_PROCEDURAL_PRIMITIVE) && (naga_tmin <="
+            )?;
+            self.write_expr(module, hit_t, func_ctx)?;
+            write!(self.out, ") && (")?;
+            self.write_expr(module, hit_t, func_ctx)?;
+            writeln!(self.out, " <= naga_tcurrentmax)) {{")?;
+            level = level.next();
+        }
+
+        write!(self.out, "{level}")?;
+        self.write_expr(module, query, func_ctx)?;
+        write!(self.out, ".CommitProceduralPrimitiveHit(")?;
+        self.write_expr(module, hit_t, func_ctx)?;
+        writeln!(self.out, ");")?;
+        if self.options.ray_query_initialization_tracking {
+            writeln!(self.out, "{base_level}}}}}")?;
+        }
+        Ok(())
+    }
+    pub(super) fn write_confirm_intersection(
+        &mut self,
+        module: &crate::Module,
+        mut level: Level,
+        query: Handle<crate::Expression>,
+        rq_tracker: &str,
+        func_ctx: &crate::back::FunctionCtx<'_>,
+    ) -> BackendResult {
+        let base_level = level;
+        if self.options.ray_query_initialization_tracking {
+            write!(self.out, "{level}if (")?;
+            self.write_contains_flags(rq_tracker, crate::back::RayQueryPoint::PROCEED.bits())?;
+            write!(self.out, " && !")?;
+            self.write_contains_flags(
+                rq_tracker,
+                crate::back::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+            )?;
+            writeln!(self.out, ") {{")?;
+            level = level.next();
+            write!(self.out, "{level}CANDIDATE_TYPE naga_kind = ")?;
+            self.write_expr(module, query, func_ctx)?;
+            writeln!(self.out, ".CandidateType();")?;
+            writeln!(
+                self.out,
+                "{level}if (naga_kind == CANDIDATE_NON_OPAQUE_TRIANGLE) {{"
+            )?;
+            level = level.next();
+        }
+
+        write!(self.out, "{level}")?;
+        self.write_expr(module, query, func_ctx)?;
+        writeln!(self.out, ".CommitNonOpaqueTriangleHit();")?;
+        if self.options.ray_query_initialization_tracking {
+            writeln!(self.out, "{base_level}}}}}")?;
+        }
+        Ok(())
+    }
 }

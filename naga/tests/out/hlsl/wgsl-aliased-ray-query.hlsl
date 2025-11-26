@@ -108,11 +108,21 @@ void main_candidate()
     }}
     RayIntersection intersection = GetCandidateIntersection(rq_1, naga_query_init_tracker_for_rq_1);
     if ((intersection.kind == 3u)) {
-        rq_1.CommitProceduralPrimitiveHit(10.0);
+        if (((naga_query_init_tracker_for_rq_1 & 2) == 2) && !((naga_query_init_tracker_for_rq_1 & 4) == 4)) {
+            CANDIDATE_TYPE naga_kind = rq_1.CandidateType();
+            float naga_tmin = rq_1.RayTMin();
+            float naga_tcurrentmax = rq_1.CommittedRayT();
+            if ((naga_kind == CANDIDATE_PROCEDURAL_PRIMITIVE) && (naga_tmin <=10.0) && (10.0 <= naga_tcurrentmax)) {
+                rq_1.CommitProceduralPrimitiveHit(10.0);
+        }}
         return;
     } else {
         if ((intersection.kind == 1u)) {
-            rq_1.CommitNonOpaqueTriangleHit();
+            if (((naga_query_init_tracker_for_rq_1 & 2) == 2) && !((naga_query_init_tracker_for_rq_1 & 4) == 4)) {
+                CANDIDATE_TYPE naga_kind = rq_1.CandidateType();
+                if (naga_kind == CANDIDATE_NON_OPAQUE_TRIANGLE) {
+                    rq_1.CommitNonOpaqueTriangleHit();
+            }}
             return;
         } else {
             rq_1.Abort();
