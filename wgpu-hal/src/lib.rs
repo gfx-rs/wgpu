@@ -1673,14 +1673,13 @@ bitflags!(
 
         /// Format can be used for render pass resolve targets.
         const MULTISAMPLE_RESOLVE = 1 << 14;
+        /// Format can be used with both multisample and array at the same time.
+        const MULTISAMPLE_ARRAY = 1 << 15;
 
         /// Format can be copied from.
-        const COPY_SRC = 1 << 15;
+        const COPY_SRC = 1 << 16;
         /// Format can be copied to.
-        const COPY_DST = 1 << 16;
-
-        /// Format can be used with both multisample and array at the same time.
-        const MULTISAMPLE_ARRAY = 1 << 17;
+        const COPY_DST = 1 << 17;
     }
 );
 

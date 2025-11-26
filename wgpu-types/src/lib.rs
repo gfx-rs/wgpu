@@ -2044,23 +2044,23 @@ bitflags::bitflags! {
         /// Allows a texture of this format to back a view passed as `resolve_target`
         /// to a render pass for an automatic driver-implemented resolve.
         const MULTISAMPLE_RESOLVE = 1 << 5;
-        /// When used as a STORAGE texture, then a texture with this format can be bound with
-        /// [`StorageTextureAccess::ReadOnly`].
-        const STORAGE_READ_ONLY = 1 << 6;
-        /// When used as a STORAGE texture, then a texture with this format can be bound with
-        /// [`StorageTextureAccess::WriteOnly`].
-        const STORAGE_WRITE_ONLY = 1 << 7;
-        /// When used as a STORAGE texture, then a texture with this format can be bound with
-        /// [`StorageTextureAccess::ReadWrite`].
-        const STORAGE_READ_WRITE = 1 << 8;
-        /// When used as a STORAGE texture, then a texture with this format can be bound with
-        /// [`StorageTextureAccess::Atomic`].
-        const STORAGE_ATOMIC = 1 << 9;
-        /// If not present, the texture can't be blended into the render target.
-        const BLENDABLE = 1 << 10;
         /// Allows a 2D texture of this format to have a `sample_count` higher than 1, and more
         /// than 1 array layer at the same time.
-        const MULTISAMPLE_ARRAY = 1 << 11;
+        const MULTISAMPLE_ARRAY = 1 << 6;
+        /// When used as a STORAGE texture, then a texture with this format can be bound with
+        /// [`StorageTextureAccess::ReadOnly`].
+        const STORAGE_READ_ONLY = 1 << 7;
+        /// When used as a STORAGE texture, then a texture with this format can be bound with
+        /// [`StorageTextureAccess::WriteOnly`].
+        const STORAGE_WRITE_ONLY = 1 << 8;
+        /// When used as a STORAGE texture, then a texture with this format can be bound with
+        /// [`StorageTextureAccess::ReadWrite`].
+        const STORAGE_READ_WRITE = 1 << 9;
+        /// When used as a STORAGE texture, then a texture with this format can be bound with
+        /// [`StorageTextureAccess::Atomic`].
+        const STORAGE_ATOMIC = 1 << 10;
+        /// If not present, the texture can't be blended into the render target.
+        const BLENDABLE = 1 << 11;
     }
 }
 
