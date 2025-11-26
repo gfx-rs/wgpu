@@ -8,6 +8,7 @@ use objc2_metal::{
 use wgt::{AstcBlock, AstcChannel};
 
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
+use core::sync::atomic;
 
 use crate::metal::QueueShared;
 
@@ -30,7 +31,7 @@ use super::{OsFeatures, TimestampQuerySupport};
 /// <https://bugzilla.mozilla.org/show_bug.cgi?id=1971452>.
 ///
 /// [new command buffer]: https://developer.apple.com/documentation/metal/mtlcommandqueue/makecommandbuffer()?language=objc
-const MAX_COMMAND_BUFFERS: usize = 4096;
+pub(super) const MAX_COMMAND_BUFFERS: usize = 4096;
 
 // Metal has a single buffer limit that we must split across 3 WebGPU limits:
 // The Metal limit is: 31 "Maximum number of entries in the buffer argument table, per graphics or kernel function".
@@ -106,7 +107,10 @@ impl crate::Adapter for super::Adapter {
                 counters: Default::default(),
             },
             queue: super::Queue {
-                shared: Arc::new(QueueShared { raw: queue }),
+                shared: Arc::new(QueueShared {
+                    raw: queue,
+                    command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
+                }),
                 timestamp_period,
             },
         })

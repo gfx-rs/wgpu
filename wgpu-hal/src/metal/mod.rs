@@ -459,14 +459,22 @@ impl Queue {
         timestamp_period: f32,
     ) -> Self {
         Self {
-            shared: Arc::new(QueueShared { raw }),
+            shared: Arc::new(QueueShared {
+                raw,
+                command_buffer_created_not_submitted: atomic::AtomicUsize::new(0),
+            }),
             timestamp_period,
         }
     }
 }
 
+#[derive(Debug)]
 pub struct QueueShared {
     raw: Retained<ProtocolObject<dyn MTLCommandQueue>>,
+    // Tracks command buffers created via `CommandEncoder::begin_encoding` that
+    // have not yet been submitted or discarded. Used to proactively fail
+    // before hitting Metal's `maxCommandBufferCount`.
+    command_buffer_created_not_submitted: atomic::AtomicUsize,
 }
 
 pub struct Device {
@@ -554,6 +562,14 @@ impl crate::Queue for Queue {
 
             for cmd_buffer in command_buffers {
                 cmd_buffer.raw.commit();
+                // One command buffer per `end_encoding` call moves from the
+                // "created but not yet submitted" bucket into the submitted
+                // set, so update the counter.
+                let previous = self
+                    .shared
+                    .command_buffer_created_not_submitted
+                    .fetch_sub(1, atomic::Ordering::AcqRel);
+                debug_assert!(previous > 0);
             }
 
             if let Some(raw) = extra_command_buffer {
