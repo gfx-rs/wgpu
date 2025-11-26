@@ -972,7 +972,7 @@ impl super::Validator {
                     .contains(Capabilities::RAY_TRACING_PIPELINE)
                 {
                     return Err(GlobalVariableError::UnsupportedCapability(
-                        Capabilities::PUSH_CONSTANT,
+                        Capabilities::RAY_TRACING_PIPELINE,
                     ));
                 }
                 (TypeFlags::DATA | TypeFlags::SIZED, false)
@@ -1082,14 +1082,28 @@ impl super::Validator {
         module: &crate::Module,
         mod_info: &ModuleInfo,
     ) -> Result<FunctionInfo, WithSpan<EntryPointError>> {
-        if matches!(
-            ep.stage,
+        match ep.stage {
             crate::ShaderStage::Task | crate::ShaderStage::Mesh
-        ) && !self.capabilities.contains(Capabilities::MESH_SHADER)
-        {
-            return Err(
-                EntryPointError::UnsupportedCapability(Capabilities::MESH_SHADER).with_span(),
-            );
+                if !self.capabilities.contains(Capabilities::MESH_SHADER) =>
+            {
+                return Err(
+                    EntryPointError::UnsupportedCapability(Capabilities::MESH_SHADER).with_span(),
+                );
+            }
+            crate::ShaderStage::RayGeneration
+            | crate::ShaderStage::AnyHit
+            | crate::ShaderStage::ClosestHit
+            | crate::ShaderStage::Miss
+                if !self
+                    .capabilities
+                    .contains(Capabilities::RAY_TRACING_PIPELINE) =>
+            {
+                return Err(EntryPointError::UnsupportedCapability(
+                    Capabilities::RAY_TRACING_PIPELINE,
+                )
+                .with_span());
+            }
+            _ => {}
         }
         if ep.early_depth_test.is_some() {
             let required = Capabilities::EARLY_DEPTH_TEST;

@@ -212,6 +212,7 @@ impl Capabilities {
             Self::CLIP_DISTANCE => Some(Ext::ClipDistances),
             Self::RAY_QUERY => Some(Ext::WgpuRayQuery),
             Self::RAY_HIT_VERTEX_POSITION => Some(Ext::WgpuRayQueryVertexReturn),
+            Self::RAY_TRACING_PIPELINE => Some(Ext::WgpuRayTracingPipeline),
             _ => None,
         }
     }
