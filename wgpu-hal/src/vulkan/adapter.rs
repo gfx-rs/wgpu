@@ -927,6 +927,13 @@ impl PhysicalDeviceFeatures {
                 mesh_shader.multiview_mesh_shader != 0,
             );
         }
+
+        // Not supported by default by `VK_KHR_portability_subset`, which we use on apple platforms.
+        // This will need to check `multisampleArrayImage` in
+        // `VkPhysicalDevicePortabilitySubsetFeaturesKHR` to check for support on apple.
+        #[cfg(not(target_vendor = "apple"))]
+        features.set(F::MULTISAMPLE_ARRAY, true);
+
         (features, dl_flags)
     }
 }
@@ -2615,13 +2622,6 @@ impl crate::Adapter for super::Adapter {
         );
         // Vulkan is very permissive about MSAA
         flags.set(Tfc::MULTISAMPLE_RESOLVE, !format.is_compressed());
-
-        // Unless we're on a portability subset, this is always allowed.
-        // On apple, we use `VK_KHR_portability_subset` and therefore this may not be supported.
-        // We could query and enable `multisampleArrayImage` on
-        // `VkPhysicalDevicePortabilitySubsetFeaturesKHR`, but for now it's just disabled.
-        #[cfg(not(target_vendor = "apple"))]
-        flags.set(Tfc::MULTISAMPLE_ARRAY, !format.is_compressed());
 
         // get the supported sample counts
         let format_aspect = crate::FormatAspects::from(format);
