@@ -41,6 +41,10 @@ Bottom level categories:
 
 ## Unreleased
 
+### New Features
+
+- Added support for cooperative load/store operations in shaders. Currently only WGSL on the input and SPIR-V, METAL, and WGSL on the output are supported. By @kvark in [#8251](https://github.com/gfx-rs/wgpu/issues/8251).
+
 ## v28.0.0 (2025-12-17)
 
 ### Major Changes
@@ -335,8 +339,6 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 - Added support for multisampled texture arrays on Vulkan through adapter feature `MULTISAMPLE_ARRAY`. By @LaylBongers in [#8571](https://github.com/gfx-rs/wgpu/pull/8571).
 - Added `get_configuration` to `wgpu::Surface`, that returns the current configuration of `wgpu::Surface`. By @sagudev in [#8664](https://github.com/gfx-rs/wgpu/pull/8664).
 - Add `wgpu_core::Global::create_bind_group_layout_error`. By @ErichDonGubler in [#8650](https://github.com/gfx-rs/wgpu/pull/8650).
-
-- Added support for cooperative load/store operations in shaders. Currently only WGSL on the input and SPIR-V, METAL, and WGSL on the output are supported. Only unsafe for now. By @kvark in [#8251](https://github.com/gfx-rs/wgpu/issues/8251).
 
 ### Changes
 

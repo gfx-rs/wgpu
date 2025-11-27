@@ -310,6 +310,7 @@ struct PrivateCapabilities {
     has_unified_memory: Option<bool>,
     timestamp_query_support: TimestampQuerySupport,
     supports_simd_scoped_operations: bool,
+    supports_cooperative_matrix: bool,
     int64: bool,
     int64_atomics_min_max: bool,
     int64_atomics: bool,

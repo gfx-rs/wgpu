@@ -1255,6 +1255,25 @@ bitflags_array! {
         /// Supported platforms:
         /// - Vulkan (except VK_KHR_portability_subset if multisampleArrayImage is not available)
         const MULTISAMPLE_ARRAY = 1 << 56;
+
+        /// Enables cooperative matrix operations (also known as tensor cores on NVIDIA GPUs
+        /// or simdgroup matrix operations on Apple GPUs).
+        ///
+        /// Cooperative matrices allow a workgroup to collectively load, store, and perform
+        /// matrix multiply-accumulate operations on small tiles of data, enabling
+        /// hardware-accelerated matrix math.
+        ///
+        /// **Current limitations:** The implementation currently only supports 8x8 f32 matrices.
+        /// On Vulkan, support is determined by querying `vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR`
+        /// for configurations matching 8x8x8 f32. Most Vulkan implementations (NVIDIA, AMD) primarily
+        /// support f16 inputs at larger sizes (e.g., 16x16), so Vulkan support may be limited.
+        ///
+        /// Supported platforms:
+        /// - Metal (with MSL 2.3+ and Apple7+/Mac2+, using simdgroup matrix operations)
+        /// - Vulkan (with [VK_KHR_cooperative_matrix](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_cooperative_matrix.html), if 8x8 f32 is supported)
+        ///
+        /// This is a native only feature.
+        const EXPERIMENTAL_COOPERATIVE_MATRIX = 1 << 57;
     }
 
     /// Features that are not guaranteed to be supported.
@@ -1566,7 +1585,8 @@ impl Features {
                 | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_POINTS.bits()
                 | FeaturesWGPU::EXPERIMENTAL_RAY_QUERY.bits()
                 | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
-                | FeaturesWGPU::EXPERIMENTAL_PASSTHROUGH_SHADERS.bits(),
+                | FeaturesWGPU::EXPERIMENTAL_PASSTHROUGH_SHADERS.bits()
+                | FeaturesWGPU::EXPERIMENTAL_COOPERATIVE_MATRIX.bits(),
             FeaturesWebGPU::empty().bits(),
         ]))
     }

@@ -135,6 +135,9 @@ pub struct PhysicalDeviceFeatures {
     ///
     /// Strictly speaking this tells us what features we *don't* have compared to core.
     portability_subset: Option<vk::PhysicalDevicePortabilitySubsetFeaturesKHR<'static>>,
+
+    /// Features provided by `VK_KHR_cooperative_matrix`
+    cooperative_matrix: Option<vk::PhysicalDeviceCooperativeMatrixFeaturesKHR<'static>>,
 }
 
 impl PhysicalDeviceFeatures {
@@ -212,6 +215,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.portability_subset {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.cooperative_matrix {
             info = info.push_next(feature);
         }
         info
@@ -566,6 +572,16 @@ impl PhysicalDeviceFeatures {
                 Some(
                     vk::PhysicalDevicePortabilitySubsetFeaturesKHR::default()
                         .multisample_array_image(multisample_array_needed),
+                )
+            } else {
+                None
+            },
+            cooperative_matrix: if enabled_extensions.contains(&khr::cooperative_matrix::NAME) {
+                let needed =
+                    requested_features.contains(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX);
+                Some(
+                    vk::PhysicalDeviceCooperativeMatrixFeaturesKHR::default()
+                        .cooperative_matrix(needed),
                 )
             } else {
                 None
@@ -959,6 +975,12 @@ impl PhysicalDeviceFeatures {
                 .map(|p| p.multisample_array_image == vk::TRUE)
                 .unwrap_or(true),
         );
+        // Enable cooperative matrix only if the device supports 8x8 f32 matrices,
+        // which is what the current wgpu implementation exposes.
+        features.set(
+            F::EXPERIMENTAL_COOPERATIVE_MATRIX,
+            caps.supports_cooperative_matrix_8x8_f32,
+        );
 
         (features, dl_flags)
     }
@@ -1038,6 +1060,12 @@ pub struct PhysicalDeviceProperties {
     ///
     /// It is associated with a `VkPhysicalDevice` and its children.
     device_api_version: u32,
+
+    /// Whether the device supports 8x8 f32 cooperative matrices.
+    ///
+    /// This is determined by querying `vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR`
+    /// and checking if any configuration matches M=8, N=8, K=8 with all f32 types.
+    supports_cooperative_matrix_8x8_f32: bool,
 }
 
 impl PhysicalDeviceProperties {
@@ -1251,6 +1279,11 @@ impl PhysicalDeviceProperties {
         // Require `VK_KHR_fragment_shader_barycentric` if the associated feature was requested
         if requested_features.intersects(wgt::Features::SHADER_BARYCENTRICS) {
             extensions.push(khr::fragment_shader_barycentric::NAME);
+        }
+
+        // Require `VK_KHR_cooperative_matrix` if the associated feature was requested
+        if requested_features.contains(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX) {
+            extensions.push(khr::cooperative_matrix::NAME);
         }
 
         extensions
@@ -1576,6 +1609,14 @@ impl super::InstanceShared {
                     get_device_properties.get_physical_device_properties2(phd, &mut properties2)
                 };
 
+                // Query cooperative matrix properties to check for 8x8 f32 support
+                if capabilities.supports_extension(khr::cooperative_matrix::NAME) {
+                    let coop_matrix =
+                        khr::cooperative_matrix::Instance::new(&self.entry, &self.raw);
+                    capabilities.supports_cooperative_matrix_8x8_f32 =
+                        check_cooperative_matrix_8x8_f32_support(&coop_matrix, phd);
+                }
+
                 if is_intel_igpu_outdated_for_robustness2(
                     capabilities.properties,
                     capabilities.driver,
@@ -1751,6 +1792,13 @@ impl super::InstanceShared {
                 let next = features
                     .portability_subset
                     .insert(vk::PhysicalDevicePortabilitySubsetFeaturesKHR::default());
+                features2 = features2.push_next(next);
+            }
+
+            if capabilities.supports_extension(khr::cooperative_matrix::NAME) {
+                let next = features
+                    .cooperative_matrix
+                    .insert(vk::PhysicalDeviceCooperativeMatrixFeaturesKHR::default());
                 features2 = features2.push_next(next);
             }
 
@@ -2309,6 +2357,11 @@ impl super::Adapter {
             }
             if features.contains(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
                 capabilities.push(spv::Capability::MeshShadingEXT);
+            }
+            if features.contains(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX) {
+                capabilities.push(spv::Capability::CooperativeMatrixKHR);
+                //TODO: expose this more generally
+                capabilities.push(spv::Capability::VulkanMemoryModel);
             }
             if self.private_caps.shader_integer_dot_product {
                 // See <https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_shader_integer_dot_product.html#_new_spir_v_capabilities>.
@@ -2880,4 +2933,49 @@ fn is_intel_igpu_outdated_for_robustness2(
         );
     }
     is_outdated
+}
+
+/// Check if the physical device supports 8x8 f32 cooperative matrices.
+///
+/// This queries `vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR` and checks
+/// if any supported configuration matches:
+/// - M = 8, N = 8, K = 8
+/// - All types (A, B, C, Result) are FLOAT32
+/// - Scope is Subgroup
+fn check_cooperative_matrix_8x8_f32_support(
+    coop_matrix: &khr::cooperative_matrix::Instance,
+    phd: vk::PhysicalDevice,
+) -> bool {
+    let properties =
+        match unsafe { coop_matrix.get_physical_device_cooperative_matrix_properties(phd) } {
+            Ok(props) => props,
+            Err(e) => {
+                log::warn!("Failed to query cooperative matrix properties: {e:?}");
+                return false;
+            }
+        };
+
+    for prop in &properties {
+        // Check for 8x8x8 dimensions with all f32 types at subgroup scope
+        let is_8x8x8 = prop.m_size == 8 && prop.n_size == 8 && prop.k_size == 8;
+        let all_f32 = prop.a_type == vk::ComponentTypeKHR::FLOAT32
+            && prop.b_type == vk::ComponentTypeKHR::FLOAT32
+            && prop.c_type == vk::ComponentTypeKHR::FLOAT32
+            && prop.result_type == vk::ComponentTypeKHR::FLOAT32;
+        let is_subgroup = prop.scope == vk::ScopeKHR::SUBGROUP;
+
+        if is_8x8x8 && all_f32 && is_subgroup {
+            log::info!(
+                "Found cooperative matrix support for 8x8x8 f32 (saturating_accumulation: {})",
+                prop.saturating_accumulation != 0
+            );
+            return true;
+        }
+    }
+
+    log::debug!(
+        "No 8x8x8 f32 cooperative matrix configuration found. Available configurations: {}",
+        properties.len()
+    );
+    false
 }

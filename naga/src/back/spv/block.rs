@@ -1845,33 +1845,45 @@ impl BlockContext<'_> {
                     "CooperativeMatrix",
                     &[spirv::Capability::CooperativeMatrixKHR],
                 )?;
-                let pointer_id = match self.write_access_chain(
-                    data.pointer,
-                    block,
-                    AccessTypeAdjustment::None,
-                )? {
-                    ExpressionPointer::Ready { pointer_id } => pointer_id,
-                    ExpressionPointer::Conditional { .. } => {
-                        return Err(Error::FeatureNotImplemented(
-                            "Copperative load/store out-of-bounds handling",
-                        ));
-                    }
-                };
                 let layout = if data.row_major {
                     spirv::CooperativeMatrixLayout::RowMajorKHR
                 } else {
                     spirv::CooperativeMatrixLayout::ColumnMajorKHR
                 };
                 let layout_id = self.get_index_constant(layout as u32);
-                let id = self.gen_id();
-                block.body.push(Instruction::coop_load(
-                    result_type_id,
-                    id,
-                    pointer_id,
-                    layout_id,
-                    self.cached[data.stride],
-                ));
-                id
+                let stride_id = self.cached[data.stride];
+                match self.write_access_chain(data.pointer, block, AccessTypeAdjustment::None)? {
+                    ExpressionPointer::Ready { pointer_id } => {
+                        let id = self.gen_id();
+                        block.body.push(Instruction::coop_load(
+                            result_type_id,
+                            id,
+                            pointer_id,
+                            layout_id,
+                            stride_id,
+                        ));
+                        id
+                    }
+                    ExpressionPointer::Conditional { condition, access } => self
+                        .write_conditional_indexed_load(
+                            result_type_id,
+                            condition,
+                            block,
+                            |id_gen, block| {
+                                let pointer_id = access.result_id.unwrap();
+                                block.body.push(access);
+                                let id = id_gen.next();
+                                block.body.push(Instruction::coop_load(
+                                    result_type_id,
+                                    id,
+                                    pointer_id,
+                                    layout_id,
+                                    stride_id,
+                                ));
+                                id
+                            },
+                        ),
+                }
             }
             crate::Expression::CooperativeMultiplyAdd { a, b, c } => {
                 self.writer.require_any(
@@ -3763,30 +3775,40 @@ impl BlockContext<'_> {
                     self.write_subgroup_gather(mode, argument, result, &mut block)?;
                 }
                 Statement::CooperativeStore { target, ref data } => {
-                    let pointer_id = match self.write_access_chain(
-                        data.pointer,
-                        &mut block,
-                        AccessTypeAdjustment::None,
-                    )? {
-                        ExpressionPointer::Ready { pointer_id } => pointer_id,
-                        ExpressionPointer::Conditional { .. } => {
-                            return Err(Error::FeatureNotImplemented(
-                                "Copperative load/store out-of-bounds handling",
-                            ));
-                        }
-                    };
+                    let target_id = self.cached[target];
                     let layout = if data.row_major {
                         spirv::CooperativeMatrixLayout::RowMajorKHR
                     } else {
                         spirv::CooperativeMatrixLayout::ColumnMajorKHR
                     };
                     let layout_id = self.get_index_constant(layout as u32);
-                    block.body.push(Instruction::coop_store(
-                        self.cached[target],
-                        pointer_id,
-                        layout_id,
-                        self.cached[data.stride],
-                    ));
+                    let stride_id = self.cached[data.stride];
+                    match self.write_access_chain(
+                        data.pointer,
+                        &mut block,
+                        AccessTypeAdjustment::None,
+                    )? {
+                        ExpressionPointer::Ready { pointer_id } => {
+                            block.body.push(Instruction::coop_store(
+                                target_id, pointer_id, layout_id, stride_id,
+                            ));
+                        }
+                        ExpressionPointer::Conditional { condition, access } => {
+                            let mut selection = Selection::start(&mut block, ());
+                            selection.if_true(self, condition, ());
+
+                            // The in-bounds path. Perform the access and the store.
+                            let pointer_id = access.result_id.unwrap();
+                            selection.block().body.push(access);
+                            selection.block().body.push(Instruction::coop_store(
+                                target_id, pointer_id, layout_id, stride_id,
+                            ));
+
+                            // Finish the in-bounds block and start the merge block. This
+                            // is the block we'll leave current on return.
+                            selection.finish(self, ());
+                        }
+                    };
                 }
             }
         }
