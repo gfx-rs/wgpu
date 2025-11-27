@@ -1,4 +1,4 @@
-enable mesh_shading;
+enable wgpu_mesh_shader;
 
 struct TaskPayload {
     colorMask: vec4<f32>,
@@ -13,11 +13,11 @@ struct VertexOutput {
 struct PrimitiveOutput {
     @builtin(triangle_indices) indices: vec3<u32>,
     @builtin(cull_primitive) cull: bool,
-    @per_primitive @location(1) colorMask: vec4<f32>,
+    @location(1) @per_primitive colorMask: vec4<f32>,
 }
 
 struct PrimitiveInput {
-    @per_primitive @location(1) colorMask: vec4<f32>,
+    @location(1) @per_primitive colorMask: vec4<f32>,
 }
 
 struct MeshOutput {
@@ -39,7 +39,7 @@ fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
     return vec3<u32>(1u, 1u, 1u);
 }
 
-@mesh(mesh_output)@payload(taskPayload) @workgroup_size(1, 1, 1) 
+@mesh(mesh_output) @workgroup_size(1, 1, 1) @payload(taskPayload) 
 fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocation_id) id: vec3<u32>) {
     mesh_output.vertex_count = 3u;
     mesh_output.primitive_count = 1u;
