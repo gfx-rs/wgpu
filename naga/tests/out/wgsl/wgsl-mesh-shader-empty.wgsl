@@ -1,4 +1,4 @@
-enable wgpu_mesh_shading;
+enable wgpu_mesh_shader;
 
 struct TaskPayload {
     dummy: u32,
