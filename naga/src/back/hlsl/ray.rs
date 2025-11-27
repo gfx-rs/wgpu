@@ -424,7 +424,7 @@ impl<W: Write> super::Writer<'_, W> {
             writeln!(
                 self.out,
                 "{level}{rq_tracker} = {rq_tracker} | {};",
-                crate::back::RayQueryPoint::INITIALIZED.bits()
+                crate::back::RayQueryPoint::PROCEED.bits()
             )?;
             writeln!(
                 self.out,
