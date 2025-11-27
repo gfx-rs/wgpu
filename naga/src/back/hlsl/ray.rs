@@ -19,8 +19,9 @@ impl<W: Write> super::Writer<'_, W> {
     }
 
     fn write_nan(&mut self, expr: &str) -> BackendResult {
+        write!(self.out, "(")?;
         self.write_not_finite(expr)?;
-        write!(self.out, " && ((asuint({expr}) & 0x7fffff) != 0)")?;
+        write!(self.out, " && ((asuint({expr}) & 0x7fffff) != 0))")?;
         Ok(())
     }
 
@@ -280,10 +281,10 @@ impl<W: Write> super::Writer<'_, W> {
             writeln!(self.out, "{level}uint naga_flags = naga_desc.flags;")?;
             write!(
                 self.out,
-                "{level}bool naga_tmin_valid = (naga_tmin >= 0.0) && (naga_tmin <= naga_tmax) && !("
+                "{level}bool naga_tmin_valid = (naga_tmin >= 0.0) && (naga_tmin <= naga_tmax) && !"
             )?;
             self.write_nan("naga_tmin")?;
-            writeln!(self.out, ");")?;
+            writeln!(self.out, ";")?;
             write!(self.out, "{level}bool naga_tmax_valid = !")?;
             self.write_nan("naga_tmax")?;
             writeln!(self.out, ";")?;

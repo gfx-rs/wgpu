@@ -88,9 +88,9 @@ void main_candidate()
         float3 naga_dir = naga_desc.dir;
         uint naga_flags = naga_desc.flags;
         bool naga_tmin_valid = (naga_tmin >= 0.0) && (naga_tmin <= naga_tmax) && !(((asuint(naga_tmin) & 2139095040) == 2139095040) && ((asuint(naga_tmin) & 0x7fffff) != 0));
-        bool naga_tmax_valid = !((asuint(naga_tmax) & 2139095040) == 2139095040) && ((asuint(naga_tmax) & 0x7fffff) != 0);
-        bool naga_origin_valid = !any(((asuint(naga_origin) & 2139095040) == 2139095040) && ((asuint(naga_origin) & 0x7fffff) != 0));
-        bool naga_dir_valid = !any(((asuint(naga_dir) & 2139095040) == 2139095040) && ((asuint(naga_dir) & 0x7fffff) != 0));
+        bool naga_tmax_valid = !(((asuint(naga_tmax) & 2139095040) == 2139095040) && ((asuint(naga_tmax) & 0x7fffff) != 0));
+        bool naga_origin_valid = !any((((asuint(naga_origin) & 2139095040) == 2139095040) && ((asuint(naga_origin) & 0x7fffff) != 0)));
+        bool naga_dir_valid = !any((((asuint(naga_dir) & 2139095040) == 2139095040) && ((asuint(naga_dir) & 0x7fffff) != 0)));
         bool naga_contains_opaque = ((naga_flags & 1) == 1);
         bool naga_contains_no_opaque = ((naga_flags & 2) == 2);
         bool naga_contains_cull_opaque = ((naga_flags & 64) == 64);
