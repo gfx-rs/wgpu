@@ -1783,12 +1783,10 @@ impl<W: Write> Writer<W> {
     ) -> BackendResult {
         // Write group and binding attributes if present
         if let Some(ref binding) = global.binding {
-            self.write_attributes(
-                &[
-                    Attribute::Group(binding.group),
-                    Attribute::Binding(binding.binding),
-                ],
-            )?;
+            self.write_attributes(&[
+                Attribute::Group(binding.group),
+                Attribute::Binding(binding.binding),
+            ])?;
             writeln!(self.out)?;
         }
 
