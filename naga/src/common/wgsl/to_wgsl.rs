@@ -190,6 +190,8 @@ impl TryToWgsl for crate::BuiltIn {
             Bi::Primitives => "primitives",
             Bi::VertexCount => "vertex_count",
             Bi::PrimitiveCount => "primitive_count",
+            Bi::PointIndex => "point_index",
+            Bi::LineIndices => "line_indices",
 
             Bi::BaseInstance
             | Bi::BaseVertex
@@ -197,9 +199,7 @@ impl TryToWgsl for crate::BuiltIn {
             | Bi::PointSize
             | Bi::DrawID
             | Bi::PointCoord
-            | Bi::WorkGroupSize
-            | Bi::LineIndices
-            | Bi::PointIndex => return None,
+            | Bi::WorkGroupSize => return None,
         })
     }
 }
