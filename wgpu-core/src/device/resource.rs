@@ -2306,9 +2306,6 @@ impl Device {
         self.check_is_valid()?;
         self.require_features(wgt::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS)?;
 
-        // TODO: when we get to use if-let chains, this will be a little nicer!
-
-        log::info!("Backend: {}", self.backend());
         let hal_shader = match self.backend() {
             wgt::Backend::Vulkan => hal::ShaderInput::SpirV(
                 descriptor
@@ -4433,7 +4430,7 @@ impl Device {
                         )?;
                     }
                     _ => {
-                        log::warn!(
+                        log::debug!(
                             "The fragment stage {:?} output @location({}) values are ignored",
                             fragment_stage
                                 .as_ref()

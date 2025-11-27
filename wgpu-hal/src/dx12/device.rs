@@ -362,7 +362,7 @@ impl super::Device {
 
                     (source, entry_point)
                 };
-                log::info!(
+                log::debug!(
                     "Naga generated shader for {entry_point:?} at {naga_stage:?}:\n{source}"
                 );
 

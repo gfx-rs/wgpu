@@ -16,6 +16,7 @@ use core::{
     ptr::NonNull,
     slice,
 };
+use hashbrown::HashMap;
 
 use arrayvec::ArrayVec;
 use smallvec::SmallVec;
@@ -36,6 +37,8 @@ use crate::{
     ShaderSource, SurfaceTargetUnsafe, TextureDescriptor, Tlas,
 };
 use crate::{dispatch::DispatchAdapter, util::Mutex};
+
+mod thread_id;
 
 #[derive(Clone)]
 pub struct ContextWgpuCore(Arc<wgc::global::Global>);
@@ -627,14 +630,14 @@ struct ErrorScope {
 }
 
 struct ErrorSinkRaw {
-    scopes: Vec<ErrorScope>,
+    scopes: HashMap<thread_id::ThreadId, Vec<ErrorScope>>,
     uncaptured_handler: Option<Arc<dyn crate::UncapturedErrorHandler>>,
 }
 
 impl ErrorSinkRaw {
     fn new() -> ErrorSinkRaw {
         ErrorSinkRaw {
-            scopes: Vec::new(),
+            scopes: HashMap::new(),
             uncaptured_handler: None,
         }
     }
@@ -656,12 +659,9 @@ impl ErrorSinkRaw {
             crate::Error::Validation { .. } => crate::ErrorFilter::Validation,
             crate::Error::Internal { .. } => crate::ErrorFilter::Internal,
         };
-        match self
-            .scopes
-            .iter_mut()
-            .rev()
-            .find(|scope| scope.filter == filter)
-        {
+        let thread_id = thread_id::ThreadId::current();
+        let scopes = self.scopes.entry(thread_id).or_default();
+        match scopes.iter_mut().rev().find(|scope| scope.filter == filter) {
             Some(scope) => {
                 if scope.error.is_none() {
                     scope.error = Some(err);
@@ -1805,7 +1805,9 @@ impl dispatch::DeviceInterface for CoreDevice {
 
     fn push_error_scope(&self, filter: crate::ErrorFilter) {
         let mut error_sink = self.error_sink.lock();
-        error_sink.scopes.push(ErrorScope {
+        let thread_id = thread_id::ThreadId::current();
+        let scopes = error_sink.scopes.entry(thread_id).or_default();
+        scopes.push(ErrorScope {
             error: None,
             filter,
         });
@@ -1813,7 +1815,10 @@ impl dispatch::DeviceInterface for CoreDevice {
 
     fn pop_error_scope(&self) -> Pin<Box<dyn dispatch::PopErrorScopeFuture>> {
         let mut error_sink = self.error_sink.lock();
-        let scope = error_sink.scopes.pop().unwrap();
+        let thread_id = thread_id::ThreadId::current();
+        let err = "Mismatched pop_error_scope call: no error scope for this thread. Error scopes are thread-local.";
+        let scopes = error_sink.scopes.get_mut(&thread_id).expect(err);
+        let scope = scopes.pop().expect(err);
         Box::pin(ready(scope.error))
     }
 

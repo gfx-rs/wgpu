@@ -4095,7 +4095,7 @@ fn invalid_clip_distances() {
         Err(naga::valid::ValidationError::EntryPoint {
             stage: naga::ShaderStage::Vertex,
             source: naga::valid::EntryPointError::Result(
-                naga::valid::VaryingError::InvalidBuiltInType(naga::ir::BuiltIn::ClipDistance)
+                naga::valid::VaryingError::InvalidBuiltInType(naga::ir::BuiltIn::ClipDistance, _)
             ),
             ..
         }),

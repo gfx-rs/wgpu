@@ -106,6 +106,30 @@ One other breaking change worth noting is that in WGSL `@builtin(view_index)` no
 
 By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206).
 
+#### Error Scopes are now thread-local
+
+Device error scopes now operate on a per-thread basis. This allows them to be used easily within multithreaded contexts,
+without having the error scope capture errors from other threads.
+
+When the `std` feature is **not** enabled, we have no way to differentiate between threads, so error scopes return to be
+global operations.
+
+By @cwfitzgerald in [#8685](https://github.com/gfx-rs/wgpu/pull/8685)
+
+#### Log Levels
+
+We have received complaints about wgpu being way too log spammy at log levels `info`/`warn`/`error`. We have
+adjusted our log policy and changed logging such that `info` and above should be silent unless some exceptional
+event happens. Our new log policy is as follows:
+
+- Error: if we can’t (for some reason, usually a bug) communicate an error any other way.
+- Warning: similar, but there may be one-shot warnings about almost certainly sub-optimal.
+- Info: do not use
+- Debug: Used for interesting events happening inside wgpu.
+- Trace: Used for all events that might be useful to either `wgpu` or application developers.
+
+By @cwfitzgerald in [#8579](https://github.com/gfx-rs/wgpu/pull/8579).
+
 ### New Features
 
 - Added support for transient textures on Vulkan and Metal. By @opstic in [#8247](https://github.com/gfx-rs/wgpu/pull/8247)
@@ -117,7 +141,6 @@ By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206
 #### General
 
 - Require new enable extensions when using ray queries and position fetch (`wgpu_ray_query`, `wgpu_ray_query_vertex_return`). By @Vecvec in [#8545](https://github.com/gfx-rs/wgpu/pull/8545).
-- Lower `max_blas_primitive_count` due to a bug in llvmpipe. By @Vecvec in [#8446](https://github.com/gfx-rs/wgpu/pull/8446).
 - Texture now has `from_custom`. By @R-Cramer4 in [#8315](https://github.com/gfx-rs/wgpu/pull/8315).
 - Using both the wgpu command encoding APIs and `CommandEncoder::as_hal_mut` on the same encoder will now result in a panic.
 - Allow `include_spirv!` and `include_spirv_raw!` macros to be used in constants and statics. By @clarfonthey in [#8250](https://github.com/gfx-rs/wgpu/pull/8250).

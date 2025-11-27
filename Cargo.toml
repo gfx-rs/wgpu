@@ -68,6 +68,7 @@ authors = ["gfx-rs developers"]
 naga = { version = "27.0.0", path = "./naga" }
 naga-test = { path = "./naga-test" }
 wgpu = { version = "27.0.0", path = "./wgpu", default-features = false, features = [
+    "std",
     "serde",
     "wgsl",
     "vulkan",

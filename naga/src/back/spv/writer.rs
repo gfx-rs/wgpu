@@ -2684,7 +2684,7 @@ impl Writer {
                 // because the entry point and its callees didn't use them,
                 // then we must skip it.
                 if !ep_info.dominates_global_use(info) {
-                    log::info!("Skip function {:?}", ir_function.name);
+                    log::debug!("Skip function {:?}", ir_function.name);
                     continue;
                 }
 

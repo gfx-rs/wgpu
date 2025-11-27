@@ -53,7 +53,7 @@ pub struct Trace {
 
 impl Trace {
     pub fn new(path: std::path::PathBuf) -> Result<Self, std::io::Error> {
-        log::info!("Tracing into '{path:?}'");
+        log::debug!("Tracing into '{path:?}'");
         let mut file = std::fs::File::create(path.join(FILE_NAME))?;
         file.write_all(b"[\n")?;
         Ok(Self {

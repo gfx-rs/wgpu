@@ -1,5 +1,5 @@
-#[cfg_attr(target_arch = "wasm32", no_main)]
-#[cfg(not(target_arch = "wasm32"))]
+#![cfg_attr(target_arch = "wasm32", no_main)]
+#![cfg(not(target_arch = "wasm32"))]
 use pollster::block_on;
 use wgpu_benchmark::Benchmark;
 
