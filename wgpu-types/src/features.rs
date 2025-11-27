@@ -1270,7 +1270,7 @@ bitflags_array! {
         /// than 1, and a `depth_or_array_layers` higher than 1.
         ///
         /// Supported platforms:
-        /// - Vulkan (except VK_KHR_portability_subset)
+        /// - Vulkan (except VK_KHR_portability_subset if multisampleArrayImage is not available)
         const MULTISAMPLE_ARRAY = 1 << 56;
     }
 
