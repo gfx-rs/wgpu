@@ -4562,7 +4562,7 @@ fn check_ray_tracing_pipeline_payload_disallowed() {
             {stage} fn main() {output} {{_ = payload; {stmt}}}"
             ),
             Err(naga::valid::ValidationError::EntryPoint {
-                source: naga::valid::EntryPointError::RayPayloadInInvalidStage,
+                source: naga::valid::EntryPointError::RayPayloadInInvalidStage(_),
                 ..
             },),
             Capabilities::RAY_TRACING_PIPELINE

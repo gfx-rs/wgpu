@@ -165,9 +165,9 @@ pub enum EntryPointError {
     #[error("Task payload must be at least 4 bytes, but is {0} bytes")]
     TaskPayloadTooSmall(u32),
     #[error("Only the `ray_generation`, `closest_hit`, and `any_hit` shader stages can access a global variable in the `ray_payload` address space")]
-    RayPayloadInInvalidStage,
+    RayPayloadInInvalidStage(crate::ShaderStage),
     #[error("Only the `closest_hit`, `any_hit`, and `miss` shader stages can access a global variable in the `incoming_ray_payload` address space")]
-    IncomingRayPayloadInInvalidStage,
+    IncomingRayPayloadInInvalidStage(crate::ShaderStage),
 }
 
 fn storage_usage(access: crate::StorageAccess) -> GlobalUse {
@@ -1340,7 +1340,7 @@ impl super::Validator {
                             | crate::ShaderStage::ClosestHit
                             | crate::ShaderStage::Miss
                     ) {
-                        return Err(EntryPointError::RayPayloadInInvalidStage
+                        return Err(EntryPointError::RayPayloadInInvalidStage(ep.stage)
                             .with_span_handle(var_handle, &module.global_variables));
                     }
                     GlobalUse::READ | GlobalUse::QUERY | GlobalUse::WRITE
@@ -1352,7 +1352,7 @@ impl super::Validator {
                             | crate::ShaderStage::ClosestHit
                             | crate::ShaderStage::Miss
                     ) {
-                        return Err(EntryPointError::IncomingRayPayloadInInvalidStage
+                        return Err(EntryPointError::IncomingRayPayloadInInvalidStage(ep.stage)
                             .with_span_handle(var_handle, &module.global_variables));
                     }
                     GlobalUse::READ | GlobalUse::QUERY | GlobalUse::WRITE

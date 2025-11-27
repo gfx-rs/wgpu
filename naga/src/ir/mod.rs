@@ -344,6 +344,7 @@ pub enum ShaderStage {
 
     /// A any hit shader, in a ray tracing pipeline.
     AnyHit,
+
     /// A closest hit shader, in a ray tracing pipeline.
     ClosestHit,
 }

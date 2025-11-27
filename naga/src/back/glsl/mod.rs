@@ -140,10 +140,11 @@ impl crate::AddressSpace {
             | crate::AddressSpace::Storage { .. }
             | crate::AddressSpace::Handle
             | crate::AddressSpace::PushConstant
-            | crate::AddressSpace::TaskPayload
-            // just a default impl, not really supported
-            | crate::AddressSpace::RayPayload
-            | crate::AddressSpace::IncomingRayPayload => false,
+            | crate::AddressSpace::TaskPayload => false,
+
+            crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload => {
+                unreachable!()
+            }
         }
     }
 }

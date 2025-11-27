@@ -596,10 +596,9 @@ impl crate::AddressSpace {
             | Self::WorkGroup
             | Self::PushConstant
             | Self::Handle
-            | Self::TaskPayload
-            | Self::RayPayload
-            | Self::IncomingRayPayload => true,
+            | Self::TaskPayload => true,
             Self::Function => false,
+            Self::RayPayload | Self::IncomingRayPayload => unreachable!(),
         }
     }
 
