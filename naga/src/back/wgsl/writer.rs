@@ -345,7 +345,7 @@ impl<W: Write> Writer<W> {
             any_written = true;
         }
         if needs_mesh_shaders {
-            writeln!(self.out, "enable wgpu_mesh_shading;")?;
+            writeln!(self.out, "enable wgpu_mesh_shader;")?;
             any_written = true;
         }
         if any_written {
