@@ -8,7 +8,7 @@ use core::fmt::Write;
 
 use super::Error;
 use super::ToWgslIfImplemented as _;
-use crate::{back::wgsl::polyfill::InversePolyfill, common::wgsl::TypeContext};
+use crate::{back::wgsl::polyfill::InversePolyfill, common::wgsl::TypeContext, AddressSpace};
 use crate::{
     back::{self, Baked},
     common::{
@@ -326,6 +326,14 @@ impl<W: Write> Writer<W> {
             .entry_points
             .iter()
             .any(|ep| matches!(ep.stage, ShaderStage::Mesh | ShaderStage::Task))
+        {
+            needs_mesh_shaders = true;
+        }
+
+        if module
+            .global_variables
+            .iter()
+            .any(|gv| gv.1.space == AddressSpace::TaskPayload)
         {
             needs_mesh_shaders = true;
         }
