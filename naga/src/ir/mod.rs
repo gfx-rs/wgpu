@@ -414,7 +414,7 @@ pub enum BuiltIn {
     ClipDistance,
     /// Written in vertex & mesh shaders
     CullDistance,
-    /// Read in vertex shaders
+    /// Read in vertex, any- and closest-hit shaders
     InstanceIndex,
     /// Written in vertex & mesh shaders
     PointSize,
@@ -429,7 +429,7 @@ pub enum BuiltIn {
     PointCoord,
     /// Read in fragment shaders
     FrontFacing,
-    /// Read in fragment shaders, written in mesh shaders
+    /// Read in fragment shaders, written in mesh shaders, read in any and closest hit shaders.
     PrimitiveIndex,
     /// Read in fragment shaders
     Barycentric,

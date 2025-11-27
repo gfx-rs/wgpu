@@ -233,7 +233,10 @@ impl VaryingContext<'_> {
                 let required = match built_in {
                     Bi::ClipDistance => Capabilities::CLIP_DISTANCE,
                     Bi::CullDistance => Capabilities::CULL_DISTANCE,
-                    Bi::PrimitiveIndex => Capabilities::PRIMITIVE_INDEX,
+                    // Primitive index is allowed w/o any other extensions in any- and closest-hit shaders
+                    Bi::PrimitiveIndex if !matches!(ep.stage, St::AnyHit | St::ClosestHit) => {
+                        Capabilities::PRIMITIVE_INDEX
+                    }
                     Bi::Barycentric => Capabilities::SHADER_BARYCENTRICS,
                     Bi::ViewIndex => Capabilities::MULTIVIEW,
                     Bi::SampleIndex => Capabilities::MULTISAMPLED_SHADING,
@@ -256,8 +259,13 @@ impl VaryingContext<'_> {
                 }
 
                 let (visible, type_good) = match built_in {
-                    Bi::BaseInstance | Bi::BaseVertex | Bi::InstanceIndex | Bi::VertexIndex => (
+                    Bi::BaseInstance | Bi::BaseVertex | Bi::VertexIndex => (
                         self.stage == St::Vertex && !self.output,
+                        *ty_inner == Ti::Scalar(crate::Scalar::U32),
+                    ),
+                    Bi::InstanceIndex => (
+                        matches!(self.stage, St::Vertex | St::AnyHit | St::ClosestHit)
+                            && !self.output,
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
                     Bi::DrawID => (
@@ -326,7 +334,8 @@ impl VaryingContext<'_> {
                         *ty_inner == Ti::Scalar(crate::Scalar::BOOL),
                     ),
                     Bi::PrimitiveIndex => (
-                        (self.stage == St::Fragment && !self.output)
+                        (matches!(self.stage, St::Fragment | St::AnyHit | St::ClosestHit)
+                            && !self.output)
                             || (self.stage == St::Mesh
                                 && self.output
                                 && self.mesh_output_type == MeshOutputType::PrimitiveOutput),
