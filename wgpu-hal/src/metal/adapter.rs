@@ -945,7 +945,7 @@ impl super::PrivateCapabilities {
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::VERTEX_WRITABLE_STORAGE
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | F::PUSH_CONSTANTS
+            | F::IMMEDIATES
             | F::POLYGON_MODE_LINE
             | F::CLEAR_TEXTURE
             | F::TEXTURE_FORMAT_16BIT_NORM
@@ -1102,7 +1102,7 @@ impl super::PrivateCapabilities {
                 max_vertex_buffer_array_stride: base.max_vertex_buffer_array_stride,
                 min_subgroup_size: 4,
                 max_subgroup_size: 64,
-                max_push_constant_size: 0x1000,
+                max_immediate_size: 0x1000,
                 min_uniform_buffer_offset_alignment: self.buffer_alignment as u32,
                 min_storage_buffer_offset_alignment: self.buffer_alignment as u32,
                 max_inter_stage_shader_components: self.max_varying_components,

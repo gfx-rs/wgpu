@@ -172,7 +172,7 @@ async fn binding_array_storage_textures(ctx: TestingContext, partially_bound: bo
         .create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            immediates_ranges: &[],
         });
 
     let pipeline = ctx

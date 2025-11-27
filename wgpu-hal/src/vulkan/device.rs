@@ -1517,8 +1517,8 @@ impl crate::Device for super::Device {
             .iter()
             .map(|bgl| bgl.raw)
             .collect::<Vec<_>>();
-        let vk_push_constant_ranges = desc
-            .push_constant_ranges
+        let vk_immediates_ranges = desc
+            .immediates_ranges
             .iter()
             .map(|pcr| vk::PushConstantRange {
                 stage_flags: conv::map_shader_stage(pcr.stages),
@@ -1530,7 +1530,7 @@ impl crate::Device for super::Device {
         let vk_info = vk::PipelineLayoutCreateInfo::default()
             .flags(vk::PipelineLayoutCreateFlags::empty())
             .set_layouts(&vk_set_layouts)
-            .push_constant_ranges(&vk_push_constant_ranges);
+            .push_constant_ranges(&vk_immediates_ranges);
 
         let raw = {
             profiling::scope!("vkCreatePipelineLayout");

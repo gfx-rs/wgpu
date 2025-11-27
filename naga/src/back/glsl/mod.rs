@@ -139,7 +139,7 @@ impl crate::AddressSpace {
             | crate::AddressSpace::Uniform
             | crate::AddressSpace::Storage { .. }
             | crate::AddressSpace::Handle
-            | crate::AddressSpace::PushConstant
+            | crate::AddressSpace::Immediate
             | crate::AddressSpace::TaskPayload => false,
         }
     }
@@ -376,8 +376,8 @@ pub struct ReflectionInfo {
     pub uniforms: crate::FastHashMap<Handle<crate::GlobalVariable>, String>,
     /// Mapping between names and attribute locations.
     pub varying: crate::FastHashMap<String, VaryingLocation>,
-    /// List of push constant items in the shader.
-    pub push_constant_items: Vec<PushConstantItem>,
+    /// List of immediate data items in the shader.
+    pub immediates_items: Vec<ImmediateItem>,
     /// Number of user-defined clip planes. Only applicable to vertex shaders.
     pub clip_distance_count: u32,
 }
@@ -401,14 +401,14 @@ pub struct TextureMapping {
 
 /// All information to bind a single uniform value to the shader.
 ///
-/// Push constants are emulated using traditional uniforms in OpenGL.
+/// Immediates are emulated using traditional uniforms in OpenGL.
 ///
 /// These are composed of a set of primitives (scalar, vector, matrix) that
 /// are given names. Because they are not backed by the concept of a buffer,
 /// we must do the work of calculating the offset of each primitive in the
-/// push constant block.
+/// immediate data block.
 #[derive(Debug, Clone)]
-pub struct PushConstantItem {
+pub struct ImmediateItem {
     /// GL uniform name for the item. This name is the same as if you were
     /// to access it directly from a GLSL shader.
     ///
@@ -420,24 +420,24 @@ pub struct PushConstantItem {
     ///     value: f32,
     /// }
     ///
-    /// struct PushConstant {
+    /// struct ImmediateData {
     ///     InnerStruct inner;
     ///     vec4 array[2];
     /// }
     ///
-    /// uniform PushConstants _push_constant_binding_cs;
+    /// uniform ImmediateData _immediates_binding_cs;
     /// ```
     ///
     /// ```text
-    /// - _push_constant_binding_cs.inner.value
-    /// - _push_constant_binding_cs.array[0]
-    /// - _push_constant_binding_cs.array[1]
+    /// - _immediates_binding_cs.inner.value
+    /// - _immediates_binding_cs.array[0]
+    /// - _immediates_binding_cs.array[1]
     /// ```
     ///
     pub access_path: String,
     /// Type of the uniform. This will only ever be a scalar, vector, or matrix.
     pub ty: Handle<crate::Type>,
-    /// The offset in the push constant memory block this uniform maps to.
+    /// The offset in the immediate data memory block this uniform maps to.
     ///
     /// The size of the uniform can be derived from the type.
     pub offset: u32,
@@ -540,10 +540,10 @@ pub enum Error {
     /// Contains the missing [`Features`].
     #[error("The selected version doesn't support {0:?}")]
     MissingFeatures(Features),
-    /// [`AddressSpace::PushConstant`](crate::AddressSpace::PushConstant) was used more than
+    /// [`AddressSpace::Immediate`](crate::AddressSpace::Immediate) was used more than
     /// once in the entry point, which isn't supported.
-    #[error("Multiple push constants aren't supported")]
-    MultiplePushConstants,
+    #[error("Multiple immediates aren't supported")]
+    MultipleImmediateData,
     /// The specified [`Version`] isn't supported.
     #[error("The specified version isn't supported")]
     VersionNotSupported,
@@ -666,9 +666,9 @@ impl<'a, W: Write> Writer<'a, W> {
             &keywords::RESERVED_KEYWORD_SET,
             proc::CaseInsensitiveKeywordSet::empty(),
             &[
-                "gl_",                     // all GL built-in variables
-                "_group",                  // all normal bindings
-                "_push_constant_binding_", // all push constant bindings
+                "gl_",                  // all GL built-in variables
+                "_group",               // all normal bindings
+                "_immediates_binding_", // all immediate data bindings
             ],
             &mut names,
         );
@@ -1292,7 +1292,7 @@ impl<'a, W: Write> Writer<'a, W> {
             crate::AddressSpace::WorkGroup => {
                 self.write_simple_global(handle, global)?;
             }
-            crate::AddressSpace::PushConstant => {
+            crate::AddressSpace::Immediate => {
                 self.write_simple_global(handle, global)?;
             }
             crate::AddressSpace::Uniform => {
@@ -1338,7 +1338,7 @@ impl<'a, W: Write> Writer<'a, W> {
 
         writeln!(self.out, ";")?;
 
-        if let crate::AddressSpace::PushConstant = global.space {
+        if let crate::AddressSpace::Immediate = global.space {
             let global_name = self.get_global_name(handle, global);
             self.reflection_names_globals.insert(handle, global_name);
         }
@@ -1528,8 +1528,8 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.entry_point.stage.to_str()
                 )
             }
-            (&None, crate::AddressSpace::PushConstant) => {
-                format!("_push_constant_binding_{}", self.entry_point.stage.to_str())
+            (&None, crate::AddressSpace::Immediate) => {
+                format!("_immediates_binding_{}", self.entry_point.stage.to_str())
             }
             (&None, _) => self.names[&NameKey::GlobalVariable(handle)].clone(),
         }
@@ -1549,9 +1549,9 @@ impl<'a, W: Write> Writer<'a, W> {
                 br.binding,
                 self.entry_point.stage.to_str()
             )?,
-            (&None, crate::AddressSpace::PushConstant) => write!(
+            (&None, crate::AddressSpace::Immediate) => write!(
                 self.out,
-                "_push_constant_binding_{}",
+                "_immediates_binding_{}",
                 self.entry_point.stage.to_str()
             )?,
             (&None, _) => write!(
@@ -5022,7 +5022,7 @@ impl<'a, W: Write> Writer<'a, W> {
             }
         }
 
-        let mut push_constant_info = None;
+        let mut immediates_info = None;
         for (handle, var) in self.module.global_variables.iter() {
             if info[handle].is_empty() {
                 continue;
@@ -5047,19 +5047,19 @@ impl<'a, W: Write> Writer<'a, W> {
                         let name = self.reflection_names_globals[&handle].clone();
                         uniforms.insert(handle, name);
                     }
-                    crate::AddressSpace::PushConstant => {
+                    crate::AddressSpace::Immediate => {
                         let name = self.reflection_names_globals[&handle].clone();
-                        push_constant_info = Some((name, var.ty));
+                        immediates_info = Some((name, var.ty));
                     }
                     _ => (),
                 },
             }
         }
 
-        let mut push_constant_segments = Vec::new();
-        let mut push_constant_items = vec![];
+        let mut immediates_segments = Vec::new();
+        let mut immediates_items = vec![];
 
-        if let Some((name, ty)) = push_constant_info {
+        if let Some((name, ty)) = immediates_info {
             // We don't have a layouter available to us, so we need to create one.
             //
             // This is potentially a bit wasteful, but the set of types in the program
@@ -5068,15 +5068,15 @@ impl<'a, W: Write> Writer<'a, W> {
             layouter.update(self.module.to_ctx()).unwrap();
 
             // We start with the name of the binding itself.
-            push_constant_segments.push(name);
+            immediates_segments.push(name);
 
-            // We then recursively collect all the uniform fields of the push constant.
-            self.collect_push_constant_items(
+            // We then recursively collect all the uniform fields of the immediate data.
+            self.collect_immediates_items(
                 ty,
-                &mut push_constant_segments,
+                &mut immediates_segments,
                 &layouter,
                 &mut 0,
-                &mut push_constant_items,
+                &mut immediates_items,
             );
         }
 
@@ -5084,18 +5084,18 @@ impl<'a, W: Write> Writer<'a, W> {
             texture_mapping,
             uniforms,
             varying: mem::take(&mut self.varying),
-            push_constant_items,
+            immediates_items,
             clip_distance_count: self.clip_distance_count,
         })
     }
 
-    fn collect_push_constant_items(
+    fn collect_immediates_items(
         &mut self,
         ty: Handle<crate::Type>,
         segments: &mut Vec<String>,
         layouter: &proc::Layouter,
         offset: &mut u32,
-        items: &mut Vec<PushConstantItem>,
+        items: &mut Vec<ImmediateItem>,
     ) {
         // At this point in the recursion, `segments` contains the path
         // needed to access `ty` from the root.
@@ -5107,7 +5107,7 @@ impl<'a, W: Write> Writer<'a, W> {
             TypeInner::Scalar { .. } | TypeInner::Vector { .. } | TypeInner::Matrix { .. } => {
                 // Build the full name, by combining all current segments.
                 let name: String = segments.iter().map(String::as_str).collect();
-                items.push(PushConstantItem {
+                items.push(ImmediateItem {
                     access_path: name,
                     offset: *offset,
                     ty,
@@ -5117,13 +5117,13 @@ impl<'a, W: Write> Writer<'a, W> {
             // Arrays are recursed into.
             TypeInner::Array { base, size, .. } => {
                 let crate::ArraySize::Constant(count) = size else {
-                    unreachable!("Cannot have dynamic arrays in push constants");
+                    unreachable!("Cannot have dynamic arrays in immediates");
                 };
 
                 for i in 0..count.get() {
                     // Add the array accessor and recurse.
                     segments.push(format!("[{i}]"));
-                    self.collect_push_constant_items(base, segments, layouter, offset, items);
+                    self.collect_immediates_items(base, segments, layouter, offset, items);
                     segments.pop();
                 }
 
@@ -5137,7 +5137,7 @@ impl<'a, W: Write> Writer<'a, W> {
                         ".{}",
                         self.names[&NameKey::StructMember(ty, index as u32)]
                     ));
-                    self.collect_push_constant_items(member.ty, segments, layouter, offset, items);
+                    self.collect_immediates_items(member.ty, segments, layouter, offset, items);
                     segments.pop();
                 }
 
@@ -5286,7 +5286,7 @@ const fn glsl_storage_qualifier(space: crate::AddressSpace) -> Option<&'static s
         As::Uniform => Some("uniform"),
         As::Handle => Some("uniform"),
         As::WorkGroup => Some("shared"),
-        As::PushConstant => Some("uniform"),
+        As::Immediate => Some("uniform"),
         As::TaskPayload => unreachable!(),
     }
 }

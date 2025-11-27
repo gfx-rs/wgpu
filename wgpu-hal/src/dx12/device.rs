@@ -867,7 +867,7 @@ impl crate::Device for super::Device {
         use naga::back::hlsl;
         // Pipeline layouts are implemented as RootSignature for D3D12.
         //
-        // Push Constants are implemented as root constants.
+        // Immediates are implemented as root constants.
         //
         // Each bind group layout will be one table entry of the root signature.
         // We have the additional restriction that SRV/CBV/UAV and samplers need to be
@@ -908,13 +908,13 @@ impl crate::Device for super::Device {
         let mut bind_srv = hlsl::BindTarget::default();
         let mut bind_uav = hlsl::BindTarget::default();
         let mut parameters = Vec::new();
-        let mut push_constants_target = None;
+        let mut immediates_target = None;
         let mut root_constant_info = None;
 
         let mut pc_start = u32::MAX;
         let mut pc_end = u32::MIN;
 
-        for pc in desc.push_constant_ranges.iter() {
+        for pc in desc.immediates_ranges.iter() {
             pc_start = pc_start.min(pc.range.start);
             pc_end = pc_end.max(pc.range.end);
         }
@@ -939,7 +939,7 @@ impl crate::Device for super::Device {
                 root_index: parameter_index as u32,
                 range: (pc_start / 4)..(pc_end / 4),
             });
-            push_constants_target = Some(binding);
+            immediates_target = Some(binding);
 
             bind_cbv.space += 1;
         }
@@ -1481,7 +1481,7 @@ impl crate::Device for super::Device {
                 binding_map,
                 fake_missing_bindings: false,
                 special_constants_binding,
-                push_constants_target,
+                immediates_target,
                 dynamic_storage_buffer_offsets_targets,
                 zero_initialize_workgroup_memory: true,
                 restrict_indexing: true,

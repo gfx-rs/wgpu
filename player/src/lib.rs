@@ -202,7 +202,7 @@ impl Player {
                 let resolved_desc = wgc::binding_model::ResolvedPipelineLayoutDescriptor {
                     label: desc.label.clone(),
                     bind_group_layouts: Cow::from(&bind_group_layouts),
-                    push_constant_ranges: Cow::Borrowed(&*desc.push_constant_ranges),
+                    immediates_ranges: Cow::Borrowed(&*desc.immediates_ranges),
                 };
 
                 let pipeline_layout = device
@@ -913,7 +913,7 @@ impl Player {
             error,
             commands,
             dynamic_offsets,
-            push_constant_data,
+            immediates_data,
             string_data,
         } = pass;
 
@@ -925,7 +925,7 @@ impl Player {
                 .map(|cmd| self.resolve_compute_command(cmd))
                 .collect(),
             dynamic_offsets,
-            push_constant_data,
+            immediates_data,
             string_data,
         }
     }
@@ -939,7 +939,7 @@ impl Player {
             error,
             commands,
             dynamic_offsets,
-            push_constant_data,
+            immediates_data,
             string_data,
         } = pass;
 
@@ -951,7 +951,7 @@ impl Player {
                 .map(|cmd| self.resolve_render_command(cmd))
                 .collect(),
             dynamic_offsets,
-            push_constant_data,
+            immediates_data,
             string_data,
         }
     }
@@ -972,11 +972,11 @@ impl Player {
                 bind_group: bind_group.map(|bg| self.resolve_bind_group_id(bg)),
             },
             C::SetPipeline(id) => C::SetPipeline(self.resolve_compute_pipeline_id(id)),
-            C::SetPushConstant {
+            C::SetImmediate {
                 offset,
                 size_bytes,
                 values_offset,
-            } => C::SetPushConstant {
+            } => C::SetImmediate {
                 offset,
                 size_bytes,
                 values_offset,
@@ -1057,12 +1057,12 @@ impl Player {
                 depth_max,
             },
             C::SetScissor(rect) => C::SetScissor(rect),
-            C::SetPushConstant {
+            C::SetImmediate {
                 stages,
                 offset,
                 size_bytes,
                 values_offset,
-            } => C::SetPushConstant {
+            } => C::SetImmediate {
                 stages,
                 offset,
                 size_bytes,

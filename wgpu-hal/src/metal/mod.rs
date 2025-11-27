@@ -3,11 +3,11 @@
 
 ## Pipeline Layout
 
-In Metal, push constants, vertex buffers, and resources in the bind groups
+In Metal, immediates, vertex buffers, and resources in the bind groups
 are all placed together in the native resource bindings, which work similarly to D3D11:
 there are tables of textures, buffers, and samplers.
 
-We put push constants first (if any) in the table, followed by bind group 0
+We put immediates first (if any) in the table, followed by bind group 0
 resources, followed by other bind groups. The vertex buffers are bound at the very
 end of the VS buffer table.
 
@@ -679,7 +679,7 @@ struct BindGroupLayoutInfo {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-struct PushConstantsInfo {
+struct ImmediateDataInfo {
     count: u32,
     buffer_index: ResourceIndex,
 }
@@ -687,9 +687,9 @@ struct PushConstantsInfo {
 #[derive(Debug)]
 pub struct PipelineLayout {
     bind_group_infos: ArrayVec<BindGroupLayoutInfo, { crate::MAX_BIND_GROUPS }>,
-    push_constants_infos: MultiStageData<Option<PushConstantsInfo>>,
+    immediates_infos: MultiStageData<Option<ImmediateDataInfo>>,
     total_counters: MultiStageResourceCounters,
-    total_push_constants: u32,
+    total_immediates: u32,
     per_stage_map: MultiStageResources,
 }
 
@@ -832,7 +832,7 @@ impl crate::DynShaderModule for ShaderModule {}
 struct PipelineStageInfo {
     #[allow(dead_code)]
     library: Option<metal::Library>,
-    push_constants: Option<PushConstantsInfo>,
+    immediates: Option<ImmediateDataInfo>,
 
     /// The buffer argument table index at which we pass runtime-sized arrays' buffer sizes.
     ///
@@ -856,7 +856,7 @@ struct PipelineStageInfo {
 
 impl PipelineStageInfo {
     fn clear(&mut self) {
-        self.push_constants = None;
+        self.immediates = None;
         self.sizes_slot = None;
         self.sized_bindings.clear();
         self.vertex_buffer_mappings.clear();
@@ -866,7 +866,7 @@ impl PipelineStageInfo {
     }
 
     fn assign_from(&mut self, other: &Self) {
-        self.push_constants = other.push_constants;
+        self.immediates = other.immediates;
         self.sizes_slot = other.sizes_slot;
         self.sized_bindings.clear();
         self.sized_bindings.extend_from_slice(&other.sized_bindings);
@@ -1003,7 +1003,7 @@ struct CommandState {
 
     vertex_buffer_size_map: FastHashMap<u64, wgt::BufferSize>,
 
-    push_constants: Vec<u32>,
+    immediates: Vec<u32>,
 
     /// Timer query that should be executed when the next pass starts.
     pending_timer_queries: Vec<(QuerySet, u32)>,

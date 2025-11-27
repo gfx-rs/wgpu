@@ -104,7 +104,7 @@ fn create_matrix(config: &wgpu::SurfaceConfiguration) -> Uniforms {
 
 impl crate::framework::Example for Example {
     fn required_features() -> wgpu::Features {
-        wgpu::Features::EXPERIMENTAL_RAY_QUERY | wgpu::Features::PUSH_CONSTANTS
+        wgpu::Features::EXPERIMENTAL_RAY_QUERY | wgpu::Features::IMMEDIATES
     }
 
     fn required_downlevel_capabilities() -> wgpu::DownlevelCapabilities {
@@ -116,7 +116,7 @@ impl crate::framework::Example for Example {
 
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits {
-            max_push_constant_size: 12,
+            max_immediate_size: 12,
             ..wgpu::Limits::default()
         }
         .using_minimum_supported_acceleration_structure_values()
@@ -208,7 +208,7 @@ impl crate::framework::Example for Example {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[wgpu::PushConstantRange {
+            immediates_ranges: &[wgpu::ImmediateRange {
                 stages: wgpu::ShaderStages::FRAGMENT,
                 range: 0..12,
             }],
@@ -353,9 +353,9 @@ impl crate::framework::Example for Example {
 
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, Some(&self.bind_group), &[]);
-            rpass.set_push_constants(wgpu::ShaderStages::FRAGMENT, 0, &0.0_f32.to_ne_bytes());
-            rpass.set_push_constants(wgpu::ShaderStages::FRAGMENT, 4, &cos.to_ne_bytes());
-            rpass.set_push_constants(wgpu::ShaderStages::FRAGMENT, 8, &sin.to_ne_bytes());
+            rpass.set_immediates(wgpu::ShaderStages::FRAGMENT, 0, &0.0_f32.to_ne_bytes());
+            rpass.set_immediates(wgpu::ShaderStages::FRAGMENT, 4, &cos.to_ne_bytes());
+            rpass.set_immediates(wgpu::ShaderStages::FRAGMENT, 8, &sin.to_ne_bytes());
             rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
             rpass.set_index_buffer(self.index_buf.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..12, 0, 0..1);

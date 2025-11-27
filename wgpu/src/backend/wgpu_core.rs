@@ -1283,7 +1283,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         let descriptor = wgc::binding_model::PipelineLayoutDescriptor {
             label: desc.label.map(Borrowed),
             bind_group_layouts: Borrowed(&temp_layouts),
-            push_constant_ranges: Borrowed(desc.push_constant_ranges),
+            immediates_ranges: Borrowed(desc.immediates_ranges),
         };
 
         let (id, error) = self
@@ -2893,17 +2893,17 @@ impl dispatch::ComputePassInterface for CoreComputePass {
         }
     }
 
-    fn set_push_constants(&mut self, offset: u32, data: &[u8]) {
-        if let Err(cause) =
-            self.context
-                .0
-                .compute_pass_set_push_constants(&mut self.pass, offset, data)
+    fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        if let Err(cause) = self
+            .context
+            .0
+            .compute_pass_set_immediates(&mut self.pass, offset, data)
         {
             self.context.handle_error(
                 &self.error_sink,
                 cause,
                 self.pass.label(),
-                "ComputePass::set_push_constant",
+                "ComputePass::set_immediates",
             );
         }
     }
@@ -3146,17 +3146,17 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         }
     }
 
-    fn set_push_constants(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]) {
+    fn set_immediates(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]) {
         if let Err(cause) =
             self.context
                 .0
-                .render_pass_set_push_constants(&mut self.pass, stages, offset, data)
+                .render_pass_set_immediates(&mut self.pass, stages, offset, data)
         {
             self.context.handle_error(
                 &self.error_sink,
                 cause,
                 self.pass.label(),
-                "RenderPass::set_push_constants",
+                "RenderPass::set_immediates",
             );
         }
     }
@@ -3722,9 +3722,9 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
         wgpu_render_bundle_set_vertex_buffer(&mut self.encoder, slot, buffer.id, offset, size)
     }
 
-    fn set_push_constants(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]) {
+    fn set_immediates(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]) {
         unsafe {
-            wgpu_render_bundle_set_push_constants(
+            wgpu_render_bundle_set_immediates(
                 &mut self.encoder,
                 stages,
                 offset,

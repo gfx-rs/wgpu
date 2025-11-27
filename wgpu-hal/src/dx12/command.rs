@@ -1192,7 +1192,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             self.reset_signature(&layout.shared);
         };
     }
-    unsafe fn set_push_constants(
+    unsafe fn set_immediates(
         &mut self,
         layout: &super::PipelineLayout,
         _stages: wgt::ShaderStages,

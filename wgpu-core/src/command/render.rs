@@ -59,7 +59,7 @@ use super::{
 };
 use super::{DrawCommandFamily, DrawKind, Rect};
 
-use crate::binding_model::{BindError, PushConstantUploadError};
+use crate::binding_model::{BindError, ImmediateUploadError};
 pub use wgt::{LoadOp, StoreOp};
 
 fn load_hal_ops<V>(load: LoadOp<V>) -> hal::AttachmentOps {
@@ -357,10 +357,7 @@ impl fmt::Debug for RenderPass {
             .field("depth_stencil_target", &self.depth_stencil_attachment)
             .field("command count", &self.base.commands.len())
             .field("dynamic offset count", &self.base.dynamic_offsets.len())
-            .field(
-                "push constant u32 count",
-                &self.base.push_constant_data.len(),
-            )
+            .field("immediate data u32 count", &self.base.immediates_data.len())
             .field("multiview mask", &self.multiview_mask)
             .finish()
     }
@@ -801,12 +798,12 @@ pub enum RenderPassErrorInner {
     Draw(#[from] DrawError),
     #[error(transparent)]
     Bind(#[from] BindError),
-    #[error("Push constant offset must be aligned to 4 bytes")]
-    PushConstantOffsetAlignment,
-    #[error("Push constant size must be aligned to 4 bytes")]
-    PushConstantSizeAlignment,
-    #[error("Ran out of push constant space. Don't set 4gb of push constants per ComputePass.")]
-    PushConstantOutOfMemory,
+    #[error("Immediate data offset must be aligned to 4 bytes")]
+    ImmediateOffsetAlignment,
+    #[error("Immediate data size must be aligned to 4 bytes")]
+    ImmediateDataizeAlignment,
+    #[error("Ran out of immediate data space. Don't set 4gb of immediates per ComputePass.")]
+    ImmediateOutOfMemory,
     #[error(transparent)]
     QueryUse(#[from] QueryUseError),
     #[error("Multiview layer count must match")]
@@ -853,8 +850,8 @@ impl From<pass::MissingPipeline> for RenderPassErrorInner {
     }
 }
 
-impl From<PushConstantUploadError> for RenderPassErrorInner {
-    fn from(error: PushConstantUploadError) -> Self {
+impl From<ImmediateUploadError> for RenderPassErrorInner {
+    fn from(error: ImmediateUploadError) -> Self {
         Self::RenderCommand(error.into())
     }
 }
@@ -913,9 +910,9 @@ impl WebGpuError for RenderPassError {
             | RenderPassErrorInner::IndirectCountBufferOverrun { .. }
             | RenderPassErrorInner::ResourceUsageCompatibility(..)
             | RenderPassErrorInner::IncompatibleBundleReadOnlyDepthStencil { .. }
-            | RenderPassErrorInner::PushConstantOffsetAlignment
-            | RenderPassErrorInner::PushConstantSizeAlignment
-            | RenderPassErrorInner::PushConstantOutOfMemory
+            | RenderPassErrorInner::ImmediateOffsetAlignment
+            | RenderPassErrorInner::ImmediateDataizeAlignment
+            | RenderPassErrorInner::ImmediateOutOfMemory
             | RenderPassErrorInner::MultiViewMismatch
             | RenderPassErrorInner::MultiViewDimensionMismatch
             | RenderPassErrorInner::TooManyMultiviewViews
@@ -2012,16 +2009,16 @@ pub(super) fn encode_render_pass(
                     let scope = PassErrorScope::SetViewport;
                     set_viewport(&mut state, rect, depth_min, depth_max).map_pass_err(scope)?;
                 }
-                ArcRenderCommand::SetPushConstant {
+                ArcRenderCommand::SetImmediate {
                     stages,
                     offset,
                     size_bytes,
                     values_offset,
                 } => {
-                    let scope = PassErrorScope::SetPushConstant;
-                    pass::set_push_constant::<RenderPassErrorInner, _>(
+                    let scope = PassErrorScope::SetImmediate;
+                    pass::set_immediates::<RenderPassErrorInner, _>(
                         &mut state.pass,
-                        &base.push_constant_data,
+                        &base.immediates_data,
                         stages,
                         offset,
                         size_bytes,
@@ -3315,46 +3312,46 @@ impl Global {
         Ok(())
     }
 
-    pub fn render_pass_set_push_constants(
+    pub fn render_pass_set_immediates(
         &self,
         pass: &mut RenderPass,
         stages: ShaderStages,
         offset: u32,
         data: &[u8],
     ) -> Result<(), PassStateError> {
-        let scope = PassErrorScope::SetPushConstant;
+        let scope = PassErrorScope::SetImmediate;
         let base = pass_base!(pass, scope);
 
-        if offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1) != 0 {
+        if offset & (wgt::IMMEDIATES_ALIGNMENT - 1) != 0 {
             pass_try!(
                 base,
                 scope,
-                Err(RenderPassErrorInner::PushConstantOffsetAlignment)
+                Err(RenderPassErrorInner::ImmediateOffsetAlignment)
             );
         }
-        if data.len() as u32 & (wgt::PUSH_CONSTANT_ALIGNMENT - 1) != 0 {
+        if data.len() as u32 & (wgt::IMMEDIATES_ALIGNMENT - 1) != 0 {
             pass_try!(
                 base,
                 scope,
-                Err(RenderPassErrorInner::PushConstantSizeAlignment)
+                Err(RenderPassErrorInner::ImmediateDataizeAlignment)
             );
         }
 
         let value_offset = pass_try!(
             base,
             scope,
-            base.push_constant_data
+            base.immediates_data
                 .len()
                 .try_into()
-                .map_err(|_| RenderPassErrorInner::PushConstantOutOfMemory),
+                .map_err(|_| RenderPassErrorInner::ImmediateOutOfMemory),
         );
 
-        base.push_constant_data.extend(
-            data.chunks_exact(wgt::PUSH_CONSTANT_ALIGNMENT as usize)
+        base.immediates_data.extend(
+            data.chunks_exact(wgt::IMMEDIATES_ALIGNMENT as usize)
                 .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
         );
 
-        base.commands.push(ArcRenderCommand::SetPushConstant {
+        base.commands.push(ArcRenderCommand::SetImmediate {
             stages,
             offset,
             size_bytes: data.len() as u32,

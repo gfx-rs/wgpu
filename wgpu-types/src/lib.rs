@@ -174,10 +174,10 @@ pub const VERTEX_ALIGNMENT: BufferAddress = 4;
 #[deprecated(note = "Use `VERTEX_ALIGNMENT` instead", since = "27.0.0")]
 pub const VERTEX_STRIDE_ALIGNMENT: BufferAddress = 4;
 
-/// Ranges of [writes to push constant storage] must be at least this aligned.
+/// Ranges of [writes to immediate data] must be at least this aligned.
 ///
-#[doc = link_to_wgpu_docs!(["writes to push constant storage"]: "struct.RenderPass.html#method.set_push_constants")]
-pub const PUSH_CONSTANT_ALIGNMENT: u32 = 4;
+#[doc = link_to_wgpu_docs!(["writes to immediate data"]: "struct.RenderPass.html#method.set_immediates")]
+pub const IMMEDIATES_ALIGNMENT: u32 = 4;
 
 /// Maximum queries in a [`QuerySetDescriptor`].
 pub const QUERY_SET_MAX_QUERIES: u32 = 4096;
@@ -573,7 +573,7 @@ macro_rules! with_limits {
         $macro_name!(min_subgroup_size, Ordering::Greater);
         $macro_name!(max_subgroup_size, Ordering::Less);
 
-        $macro_name!(max_push_constant_size, Ordering::Less);
+        $macro_name!(max_immediate_size, Ordering::Less);
         $macro_name!(max_non_sampler_bindings, Ordering::Less);
 
         $macro_name!(max_task_workgroup_total_count, Ordering::Less);
@@ -732,16 +732,16 @@ pub struct Limits {
     pub min_subgroup_size: u32,
     /// Maximal number of invocations in a subgroup. Higher is "better".
     pub max_subgroup_size: u32,
-    /// Amount of storage available for push constants in bytes. Defaults to 0. Higher is "better".
-    /// Requesting more than 0 during device creation requires [`Features::PUSH_CONSTANTS`] to be enabled.
+    /// Amount of storage available for immediates in bytes. Defaults to 0. Higher is "better".
+    /// Requesting more than 0 during device creation requires [`Features::IMMEDIATES`] to be enabled.
     ///
     /// Expect the size to be:
     /// - Vulkan: 128-256 bytes
     /// - DX12: 256 bytes
     /// - Metal: 4096 bytes
-    /// - OpenGL doesn't natively support push constants, and are emulated with uniforms,
+    /// - OpenGL doesn't natively support immediates, and are emulated with uniforms,
     ///   so this number is less useful but likely 256.
-    pub max_push_constant_size: u32,
+    pub max_immediate_size: u32,
     /// Maximum number of live non-sampler bindings.
     ///
     /// <div class="warning">
@@ -832,7 +832,7 @@ impl Limits {
     ///     max_compute_workgroups_per_dimension: 65535,
     ///     min_subgroup_size: 0,
     ///     max_subgroup_size: 0,
-    ///     max_push_constant_size: 0,
+    ///     max_immediate_size: 0,
     ///     max_non_sampler_bindings: 1_000_000,
     ///     max_task_workgroup_total_count: 0,
     ///     max_task_workgroups_per_dimension: 0,
@@ -885,7 +885,7 @@ impl Limits {
             max_compute_workgroups_per_dimension: 65535,
             min_subgroup_size: 0,
             max_subgroup_size: 0,
-            max_push_constant_size: 0,
+            max_immediate_size: 0,
             max_non_sampler_bindings: 1_000_000,
 
             max_task_workgroup_total_count: 0,
@@ -930,7 +930,7 @@ impl Limits {
     ///     max_vertex_buffer_array_stride: 2048,
     ///     min_subgroup_size: 0,
     ///     max_subgroup_size: 0,
-    ///     max_push_constant_size: 0,
+    ///     max_immediate_size: 0,
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
     ///     max_inter_stage_shader_components: 60,
@@ -1007,7 +1007,7 @@ impl Limits {
     ///     max_vertex_buffer_array_stride: 255, // +
     ///     min_subgroup_size: 0,
     ///     max_subgroup_size: 0,
-    ///     max_push_constant_size: 0,
+    ///     max_immediate_size: 0,
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
     ///     max_inter_stage_shader_components: 31,
@@ -6904,14 +6904,14 @@ pub enum MipmapFilterMode {
     Linear = 1,
 }
 
-/// A range of push constant memory to pass to a shader stage.
+/// A range of immediate data memory to pass to a shader stage.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct PushConstantRange {
-    /// Stage push constant range is visible from. Each stage can only be served by at most one range.
+pub struct ImmediateRange {
+    /// Stage immediate data range is visible from. Each stage can only be served by at most one range.
     /// One range can serve multiple stages however.
     pub stages: ShaderStages,
-    /// Range in push constant memory to use for the stage. Must be less than [`Limits::max_push_constant_size`].
+    /// Range in immediate data memory to use for the stage. Must be less than [`Limits::max_immediate_size`].
     /// Start and end must be aligned to the 4s.
     pub range: Range<u32>,
 }

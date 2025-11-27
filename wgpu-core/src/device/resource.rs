@@ -3559,14 +3559,14 @@ impl Device {
             });
         }
 
-        if !desc.push_constant_ranges.is_empty() {
-            self.require_features(wgt::Features::PUSH_CONSTANTS)?;
+        if !desc.immediates_ranges.is_empty() {
+            self.require_features(wgt::Features::IMMEDIATES)?;
         }
 
         let mut used_stages = wgt::ShaderStages::empty();
-        for (index, pc) in desc.push_constant_ranges.iter().enumerate() {
+        for (index, pc) in desc.immediates_ranges.iter().enumerate() {
             if pc.stages.intersects(used_stages) {
-                return Err(Error::MoreThanOnePushConstantRangePerStage {
+                return Err(Error::MoreThanOneImmediateRangePerStage {
                     index,
                     provided: pc.stages,
                     intersected: pc.stages & used_stages,
@@ -3574,23 +3574,23 @@ impl Device {
             }
             used_stages |= pc.stages;
 
-            let device_max_pc_size = self.limits.max_push_constant_size;
+            let device_max_pc_size = self.limits.max_immediate_size;
             if device_max_pc_size < pc.range.end {
-                return Err(Error::PushConstantRangeTooLarge {
+                return Err(Error::ImmediateRangeTooLarge {
                     index,
                     range: pc.range.clone(),
                     max: device_max_pc_size,
                 });
             }
 
-            if pc.range.start % wgt::PUSH_CONSTANT_ALIGNMENT != 0 {
-                return Err(Error::MisalignedPushConstantRange {
+            if pc.range.start % wgt::IMMEDIATES_ALIGNMENT != 0 {
+                return Err(Error::MisalignedImmediateRange {
                     index,
                     bound: pc.range.start,
                 });
             }
-            if pc.range.end % wgt::PUSH_CONSTANT_ALIGNMENT != 0 {
-                return Err(Error::MisalignedPushConstantRange {
+            if pc.range.end % wgt::IMMEDIATES_ALIGNMENT != 0 {
+                return Err(Error::MisalignedImmediateRange {
                     index,
                     bound: pc.range.end,
                 });
@@ -3632,7 +3632,7 @@ impl Device {
                 | hal::PipelineLayoutFlags::NUM_WORK_GROUPS
                 | additional_flags,
             bind_group_layouts: &raw_bind_group_layouts,
-            push_constant_ranges: desc.push_constant_ranges.as_ref(),
+            immediates_ranges: desc.immediates_ranges.as_ref(),
         };
 
         let raw = unsafe { self.raw().create_pipeline_layout(&hal_desc) }
@@ -3645,7 +3645,7 @@ impl Device {
             device: self.clone(),
             label: desc.label.to_string(),
             bind_group_layouts,
-            push_constant_ranges: desc.push_constant_ranges.iter().cloned().collect(),
+            immediates_ranges: desc.immediates_ranges.iter().cloned().collect(),
         };
 
         let layout = Arc::new(layout);
@@ -3692,7 +3692,7 @@ impl Device {
         let layout_desc = binding_model::ResolvedPipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: Cow::Owned(bind_group_layouts),
-            push_constant_ranges: Cow::Borrowed(&[]), //TODO?
+            immediates_ranges: Cow::Borrowed(&[]), //TODO?
         };
 
         let layout = self.create_pipeline_layout(&layout_desc)?;

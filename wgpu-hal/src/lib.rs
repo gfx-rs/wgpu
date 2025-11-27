@@ -1366,15 +1366,15 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         dynamic_offsets: &[wgt::DynamicOffset],
     );
 
-    /// Sets a range in push constant data.
+    /// Sets a range in immediate data data.
     ///
     /// IMPORTANT: while the data is passed as words, the offset is in bytes!
     ///
     /// # Safety
     ///
     /// - `offset_bytes` must be a multiple of 4.
-    /// - The range of push constants written must be valid for the pipeline layout at draw time.
-    unsafe fn set_push_constants(
+    /// - The range of immediates written must be valid for the pipeline layout at draw time.
+    unsafe fn set_immediates(
         &mut self,
         layout: &<Self::A as Api>::PipelineLayout,
         stages: wgt::ShaderStages,
@@ -1414,7 +1414,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// This clears any bindings established by the following calls:
     ///
     /// - [`set_bind_group`](CommandEncoder::set_bind_group)
-    /// - [`set_push_constants`](CommandEncoder::set_push_constants)
+    /// - [`set_immediates`](CommandEncoder::set_immediates)
     /// - [`begin_query`](CommandEncoder::begin_query)
     /// - [`set_render_pipeline`](CommandEncoder::set_render_pipeline)
     /// - [`set_index_buffer`](CommandEncoder::set_index_buffer)
@@ -1536,7 +1536,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// This clears any bindings established by the following calls:
     ///
     /// - [`set_bind_group`](CommandEncoder::set_bind_group)
-    /// - [`set_push_constants`](CommandEncoder::set_push_constants)
+    /// - [`set_immediates`](CommandEncoder::set_immediates)
     /// - [`begin_query`](CommandEncoder::begin_query)
     /// - [`set_compute_pipeline`](CommandEncoder::set_compute_pipeline)
     ///
@@ -1615,9 +1615,9 @@ bitflags!(
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PipelineLayoutFlags: u32 {
         /// D3D12: Add support for `first_vertex` and `first_instance` builtins
-        /// via push constants for direct execution.
+        /// via immediates for direct execution.
         const FIRST_VERTEX_INSTANCE = 1 << 0;
-        /// D3D12: Add support for `num_workgroups` builtins via push constants
+        /// D3D12: Add support for `num_workgroups` builtins via immediates
         /// for direct execution.
         const NUM_WORK_GROUPS = 1 << 1;
         /// D3D12: Add support for the builtins that the other flags enable for
@@ -1974,7 +1974,7 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
     pub label: Label<'a>,
     pub flags: PipelineLayoutFlags,
     pub bind_group_layouts: &'a [&'a B],
-    pub push_constant_ranges: &'a [wgt::PushConstantRange],
+    pub immediates_ranges: &'a [wgt::ImmediateRange],
 }
 
 /// A region of a buffer made visible to shaders via a [`BindGroup`].

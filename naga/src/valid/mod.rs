@@ -31,7 +31,7 @@ pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
 pub use function::{CallError, FunctionError, LocalVariableError, SubgroupError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
-pub use r#type::{Disalignment, PushConstantError, TypeError, TypeFlags, WidthError};
+pub use r#type::{Disalignment, ImmediateError, TypeError, TypeFlags, WidthError};
 
 use self::handles::InvalidHandleError;
 
@@ -84,10 +84,10 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct Capabilities: u32 {
-        /// Support for [`AddressSpace::PushConstant`][1].
+        /// Support for [`AddressSpace::Immediate`][1].
         ///
-        /// [1]: crate::AddressSpace::PushConstant
-        const PUSH_CONSTANT = 1 << 0;
+        /// [1]: crate::AddressSpace::Immediate
+        const IMMEDIATES = 1 << 0;
         /// Float values with width = 8.
         const FLOAT64 = 1 << 1;
         /// Support for [`BuiltIn::PrimitiveIndex`][1].

@@ -178,7 +178,7 @@ impl TestResources {
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
                 bind_group_layouts: &[&bgl],
-                push_constant_ranges: &[],
+                immediates_ranges: &[],
             });
 
         let pipeline = ctx
@@ -342,7 +342,7 @@ async fn d3d12_restrict_dynamic_buffers(ctx: TestingContext) {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bgl],
-            push_constant_ranges: &[],
+            immediates_ranges: &[],
         });
 
     let pipeline = ctx

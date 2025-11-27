@@ -127,7 +127,7 @@ fn setup_pipeline(
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: Some("Compute Pipeline Layout"),
         bind_group_layouts: &[&bind_group_layout],
-        push_constant_ranges: &[],
+        immediates_ranges: &[],
     });
 
     device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {

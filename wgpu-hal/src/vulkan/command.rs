@@ -939,7 +939,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             )
         };
     }
-    unsafe fn set_push_constants(
+    unsafe fn set_immediates(
         &mut self,
         layout: &super::PipelineLayout,
         stages: wgt::ShaderStages,

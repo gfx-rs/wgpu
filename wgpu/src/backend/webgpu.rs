@@ -822,7 +822,7 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         // The following are not part of WebGPU
         min_subgroup_size: wgt::Limits::default().min_subgroup_size,
         max_subgroup_size: wgt::Limits::default().max_subgroup_size,
-        max_push_constant_size: wgt::Limits::default().max_push_constant_size,
+        max_immediate_size: wgt::Limits::default().max_immediate_size,
         max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
         max_inter_stage_shader_components: wgt::Limits::default().max_inter_stage_shader_components,
 
@@ -3296,8 +3296,8 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
         }
     }
 
-    fn set_push_constants(&mut self, _offset: u32, _data: &[u8]) {
-        panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
+    fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
+        panic!("IMMEDIATES feature must be enabled to call set_immediates")
     }
 
     fn insert_debug_marker(&mut self, _label: &str) {
@@ -3435,8 +3435,8 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         }
     }
 
-    fn set_push_constants(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
-        panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
+    fn set_immediates(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
+        panic!("IMMEDIATES feature must be enabled to call multi_draw_indexed_indirect")
     }
 
     fn set_blend_constant(&mut self, color: crate::Color) {
@@ -3741,8 +3741,8 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         }
     }
 
-    fn set_push_constants(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
-        panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
+    fn set_immediates(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
+        panic!("IMMEDIATES feature must be enabled to call multi_draw_indexed_indirect")
     }
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
