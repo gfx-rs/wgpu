@@ -475,7 +475,7 @@ impl<W: Write> Writer<W> {
                         ShaderStage::Fragment => "fragment",
                         ShaderStage::Compute => "compute",
                         ShaderStage::Task => "task",
-                        ShaderStage::Mesh => "mesh",
+                        ShaderStage::Mesh => unreachable!(),
                     };
 
                     write!(self.out, "@{stage_str} ")?;
