@@ -441,7 +441,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             _ => false,
                         })
                 {
-                    log::info!(
+                    log::debug!(
                         "Skipping function {:?} (name {:?}) because global {:?} is inaccessible",
                         handle,
                         function.name,
@@ -945,7 +945,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         if let Some(ref binding) = global.binding {
             if let Err(err) = self.options.resolve_resource_binding(binding) {
-                log::info!(
+                log::debug!(
                     "Skipping global {:?} (name {:?}) for being inaccessible: {}",
                     handle,
                     global.name,
@@ -1187,7 +1187,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         {
             Ok(bindings) => bindings,
             Err(err) => {
-                log::info!(
+                log::debug!(
                     "Skipping global {:?} (name {:?}) for being inaccessible: {}",
                     handle,
                     global.name,

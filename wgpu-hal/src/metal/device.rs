@@ -218,7 +218,7 @@ impl super::Device {
                     .lock()
                     .new_library_with_source(source.as_ref(), &options)
                     .map_err(|err| {
-                        log::warn!("Naga generated shader:\n{source}");
+                        log::debug!("Naga generated shader:\n{source}");
                         crate::PipelineError::Linkage(stage_bit, format!("Metal: {err}"))
                     })?;
 

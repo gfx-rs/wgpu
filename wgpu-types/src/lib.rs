@@ -3898,8 +3898,7 @@ impl TextureFormat {
                 // Two chroma u16s and one luma u16 per block
                 Self::P010 => 6,
                 f => {
-                    log::warn!("Memory footprint for format {f:?} is not implemented");
-                    0
+                    unimplemented!("Memory footprint for format {f:?} is not implemented");
                 }
             },
         };
