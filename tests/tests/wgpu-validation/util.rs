@@ -42,20 +42,23 @@ fn staging_belt_random_test() {
 }
 
 #[test]
-#[should_panic]
 fn staging_belt_panics_with_invalid_buffer_usages() {
-    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    fn test_if_panics(usage: BufferUsages) -> bool {
+        std::panic::catch_unwind(|| {
+            let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+            let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(device.clone(), 512, usage);
+        })
+        .is_err()
+    }
 
-    for usage in BufferUsages::all()
+    for mut usage in BufferUsages::all()
         .difference(BufferUsages::COPY_SRC | BufferUsages::MAP_WRITE)
         .iter()
     {
-        let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(device.clone(), 512, usage);
-        let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(
-            device.clone(),
-            512,
-            usage | BufferUsages::MAP_WRITE,
-        );
+        assert!(test_if_panics(usage), "StagingBelt::new_with_buffer_usages should panic without MAPPABLE_PRIMARY_BUFFERS with usage={usage:?}");
+
+        usage.insert(BufferUsages::MAP_WRITE);
+        assert!(test_if_panics(usage), "StagingBelt::new_with_buffer_usages should panic without MAPPABLE_PRIMARY_BUFFERS with usage={usage:?}");
     }
 }
 
