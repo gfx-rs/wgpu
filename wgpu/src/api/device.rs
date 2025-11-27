@@ -410,12 +410,30 @@ impl Device {
         self.inner.on_uncaptured_error(handler)
     }
 
-    /// Push an error scope.
+    /// Push an error scope on this device's error scope stack.
+    /// All operations on this device, or on resources created from
+    /// this device, will have their errors captured by this scope
+    /// until a corresponding pop is made.
+    ///
+    /// Multiple error scopes may be active at one time, forming a stack.
+    /// Each error will be reported to the inner-most scope that matches
+    /// its filter.
+    ///
+    /// With the `std` feature enabled, this stack is **thread-local**.
+    /// Without, this is **global** to all threads.
     pub fn push_error_scope(&self, filter: ErrorFilter) {
         self.inner.push_error_scope(filter)
     }
 
-    /// Pop an error scope.
+    /// Pop an error scope from this device's error scope stack. Returns
+    /// a future which resolves to the error captured by this scope, if any.
+    ///
+    /// This will pop the most recently pushed error scope on this device.
+    ///
+    /// If there are no error scopes on this device, this will panic.
+    ///
+    /// With the `std` feature enabled, the error stack is **thread-local**.
+    /// Without, this is **global** to all threads.
     pub fn pop_error_scope(&self) -> impl Future<Output = Option<Error>> + WasmNotSend {
         self.inner.pop_error_scope()
     }

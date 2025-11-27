@@ -106,6 +106,16 @@ One other breaking change worth noting is that in WGSL `@builtin(view_index)` no
 
 By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206).
 
+#### Error Scopes are now thread-local
+
+Device error scopes now operate on a per-thread basis. This allows them to be used easily within multithreaded contexts,
+without having the error scope capture errors from other threads.
+
+When the `std` feature is **not** enabled, we have no way to differentiate between threads, so error scopes return to be
+global operations.
+
+By @cwfitzgerald in [#8685](https://github.com/gfx-rs/wgpu/pull/8685)
+
 ### New Features
 
 - Added support for transient textures on Vulkan and Metal. By @opstic in [#8247](https://github.com/gfx-rs/wgpu/pull/8247)
