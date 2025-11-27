@@ -470,9 +470,7 @@ impl<W: Write> Writer<W> {
                         ShaderStage::Mesh => "mesh",
                     };
 
-                    if shader_stage != ShaderStage::Mesh {
-                        write!(self.out, "@{stage_str} ")?;
-                    }
+                    write!(self.out, "@{stage_str} ")?;
                 }
                 Attribute::WorkGroupSize(size) => {
                     write!(
