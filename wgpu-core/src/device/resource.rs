@@ -1424,6 +1424,11 @@ impl Device {
             .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
 
         if desc.sample_count > 1 {
+            // <https://www.w3.org/TR/2025/CRD-webgpu-20251120/#:~:text=If%20descriptor%2EsampleCount%20%3E%201>
+            //
+            // Note that there are also some checks related to the sample count
+            // in [`conv::check_texture_dimension_size`].
+
             if desc.mip_level_count != 1 {
                 return Err(CreateTextureError::InvalidMipLevelCount {
                     requested: desc.mip_level_count,

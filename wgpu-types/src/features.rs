@@ -1,4 +1,4 @@
-use crate::VertexFormat;
+use crate::{link_to_wgpu_docs, link_to_wgpu_item, VertexFormat};
 #[cfg(feature = "serde")]
 use alloc::fmt;
 use alloc::vec::Vec;
@@ -800,10 +800,10 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         ///
-        /// [`RenderPass::multi_draw_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indirect
-        /// [`RenderPass::multi_draw_indexed_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indexed_indirect
-        /// [`RenderPass::multi_draw_indirect_count`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indirect_count
-        /// [`RenderPass::multi_draw_indexed_indirect_count`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indexed_indirect_count
+        #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indirect`"]: "struct.RenderPass.html#method.multi_draw_indirect")]
+        #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indexed_indirect`"]: "struct.RenderPass.html#method.multi_draw_indexed_indirect")]
+        #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indirect_count`"]: "struct.RenderPass.html#method.multi_draw_indirect_count")]
+        #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indexed_indirect_count`"]: "struct.RenderPass.html#method.multi_draw_indexed_indirect_count")]
         const MULTI_DRAW_INDIRECT_COUNT = 1 << 15;
         /// Allows the use of push constants: small, fast bits of memory that can be updated
         /// inside a [`RenderPass`].
@@ -828,9 +828,9 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         ///
-        /// [`RenderPass`]: ../wgpu/struct.RenderPass.html
-        /// [`PipelineLayoutDescriptor`]: ../wgpu/struct.PipelineLayoutDescriptor.html
-        /// [`RenderPass::set_push_constants`]: ../wgpu/struct.RenderPass.html#method.set_push_constants
+        #[doc = link_to_wgpu_item!(struct RenderPass)]
+        #[doc = link_to_wgpu_item!(struct PipelineLayoutDescriptor)]
+        #[doc = link_to_wgpu_docs!(["`RenderPass::set_push_constants`"]: "struct.RenderPass.html#method.set_push_constants")]
         /// [`Limits::max_push_constant_size`]: super::Limits
         const PUSH_CONSTANTS = 1 << 16;
         /// Allows the use of [`AddressMode::ClampToBorder`] with a border color

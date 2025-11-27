@@ -271,8 +271,7 @@ impl super::Instance {
             extensions.push(ext::acquire_drm_display::NAME);
             extensions.push(ext::direct_mode_display::NAME);
             extensions.push(khr::display::NAME);
-            //  VK_EXT_physical_device_drm -> VK_KHR_get_physical_device_properties2
-            extensions.push(ext::physical_device_drm::NAME);
+            extensions.push(khr::get_physical_device_properties2::NAME);
             extensions.push(khr::get_display_properties2::NAME);
         }
 

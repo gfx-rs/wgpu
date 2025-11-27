@@ -6,6 +6,12 @@ on:
       - ".github/workflows/changelog.yml"
       - "CHANGELOG.md"
       - "xtask/**/*"
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
 
 env:
   #
@@ -38,6 +44,7 @@ jobs:
         with:
           fetch-depth: 0
 
+      # NOTE: Keep label name(s) in sync. with `xtask`'s implementation.
       - name: Run `cargo xtask changelog …`
         run: |
-          cargo xtask changelog "origin/${{ github.event.pull_request.base.ref }}"
+          cargo xtask changelog "origin/${{ github.event.pull_request.base.ref }}" ${{ contains(github.event.pull_request.labels.*.name, 'changelog: released entry changed') && '--allow-released-changes' || ''  }}
