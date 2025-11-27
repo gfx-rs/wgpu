@@ -130,6 +130,11 @@ pub struct PhysicalDeviceFeatures {
 
     /// Features provided by `VK_KHR_fragment_shader_barycentric`
     shader_barycentrics: Option<vk::PhysicalDeviceFragmentShaderBarycentricFeaturesKHR<'static>>,
+
+    /// Features provided by `VK_KHR_portability_subset`.
+    ///
+    /// Strictly speaking this tells us what features we *don't* have compared to core.
+    portability_subset: Option<vk::PhysicalDevicePortabilitySubsetFeaturesKHR<'static>>,
 }
 
 impl PhysicalDeviceFeatures {
@@ -551,6 +556,17 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            portability_subset: if enabled_extensions.contains(&khr::portability_subset::NAME) {
+                let multisample_array_needed =
+                    requested_features.intersects(wgt::Features::MULTISAMPLE_ARRAY);
+
+                Some(
+                    vk::PhysicalDevicePortabilitySubsetFeaturesKHR::default()
+                        .multisample_array_image(multisample_array_needed),
+                )
+            } else {
+                None
+            },
         }
     }
 
@@ -929,10 +945,12 @@ impl PhysicalDeviceFeatures {
         }
 
         // Not supported by default by `VK_KHR_portability_subset`, which we use on apple platforms.
-        // This will need to check `multisampleArrayImage` in
-        // `VkPhysicalDevicePortabilitySubsetFeaturesKHR` to check for support on apple.
-        #[cfg(not(target_vendor = "apple"))]
-        features.set(F::MULTISAMPLE_ARRAY, true);
+        features.set(
+            F::MULTISAMPLE_ARRAY,
+            self.portability_subset
+                .map(|p| p.multisample_array_image == vk::TRUE)
+                .unwrap_or(true),
+        );
 
         (features, dl_flags)
     }
@@ -1702,6 +1720,13 @@ impl super::InstanceShared {
                 let next = features
                     .shader_barycentrics
                     .insert(vk::PhysicalDeviceFragmentShaderBarycentricFeaturesKHR::default());
+                features2 = features2.push_next(next);
+            }
+
+            if capabilities.supports_extension(khr::portability_subset::NAME) {
+                let next = features
+                    .portability_subset
+                    .insert(vk::PhysicalDevicePortabilitySubsetFeaturesKHR::default());
                 features2 = features2.push_next(next);
             }
 
