@@ -2,7 +2,7 @@
 
 use alloc::string::String;
 
-use crate::Backends;
+use crate::{link_to_wgpu_docs, Backends};
 
 #[cfg(doc)]
 use crate::{Backend, DownlevelFlags};
@@ -165,7 +165,7 @@ bitflags::bitflags! {
         /// can be a hassle to do manually. When this is enabled, the timestamp period returned by the queue
         /// will always be `1.0`.
         ///
-        /// [rqs]: ../wgpu/struct.CommandEncoder.html#method.resolve_query_set
+        #[doc = link_to_wgpu_docs!(["rqs"]: "struct.CommandEncoder.html#method.resolve_query_set")]
         const AUTOMATIC_TIMESTAMP_NORMALIZATION = 1 << 6;
     }
 }
@@ -461,7 +461,7 @@ pub enum Dx12SwapchainKind {
     /// This supports transparent windows, but does not have support from RenderDoc.
     ///
     /// [`IDCompositionVisual`]: https://learn.microsoft.com/en-us/windows/win32/api/dcomp/nn-dcomp-idcompositionvisual
-    /// [CV]: ../wgpu/struct.SurfaceTargetUnsafe.html#variant.CompositionVisual
+    #[doc = link_to_wgpu_docs!(["CV"]: "struct.SurfaceTargetUnsafe.html#variant.CompositionVisual")]
     DxgiFromVisual,
 }
 

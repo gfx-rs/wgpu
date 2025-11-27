@@ -116,17 +116,31 @@ global operations.
 
 By @cwfitzgerald in [#8685](https://github.com/gfx-rs/wgpu/pull/8685)
 
+#### Log Levels
+
+We have received complaints about wgpu being way too log spammy at log levels `info`/`warn`/`error`. We have
+adjusted our log policy and changed logging such that `info` and above should be silent unless some exceptional
+event happens. Our new log policy is as follows:
+
+- Error: if we can’t (for some reason, usually a bug) communicate an error any other way.
+- Warning: similar, but there may be one-shot warnings about almost certainly sub-optimal.
+- Info: do not use
+- Debug: Used for interesting events happening inside wgpu.
+- Trace: Used for all events that might be useful to either `wgpu` or application developers.
+
+By @cwfitzgerald in [#8579](https://github.com/gfx-rs/wgpu/pull/8579).
+
 ### New Features
 
 - Added support for transient textures on Vulkan and Metal. By @opstic in [#8247](https://github.com/gfx-rs/wgpu/pull/8247)
 - Implement shader triangle barycentric coordinate builtins. By @atlv24 in [#8320](https://github.com/gfx-rs/wgpu/pull/8320).
+- Added support for binding arrays of storage textures on Metal. By @msvbg in [#8464](https://github.com/gfx-rs/wgpu/pull/8464)
 
 ### Changes
 
 #### General
 
 - Require new enable extensions when using ray queries and position fetch (`wgpu_ray_query`, `wgpu_ray_query_vertex_return`). By @Vecvec in [#8545](https://github.com/gfx-rs/wgpu/pull/8545).
-- Lower `max_blas_primitive_count` due to a bug in llvmpipe. By @Vecvec in [#8446](https://github.com/gfx-rs/wgpu/pull/8446).
 - Texture now has `from_custom`. By @R-Cramer4 in [#8315](https://github.com/gfx-rs/wgpu/pull/8315).
 - Using both the wgpu command encoding APIs and `CommandEncoder::as_hal_mut` on the same encoder will now result in a panic.
 - Allow `include_spirv!` and `include_spirv_raw!` macros to be used in constants and statics. By @clarfonthey in [#8250](https://github.com/gfx-rs/wgpu/pull/8250).

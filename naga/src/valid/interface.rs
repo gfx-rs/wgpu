@@ -65,8 +65,8 @@ pub enum VaryingError {
     MissingInterpolation,
     #[error("Built-in {0:?} is not available at this stage")]
     InvalidBuiltInStage(crate::BuiltIn),
-    #[error("Built-in type for {0:?} is invalid")]
-    InvalidBuiltInType(crate::BuiltIn),
+    #[error("Built-in type for {0:?} is invalid. Found {1:?}")]
+    InvalidBuiltInType(crate::BuiltIn, crate::TypeInner),
     #[error("Entry point arguments and return values must all have bindings")]
     MissingBinding,
     #[error("Struct member {0} is missing a binding")]
@@ -426,8 +426,7 @@ impl VaryingContext<'_> {
                     return Err(VaryingError::InvalidBuiltInStage(built_in));
                 }
                 if !type_good {
-                    log::warn!("Wrong builtin type: {ty_inner:?}");
-                    return Err(VaryingError::InvalidBuiltInType(built_in));
+                    return Err(VaryingError::InvalidBuiltInType(built_in, ty_inner.clone()));
                 }
             }
             crate::Binding::Location {

@@ -1153,7 +1153,7 @@ impl PhysicalDeviceProperties {
         if self.supports_extension(ext::memory_budget::NAME) {
             extensions.push(ext::memory_budget::NAME);
         } else {
-            log::warn!("VK_EXT_memory_budget is not available.")
+            log::debug!("VK_EXT_memory_budget is not available.")
         }
 
         // Require `VK_KHR_draw_indirect_count` if the associated feature was requested
@@ -1812,9 +1812,9 @@ impl super::Instance {
                     .flags
                     .contains(wgt::InstanceFlags::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER)
                 {
-                    log::warn!("Adapter is not Vulkan compliant: {}", info.name);
+                    log::debug!("Adapter is not Vulkan compliant: {}", info.name);
                 } else {
-                    log::warn!(
+                    log::debug!(
                         "Adapter is not Vulkan compliant, hiding adapter: {}",
                         info.name
                     );
@@ -1825,7 +1825,7 @@ impl super::Instance {
         if phd_capabilities.device_api_version == vk::API_VERSION_1_0
             && !phd_capabilities.supports_extension(khr::storage_buffer_storage_class::NAME)
         {
-            log::warn!(
+            log::debug!(
                 "SPIR-V storage buffer class is not supported, hiding adapter: {}",
                 info.name
             );
@@ -1834,7 +1834,7 @@ impl super::Instance {
         if !phd_capabilities.supports_extension(khr::maintenance1::NAME)
             && phd_capabilities.device_api_version < vk::API_VERSION_1_1
         {
-            log::warn!(
+            log::debug!(
                 "VK_KHR_maintenance1 is not supported, hiding adapter: {}",
                 info.name
             );
@@ -1848,7 +1848,7 @@ impl super::Instance {
         };
         let queue_flags = queue_families.first()?.queue_flags;
         if !queue_flags.contains(vk::QueueFlags::GRAPHICS) {
-            log::warn!("The first queue only exposes {queue_flags:?}");
+            log::debug!("The first queue only exposes {queue_flags:?}");
             return None;
         }
 
@@ -1985,7 +1985,7 @@ impl super::Adapter {
             });
 
         if !unsupported_extensions.is_empty() {
-            log::warn!("Missing extensions: {unsupported_extensions:?}");
+            log::debug!("Missing extensions: {unsupported_extensions:?}");
         }
 
         log::debug!("Supported extensions: {supported_extensions:?}");
@@ -2864,7 +2864,7 @@ fn is_intel_igpu_outdated_for_robustness2(
             .unwrap_or_default();
 
     if is_outdated {
-        log::warn!(
+        log::debug!(
             "Disabling robustBufferAccess2 and robustImageAccess2: IntegratedGpu Intel Driver is outdated. Found with version 0x{:X}, less than the known good version 0x{:X} (31.0.101.2115)",
             props.driver_version,
             DRIVER_VERSION_WORKING

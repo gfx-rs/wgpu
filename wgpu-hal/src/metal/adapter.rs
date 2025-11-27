@@ -994,6 +994,13 @@ impl super::PrivateCapabilities {
                 && self.argument_buffers as u64 >= MTLArgumentBuffersTier::Tier2 as u64,
         );
         features.set(
+            F::STORAGE_RESOURCE_BINDING_ARRAY,
+            self.msl_version >= MTLLanguageVersion::V3_0
+                && self.supports_arrays_of_textures
+                && self.supports_arrays_of_textures_write
+                && self.argument_buffers as u64 >= MTLArgumentBuffersTier::Tier2 as u64,
+        );
+        features.set(
             F::SHADER_INT64,
             self.int64 && self.msl_version >= MTLLanguageVersion::V2_3,
         );
