@@ -1,3 +1,5 @@
+use crate::link_to_wgpu_item;
+
 /// Token of the user agreeing to access experimental features.
 #[derive(Debug, Default, Copy, Clone)]
 pub struct ExperimentalFeatures {
@@ -7,7 +9,7 @@ pub struct ExperimentalFeatures {
 impl ExperimentalFeatures {
     /// Uses of [`Features`] prefixed with "EXPERIMENTAL" are disallowed.
     ///
-    /// [`Features`]: ../wgpu/struct.Features.html
+    #[doc = link_to_wgpu_item!(struct Features)]
     pub const fn disabled() -> Self {
         Self { enabled: false }
     }
@@ -30,7 +32,7 @@ impl ExperimentalFeatures {
     ///   apis and those may be hit by calling otherwise safe code.
     /// - You agree to report any such bugs to us, if you find them.
     ///
-    /// [`Features`]: ../wgpu/struct.Features.html
+    #[doc = link_to_wgpu_item!(struct Features)]
     /// [`api-specs`]: https://github.com/gfx-rs/wgpu/tree/trunk/docs/api-specs
     pub const unsafe fn enabled() -> Self {
         Self { enabled: true }

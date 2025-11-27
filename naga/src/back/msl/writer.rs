@@ -7152,9 +7152,11 @@ template <typename A>
                                         }
                                     }
                                     crate::ImageClass::Storage { .. } => {
-                                        return Err(Error::UnsupportedArrayOf(
-                                            "read-write textures".to_string(),
-                                        ));
+                                        if options.lang_version < (3, 0) {
+                                            return Err(Error::UnsupportedArrayOf(
+                                                "read-write textures".to_string(),
+                                            ));
+                                        }
                                     }
                                     crate::ImageClass::External => {
                                         return Err(Error::UnsupportedArrayOf(

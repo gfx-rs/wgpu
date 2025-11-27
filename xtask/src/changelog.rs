@@ -6,6 +6,7 @@ use xshell::Shell;
 
 pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Result<()> {
     const CHANGELOG_PATH_RELATIVE: &str = "./CHANGELOG.md";
+    let allow_released_changes = args.contains("--allow-released-changes");
 
     let from_branch = args
         .free_from_str()
@@ -72,7 +73,12 @@ pub(crate) fn check_changelog(shell: Shell, mut args: Arguments) -> anyhow::Resu
             "one or more checks against `{}` failed; see above for details",
             CHANGELOG_PATH_RELATIVE,
         );
-        Err(anyhow::Error::msg(msg))
+        if allow_released_changes {
+            log::warn!("{msg}");
+            Ok(())
+        } else {
+            Err(anyhow::Error::msg(msg))
+        }
     } else {
         Ok(())
     }
