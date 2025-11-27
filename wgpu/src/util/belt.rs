@@ -29,7 +29,7 @@ pub struct StagingBelt {
     chunk_size: BufferAddress,
     /// User-specified [`BufferUsages`] with which the chunk buffers are created.
     ///
-    /// [`new`](Self::new) guarantees that this always constains
+    /// [`new`](Self::new) guarantees that this always contains
     /// [`MAP_WRITE`](BufferUsages::MAP_WRITE).
     buffer_usages: BufferUsages,
     /// Chunks into which we are accumulating data to be transferred.
