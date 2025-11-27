@@ -626,25 +626,29 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
         token: Option<TokenSpan<'a>>,
+        expected_token: ExpectedToken<'a>,
     ) -> Result<'a, Handle<ast::Expression<'a>>> {
         self.track_recursion(|this| {
             this.push_rule_span(Rule::LhsExpr, lexer);
             let token = token.unwrap_or_else(|| lexer.next());
             let expr = match token {
                 (Token::Operation('*'), _) => {
-                    let expr = this.lhs_expression(lexer, ctx, None)?;
+                    let expr =
+                        this.lhs_expression(lexer, ctx, None, ExpectedToken::LhsExpression)?;
                     let expr = ast::Expression::Deref(expr);
                     let span = this.peek_rule_span(lexer);
                     ctx.expressions.append(expr, span)
                 }
                 (Token::Operation('&'), _) => {
-                    let expr = this.lhs_expression(lexer, ctx, None)?;
+                    let expr =
+                        this.lhs_expression(lexer, ctx, None, ExpectedToken::LhsExpression)?;
                     let expr = ast::Expression::AddrOf(expr);
                     let span = this.peek_rule_span(lexer);
                     ctx.expressions.append(expr, span)
                 }
                 (Token::Paren('('), span) => {
-                    let expr = this.lhs_expression(lexer, ctx, None)?;
+                    let expr =
+                        this.lhs_expression(lexer, ctx, None, ExpectedToken::LhsExpression)?;
                     lexer.expect(Token::Paren(')'))?;
                     this.component_or_swizzle_specifier(span, lexer, ctx, expr)?
                 }
@@ -660,10 +664,7 @@ impl Parser {
                     this.component_or_swizzle_specifier(span, lexer, ctx, ident)?
                 }
                 (_, span) => {
-                    return Err(Box::new(Error::Unexpected(
-                        span,
-                        ExpectedToken::LhsExpression,
-                    )));
+                    return Err(Box::new(Error::Unexpected(span, expected_token)));
                 }
             };
 
@@ -1017,6 +1018,7 @@ impl Parser {
         ctx: &mut ExpressionContext<'a, '_, '_>,
         block: &mut ast::Block<'a>,
         token: TokenSpan<'a>,
+        expected_token: ExpectedToken<'a>,
     ) -> Result<'a, ()> {
         match token {
             (Token::Word("_"), span) => {
@@ -1031,7 +1033,7 @@ impl Parser {
             }
             _ => {}
         }
-        let target = self.lhs_expression(lexer, ctx, Some(token))?;
+        let target = self.lhs_expression(lexer, ctx, Some(token), expected_token)?;
 
         let (op, value) = match lexer.next() {
             (Token::Operation('='), _) => {
@@ -1131,9 +1133,10 @@ impl Parser {
         context: &mut ExpressionContext<'a, '_, '_>,
         block: &mut ast::Block<'a>,
         token: TokenSpan<'a>,
+        expected_token: ExpectedToken<'a>,
     ) -> Result<'a, ()> {
         if !self.maybe_func_call_statement(lexer, context, block, token)? {
-            self.variable_updating_statement(lexer, context, block, token)?;
+            self.variable_updating_statement(lexer, context, block, token, expected_token)?;
         }
         Ok(())
     }
@@ -1149,6 +1152,7 @@ impl Parser {
         ctx: &mut ExpressionContext<'a, '_, '_>,
         block: &mut ast::Block<'a>,
         token: TokenSpan<'a>,
+        expected_token: ExpectedToken<'a>,
     ) -> Result<'a, ()> {
         let local_decl = match token {
             (Token::Word("let"), _) => {
@@ -1206,7 +1210,13 @@ impl Parser {
                 })
             }
             token => {
-                return self.func_call_or_variable_updating_statement(lexer, ctx, block, token);
+                return self.func_call_or_variable_updating_statement(
+                    lexer,
+                    ctx,
+                    block,
+                    token,
+                    expected_token,
+                );
             }
         };
 
@@ -1413,7 +1423,11 @@ impl Parser {
                     if !lexer.next_if(Token::Separator(';')) {
                         let token = lexer.next();
                         this.variable_or_value_or_func_call_or_variable_updating_statement(
-                            lexer, ctx, block, token,
+                            lexer,
+                            ctx,
+                            block,
+                            token,
+                            ExpectedToken::ForInit,
                         )?;
                         lexer.expect(Token::Separator(';'))?;
                     };
@@ -1448,6 +1462,7 @@ impl Parser {
                             ctx,
                             &mut continuing,
                             token,
+                            ExpectedToken::ForUpdate,
                         )?;
                         lexer.expect(Token::Paren(')'))?;
                     }
@@ -1501,7 +1516,11 @@ impl Parser {
                 }
                 token => {
                     this.variable_or_value_or_func_call_or_variable_updating_statement(
-                        lexer, ctx, block, token,
+                        lexer,
+                        ctx,
+                        block,
+                        token,
+                        ExpectedToken::Statement,
                     )?;
                     lexer.expect(Token::Separator(';'))?;
                     this.pop_rule_span(lexer);

@@ -135,6 +135,7 @@ pub enum ExpectedToken<'a> {
     Identifier,
     AfterIdentListComma,
     AfterIdentListArg,
+    /// LHS expression (identifier component_or_swizzle_specifier?, (`lhs_expression`) component_or_swizzle_specifier?, &`lhs_expression`, *`lhs_expression`)
     LhsExpression,
     /// Expected: constant, parenthesized expression, identifier
     PrimaryExpression,
@@ -152,6 +153,12 @@ pub enum ExpectedToken<'a> {
     Function,
     /// The `diagnostic` identifier of the `@diagnostic(…)` attribute.
     DiagnosticAttribute,
+    /// statement
+    Statement,
+    /// for loop init statement (variable_or_value_statement, variable_updating_statement, func_call_statement)
+    ForInit,
+    /// for loop update statement (variable_updating_statement, func_call_statement)
+    ForUpdate,
 }
 
 #[derive(Clone, Copy, Debug, Error, PartialEq)]
@@ -504,7 +511,7 @@ impl<'a> Error<'a> {
                         Token::End => "end".to_string(),
                     },
                     ExpectedToken::Identifier => "identifier".to_string(),
-                    ExpectedToken::LhsExpression => "assignment destination".to_string(),
+                    ExpectedToken::LhsExpression => "LHS expression (identifier component_or_swizzle_specifier?, (`lhs_expression`) component_or_swizzle_specifier?, &`lhs_expression`, *`lhs_expression`)".to_string(),
                     ExpectedToken::PrimaryExpression => "expression".to_string(),
                     ExpectedToken::Assignment => "assignment or increment/decrement".to_string(),
                     ExpectedToken::SwitchItem => concat!(
@@ -532,6 +539,9 @@ impl<'a> Error<'a> {
                     ExpectedToken::DiagnosticAttribute => {
                         "the `diagnostic` attribute identifier".to_string()
                     }
+                    ExpectedToken::Statement => "statement".to_string(),
+                    ExpectedToken::ForInit => "for loop initializer statement (`var`/`let`/`const` declaration, assignment, `i++`/`i--` statement, function call)".to_string(),
+                    ExpectedToken::ForUpdate => "for loop update statement (assignment, `i++`/`i--` statement, function call)".to_string(),
                 };
                 ParseError {
                     message: format!(
