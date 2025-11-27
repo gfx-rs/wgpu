@@ -4,10 +4,10 @@ inputs:
   # Sourced from https://archive.mesa3d.org/. Bumping this requires
   # updating the mesa build in https://github.com/gfx-rs/ci-build and creating a new release.
   version:
-    default: "25.2.6"
+    default: "25.2.7"
   # Corresponds to https://github.com/gfx-rs/ci-build/releases
   ci-binary-build:
-    default: "build25"
+    default: "build26"
 runs:
   using: "composite"
   steps:
