@@ -4,6 +4,7 @@ Ray tracing pipelines are not yet implemented, so this is empty.
 */
 
 pub mod query;
+pub mod pipeline;
 
 use alloc::{vec, vec::Vec};
 

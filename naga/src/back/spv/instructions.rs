@@ -866,6 +866,39 @@ impl super::Instruction {
     }
 
     //
+    //  Ray Tracing Pipeline Instructions
+    //
+
+    #[expect(clippy::too_many_arguments)]
+    pub(super) fn trace_ray(
+        acceleration_structure: Word,
+        ray_flags: Word,
+        cull_mask: Word,
+        sbt_offset: Word,
+        sbt_stride: Word,
+        miss_idx: Word,
+        ray_origin: Word,
+        ray_tmin: Word,
+        ray_dir: Word,
+        ray_tmax: Word,
+        payload: Word,
+    ) -> Self {
+        let mut instruction = Self::new(Op::TraceRayKHR);
+        instruction.add_operand(acceleration_structure);
+        instruction.add_operand(ray_flags);
+        instruction.add_operand(cull_mask);
+        instruction.add_operand(sbt_offset);
+        instruction.add_operand(sbt_stride);
+        instruction.add_operand(miss_idx);
+        instruction.add_operand(ray_origin);
+        instruction.add_operand(ray_tmin);
+        instruction.add_operand(ray_dir);
+        instruction.add_operand(ray_tmax);
+        instruction.add_operand(payload);
+        instruction
+    }
+
+    //
     //  Conversion Instructions
     //
     pub(super) fn unary(op: Op, result_type_id: Word, id: Word, value: Word) -> Self {

@@ -593,6 +593,14 @@ enum LookupRayQueryFunction {
     Terminate,
 }
 
+// Just one supported function right now, more in the future.
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
+enum LookupRaytracingFunction {
+    TraceRay {
+        payload: Handle<crate::GlobalVariable>,
+    },
+}
+
 #[derive(Debug)]
 enum Dimension {
     Scalar,
@@ -961,6 +969,10 @@ pub struct Writer {
     temp_list: Vec<Word>,
 
     ray_query_functions: crate::FastHashMap<LookupRayQueryFunction, Word>,
+
+    ray_tracing_functions: crate::FastHashMap<LookupRaytracingFunction, Word>,
+
+    has_ray_tracing_pipeline: bool,
 
     /// F16 I/O polyfill manager for handling `f16` input/output variables
     /// when `StorageInputOutput16` capability is not available.
