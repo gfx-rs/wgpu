@@ -1,6 +1,7 @@
 //! Tests of [`wgpu::util`].
 
 use nanorand::Rng;
+use wgpu::BufferUsages;
 
 /// Generate (deterministic) random staging belt operations to exercise its logic.
 #[test]
@@ -38,4 +39,42 @@ fn staging_belt_random_test() {
         queue.submit([encoder.finish()]);
         belt.recall();
     }
+}
+
+#[test]
+#[should_panic]
+fn staging_belt_panics_with_invalid_buffer_usages() {
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+
+    for usage in BufferUsages::all()
+        .difference(BufferUsages::COPY_SRC | BufferUsages::MAP_WRITE)
+        .iter()
+    {
+        let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(device.clone(), 512, usage);
+        let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(
+            device.clone(),
+            512,
+            usage | BufferUsages::MAP_WRITE,
+        );
+    }
+}
+
+#[test]
+fn staging_belt_works_with_non_exclusive_buffer_usages() {
+    let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(
+        device.clone(),
+        512,
+        BufferUsages::COPY_SRC,
+    );
+    let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(
+        device.clone(),
+        512,
+        BufferUsages::COPY_SRC | BufferUsages::MAP_WRITE,
+    );
+    let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(
+        device.clone(),
+        512,
+        BufferUsages::MAP_WRITE,
+    );
 }
