@@ -5299,6 +5299,7 @@ const fn glsl_interpolation(interpolation: crate::Interpolation) -> &'static str
         I::Perspective => "smooth",
         I::Linear => "noperspective",
         I::Flat => "flat",
+        I::PerVertex => "pervertexEXT",
     }
 }
 

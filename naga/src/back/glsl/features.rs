@@ -628,6 +628,9 @@ impl<W> Writer<'_, W> {
                     if interpolation == Some(Interpolation::Linear) {
                         self.features.request(Features::NOPERSPECTIVE_QUALIFIER);
                     }
+                    if interpolation == Some(Interpolation::PerVertex) {
+                        self.features.request(Features::SHADER_BARYCENTRICS);
+                    }
                     if sampling == Some(Sampling::Sample) {
                         self.features.request(Features::SAMPLE_QUALIFIER);
                     }

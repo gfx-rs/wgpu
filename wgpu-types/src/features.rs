@@ -1263,6 +1263,16 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const EXPERIMENTAL_MESH_SHADER_POINTS = 1 << 55;
+
+        /// Enables shader barycentric coordinates.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with VK_KHR_fragment_shader_barycentric)
+        /// - DX12 (with SM 6.1+)
+        /// - Metal (with MSL 4+)
+        ///
+        /// This is a native only feature.
+        const SHADER_PER_VERTEX = 1 << 56;
     }
 
     /// Features that are not guaranteed to be supported.

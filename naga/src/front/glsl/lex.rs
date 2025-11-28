@@ -78,6 +78,7 @@ impl Iterator for Lexer<'_> {
                     "invariant" => TokenValue::Invariant,
                     "flat" => TokenValue::Interpolation(crate::Interpolation::Flat),
                     "noperspective" => TokenValue::Interpolation(crate::Interpolation::Linear),
+                    "pervertexEXT" => TokenValue::Interpolation(crate::Interpolation::PerVertex),
                     "smooth" => TokenValue::Interpolation(crate::Interpolation::Perspective),
                     "centroid" => TokenValue::Sampling(crate::Sampling::Centroid),
                     "sample" => TokenValue::Sampling(crate::Sampling::Sample),

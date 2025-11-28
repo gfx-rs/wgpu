@@ -409,6 +409,7 @@ fn incompatible_interpolation_and_sampling_types() {
         naga::Interpolation::Flat,
         naga::Interpolation::Linear,
         naga::Interpolation::Perspective,
+        naga::Interpolation::PerVertex,
     ]
     .into_iter()
     .cartesian_product(
@@ -498,6 +499,7 @@ mod dummy_interpolation_shader {
                 naga::Interpolation::Flat => "flat",
                 naga::Interpolation::Linear => "linear",
                 naga::Interpolation::Perspective => "perspective",
+                naga::Interpolation::PerVertex => "per_vertex",
             };
             let sampling_str = match sampling {
                 None => String::new(),
@@ -515,6 +517,7 @@ mod dummy_interpolation_shader {
             let member_type = match interpolation {
                 naga::Interpolation::Perspective | naga::Interpolation::Linear => "f32",
                 naga::Interpolation::Flat => "u32",
+                naga::Interpolation::PerVertex => "array<u32, 3>",
             };
 
             let interpolate_attr = format!("@interpolate({interpolation_str}{sampling_str})");

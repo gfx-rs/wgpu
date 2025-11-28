@@ -83,7 +83,7 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub struct Capabilities: u32 {
+    pub struct Capabilities: u64 {
         /// Support for [`AddressSpace::PushConstant`][1].
         ///
         /// [1]: crate::AddressSpace::PushConstant
@@ -191,7 +191,9 @@ bitflags::bitflags! {
         /// Support for task shaders, mesh shaders, and per-primitive fragment inputs
         const MESH_SHADER = 1 << 30;
         /// Support for mesh shaders which output points.
-        const MESH_SHADER_POINT_TOPOLOGY = 1 << 30;
+        const MESH_SHADER_POINT_TOPOLOGY = 1 << 31;
+        /// Support for per-vertex fragment input.
+        const SHADER_PER_VERTEX = 1 << 32;
     }
 }
 
