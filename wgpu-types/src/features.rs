@@ -1271,6 +1271,7 @@ bitflags_array! {
         ///
         /// Supported platforms:
         /// - Vulkan (except VK_KHR_portability_subset if multisampleArrayImage is not available)
+        /// - DX12
         const MULTISAMPLE_ARRAY = 1 << 56;
     }
 
