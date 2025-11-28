@@ -80,6 +80,10 @@ impl AdapterInterface for CustomAdapter {
         Box::pin(std::future::ready(res))
     }
 
+    fn cooperative_matrix_properties(&self) -> Vec<wgpu::CooperativeMatrixProperties> {
+        Vec::new()
+    }
+
     fn is_surface_supported(&self, _surface: &DispatchSurface) -> bool {
         unimplemented!()
     }

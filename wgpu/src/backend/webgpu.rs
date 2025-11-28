@@ -1742,6 +1742,10 @@ impl dispatch::AdapterInterface for WebAdapter {
     fn get_presentation_timestamp(&self) -> crate::PresentationTimestamp {
         crate::PresentationTimestamp::INVALID_TIMESTAMP
     }
+
+    fn cooperative_matrix_properties(&self) -> Vec<wgt::CooperativeMatrixProperties> {
+        Vec::new()
+    }
 }
 impl Drop for WebAdapter {
     fn drop(&mut self) {

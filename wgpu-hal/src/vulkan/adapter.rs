@@ -138,6 +138,9 @@ pub struct PhysicalDeviceFeatures {
 
     /// Features provided by `VK_KHR_cooperative_matrix`
     cooperative_matrix: Option<vk::PhysicalDeviceCooperativeMatrixFeaturesKHR<'static>>,
+
+    /// Features provided by `VK_KHR_vulkan_memory_model`, promoted to Vulkan 1.2
+    vulkan_memory_model: Option<vk::PhysicalDeviceVulkanMemoryModelFeaturesKHR<'static>>,
 }
 
 impl PhysicalDeviceFeatures {
@@ -218,6 +221,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.cooperative_matrix {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.vulkan_memory_model {
             info = info.push_next(feature);
         }
         info
@@ -582,6 +588,18 @@ impl PhysicalDeviceFeatures {
                 Some(
                     vk::PhysicalDeviceCooperativeMatrixFeaturesKHR::default()
                         .cooperative_matrix(needed),
+                )
+            } else {
+                None
+            },
+            vulkan_memory_model: if device_api_version >= vk::API_VERSION_1_2
+                || enabled_extensions.contains(&khr::vulkan_memory_model::NAME)
+            {
+                let needed =
+                    requested_features.contains(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX);
+                Some(
+                    vk::PhysicalDeviceVulkanMemoryModelFeaturesKHR::default()
+                        .vulkan_memory_model(needed),
                 )
             } else {
                 None
@@ -975,11 +993,10 @@ impl PhysicalDeviceFeatures {
                 .map(|p| p.multisample_array_image == vk::TRUE)
                 .unwrap_or(true),
         );
-        // Enable cooperative matrix only if the device supports 8x8 f32 matrices,
-        // which is what the current wgpu implementation exposes.
+        // Enable cooperative matrix if any configuration is supported
         features.set(
             F::EXPERIMENTAL_COOPERATIVE_MATRIX,
-            caps.supports_cooperative_matrix_8x8_f32,
+            !caps.cooperative_matrix_properties.is_empty(),
         );
 
         (features, dl_flags)
@@ -1061,11 +1078,10 @@ pub struct PhysicalDeviceProperties {
     /// It is associated with a `VkPhysicalDevice` and its children.
     device_api_version: u32,
 
-    /// Whether the device supports 8x8 f32 cooperative matrices.
+    /// Supported cooperative matrix configurations.
     ///
-    /// This is determined by querying `vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR`
-    /// and checking if any configuration matches M=8, N=8, K=8 with all f32 types.
-    supports_cooperative_matrix_8x8_f32: bool,
+    /// This is determined by querying `vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR`.
+    cooperative_matrix_properties: Vec<wgt::CooperativeMatrixProperties>,
 }
 
 impl PhysicalDeviceProperties {
@@ -1609,12 +1625,12 @@ impl super::InstanceShared {
                     get_device_properties.get_physical_device_properties2(phd, &mut properties2)
                 };
 
-                // Query cooperative matrix properties to check for 8x8 f32 support
+                // Query cooperative matrix properties
                 if capabilities.supports_extension(khr::cooperative_matrix::NAME) {
                     let coop_matrix =
                         khr::cooperative_matrix::Instance::new(&self.entry, &self.raw);
-                    capabilities.supports_cooperative_matrix_8x8_f32 =
-                        check_cooperative_matrix_8x8_f32_support(&coop_matrix, phd);
+                    capabilities.cooperative_matrix_properties =
+                        query_cooperative_matrix_properties(&coop_matrix, phd);
                 }
 
                 if is_intel_igpu_outdated_for_robustness2(
@@ -2055,6 +2071,7 @@ impl super::Instance {
                 limits: wgt::DownlevelLimits {},
                 shader_model: wgt::ShaderModel::Sm5, //TODO?
             },
+            cooperative_matrix_properties: phd_capabilities.cooperative_matrix_properties.clone(),
         };
 
         let adapter = super::Adapter {
@@ -2935,47 +2952,126 @@ fn is_intel_igpu_outdated_for_robustness2(
     is_outdated
 }
 
-/// Check if the physical device supports 8x8 f32 cooperative matrices.
-///
-/// This queries `vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR` and checks
-/// if any supported configuration matches:
-/// - M = 8, N = 8, K = 8
-/// - All types (A, B, C, Result) are FLOAT32
-/// - Scope is Subgroup
-fn check_cooperative_matrix_8x8_f32_support(
+/// Convert Vulkan component type to wgt::CooperativeScalarType.
+fn map_vk_component_type(ty: vk::ComponentTypeKHR) -> Option<wgt::CooperativeScalarType> {
+    match ty {
+        vk::ComponentTypeKHR::FLOAT16 => Some(wgt::CooperativeScalarType::F16),
+        vk::ComponentTypeKHR::FLOAT32 => Some(wgt::CooperativeScalarType::F32),
+        vk::ComponentTypeKHR::SINT32 => Some(wgt::CooperativeScalarType::I32),
+        vk::ComponentTypeKHR::UINT32 => Some(wgt::CooperativeScalarType::U32),
+        _ => None,
+    }
+}
+
+/// Convert Vulkan matrix size.
+fn map_vk_cooperative_size(size: u32) -> Option<u32> {
+    match size {
+        8 | 16 => Some(size),
+        _ => None,
+    }
+}
+
+/// Query all supported cooperative matrix configurations from Vulkan.
+fn query_cooperative_matrix_properties(
     coop_matrix: &khr::cooperative_matrix::Instance,
     phd: vk::PhysicalDevice,
-) -> bool {
-    let properties =
+) -> Vec<wgt::CooperativeMatrixProperties> {
+    let vk_properties =
         match unsafe { coop_matrix.get_physical_device_cooperative_matrix_properties(phd) } {
             Ok(props) => props,
             Err(e) => {
                 log::warn!("Failed to query cooperative matrix properties: {e:?}");
-                return false;
+                return Vec::new();
             }
         };
 
-    for prop in &properties {
-        // Check for 8x8x8 dimensions with all f32 types at subgroup scope
-        let is_8x8x8 = prop.m_size == 8 && prop.n_size == 8 && prop.k_size == 8;
-        let all_f32 = prop.a_type == vk::ComponentTypeKHR::FLOAT32
-            && prop.b_type == vk::ComponentTypeKHR::FLOAT32
-            && prop.c_type == vk::ComponentTypeKHR::FLOAT32
-            && prop.result_type == vk::ComponentTypeKHR::FLOAT32;
-        let is_subgroup = prop.scope == vk::ScopeKHR::SUBGROUP;
+    log::debug!(
+        "Vulkan reports {} cooperative matrix configurations",
+        vk_properties.len()
+    );
 
-        if is_8x8x8 && all_f32 && is_subgroup {
-            log::info!(
-                "Found cooperative matrix support for 8x8x8 f32 (saturating_accumulation: {})",
-                prop.saturating_accumulation != 0
-            );
-            return true;
+    let mut result = Vec::new();
+    for prop in &vk_properties {
+        log::debug!(
+            "  Vulkan coop matrix: M={} N={} K={} A={:?} B={:?} C={:?} Result={:?} scope={:?} saturating={}",
+            prop.m_size,
+            prop.n_size,
+            prop.k_size,
+            prop.a_type,
+            prop.b_type,
+            prop.c_type,
+            prop.result_type,
+            prop.scope,
+            prop.saturating_accumulation
+        );
+
+        // Only include subgroup-scoped operations (the only scope we support)
+        if prop.scope != vk::ScopeKHR::SUBGROUP {
+            log::debug!("    Skipped: scope is not SUBGROUP");
+            continue;
         }
+
+        // Map sizes - skip configurations with sizes we don't support
+        let m_size = match map_vk_cooperative_size(prop.m_size) {
+            Some(s) => s,
+            None => {
+                log::debug!("    Skipped: M size {} not supported", prop.m_size);
+                continue;
+            }
+        };
+        let n_size = match map_vk_cooperative_size(prop.n_size) {
+            Some(s) => s,
+            None => {
+                log::debug!("    Skipped: N size {} not supported", prop.n_size);
+                continue;
+            }
+        };
+        let k_size = match map_vk_cooperative_size(prop.k_size) {
+            Some(s) => s,
+            None => {
+                log::debug!("    Skipped: K size {} not supported", prop.k_size);
+                continue;
+            }
+        };
+
+        // Map the component types - A and B must match, C and Result must match
+        let ab_type = match map_vk_component_type(prop.a_type) {
+            Some(t) if Some(t) == map_vk_component_type(prop.b_type) => t,
+            _ => {
+                log::debug!(
+                    "    Skipped: A/B types {:?}/{:?} not supported or don't match",
+                    prop.a_type,
+                    prop.b_type
+                );
+                continue;
+            }
+        };
+        let cr_type = match map_vk_component_type(prop.c_type) {
+            Some(t) if Some(t) == map_vk_component_type(prop.result_type) => t,
+            _ => {
+                log::debug!(
+                    "    Skipped: C/Result types {:?}/{:?} not supported or don't match",
+                    prop.c_type,
+                    prop.result_type
+                );
+                continue;
+            }
+        };
+
+        log::debug!("    Accepted!");
+        result.push(wgt::CooperativeMatrixProperties {
+            m_size,
+            n_size,
+            k_size,
+            ab_type,
+            cr_type,
+            saturating_accumulation: prop.saturating_accumulation != 0,
+        });
     }
 
-    log::debug!(
-        "No 8x8x8 f32 cooperative matrix configuration found. Available configurations: {}",
-        properties.len()
+    log::info!(
+        "Found {} cooperative matrix configurations supported by wgpu",
+        result.len()
     );
-    false
+    result
 }

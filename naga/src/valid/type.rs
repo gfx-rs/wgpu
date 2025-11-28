@@ -425,7 +425,10 @@ impl super::Validator {
                 role: _,
             } => {
                 self.require_type_capability(Capabilities::COOPERATIVE_MATRIX)?;
-                if scalar.kind != crate::ScalarKind::Float || scalar.width != 4 {
+                // Allow f16 (width 2) and f32 (width 4) for cooperative matrices
+                if scalar.kind != crate::ScalarKind::Float
+                    || (scalar.width != 2 && scalar.width != 4)
+                {
                     return Err(TypeError::MatrixElementNotFloat);
                 }
                 TypeInfo::new(

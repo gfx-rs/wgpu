@@ -4802,6 +4802,7 @@ dependencies = [
  "flume",
  "getrandom 0.3.4",
  "glam",
+ "half",
  "ktx2",
  "log",
  "nanorand",

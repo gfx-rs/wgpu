@@ -503,6 +503,7 @@ impl From<VectorSize> for u32 {
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum CooperativeSize {
     Eight = 8,
+    Sixteen = 16,
 }
 
 /// Primitive type for a scalar.
