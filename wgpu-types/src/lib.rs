@@ -1094,7 +1094,7 @@ impl Limits {
         Self {
             max_blas_geometry_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
             max_tlas_instance_count: (1 << 24) - 1, // 2^24 - 1: Vulkan's minimum
-            max_blas_primitive_count: (1 << 24) - 1, // Should be 2^28: Metal's minimum, but due to an llvmpipe bug it is 2^24 - 1
+            max_blas_primitive_count: 1 << 28,      // 2^28: Metal's minimum
             max_acceleration_structures_per_shader_stage: 16, // Vulkan's minimum
             ..self
         }
@@ -3957,8 +3957,7 @@ impl TextureFormat {
                 // Two chroma u16s and one luma u16 per block
                 Self::P010 => 6,
                 f => {
-                    log::warn!("Memory footprint for format {f:?} is not implemented");
-                    0
+                    unimplemented!("Memory footprint for format {f:?} is not implemented");
                 }
             },
         };

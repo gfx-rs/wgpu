@@ -364,12 +364,12 @@ impl super::Adapter {
                 Direct3D12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_2,
                 64,
             ),
-            Direct3D12::D3D12_RESOURCE_BINDING_TIER_3 => (
+            tier if tier.0 >= Direct3D12::D3D12_RESOURCE_BINDING_TIER_3.0 => (
                 tier3_practical_descriptor_limit,
                 tier3_practical_descriptor_limit,
             ),
             other => {
-                log::warn!("Unknown resource binding tier {other:?}");
+                log::debug!("Got zero or negative value for resource binding tier {other:?}");
                 (
                     Direct3D12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_1,
                     8,
