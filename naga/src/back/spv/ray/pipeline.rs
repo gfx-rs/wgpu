@@ -12,9 +12,7 @@ impl Writer {
     ) -> spirv::Word {
         if let Some(&word) = self
             .ray_tracing_functions
-            .get(&LookupRaytracingFunction::TraceRay {
-                payload,
-            })
+            .get(&LookupRaytracingFunction::TraceRay { payload })
         {
             return word;
         }
@@ -30,10 +28,7 @@ impl Writer {
         );
 
         let (func_id, mut function, arg_ids) = self.write_function_signature(
-            &[
-                acceleration_structure_type_id,
-                ray_desc_type_id,
-            ],
+            &[acceleration_structure_type_id, ray_desc_type_id],
             self.void_type,
         );
 
@@ -120,12 +115,8 @@ impl Writer {
 
         function.to_words(&mut self.logical_layout.function_definitions);
 
-        self.ray_tracing_functions.insert(
-            LookupRaytracingFunction::TraceRay {
-                payload,
-            },
-            func_id,
-        );
+        self.ray_tracing_functions
+            .insert(LookupRaytracingFunction::TraceRay { payload }, func_id);
 
         func_id
     }
@@ -143,7 +134,9 @@ impl BlockContext<'_> {
                 descriptor,
                 payload,
             } => {
-                let crate::Expression::GlobalVariable(payload) = self.ir_function.expressions[payload] else {
+                let crate::Expression::GlobalVariable(payload) =
+                    self.ir_function.expressions[payload]
+                else {
                     unreachable!()
                 };
 
