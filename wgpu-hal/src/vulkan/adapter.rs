@@ -19,7 +19,6 @@ const INDEXING_FEATURES: wgt::Features = wgt::Features::TEXTURE_BINDING_ARRAY
     .union(wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING)
     .union(wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS)
     .union(wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY);
-
 #[expect(rustdoc::private_intra_doc_links)]
 /// Features supported by a [`vk::PhysicalDevice`] and its extensions.
 ///
@@ -748,6 +747,7 @@ impl PhysicalDeviceFeatures {
 
         if let Some(ref multiview) = self.multiview {
             features.set(F::MULTIVIEW, multiview.multiview != 0);
+            features.set(F::SELECTIVE_MULTIVIEW, multiview.multiview != 0);
         }
 
         features.set(
@@ -917,6 +917,10 @@ impl PhysicalDeviceFeatures {
             F::EXPERIMENTAL_MESH_SHADER,
             caps.supports_extension(ext::mesh_shader::NAME),
         );
+        features.set(
+            F::EXPERIMENTAL_MESH_SHADER_POINTS,
+            caps.supports_extension(ext::mesh_shader::NAME),
+        );
         if let Some(ref mesh_shader) = self.mesh_shader {
             features.set(
                 F::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
@@ -989,6 +993,9 @@ pub struct PhysicalDeviceProperties {
     mesh_shader: Option<vk::PhysicalDeviceMeshShaderPropertiesEXT<'static>>,
 
     /// Additional `vk::PhysicalDevice` properties from the
+    /// `VK_KHR_multiview` extension.
+    multiview: Option<vk::PhysicalDeviceMultiviewPropertiesKHR<'static>>,
+
     /// `VK_EXT_pci_bus_info` extension.
     pci_bus_info: Option<vk::PhysicalDevicePCIBusInfoPropertiesEXT<'static>>,
 
@@ -1146,7 +1153,7 @@ impl PhysicalDeviceProperties {
         if self.supports_extension(ext::memory_budget::NAME) {
             extensions.push(ext::memory_budget::NAME);
         } else {
-            log::warn!("VK_EXT_memory_budget is not available.")
+            log::debug!("VK_EXT_memory_budget is not available.")
         }
 
         // Require `VK_KHR_draw_indirect_count` if the associated feature was requested
@@ -1226,7 +1233,7 @@ impl PhysicalDeviceProperties {
         let (
             max_task_workgroup_total_count,
             max_task_workgroups_per_dimension,
-            max_mesh_multiview_count,
+            max_mesh_multiview_view_count,
             max_mesh_output_layers,
         ) = match self.mesh_shader {
             Some(m) => (
@@ -1288,6 +1295,11 @@ impl PhysicalDeviceProperties {
                 properties.max_per_stage_descriptor_acceleration_structures;
         }
 
+        let max_multiview_view_count = self
+            .multiview
+            .map(|a| a.max_multiview_view_count.min(32))
+            .unwrap_or(0);
+
         wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
             max_texture_dimension_2d: limits.max_image_dimension2_d,
@@ -1348,13 +1360,15 @@ impl PhysicalDeviceProperties {
 
             max_task_workgroup_total_count,
             max_task_workgroups_per_dimension,
-            max_mesh_multiview_count,
+            max_mesh_multiview_view_count,
             max_mesh_output_layers,
 
             max_blas_primitive_count,
             max_blas_geometry_count,
             max_tlas_instance_count,
             max_acceleration_structures_per_shader_stage,
+
+            max_multiview_view_count,
         }
     }
 
@@ -1412,6 +1426,9 @@ impl super::InstanceShared {
                 unsafe { self.raw.enumerate_device_extension_properties(phd).unwrap() };
             capabilities.properties = unsafe { self.raw.get_physical_device_properties(phd) };
             capabilities.device_api_version = capabilities.properties.api_version;
+
+            let supports_multiview = capabilities.device_api_version >= vk::API_VERSION_1_1
+                || capabilities.supports_extension(khr::multiview::NAME);
 
             if let Some(ref get_device_properties) = self.get_physical_device_properties {
                 // Get these now to avoid borrowing conflicts later
@@ -1496,6 +1513,13 @@ impl super::InstanceShared {
                     let next = capabilities
                         .mesh_shader
                         .insert(vk::PhysicalDeviceMeshShaderPropertiesEXT::default());
+                    properties2 = properties2.push_next(next);
+                }
+
+                if supports_multiview {
+                    let next = capabilities
+                        .multiview
+                        .insert(vk::PhysicalDeviceMultiviewProperties::default());
                     properties2 = properties2.push_next(next);
                 }
 
@@ -1788,9 +1812,9 @@ impl super::Instance {
                     .flags
                     .contains(wgt::InstanceFlags::ALLOW_UNDERLYING_NONCOMPLIANT_ADAPTER)
                 {
-                    log::warn!("Adapter is not Vulkan compliant: {}", info.name);
+                    log::debug!("Adapter is not Vulkan compliant: {}", info.name);
                 } else {
-                    log::warn!(
+                    log::debug!(
                         "Adapter is not Vulkan compliant, hiding adapter: {}",
                         info.name
                     );
@@ -1801,7 +1825,7 @@ impl super::Instance {
         if phd_capabilities.device_api_version == vk::API_VERSION_1_0
             && !phd_capabilities.supports_extension(khr::storage_buffer_storage_class::NAME)
         {
-            log::warn!(
+            log::debug!(
                 "SPIR-V storage buffer class is not supported, hiding adapter: {}",
                 info.name
             );
@@ -1810,7 +1834,7 @@ impl super::Instance {
         if !phd_capabilities.supports_extension(khr::maintenance1::NAME)
             && phd_capabilities.device_api_version < vk::API_VERSION_1_1
         {
-            log::warn!(
+            log::debug!(
                 "VK_KHR_maintenance1 is not supported, hiding adapter: {}",
                 info.name
             );
@@ -1824,7 +1848,7 @@ impl super::Instance {
         };
         let queue_flags = queue_families.first()?.queue_flags;
         if !queue_flags.contains(vk::QueueFlags::GRAPHICS) {
-            log::warn!("The first queue only exposes {queue_flags:?}");
+            log::debug!("The first queue only exposes {queue_flags:?}");
             return None;
         }
 
@@ -1894,6 +1918,10 @@ impl super::Instance {
             shader_int8: phd_features
                 .shader_float16_int8
                 .is_some_and(|features| features.shader_int8 != 0),
+            multiview_instance_index_limit: phd_capabilities
+                .multiview
+                .map(|a| a.max_multiview_instance_index)
+                .unwrap_or(0),
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
@@ -1957,7 +1985,7 @@ impl super::Adapter {
             });
 
         if !unsupported_extensions.is_empty() {
-            log::warn!("Missing extensions: {unsupported_extensions:?}");
+            log::debug!("Missing extensions: {unsupported_extensions:?}");
         }
 
         log::debug!("Supported extensions: {supported_extensions:?}");
@@ -2191,6 +2219,12 @@ impl super::Adapter {
                 // But this requires cloning the `spv::Options` struct, which has heap allocations.
                 true, // could check `super::Workarounds::SEPARATE_ENTRY_POINTS`
             );
+            flags.set(
+                spv::WriterFlags::PRINT_ON_RAY_QUERY_INITIALIZATION_FAIL,
+                self.instance.flags.contains(wgt::InstanceFlags::DEBUG)
+                    && (self.instance.instance_api_version >= vk::API_VERSION_1_3
+                        || enabled_extensions.contains(&khr::shader_non_semantic_info::NAME)),
+            );
             if features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
                 capabilities.push(spv::Capability::RayQueryKHR);
             }
@@ -2249,6 +2283,7 @@ impl super::Adapter {
                     spv::ZeroInitializeWorkgroupMemoryMode::Polyfill
                 },
                 force_loop_bounding: true,
+                ray_query_initialization_tracking: true,
                 use_storage_input_output_16: features.contains(wgt::Features::SHADER_F16)
                     && self.phd_features.supports_storage_input_output_16(),
                 fake_missing_bindings: false,
@@ -2829,7 +2864,7 @@ fn is_intel_igpu_outdated_for_robustness2(
             .unwrap_or_default();
 
     if is_outdated {
-        log::warn!(
+        log::debug!(
             "Disabling robustBufferAccess2 and robustImageAccess2: IntegratedGpu Intel Driver is outdated. Found with version 0x{:X}, less than the known good version 0x{:X} (31.0.101.2115)",
             props.driver_version,
             DRIVER_VERSION_WORKING

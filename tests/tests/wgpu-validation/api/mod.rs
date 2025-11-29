@@ -5,6 +5,7 @@ mod buffer_slice;
 mod command_buffer_actions;
 mod device;
 mod encoding;
+mod error_scopes;
 mod experimental;
 mod external_texture;
 mod instance;

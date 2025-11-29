@@ -51,9 +51,68 @@ pub use instance::*;
 pub use tokens::*;
 pub use transfers::*;
 
+/// Create a Markdown link definition referring to the `wgpu` crate.
+///
+/// This macro should be used inside a `#[doc = ...]` attribute.
+/// The two arguments should be string literals or macros that expand to string literals.
+/// If the module in which the item using this macro is located is not the crate root,
+/// use the `../` syntax.
+///
+/// We cannot simply use rustdoc links to `wgpu` because it is one of our dependents.
+/// This link adapts to work in locally generated documentation (`cargo doc`) by default,
+/// and work with `docs.rs` URL structure when building for `docs.rs`.
+///
+/// Note: This macro cannot be used outside this crate, because `cfg(docsrs)` will not apply.
+#[cfg(not(docsrs))]
+macro_rules! link_to_wgpu_docs {
+    ([$reference:expr]: $url_path:expr) => {
+        concat!("[", $reference, "]: ../wgpu/", $url_path)
+    };
+
+    (../ [$reference:expr]: $url_path:expr) => {
+        concat!("[", $reference, "]: ../../wgpu/", $url_path)
+    };
+}
+#[cfg(docsrs)]
+macro_rules! link_to_wgpu_docs {
+    ($(../)? [$reference:expr]: $url_path:expr) => {
+        concat!(
+            "[",
+            $reference,
+            // URL path will have a base URL of https://docs.rs/
+            "]: /wgpu/",
+            // The version of wgpu-types is not necessarily the same as the version of wgpu
+            // if a patch release of either has been published, so we cannot use the full version
+            // number. docs.rs will interpret this single number as a Cargo-style version
+            // requirement and redirect to the latest compatible version.
+            //
+            // This technique would break if `wgpu` and `wgpu-types` ever switch to having distinct
+            // major version numbering. An alternative would be to hardcode the corresponding `wgpu`
+            // version, but that would give us another thing to forget to update.
+            env!("CARGO_PKG_VERSION_MAJOR"),
+            "/wgpu/",
+            $url_path
+        )
+    };
+}
+
+/// Create a Markdown link definition referring to an item in the `wgpu` crate.
+///
+/// This macro should be used inside a `#[doc = ...]` attribute.
+/// See [`link_to_wgpu_docs`] for more details.
+macro_rules! link_to_wgpu_item {
+    ($kind:ident $name:ident) => {
+        $crate::link_to_wgpu_docs!(
+            [concat!("`", stringify!($name), "`")]: concat!("$kind.", stringify!($name), ".html")
+        )
+    };
+}
+
+pub(crate) use {link_to_wgpu_docs, link_to_wgpu_item};
+
 /// Integral type used for [`Buffer`] offsets and sizes.
 ///
-/// [`Buffer`]: ../wgpu/struct.Buffer.html
+#[doc = link_to_wgpu_item!(struct Buffer)]
 pub type BufferAddress = u64;
 
 /// Integral type used for [`BufferSlice`] sizes.
@@ -61,15 +120,15 @@ pub type BufferAddress = u64;
 /// Note that while this type is non-zero, a [`Buffer`] *per se* can have a size of zero,
 /// but no slice or mapping can be created from it.
 ///
-/// [`Buffer`]: ../wgpu/struct.Buffer.html
-/// [`BufferSlice`]: ../wgpu/struct.BufferSlice.html
+#[doc = link_to_wgpu_item!(struct Buffer)]
+#[doc = link_to_wgpu_item!(struct BufferSlice)]
 pub type BufferSize = core::num::NonZeroU64;
 
 /// Integral type used for binding locations in shaders.
 ///
 /// Used in [`VertexAttribute`]s and errors.
 ///
-/// [`VertexAttribute`]: ../wgpu/struct.VertexAttribute.html
+#[doc = link_to_wgpu_item!(struct VertexAttribute)]
 pub type ShaderLocation = u32;
 
 /// Integral type used for
@@ -82,14 +141,14 @@ pub type DynamicOffset = u32;
 /// and [`copy_texture_to_buffer()`].
 ///
 /// [`bytes_per_row`]: TexelCopyBufferLayout::bytes_per_row
-/// [`copy_buffer_to_texture()`]: ../wgpu/struct.Queue.html#method.copy_buffer_to_texture
-/// [`copy_texture_to_buffer()`]: ../wgpu/struct.Queue.html#method.copy_texture_to_buffer
-/// [Qwt]: ../wgpu/struct.Queue.html#method.write_texture
+#[doc = link_to_wgpu_docs!(["`copy_buffer_to_texture()`"]: "struct.Queue.html#method.copy_buffer_to_texture")]
+#[doc = link_to_wgpu_docs!(["`copy_texture_to_buffer()`"]: "struct.Queue.html#method.copy_texture_to_buffer")]
+#[doc = link_to_wgpu_docs!(["Qwt"]: "struct.Queue.html#method.write_texture")]
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 
 /// An [offset into the query resolve buffer] has to be aligned to this.
 ///
-/// [offset into the query resolve buffer]: ../wgpu/struct.CommandEncoder.html#method.resolve_query_set
+#[doc = link_to_wgpu_docs!(["offset into the query resolve buffer"]: "struct.CommandEncoder.html#method.resolve_query_set")]
 pub const QUERY_RESOLVE_BUFFER_ALIGNMENT: BufferAddress = 256;
 
 /// Buffer to buffer copy as well as buffer clear offsets and sizes must be aligned to this number.
@@ -99,25 +158,25 @@ pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;
 ///
 /// The range passed to [`map_async()`] or [`get_mapped_range()`] must be at least this aligned.
 ///
-/// [`map_async()`]: ../wgpu/struct.Buffer.html#method.map_async
-/// [`get_mapped_range()`]: ../wgpu/struct.Buffer.html#method.get_mapped_range
+#[doc = link_to_wgpu_docs!(["`map_async()`"]: "struct.Buffer.html#method.map_async")]
+#[doc = link_to_wgpu_docs!(["`get_mapped_range()`"]: "struct.Buffer.html#method.get_mapped_range")]
 pub const MAP_ALIGNMENT: BufferAddress = 8;
 
 /// [Vertex buffer offsets] and [strides] have to be a multiple of this number.
 ///
-/// [Vertex buffer offsets]: ../wgpu/util/trait.RenderEncoder.html#tymethod.set_vertex_buffer
-/// [strides]: ../wgpu/struct.VertexBufferLayout.html#structfield.array_stride
+#[doc = link_to_wgpu_docs!(["Vertex buffer offsets"]: "util/trait.RenderEncoder.html#tymethod.set_vertex_buffer")]
+#[doc = link_to_wgpu_docs!(["strides"]: "struct.VertexBufferLayout.html#structfield.array_stride")]
 pub const VERTEX_ALIGNMENT: BufferAddress = 4;
 
 /// [Vertex buffer strides] have to be a multiple of this number.
 ///
-/// [Vertex buffer strides]: ../wgpu/struct.VertexBufferLayout.html#structfield.array_stride
+#[doc = link_to_wgpu_docs!(["Vertex buffer strides"]: "struct.VertexBufferLayout.html#structfield.array_stride")]
 #[deprecated(note = "Use `VERTEX_ALIGNMENT` instead", since = "27.0.0")]
 pub const VERTEX_STRIDE_ALIGNMENT: BufferAddress = 4;
 
 /// Ranges of [writes to push constant storage] must be at least this aligned.
 ///
-/// [writes to push constant storage]: ../wgpu/struct.RenderPass.html#method.set_push_constants
+#[doc = link_to_wgpu_docs!(["writes to push constant storage"]: "struct.RenderPass.html#method.set_push_constants")]
 pub const PUSH_CONSTANT_ALIGNMENT: u32 = 4;
 
 /// Maximum queries in a [`QuerySetDescriptor`].
@@ -125,7 +184,7 @@ pub const QUERY_SET_MAX_QUERIES: u32 = 4096;
 
 /// Size in bytes of a single piece of [query] data.
 ///
-/// [query]: ../wgpu/struct.QuerySet.html
+#[doc = link_to_wgpu_docs!(["query"]: "struct.QuerySet.html")]
 pub const QUERY_SIZE: u32 = 8;
 
 /// Backends supported by wgpu.
@@ -385,7 +444,7 @@ impl<S> Default for RequestAdapterOptions<S> {
 ///
 /// This type is not part of the WebGPU standard, where `requestAdapter()` would simply return null.
 ///
-/// [`Instance::request_adapter()`]: ../wgpu/struct.Instance.html#method.request_adapter
+#[doc = link_to_wgpu_docs!(["`Instance::request_adapter()`"]: "struct.Instance.html#method.request_adapter")]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
@@ -519,12 +578,14 @@ macro_rules! with_limits {
 
         $macro_name!(max_task_workgroup_total_count, Ordering::Less);
         $macro_name!(max_task_workgroups_per_dimension, Ordering::Less);
-        $macro_name!(max_mesh_multiview_count, Ordering::Less);
+        $macro_name!(max_mesh_multiview_view_count, Ordering::Less);
         $macro_name!(max_mesh_output_layers, Ordering::Less);
 
         $macro_name!(max_blas_primitive_count, Ordering::Less);
         $macro_name!(max_blas_geometry_count, Ordering::Less);
         $macro_name!(max_tlas_instance_count, Ordering::Less);
+
+        $macro_name!(max_multiview_view_count, Ordering::Less);
     };
 }
 
@@ -683,6 +744,11 @@ pub struct Limits {
     pub max_push_constant_size: u32,
     /// Maximum number of live non-sampler bindings.
     ///
+    /// <div class="warning">
+    /// The default value is **1_000_000**, On systems with integrated GPUs (iGPUs)—particularly on Windows using the D3D12
+    /// backend—this can lead to significant system RAM consumption since iGPUs share system memory directly with the CPU.
+    /// </div>
+    ///
     /// This limit only affects the d3d12 backend. Using a large number will allow the device
     /// to create many bind groups at the cost of a large up-front allocation at device creation.
     pub max_non_sampler_bindings: u32,
@@ -694,8 +760,8 @@ pub struct Limits {
     pub max_task_workgroups_per_dimension: u32,
     /// The maximum number of layers that can be output from a mesh shader
     pub max_mesh_output_layers: u32,
-    /// The maximum number of views that can be used by a mesh shader
-    pub max_mesh_multiview_count: u32,
+    /// The maximum number of views that can be used by a mesh shader in multiview rendering
+    pub max_mesh_multiview_view_count: u32,
 
     /// The maximum number of primitive (ex: triangles, aabbs) a BLAS is allowed to have. Requesting
     /// more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_QUERY`]
@@ -713,6 +779,9 @@ pub struct Limits {
     /// Requesting more than 0 during device creation only makes sense if [`Features::EXPERIMENTAL_RAY_QUERY`]
     /// is enabled.
     pub max_acceleration_structures_per_shader_stage: u32,
+
+    /// The maximum number of views that can be used in multiview rendering
+    pub max_multiview_view_count: u32,
 }
 
 impl Default for Limits {
@@ -767,12 +836,13 @@ impl Limits {
     ///     max_non_sampler_bindings: 1_000_000,
     ///     max_task_workgroup_total_count: 0,
     ///     max_task_workgroups_per_dimension: 0,
-    ///     max_mesh_multiview_count: 0,
+    ///     max_mesh_multiview_view_count: 0,
     ///     max_mesh_output_layers: 0,
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
     ///     max_tlas_instance_count: 0,
     ///     max_acceleration_structures_per_shader_stage: 0,
+    ///     max_multiview_view_count: 0,
     /// });
     /// ```
     ///
@@ -820,13 +890,15 @@ impl Limits {
 
             max_task_workgroup_total_count: 0,
             max_task_workgroups_per_dimension: 0,
-            max_mesh_multiview_count: 0,
+            max_mesh_multiview_view_count: 0,
             max_mesh_output_layers: 0,
 
             max_blas_primitive_count: 0,
             max_blas_geometry_count: 0,
             max_tlas_instance_count: 0,
             max_acceleration_structures_per_shader_stage: 0,
+
+            max_multiview_view_count: 0,
         }
     }
 
@@ -875,13 +947,15 @@ impl Limits {
     ///
     ///     max_task_workgroup_total_count: 0,
     ///     max_task_workgroups_per_dimension: 0,
-    ///     max_mesh_multiview_count: 0,
+    ///     max_mesh_multiview_view_count: 0,
     ///     max_mesh_output_layers: 0,
     ///
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
     ///     max_tlas_instance_count: 0,
     ///     max_acceleration_structures_per_shader_stage: 0,
+    ///
+    ///     max_multiview_view_count: 0,
     /// });
     /// ```
     #[must_use]
@@ -898,7 +972,7 @@ impl Limits {
 
             max_task_workgroups_per_dimension: 0,
             max_task_workgroup_total_count: 0,
-            max_mesh_multiview_count: 0,
+            max_mesh_multiview_view_count: 0,
             max_mesh_output_layers: 0,
             ..Self::defaults()
         }
@@ -950,13 +1024,15 @@ impl Limits {
     ///
     ///     max_task_workgroup_total_count: 0,
     ///     max_task_workgroups_per_dimension: 0,
-    ///     max_mesh_multiview_count: 0,
+    ///     max_mesh_multiview_view_count: 0,
     ///     max_mesh_output_layers: 0,
     ///
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
     ///     max_tlas_instance_count: 0,
     ///     max_acceleration_structures_per_shader_stage: 0,
+    ///
+    ///     max_multiview_view_count: 0,
     /// });
     /// ```
     #[must_use]
@@ -1045,14 +1121,12 @@ impl Limits {
     #[must_use]
     pub const fn using_recommended_minimum_mesh_shader_values(self) -> Self {
         Self {
-            // Literally just made this up as 256^2 or 2^16.
-            // My GPU supports 2^22, and compute shaders don't have this kind of limit.
-            // This very likely is never a real limiter
-            max_task_workgroup_total_count: 65536,
-            max_task_workgroups_per_dimension: 256,
+            // This is a common limit for apple devices. It's not immediately clear why.
+            max_task_workgroup_total_count: 1024,
+            max_task_workgroups_per_dimension: 1024,
             // llvmpipe reports 0 multiview count, which just means no multiview is allowed
-            max_mesh_multiview_count: 0,
-            // llvmpipe once again requires this to be 8. An RTX 3060 supports well over 1024.
+            max_mesh_multiview_view_count: 0,
+            // llvmpipe once again requires this to be <=8. An RTX 3060 supports well over 1024.
             max_mesh_output_layers: 8,
             ..self
         }
@@ -1819,7 +1893,7 @@ pub struct ColorTargetState {
     /// The [`TextureFormat`] of the image that this pipeline will render to. Must match the format
     /// of the corresponding color attachment in [`CommandEncoder::begin_render_pass`][CEbrp]
     ///
-    /// [CEbrp]: ../wgpu/struct.CommandEncoder.html#method.begin_render_pass
+    #[doc = link_to_wgpu_docs!(["CEbrp"]: "struct.CommandEncoder.html#method.begin_render_pass")]
     pub format: TextureFormat,
     /// The blending that is used for this pipeline.
     #[cfg_attr(feature = "serde", serde(default))]
@@ -2869,6 +2943,20 @@ impl TextureFormat {
         }
     }
 
+    /// Returns the subsampling factor for the indicated plane of a multi-planar format.
+    #[must_use]
+    pub fn subsampling_factors(&self, plane: Option<u32>) -> (u32, u32) {
+        match *self {
+            Self::NV12 | Self::P010 => match plane {
+                Some(0) => (1, 1),
+                Some(1) => (2, 2),
+                Some(plane) => unreachable!("plane {plane} is not valid for {self:?}"),
+                None => unreachable!("the plane must be specified for multi-planar formats"),
+            },
+            _ => (1, 1),
+        }
+    }
+
     /// Returns `true` if the format has a color aspect
     #[must_use]
     pub fn has_color_aspect(&self) -> bool {
@@ -2898,6 +2986,10 @@ impl TextureFormat {
     }
 
     /// Returns the size multiple requirement for a texture using this format.
+    ///
+    /// `create_texture` currently enforces a stricter restriction than this for
+    /// mipmapped multi-planar formats.
+    /// TODO(<https://github.com/gfx-rs/wgpu/issues/8491>): Remove this note.
     #[must_use]
     pub fn size_multiple_requirement(&self) -> (u32, u32) {
         match *self {
@@ -3865,8 +3957,7 @@ impl TextureFormat {
                 // Two chroma u16s and one luma u16 per block
                 Self::P010 => 6,
                 f => {
-                    log::warn!("Memory footprint for format {f:?} is not implemented");
-                    0
+                    unimplemented!("Memory footprint for format {f:?} is not implemented");
                 }
             },
         };
@@ -4835,7 +4926,7 @@ pub struct DepthStencilState {
     /// Format of the depth/stencil buffer, must be special depth format. Must match the format
     /// of the depth/stencil attachment in [`CommandEncoder::begin_render_pass`][CEbrp].
     ///
-    /// [CEbrp]: ../wgpu/struct.CommandEncoder.html#method.begin_render_pass
+    #[doc = link_to_wgpu_docs!(["CEbrp"]: "struct.CommandEncoder.html#method.begin_render_pass")]
     pub format: TextureFormat,
     /// If disabled, depth will not be written to.
     pub depth_write_enabled: bool,
@@ -4918,7 +5009,7 @@ pub enum StencilOperation {
     /// Replace stencil value with value provided in most recent call to
     /// [`RenderPass::set_stencil_reference`][RPssr].
     ///
-    /// [RPssr]: ../wgpu/struct.RenderPass.html#method.set_stencil_reference
+    #[doc = link_to_wgpu_docs!(["RPssr"]: "struct.RenderPass.html#method.set_stencil_reference")]
     Replace = 2,
     /// Bitwise inverts stencil value.
     Invert = 3,
@@ -5079,10 +5170,10 @@ impl CompareFunction {
 /// Corresponds to [WebGPU `GPUVertexStepMode`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuvertexstepmode).
 ///
-/// [`RenderPass::draw`]: ../wgpu/struct.RenderPass.html#method.draw
-/// [`VertexBufferLayout`]: ../wgpu/struct.VertexBufferLayout.html
-/// [`step_mode`]: ../wgpu/struct.VertexBufferLayout.html#structfield.step_mode
-/// [`attributes`]: ../wgpu/struct.VertexBufferLayout.html#structfield.attributes
+#[doc = link_to_wgpu_docs!(["`RenderPass::draw`"]: "struct.RenderPass.html#method.draw")]
+#[doc = link_to_wgpu_item!(struct VertexBufferLayout)]
+#[doc = link_to_wgpu_docs!(["`step_mode`"]: "struct.VertexBufferLayout.html#structfield.step_mode")]
+#[doc = link_to_wgpu_docs!(["`attributes`"]: "struct.VertexBufferLayout.html#structfield.attributes")]
 /// [`Vertex`]: VertexStepMode::Vertex
 /// [`Instance`]: VertexStepMode::Instance
 #[repr(C)]
@@ -5107,8 +5198,8 @@ pub enum VertexStepMode {
 /// Corresponds to [WebGPU `GPUVertexAttribute`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuvertexattribute).
 ///
-/// [`vertex_attr_array!`]: ../wgpu/macro.vertex_attr_array.html
-/// [`VertexBufferLayout`]: ../wgpu/struct.VertexBufferLayout.html
+#[doc = link_to_wgpu_docs!(["`vertex_attr_array!`"]: "macro.vertex_attr_array.html")]
+#[doc = link_to_wgpu_item!(struct VertexBufferLayout)]
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -5357,6 +5448,8 @@ bitflags::bitflags! {
 
 bitflags::bitflags! {
     /// Similar to `BufferUsages`, but used only for `CommandEncoder::transition_resources`.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct BufferUses: u16 {
         /// The argument to a read-only mapping.
@@ -5408,6 +5501,7 @@ bitflags::bitflags! {
 
 /// A buffer transition for use with `CommandEncoder::transition_resources`.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BufferTransition<T> {
     /// The buffer to transition.
     pub buffer: T,
@@ -5492,8 +5586,8 @@ impl<T> Default for CommandEncoderDescriptor<Option<T>> {
 /// You can use one of the `Auto*` modes, [`Fifo`](Self::Fifo),
 /// or choose one of the supported modes from [`SurfaceCapabilities::present_modes`].
 ///
-/// [presented]: ../wgpu/struct.SurfaceTexture.html#method.present
-/// [`SurfaceTexture::present()`]: ../wgpu/struct.SurfaceTexture.html#method.present
+#[doc = link_to_wgpu_docs!(["presented"]: "struct.SurfaceTexture.html#method.present")]
+#[doc = link_to_wgpu_docs!(["`SurfaceTexture::present()`"]: "struct.SurfaceTexture.html#method.present")]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -5531,7 +5625,7 @@ pub enum PresentMode {
     /// This is the [default](Self::default) value for `PresentMode`.
     /// If you don't know what mode to choose, choose this mode.
     ///
-    /// [`Surface::get_current_texture()`]: ../wgpu/struct.Surface.html#method.get_current_texture
+    #[doc = link_to_wgpu_docs!(["`Surface::get_current_texture()`"]: "struct.Surface.html#method.get_current_texture")]
     #[default]
     Fifo = 2,
 
@@ -5550,7 +5644,7 @@ pub enum PresentMode {
     /// * **Supported on**: AMD on Vulkan.
     /// * **Also known as**: "Adaptive Vsync"
     ///
-    /// [`Surface::get_current_texture()`]: ../wgpu/struct.Surface.html#method.get_current_texture
+    #[doc = link_to_wgpu_docs!(["`Surface::get_current_texture()`"]: "struct.Surface.html#method.get_current_texture")]
     FifoRelaxed = 3,
 
     /// Presentation frames are not queued at all. The moment a present command
@@ -5669,6 +5763,8 @@ bitflags::bitflags! {
 bitflags::bitflags! {
     /// Similar to `TextureUsages`, but used only for `CommandEncoder::transition_resources`.
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
     pub struct TextureUses: u16 {
         /// The texture is in unknown state.
         const UNINITIALIZED = 1 << 0;
@@ -5704,10 +5800,10 @@ bitflags::bitflags! {
         const TRANSIENT = 1 << 12;
         /// The combination of states that a texture may be in _at the same time_.
         /// cbindgen:ignore
-        const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits();
+        const INCLUSIVE = Self::COPY_SRC.bits() | Self::RESOURCE.bits() | Self::DEPTH_STENCIL_READ.bits() | Self::STORAGE_READ_ONLY.bits();
         /// The combination of states that a texture must exclusively be in.
         /// cbindgen:ignore
-        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_READ_ONLY.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
+        const EXCLUSIVE = Self::COPY_DST.bits() | Self::COLOR_TARGET.bits() | Self::DEPTH_STENCIL_WRITE.bits() | Self::STORAGE_WRITE_ONLY.bits() | Self::STORAGE_READ_WRITE.bits() | Self::STORAGE_ATOMIC.bits() | Self::PRESENT.bits();
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is ordered, then if the texture state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
@@ -5724,6 +5820,7 @@ bitflags::bitflags! {
 
 /// A texture transition for use with `CommandEncoder::transition_resources`.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TextureTransition<T> {
     /// The texture to transition.
     pub texture: T,
@@ -5737,6 +5834,7 @@ pub struct TextureTransition<T> {
 
 /// Specifies a particular set of subresources in a texture.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct TextureSelector {
     /// Range of mips to use.
     pub mips: Range<u32>,
@@ -5778,7 +5876,7 @@ impl Default for SurfaceCapabilities {
 
 /// Configures a [`Surface`] for presentation.
 ///
-/// [`Surface`]: ../wgpu/struct.Surface.html
+#[doc = link_to_wgpu_item!(struct Surface)]
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -5807,25 +5905,40 @@ pub struct SurfaceConfiguration<V> {
     /// `AutoNoVsync` will gracefully do a designed sets of fallbacks if their primary modes are
     /// unsupported.
     pub present_mode: PresentMode,
-    /// Desired maximum number of frames that the presentation engine should queue in advance.
+    /// Desired maximum number of monitor refreshes between a [`Surface::get_current_texture`] call and the
+    /// texture being presented to the screen. This is sometimes called "Frames in Flight".
     ///
-    /// This is a hint to the backend implementation and will always be clamped to the supported range.
-    /// As a consequence, either the maximum frame latency is set directly on the swap chain,
-    /// or waits on present are scheduled to avoid exceeding the maximum frame latency if supported,
-    /// or the swap chain size is set to (max-latency + 1).
+    /// Defaults to `2` when created via [`Surface::get_default_config`] as this is a reasonable default.
     ///
-    /// Defaults to 2 when created via `Surface::get_default_config`.
+    /// This is ultimately a hint to the backend implementation and will always be clamped
+    /// to the supported range.
     ///
-    /// Typical values range from 3 to 1, but higher values are possible:
-    /// * Choose 2 or higher for potentially smoother frame display, as it allows to be at least one frame
-    ///   to be queued up. This typically avoids starving the GPU's work queue.
-    ///   Higher values are useful for achieving a constant flow of frames to the display under varying load.
-    /// * Choose 1 for low latency from frame recording to frame display.
-    ///   ⚠️ If the backend does not support waiting on present, this will cause the CPU to wait for the GPU
-    ///   to finish all work related to the previous frame when calling `Surface::get_current_texture`,
-    ///   causing CPU-GPU serialization (i.e. when `Surface::get_current_texture` returns, the GPU might be idle).
-    ///   It is currently not possible to query this. See <https://github.com/gfx-rs/wgpu/issues/2869>.
-    /// * A value of 0 is generally not supported and always clamped to a higher value.
+    /// Typical values are `1` to `3`, but higher values are valid, though likely to be clamped.
+    /// * Choose `1` to minimize latency above all else. This only gives a single monitor refresh for all of
+    ///   the CPU and GPU work to complete. ⚠️ As a result of these short swapchains, the CPU and GPU
+    ///   cannot run in parallel, prioritizing latency over throughput. For applications like GUIs doing
+    ///   a small amount of GPU work each frame that need low latency, this is a reasonable choice.
+    /// * Choose `2` for a balance between latency and throughput. The CPU and GPU both can each use
+    ///   a full monitor refresh to do their computations. This is a reasonable default for most applications.
+    /// * Choose `3` or higher to maximize throughput, sacrificing latency when the the CPU and GPU
+    ///   are using less than a full monitor refresh each. For applications that use CPU-side pipelining
+    ///   of frames this may be a reasonable choice. ⚠️ On 60hz displays the latency can be very noticeable.
+    ///
+    /// This maps to the backend in the following ways:
+    /// - Vulkan: Number of frames in the swapchain is `desired_maximum_frame_latency + 1`,
+    ///   clamped to the supported range.
+    /// - DX12: Calls [`IDXGISwapChain2::SetMaximumFrameLatency(desired_maximum_frame_latency)`][SMFL].
+    /// - Metal: Sets the `maximumDrawableCount` of the underlying `CAMetalLayer` to
+    ///   `desired_maximum_frame_latency + 1`, clamped to the supported range.
+    /// - OpenGL: Ignored
+    ///
+    /// It also has various subtle interactions with various present modes and APIs.
+    /// - DX12 + Mailbox: Limits framerate to `desired_maximum_frame_latency * Monitor Hz` fps.
+    /// - Vulkan/Metal + Mailbox: If this is set to `2`, limits framerate to `2 * Monitor Hz` fps. `3` or higher is unlimited.
+    ///
+    #[doc = link_to_wgpu_docs!(["`Surface::get_current_texture`"]: "struct.Surface.html#method.get_current_texture")]
+    #[doc = link_to_wgpu_docs!(["`Surface::get_default_config`"]: "struct.Surface.html#method.get_default_config")]
+    /// [SMFL]: https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_3/nf-dxgi1_3-idxgiswapchain2-setmaximumframelatency
     pub desired_maximum_frame_latency: u32,
     /// Specifies how the alpha channel of the textures should be handled during compositing.
     pub alpha_mode: CompositeAlphaMode,
@@ -6152,9 +6265,17 @@ impl Extent3d {
     }
 
     /// Calculates the extent at a given mip level.
-    /// Does *not* account for memory size being a multiple of block size.
+    ///
+    /// This is a low-level helper for internal use.
+    ///
+    /// It does *not* account for memory size being a multiple of block size.
+    ///
+    /// TODO(<https://github.com/gfx-rs/wgpu/issues/8491>): It also does not
+    /// consider whether an even dimension is required due to chroma
+    /// subsampling, but it probably should.
     ///
     /// <https://gpuweb.github.io/gpuweb/#logical-miplevel-specific-texture-extent>
+    #[doc(hidden)]
     #[must_use]
     pub fn mip_level_size(&self, level: u32, dim: TextureDimension) -> Self {
         Self {
@@ -6280,8 +6401,8 @@ fn test_max_mips() {
 /// Corresponds to [WebGPU `GPUTextureViewDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputextureviewdescriptor).
 ///
-/// [`TextureView`]: ../wgpu/struct.TextureView.html
-/// [`Texture::create_view()`]: ../wgpu/struct.Texture.html#method.create_view
+#[doc = link_to_wgpu_item!(struct TextureView)]
+#[doc = link_to_wgpu_docs!(["`Texture::create_view()`"]: "struct.Texture.html#method.create_view")]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TextureViewDescriptor<L> {
     /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
@@ -6425,20 +6546,26 @@ impl<L, V> TextureDescriptor<L, V> {
 
     /// Computes the render extent of this texture.
     ///
+    /// This is a low-level helper exported for use by wgpu-core.
+    ///
     /// <https://gpuweb.github.io/gpuweb/#abstract-opdef-compute-render-extent>
+    ///
+    /// # Panics
+    ///
+    /// If the mip level is out of range.
+    #[doc(hidden)]
     #[must_use]
     pub fn compute_render_extent(&self, mip_level: u32, plane: Option<u32>) -> Extent3d {
-        let width = self.size.width >> mip_level;
-        let height = self.size.height >> mip_level;
+        let Extent3d {
+            width,
+            height,
+            depth_or_array_layers: _,
+        } = self.mip_level_size(mip_level).expect("invalid mip level");
 
-        let (width, height) = match (self.format, plane) {
-            (TextureFormat::NV12 | TextureFormat::P010, Some(0)) => (width, height),
-            (TextureFormat::NV12 | TextureFormat::P010, Some(1)) => (width / 2, height / 2),
-            _ => {
-                debug_assert!(!self.format.is_multi_planar_format());
-                (width, height)
-            }
-        };
+        let (w_subsampling, h_subsampling) = self.format.subsampling_factors(plane);
+
+        let width = width / w_subsampling;
+        let height = height / h_subsampling;
 
         Extent3d {
             width,
@@ -6683,7 +6810,7 @@ impl<L: Default> Default for SamplerDescriptor<L> {
 /// Corresponds to [WebGPU `GPUTextureAspect`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gputextureaspect).
 ///
-/// [`Texture`]: ../wgpu/struct.Texture.html
+#[doc = link_to_wgpu_item!(struct Texture)]
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Default, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -6826,7 +6953,7 @@ pub struct RenderBundleDepthStencil {
     /// This must match the [`RenderPassDepthStencilAttachment::depth_ops`] of the renderpass this render bundle is executed in.
     /// If `depth_ops` is `Some(..)` this must be false. If it is `None` this must be true.
     ///
-    /// [`RenderPassDepthStencilAttachment::depth_ops`]: ../wgpu/struct.RenderPassDepthStencilAttachment.html#structfield.depth_ops
+    #[doc = link_to_wgpu_docs!(["`RenderPassDepthStencilAttachment::depth_ops`"]: "struct.RenderPassDepthStencilAttachment.html#structfield.depth_ops")]
     pub depth_read_only: bool,
 
     /// If the stencil aspect of the depth stencil attachment is going to be written to.
@@ -6834,7 +6961,7 @@ pub struct RenderBundleDepthStencil {
     /// This must match the [`RenderPassDepthStencilAttachment::stencil_ops`] of the renderpass this render bundle is executed in.
     /// If `depth_ops` is `Some(..)` this must be false. If it is `None` this must be true.
     ///
-    /// [`RenderPassDepthStencilAttachment::stencil_ops`]: ../wgpu/struct.RenderPassDepthStencilAttachment.html#structfield.stencil_ops
+    #[doc = link_to_wgpu_docs!(["`RenderPassDepthStencilAttachment::stencil_ops`"]: "struct.RenderPassDepthStencilAttachment.html#structfield.stencil_ops")]
     pub stencil_read_only: bool,
 }
 
@@ -6900,9 +7027,9 @@ pub struct TexelCopyBufferLayout {
     ///
     /// Must be a multiple of the texture block size. For non-compressed textures, this is 1.
     ///
-    /// [CEcbtt]: ../wgpu/struct.CommandEncoder.html#method.copy_buffer_to_texture
-    /// [CEcttb]: ../wgpu/struct.CommandEncoder.html#method.copy_texture_to_buffer
-    /// [Qwt]: ../wgpu/struct.Queue.html#method.write_texture
+    #[doc = link_to_wgpu_docs!(["CEcbtt"]: "struct.CommandEncoder.html#method.copy_buffer_to_texture")]
+    #[doc = link_to_wgpu_docs!(["CEcttb"]: "struct.CommandEncoder.html#method.copy_texture_to_buffer")]
+    #[doc = link_to_wgpu_docs!(["Qwt"]: "struct.Queue.html#method.write_texture")]
     pub bytes_per_row: Option<u32>,
     /// "Rows" that make up a single "image".
     ///
@@ -7163,8 +7290,8 @@ pub enum SamplerBindingType {
 /// Corresponds to WebGPU's mutually exclusive fields within [`GPUBindGroupLayoutEntry`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpubindgrouplayoutentry).
 ///
-/// [`BindingResource`]: ../wgpu/enum.BindingResource.html
-/// [`BindGroup`]: ../wgpu/struct.BindGroup.html
+#[doc = link_to_wgpu_item!(enum BindingResource)]
+#[doc = link_to_wgpu_item!(struct BindGroup)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BindingType {
@@ -7181,7 +7308,7 @@ pub enum BindingType {
         /// One offset must be passed to [`RenderPass::set_bind_group`][RPsbg]
         /// for each dynamic binding in increasing order of binding number.
         ///
-        /// [RPsbg]: ../wgpu/struct.RenderPass.html#method.set_bind_group
+        #[doc = link_to_wgpu_docs!(["RPsbg"]: "struct.RenderPass.html#method.set_bind_group")]
         #[cfg_attr(feature = "serde", serde(default))]
         has_dynamic_offset: bool,
 
@@ -7204,12 +7331,12 @@ pub enum BindingType {
         /// - Each draw or dispatch command checks that the buffer range at this
         ///   bind point satisfies the [minimum buffer binding size].
         ///
-        /// [`BufferBinding`]: ../wgpu/struct.BufferBinding.html
-        /// [`create_bind_group`]: ../wgpu/struct.Device.html#method.create_bind_group
-        /// [`BindingResource::Buffer`]: ../wgpu/enum.BindingResource.html#variant.Buffer
+        #[doc = link_to_wgpu_item!(struct BufferBinding)]
+        #[doc = link_to_wgpu_docs!(["`create_bind_group`"]: "struct.Device.html#method.create_bind_group")]
+        #[doc = link_to_wgpu_docs!(["`BindingResource::Buffer`"]: "enum.BindingResource.html#variant.Buffer")]
         /// [minimum buffer binding size]: https://www.w3.org/TR/webgpu/#minimum-buffer-binding-size
-        /// [`create_render_pipeline`]: ../wgpu/struct.Device.html#method.create_render_pipeline
-        /// [`create_compute_pipeline`]: ../wgpu/struct.Device.html#method.create_compute_pipeline
+        #[doc = link_to_wgpu_docs!(["`create_render_pipeline`"]: "struct.Device.html#method.create_render_pipeline")]
+        #[doc = link_to_wgpu_docs!(["`create_compute_pipeline`"]: "struct.Device.html#method.create_compute_pipeline")]
         #[cfg_attr(feature = "serde", serde(default))]
         min_binding_size: Option<BufferSize>,
     },
@@ -7592,7 +7719,7 @@ impl<T> CopyExternalImageDestInfo<T> {
 pub struct ImageSubresourceRange {
     /// Aspect of the texture. Color textures must be [`TextureAspect::All`][TAA].
     ///
-    /// [TAA]: ../wgpu/enum.TextureAspect.html#variant.All
+    #[doc = link_to_wgpu_docs!(["TAA"]: "enum.TextureAspect.html#variant.All")]
     pub aspect: TextureAspect,
     /// Base mip level.
     pub base_mip_level: u32,
@@ -7741,7 +7868,7 @@ impl<L> QuerySetDescriptor<L> {
 /// Corresponds to [WebGPU `GPUQueryType`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuquerytype).
 ///
-/// [`QuerySet`]: ../wgpu/struct.QuerySet.html
+#[doc = link_to_wgpu_item!(struct QuerySet)]
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum QueryType {
@@ -7764,7 +7891,7 @@ pub enum QueryType {
     ///
     /// [`Features::TIMESTAMP_QUERY`] must be enabled to use this query type.
     ///
-    /// [Qgtp]: ../wgpu/struct.Queue.html#method.get_timestamp_period
+    #[doc = link_to_wgpu_docs!(["Qgtp"]: "struct.Queue.html#method.get_timestamp_period")]
     Timestamp,
 }
 
@@ -7906,6 +8033,20 @@ pub struct ShaderRuntimeChecks {
     /// conclusions about other safety-critical code paths. This option SHOULD NOT be disabled
     /// when running untrusted code.
     pub force_loop_bounding: bool,
+    /// If false, the caller **MUST** ensure that in all passed shaders every function operating
+    /// on a ray query must obey these rules (functions using wgsl naming)
+    /// - `rayQueryInitialize` must have called before `rayQueryProceed`
+    /// - `rayQueryProceed` must have been called, returned true and have hit an AABB before
+    ///   `rayQueryGenerateIntersection` is called
+    /// - `rayQueryProceed` must have been called, returned true and have hit a triangle before
+    ///   `rayQueryConfirmIntersection` is called
+    /// - `rayQueryProceed` must have been called and have returned true before `rayQueryTerminate`,
+    ///   `getCandidateHitVertexPositions` or `rayQueryGetCandidateIntersection` is called
+    /// - `rayQueryProceed` must have been called and have returned false before `rayQueryGetCommittedIntersection`
+    ///   or `getCommittedHitVertexPositions` are called
+    ///
+    /// It is the aim that these cases will not cause UB if this is set to true, but currently this will still happen on DX12 and Metal.
+    pub ray_query_initialization_tracking: bool,
 }
 
 impl ShaderRuntimeChecks {
@@ -7938,6 +8079,7 @@ impl ShaderRuntimeChecks {
         Self {
             bounds_checks: all_checks,
             force_loop_bounding: all_checks,
+            ray_query_initialization_tracking: all_checks,
         }
     }
 }

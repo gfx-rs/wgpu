@@ -190,6 +190,8 @@ bitflags::bitflags! {
         const SHADER_BARYCENTRICS = 1 << 29;
         /// Support for task shaders, mesh shaders, and per-primitive fragment inputs
         const MESH_SHADER = 1 << 30;
+        /// Support for mesh shaders which output points.
+        const MESH_SHADER_POINT_TOPOLOGY = 1 << 31;
     }
 }
 
@@ -206,6 +208,8 @@ impl Capabilities {
             // NOTE: `SHADER_FLOAT16_IN_FLOAT32` _does not_ require the `f16` extension
             Self::SHADER_FLOAT16 => Some(Ext::F16),
             Self::CLIP_DISTANCE => Some(Ext::ClipDistances),
+            Self::RAY_QUERY => Some(Ext::WgpuRayQuery),
+            Self::RAY_HIT_VERTEX_POSITION => Some(Ext::WgpuRayQueryVertexReturn),
             _ => None,
         }
     }

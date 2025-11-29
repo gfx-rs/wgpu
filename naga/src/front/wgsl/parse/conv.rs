@@ -6,7 +6,11 @@ use crate::Span;
 
 use alloc::boxed::Box;
 
-pub fn map_address_space(word: &str, span: Span) -> Result<'_, crate::AddressSpace> {
+pub fn map_address_space<'a>(
+    word: &str,
+    span: Span,
+    enable_extensions: &EnableExtensions,
+) -> Result<'a, crate::AddressSpace> {
     match word {
         "private" => Ok(crate::AddressSpace::Private),
         "workgroup" => Ok(crate::AddressSpace::WorkGroup),
@@ -16,6 +20,16 @@ pub fn map_address_space(word: &str, span: Span) -> Result<'_, crate::AddressSpa
         }),
         "push_constant" => Ok(crate::AddressSpace::PushConstant),
         "function" => Ok(crate::AddressSpace::Function),
+        "task_payload" => {
+            if enable_extensions.contains(ImplementedEnableExtension::WgpuMeshShader) {
+                Ok(crate::AddressSpace::TaskPayload)
+            } else {
+                Err(Box::new(Error::EnableExtensionNotEnabled {
+                    span,
+                    kind: ImplementedEnableExtension::WgpuMeshShader.into(),
+                }))
+            }
+        }
         _ => Err(Box::new(Error::UnknownAddressSpace(span))),
     }
 }
@@ -50,6 +64,17 @@ pub fn map_built_in(
         "subgroup_id" => crate::BuiltIn::SubgroupId,
         "subgroup_size" => crate::BuiltIn::SubgroupSize,
         "subgroup_invocation_id" => crate::BuiltIn::SubgroupInvocationId,
+        // mesh
+        "cull_primitive" => crate::BuiltIn::CullPrimitive,
+        "point_index" => crate::BuiltIn::PointIndex,
+        "line_indices" => crate::BuiltIn::LineIndices,
+        "triangle_indices" => crate::BuiltIn::TriangleIndices,
+        "mesh_task_size" => crate::BuiltIn::MeshTaskSize,
+        // mesh global variable
+        "vertex_count" => crate::BuiltIn::VertexCount,
+        "vertices" => crate::BuiltIn::Vertices,
+        "primitive_count" => crate::BuiltIn::PrimitiveCount,
+        "primitives" => crate::BuiltIn::Primitives,
         _ => return Err(Box::new(Error::UnknownBuiltin(span))),
     };
     match built_in {
@@ -58,6 +83,21 @@ pub fn map_built_in(
                 return Err(Box::new(Error::EnableExtensionNotEnabled {
                     span,
                     kind: ImplementedEnableExtension::ClipDistances.into(),
+                }));
+            }
+        }
+        crate::BuiltIn::CullPrimitive
+        | crate::BuiltIn::PointIndex
+        | crate::BuiltIn::LineIndices
+        | crate::BuiltIn::TriangleIndices
+        | crate::BuiltIn::VertexCount
+        | crate::BuiltIn::Vertices
+        | crate::BuiltIn::PrimitiveCount
+        | crate::BuiltIn::Primitives => {
+            if !enable_extensions.contains(ImplementedEnableExtension::WgpuMeshShader) {
+                return Err(Box::new(Error::EnableExtensionNotEnabled {
+                    span,
+                    kind: ImplementedEnableExtension::WgpuMeshShader.into(),
                 }));
             }
         }

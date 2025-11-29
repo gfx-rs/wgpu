@@ -426,6 +426,13 @@ impl TypeContext for ExpressionContext<'_, '_, '_> {
 }
 
 impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
+    const fn is_runtime(&self) -> bool {
+        match self.expr_type {
+            ExpressionContextType::Runtime(_) => true,
+            ExpressionContextType::Constant(_) | ExpressionContextType::Override => false,
+        }
+    }
+
     #[allow(dead_code)]
     fn as_const(&mut self) -> ExpressionContext<'source, '_, '_> {
         ExpressionContext {
@@ -588,6 +595,16 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         }
     }
 
+    fn get(&self, handle: Handle<crate::Expression>) -> &crate::Expression {
+        match self.expr_type {
+            ExpressionContextType::Runtime(ref ctx)
+            | ExpressionContextType::Constant(Some(ref ctx)) => &ctx.function.expressions[handle],
+            ExpressionContextType::Constant(None) | ExpressionContextType::Override => {
+                &self.module.global_expressions[handle]
+            }
+        }
+    }
+
     fn local(
         &mut self,
         local: &Handle<ast::Local>,
@@ -612,6 +629,52 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                 Err(Box::new(Error::UnexpectedOperationInConstContext(span)))
             }
         }
+    }
+
+    fn with_nested_runtime_expression_ctx<'a, F, T>(
+        &mut self,
+        span: Span,
+        f: F,
+    ) -> Result<'source, (T, crate::Block)>
+    where
+        for<'t> F: FnOnce(&mut ExpressionContext<'source, 't, 't>) -> Result<'source, T>,
+    {
+        let mut block = crate::Block::new();
+        let rctx = match self.expr_type {
+            ExpressionContextType::Runtime(ref mut rctx) => Ok(rctx),
+            ExpressionContextType::Constant(_) | ExpressionContextType::Override => {
+                Err(Error::UnexpectedOperationInConstContext(span))
+            }
+        }?;
+
+        rctx.block
+            .extend(rctx.emitter.finish(&rctx.function.expressions));
+        rctx.emitter.start(&rctx.function.expressions);
+
+        let nested_rctx = LocalExpressionContext {
+            local_table: rctx.local_table,
+            function: rctx.function,
+            block: &mut block,
+            emitter: rctx.emitter,
+            typifier: rctx.typifier,
+            local_expression_kind_tracker: rctx.local_expression_kind_tracker,
+        };
+        let mut nested_ctx = ExpressionContext {
+            expr_type: ExpressionContextType::Runtime(nested_rctx),
+            ast_expressions: self.ast_expressions,
+            types: self.types,
+            globals: self.globals,
+            module: self.module,
+            const_typifier: self.const_typifier,
+            layouter: self.layouter,
+            global_expression_kind_tracker: self.global_expression_kind_tracker,
+        };
+        let ret = f(&mut nested_ctx)?;
+
+        block.extend(rctx.emitter.finish(&rctx.function.expressions));
+        rctx.emitter.start(&rctx.function.expressions);
+
+        Ok((ret, block))
     }
 
     fn gather_component(
@@ -1479,47 +1542,93 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .collect();
 
         if let Some(ref entry) = f.entry_point {
-            let workgroup_size_info = if let Some(workgroup_size) = entry.workgroup_size {
-                // TODO: replace with try_map once stabilized
-                let mut workgroup_size_out = [1; 3];
-                let mut workgroup_size_overrides_out = [None; 3];
-                for (i, size) in workgroup_size.into_iter().enumerate() {
-                    if let Some(size_expr) = size {
-                        match self.const_u32(size_expr, &mut ctx.as_const()) {
-                            Ok(value) => {
-                                workgroup_size_out[i] = value.0;
-                            }
-                            Err(err) => {
-                                if let Error::ConstantEvaluatorError(ref ty, _) = *err {
-                                    match **ty {
-                                        proc::ConstantEvaluatorError::OverrideExpr => {
-                                            workgroup_size_overrides_out[i] =
-                                                Some(self.workgroup_size_override(
-                                                    size_expr,
-                                                    &mut ctx.as_override(),
-                                                )?);
+            let (workgroup_size, workgroup_size_overrides) =
+                if let Some(workgroup_size) = entry.workgroup_size {
+                    // TODO: replace with try_map once stabilized
+                    let mut workgroup_size_out = [1; 3];
+                    let mut workgroup_size_overrides_out = [None; 3];
+                    for (i, size) in workgroup_size.into_iter().enumerate() {
+                        if let Some(size_expr) = size {
+                            match self.const_u32(size_expr, &mut ctx.as_const()) {
+                                Ok(value) => {
+                                    workgroup_size_out[i] = value.0;
+                                }
+                                Err(err) => {
+                                    if let Error::ConstantEvaluatorError(ref ty, _) = *err {
+                                        match **ty {
+                                            proc::ConstantEvaluatorError::OverrideExpr => {
+                                                workgroup_size_overrides_out[i] =
+                                                    Some(self.workgroup_size_override(
+                                                        size_expr,
+                                                        &mut ctx.as_override(),
+                                                    )?);
+                                            }
+                                            _ => {
+                                                return Err(err);
+                                            }
                                         }
-                                        _ => {
-                                            return Err(err);
-                                        }
+                                    } else {
+                                        return Err(err);
                                     }
-                                } else {
-                                    return Err(err);
                                 }
                             }
                         }
                     }
-                }
-                if workgroup_size_overrides_out.iter().all(|x| x.is_none()) {
-                    (workgroup_size_out, None)
+                    if workgroup_size_overrides_out.iter().all(|x| x.is_none()) {
+                        (workgroup_size_out, None)
+                    } else {
+                        (workgroup_size_out, Some(workgroup_size_overrides_out))
+                    }
                 } else {
-                    (workgroup_size_out, Some(workgroup_size_overrides_out))
+                    ([0; 3], None)
+                };
+
+            let mesh_info = if let Some((var_name, var_span)) = entry.mesh_output_variable {
+                let var = match ctx.globals.get(var_name) {
+                    Some(&LoweredGlobalDecl::Var(handle)) => handle,
+                    Some(_) => {
+                        return Err(Box::new(Error::ExpectedGlobalVariable {
+                            name_span: var_span,
+                        }))
+                    }
+                    None => return Err(Box::new(Error::UnknownIdent(var_span, var_name))),
+                };
+
+                let mut info = ctx.module.analyze_mesh_shader_info(var);
+                if let Some(h) = info.1[0] {
+                    info.0.max_vertices_override = Some(
+                        ctx.module
+                            .global_expressions
+                            .append(crate::Expression::Override(h), Span::UNDEFINED),
+                    );
                 }
+                if let Some(h) = info.1[1] {
+                    info.0.max_primitives_override = Some(
+                        ctx.module
+                            .global_expressions
+                            .append(crate::Expression::Override(h), Span::UNDEFINED),
+                    );
+                }
+
+                Some(info.0)
             } else {
-                ([0; 3], None)
+                None
             };
 
-            let (workgroup_size, workgroup_size_overrides) = workgroup_size_info;
+            let task_payload = if let Some((var_name, var_span)) = entry.task_payload {
+                Some(match ctx.globals.get(var_name) {
+                    Some(&LoweredGlobalDecl::Var(handle)) => handle,
+                    Some(_) => {
+                        return Err(Box::new(Error::ExpectedGlobalVariable {
+                            name_span: var_span,
+                        }))
+                    }
+                    None => return Err(Box::new(Error::UnknownIdent(var_span, var_name))),
+                })
+            } else {
+                None
+            };
+
             ctx.module.entry_points.push(ir::EntryPoint {
                 name: f.name.name.to_string(),
                 stage: entry.stage,
@@ -1527,8 +1636,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 workgroup_size,
                 workgroup_size_overrides,
                 function,
-                mesh_info: None,
-                task_payload: None,
+                mesh_info,
+                task_payload,
             });
             Ok(LoweredGlobalDecl::EntryPoint(
                 ctx.module.entry_points.len() - 1,
@@ -2329,6 +2438,130 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         expr.try_map(|handle| ctx.append_expression(handle, span))
     }
 
+    /// Generate IR for the short-circuiting operators `&&` and `||`.
+    ///
+    /// `binary` has already lowered the LHS expression and resolved its type.
+    fn logical(
+        &mut self,
+        op: crate::BinaryOperator,
+        left: Handle<crate::Expression>,
+        right: Handle<ast::Expression<'source>>,
+        span: Span,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+    ) -> Result<'source, Typed<crate::Expression>> {
+        debug_assert!(
+            op == crate::BinaryOperator::LogicalAnd || op == crate::BinaryOperator::LogicalOr
+        );
+
+        if ctx.is_runtime() {
+            // To simulate short-circuiting behavior, we want to generate IR
+            // like the following for `&&`. For `||`, the condition is `!_lhs`
+            // and the else value is `true`.
+            //
+            // var _e0: bool;
+            // if _lhs {
+            //     _e0 = _rhs;
+            // } else {
+            //     _e0 = false;
+            // }
+
+            let (condition, else_val) = if op == crate::BinaryOperator::LogicalAnd {
+                let condition = left;
+                let else_val = ctx.append_expression(
+                    crate::Expression::Literal(crate::Literal::Bool(false)),
+                    span,
+                )?;
+                (condition, else_val)
+            } else {
+                let condition = ctx.append_expression(
+                    crate::Expression::Unary {
+                        op: crate::UnaryOperator::LogicalNot,
+                        expr: left,
+                    },
+                    span,
+                )?;
+                let else_val = ctx.append_expression(
+                    crate::Expression::Literal(crate::Literal::Bool(true)),
+                    span,
+                )?;
+                (condition, else_val)
+            };
+
+            let bool_ty = ctx.ensure_type_exists(crate::TypeInner::Scalar(crate::Scalar::BOOL));
+
+            let rctx = ctx.runtime_expression_ctx(span)?;
+            let result_var = rctx.function.local_variables.append(
+                crate::LocalVariable {
+                    name: None,
+                    ty: bool_ty,
+                    init: None,
+                },
+                span,
+            );
+            let pointer =
+                ctx.append_expression(crate::Expression::LocalVariable(result_var), span)?;
+
+            let (right, mut accept) = ctx.with_nested_runtime_expression_ctx(span, |ctx| {
+                let right = self.expression_for_abstract(right, ctx)?;
+                ctx.grow_types(right)?;
+                Ok(right)
+            })?;
+
+            accept.push(
+                crate::Statement::Store {
+                    pointer,
+                    value: right,
+                },
+                span,
+            );
+
+            let mut reject = crate::Block::with_capacity(1);
+            reject.push(
+                crate::Statement::Store {
+                    pointer,
+                    value: else_val,
+                },
+                span,
+            );
+
+            let rctx = ctx.runtime_expression_ctx(span)?;
+            rctx.block.push(
+                crate::Statement::If {
+                    condition,
+                    accept,
+                    reject,
+                },
+                span,
+            );
+
+            Ok(Typed::Reference(crate::Expression::LocalVariable(
+                result_var,
+            )))
+        } else {
+            let left_expr = ctx.get(left);
+            // Constant or override context in either function or module scope
+            let &crate::Expression::Literal(crate::Literal::Bool(left_val)) = left_expr else {
+                return Err(Box::new(Error::NotBool(span)));
+            };
+
+            if op == crate::BinaryOperator::LogicalAnd && !left_val
+                || op == crate::BinaryOperator::LogicalOr && left_val
+            {
+                // Short-circuit behavior: don't evaluate the RHS. Ideally we
+                // would do _some_ validity checks of the RHS here, but that's
+                // tricky, because the RHS is allowed to have things that aren't
+                // legal in const contexts.
+
+                Ok(Typed::Plain(left_expr.clone()))
+            } else {
+                let right = self.expression_for_abstract(right, ctx)?;
+                ctx.grow_types(right)?;
+
+                Ok(Typed::Plain(crate::Expression::Binary { op, left, right }))
+            }
+        }
+    }
+
     fn binary(
         &mut self,
         op: ir::BinaryOperator,
@@ -2337,57 +2570,74 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         span: Span,
         ctx: &mut ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, Typed<ir::Expression>> {
-        // Load both operands.
-        let mut left = self.expression_for_abstract(left, ctx)?;
-        let mut right = self.expression_for_abstract(right, ctx)?;
+        if op == ir::BinaryOperator::LogicalAnd || op == ir::BinaryOperator::LogicalOr {
+            let left = self.expression_for_abstract(left, ctx)?;
+            ctx.grow_types(left)?;
 
-        // Convert `scalar op vector` to `vector op vector` by introducing
-        // `Splat` expressions.
-        ctx.binary_op_splat(op, &mut left, &mut right)?;
-
-        // Apply automatic conversions.
-        match op {
-            ir::BinaryOperator::ShiftLeft | ir::BinaryOperator::ShiftRight => {
-                // Shift operators require the right operand to be `u32` or
-                // `vecN<u32>`. We can let the validator sort out vector length
-                // issues, but the right operand must be, or convert to, a u32 leaf
-                // scalar.
-                right =
-                    ctx.try_automatic_conversion_for_leaf_scalar(right, ir::Scalar::U32, span)?;
-
-                // Additionally, we must concretize the left operand if the right operand
-                // is not a const-expression.
-                // See https://www.w3.org/TR/WGSL/#overload-resolution-section.
-                //
-                // 2. Eliminate any candidate where one of its subexpressions resolves to
-                // an abstract type after feasible automatic conversions, but another of
-                // the candidate’s subexpressions is not a const-expression.
-                //
-                // We only have to explicitly do so for shifts as their operands may be
-                // of different types - for other binary ops this is achieved by finding
-                // the conversion consensus for both operands.
-                if !ctx.is_const(right) {
-                    left = ctx.concretize(left)?;
-                }
-            }
-
-            // All other operators follow the same pattern: reconcile the
-            // scalar leaf types. If there's no reconciliation possible,
-            // leave the expressions as they are: validation will report the
-            // problem.
-            _ => {
-                ctx.grow_types(left)?;
+            if !matches!(
+                resolve_inner!(ctx, left),
+                &ir::TypeInner::Scalar(ir::Scalar::BOOL)
+            ) {
+                // Pass it through as-is, will fail validation
+                let right = self.expression_for_abstract(right, ctx)?;
                 ctx.grow_types(right)?;
-                if let Ok(consensus_scalar) =
-                    ctx.automatic_conversion_consensus([left, right].iter())
-                {
-                    ctx.convert_to_leaf_scalar(&mut left, consensus_scalar)?;
-                    ctx.convert_to_leaf_scalar(&mut right, consensus_scalar)?;
+                Ok(Typed::Plain(crate::Expression::Binary { op, left, right }))
+            } else {
+                self.logical(op, left, right, span, ctx)
+            }
+        } else {
+            // Load both operands.
+            let mut left = self.expression_for_abstract(left, ctx)?;
+            let mut right = self.expression_for_abstract(right, ctx)?;
+
+            // Convert `scalar op vector` to `vector op vector` by introducing
+            // `Splat` expressions.
+            ctx.binary_op_splat(op, &mut left, &mut right)?;
+
+            // Apply automatic conversions.
+            match op {
+                ir::BinaryOperator::ShiftLeft | ir::BinaryOperator::ShiftRight => {
+                    // Shift operators require the right operand to be `u32` or
+                    // `vecN<u32>`. We can let the validator sort out vector length
+                    // issues, but the right operand must be, or convert to, a u32 leaf
+                    // scalar.
+                    right =
+                        ctx.try_automatic_conversion_for_leaf_scalar(right, ir::Scalar::U32, span)?;
+
+                    // Additionally, we must concretize the left operand if the right operand
+                    // is not a const-expression.
+                    // See https://www.w3.org/TR/WGSL/#overload-resolution-section.
+                    //
+                    // 2. Eliminate any candidate where one of its subexpressions resolves to
+                    // an abstract type after feasible automatic conversions, but another of
+                    // the candidate’s subexpressions is not a const-expression.
+                    //
+                    // We only have to explicitly do so for shifts as their operands may be
+                    // of different types - for other binary ops this is achieved by finding
+                    // the conversion consensus for both operands.
+                    if !ctx.is_const(right) {
+                        left = ctx.concretize(left)?;
+                    }
+                }
+
+                // All other operators follow the same pattern: reconcile the
+                // scalar leaf types. If there's no reconciliation possible,
+                // leave the expressions as they are: validation will report the
+                // problem.
+                _ => {
+                    ctx.grow_types(left)?;
+                    ctx.grow_types(right)?;
+                    if let Ok(consensus_scalar) =
+                        ctx.automatic_conversion_consensus([left, right].iter())
+                    {
+                        ctx.convert_to_leaf_scalar(&mut left, consensus_scalar)?;
+                        ctx.convert_to_leaf_scalar(&mut right, consensus_scalar)?;
+                    }
                 }
             }
-        }
 
-        Ok(Typed::Plain(ir::Expression::Binary { op, left, right }))
+            Ok(Typed::Plain(ir::Expression::Binary { op, left, right }))
+        }
     }
 
     /// Generate Naga IR for call expressions and statements, and type
@@ -4059,6 +4309,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 interpolation,
                 sampling,
                 blend_src,
+                per_primitive,
             }) => {
                 let blend_src = if let Some(blend_src) = blend_src {
                     Some(self.const_u32(blend_src, &mut ctx.as_const())?.0)
@@ -4071,7 +4322,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     interpolation,
                     sampling,
                     blend_src,
-                    per_primitive: false,
+                    per_primitive,
                 };
                 binding.apply_default_interpolation(&ctx.module.types[ty].inner);
                 Some(binding)

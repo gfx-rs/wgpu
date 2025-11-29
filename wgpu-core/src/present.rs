@@ -13,7 +13,7 @@ use alloc::{sync::Arc, vec::Vec};
 use core::mem::ManuallyDrop;
 
 #[cfg(feature = "trace")]
-use crate::device::trace::Action;
+use crate::device::trace::{Action, IntoTrace};
 use crate::{
     conv,
     device::{Device, DeviceError, MissingDownlevelFlags, WaitIdleError},
@@ -363,10 +363,12 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Some(present) = surface.presentation.lock().as_ref() {
             if let Some(ref mut trace) = *present.device.trace.lock() {
-                trace.add(Action::GetSurfaceTexture {
-                    id: fid.id(),
-                    parent_id: surface_id,
-                });
+                if let Some(texture) = present.acquired_texture.as_ref() {
+                    trace.add(Action::GetSurfaceTexture {
+                        id: texture.to_trace(),
+                        parent: surface.to_trace(),
+                    });
+                }
             }
         }
 
@@ -389,7 +391,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Some(present) = surface.presentation.lock().as_ref() {
             if let Some(ref mut trace) = *present.device.trace.lock() {
-                trace.add(Action::Present(surface_id));
+                trace.add(Action::Present(surface.to_trace()));
             }
         }
 
@@ -402,7 +404,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Some(present) = surface.presentation.lock().as_ref() {
             if let Some(ref mut trace) = *present.device.trace.lock() {
-                trace.add(Action::DiscardSurfaceTexture(surface_id));
+                trace.add(Action::DiscardSurfaceTexture(surface.to_trace()));
             }
         }
 

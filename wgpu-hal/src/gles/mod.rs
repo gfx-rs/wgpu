@@ -345,6 +345,7 @@ pub struct Buffer {
     raw: Option<glow::Buffer>,
     target: BindTarget,
     size: wgt::BufferAddress,
+    /// Flags to use within calls to [`Device::map_buffer`](crate::Device::map_buffer).
     map_flags: u32,
     data: Option<Arc<MaybeMutex<Vec<u8>>>>,
     offset_of_current_mapping: Arc<MaybeMutex<wgt::BufferAddress>>,
@@ -1082,7 +1083,7 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
     let log_severity = match severity {
         glow::DEBUG_SEVERITY_HIGH => log::Level::Error,
         glow::DEBUG_SEVERITY_MEDIUM => log::Level::Warn,
-        glow::DEBUG_SEVERITY_LOW => log::Level::Info,
+        glow::DEBUG_SEVERITY_LOW => log::Level::Debug,
         glow::DEBUG_SEVERITY_NOTIFICATION => log::Level::Trace,
         _ => unreachable!(),
     };

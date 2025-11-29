@@ -84,6 +84,7 @@ metal = [
     "dep:objc",
     "dep:parking_lot",
     "dep:profiling",
+    "dep:smallvec",
 ]
 vulkan = [
     "naga/spv-out",
@@ -259,9 +260,10 @@ glutin_wgl_sys = { workspace = true, optional = true }
 
 ### Platform: x86/x86_64 Windows ###
 # This doesn't support aarch64. See https://github.com/gfx-rs/wgpu/issues/6860.
+# This doesn't support x86_64-pc-windows-gnu. See https://github.com/gfx-rs/wgpu/issues/8303
 #
 # ⚠️ Keep in sync with static_dxc cfg in build.rs and cfg_alias in `wgpu` crate ⚠️
-[target.'cfg(all(windows, not(target_arch = "aarch64")))'.dependencies]
+[target.'cfg(all(windows, not(target_arch = "aarch64"), target_env = "msvc"))'.dependencies]
 mach-dxcompiler-rs = { workspace = true, optional = true }
 
 #######################
@@ -326,6 +328,7 @@ cfg_aliases.workspace = true
 [dev-dependencies]
 env_logger.workspace = true
 glam.workspace = true                                            # for ray-traced-triangle example
+log.workspace = true
 naga = { workspace = true, features = ["wgsl-in", "termcolor"] }
 winit.workspace = true                                           # for "halmark" example
 

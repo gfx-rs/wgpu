@@ -55,7 +55,7 @@ jobs:
 
     steps:
       - name: checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install Repo MSRV toolchain
         run: |
@@ -71,7 +71,8 @@ jobs:
       - name: caching
         uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: v2-rust # Increment version for cache busting
+          # The version number can be incremented for cache busting.
+          prefix-key: v2-rust-${{ hashFiles('cts_runner/revision.txt') }}
           cache-directories: cts
 
       # We enable line numbers for panics, but that's it
@@ -92,7 +93,7 @@ jobs:
         if: matrix.os == 'windows-2022'
         uses: ./.github/actions/install-warp
         with:
-          target-dirs: "target/llvm-cov-target/debug"
+          target-dir: "target/llvm-cov-target/debug"
 
       - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'

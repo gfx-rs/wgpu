@@ -441,7 +441,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             _ => false,
                         })
                 {
-                    log::info!(
+                    log::debug!(
                         "Skipping function {:?} (name {:?}) because global {:?} is inaccessible",
                         handle,
                         function.name,
@@ -569,6 +569,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         match *binding {
             Some(crate::Binding::BuiltIn(builtin)) if !is_subgroup_builtin_binding(binding) => {
+                if builtin == crate::BuiltIn::ViewIndex
+                    && self.options.shader_model < ShaderModel::V6_1
+                {
+                    return Err(Error::ShaderModelTooLow(
+                        "used @builtin(view_index) or SV_ViewID".to_string(),
+                        ShaderModel::V6_1,
+                    ));
+                }
                 let builtin_str = builtin.to_hlsl_str()?;
                 write!(self.out, " : {builtin_str}")?;
             }
@@ -937,7 +945,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         if let Some(ref binding) = global.binding {
             if let Err(err) = self.options.resolve_resource_binding(binding) {
-                log::info!(
+                log::debug!(
                     "Skipping global {:?} (name {:?}) for being inaccessible: {}",
                     handle,
                     global.name,
@@ -1179,7 +1187,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         {
             Ok(bindings) => bindings,
             Err(err) => {
-                log::info!(
+                log::debug!(
                     "Skipping global {:?} (name {:?}) for being inaccessible: {}",
                     handle,
                     global.name,
@@ -2600,19 +2608,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     writeln!(self.out, ".Abort();")?;
                 }
             },
-            Statement::MeshFunction(crate::MeshFunction::SetMeshOutputs {
-                vertex_count,
-                primitive_count,
-            }) => {
-                write!(self.out, "{level}SetMeshOutputCounts(")?;
-                self.write_expr(module, vertex_count, func_ctx)?;
-                write!(self.out, ", ")?;
-                self.write_expr(module, primitive_count, func_ctx)?;
-                write!(self.out, ");")?;
-            }
-            Statement::MeshFunction(
-                crate::MeshFunction::SetVertex { .. } | crate::MeshFunction::SetPrimitive { .. },
-            ) => unimplemented!(),
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let name = Baked(result).to_string();

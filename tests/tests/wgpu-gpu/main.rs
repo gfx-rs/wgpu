@@ -36,6 +36,7 @@ mod instance;
 mod life_cycle;
 mod mem_leaks;
 mod mesh_shader;
+mod multiview;
 mod occlusion_query;
 mod oob_indexing;
 mod oom;
@@ -99,6 +100,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     life_cycle::all_tests(&mut tests);
     mem_leaks::all_tests(&mut tests);
     mesh_shader::all_tests(&mut tests);
+    multiview::all_tests(&mut tests);
     occlusion_query::all_tests(&mut tests);
     oob_indexing::all_tests(&mut tests);
     oom::all_tests(&mut tests);

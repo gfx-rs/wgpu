@@ -8,8 +8,10 @@ use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::{convert::Infallible, fmt, str};
 
 use crate::{
-    api_log, binding_model::BindError, command::pass::flush_bindings_helper,
-    resource::RawResourceAccess,
+    api_log,
+    binding_model::BindError,
+    command::pass::flush_bindings_helper,
+    resource::{RawResourceAccess, Trackable},
 };
 use crate::{
     binding_model::{LateMinBufferBindingSizeMismatch, PushConstantUploadError},
@@ -30,7 +32,7 @@ use crate::{
     resource::{
         self, Buffer, InvalidResourceError, Labeled, MissingBufferUsageError, ParentDevice,
     },
-    track::{ResourceUsageCompatibilityError, Tracker, TrackerIndex},
+    track::{ResourceUsageCompatibilityError, Tracker},
     Label,
 };
 use crate::{command::InnerCommandEncoder, resource::DestroyedResourceError};
@@ -306,45 +308,65 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
     ///
     /// # Indirect buffer handling
     ///
-    /// For indirect dispatches without validation, pass both `indirect_buffer`
-    /// and `indirect_buffer_index_if_not_validating`. The indirect buffer will
-    /// be added to the usage scope and the tracker.
+    /// The `indirect_buffer` argument should be passed for any indirect
+    /// dispatch (with or without validation). It will be checked for
+    /// conflicting usages according to WebGPU rules. For the purpose of
+    /// these rules, the fact that we have actually processed the buffer in
+    /// the validation pass is an implementation detail.
     ///
-    /// For indirect dispatches with validation, pass only `indirect_buffer`.
-    /// The indirect buffer will be added to the usage scope to detect usage
-    /// conflicts. The indirect buffer does not need to be added to the tracker;
-    /// the indirect validation code handles transitions manually.
+    /// The `track_indirect_buffer` argument should be set when doing indirect
+    /// dispatch *without* validation. In this case, the indirect buffer will
+    /// be added to the tracker in order to generate any necessary transitions
+    /// for that usage.
+    ///
+    /// When doing indirect dispatch *with* validation, the indirect buffer is
+    /// processed by the validation pass and is not used by the actual dispatch.
+    /// The indirect validation code handles transitions for the validation
+    /// pass.
     fn flush_bindings(
         &mut self,
         indirect_buffer: Option<&Arc<Buffer>>,
-        indirect_buffer_index_if_not_validating: Option<TrackerIndex>,
+        track_indirect_buffer: bool,
     ) -> Result<(), ComputePassErrorInner> {
-        let mut scope = self.pass.base.device.new_usage_scope();
-
         for bind_group in self.pass.binder.list_active() {
-            unsafe { scope.merge_bind_group(&bind_group.used)? };
+            unsafe { self.pass.scope.merge_bind_group(&bind_group.used)? };
         }
 
-        // When indirect validation is turned on, our actual use of the buffer
-        // is `STORAGE_READ_ONLY`, but for usage scope validation, we still want
-        // to treat it as indirect so we can detect the conflicts prescribed by
-        // WebGPU. The usage scope we construct here never leaves this function
-        // (and is not used to populate a tracker), so it's fine to do this.
+        // Add the indirect buffer. Because usage scopes are per-dispatch, this
+        // is the only place where INDIRECT usage could be added, and it is safe
+        // for us to remove it below.
         if let Some(buffer) = indirect_buffer {
-            scope
+            self.pass
+                .scope
                 .buffers
                 .merge_single(buffer, wgt::BufferUses::INDIRECT)?;
         }
 
-        // Add the state of the indirect buffer, if needed (see above).
-        self.intermediate_trackers
-            .buffers
-            .set_multiple(&mut scope.buffers, indirect_buffer_index_if_not_validating);
+        // For compute, usage scopes are associated with each dispatch and not
+        // with the pass as a whole. However, because the cost of creating and
+        // dropping `UsageScope`s is significant (even with the pool), we
+        // add and then remove usage from a single usage scope.
 
-        flush_bindings_helper(&mut self.pass, |bind_group| {
+        for bind_group in self.pass.binder.list_active() {
             self.intermediate_trackers
-                .set_from_bind_group(&mut scope, &bind_group.used)
-        })?;
+                .set_and_remove_from_usage_scope_sparse(&mut self.pass.scope, &bind_group.used);
+        }
+
+        if track_indirect_buffer {
+            self.intermediate_trackers
+                .buffers
+                .set_and_remove_from_usage_scope_sparse(
+                    &mut self.pass.scope.buffers,
+                    indirect_buffer.map(|buf| buf.tracker_index()),
+                );
+        } else if let Some(buffer) = indirect_buffer {
+            self.pass
+                .scope
+                .buffers
+                .remove_usage(buffer, wgt::BufferUses::INDIRECT);
+        }
+
+        flush_bindings_helper(&mut self.pass)?;
 
         CommandEncoder::drain_barriers(
             self.pass.base.raw_encoder,
@@ -456,73 +478,6 @@ impl Global {
         }
     }
 
-    /// Note that this differs from [`Self::compute_pass_end`], it will
-    /// create a new pass, replay the commands and end the pass.
-    ///
-    /// # Panics
-    /// On any error.
-    #[doc(hidden)]
-    #[cfg(any(feature = "serde", feature = "replay"))]
-    pub fn compute_pass_end_with_unresolved_commands(
-        &self,
-        encoder_id: id::CommandEncoderId,
-        base: BasePass<super::ComputeCommand, Infallible>,
-        timestamp_writes: Option<&PassTimestampWrites>,
-    ) {
-        #[cfg(feature = "trace")]
-        {
-            let cmd_enc = self.hub.command_encoders.get(encoder_id);
-            let mut cmd_buf_data = cmd_enc.data.lock();
-            let cmd_buf_data = cmd_buf_data.get_inner();
-
-            if let Some(ref mut list) = cmd_buf_data.trace_commands {
-                list.push(crate::command::Command::RunComputePass {
-                    base: BasePass {
-                        label: base.label.clone(),
-                        error: None,
-                        commands: base.commands.clone(),
-                        dynamic_offsets: base.dynamic_offsets.clone(),
-                        string_data: base.string_data.clone(),
-                        push_constant_data: base.push_constant_data.clone(),
-                    },
-                    timestamp_writes: timestamp_writes.cloned(),
-                });
-            }
-        }
-
-        let BasePass {
-            label,
-            error: _,
-            commands,
-            dynamic_offsets,
-            string_data,
-            push_constant_data,
-        } = base;
-
-        let (mut compute_pass, encoder_error) = self.command_encoder_begin_compute_pass(
-            encoder_id,
-            &ComputePassDescriptor {
-                label: label.as_deref().map(Cow::Borrowed),
-                timestamp_writes: timestamp_writes.cloned(),
-            },
-        );
-        if let Some(err) = encoder_error {
-            panic!("{:?}", err);
-        };
-
-        compute_pass.base = BasePass {
-            label,
-            error: None,
-            commands: super::ComputeCommand::resolve_compute_command_ids(&self.hub, &commands)
-                .unwrap(),
-            dynamic_offsets,
-            string_data,
-            push_constant_data,
-        };
-
-        self.compute_pass_end(&mut compute_pass).unwrap();
-    }
-
     pub fn compute_pass_end(&self, pass: &mut ComputePass) -> Result<(), EncoderStateError> {
         profiling::scope!(
             "CommandEncoder::run_compute_pass {}",
@@ -536,22 +491,21 @@ impl Global {
 
         let base = pass.base.take();
 
-        if matches!(
-            base,
-            Err(ComputePassError {
-                inner: ComputePassErrorInner::EncoderState(EncoderStateError::Ended),
-                scope: _,
-            })
-        ) {
-            // If the encoder was already finished at time of pass creation,
-            // then it was not put in the locked state, so we need to
-            // generate a validation error here and now due to the encoder not
-            // being locked. The encoder already holds an error from when the
-            // pass was opened, or earlier.
+        if let Err(ComputePassError {
+            inner:
+                ComputePassErrorInner::EncoderState(
+                    err @ (EncoderStateError::Locked | EncoderStateError::Ended),
+                ),
+            scope: _,
+        }) = base
+        {
+            // Most encoding errors are detected and raised within `finish()`.
             //
-            // All other errors are propagated to the encoder within `push_with`,
-            // and will be reported later.
-            return Err(EncoderStateError::Ended);
+            // However, we raise a validation error here if the pass was opened
+            // within another pass, or on a finished encoder. The latter is
+            // particularly important, because in that case reporting errors via
+            // `CommandEncoder::finish` is not possible.
+            return Err(err.clone());
         }
 
         cmd_buf_data.push_with(|| -> Result<_, ComputePassError> {
@@ -894,7 +848,7 @@ fn dispatch(state: &mut State, groups: [u32; 3]) -> Result<(), ComputePassErrorI
 
     state.is_ready()?;
 
-    state.flush_bindings(None, None)?;
+    state.flush_bindings(None, false)?;
 
     let groups_size_limit = state
         .pass
@@ -1095,7 +1049,7 @@ fn dispatch_indirect(
                 }]);
         }
 
-        state.flush_bindings(Some(&buffer), None)?;
+        state.flush_bindings(Some(&buffer), false)?;
         unsafe {
             state
                 .pass
@@ -1104,8 +1058,7 @@ fn dispatch_indirect(
                 .dispatch_indirect(params.dst_buffer, 0);
         }
     } else {
-        use crate::resource::Trackable;
-        state.flush_bindings(Some(&buffer), Some(buffer.tracker_index()))?;
+        state.flush_bindings(Some(&buffer), true)?;
 
         let buf_raw = buffer.try_raw(state.pass.base.snatch_guard)?;
         unsafe {

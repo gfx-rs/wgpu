@@ -573,7 +573,7 @@ impl Buffer {
 
     /// Returns the mapping callback in case of error so that the callback can be fired outside
     /// of the locks that are held in this function.
-    pub(crate) fn map_async(
+    pub fn map_async(
         self: &Arc<Self>,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
@@ -677,6 +677,72 @@ impl Buffer {
         Ok(submit_index)
     }
 
+    pub fn get_mapped_range(
+        self: &Arc<Self>,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferAddress>,
+    ) -> Result<(NonNull<u8>, u64), BufferAccessError> {
+        {
+            let snatch_guard = self.device.snatchable_lock.read();
+            self.check_destroyed(&snatch_guard)?;
+        }
+
+        let range_size = if let Some(size) = size {
+            size
+        } else {
+            self.size.saturating_sub(offset)
+        };
+
+        if offset % wgt::MAP_ALIGNMENT != 0 {
+            return Err(BufferAccessError::UnalignedOffset { offset });
+        }
+        if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            return Err(BufferAccessError::UnalignedRangeSize { range_size });
+        }
+        let map_state = &*self.map_state.lock();
+        match *map_state {
+            BufferMapState::Init { ref staging_buffer } => {
+                // offset (u64) can not be < 0, so no need to validate the lower bound
+                if offset + range_size > self.size {
+                    return Err(BufferAccessError::OutOfBoundsOverrun {
+                        index: offset + range_size - 1,
+                        max: self.size,
+                    });
+                }
+                let ptr = unsafe { staging_buffer.ptr() };
+                let ptr = unsafe { NonNull::new_unchecked(ptr.as_ptr().offset(offset as isize)) };
+                Ok((ptr, range_size))
+            }
+            BufferMapState::Active {
+                ref mapping,
+                ref range,
+                ..
+            } => {
+                if offset < range.start {
+                    return Err(BufferAccessError::OutOfBoundsUnderrun {
+                        index: offset,
+                        min: range.start,
+                    });
+                }
+                if offset + range_size > range.end {
+                    return Err(BufferAccessError::OutOfBoundsOverrun {
+                        index: offset + range_size - 1,
+                        max: range.end,
+                    });
+                }
+                // ptr points to the beginning of the range we mapped in map_async
+                // rather than the beginning of the buffer.
+                let relative_offset = (offset - range.start) as isize;
+                unsafe {
+                    Ok((
+                        NonNull::new_unchecked(mapping.ptr.as_ptr().offset(relative_offset)),
+                        range_size,
+                    ))
+                }
+            }
+            BufferMapState::Idle | BufferMapState::Waiting(_) => Err(BufferAccessError::NotMapped),
+        }
+    }
     /// This function returns [`None`] only if [`Self::map_state`] is not [`BufferMapState::Waiting`].
     #[must_use]
     pub(crate) fn map(&self, snatch_guard: &SnatchGuard) -> Option<BufferMapPendingClosure> {
@@ -731,14 +797,8 @@ impl Buffer {
     }
 
     // Note: This must not be called while holding a lock.
-    pub(crate) fn unmap(
-        self: &Arc<Self>,
-        #[cfg(feature = "trace")] buffer_id: crate::id::BufferId,
-    ) -> Result<(), BufferAccessError> {
-        if let Some((mut operation, status)) = self.unmap_inner(
-            #[cfg(feature = "trace")]
-            buffer_id,
-        )? {
+    pub fn unmap(self: &Arc<Self>) -> Result<(), BufferAccessError> {
+        if let Some((mut operation, status)) = self.unmap_inner()? {
             if let Some(callback) = operation.callback.take() {
                 callback(status);
             }
@@ -747,10 +807,7 @@ impl Buffer {
         Ok(())
     }
 
-    fn unmap_inner(
-        self: &Arc<Self>,
-        #[cfg(feature = "trace")] buffer_id: crate::id::BufferId,
-    ) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
+    fn unmap_inner(self: &Arc<Self>) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
         let device = &self.device;
         let snatch_guard = device.snatchable_lock.read();
         let raw_buf = self.try_raw(&snatch_guard)?;
@@ -758,9 +815,11 @@ impl Buffer {
             BufferMapState::Init { staging_buffer } => {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut trace) = *device.trace.lock() {
+                    use crate::device::trace::IntoTrace;
+
                     let data = trace.make_binary("bin", staging_buffer.get_data());
                     trace.add(trace::Action::WriteBuffer {
-                        id: buffer_id,
+                        id: self.to_trace(),
                         data,
                         range: 0..self.size,
                         queued: true,
@@ -820,12 +879,14 @@ impl Buffer {
                 if host == HostMap::Write {
                     #[cfg(feature = "trace")]
                     if let Some(ref mut trace) = *device.trace.lock() {
+                        use crate::device::trace::IntoTrace;
+
                         let size = range.end - range.start;
                         let data = trace.make_binary("bin", unsafe {
                             core::slice::from_raw_parts(mapping.ptr.as_ptr(), size as usize)
                         });
                         trace.add(trace::Action::WriteBuffer {
-                            id: buffer_id,
+                            id: self.to_trace(),
                             data,
                             range: range.clone(),
                             queued: false,
@@ -841,7 +902,7 @@ impl Buffer {
         Ok(None)
     }
 
-    pub(crate) fn destroy(self: &Arc<Self>) {
+    pub fn destroy(self: &Arc<Self>) {
         let device = &self.device;
 
         let temp = {
@@ -1343,7 +1404,7 @@ impl Texture {
         }
     }
 
-    pub(crate) fn destroy(self: &Arc<Self>) {
+    pub fn destroy(self: &Arc<Self>) {
         let device = &self.device;
 
         let temp = {
@@ -1843,7 +1904,7 @@ impl Drop for ExternalTexture {
 }
 
 impl ExternalTexture {
-    pub(crate) fn destroy(self: &Arc<Self>) {
+    pub fn destroy(self: &Arc<Self>) {
         self.params.destroy();
     }
 }

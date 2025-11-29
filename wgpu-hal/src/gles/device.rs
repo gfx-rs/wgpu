@@ -22,7 +22,7 @@ struct CompilationContext<'a> {
     sampler_map: &'a mut super::SamplerBindMap,
     name_binding_map: &'a mut NameBindingMap,
     push_constant_items: &'a mut Vec<naga::back::glsl::PushConstantItem>,
-    multiview: Option<NonZeroU32>,
+    multiview_mask: Option<NonZeroU32>,
     clip_distance_count: &'a mut u32,
 }
 
@@ -194,7 +194,7 @@ impl super::Device {
         let msg = unsafe { gl.get_shader_info_log(raw) };
         if compiled_ok {
             if !msg.is_empty() {
-                log::warn!("\tCompile: {msg}");
+                log::debug!("\tCompile message: {msg}");
             }
             Ok(raw)
         } else {
@@ -218,7 +218,9 @@ impl super::Device {
         let pipeline_options = glsl::PipelineOptions {
             shader_stage: naga_stage,
             entry_point: stage.entry_point.to_owned(),
-            multiview: context.multiview,
+            multiview: context
+                .multiview_mask
+                .map(|a| NonZeroU32::new(a.get().count_ones()).unwrap()),
         };
 
         let (module, info) = naga::back::pipeline_constants::process_overrides(
@@ -306,7 +308,7 @@ impl super::Device {
         shaders: ArrayVec<ShaderStage<'a>, { crate::MAX_CONCURRENT_SHADER_STAGES }>,
         layout: &super::PipelineLayout,
         #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
-        multiview: Option<NonZeroU32>,
+        multiview_mask: Option<NonZeroU32>,
     ) -> Result<Arc<super::PipelineInner>, crate::PipelineError> {
         let mut program_stages = ArrayVec::new();
         let mut group_to_binding_to_slot = Vec::with_capacity(layout.group_infos.len());
@@ -339,7 +341,7 @@ impl super::Device {
                     shaders,
                     layout,
                     label,
-                    multiview,
+                    multiview_mask,
                     self.shared.shading_language_version,
                     self.shared.private_caps,
                 )
@@ -355,7 +357,7 @@ impl super::Device {
         shaders: ArrayVec<ShaderStage<'a>, { crate::MAX_CONCURRENT_SHADER_STAGES }>,
         layout: &super::PipelineLayout,
         #[cfg_attr(target_arch = "wasm32", allow(unused))] label: Option<&str>,
-        multiview: Option<NonZeroU32>,
+        multiview_mask: Option<NonZeroU32>,
         glsl_version: naga::back::glsl::Version,
         private_caps: PrivateCapabilities,
     ) -> Result<Arc<super::PipelineInner>, crate::PipelineError> {
@@ -390,7 +392,7 @@ impl super::Device {
                 sampler_map: &mut sampler_map,
                 name_binding_map: &mut name_binding_map,
                 push_constant_items: pc_item,
-                multiview,
+                multiview_mask,
                 clip_distance_count: &mut clip_distance_count,
             };
 
@@ -401,7 +403,7 @@ impl super::Device {
         // Create empty fragment shader if only vertex shader is present
         if has_stages == wgt::ShaderStages::VERTEX {
             let shader_src = format!("#version {glsl_version}\n void main(void) {{}}",);
-            log::info!("Only vertex shader is present. Creating an empty fragment shader",);
+            log::debug!("Only vertex shader is present. Creating an empty fragment shader",);
             let shader = unsafe {
                 Self::compile_shader(
                     gl,
@@ -430,7 +432,7 @@ impl super::Device {
             return Err(crate::PipelineError::Linkage(has_stages, msg));
         }
         if !msg.is_empty() {
-            log::warn!("\tLink: {msg}");
+            log::debug!("\tLink message: {msg}");
         }
 
         if !private_caps.contains(PrivateCapabilities::SHADER_BINDING_LAYOUT) {
@@ -1376,8 +1378,9 @@ impl crate::Device for super::Device {
         if let Some(ref fs) = desc.fragment_stage {
             shaders.push((naga::ShaderStage::Fragment, fs));
         }
-        let inner =
-            unsafe { self.create_pipeline(gl, shaders, desc.layout, desc.label, desc.multiview) }?;
+        let inner = unsafe {
+            self.create_pipeline(gl, shaders, desc.layout, desc.label, desc.multiview_mask)
+        }?;
 
         let (vertex_buffers, vertex_attributes) = {
             let mut buffers = Vec::new();

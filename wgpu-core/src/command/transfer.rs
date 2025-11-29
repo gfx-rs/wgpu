@@ -8,8 +8,6 @@ use wgt::{
     TextureUsages,
 };
 
-#[cfg(feature = "trace")]
-use crate::command::Command as TraceCommand;
 use crate::{
     api_log,
     command::{
@@ -172,6 +170,8 @@ pub enum TransferError {
     },
     #[error("Requested mip level {requested} does not exist (count: {count})")]
     InvalidMipLevel { requested: u32, count: u32 },
+    #[error("Buffer is expected to be unmapped, but was not")]
+    BufferNotAvailable,
 }
 
 impl WebGpuError for TransferError {
@@ -213,7 +213,8 @@ impl WebGpuError for TransferError {
             | Self::InvalidSampleCount { .. }
             | Self::SampleCountNotEqual { .. }
             | Self::InvalidMipLevel { .. }
-            | Self::SameSourceDestinationBuffer => return ErrorType::Validation,
+            | Self::SameSourceDestinationBuffer
+            | Self::BufferNotAvailable => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
@@ -825,17 +826,6 @@ impl Global {
         let cmd_enc = hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
 
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.trace() {
-            list.push(TraceCommand::CopyBufferToBuffer {
-                src: source,
-                src_offset: source_offset,
-                dst: destination,
-                dst_offset: destination_offset,
-                size,
-            });
-        }
-
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
             Ok(ArcCommand::CopyBufferToBuffer {
                 src: self.resolve_buffer_id(source)?,
@@ -863,15 +853,6 @@ impl Global {
 
         let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.trace() {
-            list.push(TraceCommand::CopyBufferToTexture {
-                src: *source,
-                dst: *destination,
-                size: *copy_size,
-            });
-        }
 
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
             Ok(ArcCommand::CopyBufferToTexture {
@@ -907,15 +888,6 @@ impl Global {
         let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
 
-        #[cfg(feature = "trace")]
-        if let Some(list) = cmd_buf_data.trace() {
-            list.push(TraceCommand::CopyTextureToBuffer {
-                src: *source,
-                dst: *destination,
-                size: *copy_size,
-            });
-        }
-
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
             Ok(ArcCommand::CopyTextureToBuffer {
                 src: wgt::TexelCopyTextureInfo::<Arc<Texture>> {
@@ -949,15 +921,6 @@ impl Global {
 
         let cmd_enc = self.hub.command_encoders.get(command_encoder_id);
         let mut cmd_buf_data = cmd_enc.data.lock();
-
-        #[cfg(feature = "trace")]
-        if let Some(ref mut list) = cmd_buf_data.trace() {
-            list.push(TraceCommand::CopyTextureToTexture {
-                src: *source,
-                dst: *destination,
-                size: *copy_size,
-            });
-        }
 
         cmd_buf_data.push_with(|| -> Result<_, CommandEncoderError> {
             Ok(ArcCommand::CopyTextureToTexture {
@@ -1074,6 +1037,8 @@ pub(super) fn copy_buffer_to_buffer(
         .into());
     }
 
+    // This must happen after parameter validation (so that errors are reported
+    // as required by the spec), but before any side effects.
     if size == 0 {
         log::trace!("Ignoring copy_buffer_to_buffer of size 0");
         return Ok(());
@@ -1292,6 +1257,8 @@ pub(super) fn copy_texture_to_buffer(
         .check_usage(BufferUsages::COPY_DST)
         .map_err(TransferError::MissingBufferUsage)?;
 
+    // This must happen after parameter validation (so that errors are reported
+    // as required by the spec), but before any side effects.
     if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
         log::trace!("Ignoring copy_texture_to_buffer of size 0");
         return Ok(());
@@ -1413,12 +1380,6 @@ pub(super) fn copy_texture_to_texture(
         .into());
     }
 
-    // Handle texture init *before* dealing with barrier transitions so we
-    // have an easier time inserting "immediate-inits" that may be required
-    // by prior discards in rare cases.
-    handle_src_texture_init(state, source, copy_size, src_texture)?;
-    handle_dst_texture_init(state, destination, copy_size, dst_texture)?;
-
     let src_raw = src_texture.try_raw(state.snatch_guard)?;
     src_texture
         .check_usage(TextureUsages::COPY_SRC)
@@ -1428,10 +1389,18 @@ pub(super) fn copy_texture_to_texture(
         .check_usage(TextureUsages::COPY_DST)
         .map_err(TransferError::MissingTextureUsage)?;
 
+    // This must happen after parameter validation (so that errors are reported
+    // as required by the spec), but before any side effects.
     if copy_size.width == 0 || copy_size.height == 0 || copy_size.depth_or_array_layers == 0 {
         log::trace!("Ignoring copy_texture_to_texture of size 0");
         return Ok(());
     }
+
+    // Handle texture init *before* dealing with barrier transitions so we
+    // have an easier time inserting "immediate-inits" that may be required
+    // by prior discards in rare cases.
+    handle_src_texture_init(state, source, copy_size, src_texture)?;
+    handle_dst_texture_init(state, destination, copy_size, dst_texture)?;
 
     let src_pending =
         state

@@ -14,6 +14,7 @@ You can add additional user facing information if it's a major breaking change. 
 ```
 
 Top level categories:
+
 - Major changes
 - Added/New Features
 - Changes
@@ -40,7 +41,7 @@ Bottom level categories:
 
 ## Unreleased
 
-### Major changes
+### Major Changes
 
 #### `wgpu::Instance::enumerate_adapters` is now `async` & available on WebGPU
 
@@ -73,24 +74,88 @@ SamplerDescriptor {
 }
 ```
 
+#### Multiview on all major platforms and support for multiview bitmasks
+
+Multiview is a feature that allows rendering the same content to multiple layers of a texture. This is useful primarily in VR where you wish to
+display almost identical content to 2 views, just with a different perspective. Instead of using 2 draw calls or 2 instances for each object, you
+can use this feature.
+
+Multiview is also called view instancing in DX12 land or vertex amplification in Metal land.
+
+Multiview has been reworked, adding support for Metal and DX12, and adding testing and validation to wgpu itself.
+This change also introduces a view bitmask, a new field in `RenderPassDescriptor` that allows a render pass to render to multiple non-adjacent layers
+when using the `SELECTIVE_MULTIVIEW` feature. Note that this also influences apps that don't use multiview, as they have to set this mask to `None`.
+```diff
+- wgpu::RenderPassDescriptor {
+-     label: None,
+-     color_attachments: &color_attachments,
+-     depth_stencil_attachment: None,
+-     timestamp_writes: None,
+-     occlusion_query_set: None,
+- }
++ wgpu::RenderPassDescriptor {
++     label: None,
++     color_attachments: &color_attachments,
++     depth_stencil_attachment: None,
++     timestamp_writes: None,
++     occlusion_query_set: None,
++     multiview_mask: NonZero::new(3),
++ }
+```
+One other breaking change worth noting is that in WGSL `@builtin(view_index)` now requires a type of `u32`, where previously it required `i32`.
+
+By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206).
+
+#### Error Scopes are now thread-local
+
+Device error scopes now operate on a per-thread basis. This allows them to be used easily within multithreaded contexts,
+without having the error scope capture errors from other threads.
+
+When the `std` feature is **not** enabled, we have no way to differentiate between threads, so error scopes return to be
+global operations.
+
+By @cwfitzgerald in [#8685](https://github.com/gfx-rs/wgpu/pull/8685)
+
+#### Log Levels
+
+We have received complaints about wgpu being way too log spammy at log levels `info`/`warn`/`error`. We have
+adjusted our log policy and changed logging such that `info` and above should be silent unless some exceptional
+event happens. Our new log policy is as follows:
+
+- Error: if we can’t (for some reason, usually a bug) communicate an error any other way.
+- Warning: similar, but there may be one-shot warnings about almost certainly sub-optimal.
+- Info: do not use
+- Debug: Used for interesting events happening inside wgpu.
+- Trace: Used for all events that might be useful to either `wgpu` or application developers.
+
+By @cwfitzgerald in [#8579](https://github.com/gfx-rs/wgpu/pull/8579).
+
 ### New Features
 
 - Added support for transient textures on Vulkan and Metal. By @opstic in [#8247](https://github.com/gfx-rs/wgpu/pull/8247)
+- Implement shader triangle barycentric coordinate builtins. By @atlv24 in [#8320](https://github.com/gfx-rs/wgpu/pull/8320).
+- Added support for binding arrays of storage textures on Metal. By @msvbg in [#8464](https://github.com/gfx-rs/wgpu/pull/8464)
 
 ### Changes
 
 #### General
 
+- Require new enable extensions when using ray queries and position fetch (`wgpu_ray_query`, `wgpu_ray_query_vertex_return`). By @Vecvec in [#8545](https://github.com/gfx-rs/wgpu/pull/8545).
 - Texture now has `from_custom`. By @R-Cramer4 in [#8315](https://github.com/gfx-rs/wgpu/pull/8315).
 - Using both the wgpu command encoding APIs and `CommandEncoder::as_hal_mut` on the same encoder will now result in a panic.
 - Allow `include_spirv!` and `include_spirv_raw!` macros to be used in constants and statics. By @clarfonthey in [#8250](https://github.com/gfx-rs/wgpu/pull/8250).
 - Added support for rendering onto multi-planar textures. By @noituri in [#8307](https://github.com/gfx-rs/wgpu/pull/8307).
+- Validation errors from `CommandEncoder::finish()` will report the label of the invalid encoder. By @kpreid in [#8449](https://github.com/gfx-rs/wgpu/pull/8449).
+- Corrected documentation of the minimum alignment of the *end* of a mapped range of a buffer (it is 4, not 8). By @kpreid in [#8450](https://github.com/gfx-rs/wgpu/pull/8450).
+- `util::StagingBelt` now takes a `Device` when it is created instead of when it is used. By @kpreid in [#8462](https://github.com/gfx-rs/wgpu/pull/8462).
+- `wgpu_hal::vulkan::Device::texture_from_raw` now takes an `external_memory` argument. By @s-ol in [#8512](https://github.com/gfx-rs/wgpu/pull/8512)
 
-### Added/New Features
+#### Metal
+- Add support for mesh shaders. By @SupaMaggie70Incorporated in [#8139](https://github.com/gfx-rs/wgpu/pull/8139)
 
-## General
+#### Naga
 
-- Implement shader triangle barycentric coordinate builtins. By @atlv24 in [#8320](https://github.com/gfx-rs/wgpu/pull/8320).
+- Prevent UB with invalid ray query calls on spirv. By @Vecvec in [#8390](https://github.com/gfx-rs/wgpu/pull/8390). 
 
 ### Bug Fixes
 
@@ -107,6 +172,13 @@ SamplerDescriptor {
 - Removed three features from `wgpu-hal` which did nothing useful: `"cargo-clippy"`, `"gpu-allocator"`, and `"rustc-hash"`. By @kpreid in [#8357](https://github.com/gfx-rs/wgpu/pull/8357).
 - `wgpu_types::PollError` now always implements the `Error` trait. By @kpreid in [#8384](https://github.com/gfx-rs/wgpu/pull/8384).
 - The texture subresources used by the color attachments of a render pass are no longer allowed to overlap when accessed via different texture views. By @andyleiserson in [#8402](https://github.com/gfx-rs/wgpu/pull/8402).
+- The `STORAGE_READ_ONLY` texture usage is now permitted to coexist with other read-only usages. By @andyleiserson in [#8490](https://github.com/gfx-rs/wgpu/pull/8490).
+- Validate that buffers are unmapped in `write_buffer` calls. By @ErichDonGubler in [#8454](https://github.com/gfx-rs/wgpu/pull/8454).
+- Add WGSL parsing for mesh shaders. By @inner-daemons in [#8370](https://github.com/gfx-rs/wgpu/pull/8370).
+
+#### naga
+
+- The `||` and `&&` operators now "short circuit", i.e., do not evaluate the RHS if the result can be determined from just the LHS. By @andyleiserson in [#7339](https://github.com/gfx-rs/wgpu/pull/7339).
 
 #### DX12
 
@@ -118,6 +190,15 @@ SamplerDescriptor {
 
 #### Metal
 - Fixed a variety of feature detection related bugs. By @inner-daemons in [#8439](https://github.com/gfx-rs/wgpu/pull/8439).
+
+#### WebGPU
+
+- Fixed a bug where the texture aspect was not passed through when calling `copy_texture_to_buffer` in WebGPU, causing the copy to fail for depth/stencil textures. By @Tim-Evans-Seequent in [#8445](https://github.com/gfx-rs/wgpu/pull/8445).
+
+#### GLES
+
+- Fix race when downloading texture from compute shader pass. By @SpeedCrash100 in [#8527](https://github.com/gfx-rs/wgpu/pull/8527)
+- Fix double window class registration when dynamic libraries are used. By @Azorlogh in [#8548](https://github.com/gfx-rs/wgpu/pull/8548)
 
 #### hal
 

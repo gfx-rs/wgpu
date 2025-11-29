@@ -1,17 +1,19 @@
 use alloc::vec::Vec;
 use core::{mem, ops::Range};
 
-use windows::Win32::{
-    Foundation,
-    Graphics::{Direct3D12, Dxgi},
+use windows::{
+    core::Interface as _,
+    Win32::{
+        Foundation,
+        Graphics::{Direct3D12, Dxgi},
+    },
 };
-use windows_core::Interface;
 
 use super::conv;
 use crate::{
     auxil::{
         self,
-        dxgi::{name::ObjectExt, result::HResult as _},
+        dxgi::{name::ObjectExt as _, result::HResult as _},
     },
     dx12::borrow_interface_temporarily,
     AccelerationStructureEntries, CommandEncoder as _,
@@ -1001,26 +1003,23 @@ impl crate::CommandEncoder for super::CommandEncoder {
             if let Some(ds_view) = ds_view {
                 if flags != Direct3D12::D3D12_CLEAR_FLAGS::default() {
                     unsafe {
-                        // list.ClearDepthStencilView(
-                        //     ds_view,
-                        //     flags,
-                        //     ds.clear_value.0,
-                        //     ds.clear_value.1 as u8,
-                        //     None,
-                        // )
-                        // TODO: Replace with the above in the next breaking windows-rs release,
-                        // when https://github.com/microsoft/win32metadata/pull/1971 is in.
-                        (Interface::vtable(list).ClearDepthStencilView)(
-                            Interface::as_raw(list),
+                        list.ClearDepthStencilView(
                             ds_view,
                             flags,
                             ds.clear_value.0,
                             ds.clear_value.1 as u8,
-                            0,
-                            core::ptr::null(),
+                            None,
                         )
                     }
                 }
+            }
+        }
+
+        if let Some(multiview_mask) = desc.multiview_mask {
+            unsafe {
+                list.cast::<Direct3D12::ID3D12GraphicsCommandList2>()
+                    .unwrap()
+                    .SetViewInstanceMask(multiview_mask.get());
             }
         }
 

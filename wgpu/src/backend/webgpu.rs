@@ -632,6 +632,7 @@ fn map_texture_copy_view(
     let mapped = webgpu_sys::GpuTexelCopyTextureInfo::new(&texture.inner);
     mapped.set_mip_level(view.mip_level);
     mapped.set_origin(&map_origin_3d(view.origin));
+    mapped.set_aspect(map_texture_aspect(view.aspect));
     mapped
 }
 
@@ -828,13 +829,15 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_task_workgroup_total_count: wgt::Limits::default().max_task_workgroup_total_count,
         max_task_workgroups_per_dimension: wgt::Limits::default().max_task_workgroups_per_dimension,
         max_mesh_output_layers: wgt::Limits::default().max_mesh_output_layers,
-        max_mesh_multiview_count: wgt::Limits::default().max_mesh_multiview_count,
+        max_mesh_multiview_view_count: wgt::Limits::default().max_mesh_multiview_view_count,
 
         max_blas_primitive_count: wgt::Limits::default().max_blas_primitive_count,
         max_blas_geometry_count: wgt::Limits::default().max_blas_geometry_count,
         max_tlas_instance_count: wgt::Limits::default().max_tlas_instance_count,
         max_acceleration_structures_per_shader_stage: wgt::Limits::default()
             .max_acceleration_structures_per_shader_stage,
+
+        max_multiview_view_count: wgt::Limits::default().max_multiview_view_count,
     }
 }
 
@@ -2300,7 +2303,7 @@ impl dispatch::DeviceInterface for WebDevice {
         let mapped_desc = webgpu_sys::GpuTextureDescriptor::new(
             map_texture_format(desc.format),
             &map_extent_3d(desc.size),
-            desc.usage.bits(),
+            (desc.usage - crate::TextureUsages::TRANSIENT).bits(),
         );
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);

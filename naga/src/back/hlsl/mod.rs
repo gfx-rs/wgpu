@@ -650,6 +650,8 @@ pub enum Error {
     ResolveArraySizeError(#[from] proc::ResolveArraySizeError),
     #[error("entry point with stage {0:?} and name '{1}' not found")]
     EntryPointNotFound(ir::ShaderStage, String),
+    #[error("requires shader model {1:?} for reason: {0}")]
+    ShaderModelTooLow(String, ShaderModel),
 }
 
 #[derive(PartialEq, Eq, Hash)]

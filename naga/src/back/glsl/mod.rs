@@ -2675,11 +2675,6 @@ impl<'a, W: Write> Writer<'a, W> {
                 self.write_image_atomic(ctx, image, coordinate, array_index, fun, value)?
             }
             Statement::RayQuery { .. } => unreachable!(),
-            Statement::MeshFunction(
-                crate::MeshFunction::SetMeshOutputs { .. }
-                | crate::MeshFunction::SetVertex { .. }
-                | crate::MeshFunction::SetPrimitive { .. },
-            ) => unreachable!(),
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let res_name = Baked(result).to_string();
@@ -5215,8 +5210,13 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
                 "gl_FragCoord"
             }
         }
-        Bi::ViewIndex if options.targeting_webgl => "int(gl_ViewID_OVR)",
-        Bi::ViewIndex => "gl_ViewIndex",
+        Bi::ViewIndex => {
+            if options.targeting_webgl {
+                "gl_ViewID_OVR"
+            } else {
+                "uint(gl_ViewIndex)"
+            }
+        }
         // vertex
         Bi::BaseInstance => "uint(gl_BaseInstance)",
         Bi::BaseVertex => "uint(gl_BaseVertex)",
@@ -5265,7 +5265,11 @@ const fn glsl_built_in(built_in: crate::BuiltIn, options: VaryingOptions) -> &'s
         | Bi::PointIndex
         | Bi::LineIndices
         | Bi::TriangleIndices
-        | Bi::MeshTaskSize => {
+        | Bi::MeshTaskSize
+        | Bi::VertexCount
+        | Bi::PrimitiveCount
+        | Bi::Vertices
+        | Bi::Primitives => {
             unimplemented!()
         }
     }

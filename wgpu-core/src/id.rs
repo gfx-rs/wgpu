@@ -82,22 +82,20 @@ impl RawId {
 /// [`Registry`]: crate::registry::Registry
 /// [`Noop`]: hal::api::Noop
 #[repr(transparent)]
-#[cfg_attr(any(feature = "serde", feature = "trace"), derive(serde::Serialize))]
-#[cfg_attr(any(feature = "serde", feature = "replay"), derive(serde::Deserialize))]
-#[cfg_attr(
-    any(feature = "serde", feature = "trace", feature = "replay"),
-    serde(transparent)
-)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct Id<T: Marker>(RawId, PhantomData<T>);
 
 // This type represents Id in a more readable (and editable) way.
-#[allow(dead_code)]
+#[cfg(feature = "serde")]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-enum SerialId {
+#[derive(Clone, Debug)]
+pub enum SerialId {
     // The only variant forces RON to not ignore "Id"
     Id(Index, Epoch),
 }
 
+#[cfg(feature = "serde")]
 impl From<RawId> for SerialId {
     fn from(id: RawId) -> Self {
         let (index, epoch) = id.unzip();
@@ -105,14 +103,17 @@ impl From<RawId> for SerialId {
     }
 }
 
+#[cfg(feature = "serde")]
 pub struct ZeroIdError;
 
+#[cfg(feature = "serde")]
 impl fmt::Display for ZeroIdError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "IDs may not be zero")
     }
 }
 
+#[cfg(feature = "serde")]
 impl TryFrom<SerialId> for RawId {
     type Error = ZeroIdError;
     fn try_from(id: SerialId) -> Result<Self, ZeroIdError> {
@@ -122,6 +123,61 @@ impl TryFrom<SerialId> for RawId {
         } else {
             Ok(RawId::zip(index, epoch))
         }
+    }
+}
+
+/// Identify an object by the pointer returned by `Arc::as_ptr`.
+///
+/// This is used for tracing.
+#[allow(dead_code)]
+#[cfg(feature = "serde")]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub enum PointerId<T: Marker> {
+    // The only variant forces RON to not ignore "Id"
+    PointerId(usize, #[serde(skip)] PhantomData<T>),
+}
+
+#[cfg(feature = "serde")]
+impl<T: Marker> Copy for PointerId<T> {}
+
+#[cfg(feature = "serde")]
+impl<T: Marker> Clone for PointerId<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T: Marker> PartialEq for PointerId<T> {
+    fn eq(&self, other: &Self) -> bool {
+        let PointerId::PointerId(this, _) = self;
+        let PointerId::PointerId(other, _) = other;
+        this == other
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T: Marker> Eq for PointerId<T> {}
+
+#[cfg(feature = "serde")]
+impl<T: Marker> Hash for PointerId<T> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        let PointerId::PointerId(this, _) = self;
+        this.hash(state);
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T: crate::storage::StorageItem> From<&alloc::sync::Arc<T>> for PointerId<T::Marker> {
+    fn from(arc: &alloc::sync::Arc<T>) -> Self {
+        // Since the memory representation of `Arc<T>` is just a pointer to
+        // `ArcInner<T>`, it would be nice to use that pointer as the trace ID,
+        // since many `into_trace` implementations would then be no-ops at
+        // runtime. However, `Arc::as_ptr` returns a pointer to the contained
+        // data, not to the `ArcInner`. The `ArcInner` stores the reference
+        // counts before the data, so the machine code for this conversion has
+        // to add an offset to the pointer.
+        PointerId::PointerId(alloc::sync::Arc::as_ptr(arc) as usize, PhantomData)
     }
 }
 

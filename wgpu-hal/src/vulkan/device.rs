@@ -84,7 +84,7 @@ impl super::DeviceShared {
                     ref colors,
                     ref depth_stencil,
                     sample_count,
-                    multiview,
+                    multiview_mask,
                 } = *e.key();
 
                 let mut vk_attachments = Vec::new();
@@ -209,15 +209,8 @@ impl super::DeviceShared {
 
                 let mut multiview_info;
                 let mask;
-                if let Some(multiview) = multiview {
-                    // Sanity checks, better to panic here than cause a driver crash
-                    assert!(multiview.get() <= 8);
-                    assert!(multiview.get() > 1);
-
-                    // Right now we enable all bits on the view masks and correlation masks.
-                    // This means we're rendering to all views in the subpass, and that all views
-                    // can be rendered concurrently.
-                    mask = [(1 << multiview.get()) - 1];
+                if let Some(multiview_mask) = multiview_mask {
+                    mask = [multiview_mask.get()];
 
                     // On Vulkan 1.1 or later, this is an alias for core functionality
                     multiview_info = vk::RenderPassMultiviewCreateInfoKHR::default()
@@ -495,11 +488,14 @@ impl super::Device {
     /// - If `drop_callback` is [`None`], wgpu-hal will take ownership of `vk_image`. If
     ///   `drop_callback` is [`Some`], `vk_image` must be valid until the callback is called.
     /// - If the `ImageCreateFlags` does not contain `MUTABLE_FORMAT`, the `view_formats` of `desc` must be empty.
+    /// - If `external_memory` is [`Some`], wgpu-hal will take ownership of the memory (which is presumed to back
+    ///   `vk_image`). If `external_memory` is [`None`], the memory must be valid until `drop_callback` is called.
     pub unsafe fn texture_from_raw(
         &self,
         vk_image: vk::Image,
         desc: &crate::TextureDescriptor,
         drop_callback: Option<crate::DropCallback>,
+        external_memory: Option<vk::DeviceMemory>,
     ) -> super::Texture {
         let mut raw_flags = vk::ImageCreateFlags::empty();
         let mut view_formats = vec![];
@@ -525,7 +521,7 @@ impl super::Device {
         super::Texture {
             raw: vk_image,
             drop_guard,
-            external_memory: None,
+            external_memory,
             block: None,
             format: desc.format,
             copy_size: desc.copy_extent(),
@@ -766,6 +762,7 @@ impl super::Device {
                 };
                 let needs_temp_options = !runtime_checks.bounds_checks
                     || !runtime_checks.force_loop_bounding
+                    || !runtime_checks.ray_query_initialization_tracking
                     || !binding_map.is_empty()
                     || naga_shader.debug_source.is_some()
                     || !stage.zero_initialize_workgroup_memory;
@@ -782,6 +779,9 @@ impl super::Device {
                     }
                     if !runtime_checks.force_loop_bounding {
                         temp_options.force_loop_bounding = false;
+                    }
+                    if !runtime_checks.ray_query_initialization_tracking {
+                        temp_options.ray_query_initialization_tracking = false;
                     }
                     if !binding_map.is_empty() {
                         temp_options.binding_map = binding_map.clone();
@@ -1261,7 +1261,7 @@ impl crate::Device for super::Device {
         Ok(super::TextureView {
             raw_texture: texture.raw,
             raw,
-            layers,
+            _layers: layers,
             format: desc.format,
             raw_format,
             base_mip_level: desc.range.base_mip_level,
@@ -1368,6 +1368,7 @@ impl crate::Device for super::Device {
             framebuffers: Default::default(),
             temp_texture_views: Default::default(),
             counters: Arc::clone(&self.counters),
+            current_pipeline_is_multiview: false,
         })
     }
 
@@ -1887,7 +1888,7 @@ impl crate::Device for super::Device {
         ];
         let mut compatible_rp_key = super::RenderPassKey {
             sample_count: desc.multisample.count,
-            multiview: desc.multiview,
+            multiview_mask: desc.multiview_mask,
             ..Default::default()
         };
         let mut stages = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
@@ -2156,7 +2157,10 @@ impl crate::Device for super::Device {
 
         self.counters.render_pipelines.add(1);
 
-        Ok(super::RenderPipeline { raw })
+        Ok(super::RenderPipeline {
+            raw,
+            is_multiview: desc.multiview_mask.is_some(),
+        })
     }
 
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {
