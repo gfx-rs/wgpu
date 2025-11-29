@@ -211,6 +211,9 @@ impl PhysicalDeviceFeatures {
         if let Some(ref mut feature) = self.shader_barycentrics {
             info = info.push_next(feature);
         }
+        if let Some(ref mut feature) = self.portability_subset {
+            info = info.push_next(feature);
+        }
         info
     }
 
