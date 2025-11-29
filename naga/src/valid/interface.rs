@@ -563,9 +563,9 @@ impl VaryingContext<'_> {
                 if interpolation == Some(crate::Interpolation::PerVertex) {
                     let three = crate::ArraySize::Constant(core::num::NonZeroU32::new(3).unwrap());
                     match ty_inner {
-                        Ti::Array { base, size, .. } if *size == three => {
-                            if self.types[*base].inner.scalar_kind().is_none() {
-                                return Err(VaryingError::InvalidType(*base));
+                        &Ti::Array { base, size, .. } if size == three => {
+                            if self.types[base].inner.scalar_kind().is_none() {
+                                return Err(VaryingError::InvalidType(base));
                             }
                         }
                         _ => return Err(VaryingError::PerVertexNotArrayOfThree),
