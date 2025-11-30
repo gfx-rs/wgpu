@@ -486,8 +486,6 @@ enum MergeBlockInformation {
     SwitchMerge,
 }
 
-type OptimizationResult = Result<Option<(Handle<crate::Expression>, Option<String>)>, Error>;
-
 /// Fragments of Naga IR, to be assembled into `Statements` once data flow is
 /// resolved.
 ///
@@ -6193,54 +6191,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         Ok(())
     }
 
-    fn is_constant_zero(
-        &self,
-        module: &crate::Module,
-        const_id: spirv::Word,
-    ) -> Result<bool, Error> {
-        let lookup = self.lookup_constant.lookup(const_id)?;
-        match lookup.inner {
-            Constant::Constant(const_handle) => {
-                let init = module.constants[const_handle].init;
-                match module.global_expressions[init] {
-                    crate::Expression::Literal(literal) => Ok(match literal {
-                        crate::Literal::I32(v) => v == 0,
-                        crate::Literal::U32(v) => v == 0,
-                        crate::Literal::I64(v) => v == 0,
-                        crate::Literal::U64(v) => v == 0,
-                        _ => false,
-                    }),
-                    _ => Ok(false),
-                }
-            }
-            Constant::Override(_) => Ok(false),
-        }
-    }
-
-    fn is_constant_one(
-        &self,
-        module: &crate::Module,
-        const_id: spirv::Word,
-    ) -> Result<bool, Error> {
-        let lookup = self.lookup_constant.lookup(const_id)?;
-        match lookup.inner {
-            Constant::Constant(const_handle) => {
-                let init = module.constants[const_handle].init;
-                match module.global_expressions[init] {
-                    crate::Expression::Literal(literal) => Ok(match literal {
-                        crate::Literal::I32(v) => v == 1,
-                        crate::Literal::U32(v) => v == 1,
-                        crate::Literal::I64(v) => v == 1,
-                        crate::Literal::U64(v) => v == 1,
-                        _ => false,
-                    }),
-                    _ => Ok(false),
-                }
-            }
-            Constant::Override(_) => Ok(false),
-        }
-    }
-
     fn get_constant_name(&self, module: &crate::Module, const_id: spirv::Word) -> Option<String> {
         let lookup = self.lookup_constant.lookup(const_id).ok()?;
         match lookup.inner {
@@ -6263,125 +6213,6 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             }
             _ => String::from("unknown"),
         }
-    }
-
-    /// Try to optimize common SPIR-V type conversion patterns to simpler `As` expressions.
-    ///
-    /// Example: IAdd %a_value %zero
-    #[allow(clippy::too_many_arguments)]
-    fn try_optimize_type_conversion_pattern(
-        &mut self,
-        module: &mut crate::Module,
-        global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
-        opcode: spirv::Op,
-        ty: Handle<crate::Type>,
-        left_id: spirv::Word,
-        right_id: spirv::Word,
-        span: crate::Span,
-    ) -> OptimizationResult {
-        if matches!(opcode, spirv::Op::IAdd | spirv::Op::BitwiseOr) {
-            let left_is_zero = self.is_constant_zero(module, left_id)?;
-            let right_is_zero = self.is_constant_zero(module, right_id)?;
-
-            let (value_id, source_name) = if left_is_zero && !right_is_zero {
-                (right_id, self.get_constant_name(module, right_id))
-            } else if right_is_zero && !left_is_zero {
-                (left_id, self.get_constant_name(module, left_id))
-            } else {
-                return Ok(None);
-            };
-
-            let scalar = match module.types[ty].inner {
-                crate::TypeInner::Scalar(scalar)
-                | crate::TypeInner::Vector { scalar, .. }
-                | crate::TypeInner::Matrix { scalar, .. } => scalar,
-                _ => return Ok(None),
-            };
-
-            let value_expr_inner = self.lookup_constant.lookup(value_id)?.inner.to_expr();
-            let value_expr = self.eval_and_append_expression(
-                module,
-                global_expression_kind_tracker,
-                value_expr_inner,
-                span,
-            )?;
-
-            let as_expr = self.eval_and_append_expression(
-                module,
-                global_expression_kind_tracker,
-                crate::Expression::As {
-                    expr: value_expr,
-                    kind: scalar.kind,
-                    convert: Some(scalar.width),
-                },
-                span,
-            )?;
-
-            let derived_name = source_name.map(|name| {
-                let target_type = self.format_target_type(module, ty);
-                format!("{name}_as_{target_type}")
-            });
-
-            return Ok(Some((as_expr, derived_name)));
-        }
-
-        Ok(None)
-    }
-
-    /// Try to optimize `select` pattern used for bool to int/uint conversion to simpler `As` expressions.
-    ///
-    /// Example: Select %bool_value %one %zero
-    #[allow(clippy::too_many_arguments)]
-    fn try_optimize_select_conversion(
-        &mut self,
-        module: &mut crate::Module,
-        global_expression_kind_tracker: &mut crate::proc::ExpressionKindTracker,
-        ty: Handle<crate::Type>,
-        condition_id: spirv::Word,
-        o1_id: spirv::Word,
-        o2_id: spirv::Word,
-        span: crate::Span,
-    ) -> OptimizationResult {
-        let o1_is_one = self.is_constant_one(module, o1_id)?;
-        let o2_is_zero = self.is_constant_zero(module, o2_id)?;
-
-        if !o1_is_one || !o2_is_zero {
-            return Ok(None);
-        }
-
-        let scalar = match module.types[ty].inner {
-            crate::TypeInner::Scalar(scalar)
-            | crate::TypeInner::Vector { scalar, .. }
-            | crate::TypeInner::Matrix { scalar, .. } => scalar,
-            _ => return Ok(None),
-        };
-
-        let condition_expr_inner = self.lookup_constant.lookup(condition_id)?.inner.to_expr();
-        let condition_expr = self.eval_and_append_expression(
-            module,
-            global_expression_kind_tracker,
-            condition_expr_inner,
-            span,
-        )?;
-
-        let as_expr = self.eval_and_append_expression(
-            module,
-            global_expression_kind_tracker,
-            crate::Expression::As {
-                expr: condition_expr,
-                kind: scalar.kind,
-                convert: Some(scalar.width),
-            },
-            span,
-        )?;
-
-        let source_name = self.get_constant_name(module, condition_id);
-        let derived_name = source_name.map(|name| {
-            let target_type = self.format_target_type(module, ty);
-            format!("{name}_as_{target_type}")
-        });
-
-        Ok(Some((as_expr, derived_name)))
     }
 
     fn parse_spec_constant_op(
@@ -6506,88 +6337,69 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 let left_id = self.next()?;
                 let right_id = self.next()?;
 
-                match self.try_optimize_type_conversion_pattern(
+                let op = match opcode {
+                    Op::IAdd => crate::BinaryOperator::Add,
+                    Op::ISub => crate::BinaryOperator::Subtract,
+                    Op::IMul => crate::BinaryOperator::Multiply,
+                    Op::UDiv | Op::SDiv => crate::BinaryOperator::Divide,
+                    Op::SRem | Op::UMod => crate::BinaryOperator::Modulo,
+                    Op::BitwiseOr => crate::BinaryOperator::InclusiveOr,
+                    Op::BitwiseXor => crate::BinaryOperator::ExclusiveOr,
+                    Op::BitwiseAnd => crate::BinaryOperator::And,
+                    Op::ShiftLeftLogical => crate::BinaryOperator::ShiftLeft,
+                    Op::ShiftRightLogical | Op::ShiftRightArithmetic => {
+                        crate::BinaryOperator::ShiftRight
+                    }
+                    Op::LogicalOr => crate::BinaryOperator::LogicalOr,
+                    Op::LogicalAnd => crate::BinaryOperator::LogicalAnd,
+                    Op::LogicalEqual => crate::BinaryOperator::Equal,
+                    Op::LogicalNotEqual => crate::BinaryOperator::NotEqual,
+                    Op::IEqual => crate::BinaryOperator::Equal,
+                    Op::INotEqual => crate::BinaryOperator::NotEqual,
+                    Op::ULessThan | Op::SLessThan => crate::BinaryOperator::Less,
+                    Op::UGreaterThan | Op::SGreaterThan => crate::BinaryOperator::Greater,
+                    Op::ULessThanEqual | Op::SLessThanEqual => crate::BinaryOperator::LessEqual,
+                    Op::UGreaterThanEqual | Op::SGreaterThanEqual => {
+                        crate::BinaryOperator::GreaterEqual
+                    }
+                    _ => unreachable!(),
+                };
+
+                let left_expr_inner = self.lookup_constant.lookup(left_id)?.inner.to_expr();
+                let right_expr_inner = self.lookup_constant.lookup(right_id)?.inner.to_expr();
+                let mut left_expr = self.eval_and_append_expression(
                     module,
                     global_expression_kind_tracker,
-                    opcode,
-                    ty,
-                    left_id,
-                    right_id,
+                    left_expr_inner,
                     span,
-                )? {
-                    Some((optimized_expr, name)) => {
-                        derived_name = name;
-                        optimized_expr
-                    }
-                    None => {
-                        let op = match opcode {
-                            Op::IAdd => crate::BinaryOperator::Add,
-                            Op::ISub => crate::BinaryOperator::Subtract,
-                            Op::IMul => crate::BinaryOperator::Multiply,
-                            Op::UDiv | Op::SDiv => crate::BinaryOperator::Divide,
-                            Op::SRem | Op::UMod => crate::BinaryOperator::Modulo,
-                            Op::BitwiseOr => crate::BinaryOperator::InclusiveOr,
-                            Op::BitwiseXor => crate::BinaryOperator::ExclusiveOr,
-                            Op::BitwiseAnd => crate::BinaryOperator::And,
-                            Op::ShiftLeftLogical => crate::BinaryOperator::ShiftLeft,
-                            Op::ShiftRightLogical | Op::ShiftRightArithmetic => {
-                                crate::BinaryOperator::ShiftRight
-                            }
-                            Op::LogicalOr => crate::BinaryOperator::LogicalOr,
-                            Op::LogicalAnd => crate::BinaryOperator::LogicalAnd,
-                            Op::LogicalEqual => crate::BinaryOperator::Equal,
-                            Op::LogicalNotEqual => crate::BinaryOperator::NotEqual,
-                            Op::IEqual => crate::BinaryOperator::Equal,
-                            Op::INotEqual => crate::BinaryOperator::NotEqual,
-                            Op::ULessThan | Op::SLessThan => crate::BinaryOperator::Less,
-                            Op::UGreaterThan | Op::SGreaterThan => crate::BinaryOperator::Greater,
-                            Op::ULessThanEqual | Op::SLessThanEqual => {
-                                crate::BinaryOperator::LessEqual
-                            }
-                            Op::UGreaterThanEqual | Op::SGreaterThanEqual => {
-                                crate::BinaryOperator::GreaterEqual
-                            }
-                            _ => unreachable!(),
-                        };
+                )?;
+                let mut right_expr = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
+                    right_expr_inner,
+                    span,
+                )?;
 
-                        let left_expr_inner = self.lookup_constant.lookup(left_id)?.inner.to_expr();
-                        let right_expr_inner =
-                            self.lookup_constant.lookup(right_id)?.inner.to_expr();
-                        let mut left_expr = self.eval_and_append_expression(
-                            module,
-                            global_expression_kind_tracker,
-                            left_expr_inner,
-                            span,
-                        )?;
-                        let mut right_expr = self.eval_and_append_expression(
-                            module,
-                            global_expression_kind_tracker,
-                            right_expr_inner,
-                            span,
-                        )?;
+                self.implicit_cast_operators(
+                    module,
+                    global_expression_kind_tracker,
+                    op,
+                    ty,
+                    &mut left_expr,
+                    &mut right_expr,
+                    span,
+                )?;
 
-                        self.implicit_cast_operators(
-                            module,
-                            global_expression_kind_tracker,
-                            op,
-                            ty,
-                            &mut left_expr,
-                            &mut right_expr,
-                            span,
-                        )?;
-
-                        self.eval_and_append_expression(
-                            module,
-                            global_expression_kind_tracker,
-                            crate::Expression::Binary {
-                                op,
-                                left: left_expr,
-                                right: right_expr,
-                            },
-                            span,
-                        )?
-                    }
-                }
+                self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
+                    crate::Expression::Binary {
+                        op,
+                        left: left_expr,
+                        right: right_expr,
+                    },
+                    span,
+                )?
             }
 
             Op::SMod => {
@@ -6697,54 +6509,38 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 let o1_id = self.next()?;
                 let o2_id = self.next()?;
 
-                match self.try_optimize_select_conversion(
+                let cond_expr = self.lookup_constant.lookup(condition_id)?.inner.to_expr();
+                let o1_expr = self.lookup_constant.lookup(o1_id)?.inner.to_expr();
+                let o2_expr = self.lookup_constant.lookup(o2_id)?.inner.to_expr();
+                let cond = self.eval_and_append_expression(
                     module,
                     global_expression_kind_tracker,
-                    ty,
-                    condition_id,
-                    o1_id,
-                    o2_id,
+                    cond_expr,
                     span,
-                )? {
-                    Some((optimized_expr, name)) => {
-                        derived_name = name;
-                        optimized_expr
-                    }
-                    None => {
-                        let cond_expr = self.lookup_constant.lookup(condition_id)?.inner.to_expr();
-                        let o1_expr = self.lookup_constant.lookup(o1_id)?.inner.to_expr();
-                        let o2_expr = self.lookup_constant.lookup(o2_id)?.inner.to_expr();
-                        let cond = self.eval_and_append_expression(
-                            module,
-                            global_expression_kind_tracker,
-                            cond_expr,
-                            span,
-                        )?;
-                        let o1 = self.eval_and_append_expression(
-                            module,
-                            global_expression_kind_tracker,
-                            o1_expr,
-                            span,
-                        )?;
-                        let o2 = self.eval_and_append_expression(
-                            module,
-                            global_expression_kind_tracker,
-                            o2_expr,
-                            span,
-                        )?;
+                )?;
+                let o1 = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
+                    o1_expr,
+                    span,
+                )?;
+                let o2 = self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
+                    o2_expr,
+                    span,
+                )?;
 
-                        self.eval_and_append_expression(
-                            module,
-                            global_expression_kind_tracker,
-                            crate::Expression::Select {
-                                condition: cond,
-                                accept: o1,
-                                reject: o2,
-                            },
-                            span,
-                        )?
-                    }
-                }
+                self.eval_and_append_expression(
+                    module,
+                    global_expression_kind_tracker,
+                    crate::Expression::Select {
+                        condition: cond,
+                        accept: o1,
+                        reject: o2,
+                    },
+                    span,
+                )?
             }
 
             Op::VectorShuffle | Op::CompositeExtract | Op::CompositeInsert | Op::QuantizeToF16 => {
