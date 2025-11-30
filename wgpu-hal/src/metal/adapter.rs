@@ -628,12 +628,13 @@ impl super::PrivateCapabilities {
         }
 
         // TODO: is this check something we can comfortably run?
-        let argument_buffers = device.argument_buffers_support();
+        let argument_buffers = version
+            .at_least((10, 13), (11, 0), (11, 0), (1, 0), os_type)
+            .then(|| device.argument_buffers_support());
 
         let is_virtual = device.name().to_lowercase().contains("virtual");
 
         Self {
-            family_check,
             msl_version: if version.at_least((14, 0), (17, 0), (17, 0), (1, 0), os_type) {
                 MTLLanguageVersion::V3_1
             } else if version.at_least((13, 0), (16, 0), (16, 0), (1, 0), os_type) {
@@ -770,7 +771,7 @@ impl super::PrivateCapabilities {
             },
             max_samplers_per_stage: 16,
             // TODO: check
-            max_binding_array_elements: if argument_buffers == MTLArgumentBuffersTier::Tier2 {
+            max_binding_array_elements: if argument_buffers == Some(MTLArgumentBuffersTier::Tier2) {
                 1_000_000
             } else if family_check && device.supports_family(MTLGPUFamily::Apple4) {
                 96
@@ -827,6 +828,8 @@ impl super::PrivateCapabilities {
             } else {
                 60
             },
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=7
+            // 8 is supported on everything on that list
             max_color_render_targets: if Self::supports_any(
                 device,
                 &[
@@ -856,6 +859,9 @@ impl super::PrivateCapabilities {
             } else {
                 60
             },
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=6
+            // These are older checks but still hold true; no entry in this table supports
+            // more than 1024 threads.
             max_threads_per_group: if Self::supports_any(
                 device,
                 &[
@@ -867,6 +873,9 @@ impl super::PrivateCapabilities {
             } else {
                 512
             },
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=6
+            // These are older checks but still hold true; no entry in this table supports
+            // more than 32kb.
             max_total_threadgroup_memory: if Self::supports_any(
                 device,
                 &[
@@ -891,7 +900,9 @@ impl super::PrivateCapabilities {
             supports_binary_archives: metal3
                 || device.supports_family(MTLGPUFamily::Apple3)
                 || device.supports_family(MTLGPUFamily::Mac2),
+            // https://developer.apple.com/documentation/metal/mtlcapturemanager
             supports_capture_manager: version.at_least((10, 13), (11, 0), (11, 0), (1, 0), os_type),
+            // https://developer.apple.com/documentation/quartzcore/cametallayer/maximumdrawablecount
             can_set_maximum_drawables_count: version.at_least(
                 (10, 14),
                 (11, 2),
@@ -899,6 +910,7 @@ impl super::PrivateCapabilities {
                 (1, 0),
                 os_type,
             ),
+            // https://developer.apple.com/documentation/quartzcore/cametallayer/displaysyncenabled
             can_set_display_sync: version.at_least(
                 (10, 13),
                 OS_NOT_SUPPORT,
@@ -906,6 +918,7 @@ impl super::PrivateCapabilities {
                 OS_NOT_SUPPORT,
                 os_type,
             ),
+            // https://developer.apple.com/documentation/quartzcore/cametallayer/allowsnextdrawabletimeout
             can_set_next_drawable_timeout: version.at_least(
                 (10, 13),
                 (11, 0),
@@ -913,22 +926,27 @@ impl super::PrivateCapabilities {
                 (1, 0),
                 os_type,
             ),
+            // This is just trusted blindly since docs referencing supports_any have been removed
+            // but we don't want to remove feature support.
             supports_arrays_of_textures: Self::supports_any(
                 device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily3_v2,
+                    MTLFeatureSet::iOS_GPUFamily4_v1,
+                    MTLFeatureSet::iOS_GPUFamily5_v1,
                     MTLFeatureSet::tvOS_GPUFamily2_v1,
                     MTLFeatureSet::macOS_GPUFamily1_v3,
+                    MTLFeatureSet::macOS_GPUFamily2_v1,
                 ],
             ),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             supports_arrays_of_textures_write: metal3
-                || device.supports_family(MTLGPUFamily::Apple6)
-                || device.supports_family(MTLGPUFamily::Mac2),
+                || (family_check
+                    && (device.supports_family(MTLGPUFamily::Apple6)
+                        || device.supports_family(MTLGPUFamily::Mac2))),
             // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
             supports_mutability: version.at_least((10, 13), (11, 0), (11, 0), (1, 0), os_type),
-            // TODO: how did they come to the following conclusion
-            //Depth clipping is supported on all macOS GPU families and iOS family 4 and later
+            // Depth clipping is supported on all macOS GPU families and iOS family 4 and later
             supports_depth_clip_control: os_type == super::OsType::Macos
                 || device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1),
             // https://developer.apple.com/documentation/metal/mtlcompileoptions/preserveinvariance
@@ -956,13 +974,14 @@ impl super::PrivateCapabilities {
                 || device.supports_family(MTLGPUFamily::Apple7),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             int64: metal3 || device.supports_family(MTLGPUFamily::Apple3),
-            // TODO: my head hurts, does this only allow min/max?
-            // "Some GPU devices in the Apple8 family support 64-bit atomic minimum and maximum..."
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
-            int64_atomics: family_check
+            // There is also a footnote that says
+            // "Some GPU devices in the Apple8 family support 64-bit atomic minimum and maximum..."
+            int64_atomics_min_max: family_check
                 && (device.supports_family(MTLGPUFamily::Apple9)
                     || (device.supports_family(MTLGPUFamily::Apple8)
                         && device.supports_family(MTLGPUFamily::Mac2))),
+            int64_atomics: family_check && device.supports_family(MTLGPUFamily::Apple9),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             float_atomics: metal3
                 || device.supports_family(MTLGPUFamily::Apple7)
@@ -970,20 +989,22 @@ impl super::PrivateCapabilities {
             // https://developer.apple.com/documentation/metal/mtlsharedevent
             supports_shared_event: version.at_least((10, 14), (12, 0), (12, 0), (1, 0), os_type),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=5 (footnote)
-            // Very difficult to piece together. The function docs claims to require macOS 10.15+,
-            // but the feature set tables say "some GPU devices in the Mac2 and Metal3 families...
-            // [check support by] by inspecting its MTLDevice.supportsShaderBarycentricCoordinates property"
-            // If we get a bug report for metal 3 on macOS 10.14 should be easy to fix. Otherwise it works.
+            // Supported on some Metal4, Apple7, Mac2, and some other platforms can be queried with device.supportsShaderBarycentricCoordinates().
             shader_barycentrics: metal4
+                || (family_check
+                    && (device.supports_family(MTLGPUFamily::Apple7)
+                        || device.supports_family(MTLGPUFamily::Mac2)))
                 || (version.at_least((10, 15), (14, 0), (16, 0), (1, 0), os_type)
                     && device.supports_shader_barycentric_coordinates()),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
-            supports_memoryless_storage: metal4 || device.supports_family(MTLGPUFamily::Apple2),
+            supports_memoryless_storage: metal4
+                || (family_check && device.supports_family(MTLGPUFamily::Apple2)),
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             mesh_shaders: family_check
                 && (device.supports_family(MTLGPUFamily::Metal3)
                     || device.supports_family(MTLGPUFamily::Apple7)
                     || device.supports_family(MTLGPUFamily::Mac2))
-                    // Mesh shaders don't work on virtual devices even if they should be supported.
+                    // Mesh shaders don't work on virtual devices even if they should be supported. CI thing
                 && !is_virtual,
             supported_vertex_amplification_factor: {
                 let mut factor = 1;
@@ -1070,14 +1091,20 @@ impl super::PrivateCapabilities {
                 | F::PARTIALLY_BOUND_BINDING_ARRAY,
             self.msl_version >= MTLLanguageVersion::V3_0
                 && self.supports_arrays_of_textures
-                && self.argument_buffers as u64 >= MTLArgumentBuffersTier::Tier2 as u64,
+                && self
+                    .argument_buffers
+                    .unwrap_or(MTLArgumentBuffersTier::Tier1) as u64
+                    >= MTLArgumentBuffersTier::Tier2 as u64,
         );
         features.set(
             F::STORAGE_RESOURCE_BINDING_ARRAY,
             self.msl_version >= MTLLanguageVersion::V3_0
                 && self.supports_arrays_of_textures
                 && self.supports_arrays_of_textures_write
-                && self.argument_buffers as u64 >= MTLArgumentBuffersTier::Tier2 as u64,
+                && self
+                    .argument_buffers
+                    .unwrap_or(MTLArgumentBuffersTier::Tier1) as u64
+                    >= MTLArgumentBuffersTier::Tier2 as u64,
         );
         features.set(
             F::SHADER_INT64,
@@ -1085,7 +1112,7 @@ impl super::PrivateCapabilities {
         );
         features.set(
             F::SHADER_INT64_ATOMIC_MIN_MAX,
-            self.int64_atomics && self.msl_version >= MTLLanguageVersion::V2_4,
+            self.int64_atomics_min_max && self.msl_version >= MTLLanguageVersion::V2_4,
         );
         features.set(
             F::TEXTURE_INT64_ATOMIC,

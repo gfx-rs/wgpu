@@ -199,7 +199,6 @@ bitflags!(
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 struct PrivateCapabilities {
-    family_check: bool,
     msl_version: MTLLanguageVersion,
     fragment_rw_storage: bool,
     read_write_texture_tier: MTLReadWriteTextureTier,
@@ -207,7 +206,7 @@ struct PrivateCapabilities {
     msaa_apple3: bool,
     msaa_apple7: bool,
     resource_heaps: bool,
-    argument_buffers: MTLArgumentBuffersTier,
+    argument_buffers: Option<MTLArgumentBuffersTier>,
     shared_textures: bool,
     mutable_comparison_samplers: bool,
     sampler_clamp_to_border: bool,
@@ -299,6 +298,7 @@ struct PrivateCapabilities {
     timestamp_query_support: TimestampQuerySupport,
     supports_simd_scoped_operations: bool,
     int64: bool,
+    int64_atomics_min_max: bool,
     int64_atomics: bool,
     float_atomics: bool,
     supports_shared_event: bool,
