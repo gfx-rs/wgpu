@@ -81,6 +81,7 @@ impl StagingBelt {
     /// supported. Because [`MAP_WRITE`](BufferUsages::MAP_WRITE) is implied, only
     /// [`COPY_SRC`](BufferUsages::COPY_SRC) can be used, except if
     /// [`Features::MAPPABLE_PRIMARY_BUFFERS`] is enabled.
+    #[track_caller]
     pub fn new_with_buffer_usages(
         device: Device,
         chunk_size: BufferAddress,
