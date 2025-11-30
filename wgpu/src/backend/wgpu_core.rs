@@ -1803,22 +1803,58 @@ impl dispatch::DeviceInterface for CoreDevice {
         error_sink.uncaptured_handler = Some(handler);
     }
 
-    fn push_error_scope(&self, filter: crate::ErrorFilter) {
+    fn push_error_scope(&self, filter: crate::ErrorFilter) -> u32 {
         let mut error_sink = self.error_sink.lock();
         let thread_id = thread_id::ThreadId::current();
         let scopes = error_sink.scopes.entry(thread_id).or_default();
+        let index = scopes
+            .len()
+            .try_into()
+            .expect("Greater than 2^32 nested error scopes");
         scopes.push(ErrorScope {
             error: None,
             filter,
         });
+        index
     }
 
-    fn pop_error_scope(&self) -> Pin<Box<dyn dispatch::PopErrorScopeFuture>> {
+    fn pop_error_scope(&self, index: u32) -> Pin<Box<dyn dispatch::PopErrorScopeFuture>> {
         let mut error_sink = self.error_sink.lock();
+
+        // We go out of our way to avoid panicking while unwinding, because that would abort the process,
+        // and we are supposed to just drop the error scope on the floor.
+        let is_panicking = crate::util::is_panicking();
         let thread_id = thread_id::ThreadId::current();
         let err = "Mismatched pop_error_scope call: no error scope for this thread. Error scopes are thread-local.";
-        let scopes = error_sink.scopes.get_mut(&thread_id).expect(err);
-        let scope = scopes.pop().expect(err);
+        let scopes = match error_sink.scopes.get_mut(&thread_id) {
+            Some(s) => s,
+            None => {
+                if !is_panicking {
+                    panic!("{err}");
+                } else {
+                    return Box::pin(ready(None));
+                }
+            }
+        };
+        if scopes.is_empty() && !is_panicking {
+            panic!("{err}");
+        }
+        if index as usize != scopes.len() - 1 && !is_panicking {
+            panic!(
+                "Mismatched pop_error_scope call: error scopes must be popped in reverse order."
+            );
+        }
+
+        // It would be more correct in this case to use `remove` here so that when unwinding is occurring
+        // we would remove the correct error scope, but we don't have such a primitive on the web
+        // and having consistent behavior here is more important. If you are unwinding and it unwinds
+        // the guards in the wrong order, it's totally reasonable to have incorrect behavior.
+        let scope = match scopes.pop() {
+            Some(s) => s,
+            None if !is_panicking => unreachable!(),
+            None => return Box::pin(ready(None)),
+        };
+
         Box::pin(ready(scope.error))
     }
 

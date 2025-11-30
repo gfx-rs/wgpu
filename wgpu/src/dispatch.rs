@@ -193,8 +193,9 @@ pub trait DeviceInterface: CommonTraits {
     fn set_device_lost_callback(&self, device_lost_callback: BoxDeviceLostCallback);
 
     fn on_uncaptured_error(&self, handler: Arc<dyn crate::UncapturedErrorHandler>);
-    fn push_error_scope(&self, filter: crate::ErrorFilter);
-    fn pop_error_scope(&self) -> Pin<Box<dyn PopErrorScopeFuture>>;
+    // Returns index on the stack of the pushed error scope.
+    fn push_error_scope(&self, filter: crate::ErrorFilter) -> u32;
+    fn pop_error_scope(&self, index: u32) -> Pin<Box<dyn PopErrorScopeFuture>>;
 
     unsafe fn start_graphics_debugger_capture(&self);
     unsafe fn stop_graphics_debugger_capture(&self);

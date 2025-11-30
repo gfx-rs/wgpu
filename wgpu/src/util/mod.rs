@@ -11,6 +11,7 @@ mod device;
 mod encoder;
 mod init;
 mod mutex;
+mod panicking;
 mod texture_blitter;
 
 use alloc::{borrow::Cow, format, string::String, vec};
@@ -28,6 +29,7 @@ pub use wgt::{
 };
 
 pub(crate) use mutex::Mutex;
+pub(crate) use panicking::is_panicking;
 
 use crate::dispatch;
 
