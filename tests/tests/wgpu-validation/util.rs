@@ -1,7 +1,6 @@
 //! Tests of [`wgpu::util`].
 
 use nanorand::Rng;
-use wgpu::BufferUsages;
 
 /// Generate (deterministic) random staging belt operations to exercise its logic.
 #[test]
@@ -43,22 +42,44 @@ fn staging_belt_random_test() {
 
 #[test]
 fn staging_belt_panics_with_invalid_buffer_usages() {
-    fn test_if_panics(usage: BufferUsages) -> bool {
-        std::panic::catch_unwind(|| {
+    #[track_caller]
+    fn test_if_panics(usage: wgpu::BufferUsages) {
+        if let Err(panic) = std::panic::catch_unwind(|| {
             let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
             let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(device.clone(), 512, usage);
-        })
-        .is_err()
+        }) {
+            // according to [1] the panic payload is either a `&str` or `String`
+            // [1]: https://doc.rust-lang.org/std/macro.panic.html
+
+            let message = if let Some(message) = panic.downcast_ref::<&str>() {
+                *message
+            } else if let Some(message) = panic.downcast_ref::<String>() {
+                message.as_str()
+            } else {
+                // don't know what this panic is, but it's not ours
+                std::panic::resume_unwind(panic);
+            };
+
+            let expected_message = format!("Only BufferUsages::COPY_SRC may be used when Features::MAPPABLE_PRIMARY_BUFFERS is not enabled. Specified buffer usages: {usage:?}");
+            if expected_message == message {
+                // panicked with the correct message
+            } else {
+                // This is not our panic (or the panic message was changed)
+                std::panic::resume_unwind(panic);
+            }
+        } else {
+            panic!("StagingBelt::new_with_buffer_usages should panic without MAPPABLE_PRIMARY_BUFFERS with usage={usage:?}");
+        }
     }
 
-    for mut usage in BufferUsages::all()
-        .difference(BufferUsages::COPY_SRC | BufferUsages::MAP_WRITE)
+    for mut usage in wgpu::BufferUsages::all()
+        .difference(wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::MAP_WRITE)
         .iter()
     {
-        assert!(test_if_panics(usage), "StagingBelt::new_with_buffer_usages should panic without MAPPABLE_PRIMARY_BUFFERS with usage={usage:?}");
+        test_if_panics(usage);
 
-        usage.insert(BufferUsages::MAP_WRITE);
-        assert!(test_if_panics(usage), "StagingBelt::new_with_buffer_usages should panic without MAPPABLE_PRIMARY_BUFFERS with usage={usage:?}");
+        usage.insert(wgpu::BufferUsages::MAP_WRITE);
+        test_if_panics(usage);
     }
 }
 
@@ -68,16 +89,16 @@ fn staging_belt_works_with_non_exclusive_buffer_usages() {
     let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(
         device.clone(),
         512,
-        BufferUsages::COPY_SRC,
+        wgpu::BufferUsages::COPY_SRC,
     );
     let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(
         device.clone(),
         512,
-        BufferUsages::COPY_SRC | BufferUsages::MAP_WRITE,
+        wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::MAP_WRITE,
     );
     let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(
         device.clone(),
         512,
-        BufferUsages::MAP_WRITE,
+        wgpu::BufferUsages::MAP_WRITE,
     );
 }
