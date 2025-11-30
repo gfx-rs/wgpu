@@ -191,9 +191,9 @@ bitflags::bitflags! {
         /// Support for task shaders, mesh shaders, and per-primitive fragment inputs
         const MESH_SHADER = 1 << 30;
         /// Support for mesh shaders which output points.
-        const MESH_SHADER_POINT_TOPOLOGY = 1 << 30;
+        const MESH_SHADER_POINT_TOPOLOGY = 1 << 31;
         /// Support for ray generation, any hit, closest hit, and miss shaders.
-        const RAY_TRACING_PIPELINE = 1 << 31;
+        const RAY_TRACING_PIPELINE = 1 << 32;
     }
 }
 
