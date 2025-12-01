@@ -156,6 +156,7 @@ By @cwfitzgerald in [#8579](https://github.com/gfx-rs/wgpu/pull/8579).
 #### Naga
 
 - Prevent UB with invalid ray query calls on spirv. By @Vecvec in [#8390](https://github.com/gfx-rs/wgpu/pull/8390). 
+- The SPIR-V frontend implements OpSpecConstantOp. By @hasenbanck in [8308](https://github.com/gfx-rs/wgpu/pull/8308).
 
 ### Bug Fixes
 
