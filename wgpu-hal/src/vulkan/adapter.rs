@@ -1331,14 +1331,6 @@ impl PhysicalDeviceProperties {
                 .min(crate::MAX_VERTEX_BUFFERS as u32),
             max_vertex_attributes: limits.max_vertex_input_attributes,
             max_vertex_buffer_array_stride: limits.max_vertex_input_binding_stride,
-            min_subgroup_size: self
-                .subgroup_size_control
-                .map(|subgroup_size| subgroup_size.min_subgroup_size)
-                .unwrap_or(0),
-            max_subgroup_size: self
-                .subgroup_size_control
-                .map(|subgroup_size| subgroup_size.max_subgroup_size)
-                .unwrap_or(0),
             max_immediate_size: limits.max_push_constants_size,
             min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as u32,
             min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as u32,
@@ -1776,6 +1768,14 @@ impl super::Instance {
                     .to_owned()
             },
             backend: wgt::Backend::Vulkan,
+            subgroup_min_size: phd_capabilities
+                .subgroup_size_control
+                .map(|subgroup_size| subgroup_size.min_subgroup_size)
+                .unwrap_or(wgt::MINIMUM_SUBGROUP_MIN_SIZE),
+            subgroup_max_size: phd_capabilities
+                .subgroup_size_control
+                .map(|subgroup_size| subgroup_size.max_subgroup_size)
+                .unwrap_or(wgt::MAXIMUM_SUBGROUP_MAX_SIZE),
             transient_saves_memory: supports_lazily_allocated,
         };
         let (available_features, mut downlevel_flags) =

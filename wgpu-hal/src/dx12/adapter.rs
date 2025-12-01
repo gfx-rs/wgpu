@@ -116,6 +116,15 @@ impl super::Adapter {
         }
         .unwrap();
 
+        let mut features1 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS1::default();
+        let hr = unsafe {
+            device.CheckFeatureSupport(
+                Direct3D12::D3D12_FEATURE_D3D12_OPTIONS1,
+                <*mut _>::cast(&mut features1),
+                size_of_val(&features1) as u32,
+            )
+        };
+
         let driver_version = unsafe { adapter.CheckInterfaceSupport(&Dxgi::IDXGIDevice::IID) }
             .ok()
             .map(|i| {
@@ -156,6 +165,8 @@ impl super::Adapter {
                 driver_version.0, driver_version.1, driver_version.2, driver_version.3
             ),
             driver_info: String::new(),
+            subgroup_min_size: features1.WaveLaneCountMin,
+            subgroup_max_size: features1.WaveLaneCountMax,
             transient_saves_memory: false,
         };
 
@@ -483,15 +494,6 @@ impl super::Adapter {
         };
         features.set(wgt::Features::TEXTURE_FORMAT_P010, p010_format_supported);
 
-        let mut features1 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS1::default();
-        let hr = unsafe {
-            device.CheckFeatureSupport(
-                Direct3D12::D3D12_FEATURE_D3D12_OPTIONS1,
-                <*mut _>::cast(&mut features1),
-                size_of_val(&features1) as u32,
-            )
-        };
-
         features.set(
             wgt::Features::SHADER_INT64,
             shader_model >= naga::back::hlsl::ShaderModel::V6_0
@@ -694,8 +696,6 @@ impl super::Adapter {
                         .min(crate::MAX_VERTEX_BUFFERS as u32),
                     max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
                     max_vertex_buffer_array_stride: Direct3D12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
-                    min_subgroup_size: 4, // Not using `features1.WaveLaneCountMin` as it is unreliable
-                    max_subgroup_size: 128,
                     // The immediates are part of the root signature which
                     // has a limit of 64 DWORDS (256 bytes), but other resources
                     // also share the root signature:

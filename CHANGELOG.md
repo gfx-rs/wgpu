@@ -140,6 +140,23 @@ event happens. Our new log policy is as follows:
 
 By @cwfitzgerald in [#8579](https://github.com/gfx-rs/wgpu/pull/8579).
 
+#### `subgroup_{min,max}_size` renamed and moved from `Limits` -> `AdapterInfo`
+
+To bring our code in line with the WebGPU spec, we have moved information about subgroup size
+from limits to adapter info. Limits was not the correct place for this anyway, and we had some
+code special casing those limits.
+
+Additionally we have renamed the fields to match the spec.
+
+```diff
+- let min = limits.min_subgroup_size;
++ let min = info.subgroup_min_size;
+- let max = limits.max_subgroup_size;
++ let max = info.subgroup_max_size;
+```
+
+By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
+
 ### New Features
 
 - Added support for transient textures on Vulkan and Metal. By @opstic in [#8247](https://github.com/gfx-rs/wgpu/pull/8247)

@@ -56,9 +56,6 @@ macro_rules! with_limits {
         $macro_name!(max_compute_workgroup_size_z, Ordering::Less);
         $macro_name!(max_compute_workgroups_per_dimension, Ordering::Less);
 
-        $macro_name!(min_subgroup_size, Ordering::Greater);
-        $macro_name!(max_subgroup_size, Ordering::Less);
-
         $macro_name!(max_immediate_size, Ordering::Less);
         $macro_name!(max_non_sampler_bindings, Ordering::Less);
 
@@ -214,10 +211,6 @@ pub struct Limits {
     /// Defaults to 65535. Higher is "better".
     pub max_compute_workgroups_per_dimension: u32,
 
-    /// Minimal number of invocations in a subgroup. Lower is "better".
-    pub min_subgroup_size: u32,
-    /// Maximal number of invocations in a subgroup. Higher is "better".
-    pub max_subgroup_size: u32,
     /// Amount of storage available for immediates in bytes. Defaults to 0. Higher is "better".
     /// Requesting more than 0 during device creation requires [`Features::IMMEDIATES`] to be enabled.
     ///
@@ -316,8 +309,6 @@ impl Limits {
     ///     max_compute_workgroup_size_y: 256,
     ///     max_compute_workgroup_size_z: 64,
     ///     max_compute_workgroups_per_dimension: 65535,
-    ///     min_subgroup_size: 0,
-    ///     max_subgroup_size: 0,
     ///     max_immediate_size: 0,
     ///     max_non_sampler_bindings: 1_000_000,
     ///     max_task_workgroup_total_count: 0,
@@ -369,8 +360,6 @@ impl Limits {
             max_compute_workgroup_size_y: 256,
             max_compute_workgroup_size_z: 64,
             max_compute_workgroups_per_dimension: 65535,
-            min_subgroup_size: 0,
-            max_subgroup_size: 0,
             max_immediate_size: 0,
             max_non_sampler_bindings: 1_000_000,
 
@@ -414,8 +403,6 @@ impl Limits {
     ///     max_vertex_buffers: 8,
     ///     max_vertex_attributes: 16,
     ///     max_vertex_buffer_array_stride: 2048,
-    ///     min_subgroup_size: 0,
-    ///     max_subgroup_size: 0,
     ///     max_immediate_size: 0,
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
@@ -491,8 +478,6 @@ impl Limits {
     ///     max_vertex_buffers: 8,
     ///     max_vertex_attributes: 16,
     ///     max_vertex_buffer_array_stride: 255, // +
-    ///     min_subgroup_size: 0,
-    ///     max_subgroup_size: 0,
     ///     max_immediate_size: 0,
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
@@ -536,8 +521,6 @@ impl Limits {
             max_compute_workgroup_size_y: 0,
             max_compute_workgroup_size_z: 0,
             max_compute_workgroups_per_dimension: 0,
-            min_subgroup_size: 0,
-            max_subgroup_size: 0,
 
             // Value supported by Intel Celeron B830 on Windows (OpenGL 3.1)
             max_inter_stage_shader_components: 31,
@@ -647,12 +630,7 @@ impl Limits {
         macro_rules! check_with_fail_fn {
             ($name:ident, $ordering:expr) => {
                 let invalid_ord = $ordering.reverse();
-                // In the case of `min_subgroup_size`, requesting a value of
-                // zero means "I'm not going to use subgroups", so we have to
-                // special case that. If any of our minimum limits could
-                // meaningfully go all the way to zero, that would conflict with
-                // this.
-                if self.$name != 0 && self.$name.cmp(&allowed.$name) == invalid_ord {
+                if self.$name.cmp(&allowed.$name) == invalid_ord {
                     fail_fn(stringify!($name), self.$name as u64, allowed.$name as u64);
                     if fatal {
                         return;
@@ -661,13 +639,6 @@ impl Limits {
             };
         }
 
-        if self.min_subgroup_size > self.max_subgroup_size {
-            fail_fn(
-                "max_subgroup_size",
-                self.min_subgroup_size as u64,
-                allowed.min_subgroup_size as u64,
-            );
-        }
         with_limits!(check_with_fail_fn);
     }
 

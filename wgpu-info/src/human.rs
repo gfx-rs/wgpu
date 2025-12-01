@@ -1,6 +1,7 @@
 use std::io;
 
 use bitflags::Flags;
+use wgpu::AdapterInfo;
 
 use crate::{
     report::{AdapterReport, GpuReport},
@@ -89,21 +90,38 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     // Adapter Info //
     //////////////////
 
+    let AdapterInfo {
+        name,
+        vendor,
+        device,
+        device_type,
+        device_pci_bus_id,
+        driver,
+        driver_info,
+        backend,
+        subgroup_min_size,
+        subgroup_max_size,
+        transient_saves_memory,
+    } = info;
+
     if matches!(verbosity, PrintingVerbosity::NameOnly) {
         writeln!(output, "Adapter {idx}: {} ({:?})", info.name, info.backend)?;
         return Ok(());
     }
 
     writeln!(output, "Adapter {idx}:")?;
-    writeln!(output, "\t         Backend: {:?}", info.backend)?;
-    writeln!(output, "\t            Name: {}", info.name)?;
-    writeln!(output, "\t        VendorID: {:#X?}", info.vendor)?;
-    writeln!(output, "\t        DeviceID: {:#X?}", info.device)?;
-    writeln!(output, "\t  DevicePCIBusId: {}", print_empty_string(&info.device_pci_bus_id))?;
-    writeln!(output, "\t            Type: {:?}", info.device_type)?;
-    writeln!(output, "\t          Driver: {}", print_empty_string(&info.driver))?;
-    writeln!(output, "\t      DriverInfo: {}", print_empty_string(&info.driver_info))?;
-    writeln!(output, "\tWebGPU Compliant: {:?}", downlevel.is_webgpu_compliant())?;
+    writeln!(output, "\t               Backend: {backend:?}")?;
+    writeln!(output, "\t                  Name: {name}")?;
+    writeln!(output, "\t             Vendor ID: {vendor:#X?}")?;
+    writeln!(output, "\t             Device ID: {device:#X?}")?;
+    writeln!(output, "\t     Device PCI Bus ID: {}", print_empty_string(device_pci_bus_id))?;
+    writeln!(output, "\t                  Type: {device_type:?}")?;
+    writeln!(output, "\t                Driver: {}", print_empty_string(driver))?;
+    writeln!(output, "\t           Driver Info: {}", print_empty_string(driver_info))?;
+    writeln!(output, "\t     Subgroup Min Size: {subgroup_min_size}")?;
+    writeln!(output, "\t     Subgroup Max Size: {subgroup_max_size}")?;
+    writeln!(output, "\tTransient Saves Memory: {transient_saves_memory}")?;
+    writeln!(output, "\t      WebGPU Compliant: {:?}", downlevel.is_webgpu_compliant())?;
 
     if matches!(verbosity, PrintingVerbosity::Information) {
         return Ok(());
@@ -157,8 +175,6 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_compute_workgroup_size_y,
         max_compute_workgroup_size_z,
         max_compute_workgroups_per_dimension,
-        min_subgroup_size,
-        max_subgroup_size,
         max_immediate_size,
         max_non_sampler_bindings,
 
@@ -195,8 +211,6 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                                 Max Vertex Buffers: {max_vertex_buffers}")?;
     writeln!(output, "\t\t                              Max Vertex Attributes: {max_vertex_attributes}")?;
     writeln!(output, "\t\t                     Max Vertex Buffer Array Stride: {max_vertex_buffer_array_stride}")?;
-    writeln!(output, "\t\t                                  Min Subgroup Size: {min_subgroup_size}")?;
-    writeln!(output, "\t\t                                  Max Subgroup Size: {max_subgroup_size}")?;
     writeln!(output, "\t\t                             Max Immediate data Size: {max_immediate_size}")?;
     writeln!(output, "\t\t                Min Uniform Buffer Offset Alignment: {min_uniform_buffer_offset_alignment}")?;
     writeln!(output, "\t\t                Min Storage Buffer Offset Alignment: {min_storage_buffer_offset_alignment}")?;

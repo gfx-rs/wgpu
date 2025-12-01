@@ -132,6 +132,32 @@ pub struct AdapterInfo {
     pub driver_info: String,
     /// Backend used for device
     pub backend: Backend,
+    /// Minimum possible size of a subgroup on this adapter. Will
+    /// never be lower than [`crate::MINIMUM_SUBGROUP_MIN_SIZE`].
+    ///
+    /// This will vary from device to device. Typical values are listed below.
+    ///
+    /// - NVIDIA: 32
+    /// - AMD GCN/Vega: 64
+    /// - AMD RDNA+: 32
+    /// - Intel: 8 or 16
+    /// - Qualcomm: 64
+    /// - WARP: 4
+    /// - lavapipe: 8
+    pub subgroup_min_size: u32,
+    /// Maximum possible size of a subgroup on this adapter. Will
+    /// never be higher than [`crate::MAXIMUM_SUBGROUP_MAX_SIZE`].
+    ///
+    /// This will vary from device to device. Typical values are listed below:
+    ///
+    /// - NVIDIA: 32
+    /// - AMD GCN/Vega: 64
+    /// - AMD RDNA+: 64
+    /// - Intel: 16 or 32
+    /// - Qualcomm: 128
+    /// - WARP: 4 or 128
+    /// - lavapipe: 8
+    pub subgroup_max_size: u32,
     /// If true, adding [`TextureUsages::TRANSIENT`] to a texture will decrease memory usage.
     pub transient_saves_memory: bool,
 }

@@ -141,6 +141,8 @@ pub fn adapter_info() -> wgt::AdapterInfo {
         driver: String::from("wgpu"),
         driver_info: String::new(),
         backend: wgt::Backend::Noop,
+        subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
+        subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
         transient_saves_memory: false,
     }
 }
@@ -189,8 +191,6 @@ pub const CAPABILITIES: crate::Capabilities = {
             max_compute_workgroup_size_y: ALLOC_MAX_U32,
             max_compute_workgroup_size_z: ALLOC_MAX_U32,
             max_compute_workgroups_per_dimension: ALLOC_MAX_U32,
-            min_subgroup_size: 1,
-            max_subgroup_size: ALLOC_MAX_U32,
             max_immediate_size: ALLOC_MAX_U32,
             max_non_sampler_bindings: ALLOC_MAX_U32,
 
