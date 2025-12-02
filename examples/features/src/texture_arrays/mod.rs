@@ -438,7 +438,8 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::empty(),
-    base_test_parameters: wgpu_test::TestParameters::default(),
+    base_test_parameters: wgpu_test::TestParameters::default()
+        .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
     _phantom: std::marker::PhantomData::<Example>,
 };
@@ -452,7 +453,8 @@ pub static TEST_UNIFORM: crate::framework::ExampleTestParams =
         width: 1024,
         height: 768,
         optional_features: wgpu::Features::empty(),
-        base_test_parameters: wgpu_test::TestParameters::default(),
+        base_test_parameters: wgpu_test::TestParameters::default()
+            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
         _phantom: std::marker::PhantomData::<Example>,
     };
@@ -467,7 +469,8 @@ pub static TEST_NON_UNIFORM: crate::framework::ExampleTestParams =
         height: 768,
         optional_features:
             wgpu::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-        base_test_parameters: wgpu_test::TestParameters::default(),
+        base_test_parameters: wgpu_test::TestParameters::default()
+            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION),
         comparisons: &[wgpu_test::ComparisonType::Mean(0.0)],
         _phantom: std::marker::PhantomData::<Example>,
     };

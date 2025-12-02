@@ -18,6 +18,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
 static BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
+            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
             .features(Features::BUFFER_BINDING_ARRAY | Features::UNIFORM_BUFFER_BINDING_ARRAYS)
             .limits(Limits {
                 max_binding_array_elements_per_shader_stage: 16,
@@ -36,6 +37,7 @@ static BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConfiguratio
 static PARTIAL_BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
+            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
             .features(
                 Features::BUFFER_BINDING_ARRAY
                     | Features::PARTIALLY_BOUND_BINDING_ARRAY
@@ -58,6 +60,7 @@ static PARTIAL_BINDING_ARRAY_UNIFORM_BUFFERS: GpuTestConfiguration = GpuTestConf
 static BINDING_ARRAY_STORAGE_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
+            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
             .features(
                 Features::BUFFER_BINDING_ARRAY
                     | Features::STORAGE_RESOURCE_BINDING_ARRAY
@@ -76,6 +79,7 @@ static BINDING_ARRAY_STORAGE_BUFFERS: GpuTestConfiguration = GpuTestConfiguratio
 static PARTIAL_BINDING_ARRAY_STORAGE_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
+            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
             .features(
                 Features::BUFFER_BINDING_ARRAY
                     | Features::PARTIALLY_BOUND_BINDING_ARRAY
