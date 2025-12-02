@@ -106,7 +106,7 @@ One other breaking change worth noting is that in WGSL `@builtin(view_index)` no
 
 By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206).
 
-#### Error scopes now use guards and are thread local.
+#### Error scopes now use guards and are thread-local.
 
 ```diff
 - device.push_error_scope(wgpu::ErrorFilter::Validation);
