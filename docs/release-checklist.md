@@ -40,6 +40,7 @@ Day of Release:
   ```
 - If there were any newly published crates, ensure `github:gfx-rs/wgpu` is added as an owner of that crate.
 - Create a new tag called `vX.Y.Z` and push it to the repo.
+  - For each crate being released (viz., every `publish`-able crate that is not `deno*`), create a new tag of the form `{crate_name}-vX.Y.X`.
 - Create a new release on the `wgpu` repo with the changelog from this version, targeting that tag
 - Create a branch with the with the new version `vX` and push it to the repo.
   - On this branch, remove the [!NOTE] at the top of [wgpu/examples/README.md].
@@ -53,7 +54,7 @@ Day of Release:
     - Add an AMA comment.
   - Include the r/rust post shortlink in the following posts as well:
   - [wgpu matrix](https://matrix.to/#/#wgpu:matrix.org)
-  - [Rust Gamedev Discord](https://discord.gg/yNtPTb2) in the #crates channel
+  - [Rust Gamedev Discord](https://discord.gg/X3MYBNXUMJ) in the #crates and #wgpu channel
   - [Bevy Discord](https://discord.com/invite/bevy) in the #rendering-dev channel
   - [Graphics Programming Discord](https://discord.gg/6mgNGk7) in the #webgpu channel
   - [Rust Community Discord](https://discord.gg/rust-lang-community) in the #games-and-graphics channel
@@ -74,7 +75,8 @@ Day of Release:
 - Once the PR is CI clean, (force) rebase merge it.
 - Checkout the release branch with the merged PR.
 - Publish all relevant crates (see list above).
-- Create a new release on the `wgpu` repo with the changelog and a tag called `vX.Y.Z` on the release branch.
+- Create a new release on the `wgpu` repo with the relevant changelog included, based on a new tag called `vX.Y.Z` in the release branch.
+  - For each crate released, also create a tag `{crate_name}-vX.Y.Z`.
 - Backport the changelog and version bumps to the `trunk` branch.
   - Ensure that any items in the newly-released changelog don't appear in the "unreleased" section of the trunk changelog.
 - Update the release checklist with any needed changes.

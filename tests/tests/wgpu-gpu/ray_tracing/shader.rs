@@ -1,17 +1,19 @@
 use crate::ray_tracing::{acceleration_structure_limits, AsBuildContext};
+use wgpu::util::{BufferInitDescriptor, DeviceExt};
 use wgpu::{
-    include_wgsl, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor,
-    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor,
+    include_wgsl, Backends, BindGroupDescriptor, BindGroupEntry, BindingResource, BufferDescriptor,
+    CommandEncoderDescriptor, ComputePassDescriptor, ComputePipelineDescriptor, InstanceFlags,
 };
 use wgpu::{AccelerationStructureFlags, BufferUsages};
 use wgpu_macros::gpu_test;
-use wgpu_test::GpuTestInitializer;
+use wgpu_test::{FailureCase, GpuTestInitializer};
 use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
 
 const STRUCT_SIZE: wgpu::BufferAddress = 176;
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.push(ACCESS_ALL_STRUCT_MEMBERS);
+    tests.push(PREVENT_INVALID_RAY_QUERY_CALLS);
 }
 
 #[gpu_test]
@@ -80,6 +82,100 @@ fn access_all_struct_members(ctx: TestingContext) {
             BindGroupEntry {
                 binding: 1,
                 resource: BindingResource::Buffer(buf.as_entire_buffer_binding()),
+            },
+        ],
+    });
+
+    //
+    // Submit once to check for no issues
+    //
+
+    let mut encoder_compute = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor::default());
+    {
+        let mut pass = encoder_compute.begin_compute_pass(&ComputePassDescriptor {
+            label: None,
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&compute_pipeline);
+        pass.set_bind_group(0, Some(&bind_group), &[]);
+        pass.dispatch_workgroups(1, 1, 1)
+    }
+
+    ctx.queue.submit([encoder_compute.finish()]);
+}
+
+#[gpu_test]
+static PREVENT_INVALID_RAY_QUERY_CALLS: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .limits(acceleration_structure_limits())
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            // Otherwise, mistakes in the generated code won't be caught.
+            .instance_flags(InstanceFlags::GPU_BASED_VALIDATION)
+            // not yet implemented in directx12
+            .skip(FailureCase::backend(Backends::DX12 | Backends::METAL)),
+    )
+    .run_sync(prevent_invalid_ray_query_calls);
+
+fn prevent_invalid_ray_query_calls(ctx: TestingContext) {
+    let invalid_values_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        label: Some("invalid values buffer"),
+        contents: bytemuck::cast_slice(&[f32::NAN, f32::INFINITY]),
+        usage: BufferUsages::STORAGE,
+    });
+
+    //
+    // Create a clean `AsBuildContext`
+    //
+
+    let as_ctx = AsBuildContext::new(
+        &ctx,
+        AccelerationStructureFlags::empty(),
+        AccelerationStructureFlags::empty(),
+    );
+
+    let mut encoder_build = ctx
+        .device
+        .create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("Build"),
+        });
+
+    encoder_build.build_acceleration_structures([&as_ctx.blas_build_entry()], [&as_ctx.tlas]);
+
+    ctx.queue.submit([encoder_build.finish()]);
+
+    //
+    // Create shader
+    //
+
+    let shader = ctx
+        .device
+        .create_shader_module(include_wgsl!("shader.wgsl"));
+    let compute_pipeline = ctx
+        .device
+        .create_compute_pipeline(&ComputePipelineDescriptor {
+            label: None,
+            layout: None,
+            module: &shader,
+            entry_point: Some("invalid_usages"),
+            compilation_options: Default::default(),
+            cache: None,
+        });
+
+    let bind_group = ctx.device.create_bind_group(&BindGroupDescriptor {
+        label: None,
+        layout: &compute_pipeline.get_bind_group_layout(0),
+        entries: &[
+            BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::AccelerationStructure(&as_ctx.tlas),
+            },
+            BindGroupEntry {
+                binding: 1,
+                resource: BindingResource::Buffer(invalid_values_buffer.as_entire_buffer_binding()),
             },
         ],
     });

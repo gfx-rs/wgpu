@@ -8,7 +8,7 @@ use core::{
 };
 
 use arrayvec::ArrayVec;
-use ash::{ext, khr, vk};
+use ash::{ext, vk};
 use hashbrown::hash_map::Entry;
 use parking_lot::Mutex;
 
@@ -84,7 +84,7 @@ impl super::DeviceShared {
                     ref colors,
                     ref depth_stencil,
                     sample_count,
-                    multiview,
+                    multiview_mask,
                 } = *e.key();
 
                 let mut vk_attachments = Vec::new();
@@ -209,15 +209,8 @@ impl super::DeviceShared {
 
                 let mut multiview_info;
                 let mask;
-                if let Some(multiview) = multiview {
-                    // Sanity checks, better to panic here than cause a driver crash
-                    assert!(multiview.get() <= 8);
-                    assert!(multiview.get() > 1);
-
-                    // Right now we enable all bits on the view masks and correlation masks.
-                    // This means we're rendering to all views in the subpass, and that all views
-                    // can be rendered concurrently.
-                    mask = [(1 << multiview.get()) - 1];
+                if let Some(multiview_mask) = multiview_mask {
+                    mask = [multiview_mask.get()];
 
                     // On Vulkan 1.1 or later, this is an alias for core functionality
                     multiview_info = vk::RenderPassMultiviewCreateInfoKHR::default()
@@ -489,133 +482,20 @@ struct CompiledStage {
 }
 
 impl super::Device {
-    pub(super) unsafe fn create_swapchain(
-        &self,
-        surface: &super::Surface,
-        config: &crate::SurfaceConfiguration,
-        provided_old_swapchain: Option<super::Swapchain>,
-    ) -> Result<super::Swapchain, crate::SurfaceError> {
-        profiling::scope!("Device::create_swapchain");
-        let functor = khr::swapchain::Device::new(&surface.instance.raw, &self.shared.raw);
-
-        let old_swapchain = match provided_old_swapchain {
-            Some(osc) => osc.raw,
-            None => vk::SwapchainKHR::null(),
-        };
-
-        let color_space = if config.format == wgt::TextureFormat::Rgba16Float {
-            // Enable wide color gamut mode
-            // Vulkan swapchain for Android only supports DISPLAY_P3_NONLINEAR_EXT and EXTENDED_SRGB_LINEAR_EXT
-            vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT
-        } else {
-            vk::ColorSpaceKHR::SRGB_NONLINEAR
-        };
-
-        let original_format = self.shared.private_caps.map_texture_format(config.format);
-        let mut raw_flags = vk::SwapchainCreateFlagsKHR::empty();
-        let mut raw_view_formats: Vec<vk::Format> = vec![];
-        if !config.view_formats.is_empty() {
-            raw_flags |= vk::SwapchainCreateFlagsKHR::MUTABLE_FORMAT;
-            raw_view_formats = config
-                .view_formats
-                .iter()
-                .map(|f| self.shared.private_caps.map_texture_format(*f))
-                .collect();
-            raw_view_formats.push(original_format);
-        }
-
-        let mut info = vk::SwapchainCreateInfoKHR::default()
-            .flags(raw_flags)
-            .surface(surface.raw)
-            .min_image_count(config.maximum_frame_latency + 1) // TODO: https://github.com/gfx-rs/wgpu/issues/2869
-            .image_format(original_format)
-            .image_color_space(color_space)
-            .image_extent(vk::Extent2D {
-                width: config.extent.width,
-                height: config.extent.height,
-            })
-            .image_array_layers(config.extent.depth_or_array_layers)
-            .image_usage(conv::map_texture_usage(config.usage))
-            .image_sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .pre_transform(vk::SurfaceTransformFlagsKHR::IDENTITY)
-            .composite_alpha(conv::map_composite_alpha_mode(config.composite_alpha_mode))
-            .present_mode(conv::map_present_mode(config.present_mode))
-            .clipped(true)
-            .old_swapchain(old_swapchain);
-
-        let mut format_list_info = vk::ImageFormatListCreateInfo::default();
-        if !raw_view_formats.is_empty() {
-            format_list_info = format_list_info.view_formats(&raw_view_formats);
-            info = info.push_next(&mut format_list_info);
-        }
-
-        let result = {
-            profiling::scope!("vkCreateSwapchainKHR");
-            unsafe { functor.create_swapchain(&info, None) }
-        };
-
-        // doing this before bailing out with error
-        if old_swapchain != vk::SwapchainKHR::null() {
-            unsafe { functor.destroy_swapchain(old_swapchain, None) }
-        }
-
-        let raw = match result {
-            Ok(swapchain) => swapchain,
-            Err(error) => {
-                return Err(match error {
-                    vk::Result::ERROR_SURFACE_LOST_KHR
-                    | vk::Result::ERROR_INITIALIZATION_FAILED => crate::SurfaceError::Lost,
-                    vk::Result::ERROR_NATIVE_WINDOW_IN_USE_KHR => {
-                        crate::SurfaceError::Other("Native window is in use")
-                    }
-                    // We don't use VK_EXT_image_compression_control
-                    // VK_ERROR_COMPRESSION_EXHAUSTED_EXT
-                    other => super::map_host_device_oom_and_lost_err(other).into(),
-                });
-            }
-        };
-
-        let images =
-            unsafe { functor.get_swapchain_images(raw) }.map_err(super::map_host_device_oom_err)?;
-
-        // NOTE: It's important that we define the same number of acquire/present semaphores
-        // as we will need to index into them with the image index.
-        let acquire_semaphores = (0..=images.len())
-            .map(|i| {
-                super::SwapchainAcquireSemaphore::new(&self.shared, i)
-                    .map(Mutex::new)
-                    .map(Arc::new)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let present_semaphores = (0..=images.len())
-            .map(|i| Arc::new(Mutex::new(super::SwapchainPresentSemaphores::new(i))))
-            .collect::<Vec<_>>();
-
-        Ok(super::Swapchain {
-            raw,
-            functor,
-            device: Arc::clone(&self.shared),
-            images,
-            config: config.clone(),
-            acquire_semaphores,
-            next_acquire_index: 0,
-            present_semaphores,
-            next_present_time: None,
-        })
-    }
-
     /// # Safety
     ///
     /// - `vk_image` must be created respecting `desc`
     /// - If `drop_callback` is [`None`], wgpu-hal will take ownership of `vk_image`. If
     ///   `drop_callback` is [`Some`], `vk_image` must be valid until the callback is called.
     /// - If the `ImageCreateFlags` does not contain `MUTABLE_FORMAT`, the `view_formats` of `desc` must be empty.
+    /// - If `external_memory` is [`Some`], wgpu-hal will take ownership of the memory (which is presumed to back
+    ///   `vk_image`). If `external_memory` is [`None`], the memory must be valid until `drop_callback` is called.
     pub unsafe fn texture_from_raw(
         &self,
         vk_image: vk::Image,
         desc: &crate::TextureDescriptor,
         drop_callback: Option<crate::DropCallback>,
+        external_memory: Option<vk::DeviceMemory>,
     ) -> super::Texture {
         let mut raw_flags = vk::ImageCreateFlags::empty();
         let mut view_formats = vec![];
@@ -641,7 +521,7 @@ impl super::Device {
         super::Texture {
             raw: vk_image,
             drop_guard,
-            external_memory: None,
+            external_memory,
             block: None,
             format: desc.format,
             copy_size: desc.copy_extent(),
@@ -649,7 +529,6 @@ impl super::Device {
         }
     }
 
-    #[cfg(windows)]
     fn find_memory_type_index(
         &self,
         type_bits_req: u32,
@@ -707,7 +586,8 @@ impl super::Device {
             }
         }
         if desc.format.is_multi_planar_format() {
-            raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
+            raw_flags |=
+                vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE;
         }
 
         let mut vk_info = vk::ImageCreateInfo::default()
@@ -739,7 +619,17 @@ impl super::Device {
             // VK_ERROR_COMPRESSION_EXHAUSTED_EXT
             super::map_host_device_oom_and_ioca_err(err)
         }
-        let req = unsafe { self.shared.raw.get_image_memory_requirements(raw) };
+        let mut req = unsafe { self.shared.raw.get_image_memory_requirements(raw) };
+
+        if desc.usage.contains(wgt::TextureUses::TRANSIENT) {
+            let mem_type_index = self.find_memory_type_index(
+                req.memory_type_bits,
+                vk::MemoryPropertyFlags::LAZILY_ALLOCATED,
+            );
+            if let Some(mem_type_index) = mem_type_index {
+                req.memory_type_bits = 1 << mem_type_index;
+            }
+        }
 
         Ok(ImageWithoutMemory {
             raw,
@@ -872,6 +762,7 @@ impl super::Device {
                 };
                 let needs_temp_options = !runtime_checks.bounds_checks
                     || !runtime_checks.force_loop_bounding
+                    || !runtime_checks.ray_query_initialization_tracking
                     || !binding_map.is_empty()
                     || naga_shader.debug_source.is_some()
                     || !stage.zero_initialize_workgroup_memory;
@@ -888,6 +779,9 @@ impl super::Device {
                     }
                     if !runtime_checks.force_loop_bounding {
                         temp_options.force_loop_bounding = false;
+                    }
+                    if !runtime_checks.ray_query_initialization_tracking {
+                        temp_options.ray_query_initialization_tracking = false;
                     }
                     if !binding_map.is_empty() {
                         temp_options.binding_map = binding_map.clone();
@@ -1367,7 +1261,7 @@ impl crate::Device for super::Device {
         Ok(super::TextureView {
             raw_texture: texture.raw,
             raw,
-            layers,
+            _layers: layers,
             format: desc.format,
             raw_format,
             base_mip_level: desc.range.base_mip_level,
@@ -1474,6 +1368,7 @@ impl crate::Device for super::Device {
             framebuffers: Default::default(),
             temp_texture_views: Default::default(),
             counters: Arc::clone(&self.counters),
+            current_pipeline_is_multiview: false,
         })
     }
 
@@ -1622,8 +1517,8 @@ impl crate::Device for super::Device {
             .iter()
             .map(|bgl| bgl.raw)
             .collect::<Vec<_>>();
-        let vk_push_constant_ranges = desc
-            .push_constant_ranges
+        let vk_immediates_ranges = desc
+            .immediates_ranges
             .iter()
             .map(|pcr| vk::PushConstantRange {
                 stage_flags: conv::map_shader_stage(pcr.stages),
@@ -1635,7 +1530,7 @@ impl crate::Device for super::Device {
         let vk_info = vk::PipelineLayoutCreateInfo::default()
             .flags(vk::PipelineLayoutCreateFlags::empty())
             .set_layouts(&vk_set_layouts)
-            .push_constant_ranges(&vk_push_constant_ranges);
+            .push_constant_ranges(&vk_immediates_ranges);
 
         let raw = {
             profiling::scope!("vkCreatePipelineLayout");
@@ -1993,7 +1888,7 @@ impl crate::Device for super::Device {
         ];
         let mut compatible_rp_key = super::RenderPassKey {
             sample_count: desc.multisample.count,
-            multiview: desc.multiview,
+            multiview_mask: desc.multiview_mask,
             ..Default::default()
         };
         let mut stages = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
@@ -2262,7 +2157,10 @@ impl crate::Device for super::Device {
 
         self.counters.render_pipelines.add(1);
 
-        Ok(super::RenderPipeline { raw })
+        Ok(super::RenderPipeline {
+            raw,
+            is_multiview: desc.multiview_mask.is_some(),
+        })
     }
 
     unsafe fn destroy_render_pipeline(&self, pipeline: super::RenderPipeline) {

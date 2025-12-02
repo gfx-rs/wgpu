@@ -31,7 +31,7 @@ pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
 pub use function::{CallError, FunctionError, LocalVariableError, SubgroupError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
-pub use r#type::{Disalignment, PushConstantError, TypeError, TypeFlags, WidthError};
+pub use r#type::{Disalignment, ImmediateError, TypeError, TypeFlags, WidthError};
 
 use self::handles::InvalidHandleError;
 
@@ -84,10 +84,10 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub struct Capabilities: u32 {
-        /// Support for [`AddressSpace::PushConstant`][1].
+        /// Support for [`AddressSpace::Immediate`][1].
         ///
-        /// [1]: crate::AddressSpace::PushConstant
-        const PUSH_CONSTANT = 1 << 0;
+        /// [1]: crate::AddressSpace::Immediate
+        const IMMEDIATES = 1 << 0;
         /// Float values with width = 8.
         const FLOAT64 = 1 << 1;
         /// Support for [`BuiltIn::PrimitiveIndex`][1].
@@ -186,6 +186,12 @@ bitflags::bitflags! {
         /// Support for `quantizeToF16`, `pack2x16float`, and `unpack2x16float`, which store
         /// `f16`-precision values in `f32`s.
         const SHADER_FLOAT16_IN_FLOAT32 = 1 << 28;
+        /// Support for fragment shader barycentric coordinates.
+        const SHADER_BARYCENTRICS = 1 << 29;
+        /// Support for task shaders, mesh shaders, and per-primitive fragment inputs
+        const MESH_SHADER = 1 << 30;
+        /// Support for mesh shaders which output points.
+        const MESH_SHADER_POINT_TOPOLOGY = 1 << 31;
     }
 }
 
@@ -202,6 +208,8 @@ impl Capabilities {
             // NOTE: `SHADER_FLOAT16_IN_FLOAT32` _does not_ require the `f16` extension
             Self::SHADER_FLOAT16 => Some(Ext::F16),
             Self::CLIP_DISTANCE => Some(Ext::ClipDistances),
+            Self::RAY_QUERY => Some(Ext::WgpuRayQuery),
+            Self::RAY_HIT_VERTEX_POSITION => Some(Ext::WgpuRayQueryVertexReturn),
             _ => None,
         }
     }
@@ -278,6 +286,8 @@ bitflags::bitflags! {
         const VERTEX = 0x1;
         const FRAGMENT = 0x2;
         const COMPUTE = 0x4;
+        const MESH = 0x8;
+        const TASK = 0x10;
     }
 }
 

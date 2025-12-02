@@ -37,7 +37,7 @@ fn sampler_deduplication(ctx: TestingContext) {
         address_mode_w: wgpu::AddressMode::ClampToEdge,
         mag_filter: wgpu::FilterMode::Nearest,
         min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::MipmapFilterMode::Nearest,
         lod_min_clamp: 0.0,
         lod_max_clamp: 100.0,
         compare: None,
@@ -52,7 +52,7 @@ fn sampler_deduplication(ctx: TestingContext) {
         address_mode_w: wgpu::AddressMode::ClampToEdge,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
-        mipmap_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::MipmapFilterMode::Linear,
         lod_min_clamp: 0.0,
         lod_max_clamp: 100.0,
         compare: None,
@@ -96,7 +96,7 @@ fn sampler_creation_failure(ctx: TestingContext) {
         address_mode_w: wgpu::AddressMode::ClampToEdge,
         mag_filter: wgpu::FilterMode::Nearest,
         min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::MipmapFilterMode::Nearest,
         lod_min_clamp: 0.0,
         lod_max_clamp: 100.0,
         compare: None,
@@ -335,7 +335,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline_layout"),
             bind_group_layouts: &bgl_references,
-            push_constant_ranges: &[],
+            immediates_ranges: &[],
         });
 
     let input_image = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -397,7 +397,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             lod_min_clamp: 0.0,
             lod_max_clamp: 100.0,
             compare: None,

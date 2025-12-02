@@ -460,6 +460,9 @@ pub(crate) struct GPURenderPassDescriptor {
   /*#[webidl(default = 50000000)]
   #[options(enforce_range = true)]
   pub max_draw_count: u64,*/
+  #[webidl(default = 0)]
+  #[options(enforce_range = true)]
+  pub multiview_mask: u32,
 }
 
 #[derive(WebIDL)]

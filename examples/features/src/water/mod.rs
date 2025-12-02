@@ -217,7 +217,7 @@ impl Example {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             ..Default::default()
         });
 
@@ -428,14 +428,14 @@ impl crate::framework::Example for Example {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("water"),
                 bind_group_layouts: &[&water_bind_group_layout],
-                push_constant_ranges: &[],
+                immediates_ranges: &[],
             });
 
         let terrain_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("terrain"),
                 bind_group_layouts: &[&terrain_bind_group_layout],
-                push_constant_ranges: &[],
+                immediates_ranges: &[],
             });
 
         let water_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -567,7 +567,7 @@ impl crate::framework::Example for Example {
             }),
             // No multisampling is used.
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             // No pipeline caching is used
             cache: None,
         });
@@ -605,7 +605,7 @@ impl crate::framework::Example for Example {
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None
         });
 
@@ -750,6 +750,7 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             rpass.execute_bundles([&self.terrain_bundle]);
@@ -778,6 +779,7 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             rpass.set_pipeline(&self.terrain_pipeline);
             rpass.set_bind_group(0, &self.terrain_normal_bind_group, &[]);
@@ -805,6 +807,7 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             rpass.set_pipeline(&self.water_pipeline);

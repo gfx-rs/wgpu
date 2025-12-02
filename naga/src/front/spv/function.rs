@@ -596,6 +596,8 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             workgroup_size: ep.workgroup_size,
             workgroup_size_overrides: None,
             function,
+            mesh_info: None,
+            task_payload: None,
         });
 
         Ok(())

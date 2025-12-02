@@ -242,7 +242,7 @@ impl<A: hal::Api> Example<A> {
             label: None,
             flags: hal::PipelineLayoutFlags::empty(),
             bind_group_layouts: &[&global_group_layout, &local_group_layout],
-            push_constant_ranges: &[],
+            immediates_ranges: &[],
         };
         let pipeline_layout = unsafe {
             device
@@ -280,7 +280,7 @@ impl<A: hal::Api> Example<A> {
                 blend: Some(wgpu_types::BlendState::ALPHA_BLENDING),
                 write_mask: wgpu_types::ColorWrites::default(),
             })],
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         };
         let pipeline = unsafe { device.create_render_pipeline(&pipeline_desc).unwrap() };
@@ -385,7 +385,7 @@ impl<A: hal::Api> Example<A> {
             address_modes: [wgpu_types::AddressMode::ClampToEdge; 3],
             mag_filter: wgpu_types::FilterMode::Linear,
             min_filter: wgpu_types::FilterMode::Nearest,
-            mipmap_filter: wgpu_types::FilterMode::Nearest,
+            mipmap_filter: wgpu_types::MipmapFilterMode::Nearest,
             lod_clamp: 0.0..32.0,
             compare: None,
             anisotropy_clamp: 1,
@@ -727,7 +727,7 @@ impl<A: hal::Api> Example<A> {
                 },
             })],
             depth_stencil_attachment: None,
-            multiview: None,
+            multiview_mask: None,
             timestamp_writes: None,
             occlusion_query_set: None,
         };

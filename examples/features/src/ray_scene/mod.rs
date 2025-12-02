@@ -395,7 +395,7 @@ impl crate::framework::Example for Example {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -535,6 +535,7 @@ impl crate::framework::Example for Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             rpass.set_pipeline(&self.pipeline);
@@ -558,10 +559,7 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::default(),
-    base_test_parameters: wgpu_test::TestParameters::default().expect_fail(
-        wgpu_test::FailureCase::backend_adapter(wgpu::Backends::VULKAN, "llvmpipe")
-            .panic("Image data mismatch"),
-    ),
+    base_test_parameters: wgpu_test::TestParameters::default(),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,
 };

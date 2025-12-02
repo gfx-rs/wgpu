@@ -1,13 +1,13 @@
-name: 'Install Vulkan SDK'
-description: 'Install Vulkan SDK'
+name: "Install Vulkan SDK"
+description: "Install Vulkan SDK"
 inputs:
   # Sourced from https://vulkan.lunarg.com/sdk/home#linux
   version:
-    default: '1.4.321'
+    default: "1.4.328"
   full-version:
-    default: '1.4.321.0'
+    default: "1.4.328.1"
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: (Linux) Install Vulkan SDK
       if: runner.os == 'Linux'
@@ -42,7 +42,6 @@ runs:
         ./vulkan-sdk-installer.exe --accept-licenses --default-answer --confirm-command install
 
         echo "C:/VulkanSDK/${{ env.VULKAN_FULL_SDK_VERSION }}/Bin" >> "$GITHUB_PATH"
-
 
     - name: (Mac) Install Vulkan SDK
       if: runner.os == 'macOS'

@@ -632,6 +632,7 @@ fn map_texture_copy_view(
     let mapped = webgpu_sys::GpuTexelCopyTextureInfo::new(&texture.inner);
     mapped.set_mip_level(view.mip_level);
     mapped.set_origin(&map_origin_3d(view.origin));
+    mapped.set_aspect(map_texture_aspect(view.aspect));
     mapped
 }
 
@@ -675,10 +676,10 @@ fn map_filter_mode(mode: wgt::FilterMode) -> webgpu_sys::GpuFilterMode {
     }
 }
 
-fn map_mipmap_filter_mode(mode: wgt::FilterMode) -> webgpu_sys::GpuMipmapFilterMode {
+fn map_mipmap_filter_mode(mode: wgt::MipmapFilterMode) -> webgpu_sys::GpuMipmapFilterMode {
     match mode {
-        wgt::FilterMode::Nearest => webgpu_sys::GpuMipmapFilterMode::Nearest,
-        wgt::FilterMode::Linear => webgpu_sys::GpuMipmapFilterMode::Linear,
+        wgt::MipmapFilterMode::Nearest => webgpu_sys::GpuMipmapFilterMode::Nearest,
+        wgt::MipmapFilterMode::Linear => webgpu_sys::GpuMipmapFilterMode::Linear,
     }
 }
 
@@ -821,20 +822,22 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         // The following are not part of WebGPU
         min_subgroup_size: wgt::Limits::default().min_subgroup_size,
         max_subgroup_size: wgt::Limits::default().max_subgroup_size,
-        max_push_constant_size: wgt::Limits::default().max_push_constant_size,
+        max_immediate_size: wgt::Limits::default().max_immediate_size,
         max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
         max_inter_stage_shader_components: wgt::Limits::default().max_inter_stage_shader_components,
 
         max_task_workgroup_total_count: wgt::Limits::default().max_task_workgroup_total_count,
         max_task_workgroups_per_dimension: wgt::Limits::default().max_task_workgroups_per_dimension,
         max_mesh_output_layers: wgt::Limits::default().max_mesh_output_layers,
-        max_mesh_multiview_count: wgt::Limits::default().max_mesh_multiview_count,
+        max_mesh_multiview_view_count: wgt::Limits::default().max_mesh_multiview_view_count,
 
         max_blas_primitive_count: wgt::Limits::default().max_blas_primitive_count,
         max_blas_geometry_count: wgt::Limits::default().max_blas_geometry_count,
         max_tlas_instance_count: wgt::Limits::default().max_tlas_instance_count,
         max_acceleration_structures_per_shader_stage: wgt::Limits::default()
             .max_acceleration_structures_per_shader_stage,
+
+        max_multiview_view_count: wgt::Limits::default().max_multiview_view_count,
     }
 }
 
@@ -858,6 +861,7 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
         }
     }
 
+    // https://gpuweb.github.io/gpuweb/#gpusupportedlimits
     set_properties![
         (limits) => (object):
         (maxTextureDimension1D, max_texture_dimension_1d),
@@ -865,6 +869,7 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
         (maxTextureDimension3D, max_texture_dimension_3d),
         (maxTextureArrayLayers, max_texture_array_layers),
         (maxBindGroups, max_bind_groups),
+        // TODO: (maxBindGroupsPlusVertexBuffers, max_bind_groups_plus_vertex_buffers),
         (maxBindingsPerBindGroup, max_bindings_per_bind_group),
         (maxDynamicUniformBuffersPerPipelineLayout, max_dynamic_uniform_buffers_per_pipeline_layout),
         (maxDynamicStorageBuffersPerPipelineLayout, max_dynamic_storage_buffers_per_pipeline_layout),
@@ -881,6 +886,9 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
         (maxBufferSize, max_buffer_size),
         (maxVertexAttributes, max_vertex_attributes),
         (maxVertexBufferArrayStride, max_vertex_buffer_array_stride),
+        // TODO: (maxInterStageShaderVariables, max_inter_stage_shader_variables),
+        (maxColorAttachments, max_color_attachments),
+        (maxColorAttachmentBytesPerSample, max_color_attachment_bytes_per_sample),
         (maxComputeWorkgroupStorageSize, max_compute_workgroup_storage_size),
         (maxComputeInvocationsPerWorkgroup, max_compute_invocations_per_workgroup),
         (maxComputeWorkgroupSizeX, max_compute_workgroup_size_x),
@@ -1216,7 +1224,7 @@ pub struct WebBuffer {
     /// The associated GPU buffer.
     inner: webgpu_sys::GpuBuffer,
     /// The mapped array buffer and mapped range.
-    mapping: RefCell<WebBufferMapState>,
+    mapping: Rc<RefCell<WebBufferMapState>>,
     /// Unique identifier for this Buffer.
     ident: crate::cmp::Identifier,
 }
@@ -1226,10 +1234,10 @@ impl WebBuffer {
     fn new(inner: webgpu_sys::GpuBuffer, desc: &crate::BufferDescriptor<'_>) -> Self {
         Self {
             inner,
-            mapping: RefCell::new(WebBufferMapState {
+            mapping: Rc::new(RefCell::new(WebBufferMapState {
                 mapped_buffer: None,
                 range: 0..desc.size,
-            }),
+            })),
             ident: crate::cmp::Identifier::create(),
         }
     }
@@ -1702,9 +1710,11 @@ impl dispatch::AdapterInterface for WebAdapter {
             vendor: 0,
             device: 0,
             device_type: wgt::DeviceType::Other,
+            device_pci_bus_id: String::new(),
             driver: String::new(),
             driver_info: String::new(),
             backend: wgt::Backend::BrowserWebGpu,
+            transient_saves_memory: false,
         }
     }
 
@@ -2293,7 +2303,7 @@ impl dispatch::DeviceInterface for WebDevice {
         let mapped_desc = webgpu_sys::GpuTextureDescriptor::new(
             map_texture_format(desc.format),
             &map_extent_3d(desc.size),
-            desc.usage.bits(),
+            (desc.usage - crate::TextureUsages::TRANSIENT).bits(),
         );
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
@@ -3286,8 +3296,8 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
         }
     }
 
-    fn set_push_constants(&mut self, _offset: u32, _data: &[u8]) {
-        panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
+    fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
+        panic!("IMMEDIATES feature must be enabled to call set_immediates")
     }
 
     fn insert_debug_marker(&mut self, _label: &str) {
@@ -3425,8 +3435,8 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         }
     }
 
-    fn set_push_constants(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
-        panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
+    fn set_immediates(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
+        panic!("IMMEDIATES feature must be enabled to call multi_draw_indexed_indirect")
     }
 
     fn set_blend_constant(&mut self, color: crate::Color) {
@@ -3731,8 +3741,8 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         }
     }
 
-    fn set_push_constants(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
-        panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
+    fn set_immediates(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
+        panic!("IMMEDIATES feature must be enabled to call multi_draw_indexed_indirect")
     }
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {

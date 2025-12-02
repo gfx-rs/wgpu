@@ -607,6 +607,8 @@ impl super::PrivateCapabilities {
 
         let argument_buffers = device.argument_buffers_support();
 
+        let is_virtual = device.name().to_lowercase().contains("virtual");
+
         Self {
             family_check,
             msl_version: if os_is_xr || version.at_least((14, 0), (17, 0), os_is_mac) {
@@ -902,6 +904,29 @@ impl super::PrivateCapabilities {
                 && (device.supports_family(MTLGPUFamily::Apple7)
                     || device.supports_family(MTLGPUFamily::Mac2)),
             supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
+            mesh_shaders: family_check
+                && (device.supports_family(MTLGPUFamily::Metal3)
+                    || device.supports_family(MTLGPUFamily::Apple7)
+                    || device.supports_family(MTLGPUFamily::Mac2))
+                    // Mesh shaders don't work on virtual devices even if they should be supported.
+                && !is_virtual,
+            supported_vertex_amplification_factor: {
+                let mut factor = 1;
+                // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=8
+                // The table specifies either none, 2, 8, or unsupported, implying it is a relatively small power of 2
+                // The bitmask only uses 32 bits, so it can't be higher even if the device for some reason claims to support that.
+                while factor < 32 && device.supports_vertex_amplification_count(factor * 2) {
+                    factor *= 2
+                }
+                factor as u32
+            },
+            shader_barycentrics: device.supports_shader_barycentric_coordinates(),
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
+            supports_memoryless_storage: if family_check {
+                device.supports_family(MTLGPUFamily::Apple2)
+            } else {
+                version.at_least((11, 0), (10, 0), os_is_mac)
+            },
         }
     }
 
@@ -920,7 +945,7 @@ impl super::PrivateCapabilities {
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::VERTEX_WRITABLE_STORAGE
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | F::PUSH_CONSTANTS
+            | F::IMMEDIATES
             | F::POLYGON_MODE_LINE
             | F::CLEAR_TEXTURE
             | F::TEXTURE_FORMAT_16BIT_NORM
@@ -969,6 +994,13 @@ impl super::PrivateCapabilities {
                 && self.argument_buffers as u64 >= MTLArgumentBuffersTier::Tier2 as u64,
         );
         features.set(
+            F::STORAGE_RESOURCE_BINDING_ARRAY,
+            self.msl_version >= MTLLanguageVersion::V3_0
+                && self.supports_arrays_of_textures
+                && self.supports_arrays_of_textures_write
+                && self.argument_buffers as u64 >= MTLArgumentBuffersTier::Tier2 as u64,
+        );
+        features.set(
             F::SHADER_INT64,
             self.int64 && self.msl_version >= MTLLanguageVersion::V2_3,
         );
@@ -997,8 +1029,19 @@ impl super::PrivateCapabilities {
 
         features.set(F::RG11B10UFLOAT_RENDERABLE, self.format_rg11b10_all);
 
+        features.set(
+            F::SHADER_BARYCENTRICS,
+            self.shader_barycentrics && self.msl_version >= MTLLanguageVersion::V2_2,
+        );
+
         if self.supports_simd_scoped_operations {
             features.insert(F::SUBGROUP | F::SUBGROUP_BARRIER);
+        }
+
+        features.set(F::EXPERIMENTAL_MESH_SHADER, self.mesh_shaders);
+
+        if self.supported_vertex_amplification_factor > 1 {
+            features.insert(F::MULTIVIEW);
         }
 
         features
@@ -1031,7 +1074,6 @@ impl super::PrivateCapabilities {
         downlevel
             .flags
             .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
-
         let base = wgt::Limits::default();
         crate::Capabilities {
             limits: wgt::Limits {
@@ -1060,7 +1102,7 @@ impl super::PrivateCapabilities {
                 max_vertex_buffer_array_stride: base.max_vertex_buffer_array_stride,
                 min_subgroup_size: 4,
                 max_subgroup_size: 64,
-                max_push_constant_size: 0x1000,
+                max_immediate_size: 0x1000,
                 min_uniform_buffer_offset_alignment: self.buffer_alignment as u32,
                 min_storage_buffer_offset_alignment: self.buffer_alignment as u32,
                 max_inter_stage_shader_components: self.max_varying_components,
@@ -1077,10 +1119,11 @@ impl super::PrivateCapabilities {
                 max_buffer_size: self.max_buffer_size,
                 max_non_sampler_bindings: u32::MAX,
 
-                max_task_workgroup_total_count: 0,
-                max_task_workgroups_per_dimension: 0,
-                max_mesh_multiview_count: 0,
-                max_mesh_output_layers: 0,
+                // See https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf, Maximum threadgroups per mesh shader grid
+                max_task_workgroup_total_count: 1024,
+                max_task_workgroups_per_dimension: 1024,
+                max_mesh_multiview_view_count: 0,
+                max_mesh_output_layers: self.max_texture_layers as u32,
 
                 max_blas_primitive_count: 0, // When added: 2^28 from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits
                 max_blas_geometry_count: 0,  // When added: 2^24
@@ -1092,6 +1135,12 @@ impl super::PrivateCapabilities {
                 // > [Acceleration structures] are opaque objects that can be bound directly using
                 // buffer binding points or via argument buffers
                 max_acceleration_structures_per_shader_stage: 0,
+
+                max_multiview_view_count: if self.supported_vertex_amplification_factor > 1 {
+                    self.supported_vertex_amplification_factor
+                } else {
+                    0
+                },
             },
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),

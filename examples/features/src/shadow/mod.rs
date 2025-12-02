@@ -192,7 +192,7 @@ impl Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT,
             label: None,
             view_formats: &[],
         });
@@ -366,7 +366,7 @@ impl crate::framework::Example for Example {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             compare: Some(wgpu::CompareFunction::LessEqual),
             ..Default::default()
         });
@@ -466,7 +466,7 @@ impl crate::framework::Example for Example {
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("shadow"),
                 bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
-                push_constant_ranges: &[],
+                immediates_ranges: &[],
             });
 
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -518,7 +518,7 @@ impl crate::framework::Example for Example {
                     },
                 }),
                 multisample: wgpu::MultisampleState::default(),
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
 
@@ -582,7 +582,7 @@ impl crate::framework::Example for Example {
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("main"),
                 bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
-                push_constant_ranges: &[],
+                immediates_ranges: &[],
             });
 
             let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
@@ -653,7 +653,7 @@ impl crate::framework::Example for Example {
                     bias: wgpu::DepthBiasState::default(),
                 }),
                 multisample: wgpu::MultisampleState::default(),
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
 
@@ -771,6 +771,7 @@ impl crate::framework::Example for Example {
                     }),
                     timestamp_writes: None,
                     occlusion_query_set: None,
+                    multiview_mask: None,
                 });
                 pass.set_pipeline(&self.shadow_pass.pipeline);
                 pass.set_bind_group(0, &self.shadow_pass.bind_group, &[]);
@@ -816,6 +817,7 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             pass.set_pipeline(&self.forward_pass.pipeline);
             pass.set_bind_group(0, &self.forward_pass.bind_group, &[]);

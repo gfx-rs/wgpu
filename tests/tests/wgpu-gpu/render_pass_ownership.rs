@@ -91,6 +91,7 @@ async fn render_pass_resource_ownership(ctx: TestingContext) {
             }),
             timestamp_writes: None,
             occlusion_query_set: Some(&occlusion_query_set),
+            multiview_mask: None,
         });
 
         // Drop render pass attachments right away.
@@ -463,7 +464,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline_layout"),
             bind_group_layouts: &[&bgl],
-            push_constant_ranges: &[],
+            immediates_ranges: &[],
         });
 
     let target_size = wgpu::Extent3d {
@@ -548,7 +549,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
                 mask: !0,
                 alpha_to_coverage_enabled: false,
             },
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 

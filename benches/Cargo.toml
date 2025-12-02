@@ -16,19 +16,18 @@ name = "wgpu-benchmark"
 harness = false
 
 [features]
-# Uncomment these features to enable tracy and superluminal profiling.
-# tracy = ["dep:tracy-client", "profiling/profile-with-tracy"]
-# superluminal = ["profiling/profile-with-superluminal"]
+tracy = ["dep:tracy-client"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
     'cfg(feature, values("tracy"))',
 ] }
 
-[dependencies]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+anyhow.workspace = true
 bincode = { workspace = true, features = ["serde"] }
 bytemuck.workspace = true
-criterion.workspace = true
+# criterion.workspace = true
 naga = { workspace = true, features = [
     "deserialize",
     "serialize",
@@ -43,8 +42,12 @@ naga = { workspace = true, features = [
 ] }
 naga-test = { workspace = true, features = [] }
 nanorand.workspace = true
+pico-args.workspace = true
 pollster.workspace = true
 profiling.workspace = true
 rayon.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+termcolor.workspace = true
 tracy-client = { workspace = true, optional = true }
 wgpu.workspace = true

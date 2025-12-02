@@ -233,7 +233,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_LAYOUT: GpuTestConfiguration = GpuTestConfigu
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
                 bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[],
+                immediates_ranges: &[],
             });
 
         wgpu_test::fail(
@@ -307,7 +307,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
                 bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[],
+                immediates_ranges: &[],
             });
 
         let pipeline = ctx
@@ -354,7 +354,7 @@ static MINIMUM_BUFFER_BINDING_SIZE_DISPATCH: GpuTestConfiguration = GpuTestConfi
                 drop(pass);
                 let _ = encoder.finish();
             },
-            Some("buffer is bound with size 16 where the shader expects 32 in group[0] compact index 0"),
+            Some("In bind group index 0, the buffer bound at binding index 0 is bound with size 16 where the shader expects 32"),
         );
     });
 

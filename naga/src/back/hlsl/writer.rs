@@ -441,7 +441,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             _ => false,
                         })
                 {
-                    log::info!(
+                    log::debug!(
                         "Skipping function {:?} (name {:?}) because global {:?} is inaccessible",
                         handle,
                         function.name,
@@ -507,7 +507,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
             self.write_wrapped_functions(module, &ctx)?;
 
-            if ep.stage == ShaderStage::Compute {
+            if ep.stage.compute_like() {
                 // HLSL is calling workgroup size "num threads"
                 let num_threads = ep.workgroup_size;
                 writeln!(
@@ -569,6 +569,14 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
     ) -> BackendResult {
         match *binding {
             Some(crate::Binding::BuiltIn(builtin)) if !is_subgroup_builtin_binding(binding) => {
+                if builtin == crate::BuiltIn::ViewIndex
+                    && self.options.shader_model < ShaderModel::V6_1
+                {
+                    return Err(Error::ShaderModelTooLow(
+                        "used @builtin(view_index) or SV_ViewID".to_string(),
+                        ShaderModel::V6_1,
+                    ));
+                }
                 let builtin_str = builtin.to_hlsl_str()?;
                 write!(self.out, " : {builtin_str}")?;
             }
@@ -937,7 +945,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         if let Some(ref binding) = global.binding {
             if let Err(err) = self.options.resolve_resource_binding(binding) {
-                log::info!(
+                log::debug!(
                     "Skipping global {:?} (name {:?}) for being inaccessible: {}",
                     handle,
                     global.name,
@@ -967,6 +975,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_type(module, global.ty)?;
                 ""
             }
+            crate::AddressSpace::TaskPayload => unimplemented!(),
             crate::AddressSpace::Uniform => {
                 // constant buffer declarations are expected to be inlined, e.g.
                 // `cbuffer foo: register(b0) { field1: type1; }`
@@ -994,16 +1003,16 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_type(module, global.ty)?;
                 register
             }
-            crate::AddressSpace::PushConstant => {
-                // The type of the push constants will be wrapped in `ConstantBuffer`
+            crate::AddressSpace::Immediate => {
+                // The type of the immediates will be wrapped in `ConstantBuffer`
                 write!(self.out, "ConstantBuffer<")?;
                 "b"
             }
         };
 
-        // If the global is a push constant write the type now because it will be a
+        // If the global is a immediate data write the type now because it will be a
         // generic argument to `ConstantBuffer`
-        if global.space == crate::AddressSpace::PushConstant {
+        if global.space == crate::AddressSpace::Immediate {
             self.write_global_type(module, global.ty)?;
 
             // need to write the array size if the type was emitted with `write_type`
@@ -1018,9 +1027,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         let name = &self.names[&NameKey::GlobalVariable(handle)];
         write!(self.out, " {name}")?;
 
-        // Push constants need to be assigned a binding explicitly by the consumer
+        // Immediates need to be assigned a binding explicitly by the consumer
         // since naga has no way to know the binding from the shader alone
-        if global.space == crate::AddressSpace::PushConstant {
+        if global.space == crate::AddressSpace::Immediate {
             match module.types[global.ty].inner {
                 TypeInner::Struct { .. } => {}
                 _ => {
@@ -1032,9 +1041,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
             let target = self
                 .options
-                .push_constants_target
+                .immediates_target
                 .as_ref()
-                .expect("No bind target was defined for the push constants block");
+                .expect("No bind target was defined for the immediates block");
             write!(self.out, ": register(b{}", target.register)?;
             if target.space != 0 {
                 write!(self.out, ", space{}", target.space)?;
@@ -1178,7 +1187,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         {
             Ok(bindings) => bindings,
             Err(err) => {
-                log::info!(
+                log::debug!(
                     "Skipping global {:?} (name {:?}) for being inaccessible: {}",
                     handle,
                     global.name,
@@ -1764,7 +1773,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         module: &Module,
     ) -> bool {
         self.options.zero_initialize_workgroup_memory
-            && func_ctx.ty.is_compute_entry_point(module)
+            && func_ctx.ty.is_compute_like_entry_point(module)
             && module.global_variables.iter().any(|(handle, var)| {
                 !func_ctx.info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
             })
@@ -3076,7 +3085,8 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 crate::AddressSpace::Function
                                 | crate::AddressSpace::Private
                                 | crate::AddressSpace::WorkGroup
-                                | crate::AddressSpace::PushConstant,
+                                | crate::AddressSpace::Immediate
+                                | crate::AddressSpace::TaskPayload,
                             )
                             | None => true,
                             Some(crate::AddressSpace::Uniform) => {

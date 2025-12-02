@@ -21,16 +21,20 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
             // are not matched against.
             .expect_fail(
                 wgpu_test::FailureCase::molten_vk()
-                    // 14.3 doesn't fail test 29
+                    // 26.0 fails only test 28, and not on thread 0
+                    .panic("thread 1 failed tests: 28,\n")
+                    // 14.3 fails 27 and 28
                     .panic("thread 0 failed tests: 27,\nthread 1 failed tests: 27, 28,\n")
-                    // Prior versions do.
+                    // Prior versions fail 27, 28, and 29
                     .panic("thread 0 failed tests: 27, 29,\nthread 1 failed tests: 27, 28, 29,\n"),
             )
             .expect_fail(
                 wgpu_test::FailureCase::backend(wgpu::Backends::METAL)
-                    // 14.3 doesn't fail test 29
+                    // 26.0 fails only test 28, and not on thread 0
+                    .panic("thread 1 failed tests: 28,\n")
+                    // 14.3 fails 27 and 28
                     .panic("thread 0 failed tests: 27,\nthread 1 failed tests: 27, 28,\n")
-                    // Prior versions do.
+                    // Prior versions fail 27, 28, and 29
                     .panic("thread 0 failed tests: 27, 29,\nthread 1 failed tests: 27, 28, 29,\n"),
             ),
     )
@@ -65,7 +69,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("main"),
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            immediates_ranges: &[],
         });
 
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {

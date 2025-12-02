@@ -200,6 +200,7 @@ impl Frontend {
                     "gl_BaseVertex" => BuiltIn::BaseVertex,
                     "gl_BaseInstance" => BuiltIn::BaseInstance,
                     "gl_PrimitiveID" => BuiltIn::PrimitiveIndex,
+                    "gl_BaryCoordEXT" => BuiltIn::Barycentric,
                     "gl_InstanceIndex" => BuiltIn::InstanceIndex,
                     "gl_VertexIndex" => BuiltIn::VertexIndex,
                     "gl_SampleID" => BuiltIn::SampleIndex,
@@ -465,6 +466,7 @@ impl Frontend {
                         interpolation,
                         sampling,
                         blend_src,
+                        per_primitive: false,
                     },
                     handle,
                     storage,
@@ -553,7 +555,7 @@ impl Frontend {
                         TypeInner::Sampler { .. } => space = AddressSpace::Handle,
                         _ => {
                             if qualifiers.none_layout_qualifier("push_constant", &mut self.errors) {
-                                space = AddressSpace::PushConstant
+                                space = AddressSpace::Immediate
                             }
                         }
                     },

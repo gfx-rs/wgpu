@@ -2,8 +2,8 @@ use std::num::NonZeroU32;
 
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, GpuTestInitializer,
-    TestParameters, TestingContext,
+    gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
 
 pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
@@ -26,8 +26,7 @@ static BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestConfigurati
             .limits(Limits {
                 max_binding_array_elements_per_shader_stage: 17,
                 ..Limits::default()
-            })
-            .expect_fail(FailureCase::backend(Backends::METAL)),
+            }),
     )
     .run_async(|ctx| async move { binding_array_storage_textures(ctx, false).await });
 
@@ -45,8 +44,7 @@ static PARTIAL_BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestCon
             .limits(Limits {
                 max_binding_array_elements_per_shader_stage: 33,
                 ..Limits::default()
-            })
-            .expect_fail(FailureCase::backend(Backends::METAL)),
+            }),
     )
     .run_async(|ctx| async move { binding_array_storage_textures(ctx, true).await });
 
@@ -174,7 +172,7 @@ async fn binding_array_storage_textures(ctx: TestingContext, partially_bound: bo
         .create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            immediates_ranges: &[],
         });
 
     let pipeline = ctx

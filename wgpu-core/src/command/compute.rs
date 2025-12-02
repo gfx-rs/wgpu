@@ -7,9 +7,14 @@ use wgt::{
 use alloc::{borrow::Cow, boxed::Box, sync::Arc, vec::Vec};
 use core::{convert::Infallible, fmt, str};
 
-use crate::{binding_model::BindError, resource::RawResourceAccess};
 use crate::{
-    binding_model::{LateMinBufferBindingSizeMismatch, PushConstantUploadError},
+    api_log,
+    binding_model::BindError,
+    command::pass::flush_bindings_helper,
+    resource::{RawResourceAccess, Trackable},
+};
+use crate::{
+    binding_model::{ImmediateUploadError, LateMinBufferBindingSizeMismatch},
     command::{
         bind::{Binder, BinderError},
         compute_command::ArcComputeCommand,
@@ -27,7 +32,7 @@ use crate::{
     resource::{
         self, Buffer, InvalidResourceError, Labeled, MissingBufferUsageError, ParentDevice,
     },
-    track::{ResourceUsageCompatibilityError, Tracker, TrackerIndex},
+    track::{ResourceUsageCompatibilityError, Tracker},
     Label,
 };
 use crate::{command::InnerCommandEncoder, resource::DestroyedResourceError};
@@ -172,13 +177,13 @@ pub enum ComputePassErrorInner {
     #[error(transparent)]
     Bind(#[from] BindError),
     #[error(transparent)]
-    PushConstants(#[from] PushConstantUploadError),
-    #[error("Push constant offset must be aligned to 4 bytes")]
-    PushConstantOffsetAlignment,
-    #[error("Push constant size must be aligned to 4 bytes")]
-    PushConstantSizeAlignment,
-    #[error("Ran out of push constant space. Don't set 4gb of push constants per ComputePass.")]
-    PushConstantOutOfMemory,
+    ImmediateData(#[from] ImmediateUploadError),
+    #[error("Immediate data offset must be aligned to 4 bytes")]
+    ImmediateOffsetAlignment,
+    #[error("Immediate data size must be aligned to 4 bytes")]
+    ImmediateDataizeAlignment,
+    #[error("Ran out of immediate data space. Don't set 4gb of immediates per ComputePass.")]
+    ImmediateOutOfMemory,
     #[error(transparent)]
     QueryUse(#[from] QueryUseError),
     #[error(transparent)]
@@ -236,7 +241,7 @@ impl WebGpuError for ComputePassError {
             ComputePassErrorInner::MissingBufferUsage(e) => e,
             ComputePassErrorInner::Dispatch(e) => e,
             ComputePassErrorInner::Bind(e) => e,
-            ComputePassErrorInner::PushConstants(e) => e,
+            ComputePassErrorInner::ImmediateData(e) => e,
             ComputePassErrorInner::QueryUse(e) => e,
             ComputePassErrorInner::MissingFeatures(e) => e,
             ComputePassErrorInner::MissingDownlevelFlags(e) => e,
@@ -248,9 +253,9 @@ impl WebGpuError for ComputePassError {
             | ComputePassErrorInner::BindGroupIndexOutOfRange { .. }
             | ComputePassErrorInner::UnalignedIndirectBufferOffset(_)
             | ComputePassErrorInner::IndirectBufferOverrun { .. }
-            | ComputePassErrorInner::PushConstantOffsetAlignment
-            | ComputePassErrorInner::PushConstantSizeAlignment
-            | ComputePassErrorInner::PushConstantOutOfMemory
+            | ComputePassErrorInner::ImmediateOffsetAlignment
+            | ComputePassErrorInner::ImmediateDataizeAlignment
+            | ComputePassErrorInner::ImmediateOutOfMemory
             | ComputePassErrorInner::PassEnded => return ErrorType::Validation,
         };
         e.webgpu_error_type()
@@ -264,7 +269,7 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
 
     active_query: Option<(Arc<resource::QuerySet>, u32)>,
 
-    push_constants: Vec<u32>,
+    immediates: Vec<u32>,
 
     intermediate_trackers: Tracker,
 }
@@ -280,34 +285,88 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
         }
     }
 
-    // `extra_buffer` is there to represent the indirect buffer that is also
-    // part of the usage scope.
-    fn flush_states(
+    /// Flush binding state in preparation for a dispatch.
+    ///
+    /// # Differences between render and compute passes
+    ///
+    /// There are differences between the `flush_bindings` implementations for
+    /// render and compute passes, because render passes have a single usage
+    /// scope for the entire pass, and compute passes have a separate usage
+    /// scope for each dispatch.
+    ///
+    /// For compute passes, bind groups are merged into a fresh usage scope
+    /// here, not into the pass usage scope within calls to `set_bind_group`. As
+    /// specified by WebGPU, for compute passes, we merge only the bind groups
+    /// that are actually used by the pipeline, unlike render passes, which
+    /// merge every bind group that is ever set, even if it is not ultimately
+    /// used by the pipeline.
+    ///
+    /// For compute passes, we call `drain_barriers` here, because barriers may
+    /// be needed before each dispatch if a previous dispatch had a conflicting
+    /// usage. For render passes, barriers are emitted once at the start of the
+    /// render pass.
+    ///
+    /// # Indirect buffer handling
+    ///
+    /// The `indirect_buffer` argument should be passed for any indirect
+    /// dispatch (with or without validation). It will be checked for
+    /// conflicting usages according to WebGPU rules. For the purpose of
+    /// these rules, the fact that we have actually processed the buffer in
+    /// the validation pass is an implementation detail.
+    ///
+    /// The `track_indirect_buffer` argument should be set when doing indirect
+    /// dispatch *without* validation. In this case, the indirect buffer will
+    /// be added to the tracker in order to generate any necessary transitions
+    /// for that usage.
+    ///
+    /// When doing indirect dispatch *with* validation, the indirect buffer is
+    /// processed by the validation pass and is not used by the actual dispatch.
+    /// The indirect validation code handles transitions for the validation
+    /// pass.
+    fn flush_bindings(
         &mut self,
-        indirect_buffer: Option<TrackerIndex>,
-    ) -> Result<(), ResourceUsageCompatibilityError> {
+        indirect_buffer: Option<&Arc<Buffer>>,
+        track_indirect_buffer: bool,
+    ) -> Result<(), ComputePassErrorInner> {
         for bind_group in self.pass.binder.list_active() {
             unsafe { self.pass.scope.merge_bind_group(&bind_group.used)? };
-            // Note: stateless trackers are not merged: the lifetime reference
-            // is held to the bind group itself.
         }
+
+        // Add the indirect buffer. Because usage scopes are per-dispatch, this
+        // is the only place where INDIRECT usage could be added, and it is safe
+        // for us to remove it below.
+        if let Some(buffer) = indirect_buffer {
+            self.pass
+                .scope
+                .buffers
+                .merge_single(buffer, wgt::BufferUses::INDIRECT)?;
+        }
+
+        // For compute, usage scopes are associated with each dispatch and not
+        // with the pass as a whole. However, because the cost of creating and
+        // dropping `UsageScope`s is significant (even with the pool), we
+        // add and then remove usage from a single usage scope.
 
         for bind_group in self.pass.binder.list_active() {
-            unsafe {
-                self.intermediate_trackers
-                    .set_and_remove_from_usage_scope_sparse(&mut self.pass.scope, &bind_group.used)
-            }
+            self.intermediate_trackers
+                .set_and_remove_from_usage_scope_sparse(&mut self.pass.scope, &bind_group.used);
         }
 
-        // Add the state of the indirect buffer if it hasn't been hit before.
-        unsafe {
+        if track_indirect_buffer {
             self.intermediate_trackers
                 .buffers
                 .set_and_remove_from_usage_scope_sparse(
                     &mut self.pass.scope.buffers,
-                    indirect_buffer,
+                    indirect_buffer.map(|buf| buf.tracker_index()),
                 );
+        } else if let Some(buffer) = indirect_buffer {
+            self.pass
+                .scope
+                .buffers
+                .remove_usage(buffer, wgt::BufferUses::INDIRECT);
         }
+
+        flush_bindings_helper(&mut self.pass)?;
 
         CommandEncoder::drain_barriers(
             self.pass.base.raw_encoder,
@@ -419,73 +478,6 @@ impl Global {
         }
     }
 
-    /// Note that this differs from [`Self::compute_pass_end`], it will
-    /// create a new pass, replay the commands and end the pass.
-    ///
-    /// # Panics
-    /// On any error.
-    #[doc(hidden)]
-    #[cfg(any(feature = "serde", feature = "replay"))]
-    pub fn compute_pass_end_with_unresolved_commands(
-        &self,
-        encoder_id: id::CommandEncoderId,
-        base: BasePass<super::ComputeCommand, Infallible>,
-        timestamp_writes: Option<&PassTimestampWrites>,
-    ) {
-        #[cfg(feature = "trace")]
-        {
-            let cmd_enc = self.hub.command_encoders.get(encoder_id);
-            let mut cmd_buf_data = cmd_enc.data.lock();
-            let cmd_buf_data = cmd_buf_data.get_inner();
-
-            if let Some(ref mut list) = cmd_buf_data.trace_commands {
-                list.push(crate::command::Command::RunComputePass {
-                    base: BasePass {
-                        label: base.label.clone(),
-                        error: None,
-                        commands: base.commands.clone(),
-                        dynamic_offsets: base.dynamic_offsets.clone(),
-                        string_data: base.string_data.clone(),
-                        push_constant_data: base.push_constant_data.clone(),
-                    },
-                    timestamp_writes: timestamp_writes.cloned(),
-                });
-            }
-        }
-
-        let BasePass {
-            label,
-            error: _,
-            commands,
-            dynamic_offsets,
-            string_data,
-            push_constant_data,
-        } = base;
-
-        let (mut compute_pass, encoder_error) = self.command_encoder_begin_compute_pass(
-            encoder_id,
-            &ComputePassDescriptor {
-                label: label.as_deref().map(Cow::Borrowed),
-                timestamp_writes: timestamp_writes.cloned(),
-            },
-        );
-        if let Some(err) = encoder_error {
-            panic!("{:?}", err);
-        };
-
-        compute_pass.base = BasePass {
-            label,
-            error: None,
-            commands: super::ComputeCommand::resolve_compute_command_ids(&self.hub, &commands)
-                .unwrap(),
-            dynamic_offsets,
-            string_data,
-            push_constant_data,
-        };
-
-        self.compute_pass_end(&mut compute_pass).unwrap();
-    }
-
     pub fn compute_pass_end(&self, pass: &mut ComputePass) -> Result<(), EncoderStateError> {
         profiling::scope!(
             "CommandEncoder::run_compute_pass {}",
@@ -499,22 +491,21 @@ impl Global {
 
         let base = pass.base.take();
 
-        if matches!(
-            base,
-            Err(ComputePassError {
-                inner: ComputePassErrorInner::EncoderState(EncoderStateError::Ended),
-                scope: _,
-            })
-        ) {
-            // If the encoder was already finished at time of pass creation,
-            // then it was not put in the locked state, so we need to
-            // generate a validation error here and now due to the encoder not
-            // being locked. The encoder already holds an error from when the
-            // pass was opened, or earlier.
+        if let Err(ComputePassError {
+            inner:
+                ComputePassErrorInner::EncoderState(
+                    err @ (EncoderStateError::Locked | EncoderStateError::Ended),
+                ),
+            scope: _,
+        }) = base
+        {
+            // Most encoding errors are detected and raised within `finish()`.
             //
-            // All other errors are propagated to the encoder within `push_with`,
-            // and will be reported later.
-            return Err(EncoderStateError::Ended);
+            // However, we raise a validation error here if the pass was opened
+            // within another pass, or on a finished encoder. The latter is
+            // particularly important, because in that case reporting errors via
+            // `CommandEncoder::finish` is not possible.
+            return Err(err.clone());
         }
 
         cmd_buf_data.push_with(|| -> Result<_, ComputePassError> {
@@ -574,7 +565,7 @@ pub(super) fn encode_compute_pass(
         },
         active_query: None,
 
-        push_constants: Vec::new(),
+        immediates: Vec::new(),
 
         intermediate_trackers: Tracker::new(),
     };
@@ -668,23 +659,23 @@ pub(super) fn encode_compute_pass(
                 let scope = PassErrorScope::SetPipelineCompute;
                 set_pipeline(&mut state, device, pipeline).map_pass_err(scope)?;
             }
-            ArcComputeCommand::SetPushConstant {
+            ArcComputeCommand::SetImmediate {
                 offset,
                 size_bytes,
                 values_offset,
             } => {
-                let scope = PassErrorScope::SetPushConstant;
-                pass::set_push_constant::<ComputePassErrorInner, _>(
+                let scope = PassErrorScope::SetImmediate;
+                pass::set_immediates::<ComputePassErrorInner, _>(
                     &mut state.pass,
-                    &base.push_constant_data,
+                    &base.immediates_data,
                     wgt::ShaderStages::COMPUTE,
                     offset,
                     size_bytes,
                     Some(values_offset),
                     |data_slice| {
-                        let offset_in_elements = (offset / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
-                        let size_in_elements = (size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
-                        state.push_constants[offset_in_elements..][..size_in_elements]
+                        let offset_in_elements = (offset / wgt::IMMEDIATES_ALIGNMENT) as usize;
+                        let size_in_elements = (size_bytes / wgt::IMMEDIATES_ALIGNMENT) as usize;
+                        state.immediates[offset_in_elements..][..size_in_elements]
                             .copy_from_slice(data_slice);
                     },
                 )
@@ -828,34 +819,36 @@ fn set_pipeline(
     }
 
     // Rebind resources
-    pass::rebind_resources::<ComputePassErrorInner, _>(
+    pass::change_pipeline_layout::<ComputePassErrorInner, _>(
         &mut state.pass,
         &pipeline.layout,
         &pipeline.late_sized_buffer_groups,
         || {
-            // This only needs to be here for compute pipelines because they use push constants for
+            // This only needs to be here for compute pipelines because they use immediates for
             // validating indirect draws.
-            state.push_constants.clear();
-            // Note that can only be one range for each stage. See the `MoreThanOnePushConstantRangePerStage` error.
-            if let Some(push_constant_range) =
-                pipeline.layout.push_constant_ranges.iter().find_map(|pcr| {
+            state.immediates.clear();
+            // Note that can only be one range for each stage. See the `MoreThanOneImmediateRangePerStage` error.
+            if let Some(immediates_range) =
+                pipeline.layout.immediates_ranges.iter().find_map(|pcr| {
                     pcr.stages
                         .contains(wgt::ShaderStages::COMPUTE)
                         .then_some(pcr.range.clone())
                 })
             {
                 // Note that non-0 range start doesn't work anyway https://github.com/gfx-rs/wgpu/issues/4502
-                let len = push_constant_range.len() / wgt::PUSH_CONSTANT_ALIGNMENT as usize;
-                state.push_constants.extend(core::iter::repeat_n(0, len));
+                let len = immediates_range.len() / wgt::IMMEDIATES_ALIGNMENT as usize;
+                state.immediates.extend(core::iter::repeat_n(0, len));
             }
         },
     )
 }
 
 fn dispatch(state: &mut State, groups: [u32; 3]) -> Result<(), ComputePassErrorInner> {
+    api_log!("ComputePass::dispatch {groups:?}");
+
     state.is_ready()?;
 
-    state.flush_states(None)?;
+    state.flush_bindings(None, false)?;
 
     let groups_size_limit = state
         .pass
@@ -888,6 +881,8 @@ fn dispatch_indirect(
     buffer: Arc<Buffer>,
     offset: u64,
 ) -> Result<(), ComputePassErrorInner> {
+    api_log!("ComputePass::dispatch_indirect");
+
     buffer.same_device(device)?;
 
     state.is_ready()?;
@@ -939,7 +934,7 @@ fn dispatch_indirect(
         }
 
         unsafe {
-            state.pass.base.raw_encoder.set_push_constants(
+            state.pass.base.raw_encoder.set_immediates(
                 params.pipeline_layout,
                 wgt::ShaderStages::COMPUTE,
                 0,
@@ -1015,13 +1010,13 @@ fn dispatch_indirect(
                     .set_compute_pipeline(pipeline.raw());
             }
 
-            if !state.push_constants.is_empty() {
+            if !state.immediates.is_empty() {
                 unsafe {
-                    state.pass.base.raw_encoder.set_push_constants(
+                    state.pass.base.raw_encoder.set_immediates(
                         pipeline.layout.raw(),
                         wgt::ShaderStages::COMPUTE,
                         0,
-                        &state.push_constants,
+                        &state.immediates,
                     );
                 }
             }
@@ -1054,7 +1049,7 @@ fn dispatch_indirect(
                 }]);
         }
 
-        state.flush_states(None)?;
+        state.flush_bindings(Some(&buffer), false)?;
         unsafe {
             state
                 .pass
@@ -1063,14 +1058,7 @@ fn dispatch_indirect(
                 .dispatch_indirect(params.dst_buffer, 0);
         }
     } else {
-        state
-            .pass
-            .scope
-            .buffers
-            .merge_single(&buffer, wgt::BufferUses::INDIRECT)?;
-
-        use crate::resource::Trackable;
-        state.flush_states(Some(buffer.tracker_index()))?;
+        state.flush_bindings(Some(&buffer), true)?;
 
         let buf_raw = buffer.try_raw(state.pass.base.snatch_guard)?;
         unsafe {
@@ -1167,45 +1155,45 @@ impl Global {
         Ok(())
     }
 
-    pub fn compute_pass_set_push_constants(
+    pub fn compute_pass_set_immediates(
         &self,
         pass: &mut ComputePass,
         offset: u32,
         data: &[u8],
     ) -> Result<(), PassStateError> {
-        let scope = PassErrorScope::SetPushConstant;
+        let scope = PassErrorScope::SetImmediate;
         let base = pass_base!(pass, scope);
 
-        if offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1) != 0 {
+        if offset & (wgt::IMMEDIATES_ALIGNMENT - 1) != 0 {
             pass_try!(
                 base,
                 scope,
-                Err(ComputePassErrorInner::PushConstantOffsetAlignment),
+                Err(ComputePassErrorInner::ImmediateOffsetAlignment),
             );
         }
 
-        if data.len() as u32 & (wgt::PUSH_CONSTANT_ALIGNMENT - 1) != 0 {
+        if data.len() as u32 & (wgt::IMMEDIATES_ALIGNMENT - 1) != 0 {
             pass_try!(
                 base,
                 scope,
-                Err(ComputePassErrorInner::PushConstantSizeAlignment),
+                Err(ComputePassErrorInner::ImmediateDataizeAlignment),
             )
         }
         let value_offset = pass_try!(
             base,
             scope,
-            base.push_constant_data
+            base.immediates_data
                 .len()
                 .try_into()
-                .map_err(|_| ComputePassErrorInner::PushConstantOutOfMemory)
+                .map_err(|_| ComputePassErrorInner::ImmediateOutOfMemory)
         );
 
-        base.push_constant_data.extend(
-            data.chunks_exact(wgt::PUSH_CONSTANT_ALIGNMENT as usize)
+        base.immediates_data.extend(
+            data.chunks_exact(wgt::IMMEDIATES_ALIGNMENT as usize)
                 .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
         );
 
-        base.commands.push(ArcComputeCommand::SetPushConstant {
+        base.commands.push(ArcComputeCommand::SetImmediate {
             offset,
             size_bytes: data.len() as u32,
             values_offset: value_offset,

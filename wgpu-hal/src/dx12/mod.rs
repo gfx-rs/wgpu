@@ -79,6 +79,7 @@ mod dcomp;
 mod descriptor;
 mod device;
 mod instance;
+mod pipeline_desc;
 mod sampler;
 mod shader_compilation;
 mod suballocation;
@@ -93,10 +94,14 @@ use hashbrown::HashMap;
 use parking_lot::{Mutex, RwLock};
 use suballocation::Allocator;
 use windows::{
-    core::{Free, Interface},
+    core::{Free as _, Interface},
     Win32::{
         Foundation,
-        Graphics::{Direct3D, Direct3D12, DirectComposition, Dxgi},
+        Graphics::{
+            Direct3D,
+            Direct3D12::{self, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT},
+            DirectComposition, Dxgi,
+        },
         System::Threading,
     },
 };
@@ -593,6 +598,7 @@ enum MemoryArchitecture {
 #[derive(Debug, Clone, Copy)]
 struct PrivateCapabilities {
     instance_flags: wgt::InstanceFlags,
+    workarounds: Workarounds,
     #[allow(unused)]
     heterogeneous_resource_heaps: bool,
     memory_architecture: MemoryArchitecture,
@@ -601,13 +607,24 @@ struct PrivateCapabilities {
     suballocation_supported: bool,
     shader_model: naga::back::hlsl::ShaderModel,
     max_sampler_descriptor_heap_size: u32,
+    unrestricted_buffer_texture_copy_pitch_supported: bool,
 }
 
-#[derive(Default)]
+impl PrivateCapabilities {
+    fn texture_data_placement_alignment(&self) -> u64 {
+        if self.unrestricted_buffer_texture_copy_pitch_supported {
+            4
+        } else {
+            D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT.into()
+        }
+    }
+}
+
+#[derive(Default, Debug, Copy, Clone)]
 struct Workarounds {
-    // On WARP, temporary CPU descriptors are still used by the runtime
-    // after we call `CopyDescriptors`.
-    avoid_cpu_descriptor_overwrites: bool,
+    // On WARP 1.0.13+, debug information in shaders in certain situations causes the device
+    // to hang. https://github.com/gfx-rs/wgpu/issues/8368
+    avoid_shader_debug_info: bool,
 }
 
 pub struct Adapter {
@@ -617,9 +634,6 @@ pub struct Adapter {
     dcomp_lib: Arc<DCompLib>,
     private_caps: PrivateCapabilities,
     presentation_timer: auxil::dxgi::time::PresentationTimer,
-    // Note: this isn't used right now, but we'll need it later.
-    #[allow(unused)]
-    workarounds: Workarounds,
     memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     compiler_container: Arc<shader_compilation::CompilerContainer>,
     options: wgt::Dx12BackendOptions,
@@ -839,6 +853,8 @@ pub struct CommandEncoder {
 
     rtv_pool: Arc<Mutex<descriptor::CpuPool>>,
     temp_rtv_handles: Vec<descriptor::Handle>,
+
+    intermediate_copy_bufs: Vec<Buffer>,
 
     null_rtv_handle: descriptor::Handle,
     list: Option<Direct3D12::ID3D12GraphicsCommandList>,
@@ -1330,7 +1346,7 @@ impl crate::Surface for Surface {
                                 .ok_or(crate::SurfaceError::Other("IDXGIFactoryMedia not found"))?
                                 .CreateSwapChainForCompositionSurfaceHandle(
                                     &device.present_queue,
-                                    handle,
+                                    Some(handle),
                                     &desc,
                                     None,
                                 )
@@ -1599,117 +1615,4 @@ pub enum ShaderModuleSource {
     Naga(crate::NagaShader),
     DxilPassthrough(DxilPassthroughShader),
     HlslPassthrough(HlslPassthroughShader),
-}
-
-#[repr(C)]
-#[derive(Debug)]
-struct MeshShaderPipelineStateStream {
-    root_signature: *mut Direct3D12::ID3D12RootSignature,
-    task_shader: Direct3D12::D3D12_SHADER_BYTECODE,
-    mesh_shader: Direct3D12::D3D12_SHADER_BYTECODE,
-    pixel_shader: Direct3D12::D3D12_SHADER_BYTECODE,
-    blend_state: Direct3D12::D3D12_BLEND_DESC,
-    sample_mask: u32,
-    rasterizer_state: Direct3D12::D3D12_RASTERIZER_DESC,
-    depth_stencil_state: Direct3D12::D3D12_DEPTH_STENCIL_DESC,
-    primitive_topology_type: Direct3D12::D3D12_PRIMITIVE_TOPOLOGY_TYPE,
-    rtv_formats: Direct3D12::D3D12_RT_FORMAT_ARRAY,
-    dsv_format: Dxgi::Common::DXGI_FORMAT,
-    sample_desc: Dxgi::Common::DXGI_SAMPLE_DESC,
-    node_mask: u32,
-    cached_pso: Direct3D12::D3D12_CACHED_PIPELINE_STATE,
-    flags: Direct3D12::D3D12_PIPELINE_STATE_FLAGS,
-}
-impl MeshShaderPipelineStateStream {
-    /// # Safety
-    ///
-    /// Returned bytes contain pointers into this struct, for them to be valid,
-    /// this struct may be at the same location. As if `as_bytes<'a>(&'a self) -> Vec<u8> + 'a`
-    pub unsafe fn to_bytes(&self) -> Vec<u8> {
-        use Direct3D12::*;
-        let mut bytes = Vec::new();
-
-        macro_rules! push_subobject {
-            ($subobject_type:expr, $data:expr) => {{
-                // Ensure 8-byte alignment for the subobject start
-                let alignment = 8;
-                let aligned_length = bytes.len().next_multiple_of(alignment);
-                bytes.resize(aligned_length, 0);
-
-                // Append the type tag (u32)
-                let tag: u32 = $subobject_type.0 as u32;
-                bytes.extend_from_slice(&tag.to_ne_bytes());
-
-                // Align the data
-                let obj_align = align_of_val(&$data);
-                let data_start = bytes.len().next_multiple_of(obj_align);
-                bytes.resize(data_start, 0);
-
-                // Append the data itself
-                #[allow(clippy::ptr_as_ptr, trivial_casts)]
-                let data_ptr = &$data as *const _ as *const u8;
-                let data_size = size_of_val(&$data);
-                let slice = unsafe { core::slice::from_raw_parts(data_ptr, data_size) };
-                bytes.extend_from_slice(slice);
-            }};
-        }
-        push_subobject!(
-            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE,
-            self.root_signature
-        );
-        if !self.task_shader.pShaderBytecode.is_null() {
-            push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_AS, self.task_shader);
-        }
-        push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_MS, self.mesh_shader);
-        if !self.pixel_shader.pShaderBytecode.is_null() {
-            push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS, self.pixel_shader);
-        }
-        push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND, self.blend_state);
-        push_subobject!(
-            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK,
-            self.sample_mask
-        );
-        push_subobject!(
-            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER,
-            self.rasterizer_state
-        );
-        push_subobject!(
-            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL,
-            self.depth_stencil_state
-        );
-        push_subobject!(
-            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY,
-            self.primitive_topology_type
-        );
-        if self.rtv_formats.NumRenderTargets != 0 {
-            push_subobject!(
-                D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS,
-                self.rtv_formats
-            );
-        }
-        if self.dsv_format != Dxgi::Common::DXGI_FORMAT_UNKNOWN {
-            push_subobject!(
-                D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT,
-                self.dsv_format
-            );
-        }
-        push_subobject!(
-            D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC,
-            self.sample_desc
-        );
-        if self.node_mask != 0 {
-            push_subobject!(
-                D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK,
-                self.node_mask
-            );
-        }
-        if !self.cached_pso.pCachedBlob.is_null() {
-            push_subobject!(
-                D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CACHED_PSO,
-                self.cached_pso
-            );
-        }
-        push_subobject!(D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS, self.flags);
-        bytes
-    }
 }

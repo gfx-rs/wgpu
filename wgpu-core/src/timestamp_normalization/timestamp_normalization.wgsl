@@ -17,20 +17,20 @@ override TIMESTAMP_PERIOD_SHIFT: u32 = 0;
 @group(0) @binding(0)
 var<storage, read_write> timestamps: array<Uint64>;
 
-struct PushConstants {
+struct ImmediateData {
     timestamp_offset: u32,
     timestamp_count: u32,
 }
 
-var<push_constant> pc: PushConstants;
+var<immediate> im: ImmediateData;
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) id: vec3u) {
-    if id.x >= pc.timestamp_count {
+    if id.x >= im.timestamp_count {
         return;
     }
 
-    let index = id.x + pc.timestamp_offset;
+    let index = id.x + im.timestamp_offset;
 
     let input_value = timestamps[index];
 

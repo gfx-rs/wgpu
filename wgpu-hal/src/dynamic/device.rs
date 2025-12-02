@@ -295,7 +295,7 @@ impl<D: Device + DynResource> DynDevice for D {
         let desc = PipelineLayoutDescriptor {
             label: desc.label,
             bind_group_layouts: &bind_group_layouts,
-            push_constant_ranges: desc.push_constant_ranges,
+            immediates_ranges: desc.immediates_ranges,
             flags: desc.flags,
         };
 
@@ -407,7 +407,7 @@ impl<D: Device + DynResource> DynDevice for D {
             multisample: desc.multisample,
             fragment_stage: desc.fragment_stage.clone().map(|f| f.expect_downcast()),
             color_targets: desc.color_targets,
-            multiview: desc.multiview,
+            multiview_mask: desc.multiview_mask,
             cache: desc.cache.map(|c| c.expect_downcast_ref()),
         };
 

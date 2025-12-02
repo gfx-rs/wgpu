@@ -36,7 +36,8 @@ ignored = ["cfg_aliases"]
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = [
-    'cfg(web_sys_unstable_apis)', # web-sys uses this
+    'cfg(feature, values("cargo-clippy"))', # objc's `msg_send` macro injects this in our code https://github.com/SSheldon/rust-objc/issues/125
+    'cfg(web_sys_unstable_apis)',           # web-sys uses this
 ] }
 
 [lib]
@@ -83,6 +84,7 @@ metal = [
     "dep:objc",
     "dep:parking_lot",
     "dep:profiling",
+    "dep:smallvec",
 ]
 vulkan = [
     "naga/spv-out",
@@ -141,7 +143,9 @@ dx12 = [
     "dep:profiling",
     "dep:range-alloc",
     "dep:windows-core",
+    "dep:gpu-allocator",
     "gpu-allocator/d3d12",
+    "windows/Win32_Devices_DeviceAndDriverInstallation",
     "windows/Win32_Graphics_Direct3D_Fxc",
     "windows/Win32_Graphics_Direct3D_Dxc",
     "windows/Win32_Graphics_Direct3D",
@@ -182,14 +186,6 @@ internal_error_panic = []
 # Tracks validation errors in a `VALIDATION_CANARY` static.
 validation_canary = ["dep:parking_lot"]
 
-###################
-### Workarounds ###
-###################
-
-# objc's `msg_send` macro injects this in our code https://github.com/SSheldon/rust-objc/issues/125
-# You shouldn't ever enable this feature.
-cargo-clippy = []
-
 [[example]]
 name = "halmark"
 
@@ -219,7 +215,6 @@ hashbrown = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 ordered-float = { workspace = true, optional = true }
 profiling = { workspace = true, optional = true, default-features = false }
-rustc-hash = { workspace = true, optional = true }
 
 # Backend: GLES
 glow = { workspace = true, optional = true }
@@ -258,16 +253,17 @@ windows-core = { workspace = true, optional = true }
 # Backend: Dx12
 bit-set = { workspace = true, optional = true }
 range-alloc = { workspace = true, optional = true }
-gpu-allocator = { workspace = true, optional = true }
+gpu-allocator = { workspace = true, optional = true, features = ["d3d12"] }
 once_cell = { workspace = true, optional = true }
 # backend: GLES
 glutin_wgl_sys = { workspace = true, optional = true }
 
 ### Platform: x86/x86_64 Windows ###
 # This doesn't support aarch64. See https://github.com/gfx-rs/wgpu/issues/6860.
+# This doesn't support x86_64-pc-windows-gnu. See https://github.com/gfx-rs/wgpu/issues/8303
 #
 # ⚠️ Keep in sync with static_dxc cfg in build.rs and cfg_alias in `wgpu` crate ⚠️
-[target.'cfg(all(windows, not(target_arch = "aarch64")))'.dependencies]
+[target.'cfg(all(windows, not(target_arch = "aarch64"), target_env = "msvc"))'.dependencies]
 mach-dxcompiler-rs = { workspace = true, optional = true }
 
 #######################
@@ -332,6 +328,7 @@ cfg_aliases.workspace = true
 [dev-dependencies]
 env_logger.workspace = true
 glam.workspace = true                                            # for ray-traced-triangle example
+log.workspace = true
 naga = { workspace = true, features = ["wgsl-in", "termcolor"] }
 winit.workspace = true                                           # for "halmark" example
 

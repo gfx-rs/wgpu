@@ -99,6 +99,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t            Name: {}", info.name)?;
     writeln!(output, "\t        VendorID: {:#X?}", info.vendor)?;
     writeln!(output, "\t        DeviceID: {:#X?}", info.device)?;
+    writeln!(output, "\t  DevicePCIBusId: {}", print_empty_string(&info.device_pci_bus_id))?;
     writeln!(output, "\t            Type: {:?}", info.device_type)?;
     writeln!(output, "\t          Driver: {}", print_empty_string(&info.driver))?;
     writeln!(output, "\t      DriverInfo: {}", print_empty_string(&info.driver_info))?;
@@ -158,18 +159,20 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_compute_workgroups_per_dimension,
         min_subgroup_size,
         max_subgroup_size,
-        max_push_constant_size,
+        max_immediate_size,
         max_non_sampler_bindings,
 
         max_task_workgroup_total_count,
         max_task_workgroups_per_dimension,
-        max_mesh_multiview_count,
+        max_mesh_multiview_view_count: max_mesh_multiview_count,
         max_mesh_output_layers,
 
         max_blas_primitive_count,
         max_blas_geometry_count,
         max_tlas_instance_count,
         max_acceleration_structures_per_shader_stage,
+
+        max_multiview_view_count,
     } = limits;
     writeln!(output, "\t\t                           Max Texture Dimension 1d: {max_texture_dimension_1d}")?;
     writeln!(output, "\t\t                           Max Texture Dimension 2d: {max_texture_dimension_2d}")?;
@@ -194,7 +197,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                     Max Vertex Buffer Array Stride: {max_vertex_buffer_array_stride}")?;
     writeln!(output, "\t\t                                  Min Subgroup Size: {min_subgroup_size}")?;
     writeln!(output, "\t\t                                  Max Subgroup Size: {max_subgroup_size}")?;
-    writeln!(output, "\t\t                             Max Push Constant Size: {max_push_constant_size}")?;
+    writeln!(output, "\t\t                             Max Immediate data Size: {max_immediate_size}")?;
     writeln!(output, "\t\t                Min Uniform Buffer Offset Alignment: {min_uniform_buffer_offset_alignment}")?;
     writeln!(output, "\t\t                Min Storage Buffer Offset Alignment: {min_storage_buffer_offset_alignment}")?;
     writeln!(output, "\t\t                   Max Inter-Stage Shader Component: {max_inter_stage_shader_components}")?;
@@ -209,13 +212,15 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     
     writeln!(output, "\t\t                     Max Task Workgroup Total Count: {max_task_workgroup_total_count}")?;
     writeln!(output, "\t\t                  Max Task Workgroups Per Dimension: {max_task_workgroups_per_dimension}")?;
-    writeln!(output, "\t\t                           Max Mesh Multiview Count: {max_mesh_multiview_count}")?;
+    writeln!(output, "\t\t                      Max Mesh Multiview View Count: {max_mesh_multiview_count}")?;
     writeln!(output, "\t\t                             Max Mesh Output Layers: {max_mesh_output_layers}")?;
 
     writeln!(output, "\t\t                           Max BLAS Primitive count: {max_blas_primitive_count}")?;
     writeln!(output, "\t\t                            Max BLAS Geometry count: {max_blas_geometry_count}")?;
     writeln!(output, "\t\t                            Max TLAS Instance count: {max_tlas_instance_count}")?;
     writeln!(output, "\t\t       Max Acceleration Structures Per Shader Stage: {max_acceleration_structures_per_shader_stage}")?;
+
+    writeln!(output, "\t\t                           Max Multiview View Count: {max_multiview_view_count}")?;
     // This one reflects more of a wgpu implementation limitations than a hardware limit
     // so don't show it here.
     let _ = max_non_sampler_bindings;

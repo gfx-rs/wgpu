@@ -3,11 +3,11 @@
 
 ## Pipeline Layout
 
-In Metal, push constants, vertex buffers, and resources in the bind groups
+In Metal, immediates, vertex buffers, and resources in the bind groups
 are all placed together in the native resource bindings, which work similarly to D3D11:
 there are tables of textures, buffers, and samplers.
 
-We put push constants first (if any) in the table, followed by bind group 0
+We put immediates first (if any) in the table, followed by bind group 0
 resources, followed by other bind groups. The vertex buffers are bound at the very
 end of the VS buffer table.
 
@@ -156,9 +156,11 @@ impl crate::Instance for Instance {
                         vendor: 0,
                         device: 0,
                         device_type: shared.private_caps.device_type(),
+                        device_pci_bus_id: String::new(),
                         driver: String::new(),
                         driver_info: String::new(),
                         backend: wgt::Backend::Metal,
+                        transient_saves_memory: shared.private_caps.supports_memoryless_storage,
                     },
                     features: shared.private_caps.features(),
                     capabilities: shared.private_caps.capabilities(),
@@ -300,6 +302,10 @@ struct PrivateCapabilities {
     int64_atomics: bool,
     float_atomics: bool,
     supports_shared_event: bool,
+    mesh_shaders: bool,
+    supported_vertex_amplification_factor: u32,
+    shader_barycentrics: bool,
+    supports_memoryless_storage: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -604,12 +610,16 @@ struct MultiStageData<T> {
     vs: T,
     fs: T,
     cs: T,
+    ts: T,
+    ms: T,
 }
 
 const NAGA_STAGES: MultiStageData<naga::ShaderStage> = MultiStageData {
     vs: naga::ShaderStage::Vertex,
     fs: naga::ShaderStage::Fragment,
     cs: naga::ShaderStage::Compute,
+    ts: naga::ShaderStage::Task,
+    ms: naga::ShaderStage::Mesh,
 };
 
 impl<T> ops::Index<naga::ShaderStage> for MultiStageData<T> {
@@ -619,7 +629,8 @@ impl<T> ops::Index<naga::ShaderStage> for MultiStageData<T> {
             naga::ShaderStage::Vertex => &self.vs,
             naga::ShaderStage::Fragment => &self.fs,
             naga::ShaderStage::Compute => &self.cs,
-            naga::ShaderStage::Task | naga::ShaderStage::Mesh => unreachable!(),
+            naga::ShaderStage::Task => &self.ts,
+            naga::ShaderStage::Mesh => &self.ms,
         }
     }
 }
@@ -630,6 +641,8 @@ impl<T> MultiStageData<T> {
             vs: fun(&self.vs),
             fs: fun(&self.fs),
             cs: fun(&self.cs),
+            ts: fun(&self.ts),
+            ms: fun(&self.ms),
         }
     }
     fn map<Y>(self, fun: impl Fn(T) -> Y) -> MultiStageData<Y> {
@@ -637,17 +650,23 @@ impl<T> MultiStageData<T> {
             vs: fun(self.vs),
             fs: fun(self.fs),
             cs: fun(self.cs),
+            ts: fun(self.ts),
+            ms: fun(self.ms),
         }
     }
     fn iter<'a>(&'a self) -> impl Iterator<Item = &'a T> {
         iter::once(&self.vs)
             .chain(iter::once(&self.fs))
             .chain(iter::once(&self.cs))
+            .chain(iter::once(&self.ts))
+            .chain(iter::once(&self.ms))
     }
     fn iter_mut<'a>(&'a mut self) -> impl Iterator<Item = &'a mut T> {
         iter::once(&mut self.vs)
             .chain(iter::once(&mut self.fs))
             .chain(iter::once(&mut self.cs))
+            .chain(iter::once(&mut self.ts))
+            .chain(iter::once(&mut self.ms))
     }
 }
 
@@ -660,7 +679,7 @@ struct BindGroupLayoutInfo {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
-struct PushConstantsInfo {
+struct ImmediateDataInfo {
     count: u32,
     buffer_index: ResourceIndex,
 }
@@ -668,9 +687,9 @@ struct PushConstantsInfo {
 #[derive(Debug)]
 pub struct PipelineLayout {
     bind_group_infos: ArrayVec<BindGroupLayoutInfo, { crate::MAX_BIND_GROUPS }>,
-    push_constants_infos: MultiStageData<Option<PushConstantsInfo>>,
+    immediates_infos: MultiStageData<Option<ImmediateDataInfo>>,
     total_counters: MultiStageResourceCounters,
-    total_push_constants: u32,
+    total_immediates: u32,
     per_stage_map: MultiStageResources,
 }
 
@@ -811,7 +830,9 @@ impl crate::DynShaderModule for ShaderModule {}
 
 #[derive(Debug, Default)]
 struct PipelineStageInfo {
-    push_constants: Option<PushConstantsInfo>,
+    #[allow(dead_code)]
+    library: Option<metal::Library>,
+    immediates: Option<ImmediateDataInfo>,
 
     /// The buffer argument table index at which we pass runtime-sized arrays' buffer sizes.
     ///
@@ -825,36 +846,48 @@ struct PipelineStageInfo {
 
     /// Info on all bound vertex buffers.
     vertex_buffer_mappings: Vec<naga::back::msl::VertexBufferMapping>,
+
+    /// The workgroup size for compute, task or mesh stages
+    raw_wg_size: MTLSize,
+
+    /// The workgroup memory sizes for compute task or mesh stages
+    work_group_memory_sizes: Vec<u32>,
 }
 
 impl PipelineStageInfo {
     fn clear(&mut self) {
-        self.push_constants = None;
+        self.immediates = None;
         self.sizes_slot = None;
         self.sized_bindings.clear();
         self.vertex_buffer_mappings.clear();
+        self.library = None;
+        self.work_group_memory_sizes.clear();
+        self.raw_wg_size = Default::default();
     }
 
     fn assign_from(&mut self, other: &Self) {
-        self.push_constants = other.push_constants;
+        self.immediates = other.immediates;
         self.sizes_slot = other.sizes_slot;
         self.sized_bindings.clear();
         self.sized_bindings.extend_from_slice(&other.sized_bindings);
         self.vertex_buffer_mappings.clear();
         self.vertex_buffer_mappings
             .extend_from_slice(&other.vertex_buffer_mappings);
+        self.library = Some(other.library.as_ref().unwrap().clone());
+        self.raw_wg_size = other.raw_wg_size;
+        self.work_group_memory_sizes.clear();
+        self.work_group_memory_sizes
+            .extend_from_slice(&other.work_group_memory_sizes);
     }
 }
 
 #[derive(Debug)]
 pub struct RenderPipeline {
     raw: metal::RenderPipelineState,
-    #[allow(dead_code)]
-    vs_lib: metal::Library,
-    #[allow(dead_code)]
-    fs_lib: Option<metal::Library>,
-    vs_info: PipelineStageInfo,
+    vs_info: Option<PipelineStageInfo>,
     fs_info: Option<PipelineStageInfo>,
+    ts_info: Option<PipelineStageInfo>,
+    ms_info: Option<PipelineStageInfo>,
     raw_primitive_type: MTLPrimitiveType,
     raw_triangle_fill_mode: MTLTriangleFillMode,
     raw_front_winding: MTLWinding,
@@ -871,11 +904,7 @@ impl crate::DynRenderPipeline for RenderPipeline {}
 #[derive(Debug)]
 pub struct ComputePipeline {
     raw: metal::ComputePipelineState,
-    #[allow(dead_code)]
-    cs_lib: metal::Library,
     cs_info: PipelineStageInfo,
-    work_group_size: MTLSize,
-    work_group_memory_sizes: Vec<u32>,
 }
 
 unsafe impl Send for ComputePipeline {}
@@ -949,7 +978,6 @@ struct CommandState {
     compute: Option<metal::ComputeCommandEncoder>,
     raw_primitive_type: MTLPrimitiveType,
     index: Option<IndexState>,
-    raw_wg_size: MTLSize,
     stage_infos: MultiStageData<PipelineStageInfo>,
 
     /// Sizes of currently bound [`wgt::BufferBindingType::Storage`] buffers.
@@ -975,8 +1003,7 @@ struct CommandState {
 
     vertex_buffer_size_map: FastHashMap<u64, wgt::BufferSize>,
 
-    work_group_memory_sizes: Vec<u32>,
-    push_constants: Vec<u32>,
+    immediates: Vec<u32>,
 
     /// Timer query that should be executed when the next pass starts.
     pending_timer_queries: Vec<(QuerySet, u32)>,

@@ -28,7 +28,7 @@ OpDecorate %18 BuiltIn LocalInvocationId
 %21 = OpConstantNull  %17
 %22 = OpTypeVector %5 3
 %27 = OpConstant  %4  264
-%30 = OpConstant  %4  256
+%30 = OpConstant  %4  0
 %11 = OpFunction  %2  None %12
 %10 = OpLabel
 OpBranch %15

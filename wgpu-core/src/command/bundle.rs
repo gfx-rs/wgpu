@@ -29,9 +29,9 @@ Render passes are also isolated from the effects of bundles. After executing a
 render bundle, a render pass's pipeline, bind groups, and vertex and index
 buffers are are unset, so the bundle cannot affect later draw calls in the pass.
 
-A render pass is not fully isolated from a bundle's effects on push constant
+A render pass is not fully isolated from a bundle's effects on immediate data
 values. Draw calls following a bundle's execution will see whatever values the
-bundle writes to push constant storage. Setting a pipeline initializes any push
+bundle writes to immediate data storage. Setting a pipeline initializes any push
 constant storage it could access to zero, and this initialization may also be
 visible after bundle execution.
 
@@ -96,11 +96,13 @@ use thiserror::Error;
 use wgpu_hal::ShouldBeNonZeroExt;
 use wgt::error::{ErrorType, WebGpuError};
 
+#[cfg(feature = "trace")]
+use crate::command::ArcReferences;
 use crate::{
     binding_model::{BindError, BindGroup, PipelineLayout},
     command::{
-        BasePass, BindGroupStateChange, ColorAttachmentError, DrawError, MapPassErr,
-        PassErrorScope, RenderCommandError, StateChange,
+        BasePass, BindGroupStateChange, ColorAttachmentError, DrawError, IdReferences, MapPassErr,
+        PassErrorScope, RenderCommand, RenderCommandError, StateChange,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext,
@@ -120,11 +122,7 @@ use crate::{
     Label, LabelHelpers,
 };
 
-use super::{
-    pass,
-    render_command::{ArcRenderCommand, RenderCommand},
-    DrawCommandFamily, DrawKind,
-};
+use super::{pass, render_command::ArcRenderCommand, DrawCommandFamily, DrawKind};
 
 /// Describes a [`RenderBundleEncoder`].
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -158,7 +156,7 @@ pub struct RenderBundleEncoderDescriptor<'a> {
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct RenderBundleEncoder {
-    base: BasePass<RenderCommand, Infallible>,
+    base: BasePass<RenderCommand<IdReferences>, Infallible>,
     parent_id: id::DeviceId,
     pub(crate) context: RenderPassContext,
     pub(crate) is_depth_read_only: bool,
@@ -175,7 +173,6 @@ impl RenderBundleEncoder {
     pub fn new(
         desc: &RenderBundleEncoderDescriptor,
         parent_id: id::DeviceId,
-        base: Option<BasePass<RenderCommand, Infallible>>,
     ) -> Result<Self, CreateRenderBundleError> {
         let (is_depth_read_only, is_stencil_read_only) = match desc.depth_stencil {
             Some(ds) => {
@@ -197,7 +194,7 @@ impl RenderBundleEncoder {
         //TODO: validate that attachment formats are renderable,
         // have expected aspects, support multisampling.
         Ok(Self {
-            base: base.unwrap_or_else(|| BasePass::new(&desc.label)),
+            base: BasePass::new(&desc.label),
             parent_id,
             context: RenderPassContext {
                 attachments: AttachmentData {
@@ -221,7 +218,7 @@ impl RenderBundleEncoder {
                     }
                     sc
                 },
-                multiview: desc.multiview,
+                multiview_mask: desc.multiview,
             },
 
             is_depth_read_only,
@@ -242,7 +239,7 @@ impl RenderBundleEncoder {
                     depth_stencil: None,
                 },
                 sample_count: 0,
-                multiview: None,
+                multiview_mask: None,
             },
             is_depth_read_only: false,
             is_stencil_read_only: false,
@@ -250,11 +247,6 @@ impl RenderBundleEncoder {
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
         }
-    }
-
-    #[cfg(feature = "trace")]
-    pub(crate) fn to_base_pass(&self) -> BasePass<RenderCommand, Infallible> {
-        self.base.clone()
     }
 
     pub fn parent(&self) -> id::DeviceId {
@@ -305,12 +297,12 @@ impl RenderBundleEncoder {
 
         let base = &self.base;
 
-        for &command in &base.commands {
+        for command in &base.commands {
             match command {
-                RenderCommand::SetBindGroup {
+                &RenderCommand::SetBindGroup {
                     index,
                     num_dynamic_offsets,
-                    bind_group_id,
+                    bind_group,
                 } => {
                     let scope = PassErrorScope::SetBindGroup;
                     set_bind_group(
@@ -319,11 +311,11 @@ impl RenderBundleEncoder {
                         &base.dynamic_offsets,
                         index,
                         num_dynamic_offsets,
-                        bind_group_id,
+                        bind_group,
                     )
                     .map_pass_err(scope)?;
                 }
-                RenderCommand::SetPipeline(pipeline_id) => {
+                &RenderCommand::SetPipeline(pipeline) => {
                     let scope = PassErrorScope::SetPipelineRender;
                     set_pipeline(
                         &mut state,
@@ -331,12 +323,12 @@ impl RenderBundleEncoder {
                         &self.context,
                         self.is_depth_read_only,
                         self.is_stencil_read_only,
-                        pipeline_id,
+                        pipeline,
                     )
                     .map_pass_err(scope)?;
                 }
-                RenderCommand::SetIndexBuffer {
-                    buffer_id,
+                &RenderCommand::SetIndexBuffer {
+                    buffer,
                     index_format,
                     offset,
                     size,
@@ -345,34 +337,34 @@ impl RenderBundleEncoder {
                     set_index_buffer(
                         &mut state,
                         &buffer_guard,
-                        buffer_id,
+                        buffer,
                         index_format,
                         offset,
                         size,
                     )
                     .map_pass_err(scope)?;
                 }
-                RenderCommand::SetVertexBuffer {
+                &RenderCommand::SetVertexBuffer {
                     slot,
-                    buffer_id,
+                    buffer,
                     offset,
                     size,
                 } => {
                     let scope = PassErrorScope::SetVertexBuffer;
-                    set_vertex_buffer(&mut state, &buffer_guard, slot, buffer_id, offset, size)
+                    set_vertex_buffer(&mut state, &buffer_guard, slot, buffer, offset, size)
                         .map_pass_err(scope)?;
                 }
-                RenderCommand::SetPushConstant {
+                &RenderCommand::SetImmediate {
                     stages,
                     offset,
                     size_bytes,
                     values_offset,
                 } => {
-                    let scope = PassErrorScope::SetPushConstant;
-                    set_push_constant(&mut state, stages, offset, size_bytes, values_offset)
+                    let scope = PassErrorScope::SetImmediate;
+                    set_immediates(&mut state, stages, offset, size_bytes, values_offset)
                         .map_pass_err(scope)?;
                 }
-                RenderCommand::Draw {
+                &RenderCommand::Draw {
                     vertex_count,
                     instance_count,
                     first_vertex,
@@ -392,7 +384,7 @@ impl RenderBundleEncoder {
                     )
                     .map_pass_err(scope)?;
                 }
-                RenderCommand::DrawIndexed {
+                &RenderCommand::DrawIndexed {
                     index_count,
                     instance_count,
                     first_index,
@@ -414,7 +406,7 @@ impl RenderBundleEncoder {
                     )
                     .map_pass_err(scope)?;
                 }
-                RenderCommand::DrawMeshTasks {
+                &RenderCommand::DrawMeshTasks {
                     group_count_x,
                     group_count_y,
                     group_count_z,
@@ -432,11 +424,13 @@ impl RenderBundleEncoder {
                     )
                     .map_pass_err(scope)?;
                 }
-                RenderCommand::DrawIndirect {
-                    buffer_id,
+                &RenderCommand::DrawIndirect {
+                    buffer,
                     offset,
                     count: 1,
                     family,
+                    vertex_or_index_limit: None,
+                    instance_limit: None,
                 } => {
                     let scope = PassErrorScope::Draw {
                         kind: DrawKind::DrawIndirect,
@@ -446,32 +440,39 @@ impl RenderBundleEncoder {
                         &mut state,
                         &base.dynamic_offsets,
                         &buffer_guard,
-                        buffer_id,
+                        buffer,
                         offset,
                         family,
                     )
                     .map_pass_err(scope)?;
                 }
-                RenderCommand::DrawIndirect { .. }
-                | RenderCommand::MultiDrawIndirectCount { .. }
-                | RenderCommand::PushDebugGroup { color: _, len: _ }
-                | RenderCommand::InsertDebugMarker { color: _, len: _ }
-                | RenderCommand::PopDebugGroup => {
+                &RenderCommand::DrawIndirect {
+                    count,
+                    vertex_or_index_limit,
+                    instance_limit,
+                    ..
+                } => {
+                    unreachable!("unexpected (multi-)draw indirect with count {count}, vertex_or_index_limits {vertex_or_index_limit:?}, instance_limit {instance_limit:?} found in a render bundle");
+                }
+                &RenderCommand::MultiDrawIndirectCount { .. }
+                | &RenderCommand::PushDebugGroup { color: _, len: _ }
+                | &RenderCommand::InsertDebugMarker { color: _, len: _ }
+                | &RenderCommand::PopDebugGroup => {
                     unimplemented!("not supported by a render bundle")
                 }
                 // Must check the TIMESTAMP_QUERY_INSIDE_PASSES feature
-                RenderCommand::WriteTimestamp { .. }
-                | RenderCommand::BeginOcclusionQuery { .. }
-                | RenderCommand::EndOcclusionQuery
-                | RenderCommand::BeginPipelineStatisticsQuery { .. }
-                | RenderCommand::EndPipelineStatisticsQuery => {
+                &RenderCommand::WriteTimestamp { .. }
+                | &RenderCommand::BeginOcclusionQuery { .. }
+                | &RenderCommand::EndOcclusionQuery
+                | &RenderCommand::BeginPipelineStatisticsQuery { .. }
+                | &RenderCommand::EndPipelineStatisticsQuery => {
                     unimplemented!("not supported by a render bundle")
                 }
-                RenderCommand::ExecuteBundle(_)
-                | RenderCommand::SetBlendConstant(_)
-                | RenderCommand::SetStencilReference(_)
-                | RenderCommand::SetViewport { .. }
-                | RenderCommand::SetScissor(_) => unreachable!("not supported by a render bundle"),
+                &RenderCommand::ExecuteBundle(_)
+                | &RenderCommand::SetBlendConstant(_)
+                | &RenderCommand::SetStencilReference(_)
+                | &RenderCommand::SetViewport { .. }
+                | &RenderCommand::SetScissor(_) => unreachable!("not supported by a render bundle"),
             }
         }
 
@@ -497,7 +498,7 @@ impl RenderBundleEncoder {
                 commands,
                 dynamic_offsets: flat_dynamic_offsets,
                 string_data: self.base.string_data,
-                push_constant_data: self.base.push_constant_data,
+                immediates_data: self.base.immediates_data,
             },
             is_depth_read_only: self.is_depth_read_only,
             is_stencil_read_only: self.is_stencil_read_only,
@@ -518,13 +519,13 @@ impl RenderBundleEncoder {
 
     pub fn set_index_buffer(
         &mut self,
-        buffer_id: id::BufferId,
+        buffer: id::BufferId,
         index_format: wgt::IndexFormat,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferSize>,
     ) {
         self.base.commands.push(RenderCommand::SetIndexBuffer {
-            buffer_id,
+            buffer,
             index_format,
             offset,
             size,
@@ -613,8 +614,8 @@ fn set_pipeline(
         .commands
         .push(ArcRenderCommand::SetPipeline(pipeline.clone()));
 
-    // If this pipeline uses push constants, zero out their values.
-    if let Some(iter) = pipeline_state.zero_push_constants() {
+    // If this pipeline uses immediates, zero out their values.
+    if let Some(iter) = pipeline_state.zero_immediates() {
         state.commands.extend(iter)
     }
 
@@ -708,7 +709,7 @@ fn set_vertex_buffer(
     Ok(())
 }
 
-fn set_push_constant(
+fn set_immediates(
     state: &mut State,
     stages: wgt::ShaderStages,
     offset: u32,
@@ -722,9 +723,9 @@ fn set_push_constant(
     pipeline_state
         .pipeline
         .layout
-        .validate_push_constant_ranges(stages, offset, end_offset)?;
+        .validate_immediates_ranges(stages, offset, end_offset)?;
 
-    state.commands.push(ArcRenderCommand::SetPushConstant {
+    state.commands.push(ArcRenderCommand::SetImmediate {
         stages,
         offset,
         size_bytes,
@@ -899,8 +900,8 @@ fn multi_draw_indirect(
         count: 1,
         family,
 
-        vertex_or_index_limit,
-        instance_limit,
+        vertex_or_index_limit: Some(vertex_or_index_limit),
+        instance_limit: Some(instance_limit),
     });
     Ok(())
 }
@@ -941,6 +942,7 @@ pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 //Note: here, `RenderBundle` is just wrapping a raw stream of render commands.
 // The plan is to back it by an actual Vulkan secondary buffer, D3D12 Bundle,
 // or Metal indirect command buffer.
+/// cbindgen:ignore
 #[derive(Debug)]
 pub struct RenderBundle {
     // Normalized command stream. It can be executed verbatim,
@@ -971,6 +973,11 @@ unsafe impl Send for RenderBundle {}
 unsafe impl Sync for RenderBundle {}
 
 impl RenderBundle {
+    #[cfg(feature = "trace")]
+    pub(crate) fn to_base_pass(&self) -> BasePass<RenderCommand<ArcReferences>, Infallible> {
+        self.base.clone()
+    }
+
     /// Actually encode the contents into a native command buffer.
     ///
     /// This is partially duplicating the logic of `render_pass_end`.
@@ -1048,7 +1055,7 @@ impl RenderBundle {
                     let bb = hal::BufferBinding::new_unchecked(buffer, *offset, *size);
                     unsafe { raw.set_vertex_buffer(*slot, bb) };
                 }
-                Cmd::SetPushConstant {
+                Cmd::SetImmediate {
                     stages,
                     offset,
                     size_bytes,
@@ -1058,25 +1065,20 @@ impl RenderBundle {
 
                     if let Some(values_offset) = *values_offset {
                         let values_end_offset =
-                            (values_offset + size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
-                        let data_slice = &self.base.push_constant_data
-                            [(values_offset as usize)..values_end_offset];
+                            (values_offset + size_bytes / wgt::IMMEDIATES_ALIGNMENT) as usize;
+                        let data_slice =
+                            &self.base.immediates_data[(values_offset as usize)..values_end_offset];
 
                         unsafe {
-                            raw.set_push_constants(
-                                pipeline_layout.raw(),
-                                *stages,
-                                *offset,
-                                data_slice,
-                            )
+                            raw.set_immediates(pipeline_layout.raw(), *stages, *offset, data_slice)
                         }
                     } else {
-                        super::push_constant_clear(
+                        super::immediates_clear(
                             *offset,
                             *size_bytes,
                             |clear_offset, clear_data| {
                                 unsafe {
-                                    raw.set_push_constants(
+                                    raw.set_immediates(
                                         pipeline_layout.raw(),
                                         *stages,
                                         clear_offset,
@@ -1142,8 +1144,9 @@ impl RenderBundle {
                             buffer,
                             *offset,
                             *family,
-                            *vertex_or_index_limit,
-                            *instance_limit,
+                            vertex_or_index_limit
+                                .expect("finalized render bundle missing vertex_or_index_limit"),
+                            instance_limit.expect("finalized render bundle missing instance_limit"),
                         )?;
 
                         let dst_buffer =
@@ -1330,9 +1333,9 @@ struct PipelineState {
     /// by vertex buffer slot number.
     steps: Vec<VertexStep>,
 
-    /// Ranges of push constants this pipeline uses, copied from the pipeline
+    /// Ranges of immediates this pipeline uses, copied from the pipeline
     /// layout.
-    push_constant_ranges: ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT }>,
+    immediates_ranges: ArrayVec<wgt::ImmediateRange, { SHADER_STAGE_COUNT }>,
 
     /// The number of bind groups this pipeline uses.
     used_bind_groups: usize,
@@ -1343,27 +1346,22 @@ impl PipelineState {
         Self {
             pipeline: pipeline.clone(),
             steps: pipeline.vertex_steps.to_vec(),
-            push_constant_ranges: pipeline
-                .layout
-                .push_constant_ranges
-                .iter()
-                .cloned()
-                .collect(),
+            immediates_ranges: pipeline.layout.immediates_ranges.iter().cloned().collect(),
             used_bind_groups: pipeline.layout.bind_group_layouts.len(),
         }
     }
 
-    /// Return a sequence of commands to zero the push constant ranges this
+    /// Return a sequence of commands to zero the immediate data ranges this
     /// pipeline uses. If no initialization is necessary, return `None`.
-    fn zero_push_constants(&self) -> Option<impl Iterator<Item = ArcRenderCommand>> {
-        if !self.push_constant_ranges.is_empty() {
+    fn zero_immediates(&self) -> Option<impl Iterator<Item = ArcRenderCommand>> {
+        if !self.immediates_ranges.is_empty() {
             let nonoverlapping_ranges =
-                super::bind::compute_nonoverlapping_ranges(&self.push_constant_ranges);
+                super::bind::compute_nonoverlapping_ranges(&self.immediates_ranges);
 
             Some(
                 nonoverlapping_ranges
                     .into_iter()
-                    .map(|range| ArcRenderCommand::SetPushConstant {
+                    .map(|range| ArcRenderCommand::SetImmediate {
                         stages: range.stages,
                         offset: range.range.start,
                         size_bytes: range.range.end - range.range.start,
@@ -1473,7 +1471,7 @@ impl State {
     /// - If the layout of any bind group slot changes, then that slot and
     ///   all following slots must have their bind groups re-established.
     ///
-    /// - Changing the push constant ranges at all requires re-establishing
+    /// - Changing the immediate data ranges at all requires re-establishing
     ///   all bind groups.
     fn invalidate_bind_groups(&mut self, new: &PipelineState, layout: &PipelineLayout) {
         match self.pipeline {
@@ -1488,8 +1486,8 @@ impl State {
                     return;
                 }
 
-                // Any push constant change invalidates all groups.
-                if old.push_constant_ranges != new.push_constant_ranges {
+                // Any immediate data change invalidates all groups.
+                if old.immediates_ranges != new.immediates_ranges {
                     self.invalidate_bind_group_from(0);
                 } else {
                     let first_changed = self.bind.iter().zip(&layout.bind_group_layouts).position(
@@ -1590,7 +1588,7 @@ impl State {
 
 /// Error encountered when finishing recording a render bundle.
 #[derive(Clone, Debug, Error)]
-pub(super) enum RenderBundleErrorInner {
+pub enum RenderBundleErrorInner {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(transparent)]
@@ -1692,7 +1690,7 @@ pub mod bundle_ffi {
         bundle.base.commands.push(RenderCommand::SetBindGroup {
             index,
             num_dynamic_offsets: offset_length,
-            bind_group_id,
+            bind_group: bind_group_id,
         });
     }
 
@@ -1719,7 +1717,7 @@ pub mod bundle_ffi {
     ) {
         bundle.base.commands.push(RenderCommand::SetVertexBuffer {
             slot,
-            buffer_id,
+            buffer: buffer_id,
             offset,
             size,
         });
@@ -1739,7 +1737,7 @@ pub mod bundle_ffi {
     ///
     /// This function is unsafe as there is no guarantee that the given pointer is
     /// valid for `data` elements.
-    pub unsafe fn wgpu_render_bundle_set_push_constants(
+    pub unsafe fn wgpu_render_bundle_set_immediates(
         pass: &mut RenderBundleEncoder,
         stages: wgt::ShaderStages,
         offset: u32,
@@ -1747,27 +1745,27 @@ pub mod bundle_ffi {
         data: *const u8,
     ) {
         assert_eq!(
-            offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
+            offset & (wgt::IMMEDIATES_ALIGNMENT - 1),
             0,
-            "Push constant offset must be aligned to 4 bytes."
+            "Immediate data offset must be aligned to 4 bytes."
         );
         assert_eq!(
-            size_bytes & (wgt::PUSH_CONSTANT_ALIGNMENT - 1),
+            size_bytes & (wgt::IMMEDIATES_ALIGNMENT - 1),
             0,
-            "Push constant size must be aligned to 4 bytes."
+            "Immediate data size must be aligned to 4 bytes."
         );
         let data_slice = unsafe { slice::from_raw_parts(data, size_bytes as usize) };
-        let value_offset = pass.base.push_constant_data.len().try_into().expect(
-            "Ran out of push constant space. Don't set 4gb of push constants per RenderBundle.",
+        let value_offset = pass.base.immediates_data.len().try_into().expect(
+            "Ran out of immediate data space. Don't set 4gb of immediates per RenderBundle.",
         );
 
-        pass.base.push_constant_data.extend(
+        pass.base.immediates_data.extend(
             data_slice
-                .chunks_exact(wgt::PUSH_CONSTANT_ALIGNMENT as usize)
+                .chunks_exact(wgt::IMMEDIATES_ALIGNMENT as usize)
                 .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
         );
 
-        pass.base.commands.push(RenderCommand::SetPushConstant {
+        pass.base.commands.push(RenderCommand::SetImmediate {
             stages,
             offset,
             size_bytes,
@@ -1813,10 +1811,12 @@ pub mod bundle_ffi {
         offset: BufferAddress,
     ) {
         bundle.base.commands.push(RenderCommand::DrawIndirect {
-            buffer_id,
+            buffer: buffer_id,
             offset,
             count: 1,
             family: DrawCommandFamily::Draw,
+            vertex_or_index_limit: None,
+            instance_limit: None,
         });
     }
 
@@ -1826,10 +1826,12 @@ pub mod bundle_ffi {
         offset: BufferAddress,
     ) {
         bundle.base.commands.push(RenderCommand::DrawIndirect {
-            buffer_id,
+            buffer: buffer_id,
             offset,
             count: 1,
             family: DrawCommandFamily::DrawIndexed,
+            vertex_or_index_limit: None,
+            instance_limit: None,
         });
     }
 

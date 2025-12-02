@@ -31,7 +31,7 @@ env:
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
   WGPU_DX12_COMPILER: dxc
-  RUST_LOG: debug,wasm_bindgen_wasm_interpreter=warn,wasm_bindgen_cli_support=warn,walrus=warn
+  RUST_LOG: debug,wasm_bindgen_wasm_interpreter=warn,wasm_bindgen_cli_support=warn,walrus=warn,naga=info
   RUST_BACKTRACE: full
   PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
   RUSTFLAGS: -D warnings
@@ -194,7 +194,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install toolchain (repo MSRV - tier 1 or 2)
         if: matrix.tier == 1 || matrix.tier == 2
@@ -264,16 +264,16 @@ jobs:
           export RUSTFLAGS="$RUSTFLAGS --cfg getrandom_backend=\"wasm_js\""
 
           # build for WebGPU
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --features glsl,spirv,fragile-send-sync-non-atomic-wasm
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --features glsl,spirv
-          cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-deps --features glsl,spirv
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --features glsl,spirv,fragile-send-sync-non-atomic-wasm
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --features glsl,spirv
+          cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-deps --features glsl,spirv
 
           # check with only the web feature
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-default-features --features=web
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-default-features --features=web
 
           # all features
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --all-features
-          cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-deps --all-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --all-features
+          cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-deps --all-features
 
       # Building for platforms where the tests do not compile.
       - name: Check `wgpu` only
@@ -283,13 +283,13 @@ jobs:
           set -e
 
           # check with no features
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu -p wgpu-hal --no-default-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu -p wgpu-hal --no-default-features
 
           # Don't check samples since we use winit in our samples which has dropped support for Emscripten.
 
           # Check with all features.
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --all-features
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --all-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --all-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --all-features
 
       # Building for no_std platforms.
       - name: Check `no_std`
@@ -299,16 +299,16 @@ jobs:
           set -e
 
           # check with no features
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --no-default-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --no-default-features
 
           # Check with all compatible features
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features --features strict_asserts,fragile-send-sync-non-atomic-wasm,serde,counters
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features --features dot-out,spv-in,spv-out
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features fragile-send-sync-non-atomic-wasm
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --no-default-features --features serde
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features --features strict_asserts,fragile-send-sync-non-atomic-wasm,serde,counters
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features --features dot-out,spv-in,spv-out
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features fragile-send-sync-non-atomic-wasm
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --no-default-features --features serde
 
       # Building for native platforms with standard tests.
       - name: Check native
@@ -318,17 +318,17 @@ jobs:
           set -e
 
           # check with no features
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-default-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-default-features
 
           # Check with all features.
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --benches --all-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --benches --all-features
 
           # Check with all features and profiling macro code.
           # If we don't check this then errors inside `profiling::scope!()` will not be caught.
-          cargo clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --benches --all-features --features test-build-with-profiling
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --benches --all-features --features test-build-with-profiling
 
           # build docs
-          cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --all-features --no-deps
+          cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --all-features --no-deps
 
       - name: Check private item docs
         if: matrix.kind == 'native'
@@ -336,11 +336,11 @@ jobs:
         run: |
           set -e
 
-          # wgpu_core package
-          cargo doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} \
+          cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} \
                 --package wgpu-core \
                 --package wgpu-hal \
                 --package naga \
+                --package wgpu \
                 --all-features --no-deps --document-private-items
 
   # We run minimal checks on the MSRV of the core crates, ensuring that
@@ -375,7 +375,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install core MSRV toolchain
         run: |
@@ -432,7 +432,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install toolchain
         run: |
@@ -473,7 +473,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install repo MSRV toolchain
         run: |
@@ -519,7 +519,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install repo MSRV toolchain
         run: |
@@ -558,7 +558,7 @@ jobs:
         if: matrix.os == 'windows-2022'
         uses: ./.github/actions/install-warp
         with:
-          target-dirs: "target/llvm-cov-target/debug target/llvm-cov-target/debug/deps"
+          target-dir: "target/llvm-cov-target/debug"
 
       - name: (Windows) Install Mesa
         if: matrix.os == 'windows-2022'
@@ -596,20 +596,20 @@ jobs:
           export RUST_LOG=trace
 
           # This needs to match the command in xtask/tests.rs
-          cargo llvm-cov --no-cfg-coverage --no-report run --bin wgpu-info -- -vv
+          cargo --locked llvm-cov --no-cfg-coverage --no-report run --bin wgpu-info -- -vv
 
       - name: Run tests
         shell: bash
         run: |
           set -e
 
-          cargo xtask test --llvm-cov
+          cargo --locked xtask test --llvm-cov
 
       - name: Check Naga snapshots
         # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
         run: git add . && git diff --exit-code HEAD naga/tests/out
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always() # We want artifacts even if the tests fail.
         with:
           name: comparison-images-${{ matrix.os }}
@@ -624,7 +624,7 @@ jobs:
         run: |
           set -e
 
-          cargo llvm-cov report --lcov --output-path lcov.info
+          cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
         uses: codecov/codecov-action@v5
@@ -642,7 +642,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install repo MSRV toolchain
         run: |
@@ -660,7 +660,7 @@ jobs:
         run: |
           set -e
 
-          cargo test --doc
+          cargo --locked test --doc
 
   fmt:
     # runtime is normally 15 seconds
@@ -670,7 +670,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install repo MSRV toolchain
         run: |
@@ -680,7 +680,7 @@ jobs:
 
       - name: Run `cargo fmt`
         run: |
-          cargo fmt -- --check
+          cargo --locked fmt -- --check
 
       - name: Install Taplo
         uses: uncenter/setup-taplo@v1
@@ -691,7 +691,7 @@ jobs:
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.37.3
+        uses: crate-ci/typos@v1.40.0
 
   check-cts-runner:
     # runtime is normally 2 minutes
@@ -701,7 +701,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install MSRV toolchain
         run: |
@@ -726,7 +726,7 @@ jobs:
 
       - name: Build Deno
         run: |
-          cargo clippy --manifest-path cts_runner/Cargo.toml
+          cargo --locked clippy --manifest-path cts_runner/Cargo.toml
 
   # Separate job so that new advisories don't block CI.
   #
@@ -739,7 +739,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v2
@@ -757,7 +757,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v2

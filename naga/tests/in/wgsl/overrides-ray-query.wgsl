@@ -1,3 +1,5 @@
+enable wgpu_ray_query;
+
 override o: f32;
 
 @group(0) @binding(0)

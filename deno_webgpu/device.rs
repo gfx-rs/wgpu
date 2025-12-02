@@ -372,7 +372,7 @@ impl GPUDevice {
     let wgpu_descriptor = wgpu_core::binding_model::PipelineLayoutDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
       bind_group_layouts: Cow::Owned(bind_group_layouts),
-      push_constant_ranges: Default::default(),
+      immediates_ranges: Default::default(),
     };
 
     let (id, err) = self.instance.device_create_pipeline_layout(
@@ -577,11 +577,8 @@ impl GPUDevice {
       multiview: None,
     };
 
-    let res = wgpu_core::command::RenderBundleEncoder::new(
-      &wgpu_descriptor,
-      self.id,
-      None,
-    );
+    let res =
+      wgpu_core::command::RenderBundleEncoder::new(&wgpu_descriptor, self.id);
     let (encoder, err) = match res {
       Ok(encoder) => (encoder, None),
       Err(e) => (
@@ -879,7 +876,7 @@ impl GPUDevice {
       multisample,
       fragment,
       cache: None,
-      multiview: None,
+      multiview_mask: None,
     };
 
     let (id, err) = self.instance.device_create_render_pipeline(

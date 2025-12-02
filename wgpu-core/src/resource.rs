@@ -573,7 +573,7 @@ impl Buffer {
 
     /// Returns the mapping callback in case of error so that the callback can be fired outside
     /// of the locks that are held in this function.
-    pub(crate) fn map_async(
+    pub fn map_async(
         self: &Arc<Self>,
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
@@ -677,6 +677,72 @@ impl Buffer {
         Ok(submit_index)
     }
 
+    pub fn get_mapped_range(
+        self: &Arc<Self>,
+        offset: wgt::BufferAddress,
+        size: Option<wgt::BufferAddress>,
+    ) -> Result<(NonNull<u8>, u64), BufferAccessError> {
+        {
+            let snatch_guard = self.device.snatchable_lock.read();
+            self.check_destroyed(&snatch_guard)?;
+        }
+
+        let range_size = if let Some(size) = size {
+            size
+        } else {
+            self.size.saturating_sub(offset)
+        };
+
+        if offset % wgt::MAP_ALIGNMENT != 0 {
+            return Err(BufferAccessError::UnalignedOffset { offset });
+        }
+        if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            return Err(BufferAccessError::UnalignedRangeSize { range_size });
+        }
+        let map_state = &*self.map_state.lock();
+        match *map_state {
+            BufferMapState::Init { ref staging_buffer } => {
+                // offset (u64) can not be < 0, so no need to validate the lower bound
+                if offset + range_size > self.size {
+                    return Err(BufferAccessError::OutOfBoundsOverrun {
+                        index: offset + range_size - 1,
+                        max: self.size,
+                    });
+                }
+                let ptr = unsafe { staging_buffer.ptr() };
+                let ptr = unsafe { NonNull::new_unchecked(ptr.as_ptr().offset(offset as isize)) };
+                Ok((ptr, range_size))
+            }
+            BufferMapState::Active {
+                ref mapping,
+                ref range,
+                ..
+            } => {
+                if offset < range.start {
+                    return Err(BufferAccessError::OutOfBoundsUnderrun {
+                        index: offset,
+                        min: range.start,
+                    });
+                }
+                if offset + range_size > range.end {
+                    return Err(BufferAccessError::OutOfBoundsOverrun {
+                        index: offset + range_size - 1,
+                        max: range.end,
+                    });
+                }
+                // ptr points to the beginning of the range we mapped in map_async
+                // rather than the beginning of the buffer.
+                let relative_offset = (offset - range.start) as isize;
+                unsafe {
+                    Ok((
+                        NonNull::new_unchecked(mapping.ptr.as_ptr().offset(relative_offset)),
+                        range_size,
+                    ))
+                }
+            }
+            BufferMapState::Idle | BufferMapState::Waiting(_) => Err(BufferAccessError::NotMapped),
+        }
+    }
     /// This function returns [`None`] only if [`Self::map_state`] is not [`BufferMapState::Waiting`].
     #[must_use]
     pub(crate) fn map(&self, snatch_guard: &SnatchGuard) -> Option<BufferMapPendingClosure> {
@@ -731,14 +797,8 @@ impl Buffer {
     }
 
     // Note: This must not be called while holding a lock.
-    pub(crate) fn unmap(
-        self: &Arc<Self>,
-        #[cfg(feature = "trace")] buffer_id: crate::id::BufferId,
-    ) -> Result<(), BufferAccessError> {
-        if let Some((mut operation, status)) = self.unmap_inner(
-            #[cfg(feature = "trace")]
-            buffer_id,
-        )? {
+    pub fn unmap(self: &Arc<Self>) -> Result<(), BufferAccessError> {
+        if let Some((mut operation, status)) = self.unmap_inner()? {
             if let Some(callback) = operation.callback.take() {
                 callback(status);
             }
@@ -747,10 +807,7 @@ impl Buffer {
         Ok(())
     }
 
-    fn unmap_inner(
-        self: &Arc<Self>,
-        #[cfg(feature = "trace")] buffer_id: crate::id::BufferId,
-    ) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
+    fn unmap_inner(self: &Arc<Self>) -> Result<Option<BufferMapPendingClosure>, BufferAccessError> {
         let device = &self.device;
         let snatch_guard = device.snatchable_lock.read();
         let raw_buf = self.try_raw(&snatch_guard)?;
@@ -758,9 +815,11 @@ impl Buffer {
             BufferMapState::Init { staging_buffer } => {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut trace) = *device.trace.lock() {
+                    use crate::device::trace::IntoTrace;
+
                     let data = trace.make_binary("bin", staging_buffer.get_data());
                     trace.add(trace::Action::WriteBuffer {
-                        id: buffer_id,
+                        id: self.to_trace(),
                         data,
                         range: 0..self.size,
                         queued: true,
@@ -816,16 +875,18 @@ impl Buffer {
                 range,
                 host,
             } => {
-                #[allow(clippy::collapsible_if)]
+                #[cfg_attr(not(feature = "trace"), expect(clippy::collapsible_if))]
                 if host == HostMap::Write {
                     #[cfg(feature = "trace")]
                     if let Some(ref mut trace) = *device.trace.lock() {
+                        use crate::device::trace::IntoTrace;
+
                         let size = range.end - range.start;
                         let data = trace.make_binary("bin", unsafe {
                             core::slice::from_raw_parts(mapping.ptr.as_ptr(), size as usize)
                         });
                         trace.add(trace::Action::WriteBuffer {
-                            id: buffer_id,
+                            id: self.to_trace(),
                             data,
                             range: range.clone(),
                             queued: false,
@@ -841,7 +902,7 @@ impl Buffer {
         Ok(None)
     }
 
-    pub(crate) fn destroy(self: &Arc<Self>) {
+    pub fn destroy(self: &Arc<Self>) {
         let device = &self.device;
 
         let temp = {
@@ -1343,7 +1404,7 @@ impl Texture {
         }
     }
 
-    pub(crate) fn destroy(self: &Arc<Self>) {
+    pub fn destroy(self: &Arc<Self>) {
         let device = &self.device;
 
         let temp = {
@@ -1509,6 +1570,8 @@ pub enum CreateTextureError {
     CreateTextureView(#[from] CreateTextureViewError),
     #[error("Invalid usage flags {0:?}")]
     InvalidUsage(wgt::TextureUsages),
+    #[error("Texture usage {0:?} is not compatible with texture usage {1:?}")]
+    IncompatibleUsage(wgt::TextureUsages, wgt::TextureUsages),
     #[error(transparent)]
     InvalidDimension(#[from] TextureDimensionError),
     #[error("Depth texture ({1:?}) can't be created as {0:?}")]
@@ -1564,6 +1627,7 @@ impl WebGpuError for CreateTextureError {
             Self::MissingDownlevelFlags(e) => e,
 
             Self::InvalidUsage(_)
+            | Self::IncompatibleUsage(_, _)
             | Self::InvalidDepthDimension(_, _)
             | Self::InvalidCompressedDimension(_, _)
             | Self::InvalidMipLevelCount { .. }
@@ -1651,7 +1715,6 @@ pub struct TextureView {
     pub(crate) selector: TextureSelector,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
-    pub(crate) tracking_data: TrackingData,
 }
 
 impl Drop for TextureView {
@@ -1714,20 +1777,22 @@ pub enum CreateTextureViewError {
         view: wgt::TextureViewDimension,
         texture: wgt::TextureDimension,
     },
-    #[error("Texture view format `{0:?}` is not renderable")]
+    #[error("Texture view format `{0:?}` cannot be used as a render attachment. Make sure the format supports RENDER_ATTACHMENT usage and required device features are enabled.")]
     TextureViewFormatNotRenderable(wgt::TextureFormat),
-    #[error("Texture view format `{0:?}` is not storage bindable")]
+    #[error("Texture view format `{0:?}` cannot be used as a storage binding. Make sure the format supports STORAGE usage and required device features are enabled.")]
     TextureViewFormatNotStorage(wgt::TextureFormat),
-    #[error("Invalid texture view usage `{view:?}` with texture of usage `{texture:?}`")]
+    #[error("Texture view usages (`{view:?}`) must be a subset of the texture's original usages (`{texture:?}`)")]
     InvalidTextureViewUsage {
         view: wgt::TextureUsages,
         texture: wgt::TextureUsages,
     },
-    #[error("Invalid texture view dimension `{0:?}` of a multisampled texture")]
+    #[error("Texture view dimension `{0:?}` cannot be used with a multisampled texture")]
     InvalidMultisampledTextureViewDimension(wgt::TextureViewDimension),
-    #[error("Invalid texture depth `{depth}` for texture view of dimension `Cubemap`. Cubemap views must use images of size 6.")]
+    #[error(
+        "TextureView has an arrayLayerCount of {depth}. Views of type `Cube` must have arrayLayerCount of 6."
+    )]
     InvalidCubemapTextureDepth { depth: u32 },
-    #[error("Invalid texture depth `{depth}` for texture view of dimension `CubemapArray`. Cubemap views must use images with sizes which are a multiple of 6.")]
+    #[error("TextureView has an arrayLayerCount of {depth}. Views of type `CubeArray` must have an arrayLayerCount that is a multiple of 6.")]
     InvalidCubemapArrayTextureDepth { depth: u32 },
     #[error("Source texture width and height must be equal for a texture view of dimension `Cube`/`CubeArray`")]
     InvalidCubeTextureViewSize,
@@ -1736,22 +1801,41 @@ pub enum CreateTextureViewError {
     #[error("Array layer count is 0")]
     ZeroArrayLayerCount,
     #[error(
-        "TextureView mip level count + base mip level {requested} must be <= Texture mip level count {total}"
+        "TextureView spans mip levels [{base_mip_level}, {end_mip_level}) \
+        (mipLevelCount {mip_level_count}) but the texture view only has {total} total mip levels",
+        end_mip_level = base_mip_level + mip_level_count
     )]
-    TooManyMipLevels { requested: u32, total: u32 },
-    #[error("TextureView array layer count + base array layer {requested} must be <= Texture depth/array layer count {total}")]
-    TooManyArrayLayers { requested: u32, total: u32 },
+    TooManyMipLevels {
+        base_mip_level: u32,
+        mip_level_count: u32,
+        total: u32,
+    },
+    #[error(
+        "TextureView spans array layers [{base_array_layer}, {end_array_layer}) \
+         (arrayLayerCount {array_layer_count}) but the texture view only has {total} total layers",
+        end_array_layer = base_array_layer + array_layer_count
+    )]
+    TooManyArrayLayers {
+        base_array_layer: u32,
+        array_layer_count: u32,
+        total: u32,
+    },
     #[error("Requested array layer count {requested} is not valid for the target view dimension {dim:?}")]
     InvalidArrayLayerCount {
         requested: u32,
         dim: wgt::TextureViewDimension,
     },
-    #[error("Aspect {requested_aspect:?} is not in the source texture format {texture_format:?}")]
+    #[error(
+        "Aspect {requested_aspect:?} is not a valid aspect of the source texture format {texture_format:?}"
+    )]
     InvalidAspect {
         texture_format: wgt::TextureFormat,
         requested_aspect: wgt::TextureAspect,
     },
-    #[error("Unable to view texture {texture:?} as {view:?}")]
+    #[error(
+        "Trying to create a view of format {view:?} of a texture with format {texture:?}, \
+         but this view format is not present in the texture's viewFormat array"
+    )]
     FormatReinterpretation {
         texture: wgt::TextureFormat,
         view: wgt::TextureFormat,
@@ -1797,7 +1881,6 @@ crate::impl_resource_type!(TextureView);
 crate::impl_labeled!(TextureView);
 crate::impl_parent_device!(TextureView);
 crate::impl_storage_item!(TextureView);
-crate::impl_trackable!(TextureView);
 
 pub type ExternalTextureDescriptor<'a> = wgt::ExternalTextureDescriptor<Label<'a>>;
 
@@ -1821,7 +1904,7 @@ impl Drop for ExternalTexture {
 }
 
 impl ExternalTexture {
-    pub(crate) fn destroy(self: &Arc<Self>) {
+    pub fn destroy(self: &Arc<Self>) {
         self.params.destroy();
     }
 }
@@ -1908,7 +1991,7 @@ pub struct SamplerDescriptor<'a> {
     /// How to filter the texture when it needs to be minified (made smaller)
     pub min_filter: wgt::FilterMode,
     /// How to filter between mip map levels
-    pub mipmap_filter: wgt::FilterMode,
+    pub mipmap_filter: wgt::MipmapFilterMode,
     /// Minimum level of detail (i.e. mip level) to use
     pub lod_min_clamp: f32,
     /// Maximum level of detail (i.e. mip level) to use
@@ -1989,6 +2072,12 @@ pub enum CreateSamplerError {
         filter_mode: wgt::FilterMode,
         anisotropic_clamp: u16,
     },
+    #[error("Invalid filter mode for {filter_type:?}: {filter_mode:?}. When anistropic clamp is not 1 (it is {anisotropic_clamp}), all filter modes must be linear.")]
+    InvalidMipmapFilterModeWithAnisotropy {
+        filter_type: SamplerFilterErrorType,
+        filter_mode: wgt::MipmapFilterMode,
+        anisotropic_clamp: u16,
+    },
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
 }
@@ -2008,7 +2097,8 @@ impl WebGpuError for CreateSamplerError {
             Self::InvalidLodMinClamp(_)
             | Self::InvalidLodMaxClamp { .. }
             | Self::InvalidAnisotropy(_)
-            | Self::InvalidFilterModeWithAnisotropy { .. } => return ErrorType::Validation,
+            | Self::InvalidFilterModeWithAnisotropy { .. }
+            | Self::InvalidMipmapFilterModeWithAnisotropy { .. } => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }

@@ -328,7 +328,7 @@ impl crate::framework::Example for Example {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("main"),
             bind_group_layouts: &[&bind_group_layout, &uniform_bind_group_layout],
-            push_constant_ranges: &[],
+            immediates_ranges: &[],
         });
 
         let index_format = wgpu::IndexFormat::Uint16;
@@ -358,7 +358,7 @@ impl crate::framework::Example for Example {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None
         });
 
@@ -402,6 +402,7 @@ impl crate::framework::Example for Example {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         rpass.set_pipeline(&self.pipeline);

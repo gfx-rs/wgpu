@@ -111,7 +111,12 @@ pub fn map_texture_usage(
             flags.contains(wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE),
         );
     }
-    let is_color = aspect.contains(hal::FormatAspects::COLOR);
+    let is_color = aspect.intersects(
+        hal::FormatAspects::COLOR
+            | hal::FormatAspects::PLANE_0
+            | hal::FormatAspects::PLANE_1
+            | hal::FormatAspects::PLANE_2,
+    );
     u.set(
         wgt::TextureUses::COLOR_TARGET,
         usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT) && is_color,
@@ -123,6 +128,10 @@ pub fn map_texture_usage(
     u.set(
         wgt::TextureUses::STORAGE_ATOMIC,
         usage.contains(wgt::TextureUsages::STORAGE_ATOMIC),
+    );
+    u.set(
+        wgt::TextureUses::TRANSIENT,
+        usage.contains(wgt::TextureUsages::TRANSIENT),
     );
     u
 }
@@ -183,9 +192,24 @@ pub fn map_texture_usage_from_hal(uses: wgt::TextureUses) -> wgt::TextureUsages 
         wgt::TextureUsages::STORAGE_ATOMIC,
         uses.contains(wgt::TextureUses::STORAGE_ATOMIC),
     );
+    u.set(
+        wgt::TextureUsages::TRANSIENT,
+        uses.contains(wgt::TextureUses::TRANSIENT),
+    );
     u
 }
 
+/// Check the requested texture size against the supported limits.
+///
+/// This function implements the texture size and sample count checks in [vtd
+/// dimension step]. The format checks are elsewhere in [`create_texture`]`.
+///
+/// Note that while there is some basic checking of the sample count here, there
+/// is an additional set of checks when `sample_count > 1` elsewhere in
+/// [`create_texture`]`.
+///
+/// [vtd dimension step]: https://www.w3.org/TR/2025/CRD-webgpu-20251120/#:~:text=or%204.-,If%20descriptor.dimension%20is
+/// [`create_texture`]: crate::device::Device::create_texture
 pub fn check_texture_dimension_size(
     dimension: wgt::TextureDimension,
     wgt::Extent3d {

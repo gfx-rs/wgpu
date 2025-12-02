@@ -31,8 +31,10 @@ const MESSAGE_PREFIXES: &[(&str, log::Level)] = &[
     ("CORRUPTION", log::Level::Error),
     ("ERROR", log::Level::Error),
     ("WARNING", log::Level::Warn),
-    ("INFO", log::Level::Info),
-    ("MESSAGE", log::Level::Debug),
+    // We intentionally suppress "INFO" messages down to debug
+    // so that users are not innundated with info messages from the runtime.
+    ("INFO", log::Level::Debug),
+    ("MESSAGE", log::Level::Trace),
 ];
 
 unsafe extern "system" fn output_debug_string_handler(

@@ -179,7 +179,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
         .create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            immediates_ranges: &[],
         });
 
     let pipeline = ctx
@@ -207,7 +207,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
             depth_stencil: None,
             multisample: MultisampleState::default(),
             cache: None,
-            multiview: None,
+            multiview_mask: None,
         });
 
     let mut encoder = ctx
@@ -228,6 +228,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
         render_pass.set_pipeline(&pipeline);
         render_pass.set_bind_group(0, &bind_group, &[]);

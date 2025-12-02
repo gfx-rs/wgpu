@@ -85,6 +85,13 @@ pub fn map_filter_mode(mode: wgt::FilterMode) -> Direct3D12::D3D12_FILTER_TYPE {
     }
 }
 
+pub fn map_mipmap_filter_mode(mode: wgt::MipmapFilterMode) -> Direct3D12::D3D12_FILTER_TYPE {
+    match mode {
+        wgt::MipmapFilterMode::Nearest => Direct3D12::D3D12_FILTER_TYPE_POINT,
+        wgt::MipmapFilterMode::Linear => Direct3D12::D3D12_FILTER_TYPE_LINEAR,
+    }
+}
+
 pub fn map_comparison(func: wgt::CompareFunction) -> Direct3D12::D3D12_COMPARISON_FUNC {
     use wgt::CompareFunction as Cf;
     match func {

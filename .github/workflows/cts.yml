@@ -55,7 +55,7 @@ jobs:
 
     steps:
       - name: checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install Repo MSRV toolchain
         run: |
@@ -71,7 +71,8 @@ jobs:
       - name: caching
         uses: Swatinem/rust-cache@v2
         with:
-          prefix-key: v2-rust # Increment version for cache busting
+          # The version number can be incremented for cache busting.
+          prefix-key: v2-rust-${{ hashFiles('cts_runner/revision.txt') }}
           cache-directories: cts
 
       # We enable line numbers for panics, but that's it
@@ -92,7 +93,7 @@ jobs:
         if: matrix.os == 'windows-2022'
         uses: ./.github/actions/install-warp
         with:
-          target-dirs: "target/llvm-cov-target/debug"
+          target-dir: "target/llvm-cov-target/debug"
 
       - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'
@@ -100,7 +101,7 @@ jobs:
 
       - name: run CTS
         shell: bash
-        run: cargo xtask cts --llvm-cov --backend ${{ matrix.backend }}
+        run: cargo --locked xtask cts --llvm-cov --backend ${{ matrix.backend }}
 
       - name: Generate coverage report
         id: coverage
@@ -109,7 +110,7 @@ jobs:
         run: |
           set -e
 
-          cargo llvm-cov report --lcov --output-path lcov.info
+          cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
         uses: codecov/codecov-action@v5

@@ -67,5 +67,5 @@ If your change adds a new operation:
       identifiers? (This is usually not relevant to the SPIR-V
       backend.)
   - [ ] Did you use the `Namer` to generate a fresh identifier?
-  - [ ] Did you register the identifier as a reserved word with the the `Namer`?
+  - [ ] Did you register the identifier as a reserved word with the `Namer`?
   - [ ] Did you use a reserved prefix registered with the `Namer`?

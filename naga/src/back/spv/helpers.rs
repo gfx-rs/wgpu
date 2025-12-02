@@ -53,7 +53,8 @@ pub(super) const fn map_storage_class(space: crate::AddressSpace) -> spirv::Stor
         crate::AddressSpace::Storage { .. } => spirv::StorageClass::StorageBuffer,
         crate::AddressSpace::Uniform => spirv::StorageClass::Uniform,
         crate::AddressSpace::WorkGroup => spirv::StorageClass::Workgroup,
-        crate::AddressSpace::PushConstant => spirv::StorageClass::PushConstant,
+        crate::AddressSpace::Immediate => spirv::StorageClass::PushConstant,
+        crate::AddressSpace::TaskPayload => unreachable!(),
     }
 }
 
@@ -79,11 +80,10 @@ impl crate::AddressSpace {
         self,
     ) -> (spirv::MemorySemantics, spirv::Scope) {
         match self {
-            Self::Storage { .. } => (spirv::MemorySemantics::UNIFORM_MEMORY, spirv::Scope::Device),
-            Self::WorkGroup => (
-                spirv::MemorySemantics::WORKGROUP_MEMORY,
-                spirv::Scope::Workgroup,
-            ),
+            Self::Storage { .. } => (spirv::MemorySemantics::empty(), spirv::Scope::Device),
+            Self::WorkGroup => (spirv::MemorySemantics::empty(), spirv::Scope::Workgroup),
+            Self::Uniform => (spirv::MemorySemantics::empty(), spirv::Scope::Device),
+            Self::Handle => (spirv::MemorySemantics::empty(), spirv::Scope::Device),
             _ => (spirv::MemorySemantics::empty(), spirv::Scope::Invocation),
         }
     }
@@ -98,7 +98,7 @@ pub fn global_needs_wrapper(ir_module: &crate::Module, var: &crate::GlobalVariab
     match var.space {
         crate::AddressSpace::Uniform
         | crate::AddressSpace::Storage { .. }
-        | crate::AddressSpace::PushConstant => {}
+        | crate::AddressSpace::Immediate => {}
         _ => return false,
     };
     match ir_module.types[var.ty].inner {
