@@ -4,7 +4,7 @@
 //! A lot of things aren't explained here via comments. See hello-compute and
 //! repeated-compute for code that is more thoroughly commented.
 
-use std::num::NonZeroU32;
+use std::num::{NonZeroU32, NonZeroU64};
 use wgpu::{util::DeviceExt, Features};
 
 // These are set by the minimum required defaults for webgpu.
@@ -144,37 +144,36 @@ fn setup_binds(
     storage_buffers: &[wgpu::Buffer],
     device: &wgpu::Device,
 ) -> (wgpu::BindGroupLayout, wgpu::BindGroup) {
-    let bind_group_entries: Vec<wgpu::BindGroupEntry> = storage_buffers
+    let buffers: Vec<_> = storage_buffers
         .iter()
-        .enumerate()
-        .map(|(bind_idx, buffer)| wgpu::BindGroupEntry {
-            binding: bind_idx as u32,
-            resource: buffer.as_entire_binding(),
-        })
+        .map(|b| b.as_entire_buffer_binding())
         .collect();
 
-    let bind_group_layout_entries: Vec<wgpu::BindGroupLayoutEntry> = (0..storage_buffers.len())
-        .map(|bind_idx| wgpu::BindGroupLayoutEntry {
-            binding: bind_idx as u32,
-            visibility: wgpu::ShaderStages::COMPUTE,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only: false },
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: Some(NonZeroU32::new(1).unwrap()),
-        })
-        .collect();
+    let entry = wgpu::BindGroupEntry {
+        binding: 0,
+        resource: wgpu::BindingResource::BufferArray(&buffers),
+    };
+
+    let bgl_entry = wgpu::BindGroupLayoutEntry {
+        binding: 0,
+        visibility: wgpu::ShaderStages::COMPUTE,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Storage { read_only: false },
+            has_dynamic_offset: false,
+            min_binding_size: Some(NonZeroU64::new(4).unwrap()),
+        },
+        count: Some(NonZeroU32::new(buffers.len() as u32).unwrap()),
+    };
 
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("Custom Storage Bind Group Layout"),
-        entries: &bind_group_layout_entries,
+        entries: &[bgl_entry],
     });
 
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("Combined Storage Bind Group"),
         layout: &bind_group_layout,
-        entries: &bind_group_entries,
+        entries: &[entry],
     });
 
     (bind_group_layout, bind_group)
