@@ -184,7 +184,6 @@ pub const CAPABILITIES: crate::Capabilities = {
             max_inter_stage_shader_variables: ALLOC_MAX_U32,
             min_uniform_buffer_offset_alignment: 1,
             min_storage_buffer_offset_alignment: 1,
-            max_inter_stage_shader_components: ALLOC_MAX_U32,
             max_color_attachments: ALLOC_MAX_U32,
             max_color_attachment_bytes_per_sample: ALLOC_MAX_U32,
             max_compute_workgroup_storage_size: ALLOC_MAX_U32,

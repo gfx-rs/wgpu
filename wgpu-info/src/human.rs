@@ -167,7 +167,6 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_inter_stage_shader_variables,
         min_uniform_buffer_offset_alignment,
         min_storage_buffer_offset_alignment,
-        max_inter_stage_shader_components,
         max_color_attachments,
         max_color_attachment_bytes_per_sample,
         max_compute_workgroup_storage_size,
@@ -223,7 +222,6 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                   Max Inter-stage Shader Variables: {max_inter_stage_shader_variables}")?;
     writeln!(output, "\t\t                Min Uniform Buffer Offset Alignment: {min_uniform_buffer_offset_alignment}")?;
     writeln!(output, "\t\t                Min Storage Buffer Offset Alignment: {min_storage_buffer_offset_alignment}")?;
-    writeln!(output, "\t\t                   Max Inter-Stage Shader Component: {max_inter_stage_shader_components}")?;
     writeln!(output, "\t\t                              Max Color Attachments: {max_color_attachments}")?;
     writeln!(output, "\t\t              Max Color Attachment Bytes per sample: {max_color_attachment_bytes_per_sample}")?;
     writeln!(output, "\t\t                 Max Compute Workgroup Storage Size: {max_compute_workgroup_storage_size}")?;

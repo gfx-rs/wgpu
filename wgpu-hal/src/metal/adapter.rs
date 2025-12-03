@@ -1194,7 +1194,6 @@ impl super::PrivateCapabilities {
             max_inter_stage_shader_variables: self.max_varying_components / 4,
             min_uniform_buffer_offset_alignment: self.buffer_alignment as u32,
             min_storage_buffer_offset_alignment: self.buffer_alignment as u32,
-            max_inter_stage_shader_components: self.max_varying_components,
             max_color_attachments: self.max_color_render_targets as u32,
             max_color_attachment_bytes_per_sample: self.max_color_attachment_bytes_per_sample
                 as u32,

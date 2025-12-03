@@ -46,7 +46,6 @@ macro_rules! with_limits {
         $macro_name!(max_vertex_buffer_array_stride, Ordering::Less);
         $macro_name!(min_uniform_buffer_offset_alignment, Ordering::Greater);
         $macro_name!(min_storage_buffer_offset_alignment, Ordering::Greater);
-        $macro_name!(max_inter_stage_shader_components, Ordering::Less);
         $macro_name!(max_color_attachments, Ordering::Less);
         $macro_name!(max_color_attachment_bytes_per_sample, Ordering::Less);
         $macro_name!(max_compute_workgroup_storage_size, Ordering::Less);
@@ -193,10 +192,6 @@ pub struct Limits {
     /// when creating a `BindGroup`, or for `set_bind_group` `dynamicOffsets`.
     /// Defaults to 256. Lower is "better".
     pub min_storage_buffer_offset_alignment: u32,
-    /// Maximum allowed number of components (scalars) of input or output locations for
-    /// inter-stage communication (vertex outputs to fragment inputs). Defaults to 60.
-    /// Higher is "better".
-    pub max_inter_stage_shader_components: u32,
     /// The maximum allowed number of color attachments.
     pub max_color_attachments: u32,
     /// The maximum number of bytes necessary to hold one sample (pixel or subpixel) of render
@@ -333,7 +328,6 @@ impl Limits {
     ///     max_inter_stage_shader_variables: 16,
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
-    ///     max_inter_stage_shader_components: 60,
     ///     max_color_attachments: 8,
     ///     max_color_attachment_bytes_per_sample: 32,
     ///     max_compute_workgroup_storage_size: 16384,
@@ -392,7 +386,6 @@ impl Limits {
             max_inter_stage_shader_variables: 16,
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
-            max_inter_stage_shader_components: 60,
             max_color_attachments: 8,
             max_color_attachment_bytes_per_sample: 32,
             max_compute_workgroup_storage_size: 16384,
@@ -455,7 +448,6 @@ impl Limits {
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
     ///     max_inter_stage_shader_variables: 15,
-    ///     max_inter_stage_shader_components: 60,
     ///     max_color_attachments: 4,
     ///     max_color_attachment_bytes_per_sample: 32,
     ///     max_compute_workgroup_storage_size: 16352, // *
@@ -534,7 +526,6 @@ impl Limits {
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
     ///     max_inter_stage_shader_variables: 15,
-    ///     max_inter_stage_shader_components: 31,
     ///     max_color_attachments: 4,
     ///     max_color_attachment_bytes_per_sample: 32,
     ///     max_compute_workgroup_storage_size: 0, // +
@@ -584,7 +575,6 @@ impl Limits {
 
             // Value supported by Intel Celeron B830 on Windows (OpenGL 3.1)
             max_inter_stage_shader_variables: 15,
-            max_inter_stage_shader_components: 31,
 
             // Most of the values should be the same as the downlevel defaults
             ..Self::downlevel_defaults()

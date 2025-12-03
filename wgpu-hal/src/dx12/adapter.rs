@@ -809,7 +809,6 @@ impl super::Adapter {
                     min_uniform_buffer_offset_alignment:
                         Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
                     min_storage_buffer_offset_alignment: 4,
-                    max_inter_stage_shader_components: base.max_inter_stage_shader_components,
                     max_inter_stage_shader_variables: base.max_inter_stage_shader_variables,
                     max_color_attachments,
                     max_color_attachment_bytes_per_sample,

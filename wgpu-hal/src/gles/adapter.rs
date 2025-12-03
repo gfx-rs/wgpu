@@ -755,19 +755,6 @@ impl super::Adapter {
             max_immediate_size: super::MAX_IMMEDIATES as u32 * 4,
             min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment,
-            max_inter_stage_shader_components: {
-                // MAX_VARYING_COMPONENTS may return 0, because it is deprecated since OpenGL 3.2 core,
-                // and an OpenGL Context with the core profile and with forward-compatibility=true,
-                // will make deprecated constants unavailable.
-                let max_varying_components =
-                    unsafe { gl.get_parameter_i32(glow::MAX_VARYING_COMPONENTS) } as u32;
-                if max_varying_components == 0 {
-                    // default value for max_inter_stage_shader_components
-                    60
-                } else {
-                    max_varying_components
-                }
-            },
             max_inter_stage_shader_variables: {
                 // MAX_VARYING_COMPONENTS may return 0, because it is deprecated since OpenGL 3.2 core,
                 // and an OpenGL Context with the core profile and with forward-compatibility=true,

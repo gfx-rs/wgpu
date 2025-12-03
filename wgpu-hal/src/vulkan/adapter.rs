@@ -1437,9 +1437,6 @@ impl PhysicalDeviceProperties {
                 / 4,
             min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as u32,
             min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as u32,
-            max_inter_stage_shader_components: limits
-                .max_vertex_output_components
-                .min(limits.max_fragment_input_components),
             max_color_attachments: limits.max_color_attachments,
             max_color_attachment_bytes_per_sample,
             max_compute_workgroup_storage_size: limits.max_compute_shared_memory_size,
