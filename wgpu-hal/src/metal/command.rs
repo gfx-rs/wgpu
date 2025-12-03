@@ -7,7 +7,7 @@ use alloc::{
 use core::ops::Range;
 use metal::{
     MTLIndexType, MTLLoadAction, MTLPrimitiveType, MTLScissorRect, MTLSize, MTLStoreAction,
-    MTLViewport, MTLVisibilityResultMode, NSRange,
+    MTLViewport, MTLVisibilityResultMode, NSRange, NSUInteger,
 };
 use smallvec::SmallVec;
 
@@ -51,6 +51,51 @@ impl Encoder<'_> {
             Self::Task(_) => naga::ShaderStage::Task,
             Self::Mesh(_) => naga::ShaderStage::Mesh,
             Self::Compute(_) => naga::ShaderStage::Compute,
+        }
+    }
+
+    fn set_buffer(
+        &self,
+        index: NSUInteger,
+        buffer: Option<&metal::BufferRef>,
+        offset: wgt::BufferAddress,
+    ) {
+        match *self {
+            Self::Vertex(enc) => enc.set_vertex_buffer(index, buffer, offset),
+            Self::Fragment(enc) => enc.set_fragment_buffer(index, buffer, offset),
+            Self::Task(enc) => enc.set_object_buffer(index, buffer, offset),
+            Self::Mesh(enc) => enc.set_mesh_buffer(index, buffer, offset),
+            Self::Compute(enc) => enc.set_buffer(index, buffer, offset),
+        }
+    }
+
+    fn set_bytes(&self, index: NSUInteger, length: u64, bytes: *const core::ffi::c_void) {
+        match *self {
+            Self::Vertex(enc) => enc.set_vertex_bytes(index, length, bytes),
+            Self::Fragment(enc) => enc.set_fragment_bytes(index, length, bytes),
+            Self::Task(enc) => enc.set_object_bytes(index, length, bytes),
+            Self::Mesh(enc) => enc.set_mesh_bytes(index, length, bytes),
+            Self::Compute(enc) => enc.set_bytes(index, length, bytes),
+        }
+    }
+
+    fn set_sampler_state(&self, index: NSUInteger, state: Option<&metal::SamplerStateRef>) {
+        match *self {
+            Self::Vertex(enc) => enc.set_vertex_sampler_state(index, state),
+            Self::Fragment(enc) => enc.set_fragment_sampler_state(index, state),
+            Self::Task(enc) => enc.set_object_sampler_state(index, state),
+            Self::Mesh(enc) => enc.set_mesh_sampler_state(index, state),
+            Self::Compute(enc) => enc.set_sampler_state(index, state),
+        }
+    }
+
+    fn set_texture(&self, index: NSUInteger, texture: Option<&metal::TextureRef>) {
+        match *self {
+            Self::Vertex(enc) => enc.set_vertex_texture(index, texture),
+            Self::Fragment(enc) => enc.set_fragment_texture(index, texture),
+            Self::Task(enc) => enc.set_object_texture(index, texture),
+            Self::Mesh(enc) => enc.set_mesh_texture(index, texture),
+            Self::Compute(enc) => enc.set_texture(index, texture),
         }
     }
 }
@@ -180,7 +225,6 @@ impl super::CommandEncoder {
         group: &super::BindGroup,
     ) {
         use naga::ShaderStage as S;
-        use Encoder as E;
         let resource_indices = match encoder.stage() {
             S::Vertex => &bg_info.base_resource_indices.vs,
             S::Fragment => &bg_info.base_resource_indices.fs,
@@ -203,14 +247,8 @@ impl super::CommandEncoder {
                 offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
             }
             let index = (resource_indices.buffers + index) as u64;
-            let buf_ptr = Some(buf.ptr.as_native());
-            match encoder {
-                E::Vertex(encoder) => encoder.set_vertex_buffer(index, buf_ptr, offset),
-                E::Fragment(encoder) => encoder.set_fragment_buffer(index, buf_ptr, offset),
-                E::Task(encoder) => encoder.set_object_buffer(index, buf_ptr, offset),
-                E::Mesh(encoder) => encoder.set_mesh_buffer(index, buf_ptr, offset),
-                E::Compute(encoder) => encoder.set_buffer(index, buf_ptr, offset),
-            }
+            let buffer = Some(buf.ptr.as_native());
+            encoder.set_buffer(index, buffer, offset);
             if let Some(size) = buf.binding_size {
                 let br = naga::ResourceBinding {
                     group: group_index,
@@ -228,13 +266,7 @@ impl super::CommandEncoder {
                 let index = index as _;
                 let length = (sizes.len() * WORD_SIZE) as u64;
                 let bytes_ptr = sizes.as_ptr().cast();
-                match encoder {
-                    E::Vertex(encoder) => encoder.set_vertex_bytes(index, length, bytes_ptr),
-                    E::Fragment(encoder) => encoder.set_fragment_bytes(index, length, bytes_ptr),
-                    E::Task(encoder) => encoder.set_object_bytes(index, length, bytes_ptr),
-                    E::Mesh(encoder) => encoder.set_mesh_bytes(index, length, bytes_ptr),
-                    E::Compute(encoder) => encoder.set_bytes(index, length, bytes_ptr),
-                }
+                encoder.set_bytes(index, length, bytes_ptr);
             }
         }
         let samplers = match encoder.stage() {
@@ -248,13 +280,7 @@ impl super::CommandEncoder {
             let res = group.samplers[(index_base.samplers + index) as usize];
             let index = (resource_indices.samplers + index) as u64;
             let state = Some(res.as_native());
-            match encoder {
-                E::Vertex(encoder) => encoder.set_vertex_sampler_state(index, state),
-                E::Fragment(encoder) => encoder.set_fragment_sampler_state(index, state),
-                E::Task(encoder) => encoder.set_object_sampler_state(index, state),
-                E::Mesh(encoder) => encoder.set_mesh_sampler_state(index, state),
-                E::Compute(encoder) => encoder.set_sampler_state(index, state),
-            }
+            encoder.set_sampler_state(index, state);
         }
 
         let textures = match encoder.stage() {
@@ -268,13 +294,7 @@ impl super::CommandEncoder {
             let res = group.textures[(index_base.textures + index) as usize];
             let index = (resource_indices.textures + index) as u64;
             let texture = Some(res.as_native());
-            match encoder {
-                E::Vertex(encoder) => encoder.set_vertex_texture(index, texture),
-                E::Fragment(encoder) => encoder.set_fragment_texture(index, texture),
-                E::Task(encoder) => encoder.set_object_texture(index, texture),
-                E::Mesh(encoder) => encoder.set_mesh_texture(index, texture),
-                E::Compute(encoder) => encoder.set_texture(index, texture),
-            }
+            encoder.set_texture(index, texture);
         }
     }
 }
