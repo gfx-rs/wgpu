@@ -634,28 +634,30 @@ impl super::PrivateCapabilities {
 
         let is_virtual = device.name().to_lowercase().contains("virtual");
 
+        let msl_version = if version.at_least((14, 0), (17, 0), (17, 0), (1, 0), os_type) {
+            MTLLanguageVersion::V3_1
+        } else if version.at_least((13, 0), (16, 0), (16, 0), (1, 0), os_type) {
+            MTLLanguageVersion::V3_0
+        } else if version.at_least((12, 0), (15, 0), (15, 0), (1, 0), os_type) {
+            MTLLanguageVersion::V2_4
+        } else if version.at_least((11, 0), (14, 0), (14, 0), (1, 0), os_type) {
+            MTLLanguageVersion::V2_3
+        } else if version.at_least((10, 15), (13, 0), (13, 0), (1, 0), os_type) {
+            MTLLanguageVersion::V2_2
+        } else if version.at_least((10, 14), (12, 0), (12, 0), (1, 0), os_type) {
+            MTLLanguageVersion::V2_1
+        } else if version.at_least((10, 13), (11, 0), (11, 0), (1, 0), os_type) {
+            MTLLanguageVersion::V2_0
+        } else if version.at_least((10, 12), (10, 0), (10, 0), (1, 0), os_type) {
+            MTLLanguageVersion::V1_2
+        } else if version.at_least((10, 11), (9, 0), (9, 0), (1, 0), os_type) {
+            MTLLanguageVersion::V1_1
+        } else {
+            MTLLanguageVersion::V1_0
+        };
+
         Self {
-            msl_version: if version.at_least((14, 0), (17, 0), (17, 0), (1, 0), os_type) {
-                MTLLanguageVersion::V3_1
-            } else if version.at_least((13, 0), (16, 0), (16, 0), (1, 0), os_type) {
-                MTLLanguageVersion::V3_0
-            } else if version.at_least((12, 0), (15, 0), (15, 0), (1, 0), os_type) {
-                MTLLanguageVersion::V2_4
-            } else if version.at_least((11, 0), (14, 0), (14, 0), (1, 0), os_type) {
-                MTLLanguageVersion::V2_3
-            } else if version.at_least((10, 15), (13, 0), (13, 0), (1, 0), os_type) {
-                MTLLanguageVersion::V2_2
-            } else if version.at_least((10, 14), (12, 0), (12, 0), (1, 0), os_type) {
-                MTLLanguageVersion::V2_1
-            } else if version.at_least((10, 13), (11, 0), (11, 0), (1, 0), os_type) {
-                MTLLanguageVersion::V2_0
-            } else if version.at_least((10, 12), (10, 0), (10, 0), (1, 0), os_type) {
-                MTLLanguageVersion::V1_2
-            } else if version.at_least((10, 11), (9, 0), (9, 0), (1, 0), os_type) {
-                MTLLanguageVersion::V1_1
-            } else {
-                MTLLanguageVersion::V1_0
-            },
+            msl_version,
             // macOS 10.11 doesn't support read-write resources
             fragment_rw_storage: version.at_least((10, 12), (8, 0), (8, 0), (1, 0), os_type),
             read_write_texture_tier: rw_texture_tier,
@@ -940,10 +942,10 @@ impl super::PrivateCapabilities {
                 ],
             ),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
-            supports_arrays_of_textures_write: metal3
-                || (family_check
-                    && (device.supports_family(MTLGPUFamily::Apple6)
-                        || device.supports_family(MTLGPUFamily::Mac2))),
+            supports_arrays_of_textures_write: family_check
+                && (metal3
+                    || device.supports_family(MTLGPUFamily::Apple6)
+                    || device.supports_family(MTLGPUFamily::Mac2)),
             // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
             supports_mutability: version.at_least((10, 13), (11, 0), (11, 0), (1, 0), os_type),
             // Depth clipping is supported on all macOS GPU families and iOS family 4 and later
@@ -958,9 +960,10 @@ impl super::PrivateCapabilities {
                 os_type,
             ),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
-            supports_shader_primitive_index: metal3
-                || device.supports_family(MTLGPUFamily::Apple7)
-                || device.supports_family(MTLGPUFamily::Mac2),
+            supports_shader_primitive_index: family_check
+                && (metal3
+                    || device.supports_family(MTLGPUFamily::Apple7)
+                    || device.supports_family(MTLGPUFamily::Mac2)),
             // https://developer.apple.com/documentation/metal/mtldevice/hasunifiedmemory
             has_unified_memory: if version.at_least((10, 15), (13, 0), (13, 0), (1, 0), os_type) {
                 Some(device.has_unified_memory())
@@ -969,11 +972,12 @@ impl super::PrivateCapabilities {
             },
             timestamp_query_support,
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
-            supports_simd_scoped_operations: metal3
-                || device.supports_family(MTLGPUFamily::Mac2)
-                || device.supports_family(MTLGPUFamily::Apple7),
+            supports_simd_scoped_operations: family_check
+                && (metal3
+                    || device.supports_family(MTLGPUFamily::Mac2)
+                    || device.supports_family(MTLGPUFamily::Apple7)),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
-            int64: metal3 || device.supports_family(MTLGPUFamily::Apple3),
+            int64: family_check && (metal3 || device.supports_family(MTLGPUFamily::Apple3)),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             // There is also a footnote that says
             // "Some GPU devices in the Apple8 family support 64-bit atomic minimum and maximum..."
@@ -983,9 +987,10 @@ impl super::PrivateCapabilities {
                         && device.supports_family(MTLGPUFamily::Mac2))),
             int64_atomics: family_check && device.supports_family(MTLGPUFamily::Apple9),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
-            float_atomics: metal3
-                || device.supports_family(MTLGPUFamily::Apple7)
-                || device.supports_family(MTLGPUFamily::Mac2),
+            float_atomics: family_check
+                && (metal3
+                    || device.supports_family(MTLGPUFamily::Apple7)
+                    || device.supports_family(MTLGPUFamily::Mac2)),
             // https://developer.apple.com/documentation/metal/mtlsharedevent
             supports_shared_event: version.at_least((10, 14), (12, 0), (12, 0), (1, 0), os_type),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=5 (footnote)
