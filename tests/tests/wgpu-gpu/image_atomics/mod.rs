@@ -101,7 +101,7 @@ async fn test_format(
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            immediates_ranges: &[],
         });
     let shader = ctx.device.create_shader_module(desc);
     let pipeline = ctx

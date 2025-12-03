@@ -428,14 +428,14 @@ impl crate::framework::Example for Example {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("water"),
                 bind_group_layouts: &[&water_bind_group_layout],
-                push_constant_ranges: &[],
+                immediates_ranges: &[],
             });
 
         let terrain_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("terrain"),
                 bind_group_layouts: &[&terrain_bind_group_layout],
-                push_constant_ranges: &[],
+                immediates_ranges: &[],
             });
 
         let water_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {

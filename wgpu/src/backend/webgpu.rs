@@ -15,8 +15,7 @@ use alloc::{
     vec::Vec,
 };
 use core::{
-    cell::OnceCell,
-    cell::RefCell,
+    cell::{Cell, OnceCell, RefCell},
     fmt,
     future::Future,
     ops::Range,
@@ -822,7 +821,7 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         // The following are not part of WebGPU
         min_subgroup_size: wgt::Limits::default().min_subgroup_size,
         max_subgroup_size: wgt::Limits::default().max_subgroup_size,
-        max_push_constant_size: wgt::Limits::default().max_push_constant_size,
+        max_immediate_size: wgt::Limits::default().max_immediate_size,
         max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
         max_inter_stage_shader_components: wgt::Limits::default().max_inter_stage_shader_components,
 
@@ -945,6 +944,7 @@ fn future_request_device(
                 WebDevice {
                     inner: device,
                     ident: crate::cmp::Identifier::create(),
+                    error_scope_count: Rc::new(Cell::new(0)),
                 }
                 .into(),
                 WebQueue {
@@ -1168,6 +1168,8 @@ pub struct WebDevice {
     pub(crate) inner: webgpu_sys::GpuDevice,
     /// Unique identifier for this Device.
     ident: crate::cmp::Identifier,
+    /// Current number of error scopes that have been pushed on the device.
+    error_scope_count: Rc<Cell<u32>>,
 }
 
 #[derive(Debug, Clone)]
@@ -2480,15 +2482,36 @@ impl dispatch::DeviceInterface for WebDevice {
         f.forget();
     }
 
-    fn push_error_scope(&self, filter: crate::ErrorFilter) {
+    fn push_error_scope(&self, filter: crate::ErrorFilter) -> u32 {
+        let index = self.error_scope_count.get();
+        self.error_scope_count.set(
+            index
+                .checked_add(1)
+                .expect("Greater than 2^32 nested error scopes"),
+        );
         self.inner.push_error_scope(match filter {
             crate::ErrorFilter::OutOfMemory => webgpu_sys::GpuErrorFilter::OutOfMemory,
             crate::ErrorFilter::Validation => webgpu_sys::GpuErrorFilter::Validation,
             crate::ErrorFilter::Internal => webgpu_sys::GpuErrorFilter::Internal,
         });
+        index
     }
 
-    fn pop_error_scope(&self) -> Pin<Box<dyn dispatch::PopErrorScopeFuture>> {
+    fn pop_error_scope(&self, index: u32) -> Pin<Box<dyn dispatch::PopErrorScopeFuture>> {
+        let current_scope_count = self.error_scope_count.get();
+        let is_panicking = crate::util::is_panicking();
+        if current_scope_count == 0 && !is_panicking {
+            panic!("Mismatched pop_error_scope call: no error scope for this thread. Error scopes are thread-local.");
+        }
+        if index + 1 != current_scope_count && !is_panicking {
+            panic!(
+                "Mismatched pop_error_scope call: error scopes must be popped in reverse order."
+            );
+        }
+        // Decrement the error scope count. We've asserted that the current
+        // size is `index + 1` above.
+        self.error_scope_count.set(index);
+
         let error_promise = self.inner.pop_error_scope();
         Box::pin(MakeSendFuture::new(
             wasm_bindgen_futures::JsFuture::from(error_promise),
@@ -3296,8 +3319,8 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
         }
     }
 
-    fn set_push_constants(&mut self, _offset: u32, _data: &[u8]) {
-        panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
+    fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
+        panic!("IMMEDIATES feature must be enabled to call set_immediates")
     }
 
     fn insert_debug_marker(&mut self, _label: &str) {
@@ -3435,8 +3458,8 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         }
     }
 
-    fn set_push_constants(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
-        panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
+    fn set_immediates(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
+        panic!("IMMEDIATES feature must be enabled to call multi_draw_indexed_indirect")
     }
 
     fn set_blend_constant(&mut self, color: crate::Color) {
@@ -3741,8 +3764,8 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         }
     }
 
-    fn set_push_constants(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
-        panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
+    fn set_immediates(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
+        panic!("IMMEDIATES feature must be enabled to call multi_draw_indexed_indirect")
     }
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {

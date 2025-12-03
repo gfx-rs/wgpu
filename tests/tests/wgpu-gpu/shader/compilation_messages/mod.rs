@@ -24,11 +24,11 @@ static SHADER_COMPILE_SUCCESS: GpuTestConfiguration = GpuTestConfiguration::new(
 static SHADER_COMPILE_ERROR: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
-        ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
+        let scope = ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
         let sm = ctx
             .device
             .create_shader_module(include_wgsl!("error_shader.wgsl"));
-        assert!(pollster::block_on(ctx.device.pop_error_scope()).is_some());
+        assert!(pollster::block_on(scope.pop()).is_some());
 
         let compilation_info = sm.get_compilation_info().await;
         let error_message = compilation_info

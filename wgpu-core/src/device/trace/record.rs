@@ -363,7 +363,7 @@ impl<C: IntoTrace> IntoTrace for BasePass<C, Infallible> {
                 .collect(),
             dynamic_offsets: self.dynamic_offsets,
             string_data: self.string_data,
-            push_constant_data: self.push_constant_data,
+            immediates_data: self.immediates_data,
         }
     }
 }
@@ -383,11 +383,11 @@ impl IntoTrace for ArcComputeCommand {
                 bind_group: bind_group.map(|bg| bg.into_trace()),
             },
             C::SetPipeline(id) => C::SetPipeline(id.into_trace()),
-            C::SetPushConstant {
+            C::SetImmediate {
                 offset,
                 size_bytes,
                 values_offset,
-            } => C::SetPushConstant {
+            } => C::SetImmediate {
                 offset,
                 size_bytes,
                 values_offset,
@@ -468,12 +468,12 @@ impl IntoTrace for ArcRenderCommand {
                 depth_max,
             },
             C::SetScissor(rect) => C::SetScissor(rect),
-            C::SetPushConstant {
+            C::SetImmediate {
                 stages,
                 offset,
                 size_bytes,
                 values_offset,
-            } => C::SetPushConstant {
+            } => C::SetImmediate {
                 stages,
                 offset,
                 size_bytes,
@@ -578,7 +578,7 @@ impl<'a> IntoTrace for crate::binding_model::ResolvedPipelineLayoutDescriptor<'a
                 .iter()
                 .map(|bgl| bgl.to_trace())
                 .collect(),
-            push_constant_ranges: self.push_constant_ranges.clone(),
+            immediates_ranges: self.immediates_ranges.clone(),
         }
     }
 }

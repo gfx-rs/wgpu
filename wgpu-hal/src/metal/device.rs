@@ -687,10 +687,10 @@ impl crate::Device for super::Device {
         });
         let mut bind_group_infos = arrayvec::ArrayVec::new();
 
-        // First, place the push constants
-        let mut total_push_constants = 0;
+        // First, place the immediates
+        let mut total_immediates = 0;
         for info in stage_data.iter_mut() {
-            for pcr in desc.push_constant_ranges {
+            for pcr in desc.immediates_ranges {
                 if pcr.stages.contains(map_naga_stage(info.stage)) {
                     debug_assert_eq!(pcr.range.end % 4, 0);
                     info.pc_limit = (pcr.range.end / 4).max(info.pc_limit);
@@ -705,13 +705,13 @@ impl crate::Device for super::Device {
                 info.pc_limit = (info.pc_limit + LIMIT_MASK) & !LIMIT_MASK;
             }
 
-            // handle the push constant buffer assignment and shader overrides
+            // handle the immediate data buffer assignment and shader overrides
             if info.pc_limit != 0 {
                 info.pc_buffer = Some(info.counters.buffers);
                 info.counters.buffers += 1;
             }
 
-            total_push_constants = total_push_constants.max(info.pc_limit);
+            total_immediates = total_immediates.max(info.pc_limit);
         }
 
         // Second, place the described resources
@@ -820,8 +820,8 @@ impl crate::Device for super::Device {
             }
         }
 
-        let push_constants_infos = stage_data.map_ref(|info| {
-            info.pc_buffer.map(|buffer_index| super::PushConstantsInfo {
+        let immediates_infos = stage_data.map_ref(|info| {
+            info.pc_buffer.map(|buffer_index| super::ImmediateDataInfo {
                 count: info.pc_limit,
                 buffer_index,
             })
@@ -830,7 +830,7 @@ impl crate::Device for super::Device {
         let total_counters = stage_data.map_ref(|info| info.counters.clone());
 
         let per_stage_map = stage_data.map(|info| naga::back::msl::EntryPointResources {
-            push_constant_buffer: info
+            immediates_buffer: info
                 .pc_buffer
                 .map(|buffer_index| buffer_index as naga::back::msl::Slot),
             sizes_buffer: info
@@ -843,9 +843,9 @@ impl crate::Device for super::Device {
 
         Ok(super::PipelineLayout {
             bind_group_infos,
-            push_constants_infos,
+            immediates_infos,
             total_counters,
-            total_push_constants,
+            total_immediates,
             per_stage_map,
         })
     }
@@ -1233,7 +1233,7 @@ impl crate::Device for super::Device {
                         }
 
                         vs_info = Some(super::PipelineStageInfo {
-                            push_constants: desc.layout.push_constants_infos.vs,
+                            immediates: desc.layout.immediates_infos.vs,
                             sizes_slot: desc.layout.per_stage_map.vs.sizes_buffer,
                             sized_bindings: vs.sized_bindings,
                             vertex_buffer_mappings,
@@ -1326,7 +1326,7 @@ impl crate::Device for super::Device {
                             );
                         }
                         ts_info = Some(super::PipelineStageInfo {
-                            push_constants: desc.layout.push_constants_infos.ts,
+                            immediates: desc.layout.immediates_infos.ts,
                             sizes_slot: desc.layout.per_stage_map.ts.sizes_buffer,
                             sized_bindings: ts.sized_bindings,
                             vertex_buffer_mappings: vec![],
@@ -1355,7 +1355,7 @@ impl crate::Device for super::Device {
                             );
                         }
                         ms_info = Some(super::PipelineStageInfo {
-                            push_constants: desc.layout.push_constants_infos.ms,
+                            immediates: desc.layout.immediates_infos.ms,
                             sizes_slot: desc.layout.per_stage_map.ms.sizes_buffer,
                             sized_bindings: ms.sized_bindings,
                             vertex_buffer_mappings: vec![],
@@ -1398,7 +1398,7 @@ impl crate::Device for super::Device {
                     }
 
                     Some(super::PipelineStageInfo {
-                        push_constants: desc.layout.push_constants_infos.fs,
+                        immediates: desc.layout.immediates_infos.fs,
                         sizes_slot: desc.layout.per_stage_map.fs.sizes_buffer,
                         sized_bindings: fs.sized_bindings,
                         vertex_buffer_mappings: vec![],
@@ -1585,7 +1585,7 @@ impl crate::Device for super::Device {
 
             let cs_info = super::PipelineStageInfo {
                 library: Some(cs.library),
-                push_constants: desc.layout.push_constants_infos.cs,
+                immediates: desc.layout.immediates_infos.cs,
                 sizes_slot: desc.layout.per_stage_map.cs.sizes_buffer,
                 sized_bindings: cs.sized_bindings,
                 vertex_buffer_mappings: vec![],

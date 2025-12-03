@@ -1,4 +1,4 @@
-struct PushConstants {
+struct ImmediateData {
     index: u32,
     double: vec2<f32>,
 }
@@ -8,11 +8,11 @@ struct FragmentIn {
     @builtin(primitive_index) primitive_index: u32,
 }
 
-var<push_constant> pc: PushConstants;
+var<immediate> im: ImmediateData;
 
 @fragment 
 fn main(in: FragmentIn) -> @location(0) vec4<f32> {
-    let _e4 = pc.index;
+    let _e4 = im.index;
     if (in.primitive_index == _e4) {
         return in.color;
     } else {

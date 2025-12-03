@@ -1325,22 +1325,22 @@ fn float16_capability_and_enable() {
 }
 
 #[test]
-fn float16_in_push_constant() {
+fn float16_in_immediate() {
     check_validation! {
-        "enable f16; var<push_constant> input: f16;",
-        "enable f16; var<push_constant> input: vec2<f16>;",
-        "enable f16; var<push_constant> input: mat4x4<f16>;",
-        "enable f16; struct S { a: f16 }; var<push_constant> input: S;",
-        "enable f16; struct S1 { a: f16 }; struct S2 { a : S1 } var<push_constant> input: S2;":
+        "enable f16; var<immediate> input: f16;",
+        "enable f16; var<immediate> input: vec2<f16>;",
+        "enable f16; var<immediate> input: mat4x4<f16>;",
+        "enable f16; struct S { a: f16 }; var<immediate> input: S;",
+        "enable f16; struct S1 { a: f16 }; struct S2 { a : S1 } var<immediate> input: S2;":
         Err(naga::valid::ValidationError::GlobalVariable {
-            source: naga::valid::GlobalVariableError::InvalidPushConstantType(
-                naga::valid::PushConstantError::InvalidScalar(
+            source: naga::valid::GlobalVariableError::InvalidImmediateType(
+                naga::valid::ImmediateError::InvalidScalar(
                     naga::Scalar::F16
                 )
             ),
             ..
         }),
-        naga::valid::Capabilities::SHADER_FLOAT16 | naga::valid::Capabilities::PUSH_CONSTANT
+        naga::valid::Capabilities::SHADER_FLOAT16 | naga::valid::Capabilities::IMMEDIATES
     }
 }
 

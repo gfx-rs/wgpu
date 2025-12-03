@@ -464,8 +464,6 @@ impl crate::framework::Example for Example {
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        device.push_error_scope(wgpu::ErrorFilter::Validation);
-
         // scene update
         {
             let dist = 3.5;

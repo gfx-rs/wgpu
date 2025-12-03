@@ -406,8 +406,6 @@ impl crate::framework::Example for Example {
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        device.push_error_scope(wgpu::ErrorFilter::Validation);
-
         let anim_time = self.animation_timer.time();
 
         self.tlas[0].as_mut().unwrap().transform =

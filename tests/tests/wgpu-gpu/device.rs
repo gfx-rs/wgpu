@@ -138,7 +138,7 @@ async fn request_device_error_message() {
                 max_texture_dimension_2d: u32::MAX,
                 max_texture_dimension_3d: u32::MAX,
                 max_bind_groups: u32::MAX,
-                max_push_constant_size: u32::MAX,
+                max_immediate_size: u32::MAX,
                 ..Default::default()
             },
             ..Default::default()
@@ -432,7 +432,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: None,
                     bind_group_layouts: &[&invalid_bind_group_layout],
-                    push_constant_ranges: &[],
+                    immediates_ranges: &[],
                 });
 
         let _ = ctx

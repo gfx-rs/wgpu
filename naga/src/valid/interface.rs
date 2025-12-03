@@ -4,7 +4,7 @@ use bit_set::BitSet;
 
 use super::{
     analyzer::{FunctionInfo, GlobalUse},
-    Capabilities, Disalignment, FunctionError, ModuleInfo, PushConstantError,
+    Capabilities, Disalignment, FunctionError, ImmediateError, ModuleInfo,
 };
 use crate::arena::{Handle, UniqueArena};
 use crate::span::{AddSpan as _, MapErrWithSpan as _, SpanProvider as _, WithSpan};
@@ -41,8 +41,8 @@ pub enum GlobalVariableError {
     InitializerNotAllowed(crate::AddressSpace),
     #[error("Storage address space doesn't support write-only access")]
     StorageAddressSpaceWriteOnlyNotSupported,
-    #[error("Type is not valid for use as a push constant")]
-    InvalidPushConstantType(#[source] PushConstantError),
+    #[error("Type is not valid for use as a immediate data")]
+    InvalidImmediateType(#[source] ImmediateError),
     #[error("Task payload must not be zero-sized")]
     ZeroSizedTaskPayload,
 }
@@ -117,8 +117,8 @@ pub enum EntryPointError {
     ForbiddenStageOperations,
     #[error("Global variable {0:?} is used incorrectly as {1:?}")]
     InvalidGlobalUsage(Handle<crate::GlobalVariable>, GlobalUse),
-    #[error("More than 1 push constant variable is used")]
-    MoreThanOnePushConstantUsed,
+    #[error("More than 1 immediate data variable is used")]
+    MoreThanOneImmediateUsed,
     #[error("Bindings for {0:?} conflict with other resource")]
     BindingCollision(Handle<crate::GlobalVariable>),
     #[error("Argument {0} varying error")]
@@ -740,14 +740,14 @@ impl super::Validator {
                 }
                 (TypeFlags::DATA | TypeFlags::SIZED, false)
             }
-            crate::AddressSpace::PushConstant => {
-                if !self.capabilities.contains(Capabilities::PUSH_CONSTANT) {
+            crate::AddressSpace::Immediate => {
+                if !self.capabilities.contains(Capabilities::IMMEDIATES) {
                     return Err(GlobalVariableError::UnsupportedCapability(
-                        Capabilities::PUSH_CONSTANT,
+                        Capabilities::IMMEDIATES,
                     ));
                 }
-                if let Err(ref err) = type_info.push_constant_compatibility {
-                    return Err(GlobalVariableError::InvalidPushConstantType(err.clone()));
+                if let Err(ref err) = type_info.immediates_compatibility {
+                    return Err(GlobalVariableError::InvalidImmediateType(err.clone()));
                 }
                 (
                     TypeFlags::DATA
@@ -1031,16 +1031,16 @@ impl super::Validator {
         }
 
         {
-            let mut used_push_constants = module
+            let mut used_immediates = module
                 .global_variables
                 .iter()
-                .filter(|&(_, var)| var.space == crate::AddressSpace::PushConstant)
+                .filter(|&(_, var)| var.space == crate::AddressSpace::Immediate)
                 .map(|(handle, _)| handle)
                 .filter(|&handle| !info[handle].is_empty());
-            // Check if there is more than one push constant, and error if so.
+            // Check if there is more than one immediate data, and error if so.
             // Use a loop for when returning multiple errors is supported.
-            if let Some(handle) = used_push_constants.nth(1) {
-                return Err(EntryPointError::MoreThanOnePushConstantUsed
+            if let Some(handle) = used_immediates.nth(1) {
+                return Err(EntryPointError::MoreThanOneImmediateUsed
                     .with_span_handle(handle, &module.global_variables));
             }
         }
@@ -1094,7 +1094,7 @@ impl super::Validator {
                             GlobalUse::empty()
                         }
                 }
-                crate::AddressSpace::PushConstant => GlobalUse::READ,
+                crate::AddressSpace::Immediate => GlobalUse::READ,
             };
             if !allowed_usage.contains(usage) {
                 log::warn!("\tUsage error for: {var:?}");
