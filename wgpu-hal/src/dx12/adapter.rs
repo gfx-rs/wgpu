@@ -806,6 +806,7 @@ impl super::Adapter {
                     //
                     // Source: https://learn.microsoft.com/en-us/windows/win32/direct3d12/root-signature-limits#memory-limits-and-costs
                     max_immediate_size: 128,
+                    max_inter_stage_shader_variables: 16,
                     min_uniform_buffer_offset_alignment:
                         Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
                     min_storage_buffer_offset_alignment: 4,

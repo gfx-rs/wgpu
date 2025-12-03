@@ -1182,6 +1182,7 @@ impl super::PrivateCapabilities {
             max_vertex_attributes: 31,
             max_vertex_buffer_array_stride: base.max_vertex_buffer_array_stride,
             max_immediate_size: 0x1000,
+            max_inter_stage_shader_variables: 16,
             min_uniform_buffer_offset_alignment: self.buffer_alignment as u32,
             min_storage_buffer_offset_alignment: self.buffer_alignment as u32,
             max_inter_stage_shader_components: self.max_varying_components,

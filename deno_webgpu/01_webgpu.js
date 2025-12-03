@@ -273,8 +273,7 @@ ObjectDefineProperty(GPUSupportedLimitsPrototype, privateCustomInspect, {
           "maxBufferSize",
           "maxVertexAttributes",
           "maxVertexBufferArrayStride",
-          // TODO(@crowlKats): support max_inter_stage_shader_variables
-          // "maxInterStageShaderVariables",
+          "maxInterStageShaderVariables",
           "maxColorAttachments",
           "maxColorAttachmentBytesPerSample",
           "maxComputeWorkgroupStorageSize",

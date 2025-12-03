@@ -753,6 +753,7 @@ impl super::Adapter {
                 !0
             },
             max_immediate_size: super::MAX_IMMEDIATES as u32 * 4,
+            max_inter_stage_shader_variables: 16,
             min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment,
             max_inter_stage_shader_components: {

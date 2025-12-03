@@ -1382,6 +1382,7 @@ impl PhysicalDeviceProperties {
             max_vertex_attributes: limits.max_vertex_input_attributes,
             max_vertex_buffer_array_stride: limits.max_vertex_input_binding_stride,
             max_immediate_size: limits.max_push_constants_size,
+            max_inter_stage_shader_variables: 16,
             min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as u32,
             min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as u32,
             max_inter_stage_shader_components: limits

@@ -339,7 +339,10 @@ impl GPUSupportedLimits {
     self.0.max_vertex_buffer_array_stride
   }
 
-  // TODO(@crowlKats): support max_inter_stage_shader_variables
+  #[getter]
+  fn maxInterStageShaderVariables(&self) -> u32 {
+    self.0.max_inter_stage_shader_variables
+  }
 
   #[getter]
   fn maxColorAttachments(&self) -> u32 {
