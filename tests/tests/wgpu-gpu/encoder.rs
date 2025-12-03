@@ -91,11 +91,7 @@ static DROP_ENCODER_AFTER_ERROR: GpuTestConfiguration = GpuTestConfiguration::ne
 static ENCODER_OPERATIONS_FAIL_WHILE_PASS_ALIVE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(
-                wgpu::Features::CLEAR_TEXTURE
-                    | wgpu::Features::TIMESTAMP_QUERY
-                    | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
-            )
+            .features(wgpu::Features::CLEAR_TEXTURE | wgpu::Features::TIMESTAMP_QUERY)
             .enable_noop(),
     )
     .run_sync(encoder_operations_fail_while_pass_alive);

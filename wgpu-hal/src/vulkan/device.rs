@@ -488,41 +488,27 @@ impl super::Device {
     /// - If `drop_callback` is [`None`], wgpu-hal will take ownership of `vk_image`. If
     ///   `drop_callback` is [`Some`], `vk_image` must be valid until the callback is called.
     /// - If the `ImageCreateFlags` does not contain `MUTABLE_FORMAT`, the `view_formats` of `desc` must be empty.
-    /// - If `external_memory` is [`Some`], wgpu-hal will take ownership of the memory (which is presumed to back
-    ///   `vk_image`). If `external_memory` is [`None`], the memory must be valid until `drop_callback` is called.
+    /// - If `external_memory` is not [`super::TextureMemory::External`], wgpu-hal will take ownership of the
+    ///   memory (which is presumed to back `vk_image`). Otherwise, the memory must remain valid until
+    ///   `drop_callback` is called.
     pub unsafe fn texture_from_raw(
         &self,
         vk_image: vk::Image,
         desc: &crate::TextureDescriptor,
         drop_callback: Option<crate::DropCallback>,
-        external_memory: Option<vk::DeviceMemory>,
+        memory: super::TextureMemory,
     ) -> super::Texture {
-        let mut raw_flags = vk::ImageCreateFlags::empty();
-        let mut view_formats = vec![];
-        for tf in desc.view_formats.iter() {
-            if *tf == desc.format {
-                continue;
-            }
-            view_formats.push(*tf);
-        }
-        if !view_formats.is_empty() {
-            raw_flags |=
-                vk::ImageCreateFlags::MUTABLE_FORMAT | vk::ImageCreateFlags::EXTENDED_USAGE;
-            view_formats.push(desc.format)
-        }
-        if desc.format.is_multi_planar_format() {
-            raw_flags |= vk::ImageCreateFlags::MUTABLE_FORMAT;
-        }
-
         let identity = self.shared.texture_identity_factory.next();
-
         let drop_guard = crate::DropGuard::from_option(drop_callback);
+
+        if let Some(label) = desc.label {
+            unsafe { self.shared.set_object_name(vk_image, label) };
+        }
 
         super::Texture {
             raw: vk_image,
             drop_guard,
-            external_memory,
-            block: None,
+            memory,
             format: desc.format,
             copy_size: desc.copy_extent(),
             identity,
@@ -634,7 +620,6 @@ impl super::Device {
         Ok(ImageWithoutMemory {
             raw,
             requirements: req,
-            copy_size,
         })
     }
 
@@ -695,22 +680,13 @@ impl super::Device {
         unsafe { self.shared.raw.bind_image_memory(image.raw, memory, 0) }
             .map_err(super::map_host_device_oom_err)?;
 
-        if let Some(label) = desc.label {
-            unsafe { self.shared.set_object_name(image.raw, label) };
-        }
-
-        let identity = self.shared.texture_identity_factory.next();
-
-        self.counters.textures.add(1);
-
-        Ok(super::Texture {
-            raw: image.raw,
-            drop_guard: None,
-            external_memory: Some(memory),
-            block: None,
-            format: desc.format,
-            copy_size: image.copy_size,
-            identity,
+        Ok(unsafe {
+            self.texture_from_raw(
+                image.raw,
+                desc,
+                None,
+                super::TextureMemory::Dedicated(memory),
+            )
         })
     }
 
@@ -1186,35 +1162,25 @@ impl crate::Device for super::Device {
             unsafe { self.shared.raw.destroy_image(image.raw, None) };
         })?;
 
-        if let Some(label) = desc.label {
-            unsafe { self.shared.set_object_name(image.raw, label) };
-        }
-
-        let identity = self.shared.texture_identity_factory.next();
-
-        self.counters.textures.add(1);
-
-        Ok(super::Texture {
-            raw: image.raw,
-            drop_guard: None,
-            external_memory: None,
-            block: Some(block),
-            format: desc.format,
-            copy_size: image.copy_size,
-            identity,
+        Ok(unsafe {
+            self.texture_from_raw(image.raw, desc, None, super::TextureMemory::Block(block))
         })
     }
+
     unsafe fn destroy_texture(&self, texture: super::Texture) {
         if texture.drop_guard.is_none() {
             unsafe { self.shared.raw.destroy_image(texture.raw, None) };
         }
-        if let Some(memory) = texture.external_memory {
-            unsafe { self.shared.raw.free_memory(memory, None) };
-        }
-        if let Some(block) = texture.block {
-            self.counters.texture_memory.sub(block.size() as isize);
 
-            unsafe { self.mem_allocator.lock().dealloc(&*self.shared, block) };
+        match texture.memory {
+            super::TextureMemory::Block(block) => unsafe {
+                self.counters.texture_memory.sub(block.size() as isize);
+                self.mem_allocator.lock().dealloc(&*self.shared, block);
+            },
+            super::TextureMemory::Dedicated(memory) => unsafe {
+                self.shared.raw.free_memory(memory, None);
+            },
+            super::TextureMemory::External => {}
         }
 
         self.counters.textures.sub(1);
@@ -2879,5 +2845,4 @@ fn handle_unexpected(err: vk::Result) -> ! {
 struct ImageWithoutMemory {
     raw: vk::Image,
     requirements: vk::MemoryRequirements,
-    copy_size: crate::CopyExtent,
 }
