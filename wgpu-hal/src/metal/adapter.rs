@@ -899,9 +899,10 @@ impl super::PrivateCapabilities {
                 ],
             ),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
-            supports_binary_archives: metal3
-                || device.supports_family(MTLGPUFamily::Apple3)
-                || device.supports_family(MTLGPUFamily::Mac2),
+            supports_binary_archives: family_check
+                && (metal3
+                    || device.supports_family(MTLGPUFamily::Apple3)
+                    || device.supports_family(MTLGPUFamily::Mac2)),
             // https://developer.apple.com/documentation/metal/mtlcapturemanager
             supports_capture_manager: version.at_least((10, 13), (11, 0), (11, 0), (1, 0), os_type),
             // https://developer.apple.com/documentation/quartzcore/cametallayer/maximumdrawablecount
