@@ -164,6 +164,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_buffer_size,
         max_vertex_attributes,
         max_vertex_buffer_array_stride,
+        max_inter_stage_shader_variables,
         min_uniform_buffer_offset_alignment,
         min_storage_buffer_offset_alignment,
         max_inter_stage_shader_components,
@@ -219,6 +220,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                              Max Vertex Attributes: {max_vertex_attributes}")?;
     writeln!(output, "\t\t                     Max Vertex Buffer Array Stride: {max_vertex_buffer_array_stride}")?;
     writeln!(output, "\t\t                            Max Immediate data Size: {max_immediate_size}")?;
+    writeln!(output, "\t\t                   Max Inter-stage Shader Variables: {max_inter_stage_shader_variables}")?;
     writeln!(output, "\t\t                Min Uniform Buffer Offset Alignment: {min_uniform_buffer_offset_alignment}")?;
     writeln!(output, "\t\t                Min Storage Buffer Offset Alignment: {min_storage_buffer_offset_alignment}")?;
     writeln!(output, "\t\t                   Max Inter-Stage Shader Component: {max_inter_stage_shader_components}")?;

@@ -768,6 +768,19 @@ impl super::Adapter {
                     max_varying_components
                 }
             },
+            max_inter_stage_shader_variables: {
+                // MAX_VARYING_COMPONENTS may return 0, because it is deprecated since OpenGL 3.2 core,
+                // and an OpenGL Context with the core profile and with forward-compatibility=true,
+                // will make deprecated constants unavailable.
+                let max_varying_components =
+                    unsafe { gl.get_parameter_i32(glow::MAX_VARYING_COMPONENTS) } as u32;
+                if max_varying_components == 0 {
+                    // default value for max_inter_stage_shader_variables
+                    15
+                } else {
+                    max_varying_components / 4
+                }
+            },
             max_color_attachments,
             max_color_attachment_bytes_per_sample,
             max_compute_workgroup_storage_size: if supports_work_group_params {
