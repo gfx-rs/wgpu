@@ -4238,6 +4238,7 @@ impl Device {
                 vertex_stage = {
                     let stage_desc = &vertex.stage;
                     let stage = validation::ShaderStageForValidation::Vertex {
+                        topology: desc.primitive.topology,
                         compare_function: desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                     };
                     let stage_bit = stage.to_wgt_bit();

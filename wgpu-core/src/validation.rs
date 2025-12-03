@@ -7,6 +7,7 @@ use core::fmt;
 
 use arrayvec::ArrayVec;
 use hashbrown::hash_map::Entry;
+use shader_io_deductions::{display_deductions_as_optional_list, MaxVertexShaderOutputDeduction};
 use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
@@ -14,6 +15,8 @@ use wgt::{
 };
 
 use crate::{device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
+
+pub mod shader_io_deductions;
 
 #[derive(Debug)]
 enum ResourceType {
@@ -329,6 +332,29 @@ pub enum StageError {
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
     #[error(
+        "vertex shader output location Location[{location}] ({var}) exceeds the \
+        `max_inter_stage_shader_variables` limit ({}, 0-based){}",
+        // NOTE: Remember: the limit is 0-based for indices.
+        limit - 1,
+        display_deductions_as_optional_list(deductions, |d| d.for_location())
+    )]
+    VertexOutputLocationTooLarge {
+        location: u32,
+        var: InterfaceVar,
+        limit: u32,
+        deductions: Vec<MaxVertexShaderOutputDeduction>,
+    },
+    #[error(
+        "found {num_found} user-defined vertex shader output variables, which exceeds the \
+        `max_inter_stage_shader_variables` limit ({limit}){}",
+        display_deductions_as_optional_list(deductions, |d| d.for_variables())
+    )]
+    TooManyUserDefinedVertexOutputs {
+        num_found: u32,
+        limit: u32,
+        deductions: Vec<MaxVertexShaderOutputDeduction>,
+    },
+    #[error(
         "Location[{location}] {var}'s index exceeds the `max_color_attachments` limit ({limit})"
     )]
     ColorAttachmentLocationTooLarge {
@@ -375,6 +401,8 @@ impl WebGpuError for StageError {
             | Self::MissingEntryPoint(..)
             | Self::NoEntryPointFound
             | Self::MultipleEntryPointsFound
+            | Self::VertexOutputLocationTooLarge { .. }
+            | Self::TooManyUserDefinedVertexOutputs { .. }
             | Self::ColorAttachmentLocationTooLarge { .. }
             | Self::TooManyMeshVertices { .. }
             | Self::TooManyMeshPrimitives { .. }
@@ -1444,12 +1472,50 @@ impl Interface {
         }
 
         match shader_stage {
-            ShaderStageForValidation::Vertex { compare_function } => {
+            ShaderStageForValidation::Vertex {
+                topology,
+                compare_function,
+            } => {
+                let mut max_vertex_shader_output_variables =
+                    self.limits.max_inter_stage_shader_variables;
+                let mut max_vertex_shader_output_location = max_vertex_shader_output_variables - 1;
+
+                let point_list_deduction = if topology == wgt::PrimitiveTopology::PointList {
+                    Some(MaxVertexShaderOutputDeduction::PointListPrimitiveTopology)
+                } else {
+                    None
+                };
+
+                let deductions = point_list_deduction.into_iter();
+
+                for deduction in deductions.clone() {
+                    // NOTE: Deductions, in the current version of the spec. we implement, do not
+                    // ever exceed the minimum variables available.
+                    max_vertex_shader_output_variables = max_vertex_shader_output_variables
+                        .checked_sub(deduction.for_variables())
+                        .unwrap();
+                    max_vertex_shader_output_location = max_vertex_shader_output_location
+                        .checked_sub(deduction.for_location())
+                        .unwrap();
+                }
+
+                let mut num_user_defined_outputs = 0;
+
                 for output in entry_point.outputs.iter() {
-                    //TODO: count builtins towards the limit?
-                    inter_stage_components += match *output {
-                        Varying::Local { ref iv, .. } => iv.ty.dim.num_components(),
-                        Varying::BuiltIn(_) => 0,
+                    match *output {
+                        Varying::Local { ref iv, location } => {
+                            if location > max_vertex_shader_output_location {
+                                return Err(StageError::VertexOutputLocationTooLarge {
+                                    location,
+                                    var: iv.clone(),
+                                    limit: self.limits.max_inter_stage_shader_variables,
+                                    deductions: deductions.collect(),
+                                });
+                            }
+                            num_user_defined_outputs += 1;
+                            inter_stage_components += iv.ty.dim.num_components()
+                        }
+                        Varying::BuiltIn(_) => {}
                     };
 
                     if let Some(
@@ -1475,6 +1541,14 @@ impl Interface {
                             );
                         }
                     }
+                }
+
+                if num_user_defined_outputs > max_vertex_shader_output_variables {
+                    return Err(StageError::TooManyUserDefinedVertexOutputs {
+                        num_found: num_user_defined_outputs,
+                        limit: self.limits.max_inter_stage_shader_variables,
+                        deductions: deductions.collect(),
+                    });
                 }
             }
             ShaderStageForValidation::Fragment => {
@@ -1615,6 +1689,7 @@ pub fn validate_color_attachment_bytes_per_sample(
 
 pub enum ShaderStageForValidation {
     Vertex {
+        topology: wgt::PrimitiveTopology,
         compare_function: Option<wgt::CompareFunction>,
     },
     Mesh,
