@@ -1584,8 +1584,8 @@ impl Interface {
                 let deductions = entry_point.inputs.iter().filter_map(|output| match output {
                     Varying::Local { .. } => None,
                     Varying::BuiltIn(builtin) => {
-                        MaxFragmentShaderInputDeduction::from_inter_stage_builtin(builtin.clone())
-                            .or_else(|| {
+                        MaxFragmentShaderInputDeduction::from_inter_stage_builtin(*builtin).or_else(
+                            || {
                                 unreachable!(
                                     concat!(
                                         "unexpected built-in provided; ",
@@ -1593,7 +1593,8 @@ impl Interface {
                                     ),
                                     builtin
                                 )
-                            })
+                            },
+                        )
                     }
                 });
 

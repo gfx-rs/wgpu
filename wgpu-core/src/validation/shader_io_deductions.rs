@@ -41,8 +41,8 @@ impl MaxFragmentShaderInputDeduction {
         }
     }
 
-    pub fn from_inter_stage_builtin(builtin: crate::validation::BuiltIn) -> Option<Self> {
-        use crate::validation::BuiltIn;
+    pub fn from_inter_stage_builtin(builtin: naga::BuiltIn) -> Option<Self> {
+        use naga::BuiltIn;
 
         Some(Self::InterStageBuiltIn(match builtin {
             BuiltIn::FrontFacing => InterStageBuiltIn::FrontFacing,
@@ -57,7 +57,7 @@ impl MaxFragmentShaderInputDeduction {
 
             BuiltIn::BaseInstance
             | BuiltIn::BaseVertex
-            | BuiltIn::ClipDistance { .. }
+            | BuiltIn::ClipDistance
             | BuiltIn::CullDistance
             | BuiltIn::InstanceIndex
             | BuiltIn::PointSize
@@ -82,7 +82,7 @@ impl MaxFragmentShaderInputDeduction {
             | BuiltIn::VertexCount
             | BuiltIn::Vertices
             | BuiltIn::PrimitiveCount
-            | BuiltIn::Primitives => None,
+            | BuiltIn::Primitives => return None,
         }))
     }
 }
