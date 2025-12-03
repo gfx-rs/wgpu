@@ -1,7 +1,7 @@
 use alloc::{boxed::Box, string::String, sync::Arc, vec};
 #[cfg(wgpu_core)]
 use core::ops::Deref;
-use core::{error, fmt, future::Future};
+use core::{error, fmt, future::Future, marker::PhantomData};
 
 use crate::api::blas::{Blas, BlasGeometrySizeDescriptors, CreateBlasDescriptor};
 use crate::api::tlas::{CreateTlasDescriptor, Tlas};
@@ -214,7 +214,7 @@ impl Device {
         let encoder = self.inner.create_render_bundle_encoder(desc);
         RenderBundleEncoder {
             inner: encoder,
-            _p: core::marker::PhantomData,
+            _p: PhantomData,
         }
     }
 
@@ -410,10 +410,14 @@ impl Device {
         self.inner.on_uncaptured_error(handler)
     }
 
-    /// Push an error scope on this device's error scope stack.
-    /// All operations on this device, or on resources created from
-    /// this device, will have their errors captured by this scope
-    /// until a corresponding pop is made.
+    /// Push an error scope on this device's thread-local error scope
+    /// stack. All operations on this device, or on resources created
+    /// from this device, will have their errors captured by this scope
+    /// until the scope is popped.
+    ///
+    /// Scopes must be popped in reverse order to their creation. If
+    /// a guard is dropped without being `pop()`ped, the scope will be
+    /// popped, and the captured errors will be dropped.
     ///
     /// Multiple error scopes may be active at one time, forming a stack.
     /// Each error will be reported to the inner-most scope that matches
@@ -421,21 +425,31 @@ impl Device {
     ///
     /// With the `std` feature enabled, this stack is **thread-local**.
     /// Without, this is **global** to all threads.
-    pub fn push_error_scope(&self, filter: ErrorFilter) {
-        self.inner.push_error_scope(filter)
-    }
-
-    /// Pop an error scope from this device's error scope stack. Returns
-    /// a future which resolves to the error captured by this scope, if any.
     ///
-    /// This will pop the most recently pushed error scope on this device.
+    /// ```rust
+    /// # async move {
+    /// # let device: wgpu::Device = unreachable!();
+    /// let error_scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
     ///
-    /// If there are no error scopes on this device, this will panic.
+    /// // ...
+    /// // do work that may produce validation errors
+    /// // ...
     ///
-    /// With the `std` feature enabled, the error stack is **thread-local**.
-    /// Without, this is **global** to all threads.
-    pub fn pop_error_scope(&self) -> impl Future<Output = Option<Error>> + WasmNotSend {
-        self.inner.pop_error_scope()
+    /// // pop the error scope and get a future for the result
+    /// let error_future = error_scope.pop();
+    ///
+    /// // await the future to get the error, if any
+    /// let error = error_future.await;
+    /// # };
+    /// ```
+    pub fn push_error_scope(&self, filter: ErrorFilter) -> ErrorScopeGuard {
+        let index = self.inner.push_error_scope(filter);
+        ErrorScopeGuard {
+            device: self.inner.clone(),
+            index,
+            popped: false,
+            _phantom: PhantomData,
+        }
     }
 
     /// Starts a capture in the attached graphics debugger.
@@ -809,6 +823,46 @@ impl fmt::Display for Error {
             Error::OutOfMemory { .. } => f.write_str("Out of Memory"),
             Error::Validation { description, .. } => f.write_str(description),
             Error::Internal { description, .. } => f.write_str(description),
+        }
+    }
+}
+
+/// Guard for an error scope pushed with [`Device::push_error_scope()`].
+///
+/// Call [`pop()`] to pop the scope and get a future for the result. If
+/// the guard is dropped without being popped explicitly, the scope will still be popped,
+/// and the captured errors will be dropped.
+///
+/// This guard is neither `Send` nor `Sync`, as error scopes are handled
+/// on a per-thread basis when the `std` feature is enabled.
+///
+/// [`pop()`]: ErrorScopeGuard::pop
+#[must_use = "Error scopes must be explicitly popped to retrieve errors they catch"]
+pub struct ErrorScopeGuard {
+    device: dispatch::DispatchDevice,
+    index: u32,
+    popped: bool,
+    // Ensure the guard is !Send and !Sync
+    _phantom: PhantomData<*mut ()>,
+}
+
+static_assertions::assert_not_impl_any!(ErrorScopeGuard: Send, Sync);
+
+impl ErrorScopeGuard {
+    /// Pops the error scope.
+    ///
+    /// Returns a future which resolves to the error captured by this scope, if any.
+    /// The pop takes effect immediately; the future does not need to be awaited before doing work that is outside of this error scope.
+    pub fn pop(mut self) -> impl Future<Output = Option<Error>> + WasmNotSend {
+        self.popped = true;
+        self.device.pop_error_scope(self.index)
+    }
+}
+
+impl Drop for ErrorScopeGuard {
+    fn drop(&mut self) {
+        if !self.popped {
+            drop(self.device.pop_error_scope(self.index));
         }
     }
 }

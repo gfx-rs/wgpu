@@ -400,8 +400,8 @@ pub fn create_validator(
     use naga::valid::Capabilities as Caps;
     let mut caps = Caps::empty();
     caps.set(
-        Caps::PUSH_CONSTANT,
-        features.contains(wgt::Features::PUSH_CONSTANTS),
+        Caps::IMMEDIATES,
+        features.contains(wgt::Features::IMMEDIATES),
     );
     caps.set(Caps::FLOAT64, features.contains(wgt::Features::SHADER_F64));
     caps.set(

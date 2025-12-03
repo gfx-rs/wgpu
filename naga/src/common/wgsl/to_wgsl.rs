@@ -371,7 +371,7 @@ pub const fn address_space_str(
                     "storage"
                 }
             }
-            As::PushConstant => "push_constant",
+            As::Immediate => "immediate",
             As::WorkGroup => "workgroup",
             As::Handle => return (None, None),
             As::Function => "function",

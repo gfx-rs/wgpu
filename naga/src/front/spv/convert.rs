@@ -182,7 +182,7 @@ pub(super) fn map_storage_class(word: spirv::Word) -> Result<super::ExtendedClas
         // we expect the `Storage` case to be filtered out before calling this function.
         Some(Sc::Uniform) => Ec::Global(crate::AddressSpace::Uniform),
         Some(Sc::Workgroup) => Ec::Global(crate::AddressSpace::WorkGroup),
-        Some(Sc::PushConstant) => Ec::Global(crate::AddressSpace::PushConstant),
+        Some(Sc::PushConstant) => Ec::Global(crate::AddressSpace::Immediate),
         _ => return Err(Error::UnsupportedStorageClass(word)),
     })
 }

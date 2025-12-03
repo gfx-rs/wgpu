@@ -48,7 +48,7 @@ impl crate::framework::Example for Example {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
-            push_constant_ranges: &[],
+            immediates_ranges: &[],
         });
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));

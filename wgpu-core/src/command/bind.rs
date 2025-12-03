@@ -376,7 +376,7 @@ impl Binder {
 
         if let Some(old) = old_id_opt {
             // root constants are the base compatibility property
-            if old.push_constant_ranges != new.push_constant_ranges {
+            if old.immediates_ranges != new.immediates_ranges {
                 self.manager.update_start_index(0);
             }
         }
@@ -499,32 +499,32 @@ impl Binder {
     }
 }
 
-struct PushConstantChange {
+struct ImmediateChange {
     stages: wgt::ShaderStages,
     offset: u32,
     enable: bool,
 }
 
-/// Break up possibly overlapping push constant ranges into a set of
+/// Break up possibly overlapping immediate data ranges into a set of
 /// non-overlapping ranges which contain all the stage flags of the
 /// original ranges. This allows us to zero out (or write any value)
 /// to every possible value.
 pub fn compute_nonoverlapping_ranges(
-    ranges: &[wgt::PushConstantRange],
-) -> ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT * 2 }> {
+    ranges: &[wgt::ImmediateRange],
+) -> ArrayVec<wgt::ImmediateRange, { SHADER_STAGE_COUNT * 2 }> {
     if ranges.is_empty() {
         return ArrayVec::new();
     }
     debug_assert!(ranges.len() <= SHADER_STAGE_COUNT);
 
-    let mut breaks: ArrayVec<PushConstantChange, { SHADER_STAGE_COUNT * 2 }> = ArrayVec::new();
+    let mut breaks: ArrayVec<ImmediateChange, { SHADER_STAGE_COUNT * 2 }> = ArrayVec::new();
     for range in ranges {
-        breaks.push(PushConstantChange {
+        breaks.push(ImmediateChange {
             stages: range.stages,
             offset: range.range.start,
             enable: true,
         });
-        breaks.push(PushConstantChange {
+        breaks.push(ImmediateChange {
             stages: range.stages,
             offset: range.range.end,
             enable: false,
@@ -538,7 +538,7 @@ pub fn compute_nonoverlapping_ranges(
 
     for bk in breaks {
         if bk.offset - position > 0 && !stages.is_empty() {
-            output_ranges.push(wgt::PushConstantRange {
+            output_ranges.push(wgt::ImmediateRange {
                 stages,
                 range: position..bk.offset,
             })

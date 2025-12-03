@@ -18,7 +18,7 @@ pub fn map_address_space<'a>(
         "storage" => Ok(crate::AddressSpace::Storage {
             access: crate::StorageAccess::default(),
         }),
-        "push_constant" => Ok(crate::AddressSpace::PushConstant),
+        "immediate" => Ok(crate::AddressSpace::Immediate),
         "function" => Ok(crate::AddressSpace::Function),
         "task_payload" => {
             if enable_extensions.contains(ImplementedEnableExtension::WgpuMeshShader) {

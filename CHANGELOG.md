@@ -106,7 +106,15 @@ One other breaking change worth noting is that in WGSL `@builtin(view_index)` no
 
 By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206).
 
-#### Error Scopes are now thread-local
+#### Error scopes now use guards and are thread-local.
+
+```diff
+- device.push_error_scope(wgpu::ErrorFilter::Validation);
++ let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
+  // ... perform operations on the device ...
+- let error: Option<Error> = device.pop_error_scope().await;
++ let error: Option<Error> = scope.pop().await;
+```
 
 Device error scopes now operate on a per-thread basis. This allows them to be used easily within multithreaded contexts,
 without having the error scope capture errors from other threads.

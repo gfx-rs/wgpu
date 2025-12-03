@@ -159,7 +159,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_compute_workgroups_per_dimension,
         min_subgroup_size,
         max_subgroup_size,
-        max_push_constant_size,
+        max_immediate_size,
         max_non_sampler_bindings,
 
         max_task_workgroup_total_count,
@@ -197,7 +197,7 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                     Max Vertex Buffer Array Stride: {max_vertex_buffer_array_stride}")?;
     writeln!(output, "\t\t                                  Min Subgroup Size: {min_subgroup_size}")?;
     writeln!(output, "\t\t                                  Max Subgroup Size: {max_subgroup_size}")?;
-    writeln!(output, "\t\t                             Max Push Constant Size: {max_push_constant_size}")?;
+    writeln!(output, "\t\t                             Max Immediate data Size: {max_immediate_size}")?;
     writeln!(output, "\t\t                Min Uniform Buffer Offset Alignment: {min_uniform_buffer_offset_alignment}")?;
     writeln!(output, "\t\t                Min Storage Buffer Offset Alignment: {min_storage_buffer_offset_alignment}")?;
     writeln!(output, "\t\t                   Max Inter-Stage Shader Component: {max_inter_stage_shader_components}")?;

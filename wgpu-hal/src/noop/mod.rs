@@ -191,7 +191,7 @@ pub const CAPABILITIES: crate::Capabilities = {
             max_compute_workgroups_per_dimension: ALLOC_MAX_U32,
             min_subgroup_size: 1,
             max_subgroup_size: ALLOC_MAX_U32,
-            max_push_constant_size: ALLOC_MAX_U32,
+            max_immediate_size: ALLOC_MAX_U32,
             max_non_sampler_bindings: ALLOC_MAX_U32,
 
             max_task_workgroup_total_count: ALLOC_MAX_U32,

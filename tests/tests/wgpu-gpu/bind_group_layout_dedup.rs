@@ -81,7 +81,7 @@ async fn bgl_dedupe(ctx: TestingContext) {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bgl_1b],
-            push_constant_ranges: &[],
+            immediates_ranges: &[],
         });
 
     let module = ctx
@@ -145,7 +145,7 @@ fn bgl_dedupe_with_dropped_user_handle(ctx: TestingContext) {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bgl_1],
-            push_constant_ranges: &[],
+            immediates_ranges: &[],
         });
 
     // We drop bgl_1 here. As bgl_1 is still alive, referenced by the pipeline layout,

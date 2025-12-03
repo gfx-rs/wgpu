@@ -654,7 +654,7 @@ impl FunctionInfo {
                     // task payload memory is very similar to workgroup memory
                     As::WorkGroup | As::TaskPayload => true,
                     // uniform data
-                    As::Uniform | As::PushConstant => true,
+                    As::Uniform | As::Immediate => true,
                     // storage data is only uniform when read-only
                     As::Storage { access } => !access.contains(crate::StorageAccess::STORE),
                     As::Handle => false,

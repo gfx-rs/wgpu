@@ -505,34 +505,34 @@ impl RenderPass<'_> {
     }
 }
 
-/// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
+/// [`Features::IMMEDIATES`] must be enabled on the device in order to call these functions.
 impl RenderPass<'_> {
-    /// Set push constant data for subsequent draw calls.
+    /// Set immediate data data for subsequent draw calls.
     ///
-    /// Write the bytes in `data` at offset `offset` within push constant
+    /// Write the bytes in `data` at offset `offset` within immediate data
     /// storage, all of which are accessible by all the pipeline stages in
     /// `stages`, and no others.  Both `offset` and the length of `data` must be
-    /// multiples of [`PUSH_CONSTANT_ALIGNMENT`], which is always 4.
+    /// multiples of [`IMMEDIATES_ALIGNMENT`], which is always 4.
     ///
     /// For example, if `offset` is `4` and `data` is eight bytes long, this
-    /// call will write `data` to bytes `4..12` of push constant storage.
+    /// call will write `data` to bytes `4..12` of immediate data storage.
     ///
     /// # Stage matching
     ///
-    /// Every byte in the affected range of push constant storage must be
+    /// Every byte in the affected range of immediate data storage must be
     /// accessible to exactly the same set of pipeline stages, which must match
     /// `stages`. If there are two bytes of storage that are accessible by
     /// different sets of pipeline stages - say, one is accessible by fragment
     /// shaders, and the other is accessible by both fragment shaders and vertex
-    /// shaders - then no single `set_push_constants` call may affect both of
+    /// shaders - then no single `set_immediates` call may affect both of
     /// them; to write both, you must make multiple calls, each with the
     /// appropriate `stages` value.
     ///
     /// Which pipeline stages may access a given byte is determined by the
-    /// pipeline's [`PushConstant`] global variable and (if it is a struct) its
+    /// pipeline's [`Immediate`] global variable and (if it is a struct) its
     /// members' offsets.
     ///
-    /// For example, suppose you have twelve bytes of push constant storage,
+    /// For example, suppose you have twelve bytes of immediate data storage,
     /// where bytes `0..8` are accessed by the vertex shader, and bytes `4..12`
     /// are accessed by the fragment shader. This means there are three byte
     /// ranges each accessed by a different set of stages:
@@ -543,12 +543,12 @@ impl RenderPass<'_> {
     ///
     /// - Bytes `8..12` are accessed only by the vertex shader.
     ///
-    /// To write all twelve bytes requires three `set_push_constants` calls, one
+    /// To write all twelve bytes requires three `set_immediates` calls, one
     /// for each range, each passing the matching `stages` mask.
     ///
-    /// [`PushConstant`]: https://docs.rs/naga/latest/naga/enum.StorageClass.html#variant.PushConstant
-    pub fn set_push_constants(&mut self, stages: ShaderStages, offset: u32, data: &[u8]) {
-        self.inner.set_push_constants(stages, offset, data);
+    /// [`Immediate`]: https://docs.rs/naga/latest/naga/enum.StorageClass.html#variant.Immediate
+    pub fn set_immediates(&mut self, stages: ShaderStages, offset: u32, data: &[u8]) {
+        self.inner.set_immediates(stages, offset, data);
     }
 }
 

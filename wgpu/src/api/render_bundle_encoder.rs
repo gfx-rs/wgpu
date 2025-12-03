@@ -196,17 +196,17 @@ impl<'a> RenderBundleEncoder<'a> {
     }
 }
 
-/// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
+/// [`Features::IMMEDIATES`] must be enabled on the device in order to call these functions.
 impl RenderBundleEncoder<'_> {
-    /// Set push constant data.
+    /// Set immediate data data.
     ///
-    /// Offset is measured in bytes, but must be a multiple of [`PUSH_CONSTANT_ALIGNMENT`].
+    /// Offset is measured in bytes, but must be a multiple of [`IMMEDIATES_ALIGNMENT`].
     ///
     /// Data size must be a multiple of 4 and must have an alignment of 4.
     /// For example, with an offset of 4 and an array of `[u8; 8]`, that will write to the range
     /// of 4..12.
     ///
-    /// For each byte in the range of push constant data written, the union of the stages of all push constant
+    /// For each byte in the range of immediate data data written, the union of the stages of all immediate data
     /// ranges that covers that byte must be exactly `stages`. There's no good way of explaining this simply,
     /// so here are some examples:
     ///
@@ -216,7 +216,7 @@ impl RenderBundleEncoder<'_> {
     /// - 4..8 Fragment
     /// ```
     ///
-    /// You would need to upload this in two set_push_constants calls. First for the `Vertex` range, second for the `Fragment` range.
+    /// You would need to upload this in two set_immediates calls. First for the `Vertex` range, second for the `Fragment` range.
     ///
     /// ```text
     /// For the given ranges:
@@ -224,9 +224,9 @@ impl RenderBundleEncoder<'_> {
     /// - 4..12 Fragment
     /// ```
     ///
-    /// You would need to upload this in three set_push_constants calls. First for the `Vertex` only range 0..4, second
+    /// You would need to upload this in three set_immediates calls. First for the `Vertex` only range 0..4, second
     /// for the `Vertex | Fragment` range 4..8, third for the `Fragment` range 8..12.
-    pub fn set_push_constants(&mut self, stages: ShaderStages, offset: u32, data: &[u8]) {
-        self.inner.set_push_constants(stages, offset, data);
+    pub fn set_immediates(&mut self, stages: ShaderStages, offset: u32, data: &[u8]) {
+        self.inner.set_immediates(stages, offset, data);
     }
 }

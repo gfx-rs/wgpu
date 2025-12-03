@@ -136,9 +136,9 @@ const MAX_TEXTURE_SLOTS: usize = 16;
 const MAX_SAMPLERS: usize = 16;
 const MAX_VERTEX_ATTRIBUTES: usize = 16;
 const ZERO_BUFFER_SIZE: usize = 256 << 10;
-const MAX_PUSH_CONSTANTS: usize = 64;
-// We have to account for each push constant may need to be set for every shader.
-const MAX_PUSH_CONSTANT_COMMANDS: usize = MAX_PUSH_CONSTANTS * crate::MAX_CONCURRENT_SHADER_STAGES;
+const MAX_IMMEDIATES: usize = 64;
+// We have to account for each immediate data may need to be set for every shader.
+const MAX_IMMEDIATES_COMMANDS: usize = MAX_IMMEDIATES * crate::MAX_CONCURRENT_SHADER_STAGES;
 
 impl crate::Api for Api {
     const VARIANT: wgt::Backend = wgt::Backend::Gl;
@@ -653,7 +653,7 @@ struct VertexBufferDesc {
 }
 
 #[derive(Clone, Debug)]
-struct PushConstantDesc {
+struct ImmediateDesc {
     location: glow::UniformLocation,
     ty: naga::TypeInner,
     offset: u32,
@@ -661,9 +661,9 @@ struct PushConstantDesc {
 }
 
 #[cfg(send_sync)]
-unsafe impl Sync for PushConstantDesc {}
+unsafe impl Sync for ImmediateDesc {}
 #[cfg(send_sync)]
-unsafe impl Send for PushConstantDesc {}
+unsafe impl Send for ImmediateDesc {}
 
 /// For each texture in the pipeline layout, store the index of the only
 /// sampler (in this layout) that the texture is used with.
@@ -674,7 +674,7 @@ struct PipelineInner {
     program: glow::Program,
     sampler_map: SamplerBindMap,
     first_instance_location: Option<glow::UniformLocation>,
-    push_constant_descs: ArrayVec<PushConstantDesc, MAX_PUSH_CONSTANT_COMMANDS>,
+    immediates_descs: ArrayVec<ImmediateDesc, MAX_IMMEDIATES_COMMANDS>,
     clip_distance_count: u32,
 }
 
@@ -1008,8 +1008,8 @@ enum Command {
     InsertDebugMarker(Range<u32>),
     PushDebugGroup(Range<u32>),
     PopDebugGroup,
-    SetPushConstants {
-        uniform: PushConstantDesc,
+    SetImmediates {
+        uniform: ImmediateDesc,
         /// Offset from the start of the `data_bytes`
         offset: u32,
     },

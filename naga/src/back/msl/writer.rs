@@ -594,7 +594,7 @@ impl crate::AddressSpace {
             | Self::Storage { .. }
             | Self::Private
             | Self::WorkGroup
-            | Self::PushConstant
+            | Self::Immediate
             | Self::Handle
             | Self::TaskPayload => true,
             Self::Function => false,
@@ -614,7 +614,7 @@ impl crate::AddressSpace {
             // These should always be read-write.
             Self::Private | Self::WorkGroup => false,
             // These translate to `constant` address space, no need for qualifiers.
-            Self::Uniform | Self::PushConstant => false,
+            Self::Uniform | Self::Immediate => false,
             // Not applicable.
             Self::Handle | Self::Function => false,
         }
@@ -623,7 +623,7 @@ impl crate::AddressSpace {
     const fn to_msl_name(self) -> Option<&'static str> {
         match self {
             Self::Handle => None,
-            Self::Uniform | Self::PushConstant => Some("constant"),
+            Self::Uniform | Self::Immediate => Some("constant"),
             Self::Storage { .. } => Some("device"),
             // note for `RayPayload`, this probably needs to be emulated as a
             // private variable, as metal has essentially an inout input
@@ -6742,8 +6742,8 @@ template <typename A>
                                 break;
                             }
                         }
-                        crate::AddressSpace::PushConstant => {
-                            if let Err(e) = options.resolve_push_constants(ep) {
+                        crate::AddressSpace::Immediate => {
+                            if let Err(e) = options.resolve_immediates(ep) {
                                 ep_error = Some(e);
                                 break;
                             }
@@ -7176,7 +7176,7 @@ template <typename A>
 
                 // the resolves have already been checked for `!fake_missing_bindings` case
                 let resolved = match var.space {
-                    crate::AddressSpace::PushConstant => options.resolve_push_constants(ep).ok(),
+                    crate::AddressSpace::Immediate => options.resolve_immediates(ep).ok(),
                     crate::AddressSpace::WorkGroup => None,
                     _ => options
                         .resolve_resource_binding(ep, var.binding.as_ref().unwrap())

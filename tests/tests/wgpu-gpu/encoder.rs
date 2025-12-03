@@ -319,7 +319,7 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
 
             let pass = create_pass(&mut encoder, pass_type);
 
-            ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
+            let _scope = ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
 
             log::info!("Testing operation {op_name:?} on a locked command encoder while a {pass_type:?} pass is active");
             op(&mut encoder);
@@ -341,6 +341,9 @@ fn encoder_operations_fail_while_pass_alive(ctx: TestingContext) {
             drop(pass);
 
             fail(&ctx.device, || encoder.finish(), Some("encoder is locked"));
+
+            // We don't care about any errors that happen outside of a `fail` call.
+            drop(_scope);
         }
     }
 }

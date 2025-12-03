@@ -9,10 +9,10 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([
         UNIFORM_INPUT,
         STORAGE_INPUT,
-        PUSH_CONSTANT_INPUT,
+        IMMEDIATES_INPUT,
         UNIFORM_INPUT_INT64,
         STORAGE_INPUT_INT64,
-        PUSH_CONSTANT_INPUT_INT64,
+        IMMEDIATES_INPUT_INT64,
         UNIFORM_INPUT_F16,
         STORAGE_INPUT_F16,
     ]);
@@ -54,21 +54,21 @@ static STORAGE_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
     });
 
 #[gpu_test]
-static PUSH_CONSTANT_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
+static IMMEDIATES_INPUT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::PUSH_CONSTANTS)
+            .features(Features::IMMEDIATES)
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits {
-                max_push_constant_size: MAX_BUFFER_SIZE as u32,
+                max_immediate_size: MAX_BUFFER_SIZE as u32,
                 ..Limits::downlevel_defaults()
             }),
     )
     .run_async(|ctx| {
         shader_input_output_test(
             ctx,
-            InputStorageType::PushConstant,
-            create_struct_layout_tests(InputStorageType::PushConstant),
+            InputStorageType::Immediate,
+            create_struct_layout_tests(InputStorageType::Immediate),
         )
     });
 
@@ -352,20 +352,20 @@ static STORAGE_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
     });
 
 #[gpu_test]
-static PUSH_CONSTANT_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
+static IMMEDIATES_INPUT_INT64: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::SHADER_INT64 | Features::PUSH_CONSTANTS)
+            .features(Features::SHADER_INT64 | Features::IMMEDIATES)
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
             .limits(Limits {
-                max_push_constant_size: MAX_BUFFER_SIZE as u32,
+                max_immediate_size: MAX_BUFFER_SIZE as u32,
                 ..Limits::downlevel_defaults()
             }),
     )
     .run_async(|ctx| {
         shader_input_output_test(
             ctx,
-            InputStorageType::PushConstant,
+            InputStorageType::Immediate,
             create_64bit_struct_layout_tests(),
         )
     });

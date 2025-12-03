@@ -571,7 +571,7 @@ impl PhysicalDeviceFeatures {
         use wgt::{DownlevelFlags as Df, Features as F};
         let mut features = F::empty()
             | F::MAPPABLE_PRIMARY_BUFFERS
-            | F::PUSH_CONSTANTS
+            | F::IMMEDIATES
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::ADDRESS_MODE_CLAMP_TO_ZERO
             | F::TIMESTAMP_QUERY
@@ -1339,7 +1339,7 @@ impl PhysicalDeviceProperties {
                 .subgroup_size_control
                 .map(|subgroup_size| subgroup_size.max_subgroup_size)
                 .unwrap_or(0),
-            max_push_constant_size: limits.max_push_constants_size,
+            max_immediate_size: limits.max_push_constants_size,
             min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as u32,
             min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as u32,
             max_inter_stage_shader_components: limits

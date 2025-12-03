@@ -62,6 +62,9 @@ mod webgpu_impl {
 
     #[doc(hidden)]
     pub const WEBGPU_FEATURE_CLIP_DISTANCES: u64 = 1 << 14;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_IMMEDIATES: u64 = 1 << 15;
 }
 
 macro_rules! bitflags_array_impl {
@@ -805,34 +808,6 @@ bitflags_array! {
         #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indirect_count`"]: "struct.RenderPass.html#method.multi_draw_indirect_count")]
         #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indexed_indirect_count`"]: "struct.RenderPass.html#method.multi_draw_indexed_indirect_count")]
         const MULTI_DRAW_INDIRECT_COUNT = 1 << 15;
-        /// Allows the use of push constants: small, fast bits of memory that can be updated
-        /// inside a [`RenderPass`].
-        ///
-        /// Allows the user to call [`RenderPass::set_push_constants`], provide a non-empty array
-        /// to [`PipelineLayoutDescriptor`], and provide a non-zero limit to [`Limits::max_push_constant_size`].
-        ///
-        /// A block of push constants can be declared in WGSL with `var<push_constant>`:
-        ///
-        /// ```rust,ignore
-        /// struct PushConstants { example: f32, }
-        /// var<push_constant> c: PushConstants;
-        /// ```
-        ///
-        /// In GLSL, this corresponds to `layout(push_constant) uniform Name {..}`.
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Vulkan
-        /// - Metal
-        /// - OpenGL (emulated with uniforms)
-        ///
-        /// This is a native only feature.
-        ///
-        #[doc = link_to_wgpu_item!(struct RenderPass)]
-        #[doc = link_to_wgpu_item!(struct PipelineLayoutDescriptor)]
-        #[doc = link_to_wgpu_docs!(["`RenderPass::set_push_constants`"]: "struct.RenderPass.html#method.set_push_constants")]
-        /// [`Limits::max_push_constant_size`]: super::Limits
-        const PUSH_CONSTANTS = 1 << 16;
         /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
         /// of [`SamplerBorderColor::Zero`].
         ///
@@ -1440,7 +1415,7 @@ bitflags_array! {
         const INDIRECT_FIRST_INSTANCE = WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE;
 
         /// Allows shaders to use 16-bit floating point types. You may use them uniform buffers,
-        /// storage buffers, and local variables. You may not use them in push constants.
+        /// storage buffers, and local variables. You may not use them in immediates.
         ///
         /// In order to use this in WGSL shaders, you must add `enable f16;` to the top of your shader,
         /// before any global items.
@@ -1512,6 +1487,37 @@ bitflags_array! {
         ///
         /// This is a web and native feature.
         const CLIP_DISTANCES = WEBGPU_FEATURE_CLIP_DISTANCES;
+
+        /// Allows the use of immediate data: small, fast bits of memory that can be updated
+        /// inside a [`RenderPass`].
+        ///
+        /// Allows the user to call [`RenderPass::set_immediates`], provide a non-zero immediate data size
+        /// to [`PipelineLayoutDescriptor`], and provide a non-zero limit to [`Limits::max_immediate_size`].
+        ///
+        /// A block of immediate data can be declared in WGSL with `var<immediate>`:
+        ///
+        /// ```rust,ignore
+        /// struct Immediates { example: f32, }
+        /// var<immediate> c: Immediates;
+        /// ```
+        ///
+        /// In GLSL, this corresponds to `layout(immediates) uniform Name {..}`.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        /// - Metal
+        /// - OpenGL (emulated with uniforms)
+        ///
+        /// WebGPU support is currently a proposal and will be available in browsers in the future.
+        ///
+        /// This is a web and native feature.
+        ///
+        #[doc = link_to_wgpu_item!(struct RenderPass)]
+        #[doc = link_to_wgpu_item!(struct PipelineLayoutDescriptor)]
+        #[doc = link_to_wgpu_docs!(["`RenderPass::set_immediates`"]: "struct.RenderPass.html#method.set_immediates")]
+        /// [`Limits::max_immediate_size`]: super::Limits
+        const IMMEDIATES = WEBGPU_FEATURE_IMMEDIATES;
     }
 }
 

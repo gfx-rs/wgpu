@@ -395,7 +395,7 @@ impl super::Adapter {
             | wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D
             | wgt::Features::CLEAR_TEXTURE
             | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
-            | wgt::Features::PUSH_CONSTANTS
+            | wgt::Features::IMMEDIATES
             | wgt::Features::SHADER_PRIMITIVE_INDEX
             | wgt::Features::RG11B10UFLOAT_RENDERABLE
             | wgt::Features::DUAL_SOURCE_BLENDING
@@ -696,11 +696,11 @@ impl super::Adapter {
                     max_vertex_buffer_array_stride: Direct3D12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
                     min_subgroup_size: 4, // Not using `features1.WaveLaneCountMin` as it is unreliable
                     max_subgroup_size: 128,
-                    // The push constants are part of the root signature which
+                    // The immediates are part of the root signature which
                     // has a limit of 64 DWORDS (256 bytes), but other resources
                     // also share the root signature:
                     //
-                    // - push constants consume a `DWORD` for each `4 bytes` of data
+                    // - immediates consume a `DWORD` for each `4 bytes` of data
                     // - If a bind group has buffers it will consume a `DWORD`
                     //   for the descriptor table
                     // - If a bind group has samplers it will consume a `DWORD`
@@ -716,7 +716,7 @@ impl super::Adapter {
                     // constants needs to be set to a reasonable number instead.
                     //
                     // Source: https://learn.microsoft.com/en-us/windows/win32/direct3d12/root-signature-limits#memory-limits-and-costs
-                    max_push_constant_size: 128,
+                    max_immediate_size: 128,
                     min_uniform_buffer_offset_alignment:
                         Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
                     min_storage_buffer_offset_alignment: 4,

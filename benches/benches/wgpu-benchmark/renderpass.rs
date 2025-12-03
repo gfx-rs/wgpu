@@ -151,7 +151,7 @@ impl RenderpassState {
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: None,
                     bind_group_layouts: &[&bind_group_layout],
-                    push_constant_ranges: &[],
+                    immediates_ranges: &[],
                 });
 
         let mut vertex_buffers = Vec::with_capacity(vertex_buffer_count as usize);
@@ -287,7 +287,7 @@ impl RenderpassState {
                     .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                         label: None,
                         bind_group_layouts: &[&bindless_bind_group_layout],
-                        push_constant_ranges: &[],
+                        immediates_ranges: &[],
                     });
 
             bindless_pipeline = Some(device_state.device.create_render_pipeline(
