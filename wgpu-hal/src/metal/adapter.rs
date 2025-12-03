@@ -262,12 +262,17 @@ impl crate::Adapter for super::Adapter {
                 all_caps | Tfc::DEPTH_STENCIL_ATTACHMENT | msaa_count | msaa_resolve_apple3x_if
             }
             Tf::Depth16Unorm => {
-                let mut flags =
-                    Tfc::DEPTH_STENCIL_ATTACHMENT | msaa_count | msaa_resolve_apple3x_if;
                 if pc.format_depth16unorm {
-                    flags |= Tfc::SAMPLED_LINEAR
+                    // TODO: what does SAMPLED_LINEAR mean?!?
+                    let mut flags =
+                        Tfc::DEPTH_STENCIL_ATTACHMENT | msaa_count | msaa_resolve_apple3x_if;
+                    if pc.format_depth16unorm_filter {
+                        flags |= Tfc::SAMPLED_LINEAR;
+                    }
+                    flags
+                } else {
+                    return Tfc::empty();
                 }
-                flags
             }
             Tf::Depth32Float | Tf::Depth32FloatStencil8 => {
                 let mut flags =
@@ -749,13 +754,13 @@ impl super::PrivateCapabilities {
             format_rgba32float_color_write: true,
             // Only macOS support rgba32float's all capabilities
             format_rgba32float_all: os_type == super::OsType::Macos,
-            format_depth16unorm: Self::supports_any(
-                device,
-                &[
-                    MTLFeatureSet::iOS_GPUFamily3_v3,
-                    MTLFeatureSet::macOS_GPUFamily1_v2,
-                ],
-            ),
+            // https://developer.apple.com/documentation/metal/mtlpixelformat/depth16unorm
+            format_depth16unorm: version.at_least((10, 12), (13, 0), (13, 0), (1, 0), os_type),
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=12
+            format_depth16unorm_filter: family_check
+                && (metal3
+                    || device.supports_family(MTLGPUFamily::Apple3)
+                    || device.supports_family(MTLGPUFamily::Mac2)),
             format_depth32float_filter: os_type == super::OsType::Macos,
             format_depth32float_none: os_type != super::OsType::Macos,
             format_bgr10a2_all: Self::supports_any(device, BGR10A2_ALL),

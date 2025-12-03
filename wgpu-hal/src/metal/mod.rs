@@ -260,6 +260,7 @@ struct PrivateCapabilities {
     format_rgba32float_color_write: bool,
     format_rgba32float_all: bool,
     format_depth16unorm: bool,
+    format_depth16unorm_filter: bool,
     format_depth32float_filter: bool,
     format_depth32float_none: bool,
     format_bgr10a2_all: bool,
