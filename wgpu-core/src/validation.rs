@@ -302,8 +302,6 @@ pub enum StageError {
         per_dimension_limit: &'static str,
         total_limit: &'static str,
     },
-    #[error("Shader uses {used} inter-stage components above the limit of {limit}")]
-    TooManyVaryings { used: u32, limit: u32 },
     #[error("Unable to find entry point '{0}'")]
     MissingEntryPoint(String),
     #[error("Shader global {0:?} is not available in the pipeline layout")]
@@ -1646,13 +1644,6 @@ impl Interface {
                 }
             }
             _ => (),
-        }
-
-        if inter_stage_components > self.limits.max_inter_stage_shader_components {
-            return Err(StageError::TooManyVaryings {
-                used: inter_stage_components,
-                limit: self.limits.max_inter_stage_shader_components,
-            });
         }
 
         if let Some(ref mesh_info) = entry_point.mesh_info {
