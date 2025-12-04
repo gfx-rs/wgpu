@@ -37,7 +37,7 @@ env:
   RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
-  CACHE_SUFFIX: d # cache busting
+  CACHE_SUFFIX: e # cache busting
   WGPU_CI: true
 
 # Every time a PR is pushed to, cancel any previous jobs. This
@@ -588,16 +588,6 @@ jobs:
           # Delete snapshots so we can ensure there aren't any excess output files.
           rm -r naga/tests/out
 
-      - name: Run `wgpu-info`
-        shell: bash
-        run: |
-          echo "$PATH"
-
-          export RUST_LOG=trace
-
-          # This needs to match the command in xtask/tests.rs
-          cargo --locked llvm-cov --no-cfg-coverage --no-report run --bin wgpu-info -- -vv
-
       - name: Run tests
         shell: bash
         run: |
@@ -610,12 +600,22 @@ jobs:
         run: git add . && git diff --exit-code HEAD naga/tests/out
 
       - uses: actions/upload-artifact@v5
+        name: Upload comparison images
         if: always() # We want artifacts even if the tests fail.
         with:
           name: comparison-images-${{ matrix.os }}
           path: |
             **/*-actual.png
             **/*-difference.png
+
+      # Print GPU configuration so we can see what features were available during the test.
+      - name: Print GPU configurations
+        if: always() # We want this information even if the tests fail.
+        shell: bash
+        run: |
+          set -e
+
+          cat .gpuconfig
 
       - name: Generate coverage report
         id: coverage
