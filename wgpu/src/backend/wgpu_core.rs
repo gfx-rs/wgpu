@@ -555,6 +555,7 @@ pub struct CoreRenderBundleEncoder {
 
 #[derive(Debug)]
 pub struct CoreRenderBundle {
+    context: ContextWgpuCore,
     id: wgc::id::RenderBundleId,
 }
 
@@ -3828,11 +3829,21 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
             self.context
                 .handle_error_fatal(err, "RenderBundleEncoder::finish");
         }
-        CoreRenderBundle { id }.into()
+        CoreRenderBundle {
+            context: self.context.clone(),
+            id,
+        }
+        .into()
     }
 }
 
 impl dispatch::RenderBundleInterface for CoreRenderBundle {}
+
+impl Drop for CoreRenderBundle {
+    fn drop(&mut self) {
+        self.context.0.render_bundle_drop(self.id)
+    }
+}
 
 impl dispatch::SurfaceInterface for CoreSurface {
     fn get_capabilities(&self, adapter: &dispatch::DispatchAdapter) -> wgt::SurfaceCapabilities {
