@@ -18,10 +18,9 @@ rust-version = "1.82.0"
 [package.metadata.docs.rs]
 # Ideally we would enable all the features.
 #
-# However, the metal features fail to be documented because the docs.rs runner cross-compiling under
-# x86_64-unknown-linux-gnu and metal-rs cannot compile in that environment at the moment. The same applies
-# for the dx12 feature.
-features = ["vulkan", "gles", "renderdoc"]
+# However, the dx12 features fail to be documented because the docs.rs runner cross-compiling under
+# x86_64-unknown-linux-gnu cannot compile in that environment at the moment.
+features = ["metal", "vulkan", "gles", "renderdoc"]
 rustdoc-args = ["--cfg", "docsrs"]
 targets = [
     "x86_64-unknown-linux-gnu",
@@ -75,13 +74,15 @@ metal = [
     # Metal is only available on Apple platforms, therefore request MSL output also only if we target an Apple platform.
     "naga/msl-out",
     "dep:arrayvec",
-    "dep:block",
-    "dep:core-graphics-types",
+    "dep:block2",
     "dep:hashbrown",
     "dep:libc",
     "dep:log",
-    "dep:metal",
-    "dep:objc",
+    "dep:objc2",
+    "dep:objc2-core-foundation",
+    "dep:objc2-foundation",
+    "dep:objc2-metal",
+    "dep:objc2-quartz-core",
     "dep:parking_lot",
     "dep:profiling",
     "dep:smallvec",
@@ -120,7 +121,7 @@ gles = [
     "dep:libloading",
     "dep:log",
     "dep:ndk-sys",
-    "dep:objc",
+    "dep:objc2",
     "dep:parking_lot",
     "dep:profiling",
     "dep:wasm-bindgen",
@@ -281,10 +282,12 @@ mach-dxcompiler-rs = { workspace = true, optional = true }
 
 [target.'cfg(target_vendor = "apple")'.dependencies]
 # Backend: Metal
-block = { workspace = true, optional = true }
-core-graphics-types = { workspace = true, optional = true }
-metal = { workspace = true, optional = true }
-objc = { workspace = true, optional = true }
+block2 = { workspace = true, optional = true }
+objc2 = { workspace = true, optional = true }
+objc2-core-foundation = { workspace = true, optional = true }
+objc2-foundation = { workspace = true, optional = true }
+objc2-metal = { workspace = true, optional = true }
+objc2-quartz-core = { workspace = true, optional = true }
 
 # backend: Metal + Vulkan
 raw-window-metal = { workspace = true, optional = true }
