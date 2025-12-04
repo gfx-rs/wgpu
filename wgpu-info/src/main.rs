@@ -4,6 +4,8 @@
 mod cli;
 mod human;
 mod report;
+#[cfg(test)]
+mod tests;
 mod texture;
 
 fn main() -> anyhow::Result<()> {
