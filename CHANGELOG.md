@@ -85,6 +85,7 @@ Multiview is also called view instancing in DX12 land or vertex amplification in
 Multiview has been reworked, adding support for Metal and DX12, and adding testing and validation to wgpu itself.
 This change also introduces a view bitmask, a new field in `RenderPassDescriptor` that allows a render pass to render to multiple non-adjacent layers
 when using the `SELECTIVE_MULTIVIEW` feature. Note that this also influences apps that don't use multiview, as they have to set this mask to `None`.
+
 ```diff
 - wgpu::RenderPassDescriptor {
 -     label: None,
@@ -102,6 +103,7 @@ when using the `SELECTIVE_MULTIVIEW` feature. Note that this also influences app
 +     multiview_mask: NonZero::new(3),
 + }
 ```
+
 One other breaking change worth noting is that in WGSL `@builtin(view_index)` now requires a type of `u32`, where previously it required `i32`.
 
 By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206).
@@ -138,6 +140,23 @@ event happens. Our new log policy is as follows:
 
 By @cwfitzgerald in [#8579](https://github.com/gfx-rs/wgpu/pull/8579).
 
+#### `subgroup_{min,max}_size` renamed and moved from `Limits` -> `AdapterInfo`
+
+To bring our code in line with the WebGPU spec, we have moved information about subgroup size
+from limits to adapter info. Limits was not the correct place for this anyway, and we had some
+code special casing those limits.
+
+Additionally we have renamed the fields to match the spec.
+
+```diff
+- let min = limits.min_subgroup_size;
++ let min = info.subgroup_min_size;
+- let max = limits.max_subgroup_size;
++ let max = info.subgroup_max_size;
+```
+
+By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
+
 ### New Features
 
 - Added support for transient textures on Vulkan and Metal. By @opstic in [#8247](https://github.com/gfx-rs/wgpu/pull/8247)
@@ -155,16 +174,17 @@ By @cwfitzgerald in [#8579](https://github.com/gfx-rs/wgpu/pull/8579).
 - Allow `include_spirv!` and `include_spirv_raw!` macros to be used in constants and statics. By @clarfonthey in [#8250](https://github.com/gfx-rs/wgpu/pull/8250).
 - Added support for rendering onto multi-planar textures. By @noituri in [#8307](https://github.com/gfx-rs/wgpu/pull/8307).
 - Validation errors from `CommandEncoder::finish()` will report the label of the invalid encoder. By @kpreid in [#8449](https://github.com/gfx-rs/wgpu/pull/8449).
-- Corrected documentation of the minimum alignment of the *end* of a mapped range of a buffer (it is 4, not 8). By @kpreid in [#8450](https://github.com/gfx-rs/wgpu/pull/8450).
+- Corrected documentation of the minimum alignment of the _end_ of a mapped range of a buffer (it is 4, not 8). By @kpreid in [#8450](https://github.com/gfx-rs/wgpu/pull/8450).
 - `util::StagingBelt` now takes a `Device` when it is created instead of when it is used. By @kpreid in [#8462](https://github.com/gfx-rs/wgpu/pull/8462).
 - `wgpu_hal::vulkan::Texture` API changes to handle externally-created textures and memory more flexibly. By @s-ol in [#8512](https://github.com/gfx-rs/wgpu/pull/8512), [#8521](https://github.com/gfx-rs/wgpu/pull/8521).
 
 #### Metal
+
 - Add support for mesh shaders. By @SupaMaggie70Incorporated in [#8139](https://github.com/gfx-rs/wgpu/pull/8139)
 
 #### Naga
 
-- Prevent UB with invalid ray query calls on spirv. By @Vecvec in [#8390](https://github.com/gfx-rs/wgpu/pull/8390). 
+- Prevent UB with invalid ray query calls on spirv. By @Vecvec in [#8390](https://github.com/gfx-rs/wgpu/pull/8390).
 
 ### Bug Fixes
 

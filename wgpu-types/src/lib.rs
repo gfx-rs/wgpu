@@ -207,6 +207,17 @@ pub const QUERY_SET_MAX_QUERIES: u32 = 4096;
 #[doc = link_to_wgpu_docs!(["query"]: "struct.QuerySet.html")]
 pub const QUERY_SIZE: u32 = 8;
 
+/// The minimum allowed value for [`AdapterInfo::subgroup_min_size`].
+///
+/// See <https://gpuweb.github.io/gpuweb/#gpuadapterinfo>
+/// where you can always use these values on all devices
+pub const MINIMUM_SUBGROUP_MIN_SIZE: u32 = 4;
+/// The maximum allowed value for [`AdapterInfo::subgroup_max_size`].
+///
+/// See <https://gpuweb.github.io/gpuweb/#gpuadapterinfo>
+/// where you can always use these values on all devices.
+pub const MAXIMUM_SUBGROUP_MAX_SIZE: u32 = 128;
+
 /// Passed to `Device::poll` to control how and if it should block.
 #[derive(Clone, Debug)]
 pub enum PollType<T> {

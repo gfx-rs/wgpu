@@ -505,7 +505,7 @@ pub static TEST_ETC2: crate::framework::ExampleTestParams = crate::framework::Ex
     height: 768,
     optional_features: wgpu::Features::TEXTURE_COMPRESSION_ETC2,
     base_test_parameters: wgpu_test::TestParameters::default(),
-    comparisons: &[wgpu_test::ComparisonType::Mean(0.015)],
+    comparisons: &[wgpu_test::ComparisonType::Mean(0.016)], // Bounded by Apple A9
     _phantom: std::marker::PhantomData::<Example>,
 };
 
@@ -518,6 +518,6 @@ pub static TEST_ASTC: crate::framework::ExampleTestParams = crate::framework::Ex
     height: 768,
     optional_features: wgpu::Features::TEXTURE_COMPRESSION_ASTC,
     base_test_parameters: wgpu_test::TestParameters::default(),
-    comparisons: &[wgpu_test::ComparisonType::Mean(0.016)],
+    comparisons: &[wgpu_test::ComparisonType::Mean(0.017)], // Bounded by Apple A9
     _phantom: std::marker::PhantomData::<Example>,
 };

@@ -190,6 +190,8 @@ impl super::Adapter {
             device_pci_bus_id: String::new(),
             driver_info: version,
             backend: wgt::Backend::Gl,
+            subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
+            subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
             transient_saves_memory: false,
         }
     }
@@ -751,8 +753,6 @@ impl super::Adapter {
             } else {
                 !0
             },
-            min_subgroup_size: 0,
-            max_subgroup_size: 0,
             max_immediate_size: super::MAX_IMMEDIATES as u32 * 4,
             min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment,

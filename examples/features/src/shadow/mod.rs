@@ -854,6 +854,6 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
             wgpu::Backends::VULKAN,
             "V3D",
         )),
-    comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
+    comparisons: &[wgpu_test::ComparisonType::Mean(0.026)], // Bounded by Apple A9
     _phantom: std::marker::PhantomData::<Example>,
 };

@@ -546,6 +546,6 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
     optional_features: wgpu::Features::default(),
     base_test_parameters: wgpu_test::TestParameters::default(),
     // Bounded by lavapipe
-    comparisons: &[wgpu_test::ComparisonType::Mean(0.005)],
+    comparisons: &[wgpu_test::ComparisonType::Mean(0.014)], // Bounded by Apple A9
     _phantom: std::marker::PhantomData::<Example>,
 };

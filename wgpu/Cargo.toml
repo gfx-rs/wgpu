@@ -190,6 +190,7 @@ wgpu-types.workspace = true
 # Needed for both wgpu-core and webgpu
 arrayvec.workspace = true
 bitflags.workspace = true
+bytemuck.workspace = true
 cfg-if.workspace = true
 document-features.workspace = true
 log.workspace = true
