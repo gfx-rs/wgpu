@@ -211,6 +211,7 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 #### DX12
 
 - Align copies b/w textures and buffers via a single intermediate buffer per copy when `D3D12_FEATURE_DATA_D3D12_OPTIONS13.UnrestrictedBufferTextureCopyPitchSupported` is `false`. By @ErichDonGubler in [#7721](https://github.com/gfx-rs/wgpu/pull/7721).
+- Fix detection of Int64 Buffer/Texture atomic features. By @cwfitzgerald in [#8667](https://github.com/gfx-rs/wgpu/pull/8667).
 
 #### Vulkan
 
