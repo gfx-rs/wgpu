@@ -1,6 +1,6 @@
 # No GLSL support for f16
 targets = "SPIRV | METAL | HLSL | WGSL"
-god_mode = true
+capabilities = "SHADER_FLOAT16"
 
 [spv]
 version = [1, 0]

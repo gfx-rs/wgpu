@@ -1,4 +1,4 @@
-god_mode = true
+capabilities = "IMMEDIATES | PRIMITIVE_INDEX"
 targets = "SPIRV | METAL | WGSL"
 
 [msl]

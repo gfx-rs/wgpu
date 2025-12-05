@@ -571,11 +571,13 @@ impl Validator {
         }
     }
 
+    // TODO(https://github.com/gfx-rs/wgpu/issues/8207): Consider removing this
     pub fn subgroup_stages(&mut self, stages: ShaderStages) -> &mut Self {
         self.subgroup_stages = stages;
         self
     }
 
+    // TODO(https://github.com/gfx-rs/wgpu/issues/8207): Consider removing this
     pub fn subgroup_operations(&mut self, operations: SubgroupOperationSet) -> &mut Self {
         self.subgroup_operations = operations;
         self

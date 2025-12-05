@@ -1,2 +1,2 @@
-god_mode = true
+capabilities = "MESH_SHADER | MESH_SHADER_POINT_TOPOLOGY"
 targets = "IR | ANALYSIS"

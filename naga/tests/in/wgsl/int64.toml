@@ -1,4 +1,4 @@
-god_mode = true
+capabilities = "SHADER_INT64"
 targets = "SPIRV | HLSL | WGSL | METAL"
 
 [msl]
