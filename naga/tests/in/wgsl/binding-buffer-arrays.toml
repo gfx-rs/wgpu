@@ -1,4 +1,5 @@
 targets = "WGSL | SPIRV"
+god_mode = true
 
 [bounds_check_policies]
 index = "ReadZeroSkipWrite"

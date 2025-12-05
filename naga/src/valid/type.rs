@@ -802,6 +802,7 @@ impl super::Validator {
 
                 if base_info.flags.contains(TypeFlags::DATA) {
                     // Currently Naga only supports binding arrays of structs for non-handle types.
+                    // `validate_global_var` relies on ray queries (which are `DATA`) being rejected here
                     match gctx.types[base].inner {
                         crate::TypeInner::Struct { .. } => {}
                         _ => return Err(TypeError::BindingArrayBaseTypeNotStruct(base)),
@@ -815,7 +816,8 @@ impl super::Validator {
                     }
                 ) {
                     // Binding arrays of external textures are not yet supported.
-                    // https://github.com/gfx-rs/wgpu/issues/8027
+                    // See <https://github.com/gfx-rs/wgpu/issues/8027>. Note that
+                    // `validate_global_var` relies on this error being raised here.
                     return Err(TypeError::BindingArrayBaseExternalTextures);
                 }
 

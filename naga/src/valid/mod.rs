@@ -83,7 +83,7 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub struct Capabilities: u32 {
+    pub struct Capabilities: u64 {
         /// Support for [`AddressSpace::Immediate`][1].
         ///
         /// [1]: crate::AddressSpace::Immediate
@@ -94,14 +94,14 @@ bitflags::bitflags! {
         ///
         /// [1]: crate::BuiltIn::PrimitiveIndex
         const PRIMITIVE_INDEX = 1 << 2;
-        /// Support for non-uniform indexing of sampled textures and storage buffer arrays.
-        const SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 1 << 3;
-        /// Support for non-uniform indexing of storage texture arrays.
-        const STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 1 << 4;
-        /// Support for non-uniform indexing of uniform buffer arrays.
-        const UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 1 << 5;
-        /// Support for non-uniform indexing of samplers.
-        const SAMPLER_NON_UNIFORM_INDEXING = 1 << 6;
+        /// Support for binding arrays of sampled textures and samplers.
+        const TEXTURE_AND_SAMPLER_BINDING_ARRAY = 1 << 3;
+        /// Support for binding arrays of uniform buffers.
+        const BUFFER_BINDING_ARRAY = 1 << 4;
+        /// Support for binding arrays of storage textures.
+        const STORAGE_TEXTURE_BINDING_ARRAY = 1 << 5;
+        /// Support for binding arrays of storage buffers.
+        const STORAGE_BUFFER_BINDING_ARRAY = 1 << 6;
         /// Support for [`BuiltIn::ClipDistance`].
         ///
         /// [`BuiltIn::ClipDistance`]: crate::BuiltIn::ClipDistance
@@ -192,6 +192,14 @@ bitflags::bitflags! {
         const MESH_SHADER = 1 << 30;
         /// Support for mesh shaders which output points.
         const MESH_SHADER_POINT_TOPOLOGY = 1 << 31;
+        /// Support for non-uniform indexing of binding arrays of sampled textures and samplers.
+        const TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 32;
+        /// Support for non-uniform indexing of binding arrays of uniform buffers.
+        const BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 33;
+        /// Support for non-uniform indexing of binding arrays of storage textures.
+        const STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 34;
+        /// Support for non-uniform indexing of binding arrays of storage buffers.
+        const STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 35;
     }
 }
 

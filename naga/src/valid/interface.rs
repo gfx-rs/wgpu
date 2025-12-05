@@ -18,6 +18,8 @@ pub enum GlobalVariableError {
     InvalidUsage(crate::AddressSpace),
     #[error("Type isn't compatible with address space {0:?}")]
     InvalidType(crate::AddressSpace),
+    #[error("Type {0:?} isn't compatible with binding arrays")]
+    InvalidBindingArray(Handle<crate::Type>),
     #[error("Type flags {seen:?} do not meet the required {required:?}")]
     MissingTypeFlags {
         required: super::TypeFlags,
@@ -643,9 +645,80 @@ impl super::Validator {
             // series of individually bound resources, so we can (mostly)
             // validate a `binding_array<T>` as if it were just a plain `T`.
             crate::TypeInner::BindingArray { base, .. } => match var.space {
-                crate::AddressSpace::Storage { .. }
-                | crate::AddressSpace::Uniform
-                | crate::AddressSpace::Handle => base,
+                crate::AddressSpace::Storage { .. } => {
+                    if !self
+                        .capabilities
+                        .contains(Capabilities::STORAGE_BUFFER_BINDING_ARRAY)
+                    {
+                        return Err(GlobalVariableError::UnsupportedCapability(
+                            Capabilities::STORAGE_BUFFER_BINDING_ARRAY,
+                        ));
+                    }
+                    base
+                }
+                crate::AddressSpace::Uniform => {
+                    if !self
+                        .capabilities
+                        .contains(Capabilities::BUFFER_BINDING_ARRAY)
+                    {
+                        return Err(GlobalVariableError::UnsupportedCapability(
+                            Capabilities::BUFFER_BINDING_ARRAY,
+                        ));
+                    }
+                    base
+                }
+                crate::AddressSpace::Handle => {
+                    match gctx.types[base].inner {
+                        crate::TypeInner::Image { class, .. } => match class {
+                            crate::ImageClass::Storage { .. } => {
+                                if !self
+                                    .capabilities
+                                    .contains(Capabilities::STORAGE_TEXTURE_BINDING_ARRAY)
+                                {
+                                    return Err(GlobalVariableError::UnsupportedCapability(
+                                        Capabilities::STORAGE_TEXTURE_BINDING_ARRAY,
+                                    ));
+                                }
+                            }
+                            crate::ImageClass::Sampled { .. } | crate::ImageClass::Depth { .. } => {
+                                if !self
+                                    .capabilities
+                                    .contains(Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY)
+                                {
+                                    return Err(GlobalVariableError::UnsupportedCapability(
+                                        Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY,
+                                    ));
+                                }
+                            }
+                            crate::ImageClass::External => {
+                                // This should have been rejected in `validate_type`.
+                                unreachable!("binding arrays of external images are not supported");
+                            }
+                        },
+                        crate::TypeInner::Sampler { .. } => {
+                            if !self
+                                .capabilities
+                                .contains(Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY)
+                            {
+                                return Err(GlobalVariableError::UnsupportedCapability(
+                                    Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY,
+                                ));
+                            }
+                        }
+                        crate::TypeInner::AccelerationStructure { .. } => {
+                            return Err(GlobalVariableError::InvalidBindingArray(base));
+                        }
+                        crate::TypeInner::RayQuery { .. } => {
+                            // This should have been rejected in `validate_type`.
+                            unreachable!("binding arrays of ray queries are not supported");
+                        }
+                        _ => {
+                            // Fall through to the regular validation, which will reject `base`
+                            // as invalid in `AddressSpace::Handle`.
+                        }
+                    }
+                    base
+                }
                 _ => return Err(GlobalVariableError::InvalidUsage(var.space)),
             },
             _ => var.ty,
