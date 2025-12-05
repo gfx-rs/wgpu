@@ -43,8 +43,7 @@ webgpu:api,operation,rendering,color_target_state:blending,GPUBlendComponent:*
 webgpu:api,operation,rendering,depth:*
 webgpu:api,operation,rendering,draw:*
 webgpu:api,operation,shader_module,compilation_info:*
-// Likely due to https://github.com/gfx-rs/wgpu/issues/7357.
-fails-if(metal) webgpu:api,operation,uncapturederror:iff_uncaptured:*
+webgpu:api,operation,uncapturederror:iff_uncaptured:*
 //FAIL: webgpu:api,operation,uncapturederror:onuncapturederror_order_wrt_addEventListener
 // There are also two unimplemented SKIPs in uncapturederror not enumerated here.
 fails-if(vulkan) webgpu:api,operation,vertex_state,correctness:array_stride_zero:*
