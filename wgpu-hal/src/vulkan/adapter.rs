@@ -1883,6 +1883,7 @@ impl super::Instance {
                 depth_stencil_required_flags(),
             ),
             multi_draw_indirect: phd_features.core.multi_draw_indirect != 0,
+            max_draw_indirect_count: phd_capabilities.properties.limits.max_draw_indirect_count,
             non_coherent_map_mask: phd_capabilities.properties.limits.non_coherent_atom_size - 1,
             can_present: true,
             //TODO: make configurable
