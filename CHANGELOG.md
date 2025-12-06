@@ -226,6 +226,7 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 
 - Fix race when downloading texture from compute shader pass. By @SpeedCrash100 in [#8527](https://github.com/gfx-rs/wgpu/pull/8527)
 - Fix double window class registration when dynamic libraries are used. By @Azorlogh in [#8548](https://github.com/gfx-rs/wgpu/pull/8548)
+- Fix Firefox error in WebGL when using Queue::write_texture with a 2D texture. By @tgecho in [#8668](https://github.com/gfx-rs/wgpu/pull/8673)
 
 #### hal
 

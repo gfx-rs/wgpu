@@ -905,6 +905,13 @@ impl Queue {
 
         let staging_buffer = staging_buffer.flush();
 
+        let copy_rows_per_image =
+            if array_layer_count > 1 || dst.desc.dimension == wgt::TextureDimension::D3 {
+                Some(rows_per_image)
+            } else {
+                None
+            };
+
         let regions = (0..array_layer_count)
             .map(|array_layer_offset| {
                 let mut texture_base = dst_base.clone();
@@ -915,7 +922,7 @@ impl Queue {
                             * rows_per_image as u64
                             * stage_bytes_per_row as u64,
                         bytes_per_row: Some(stage_bytes_per_row),
-                        rows_per_image: Some(rows_per_image),
+                        rows_per_image: copy_rows_per_image,
                     },
                     texture_base,
                     size: hal_copy_size,
