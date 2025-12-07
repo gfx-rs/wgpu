@@ -2605,11 +2605,11 @@ impl dispatch::QueueInterface for WebQueue {
             return None;
         }
         let write_size = u64::from(size);
-        if write_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+        if !write_size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             log::error!("Copy size {size} does not respect `COPY_BUFFER_ALIGNMENT`");
             return None;
         }
-        if offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+        if !offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             log::error!(
                 "Buffer offset {offset} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`"
             );

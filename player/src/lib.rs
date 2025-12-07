@@ -252,7 +252,7 @@ impl Player {
                 let spirv = data.iter().find_map(|a| {
                     if a.ends_with(".spv") {
                         let data = fs::read(dir.join(a)).unwrap();
-                        assert!(data.len() % 4 == 0);
+                        assert!(data.len().is_multiple_of(4));
 
                         Some(Cow::Owned(bytemuck::pod_collect_to_vec(&data)))
                     } else {

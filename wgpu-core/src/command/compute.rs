@@ -1110,9 +1110,7 @@ impl Global {
         }
 
         let mut bind_group = None;
-        if bind_group_id.is_some() {
-            let bind_group_id = bind_group_id.unwrap();
-
+        if let Some(bind_group_id) = bind_group_id {
             let hub = &self.hub;
             bind_group = Some(pass_try!(
                 base,

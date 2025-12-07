@@ -101,12 +101,13 @@ pub enum PresentMode {
 /// Specifies how the alpha channel of the textures should be handled during
 /// compositing.
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum CompositeAlphaMode {
     /// Chooses either `Opaque` or `Inherit` automatically，depending on the
     /// `alpha_mode` that the current surface can support.
+    #[default]
     Auto = 0,
     /// The alpha channel, if it exists, of the textures is ignored in the
     /// compositing process. Instead, the textures is treated as if it has a
@@ -128,12 +129,6 @@ pub enum CompositeAlphaMode {
     /// the composite alpha blending mode using native WSI command. If not set,
     /// then a platform-specific default will be used.
     Inherit = 4,
-}
-
-impl Default for CompositeAlphaMode {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 /// Defines the capabilities of a given surface and adapter.

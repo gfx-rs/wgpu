@@ -34,7 +34,7 @@ pub(super) fn string_to_byte_chunks(input: &str, limit: usize) -> Vec<&[u8]> {
     let mut start: usize = 0;
     let mut words = vec![];
     while offset < input.len() {
-        offset = input.floor_char_boundary(offset + limit);
+        offset = input.floor_char_boundary_polyfill(offset + limit);
         // Clippy wants us to call as_bytes() first to avoid the UTF-8 check,
         // but we want to assert the output is valid UTF-8.
         #[allow(clippy::sliced_string_as_bytes)]
@@ -123,30 +123,31 @@ pub fn global_needs_wrapper(ir_module: &crate::Module, var: &crate::GlobalVariab
 }
 
 ///HACK: this is taken from std unstable, remove it when std's floor_char_boundary is stable
+/// and available in our msrv.
 trait U8Internal {
-    fn is_utf8_char_boundary(&self) -> bool;
+    fn is_utf8_char_boundary_polyfill(&self) -> bool;
 }
 
 impl U8Internal for u8 {
-    fn is_utf8_char_boundary(&self) -> bool {
+    fn is_utf8_char_boundary_polyfill(&self) -> bool {
         // This is bit magic equivalent to: b < 128 || b >= 192
         (*self as i8) >= -0x40
     }
 }
 
 trait StrUnstable {
-    fn floor_char_boundary(&self, index: usize) -> usize;
+    fn floor_char_boundary_polyfill(&self, index: usize) -> usize;
 }
 
 impl StrUnstable for str {
-    fn floor_char_boundary(&self, index: usize) -> usize {
+    fn floor_char_boundary_polyfill(&self, index: usize) -> usize {
         if index >= self.len() {
             self.len()
         } else {
             let lower_bound = index.saturating_sub(3);
             let new_index = self.as_bytes()[lower_bound..=index]
                 .iter()
-                .rposition(|b| b.is_utf8_char_boundary());
+                .rposition(|b| b.is_utf8_char_boundary_polyfill());
 
             // SAFETY: we know that the character boundary will be within four bytes
             unsafe { lower_bound + new_index.unwrap_unchecked() }
