@@ -85,6 +85,7 @@ Multiview is also called view instancing in DX12 land or vertex amplification in
 Multiview has been reworked, adding support for Metal and DX12, and adding testing and validation to wgpu itself.
 This change also introduces a view bitmask, a new field in `RenderPassDescriptor` that allows a render pass to render to multiple non-adjacent layers
 when using the `SELECTIVE_MULTIVIEW` feature. Note that this also influences apps that don't use multiview, as they have to set this mask to `None`.
+
 ```diff
 - wgpu::RenderPassDescriptor {
 -     label: None,
@@ -102,6 +103,7 @@ when using the `SELECTIVE_MULTIVIEW` feature. Note that this also influences app
 +     multiview_mask: NonZero::new(3),
 + }
 ```
+
 One other breaking change worth noting is that in WGSL `@builtin(view_index)` now requires a type of `u32`, where previously it required `i32`.
 
 By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206).
@@ -138,12 +140,31 @@ event happens. Our new log policy is as follows:
 
 By @cwfitzgerald in [#8579](https://github.com/gfx-rs/wgpu/pull/8579).
 
+#### `subgroup_{min,max}_size` renamed and moved from `Limits` -> `AdapterInfo`
+
+To bring our code in line with the WebGPU spec, we have moved information about subgroup size
+from limits to adapter info. Limits was not the correct place for this anyway, and we had some
+code special casing those limits.
+
+Additionally we have renamed the fields to match the spec.
+
+```diff
+- let min = limits.min_subgroup_size;
++ let min = info.subgroup_min_size;
+- let max = limits.max_subgroup_size;
++ let max = info.subgroup_max_size;
+```
+
+By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
+
 ### New Features
 
 - Added support for transient textures on Vulkan and Metal. By @opstic in [#8247](https://github.com/gfx-rs/wgpu/pull/8247)
 - Implement shader triangle barycentric coordinate builtins. By @atlv24 in [#8320](https://github.com/gfx-rs/wgpu/pull/8320).
 - Added support for binding arrays of storage textures on Metal. By @msvbg in [#8464](https://github.com/gfx-rs/wgpu/pull/8464)
 - Initial wgsl-in ray tracing pipelines. By @Vecvec in [#8570](https://github.com/gfx-rs/wgpu/pull/8570).
+- Added support for multisampled texture arrays on Vulkan through adapter feature `MULTISAMPLE_ARRAY`. By @LaylBongers in [#8571](https://github.com/gfx-rs/wgpu/pull/8571).
+- Added `get_configuration` to `wgpu::Surface`, that returns the current configuration of `wgpu::Surface`. By @sagudev in [#8664](https://github.com/gfx-rs/wgpu/pull/8664).
 
 ### Changes
 
@@ -155,16 +176,17 @@ By @cwfitzgerald in [#8579](https://github.com/gfx-rs/wgpu/pull/8579).
 - Allow `include_spirv!` and `include_spirv_raw!` macros to be used in constants and statics. By @clarfonthey in [#8250](https://github.com/gfx-rs/wgpu/pull/8250).
 - Added support for rendering onto multi-planar textures. By @noituri in [#8307](https://github.com/gfx-rs/wgpu/pull/8307).
 - Validation errors from `CommandEncoder::finish()` will report the label of the invalid encoder. By @kpreid in [#8449](https://github.com/gfx-rs/wgpu/pull/8449).
-- Corrected documentation of the minimum alignment of the *end* of a mapped range of a buffer (it is 4, not 8). By @kpreid in [#8450](https://github.com/gfx-rs/wgpu/pull/8450).
+- Corrected documentation of the minimum alignment of the _end_ of a mapped range of a buffer (it is 4, not 8). By @kpreid in [#8450](https://github.com/gfx-rs/wgpu/pull/8450).
 - `util::StagingBelt` now takes a `Device` when it is created instead of when it is used. By @kpreid in [#8462](https://github.com/gfx-rs/wgpu/pull/8462).
 - `wgpu_hal::vulkan::Texture` API changes to handle externally-created textures and memory more flexibly. By @s-ol in [#8512](https://github.com/gfx-rs/wgpu/pull/8512), [#8521](https://github.com/gfx-rs/wgpu/pull/8521).
 
 #### Metal
+
 - Add support for mesh shaders. By @SupaMaggie70Incorporated in [#8139](https://github.com/gfx-rs/wgpu/pull/8139)
 
 #### Naga
 
-- Prevent UB with invalid ray query calls on spirv. By @Vecvec in [#8390](https://github.com/gfx-rs/wgpu/pull/8390). 
+- Prevent UB with invalid ray query calls on spirv. By @Vecvec in [#8390](https://github.com/gfx-rs/wgpu/pull/8390).
 
 ### Bug Fixes
 
@@ -184,6 +206,7 @@ By @cwfitzgerald in [#8579](https://github.com/gfx-rs/wgpu/pull/8579).
 - The `STORAGE_READ_ONLY` texture usage is now permitted to coexist with other read-only usages. By @andyleiserson in [#8490](https://github.com/gfx-rs/wgpu/pull/8490).
 - Validate that buffers are unmapped in `write_buffer` calls. By @ErichDonGubler in [#8454](https://github.com/gfx-rs/wgpu/pull/8454).
 - Add WGSL parsing for mesh shaders. By @inner-daemons in [#8370](https://github.com/gfx-rs/wgpu/pull/8370).
+- Shorten critical section inside present such that the snatch write lock is no longer held during present, preventing other work happening on other threads. By @cwfitzgerald in [#8608](https://github.com/gfx-rs/wgpu/pull/8608).
 
 #### naga
 
@@ -192,6 +215,7 @@ By @cwfitzgerald in [#8579](https://github.com/gfx-rs/wgpu/pull/8579).
 #### DX12
 
 - Align copies b/w textures and buffers via a single intermediate buffer per copy when `D3D12_FEATURE_DATA_D3D12_OPTIONS13.UnrestrictedBufferTextureCopyPitchSupported` is `false`. By @ErichDonGubler in [#7721](https://github.com/gfx-rs/wgpu/pull/7721).
+- Fix detection of Int64 Buffer/Texture atomic features. By @cwfitzgerald in [#8667](https://github.com/gfx-rs/wgpu/pull/8667).
 
 #### Vulkan
 

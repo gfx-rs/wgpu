@@ -323,6 +323,8 @@ mod tests {
         driver: String::new(),
         driver_info: String::new(),
         backend: wgt::Backend::Vulkan,
+        subgroup_min_size: 32,
+        subgroup_max_size: 32,
         transient_saves_memory: true,
     };
 

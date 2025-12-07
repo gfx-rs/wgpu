@@ -555,6 +555,7 @@ pub struct CoreRenderBundleEncoder {
 
 #[derive(Debug)]
 pub struct CoreRenderBundle {
+    context: ContextWgpuCore,
     id: wgc::id::RenderBundleId,
 }
 
@@ -620,6 +621,7 @@ pub struct CoreTlas {
 pub struct CoreSurfaceOutputDetail {
     context: ContextWgpuCore,
     surface_id: wgc::id::SurfaceId,
+    error_sink: ErrorSink,
 }
 
 type ErrorSink = Arc<Mutex<ErrorSinkRaw>>;
@@ -3828,11 +3830,21 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
             self.context
                 .handle_error_fatal(err, "RenderBundleEncoder::finish");
         }
-        CoreRenderBundle { id }.into()
+        CoreRenderBundle {
+            context: self.context.clone(),
+            id,
+        }
+        .into()
     }
 }
 
 impl dispatch::RenderBundleInterface for CoreRenderBundle {}
+
+impl Drop for CoreRenderBundle {
+    fn drop(&mut self) {
+        self.context.0.render_bundle_drop(self.id)
+    }
+}
 
 impl dispatch::SurfaceInterface for CoreSurface {
     fn get_capabilities(&self, adapter: &dispatch::DispatchAdapter) -> wgt::SurfaceCapabilities {
@@ -3864,9 +3876,16 @@ impl dispatch::SurfaceInterface for CoreSurface {
         crate::SurfaceStatus,
         dispatch::DispatchSurfaceOutputDetail,
     ) {
+        let error_sink = if let Some(error_sink) = self.error_sink.lock().as_ref() {
+            error_sink.clone()
+        } else {
+            Arc::new(Mutex::new(ErrorSinkRaw::new()))
+        };
+
         let output_detail = CoreSurfaceOutputDetail {
             context: self.context.clone(),
             surface_id: self.id,
+            error_sink: error_sink.clone(),
         }
         .into();
 
@@ -3879,7 +3898,7 @@ impl dispatch::SurfaceInterface for CoreSurface {
                     .map(|id| CoreTexture {
                         context: self.context.clone(),
                         id,
-                        error_sink: Arc::new(Mutex::new(ErrorSinkRaw::new())),
+                        error_sink,
                     })
                     .map(Into::into);
 
@@ -3915,7 +3934,10 @@ impl dispatch::SurfaceOutputDetailInterface for CoreSurfaceOutputDetail {
     fn present(&self) {
         match self.context.0.surface_present(self.surface_id) {
             Ok(_status) => (),
-            Err(err) => self.context.handle_error_fatal(err, "Surface::present"),
+            Err(err) => {
+                self.context
+                    .handle_error_nolabel(&self.error_sink, err, "Surface::present");
+            }
         }
     }
 

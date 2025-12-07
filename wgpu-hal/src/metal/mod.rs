@@ -160,6 +160,12 @@ impl crate::Instance for Instance {
                         driver: String::new(),
                         driver_info: String::new(),
                         backend: wgt::Backend::Metal,
+                        // These are hardcoded based on typical values for Metal devices
+                        //
+                        // See <https://github.com/gpuweb/gpuweb/blob/main/proposals/subgroups.md#adapter-info>
+                        // for more information.
+                        subgroup_min_size: 4,
+                        subgroup_max_size: 64,
                         transient_saves_memory: shared.private_caps.supports_memoryless_storage,
                     },
                     features: shared.private_caps.features(),

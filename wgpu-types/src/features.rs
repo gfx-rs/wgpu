@@ -1238,6 +1238,15 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const EXPERIMENTAL_MESH_SHADER_POINTS = 1 << 55;
+
+        /// Enables creating texture arrays that are also multisampled.
+        ///
+        /// Without this feature, you cannot create a texture that has both a `sample_count` higher
+        /// than 1, and a `depth_or_array_layers` higher than 1.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (except VK_KHR_portability_subset if multisampleArrayImage is not available)
+        const MULTISAMPLE_ARRAY = 1 << 56;
     }
 
     /// Features that are not guaranteed to be supported.

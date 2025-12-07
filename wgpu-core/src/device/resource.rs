@@ -1436,7 +1436,9 @@ impl Device {
                 });
             }
 
-            if desc.size.depth_or_array_layers != 1 {
+            if desc.size.depth_or_array_layers != 1
+                && !self.features.contains(wgt::Features::MULTISAMPLE_ARRAY)
+            {
                 return Err(CreateTextureError::InvalidDimension(
                     TextureDimensionError::MultisampledDepthOrArrayLayer(
                         desc.size.depth_or_array_layers,
@@ -1741,11 +1743,17 @@ impl Device {
 
         // check if multisampled texture is seen as anything but 2D
         if texture.desc.sample_count > 1 && resolved_dimension != TextureViewDimension::D2 {
-            return Err(
-                resource::CreateTextureViewError::InvalidMultisampledTextureViewDimension(
-                    resolved_dimension,
-                ),
-            );
+            // Multisample is allowed on 2D arrays, only if explicitly supported
+            let multisample_array_exception = resolved_dimension == TextureViewDimension::D2Array
+                && self.features.contains(wgt::Features::MULTISAMPLE_ARRAY);
+
+            if !multisample_array_exception {
+                return Err(
+                    resource::CreateTextureViewError::InvalidMultisampledTextureViewDimension(
+                        resolved_dimension,
+                    ),
+                );
+            }
         }
 
         // check if the dimension is compatible with the texture

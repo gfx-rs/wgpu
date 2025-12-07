@@ -1,16 +1,13 @@
-#[cfg(not(target_arch = "wasm32"))]
+#![cfg_attr(target_arch = "wasm32", no_main)]
+#![cfg(not(target_arch = "wasm32"))]
+
 mod cli;
-#[cfg(not(target_arch = "wasm32"))]
 mod human;
-#[cfg(not(target_arch = "wasm32"))]
 mod report;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(test)]
+mod tests;
 mod texture;
 
 fn main() -> anyhow::Result<()> {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        cli::main()?;
-    }
-    Ok(())
+    cli::main()
 }

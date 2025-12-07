@@ -478,8 +478,14 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
     height: 768,
     optional_features: wgpu::Features::default(),
     base_test_parameters: wgpu_test::TestParameters::default().expect_fail(
-        wgpu_test::FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")
-            .panic("Image data mismatch"),
+        // RADV does this fine.
+        wgpu_test::FailureCase {
+            backends: Some(wgpu::Backends::VULKAN),
+            adapter: Some("AMD"),
+            driver: Some("AMD proprietary driver"),
+            ..wgpu_test::FailureCase::default()
+        }
+        .panic("Image data mismatch"),
     ),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,
