@@ -433,14 +433,17 @@ impl Device {
         }
         .map_err(DeviceError::from_hal)?;
 
+        // Cloned as we need them below anyway.
         let alignments = adapter.raw.capabilities.alignments.clone();
         let downlevel = adapter.raw.capabilities.downlevel.clone();
+        let limits = &adapter.raw.capabilities.limits;
 
         let enable_indirect_validation = instance_flags
             .contains(wgt::InstanceFlags::VALIDATION_INDIRECT_CALL)
-            && downlevel
-                .flags
-                .contains(wgt::DownlevelFlags::INDIRECT_EXECUTION);
+            && downlevel.flags.contains(
+                wgt::DownlevelFlags::INDIRECT_EXECUTION | wgt::DownlevelFlags::COMPUTE_SHADERS,
+            )
+            && limits.max_storage_buffers_per_shader_stage >= 2;
 
         let indirect_validation = if enable_indirect_validation {
             Some(crate::indirect_validation::IndirectValidation::new(
