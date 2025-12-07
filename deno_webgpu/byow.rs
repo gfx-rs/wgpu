@@ -327,7 +327,12 @@ fn raw_window(
   Ok((win_handle, display_handle))
 }
 
-#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd"))]
+#[cfg(any(
+  target_os = "linux",
+  target_os = "freebsd",
+  target_os = "netbsd",
+  target_os = "openbsd"
+))]
 fn raw_window(
   system: UnsafeWindowSurfaceSystem,
   window: *const c_void,
