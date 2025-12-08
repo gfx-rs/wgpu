@@ -29,8 +29,7 @@ webgpu:api,operation,compute_pipeline,overrides:*
 webgpu:api,operation,device,lost:*
 webgpu:api,operation,render_pass,storeOp:*
 fails-if(vulkan) webgpu:api,operation,vertex_state,correctness:array_stride_zero:*
-// Presumably vertex pulling, revisit after https://github.com/gfx-rs/wgpu/issues/7981 is fixed.
-fails-if(metal) webgpu:api,operation,vertex_state,correctness:setVertexBuffer_offset_and_attribute_offset:*
+webgpu:api,operation,vertex_state,correctness:setVertexBuffer_offset_and_attribute_offset:*
 webgpu:api,validation,buffer,create:*
 webgpu:api,validation,buffer,destroy:*
 fails-if(dx12) webgpu:api,validation,capability_checks,limits,maxBindGroups:setBindGroup,*
@@ -41,6 +40,7 @@ webgpu:api,validation,encoding,beginComputePass:*
 webgpu:api,validation,encoding,beginRenderPass:*
 webgpu:api,validation,encoding,cmds,clearBuffer:*
 webgpu:api,validation,encoding,cmds,compute_pass:*
+webgpu:api,validation,encoding,cmds,copyBufferToBuffer:*
 webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_with_invalid_or_destroyed_texture:*
 webgpu:api,validation,encoding,cmds,copyTextureToTexture:texture,device_mismatch:*
 webgpu:api,validation,encoding,cmds,copyTextureToTexture:mipmap_level:*
@@ -62,14 +62,18 @@ webgpu:api,validation,encoding,cmds,debug:debug_group_balanced:encoderType="rend
 webgpu:api,validation,encoding,cmds,debug:debug_group:*
 webgpu:api,validation,encoding,cmds,debug:debug_marker:*
 webgpu:api,validation,encoding,cmds,index_access:*
-//FAIL: webgpu:api,validation,encoding,cmds,render,draw:*
+//FAIL: some others in webgpu:api,validation,encoding,cmds,render,draw:*
+// due to e.g. https://github.com/gfx-rs/wgpu/issues/7912
 webgpu:api,validation,encoding,cmds,render,draw:index_buffer_OOB:*
 webgpu:api,validation,encoding,cmds,render,draw:unused_buffer_bound:*
 webgpu:api,validation,encoding,cmds,render,dynamic_state:*
 webgpu:api,validation,encoding,cmds,render,indirect_draw:indirect_buffer,device_mismatch:*
 webgpu:api,validation,encoding,cmds,render,indirect_draw:indirect_buffer_usage:*
 webgpu:api,validation,encoding,cmds,render,setIndexBuffer:*
+webgpu:api,validation,encoding,cmds,render,setPipeline:*
 webgpu:api,validation,encoding,cmds,render,setVertexBuffer:*
+webgpu:api,validation,encoding,cmds,render,state_tracking:vertex_buffers_do_not_inherit_between_render_passes:*
+webgpu:api,validation,encoding,cmds,render,state_tracking:vertex_buffers_inherit_from_previous_pipeline:*
 webgpu:api,validation,encoding,encoder_state:*
 webgpu:api,validation,encoding,encoder_open_state:non_pass_commands:*
 webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:*
@@ -121,7 +125,7 @@ fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:offset_and
 webgpu:api,validation,image_copy,layout_related:copy_end_overflows_u64:*
 // Fails with OOM in CI.
 fails-if(dx12) webgpu:api,validation,image_copy,layout_related:offset_alignment:*
-webgpu:api,validation,image_copy,texture_related:format:dimension="1d";*
+webgpu:api,validation,image_copy,texture_related:*
 // `vulkan` failure: https://github.com/gfx-rs/wgpu/issues/????
 fails-if(vulkan) webgpu:api,validation,queue,buffer_mapped:writeBuffer:*
 webgpu:api,validation,queue,buffer_mapped:copyBufferToBuffer:*
