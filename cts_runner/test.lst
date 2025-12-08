@@ -180,3 +180,4 @@ webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="l
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="switch1"
 //FAIL: 9 invalid_statements subtests due to https://github.com/gfx-rs/wgpu/issues/7733
 webgpu:api,validation,render_pipeline,vertex_state:many_attributes_overlapping:*
+webgpu:api,validation,encoding,queries,begin_end:occlusion_query,*
