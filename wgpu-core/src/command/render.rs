@@ -44,7 +44,7 @@ use crate::{
         ParentDevice, QuerySet, Texture, TextureView, TextureViewNotRenderableReason,
     },
     track::{ResourceUsageCompatibilityError, Tracker, UsageScope},
-    Label,
+    validation, Label,
 };
 
 #[cfg(feature = "serde")]
@@ -1680,6 +1680,13 @@ impl Global {
                     arc_desc.color_attachments.push(None);
                 }
             }
+
+            validation::validate_color_attachment_bytes_per_sample(
+                &arc_desc.color_attachments,
+                |at| at.view.desc.format,
+                device.limits.max_color_attachment_bytes_per_sample,
+            )
+            .map_err(RenderPassErrorInner::ColorAttachment)?;
 
             arc_desc.depth_stencil_attachment =
             // https://gpuweb.github.io/gpuweb/#abstract-opdef-gpurenderpassdepthstencilattachment-gpurenderpassdepthstencilattachment-valid-usage

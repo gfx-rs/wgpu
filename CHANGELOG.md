@@ -195,6 +195,7 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 - Corrected documentation of the minimum alignment of the _end_ of a mapped range of a buffer (it is 4, not 8). By @kpreid in [#8450](https://github.com/gfx-rs/wgpu/pull/8450).
 - `util::StagingBelt` now takes a `Device` when it is created instead of when it is used. By @kpreid in [#8462](https://github.com/gfx-rs/wgpu/pull/8462).
 - `wgpu_hal::vulkan::Texture` API changes to handle externally-created textures and memory more flexibly. By @s-ol in [#8512](https://github.com/gfx-rs/wgpu/pull/8512), [#8521](https://github.com/gfx-rs/wgpu/pull/8521).
+- Render passes are now validated against the `maxColorAttachmentBytesPerSample` limit. By @andyleiserson in [#8697](https://github.com/gfx-rs/wgpu/pull/8697).
 
 #### Metal
 
