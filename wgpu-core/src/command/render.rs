@@ -1278,8 +1278,10 @@ impl RenderPassInfo {
             }
 
             validation::validate_color_attachment_bytes_per_sample(
-                color_attachments,
-                |at| at.view.desc.format,
+                color_attachments
+                    .iter()
+                    .flatten()
+                    .map(|at| at.view.desc.format),
                 device.limits.max_color_attachment_bytes_per_sample,
             )
             .map_err(RenderPassErrorInner::ColorAttachment)?;

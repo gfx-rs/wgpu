@@ -1417,14 +1417,12 @@ impl Interface {
 /// descriptor. A closure is used to access the attachment format.
 ///
 /// Implements <https://gpuweb.github.io/gpuweb/#abstract-opdef-calculating-color-attachment-bytes-per-sample>.
-pub fn validate_color_attachment_bytes_per_sample<'a, T: 'a>(
-    attachments: impl IntoIterator<Item = &'a Option<T>>,
-    format_fn: impl Fn(&T) -> wgt::TextureFormat,
+pub fn validate_color_attachment_bytes_per_sample(
+    attachment_formats: impl IntoIterator<Item = wgt::TextureFormat>,
     limit: u32,
 ) -> Result<(), crate::command::ColorAttachmentError> {
     let mut total_bytes_per_sample: u32 = 0;
-    for attachment in attachments.into_iter().filter_map(Option::as_ref) {
-        let format = format_fn(attachment);
+    for format in attachment_formats {
         let byte_cost = format.target_pixel_byte_cost().unwrap();
         let alignment = format.target_component_alignment().unwrap();
 

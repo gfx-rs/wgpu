@@ -4135,8 +4135,7 @@ impl Device {
         }
 
         validation::validate_color_attachment_bytes_per_sample(
-            color_targets,
-            |cs| cs.format,
+            color_targets.iter().flatten().map(|cs| cs.format),
             self.limits.max_color_attachment_bytes_per_sample,
         )
         .map_err(pipeline::CreateRenderPipelineError::ColorAttachment)?;
