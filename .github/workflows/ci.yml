@@ -134,6 +134,13 @@ jobs:
             tier: 2
             kind: wgpu-only
 
+          # NetBSD
+          - name: NetBSD x86_64
+            os: ubuntu-24.04
+            target: x86_64-unknown-netbsd
+            tier: 2
+            kind: wgpu-only
+
           # Android
           - name: Android aarch64
             os: ubuntu-24.04
