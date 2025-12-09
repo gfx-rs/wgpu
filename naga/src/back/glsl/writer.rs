@@ -330,7 +330,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 TypeInner::Image {
                     mut dim,
                     arrayed,
-                    class,
+                    mut class,
                 } => {
                     // Gather the storage format if needed
                     let storage_format_access = match self.module.types[global.ty].inner {
@@ -377,6 +377,10 @@ impl<'a, W: Write> Writer<'a, W> {
                     // All images in glsl are `uniform`
                     // The trailing space is important
                     write!(self.out, "uniform ")?;
+
+                    if self.needs_depth_fix(ep_info, handle, &mut class) {
+                        class = crate::ImageClass::Sampled { kind: crate::ScalarKind::Float, multi: false };
+                    }
 
                     // write the type
                     //
@@ -451,6 +455,27 @@ impl<'a, W: Write> Writer<'a, W> {
 
         // Collect all reflection info and return it to the user
         self.collect_reflection_info()
+    }
+
+    fn needs_depth_fix(&mut self, ep_info: &valid::FunctionInfo, handle: Handle<crate::GlobalVariable>, class: &crate::ImageClass) -> bool {
+        if let crate::ImageClass::Depth { multi: false } = class {
+            let has_shadow_sampler = ep_info.sampling_set.iter().all(|key| {
+                let data = &self.module.global_variables[key.sampler];
+                if key.image != handle {
+                    return false;
+                }
+                return if let TypeInner::Sampler { comparison: true } = &self.module.types[data.ty].inner {
+                    true
+                } else {
+                    false
+                }
+            });
+
+            !has_shadow_sampler
+        }
+        else {
+            false
+        }
     }
 
     fn write_array_size(
@@ -2586,6 +2611,14 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.write_expr(expr, ctx)?;
                 }
 
+                let needs_depth_fix = if let Expression::GlobalVariable(global_handle) = ctx.expressions[image] {
+                    let ep_info = self.info.get_entry_point(self.entry_point_idx as usize);
+                    self.needs_depth_fix(ep_info, global_handle, &class)
+                }
+                else {
+                    false
+                };
+
                 match level {
                     // Auto needs no more arguments
                     crate::SampleLevel::Auto => (),
@@ -2604,7 +2637,16 @@ impl<'a, W: Write> Writer<'a, W> {
                     // Exact and bias require another argument
                     crate::SampleLevel::Exact(expr) => {
                         write!(self.out, ", ")?;
+
+                        if needs_depth_fix {
+                            write!(self.out, "float(")?;
+                        }
+
                         self.write_expr(expr, ctx)?;
+
+                        if needs_depth_fix {
+                            write!(self.out, ")")?;
+                        }
                     }
                     crate::SampleLevel::Bias(_) => {
                         // This needs to be done after the offset writing
@@ -2651,6 +2693,11 @@ impl<'a, W: Write> Writer<'a, W> {
 
                 // End the function
                 write!(self.out, ")")?
+
+                if needs_depth_fix {
+                    // parser thinks it will yield f32, but in reality it yields vec4f
+                    write!(self.out, ".x")?;
+                }
             }
             Expression::ImageLoad {
                 image,
