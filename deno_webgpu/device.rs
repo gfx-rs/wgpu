@@ -506,7 +506,7 @@ impl GPUDevice {
   fn create_render_pipeline(
     &self,
     #[webidl] descriptor: super::render_pipeline::GPURenderPipelineDescriptor,
-  ) -> Result<GPURenderPipeline, JsErrorBox> {
+  ) -> GPURenderPipeline {
     self.new_render_pipeline(descriptor)
   }
 
@@ -526,7 +526,7 @@ impl GPUDevice {
   async fn create_render_pipeline_async(
     &self,
     #[webidl] descriptor: super::render_pipeline::GPURenderPipelineDescriptor,
-  ) -> Result<GPURenderPipeline, JsErrorBox> {
+  ) -> GPURenderPipeline {
     self.new_render_pipeline(descriptor)
   }
 
@@ -771,7 +771,7 @@ impl GPUDevice {
   fn new_render_pipeline(
     &self,
     descriptor: super::render_pipeline::GPURenderPipelineDescriptor,
-  ) -> Result<GPURenderPipeline, JsErrorBox> {
+  ) -> GPURenderPipeline {
     let vertex = wgpu_core::pipeline::VertexState {
       stage: ProgrammableStageDescriptor {
         module: descriptor.vertex.module.id,
@@ -866,10 +866,10 @@ impl GPUDevice {
         .alpha_to_coverage_enabled,
     };
 
-    let fragment = descriptor
-      .fragment
-      .map(|fragment| {
-        Ok::<_, JsErrorBox>(wgpu_core::pipeline::FragmentState {
+    let fragment =
+      descriptor
+        .fragment
+        .map(|fragment| wgpu_core::pipeline::FragmentState {
           stage: ProgrammableStageDescriptor {
             module: fragment.module.id,
             entry_point: fragment.entry_point.map(Into::into),
@@ -881,33 +881,28 @@ impl GPUDevice {
               .targets
               .into_iter()
               .map(|target| {
-                target
-                  .into_option()
-                  .map(|target| {
-                    Ok(wgpu_types::ColorTargetState {
-                      format: target.format.into(),
-                      blend: target.blend.map(|blend| wgpu_types::BlendState {
-                        color: wgpu_types::BlendComponent {
-                          src_factor: blend.color.src_factor.into(),
-                          dst_factor: blend.color.dst_factor.into(),
-                          operation: blend.color.operation.into(),
-                        },
-                        alpha: wgpu_types::BlendComponent {
-                          src_factor: blend.alpha.src_factor.into(),
-                          dst_factor: blend.alpha.dst_factor.into(),
-                          operation: blend.alpha.operation.into(),
-                        },
-                      }),
-                      write_mask: target.write_mask.into(),
-                    })
-                  })
-                  .transpose()
+                target.into_option().map(|target| {
+                  wgpu_types::ColorTargetState {
+                    format: target.format.into(),
+                    blend: target.blend.map(|blend| wgpu_types::BlendState {
+                      color: wgpu_types::BlendComponent {
+                        src_factor: blend.color.src_factor.into(),
+                        dst_factor: blend.color.dst_factor.into(),
+                        operation: blend.color.operation.into(),
+                      },
+                      alpha: wgpu_types::BlendComponent {
+                        src_factor: blend.alpha.src_factor.into(),
+                        dst_factor: blend.alpha.dst_factor.into(),
+                        operation: blend.alpha.operation.into(),
+                      },
+                    }),
+                    write_mask: target.write_mask.into(),
+                  }
+                })
               })
-              .collect::<Result<_, JsErrorBox>>()?,
+              .collect(),
           ),
-        })
-      })
-      .transpose()?;
+        });
 
     let wgpu_descriptor = wgpu_core::pipeline::RenderPipelineDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
@@ -929,12 +924,12 @@ impl GPUDevice {
 
     self.error_handler.push_error(err);
 
-    Ok(GPURenderPipeline {
+    GPURenderPipeline {
       instance: self.instance.clone(),
       error_handler: self.error_handler.clone(),
       id,
       label: descriptor.label,
-    })
+    }
   }
 }
 
