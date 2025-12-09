@@ -38,8 +38,7 @@ webgpu:api,validation,createBindGroup:buffer,effective_buffer_binding_size:*
 webgpu:api,validation,encoding,beginComputePass:*
 webgpu:api,validation,encoding,beginRenderPass:*
 webgpu:api,validation,encoding,cmds,clearBuffer:*
-webgpu:api,validation,encoding,cmds,compute_pass:set_pipeline:*
-webgpu:api,validation,encoding,cmds,compute_pass:dispatch_sizes:*
+webgpu:api,validation,encoding,cmds,compute_pass:*
 webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_with_invalid_or_destroyed_texture:*
 webgpu:api,validation,encoding,cmds,copyTextureToTexture:texture,device_mismatch:*
 webgpu:api,validation,encoding,cmds,copyTextureToTexture:mipmap_level:*
