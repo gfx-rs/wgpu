@@ -85,14 +85,9 @@ webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:buffer_bi
 webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:sampler_binding,render_pipeline:*
 webgpu:api,validation,encoding,queries,general:occlusion_query,query_index:*
 webgpu:shader,validation,extension,dual_source_blending:blend_src_syntax_validation:*
+webgpu:api,validation,image_copy,buffer_related:*
 webgpu:api,validation,image_copy,buffer_texture_copies:depth_stencil_format,copy_usage_and_aspect:*
 webgpu:api,validation,image_copy,buffer_texture_copies:depth_stencil_format,copy_buffer_size:*
-// `vulkan` failure: https://github.com/gfx-rs/wgpu/issues/????
-fails-if(vulkan) webgpu:api,validation,queue,buffer_mapped:writeBuffer:*
-webgpu:api,validation,queue,buffer_mapped:copyBufferToBuffer:*
-webgpu:api,validation,queue,buffer_mapped:copyBufferToTexture:*
-webgpu:api,validation,queue,buffer_mapped:copyTextureToBuffer:*
-webgpu:api,validation,queue,buffer_mapped:map_command_recording_order:*
 // image_copy depth/stencil failures on dx12: https://github.com/gfx-rs/wgpu/issues/8133
 fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:depth_stencil_format,copy_buffer_offset:format="stencil8";aspect="stencil-only";copyType="CopyB2T"
 fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:depth_stencil_format,copy_buffer_offset:format="stencil8";aspect="stencil-only";copyType="CopyT2B"
@@ -124,6 +119,12 @@ webgpu:api,validation,image_copy,layout_related:copy_end_overflows_u64:*
 // Fails with OOM in CI.
 fails-if(dx12) webgpu:api,validation,image_copy,layout_related:offset_alignment:*
 webgpu:api,validation,image_copy,texture_related:format:dimension="1d";*
+// `vulkan` failure: https://github.com/gfx-rs/wgpu/issues/????
+fails-if(vulkan) webgpu:api,validation,queue,buffer_mapped:writeBuffer:*
+webgpu:api,validation,queue,buffer_mapped:copyBufferToBuffer:*
+webgpu:api,validation,queue,buffer_mapped:copyBufferToTexture:*
+webgpu:api,validation,queue,buffer_mapped:copyTextureToBuffer:*
+webgpu:api,validation,queue,buffer_mapped:map_command_recording_order:*
 webgpu:api,validation,queue,submit:command_buffer,*
 webgpu:api,validation,render_pass,render_pass_descriptor:attachments,*
 webgpu:api,validation,render_pass,render_pass_descriptor:color_attachments,depthSlice,*
