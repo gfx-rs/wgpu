@@ -1,14 +1,15 @@
 use alloc::{
     borrow::ToOwned, format, string::String, string::ToString as _, sync::Arc, vec, vec::Vec,
 };
-use arrayvec::ArrayVec;
 use core::{cmp::max, convert::TryInto, num::NonZeroU32, ptr, sync::atomic::Ordering};
+
+use arrayvec::ArrayVec;
 use glow::HasContext;
 use naga::FastHashMap;
 
-use super::{conv, lock, MaybeMutex, PrivateCapabilities, ShaderModule};
+use super::{conv, lock, MaybeMutex, PrivateCapabilities};
 use crate::auxil::map_naga_stage;
-use crate::{ProgrammableStage, TlasInstance};
+use crate::TlasInstance;
 
 type ShaderStage<'a> = (
     naga::ShaderStage,
@@ -352,7 +353,7 @@ impl super::Device {
         Ok(program)
     }
 
-    fn create_constant_hash(stage: &ProgrammableStage<ShaderModule>) -> Vec<u8>
+    fn create_constant_hash(stage: &crate::ProgrammableStage<super::ShaderModule>) -> Vec<u8>
     {
         let mut buf: Vec<u8> = Vec::new();
 
