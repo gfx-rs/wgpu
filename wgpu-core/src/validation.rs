@@ -1411,10 +1411,9 @@ impl Interface {
     }
 }
 
-/// Validate a list of color attachments against `maxColorAttachmentBytesPerSample`.
+/// Validate a list of color attachment formats against `maxColorAttachmentBytesPerSample`.
 ///
-/// The color attachments can be from a render pass descriptor or a pipeline
-/// descriptor. A closure is used to access the attachment format.
+/// The color attachments can be from a render pass descriptor or a pipeline descriptor.
 ///
 /// Implements <https://gpuweb.github.io/gpuweb/#abstract-opdef-calculating-color-attachment-bytes-per-sample>.
 pub fn validate_color_attachment_bytes_per_sample(
