@@ -321,7 +321,7 @@ impl super::Device {
                 shader_id: stage.module.id,
                 entry_point: stage.entry_point.to_owned(),
                 zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
-                constant_hash: Self::create_constant_hash(stage)
+                constant_hash: Self::create_constant_hash(stage),
             });
         }
         let mut guard = self
@@ -353,18 +353,16 @@ impl super::Device {
         Ok(program)
     }
 
-    fn create_constant_hash(stage: &crate::ProgrammableStage<super::ShaderModule>) -> Vec<u8>
-    {
+    fn create_constant_hash(stage: &crate::ProgrammableStage<super::ShaderModule>) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
 
-        for (key, value) in stage.constants.iter()
-        {
+        for (key, value) in stage.constants.iter() {
             buf.extend_from_slice(key.as_bytes());
             buf.extend_from_slice(&value.to_le_bytes());
         }
 
         buf
-}
+    }
 
     unsafe fn create_program<'a>(
         gl: &glow::Context,
