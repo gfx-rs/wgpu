@@ -3,10 +3,11 @@ use super::{
     CreateIndirectValidationPipelineError,
 };
 use crate::{
+    command::RenderPassErrorInner,
     device::{queue::TempResource, Device, DeviceError},
     lock::{rank, Mutex},
     pipeline::{CreateComputePipelineError, CreateShaderModuleError},
-    resource::{StagingBuffer, Trackable},
+    resource::{RawResourceAccess as _, StagingBuffer, Trackable},
     snatch::SnatchGuard,
     track::TrackerIndex,
     FastHashMap,
@@ -199,7 +200,7 @@ impl Draw {
         temp_resources: &mut Vec<TempResource>,
         encoder: &mut dyn hal::DynCommandEncoder,
         batcher: DrawBatcher,
-    ) -> Result<(), DeviceError> {
+    ) -> Result<(), RenderPassErrorInner> {
         let mut batches = batcher.batches;
 
         if batches.is_empty() {
@@ -377,6 +378,9 @@ impl Draw {
             unsafe {
                 encoder.set_bind_group(pipeline_layout, 0, Some(metadata_bind_group), &[]);
             }
+
+            // Make sure the indirect buffer is still valid.
+            batch.src_buffer.try_raw(snatch_guard)?;
 
             let src_bind_group = batch
                 .src_buffer

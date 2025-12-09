@@ -65,6 +65,8 @@ webgpu:api,validation,encoding,cmds,index_access:*
 webgpu:api,validation,encoding,cmds,render,draw:index_buffer_OOB:*
 webgpu:api,validation,encoding,cmds,render,draw:unused_buffer_bound:*
 webgpu:api,validation,encoding,cmds,render,dynamic_state:*
+webgpu:api,validation,encoding,cmds,render,indirect_draw:indirect_buffer,device_mismatch:*
+webgpu:api,validation,encoding,cmds,render,indirect_draw:indirect_buffer_usage:*
 webgpu:api,validation,encoding,cmds,render,setIndexBuffer:*
 webgpu:api,validation,encoding,cmds,render,setVertexBuffer:*
 webgpu:api,validation,encoding,encoder_state:*
