@@ -4,7 +4,7 @@
 
 using metal::uint;
 
-struct PushConstants {
+struct ImmediateData {
     uint index;
     char _pad1[4];
     metal::float2 double_;
@@ -24,10 +24,10 @@ struct main_Output {
 fragment main_Output main_(
   main_Input varyings [[stage_in]]
 , uint primitive_index [[primitive_id]]
-, constant PushConstants& pc [[buffer(1)]]
+, constant ImmediateData& im [[buffer(1)]]
 ) {
     const FragmentIn in = { varyings.color, primitive_index };
-    uint _e4 = pc.index;
+    uint _e4 = im.index;
     if (in.primitive_index == _e4) {
         return main_Output { in.color };
     } else {

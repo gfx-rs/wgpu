@@ -79,7 +79,6 @@ impl Deref for QueueWriteBufferView {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
-        log::warn!("Reading from a QueueWriteBufferView won't yield the contents of the buffer and may be slow.");
         self.inner.slice()
     }
 }

@@ -1,4 +1,4 @@
-use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task};
+use std::{borrow::Cow, iter, mem};
 
 use bytemuck::{Pod, Zeroable};
 use glam::{Affine3A, Mat4, Quat, Vec3};
@@ -95,28 +95,6 @@ fn affine_to_rows(mat: &Affine3A) -> [f32; 12] {
         row_2.z,
         translation.z,
     ]
-}
-
-/// A wrapper for `pop_error_scope` futures that panics if an error occurs.
-///
-/// Given a future `inner` of an `Option<E>` for some error type `E`,
-/// wait for the future to be ready, and panic if its value is `Some`.
-///
-/// This can be done simpler with `FutureExt`, but we don't want to add
-/// a dependency just for this small case.
-struct ErrorFuture<F> {
-    inner: F,
-}
-impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
-    type Output = ();
-    fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<()> {
-        let inner = unsafe { self.map_unchecked_mut(|me| &mut me.inner) };
-        inner.poll(cx).map(|error| {
-            if let Some(e) = error {
-                panic!("Rendering {e}");
-            }
-        })
-    }
 }
 
 struct Example {
@@ -406,8 +384,6 @@ impl crate::framework::Example for Example {
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        device.push_error_scope(wgpu::ErrorFilter::Validation);
-
         let anim_time = self.animation_timer.time();
 
         self.tlas[0].as_mut().unwrap().transform =
@@ -480,8 +456,14 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
     height: 768,
     optional_features: wgpu::Features::default(),
     base_test_parameters: wgpu_test::TestParameters::default().expect_fail(
-        wgpu_test::FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")
-            .panic("Image data mismatch"),
+        // RADV does this fine.
+        wgpu_test::FailureCase {
+            backends: Some(wgpu::Backends::VULKAN),
+            adapter: Some("AMD"),
+            driver: Some("AMD proprietary driver"),
+            ..wgpu_test::FailureCase::default()
+        }
+        .panic("Image data mismatch"),
     ),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
     _phantom: std::marker::PhantomData::<Example>,

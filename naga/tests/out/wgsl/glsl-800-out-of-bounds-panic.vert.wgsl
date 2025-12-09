@@ -13,7 +13,7 @@ struct VertexOutput {
 
 @group(0) @binding(0) 
 var<uniform> global: Globals;
-var<push_constant> global_1: VertexPushConstants;
+var<immediate> global_1: VertexPushConstants;
 var<private> position_1: vec2<f32>;
 var<private> color_1: vec4<f32>;
 var<private> frag_color: vec4<f32>;

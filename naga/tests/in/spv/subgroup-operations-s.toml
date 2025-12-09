@@ -1,4 +1,4 @@
-god_mode = true
+capabilities = "SUBGROUP"
 targets = "METAL | GLSL | HLSL | WGSL"
 
 [msl]

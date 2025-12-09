@@ -150,6 +150,8 @@ pub enum QueryUseError {
         set_type: SimplifiedQueryType,
         query_type: SimplifiedQueryType,
     },
+    #[error("A query of type {query_type:?} was not ended before the encoder was finished")]
+    MissingEnd { query_type: SimplifiedQueryType },
 }
 
 impl WebGpuError for QueryUseError {
@@ -160,7 +162,8 @@ impl WebGpuError for QueryUseError {
             | Self::UsedTwiceInsideRenderpass { .. }
             | Self::AlreadyStarted { .. }
             | Self::AlreadyStopped
-            | Self::IncompatibleType { .. } => ErrorType::Validation,
+            | Self::IncompatibleType { .. }
+            | Self::MissingEnd { .. } => ErrorType::Validation,
         }
     }
 }

@@ -3,13 +3,10 @@
 
 use std::process::ExitCode;
 
-use anyhow::Context;
 use cli::Args;
 
 use crate::{
     cli::Subcommand,
-    fs::remove_dir_all,
-    path::join_path,
     process::{which, EasyCommand},
 };
 
@@ -63,15 +60,6 @@ fn run(args: Args) -> anyhow::Result<()> {
             )
             .success()?;
             Ok(())
-        }
-        Subcommand::Bench { clean } => {
-            if clean {
-                let criterion_artifact_dir = join_path(["target", "criterion"]);
-                log::info!("removing {}", criterion_artifact_dir.display());
-                remove_dir_all(&criterion_artifact_dir)
-                    .with_context(|| format!("failed to remove {criterion_artifact_dir:?}"))?;
-            }
-            EasyCommand::simple("cargo", ["bench"]).success()
         }
         Subcommand::Validate(cmd) => validate::validate(cmd),
     }

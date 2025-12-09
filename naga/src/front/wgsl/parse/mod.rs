@@ -1930,15 +1930,87 @@ impl Parser {
                 }
             }
             "acceleration_structure" => {
+                if !lexer
+                    .enable_extensions
+                    .contains(ImplementedEnableExtension::WgpuRayQuery)
+                {
+                    return Err(Box::new(Error::EnableExtensionNotEnabled {
+                        kind: EnableExtension::Implemented(
+                            ImplementedEnableExtension::WgpuRayQuery,
+                        ),
+                        span,
+                    }));
+                }
                 let vertex_return = lexer.next_acceleration_structure_flags()?;
+                if !lexer
+                    .enable_extensions
+                    .contains(ImplementedEnableExtension::WgpuRayQueryVertexReturn)
+                    && vertex_return
+                {
+                    return Err(Box::new(Error::EnableExtensionNotEnabled {
+                        kind: EnableExtension::Implemented(
+                            ImplementedEnableExtension::WgpuRayQueryVertexReturn,
+                        ),
+                        span,
+                    }));
+                }
                 ast::Type::AccelerationStructure { vertex_return }
             }
             "ray_query" => {
+                if !lexer
+                    .enable_extensions
+                    .contains(ImplementedEnableExtension::WgpuRayQuery)
+                {
+                    return Err(Box::new(Error::EnableExtensionNotEnabled {
+                        kind: EnableExtension::Implemented(
+                            ImplementedEnableExtension::WgpuRayQuery,
+                        ),
+                        span,
+                    }));
+                }
                 let vertex_return = lexer.next_acceleration_structure_flags()?;
+                if !lexer
+                    .enable_extensions
+                    .contains(ImplementedEnableExtension::WgpuRayQueryVertexReturn)
+                    && vertex_return
+                {
+                    return Err(Box::new(Error::EnableExtensionNotEnabled {
+                        kind: EnableExtension::Implemented(
+                            ImplementedEnableExtension::WgpuRayQueryVertexReturn,
+                        ),
+                        span,
+                    }));
+                }
                 ast::Type::RayQuery { vertex_return }
             }
-            "RayDesc" => ast::Type::RayDesc,
-            "RayIntersection" => ast::Type::RayIntersection,
+            "RayDesc" => {
+                if !lexer
+                    .enable_extensions
+                    .contains(ImplementedEnableExtension::WgpuRayQuery)
+                {
+                    return Err(Box::new(Error::EnableExtensionNotEnabled {
+                        kind: EnableExtension::Implemented(
+                            ImplementedEnableExtension::WgpuRayQuery,
+                        ),
+                        span,
+                    }));
+                }
+                ast::Type::RayDesc
+            }
+            "RayIntersection" => {
+                if !lexer
+                    .enable_extensions
+                    .contains(ImplementedEnableExtension::WgpuRayQuery)
+                {
+                    return Err(Box::new(Error::EnableExtensionNotEnabled {
+                        kind: EnableExtension::Implemented(
+                            ImplementedEnableExtension::WgpuRayQuery,
+                        ),
+                        span,
+                    }));
+                }
+                ast::Type::RayIntersection
+            }
             _ => return Ok(None),
         }))
     }

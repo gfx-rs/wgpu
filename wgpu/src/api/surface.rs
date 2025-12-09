@@ -99,6 +99,13 @@ impl Surface<'_> {
         *conf = Some(config.clone());
     }
 
+    /// Returns the current configuration of [`Surface`], if configured.
+    ///
+    /// This is similar to [WebGPU `GPUcCanvasContext::getConfiguration`](https://gpuweb.github.io/gpuweb/#dom-gpucanvascontext-getconfiguration).
+    pub fn get_configuration(&self) -> Option<SurfaceConfiguration> {
+        self.config.lock().clone()
+    }
+
     /// Returns the next texture to be presented by the swapchain for drawing.
     ///
     /// In order to present the [`SurfaceTexture`] returned by this method,

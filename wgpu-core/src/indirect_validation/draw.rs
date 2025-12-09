@@ -3,10 +3,11 @@ use super::{
     CreateIndirectValidationPipelineError,
 };
 use crate::{
+    command::RenderPassErrorInner,
     device::{queue::TempResource, Device, DeviceError},
     lock::{rank, Mutex},
     pipeline::{CreateComputePipelineError, CreateShaderModuleError},
-    resource::{StagingBuffer, Trackable},
+    resource::{RawResourceAccess as _, StagingBuffer, Trackable},
     snatch::SnatchGuard,
     track::TrackerIndex,
     FastHashMap,
@@ -41,7 +42,7 @@ const BUFFER_SIZE: wgt::BufferSize = unsafe { wgt::BufferSize::new_unchecked(1_0
 /// - max_bind_groups: 3,
 /// - max_dynamic_storage_buffers_per_pipeline_layout: 1,
 /// - max_storage_buffers_per_shader_stage: 3,
-/// - max_push_constant_size: 8,
+/// - max_immediate_size: 8,
 ///
 /// These are all indirectly satisfied by `DownlevelFlags::INDIRECT_EXECUTION`, which is also
 /// required for this module's functionality to work.
@@ -80,7 +81,7 @@ impl Draw {
                 src_bind_group_layout.as_ref(),
                 dst_bind_group_layout.as_ref(),
             ],
-            push_constant_ranges: &[wgt::PushConstantRange {
+            immediates_ranges: &[wgt::ImmediateRange {
                 stages: wgt::ShaderStages::COMPUTE,
                 range: 0..8,
             }],
@@ -199,7 +200,7 @@ impl Draw {
         temp_resources: &mut Vec<TempResource>,
         encoder: &mut dyn hal::DynCommandEncoder,
         batcher: DrawBatcher,
-    ) -> Result<(), DeviceError> {
+    ) -> Result<(), RenderPassErrorInner> {
         let mut batches = batcher.batches;
 
         if batches.is_empty() {
@@ -364,7 +365,7 @@ impl Draw {
                 (batch.metadata_buffer_offset / size_of::<MetadataEntry>() as u64) as u32;
             let metadata_count = batch.entries.len() as u32;
             unsafe {
-                encoder.set_push_constants(
+                encoder.set_immediates(
                     pipeline_layout,
                     wgt::ShaderStages::COMPUTE,
                     0,
@@ -377,6 +378,9 @@ impl Draw {
             unsafe {
                 encoder.set_bind_group(pipeline_layout, 0, Some(metadata_bind_group), &[]);
             }
+
+            // Make sure the indirect buffer is still valid.
+            batch.src_buffer.try_raw(snatch_guard)?;
 
             let src_bind_group = batch
                 .src_buffer
@@ -483,7 +487,7 @@ fn create_validation_module(
     let module = panic!("Indirect validation requires the wgsl feature flag to be enabled!");
 
     let info = crate::device::create_validator(
-        wgt::Features::PUSH_CONSTANTS,
+        wgt::Features::IMMEDIATES,
         wgt::DownlevelFlags::empty(),
         naga::valid::ValidationFlags::all(),
     )

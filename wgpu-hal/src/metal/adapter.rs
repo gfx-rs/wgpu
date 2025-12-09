@@ -945,7 +945,7 @@ impl super::PrivateCapabilities {
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::VERTEX_WRITABLE_STORAGE
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | F::PUSH_CONSTANTS
+            | F::IMMEDIATES
             | F::POLYGON_MODE_LINE
             | F::CLEAR_TEXTURE
             | F::TEXTURE_FORMAT_16BIT_NORM
@@ -991,6 +991,13 @@ impl super::PrivateCapabilities {
                 | F::PARTIALLY_BOUND_BINDING_ARRAY,
             self.msl_version >= MTLLanguageVersion::V3_0
                 && self.supports_arrays_of_textures
+                && self.argument_buffers as u64 >= MTLArgumentBuffersTier::Tier2 as u64,
+        );
+        features.set(
+            F::STORAGE_RESOURCE_BINDING_ARRAY,
+            self.msl_version >= MTLLanguageVersion::V3_0
+                && self.supports_arrays_of_textures
+                && self.supports_arrays_of_textures_write
                 && self.argument_buffers as u64 >= MTLArgumentBuffersTier::Tier2 as u64,
         );
         features.set(
@@ -1093,9 +1100,7 @@ impl super::PrivateCapabilities {
                 max_vertex_buffers: self.max_vertex_buffers,
                 max_vertex_attributes: 31,
                 max_vertex_buffer_array_stride: base.max_vertex_buffer_array_stride,
-                min_subgroup_size: 4,
-                max_subgroup_size: 64,
-                max_push_constant_size: 0x1000,
+                max_immediate_size: 0x1000,
                 min_uniform_buffer_offset_alignment: self.buffer_alignment as u32,
                 min_storage_buffer_offset_alignment: self.buffer_alignment as u32,
                 max_inter_stage_shader_components: self.max_varying_components,

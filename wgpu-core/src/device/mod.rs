@@ -400,8 +400,8 @@ pub fn create_validator(
     use naga::valid::Capabilities as Caps;
     let mut caps = Caps::empty();
     caps.set(
-        Caps::PUSH_CONSTANT,
-        features.contains(wgt::Features::PUSH_CONSTANTS),
+        Caps::IMMEDIATES,
+        features.contains(wgt::Features::IMMEDIATES),
     );
     caps.set(Caps::FLOAT64, features.contains(wgt::Features::SHADER_F64));
     caps.set(
@@ -417,21 +417,38 @@ pub fn create_validator(
         features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX),
     );
     caps.set(
-        Caps::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
+        Caps::TEXTURE_AND_SAMPLER_BINDING_ARRAY,
+        features.contains(wgt::Features::TEXTURE_BINDING_ARRAY),
+    );
+    caps.set(
+        Caps::BUFFER_BINDING_ARRAY,
+        features.contains(wgt::Features::BUFFER_BINDING_ARRAY),
+    );
+    caps.set(
+        Caps::STORAGE_TEXTURE_BINDING_ARRAY,
+        features.contains(wgt::Features::TEXTURE_BINDING_ARRAY)
+            && features.contains(wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY),
+    );
+    caps.set(
+        Caps::STORAGE_BUFFER_BINDING_ARRAY,
+        features.contains(wgt::Features::BUFFER_BINDING_ARRAY)
+            && features.contains(wgt::Features::STORAGE_RESOURCE_BINDING_ARRAY),
+    );
+    caps.set(
+        Caps::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING,
         features
             .contains(wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING),
     );
     caps.set(
-        Caps::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+        Caps::BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING,
+        features.contains(wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS),
+    );
+    caps.set(
+        Caps::STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING,
         features.contains(wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
     );
     caps.set(
-        Caps::UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
-        features.contains(wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS),
-    );
-    // TODO: This needs a proper wgpu feature
-    caps.set(
-        Caps::SAMPLER_NON_UNIFORM_INDEXING,
+        Caps::STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING,
         features
             .contains(wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING),
     );

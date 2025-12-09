@@ -96,7 +96,7 @@ pub type TexelCopyTextureInfo = ffi::TexelCopyTextureInfo;
 /// cbindgen:ignore
 pub type CopyExternalImageDestInfo = ffi::CopyExternalImageDestInfo;
 
-const PUSH_CONSTANT_CLEAR_ARRAY: &[u32] = &[0_u32; 64];
+const IMMEDIATES_CLEAR_ARRAY: &[u32] = &[0_u32; 64];
 
 /// The current state of a command or pass encoder.
 ///
@@ -1282,11 +1282,11 @@ pub struct BasePass<C, E> {
     /// instruction consumes the next `len` bytes from this vector.
     pub string_data: Vec<u8>,
 
-    /// Data used by `SetPushConstant` instructions.
+    /// Data used by `SetImmediate` instructions.
     ///
-    /// See the documentation for [`RenderCommand::SetPushConstant`]
-    /// and [`ComputeCommand::SetPushConstant`] for details.
-    pub push_constant_data: Vec<u32>,
+    /// See the documentation for [`RenderCommand::SetImmediate`]
+    /// and [`ComputeCommand::SetImmediate`] for details.
+    pub immediates_data: Vec<u32>,
 }
 
 impl<C: Clone, E: Clone> BasePass<C, E> {
@@ -1297,7 +1297,7 @@ impl<C: Clone, E: Clone> BasePass<C, E> {
             commands: Vec::new(),
             dynamic_offsets: Vec::new(),
             string_data: Vec::new(),
-            push_constant_data: Vec::new(),
+            immediates_data: Vec::new(),
         }
     }
 
@@ -1308,7 +1308,7 @@ impl<C: Clone, E: Clone> BasePass<C, E> {
             commands: Vec::new(),
             dynamic_offsets: Vec::new(),
             string_data: Vec::new(),
-            push_constant_data: Vec::new(),
+            immediates_data: Vec::new(),
         }
     }
 
@@ -1327,7 +1327,7 @@ impl<C: Clone, E: Clone> BasePass<C, E> {
                 commands: mem::take(&mut self.commands),
                 dynamic_offsets: mem::take(&mut self.dynamic_offsets),
                 string_data: mem::take(&mut self.string_data),
-                push_constant_data: mem::take(&mut self.push_constant_data),
+                immediates_data: mem::take(&mut self.immediates_data),
             }),
         }
     }
@@ -1771,20 +1771,20 @@ pub(crate) fn pop_debug_group(state: &mut EncodingState) -> Result<(), CommandEn
     Ok(())
 }
 
-fn push_constant_clear<PushFn>(offset: u32, size_bytes: u32, mut push_fn: PushFn)
+fn immediates_clear<PushFn>(offset: u32, size_bytes: u32, mut push_fn: PushFn)
 where
     PushFn: FnMut(u32, &[u32]),
 {
     let mut count_words = 0_u32;
-    let size_words = size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT;
+    let size_words = size_bytes / wgt::IMMEDIATES_ALIGNMENT;
     while count_words < size_words {
-        let count_bytes = count_words * wgt::PUSH_CONSTANT_ALIGNMENT;
+        let count_bytes = count_words * wgt::IMMEDIATES_ALIGNMENT;
         let size_to_write_words =
-            (size_words - count_words).min(PUSH_CONSTANT_CLEAR_ARRAY.len() as u32);
+            (size_words - count_words).min(IMMEDIATES_CLEAR_ARRAY.len() as u32);
 
         push_fn(
             offset + count_bytes,
-            &PUSH_CONSTANT_CLEAR_ARRAY[0..size_to_write_words as usize],
+            &IMMEDIATES_CLEAR_ARRAY[0..size_to_write_words as usize],
         );
 
         count_words += size_to_write_words;
@@ -1927,8 +1927,8 @@ pub enum PassErrorScope {
     SetPipelineRender,
     #[error("In a set_pipeline command")]
     SetPipelineCompute,
-    #[error("In a set_push_constant command")]
-    SetPushConstant,
+    #[error("In a set_immediates command")]
+    SetImmediate,
     #[error("In a set_vertex_buffer command")]
     SetVertexBuffer,
     #[error("In a set_index_buffer command")]

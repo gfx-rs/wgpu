@@ -189,6 +189,8 @@ pub(super) fn clear_buffer(
         });
     }
 
+    // This must happen after parameter validation (so that errors are reported
+    // as required by the spec), but before any side effects.
     if offset == end_offset {
         log::trace!("Ignoring fill_buffer of size 0");
         return Ok(());
@@ -498,7 +500,7 @@ fn clear_texture_via_render_passes(
                     },
                     depth_slice: None,
                     resolve_target: None,
-                    ops: hal::AttachmentOps::STORE,
+                    ops: hal::AttachmentOps::STORE | hal::AttachmentOps::LOAD_CLEAR,
                     clear_value: wgt::Color::TRANSPARENT,
                 })];
                 (&color_attachments_tmp[..], None)
@@ -515,8 +517,8 @@ fn clear_texture_via_render_passes(
                             ),
                             usage: wgt::TextureUses::DEPTH_STENCIL_WRITE,
                         },
-                        depth_ops: hal::AttachmentOps::STORE,
-                        stencil_ops: hal::AttachmentOps::STORE,
+                        depth_ops: hal::AttachmentOps::STORE | hal::AttachmentOps::LOAD_CLEAR,
+                        stencil_ops: hal::AttachmentOps::STORE | hal::AttachmentOps::LOAD_CLEAR,
                         clear_value: (0.0, 0),
                     }),
                 )

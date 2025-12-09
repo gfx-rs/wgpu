@@ -17,7 +17,7 @@ struct MetadataRange {
     start: u32,
     count: u32,
 }
-var<push_constant> metadata_range: MetadataRange;
+var<immediate> metadata_range: MetadataRange;
 
 @group(0) @binding(0)
 var<storage, read> metadata: array<MetadataEntry>;

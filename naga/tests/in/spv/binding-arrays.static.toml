@@ -1,2 +1,4 @@
+capabilities = "TEXTURE_AND_SAMPLER_BINDING_ARRAY"
+
 [spv-in]
 adjust_coordinate_space = true

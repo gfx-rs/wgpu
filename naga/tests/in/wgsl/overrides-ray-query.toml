@@ -1,4 +1,4 @@
-god_mode = true
+capabilities = "RAY_QUERY"
 pipeline_constants = { o = 2.0 }
 targets = "IR | SPIRV | METAL"
 

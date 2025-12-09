@@ -199,6 +199,17 @@ pub fn map_texture_usage_from_hal(uses: wgt::TextureUses) -> wgt::TextureUsages 
     u
 }
 
+/// Check the requested texture size against the supported limits.
+///
+/// This function implements the texture size and sample count checks in [vtd
+/// dimension step]. The format checks are elsewhere in [`create_texture`]`.
+///
+/// Note that while there is some basic checking of the sample count here, there
+/// is an additional set of checks when `sample_count > 1` elsewhere in
+/// [`create_texture`]`.
+///
+/// [vtd dimension step]: https://www.w3.org/TR/2025/CRD-webgpu-20251120/#:~:text=or%204.-,If%20descriptor.dimension%20is
+/// [`create_texture`]: crate::device::Device::create_texture
 pub fn check_texture_dimension_size(
     dimension: wgt::TextureDimension,
     wgt::Extent3d {

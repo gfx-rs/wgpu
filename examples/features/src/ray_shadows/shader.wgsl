@@ -1,3 +1,5 @@
+enable wgpu_ray_query;
+
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) tex_coords: vec2<f32>,
@@ -33,10 +35,10 @@ var<uniform> uniforms: Uniforms;
 @group(0) @binding(1)
 var acc_struct: acceleration_structure;
 
-struct PushConstants {
+struct ImmediateData {
     light: vec3<f32>,
 }
-var<push_constant> pc: PushConstants;
+var<immediate> pc: ImmediateData;
 
 const SURFACE_BRIGHTNESS = 0.5;
 

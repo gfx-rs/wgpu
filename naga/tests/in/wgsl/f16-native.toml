@@ -1,5 +1,5 @@
 targets = "SPIRV"
-god_mode = true
+capabilities = "SHADER_FLOAT16"
 
 [spv]
 debug = true

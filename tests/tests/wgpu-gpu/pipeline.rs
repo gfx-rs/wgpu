@@ -44,8 +44,6 @@ static COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
-            ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
-
             fail(
                 &ctx.device,
                 || {
@@ -78,8 +76,6 @@ static COMPUTE_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
                 .enable_noop(),
         )
         .run_sync(|ctx| {
-            ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
-
             fail(
                 &ctx.device,
                 || {
@@ -107,8 +103,6 @@ static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_MODULE: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
-            ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
-
             fail(
                 &ctx.device,
                 || {
@@ -148,8 +142,6 @@ static RENDER_PIPELINE_DEFAULT_LAYOUT_BAD_BGL_INDEX: GpuTestConfiguration =
                 .enable_noop(),
         )
         .run_sync(|ctx| {
-            ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
-
             fail(
                 &ctx.device,
                 || {
