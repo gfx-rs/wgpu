@@ -680,3 +680,138 @@ pub fn features_to_feature_names(
 
   return_features
 }
+
+#[derive(Clone, Copy)]
+pub(crate) struct GPUTextureUsageFlags(pub(crate) wgpu_types::TextureUsages);
+
+impl<'a> WebIdlConverter<'a> for GPUTextureUsageFlags {
+  type Options = ();
+
+  fn convert<'b>(
+    scope: &mut v8::HandleScope<'a>,
+    value: v8::Local<'a, v8::Value>,
+    prefix: Cow<'static, str>,
+    context: ContextFn<'b>,
+    _options: &Self::Options,
+  ) -> Result<Self, WebIdlError> {
+    let flags_value = u32::convert(
+      scope,
+      value,
+      prefix.clone(),
+      context.borrowed(),
+      &IntOptions {
+        clamp: false,
+        enforce_range: true,
+      },
+    )?;
+
+    let flags =
+      wgpu_types::TextureUsages::from_bits(flags_value).ok_or_else(|| {
+        WebIdlError::other(
+          prefix,
+          context,
+          JsErrorBox::type_error("usage is not valid"),
+        )
+      })?;
+
+    Ok(GPUTextureUsageFlags(flags))
+  }
+}
+
+impl From<GPUTextureUsageFlags> for wgpu_types::TextureUsages {
+  fn from(value: GPUTextureUsageFlags) -> Self {
+    value.0
+  }
+}
+
+impl GPUTextureUsageFlags {
+  pub fn bits(&self) -> u32 {
+    self.0.bits()
+  }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct GPUShaderStageFlags(pub(crate) wgpu_types::ShaderStages);
+
+impl<'a> WebIdlConverter<'a> for GPUShaderStageFlags {
+  type Options = ();
+
+  fn convert<'b>(
+    scope: &mut v8::HandleScope<'a>,
+    value: v8::Local<'a, v8::Value>,
+    prefix: Cow<'static, str>,
+    context: ContextFn<'b>,
+    _options: &Self::Options,
+  ) -> Result<Self, WebIdlError> {
+    let flags_value = u32::convert(
+      scope,
+      value,
+      prefix.clone(),
+      context.borrowed(),
+      &IntOptions {
+        clamp: false,
+        enforce_range: true,
+      },
+    )?;
+
+    let flags =
+      wgpu_types::ShaderStages::from_bits(flags_value).ok_or_else(|| {
+        WebIdlError::other(
+          prefix,
+          context,
+          JsErrorBox::type_error("shader stage is not valid"),
+        )
+      })?;
+
+    Ok(GPUShaderStageFlags(flags))
+  }
+}
+
+impl From<GPUShaderStageFlags> for wgpu_types::ShaderStages {
+  fn from(value: GPUShaderStageFlags) -> Self {
+    value.0
+  }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct GPUColorWriteFlags(pub(crate) wgpu_types::ColorWrites);
+
+impl<'a> WebIdlConverter<'a> for GPUColorWriteFlags {
+  type Options = ();
+
+  fn convert<'b>(
+    scope: &mut v8::HandleScope<'a>,
+    value: v8::Local<'a, v8::Value>,
+    prefix: Cow<'static, str>,
+    context: ContextFn<'b>,
+    _options: &Self::Options,
+  ) -> Result<Self, WebIdlError> {
+    let flags_value = u32::convert(
+      scope,
+      value,
+      prefix.clone(),
+      context.borrowed(),
+      &IntOptions {
+        clamp: false,
+        enforce_range: true,
+      },
+    )?;
+
+    let flags =
+      wgpu_types::ColorWrites::from_bits(flags_value).ok_or_else(|| {
+        WebIdlError::other(
+          prefix,
+          context,
+          JsErrorBox::type_error("color write flags are not valid"),
+        )
+      })?;
+
+    Ok(GPUColorWriteFlags(flags))
+  }
+}
+
+impl From<GPUColorWriteFlags> for wgpu_types::ColorWrites {
+  fn from(value: GPUColorWriteFlags) -> Self {
+    value.0
+  }
+}

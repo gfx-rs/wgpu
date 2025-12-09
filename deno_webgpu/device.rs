@@ -221,8 +221,7 @@ impl GPUDevice {
       sample_count: descriptor.sample_count,
       dimension: descriptor.dimension.clone().into(),
       format: descriptor.format.clone().into(),
-      usage: wgpu_types::TextureUsages::from_bits(descriptor.usage)
-        .ok_or_else(|| JsErrorBox::type_error("usage is not valid"))?,
+      usage: descriptor.usage.into(),
       view_formats: descriptor
         .view_formats
         .into_iter()
@@ -340,8 +339,7 @@ impl GPUDevice {
 
       entries.push(wgpu_types::BindGroupLayoutEntry {
         binding: entry.binding,
-        visibility: wgpu_types::ShaderStages::from_bits(entry.visibility)
-          .ok_or_else(|| JsErrorBox::type_error("usage is not valid"))?,
+        visibility: entry.visibility.into(),
         ty,
         count: None, // native-only
       });
@@ -900,12 +898,7 @@ impl GPUDevice {
                           operation: blend.alpha.operation.into(),
                         },
                       }),
-                      write_mask: wgpu_types::ColorWrites::from_bits(
-                        target.write_mask,
-                      )
-                      .ok_or_else(|| {
-                        JsErrorBox::type_error("usage is not valid")
-                      })?,
+                      write_mask: target.write_mask.into(),
                     })
                   })
                   .transpose()
