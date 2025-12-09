@@ -332,6 +332,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         self.raw_cmd_buf = Some(raw);
 
+        // Clear resource tracking for new command buffer
+        self.used_buffers.clear();
+        self.used_textures.clear();
+
         Ok(())
     }
 
@@ -346,6 +350,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
             encoder.end_encoding();
         }
         self.raw_cmd_buf = None;
+
+        // Clear resource tracking since we're discarding
+        self.used_buffers.clear();
+        self.used_textures.clear();
     }
 
     unsafe fn end_encoding(&mut self) -> Result<super::CommandBuffer, crate::DeviceError> {
@@ -362,6 +370,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         Ok(super::CommandBuffer {
             raw: self.raw_cmd_buf.take().unwrap(),
+            // Transfer resource references to keep them alive until GPU completion
+            used_buffers: core::mem::take(&mut self.used_buffers),
+            used_textures: core::mem::take(&mut self.used_textures),
         })
     }
 
@@ -387,6 +398,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn clear_buffer(&mut self, buffer: &super::Buffer, range: crate::MemoryRange) {
         let encoder = self.enter_blit();
         encoder.fill_buffer(&buffer.raw, conv::map_range(&range), 0);
+
+        // Retain buffer reference until command buffer completes
+        self.used_buffers.push(buffer.raw.clone());
     }
 
     unsafe fn copy_buffer_to_buffer<T>(
@@ -407,6 +421,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 copy.size.get(),
             );
         }
+
+        // Retain buffer references until command buffer completes
+        self.used_buffers.push(src.raw.clone());
+        self.used_buffers.push(dst.raw.clone());
     }
 
     unsafe fn copy_texture_to_texture<T>(
@@ -444,6 +462,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 dst_origin,
             );
         }
+
+        // Retain texture references until command buffer completes
+        self.used_textures.push(src.raw.clone());
+        self.used_textures.push(dst.raw.clone());
     }
 
     unsafe fn copy_buffer_to_texture<T>(
@@ -486,6 +508,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 conv::get_blit_option(dst.format, copy.texture_base.aspect),
             );
         }
+
+        // Retain resource references until command buffer completes
+        self.used_buffers.push(src.raw.clone());
+        self.used_textures.push(dst.raw.clone());
     }
 
     unsafe fn copy_texture_to_buffer<T>(
@@ -523,6 +549,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 conv::get_blit_option(src.format, copy.texture_base.aspect),
             );
         }
+
+        // Retain resource references until command buffer completes
+        self.used_textures.push(src.raw.clone());
+        self.used_buffers.push(dst.raw.clone());
     }
 
     unsafe fn copy_acceleration_structure_to_acceleration_structure(
@@ -821,6 +851,17 @@ impl crate::CommandEncoder for super::CommandEncoder {
             }
             self.state.render = Some(encoder.to_owned());
         });
+
+        // Retain texture references for render attachments until command buffer completes
+        for at in desc.color_attachments.iter().flatten() {
+            self.used_textures.push(at.target.view.raw.clone());
+            if let Some(ref resolve) = at.resolve_target {
+                self.used_textures.push(resolve.view.raw.clone());
+            }
+        }
+        if let Some(ref at) = desc.depth_stencil_attachment {
+            self.used_textures.push(at.target.view.raw.clone());
+        }
 
         Ok(())
     }
@@ -1127,6 +1168,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
             stride,
             raw_type,
         });
+
+        // Retain buffer reference until command buffer completes
+        self.used_buffers.push(binding.buffer.raw.clone());
     }
 
     unsafe fn set_vertex_buffer<'a>(
@@ -1158,6 +1202,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 sizes.as_ptr().cast(),
             );
         }
+
+        // Retain buffer reference until command buffer completes
+        self.used_buffers.push(binding.buffer.raw.clone());
     }
 
     unsafe fn set_viewport(&mut self, rect: &crate::Rect<f32>, depth_range: Range<f32>) {
@@ -1300,6 +1347,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
             encoder.draw_primitives_indirect(self.state.raw_primitive_type, &buffer.raw, offset);
             offset += size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
         }
+
+        // Retain indirect buffer reference until command buffer completes
+        self.used_buffers.push(buffer.raw.clone());
     }
 
     unsafe fn draw_indexed_indirect(
@@ -1321,6 +1371,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
             );
             offset += size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
         }
+
+        // Retain indirect buffer reference until command buffer completes
+        self.used_buffers.push(buffer.raw.clone());
     }
 
     unsafe fn draw_mesh_tasks_indirect(
@@ -1505,6 +1558,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
             offset,
             self.state.stage_infos.cs.raw_wg_size,
         );
+
+        // Retain indirect buffer reference until command buffer completes
+        self.used_buffers.push(buffer.raw.clone());
     }
 
     unsafe fn build_acceleration_structures<'a, T>(

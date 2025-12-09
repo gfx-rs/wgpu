@@ -1014,6 +1014,11 @@ pub struct CommandEncoder {
     state: CommandState,
     temp: Temp,
     counters: Arc<wgt::HalCounters>,
+    /// Buffers used during encoding of the current command buffer.
+    /// These are transferred to the CommandBuffer in end_encoding().
+    used_buffers: Vec<metal::Buffer>,
+    /// Textures used during encoding of the current command buffer.
+    used_textures: Vec<metal::Texture>,
 }
 
 impl fmt::Debug for CommandEncoder {
@@ -1031,6 +1036,16 @@ unsafe impl Sync for CommandEncoder {}
 #[derive(Debug)]
 pub struct CommandBuffer {
     raw: metal::CommandBuffer,
+    /// Metal buffer handles used by this command buffer.
+    ///
+    /// When `retain_command_buffer_references` is false, Metal's command buffer
+    /// doesn't automatically retain resources. We keep these handles alive
+    /// until the command buffer completes execution to prevent use-after-free.
+    #[expect(dead_code, reason = "Keeps strong references to resources")]
+    used_buffers: Vec<metal::Buffer>,
+    /// Metal texture handles used by this command buffer.
+    #[expect(dead_code, reason = "Keeps strong references to resources")]
+    used_textures: Vec<metal::Texture>,
 }
 
 impl crate::DynCommandBuffer for CommandBuffer {}
