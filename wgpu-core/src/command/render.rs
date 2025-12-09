@@ -1277,6 +1277,13 @@ impl RenderPassInfo {
                 ));
             }
 
+            validation::validate_color_attachment_bytes_per_sample(
+                color_attachments,
+                |at| at.view.desc.format,
+                device.limits.max_color_attachment_bytes_per_sample,
+            )
+            .map_err(RenderPassErrorInner::ColorAttachment)?;
+
             fn check_attachment_overlap(
                 attachment_set: &mut crate::FastHashSet<(crate::track::TrackerIndex, u32, u32)>,
                 view: &TextureView,
@@ -1680,13 +1687,6 @@ impl Global {
                     arc_desc.color_attachments.push(None);
                 }
             }
-
-            validation::validate_color_attachment_bytes_per_sample(
-                &arc_desc.color_attachments,
-                |at| at.view.desc.format,
-                device.limits.max_color_attachment_bytes_per_sample,
-            )
-            .map_err(RenderPassErrorInner::ColorAttachment)?;
 
             arc_desc.depth_stencil_attachment =
             // https://gpuweb.github.io/gpuweb/#abstract-opdef-gpurenderpassdepthstencilattachment-gpurenderpassdepthstencilattachment-valid-usage
