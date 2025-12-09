@@ -2692,7 +2692,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
 
                 // End the function
-                write!(self.out, ")")?
+                write!(self.out, ")")?;
 
                 if needs_depth_fix {
                     // parser thinks it will yield f32, but in reality it yields vec4f
