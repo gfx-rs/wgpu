@@ -358,7 +358,7 @@ impl super::Device {
 
         for (key, value) in stage.constants.iter() {
             buf.extend_from_slice(key.as_bytes());
-            buf.extend_from_slice(&value.to_le_bytes());
+            buf.extend_from_slice(&value.to_ne_bytes());
         }
 
         buf
