@@ -474,9 +474,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     return false;
                 }
 
-                if let TypeInner::Sampler { comparison: true } =
-                    self.module.types[data.ty].inner
-                {
+                if let TypeInner::Sampler { comparison: true } = self.module.types[data.ty].inner {
                     true
                 } else {
                     false
