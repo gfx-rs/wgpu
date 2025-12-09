@@ -6,9 +6,9 @@ use core::{cmp::max, convert::TryInto, num::NonZeroU32, ptr, sync::atomic::Order
 use glow::HasContext;
 use naga::FastHashMap;
 
-use super::{conv, lock, MaybeMutex, PrivateCapabilities};
+use super::{conv, lock, MaybeMutex, PrivateCapabilities, ShaderModule};
 use crate::auxil::map_naga_stage;
-use crate::TlasInstance;
+use crate::{ProgrammableStage, TlasInstance};
 
 type ShaderStage<'a> = (
     naga::ShaderStage,
@@ -320,11 +320,7 @@ impl super::Device {
                 shader_id: stage.module.id,
                 entry_point: stage.entry_point.to_owned(),
                 zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
-                constant_hash: stage
-                    .constants
-                    .iter()
-                    .map(|(key, value)| format!("{key}:{value}"))
-                    .collect(),
+                constant_hash: Self::create_constant_hash(stage)
             });
         }
         let mut guard = self
@@ -355,6 +351,19 @@ impl super::Device {
 
         Ok(program)
     }
+
+    fn create_constant_hash(stage: &ProgrammableStage<ShaderModule>) -> Vec<u8>
+    {
+        let mut buf: Vec<u8> = Vec::new();
+
+        for (key, value) in stage.constants.iter()
+        {
+            buf.extend_from_slice(key.as_bytes());
+            buf.extend_from_slice(&value.to_le_bytes());
+        }
+
+        buf
+}
 
     unsafe fn create_program<'a>(
         gl: &glow::Context,

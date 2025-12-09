@@ -704,7 +704,7 @@ struct ProgramStage {
     shader_id: ShaderId,
     entry_point: String,
     zero_initialize_workgroup_memory: bool,
-    constant_hash: String,
+    constant_hash: Vec<u8>,
 }
 
 #[derive(PartialEq, Eq, Hash)]
