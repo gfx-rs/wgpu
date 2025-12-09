@@ -379,7 +379,10 @@ impl<'a, W: Write> Writer<'a, W> {
                     write!(self.out, "uniform ")?;
 
                     if self.needs_depth_fix(ep_info, handle, &mut class) {
-                        class = crate::ImageClass::Sampled { kind: crate::ScalarKind::Float, multi: false };
+                        class = crate::ImageClass::Sampled {
+                            kind: crate::ScalarKind::Float,
+                            multi: false,
+                        };
                     }
 
                     // write the type
@@ -457,23 +460,29 @@ impl<'a, W: Write> Writer<'a, W> {
         self.collect_reflection_info()
     }
 
-    fn needs_depth_fix(&mut self, ep_info: &valid::FunctionInfo, handle: Handle<crate::GlobalVariable>, class: &crate::ImageClass) -> bool {
+    fn needs_depth_fix(
+        &mut self,
+        ep_info: &valid::FunctionInfo,
+        handle: Handle<crate::GlobalVariable>,
+        class: &crate::ImageClass,
+    ) -> bool {
         if let crate::ImageClass::Depth { multi: false } = class {
             let has_shadow_sampler = ep_info.sampling_set.iter().all(|key| {
                 let data = &self.module.global_variables[key.sampler];
                 if key.image != handle {
                     return false;
                 }
-                return if let TypeInner::Sampler { comparison: true } = &self.module.types[data.ty].inner {
+                return if let TypeInner::Sampler { comparison: true } =
+                    &self.module.types[data.ty].inner
+                {
                     true
                 } else {
                     false
-                }
+                };
             });
 
             !has_shadow_sampler
-        }
-        else {
+        } else {
             false
         }
     }
@@ -2611,13 +2620,13 @@ impl<'a, W: Write> Writer<'a, W> {
                     self.write_expr(expr, ctx)?;
                 }
 
-                let needs_depth_fix = if let Expression::GlobalVariable(global_handle) = ctx.expressions[image] {
-                    let ep_info = self.info.get_entry_point(self.entry_point_idx as usize);
-                    self.needs_depth_fix(ep_info, global_handle, &class)
-                }
-                else {
-                    false
-                };
+                let needs_depth_fix =
+                    if let Expression::GlobalVariable(global_handle) = ctx.expressions[image] {
+                        let ep_info = self.info.get_entry_point(self.entry_point_idx as usize);
+                        self.needs_depth_fix(ep_info, global_handle, &class)
+                    } else {
+                        false
+                    };
 
                 match level {
                     // Auto needs no more arguments
