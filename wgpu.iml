@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="RUST_MODULE" version="4">
+  <component name="NewModuleRootManager" inherit-compiler-output="true">
+    <exclude-output />
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/benches/benches" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/cts_runner/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/cts_runner/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/cts_runner/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/examples/features/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/examples/standalone/01_hello_compute/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/examples/standalone/02_hello_window/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/examples/standalone/custom_backend/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/lock-analyzer/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/naga-cli/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/naga-test/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/naga/hlsl-snapshots/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/naga/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/naga/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/naga/xtask/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/player/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/player/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/tests/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tests/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/wgpu-core/platform-deps/apple/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/wgpu-core/platform-deps/emscripten/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/wgpu-core/platform-deps/wasm/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/wgpu-core/platform-deps/windows-linux-android/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/wgpu-core/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/wgpu-hal/examples" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/wgpu-hal/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/wgpu-info/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/wgpu-macros/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/wgpu-types/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/wgpu/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/xtask/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/benches/src" isTestSource="false" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>

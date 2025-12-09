@@ -467,7 +467,7 @@ impl<'a, W: Write> Writer<'a, W> {
         class: crate::ImageClass,
     ) -> bool {
         if let crate::ImageClass::Depth { multi: false } = class {
-            let has_shadow_sampler = ep_info.sampling_set.iter().all(|key| {
+            let has_shadow_sampler = ep_info.sampling_set.iter().any(|key| {
                 let data = &self.module.global_variables[key.sampler];
 
                 if key.image != handle {
