@@ -135,6 +135,7 @@ webgpu:api,validation,render_pass,render_pass_descriptor:attachments,*
 webgpu:api,validation,render_pass,render_pass_descriptor:color_attachments,*
 webgpu:api,validation,render_pass,render_pass_descriptor:resolveTarget,*
 webgpu:api,validation,render_pass,resolve:resolve_attachment:*
+webgpu:api,validation,render_pipeline,depth_stencil_state:stencil_write:*
 webgpu:api,validation,resource_usages,buffer,in_pass_encoder:*
 // FAIL: 2 other cases in resource_usages,texture,in_pass_encoder. https://github.com/gfx-rs/wgpu/issues/3126
 webgpu:api,validation,resource_usages,texture,in_pass_encoder:scope,*

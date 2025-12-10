@@ -29,7 +29,8 @@ use crate::adapter::GPUAdapterInfo;
 use crate::adapter::GPUSupportedFeatures;
 use crate::adapter::GPUSupportedLimits;
 use crate::command_encoder::GPUCommandEncoder;
-use crate::error::{GPUError, GPUGenericError};
+use crate::error::make_pipeline_error;
+use crate::error::{GPUError, GPUGenericError, GPUPipelineErrorReason};
 use crate::query_set::GPUQuerySet;
 use crate::render_bundle::GPURenderBundleEncoder;
 use crate::render_pipeline::GPURenderPipeline;
@@ -498,7 +499,9 @@ impl GPUDevice {
     &self,
     #[webidl] descriptor: super::compute_pipeline::GPUComputePipelineDescriptor,
   ) -> GPUComputePipeline {
-    self.new_compute_pipeline(descriptor)
+    let (pipeline, err) = self.new_compute_pipeline(descriptor);
+    self.error_handler.push_error(err);
+    pipeline
   }
 
   #[required(1)]
@@ -507,27 +510,63 @@ impl GPUDevice {
     &self,
     #[webidl] descriptor: super::render_pipeline::GPURenderPipelineDescriptor,
   ) -> GPURenderPipeline {
-    self.new_render_pipeline(descriptor)
+    let (pipeline, err) = self.new_render_pipeline(descriptor);
+    self.error_handler.push_error(err);
+    pipeline
   }
 
-  #[async_method]
+  #[async_method(fake)]
   #[required(1)]
   #[cppgc]
-  async fn create_compute_pipeline_async(
+  #[global]
+  fn create_compute_pipeline_async(
     &self,
+    scope: &mut v8::HandleScope,
     #[webidl] descriptor: super::compute_pipeline::GPUComputePipelineDescriptor,
-  ) -> GPUComputePipeline {
-    self.new_compute_pipeline(descriptor)
+  ) -> v8::Global<v8::Promise> {
+    let resolver = v8::PromiseResolver::new(scope).unwrap();
+    let promise = resolver.get_promise(scope);
+
+    let (pipeline, err) = self.new_compute_pipeline(descriptor);
+    if let Some(err) = err {
+      let err = make_pipeline_error(
+        scope,
+        GPUPipelineErrorReason::Validation,
+        &err.to_string(),
+      );
+      resolver.reject(scope, err.into());
+    } else {
+      let val = make_cppgc_object(scope, pipeline).into();
+      resolver.resolve(scope, val);
+    }
+    v8::Global::new(scope, promise)
   }
 
-  #[async_method]
+  #[async_method(fake)]
   #[required(1)]
   #[cppgc]
-  async fn create_render_pipeline_async(
+  #[global]
+  fn create_render_pipeline_async(
     &self,
+    scope: &mut v8::HandleScope,
     #[webidl] descriptor: super::render_pipeline::GPURenderPipelineDescriptor,
-  ) -> GPURenderPipeline {
-    self.new_render_pipeline(descriptor)
+  ) -> v8::Global<v8::Promise> {
+    let resolver = v8::PromiseResolver::new(scope).unwrap();
+    let promise = resolver.get_promise(scope);
+
+    let (pipeline, err) = self.new_render_pipeline(descriptor);
+    if let Some(err) = err {
+      let err = make_pipeline_error(
+        scope,
+        GPUPipelineErrorReason::Validation,
+        &err.to_string(),
+      );
+      resolver.reject(scope, err.into());
+    } else {
+      let val = make_cppgc_object(scope, pipeline).into();
+      resolver.resolve(scope, val);
+    }
+    v8::Global::new(scope, promise)
   }
 
   fn create_command_encoder<'a>(
@@ -739,7 +778,10 @@ impl GPUDevice {
   fn new_compute_pipeline(
     &self,
     descriptor: super::compute_pipeline::GPUComputePipelineDescriptor,
-  ) -> GPUComputePipeline {
+  ) -> (
+    GPUComputePipeline,
+    Option<wgpu_core::pipeline::CreateComputePipelineError>,
+  ) {
     let wgpu_descriptor = wgpu_core::pipeline::ComputePipelineDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
       layout: descriptor.layout.into(),
@@ -758,20 +800,24 @@ impl GPUDevice {
       None,
     );
 
-    self.error_handler.push_error(err);
-
-    GPUComputePipeline {
-      instance: self.instance.clone(),
-      error_handler: self.error_handler.clone(),
-      id,
-      label: descriptor.label.clone(),
-    }
+    (
+      GPUComputePipeline {
+        instance: self.instance.clone(),
+        error_handler: self.error_handler.clone(),
+        id,
+        label: descriptor.label.clone(),
+      },
+      err,
+    )
   }
 
   fn new_render_pipeline(
     &self,
     descriptor: super::render_pipeline::GPURenderPipelineDescriptor,
-  ) -> GPURenderPipeline {
+  ) -> (
+    GPURenderPipeline,
+    Option<wgpu_core::pipeline::CreateRenderPipelineError>,
+  ) {
     let vertex = wgpu_core::pipeline::VertexState {
       stage: ProgrammableStageDescriptor {
         module: descriptor.vertex.module.id,
@@ -922,14 +968,15 @@ impl GPUDevice {
       None,
     );
 
-    self.error_handler.push_error(err);
-
-    GPURenderPipeline {
-      instance: self.instance.clone(),
-      error_handler: self.error_handler.clone(),
-      id,
-      label: descriptor.label,
-    }
+    (
+      GPURenderPipeline {
+        instance: self.instance.clone(),
+        error_handler: self.error_handler.clone(),
+        id,
+        label: descriptor.label,
+      },
+      err,
+    )
   }
 }
 
