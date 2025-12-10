@@ -150,7 +150,21 @@ impl GPUDevice {
   fn create_buffer(
     &self,
     #[webidl] descriptor: super::buffer::GPUBufferDescriptor,
-  ) -> GPUBuffer {
+  ) -> Result<GPUBuffer, JsErrorBox> {
+    // wgpu-core would also check this, but it needs to be reported via a JS
+    // error, not a validation error. (WebGPU specifies this check on the
+    // content timeline.)
+    if descriptor.mapped_at_creation
+      && descriptor.size % wgpu_types::COPY_BUFFER_ALIGNMENT != 0
+    {
+      return Err(JsErrorBox::range_error(
+        format!(
+          "The size of a buffer that is mapped at creation must be a multiple of {}",
+          wgpu_types::COPY_BUFFER_ALIGNMENT,
+        )
+      ));
+    }
+
     // Validation of the usage needs to happen on the device timeline, so
     // don't raise an error immediately if it isn't valid. wgpu will
     // reject `BufferUsages::empty()`.
@@ -171,7 +185,7 @@ impl GPUDevice {
 
     self.error_handler.push_error(err);
 
-    GPUBuffer {
+    Ok(GPUBuffer {
       instance: self.instance.clone(),
       error_handler: self.error_handler.clone(),
       id,
@@ -190,7 +204,7 @@ impl GPUDevice {
         None
       }),
       mapped_js_buffers: RefCell::new(vec![]),
-    }
+    })
   }
 
   #[required(1)]
