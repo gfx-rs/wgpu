@@ -5,8 +5,7 @@ use std::cell::RefCell;
 use std::num::NonZeroU64;
 use std::rc::Rc;
 
-use deno_core::cppgc::make_cppgc_object;
-use deno_core::cppgc::SameObject;
+use deno_core::cppgc::{make_cppgc_object, SameObject};
 use deno_core::op2;
 use deno_core::v8;
 use deno_core::webidl::WebIdlInterfaceConverter;
@@ -531,17 +530,29 @@ impl GPUDevice {
     self.new_render_pipeline(descriptor)
   }
 
-  #[cppgc]
-  fn create_command_encoder(
+  fn create_command_encoder<'a>(
     &self,
+    scope: &mut v8::HandleScope<'a>,
     #[webidl] descriptor: Option<
       super::command_encoder::GPUCommandEncoderDescriptor,
     >,
-  ) -> GPUCommandEncoder {
+  ) -> v8::Local<'a, v8::Object> {
+    // Metal imposes a limit on the number of outstanding command buffers.
+    // Attempting to create another command buffer after reaching that limit
+    // will block, which can result in a deadlock if GC is required to
+    // recover old command buffers. To encourage V8 to garbage collect
+    // command buffers before that happens, we associate some external
+    // memory with each command buffer.
+    #[cfg(target_vendor = "apple")]
+    const EXTERNAL_MEMORY_AMOUNT: i64 = 1 << 16;
+
     let label = descriptor.map(|d| d.label).unwrap_or_default();
     let wgpu_descriptor = wgpu_types::CommandEncoderDescriptor {
       label: Some(Cow::Owned(label.clone())),
     };
+
+    #[cfg(target_vendor = "apple")]
+    scope.adjust_amount_of_external_allocated_memory(EXTERNAL_MEMORY_AMOUNT);
 
     let (id, err) = self.instance.device_create_command_encoder(
       self.id,
@@ -551,12 +562,39 @@ impl GPUDevice {
 
     self.error_handler.push_error(err);
 
-    GPUCommandEncoder {
+    let encoder = GPUCommandEncoder {
       instance: self.instance.clone(),
       error_handler: self.error_handler.clone(),
       id,
       label,
+      #[cfg(target_vendor = "apple")]
+      weak: std::sync::OnceLock::new(),
+    };
+
+    let obj = make_cppgc_object(scope, encoder);
+
+    #[cfg(target_vendor = "apple")]
+    {
+      let finalizer = v8::Weak::with_finalizer(
+        scope,
+        obj,
+        Box::new(|isolate: &mut v8::Isolate| {
+          isolate.adjust_amount_of_external_allocated_memory(
+            -EXTERNAL_MEMORY_AMOUNT,
+          );
+        }),
+      );
+      deno_core::cppgc::try_unwrap_cppgc_object::<GPUCommandEncoder>(
+        scope,
+        obj.into(),
+      )
+      .unwrap()
+      .weak
+      .set(finalizer)
+      .unwrap();
     }
+
+    obj
   }
 
   #[required(1)]
