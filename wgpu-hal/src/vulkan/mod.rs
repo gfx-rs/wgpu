@@ -733,7 +733,8 @@ impl Texture {
 
     /// # Safety
     ///
-    /// - The external memory must not be manually freed
+    /// - The caller must not free the `vk::DeviceMemory` or
+    ///   `gpu_alloc::MemoryBlock` in the returned `TextureMemory`.
     pub unsafe fn memory(&self) -> &TextureMemory {
         &self.memory
     }

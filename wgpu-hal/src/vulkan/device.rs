@@ -488,7 +488,7 @@ impl super::Device {
     /// - If `drop_callback` is [`None`], wgpu-hal will take ownership of `vk_image`. If
     ///   `drop_callback` is [`Some`], `vk_image` must be valid until the callback is called.
     /// - If the `ImageCreateFlags` does not contain `MUTABLE_FORMAT`, the `view_formats` of `desc` must be empty.
-    /// - If `external_memory` is not [`super::TextureMemory::External`], wgpu-hal will take ownership of the
+    /// - If `memory` is not [`super::TextureMemory::External`], wgpu-hal will take ownership of the
     ///   memory (which is presumed to back `vk_image`). Otherwise, the memory must remain valid until
     ///   `drop_callback` is called.
     pub unsafe fn texture_from_raw(
