@@ -642,10 +642,9 @@ impl Limits {
     #[must_use]
     pub const fn using_recommended_minimum_mesh_shader_values(self) -> Self {
         Self {
-            // Literally just made this up as 256^2 or 2^16.
-            // My GPU supports 2^22, and compute shaders don't have this kind of limit.
-            // This very likely is never a real limiter
-            max_task_mesh_workgroup_total_count: 65536,
+            // This limitation comes from metal
+            max_task_mesh_workgroup_total_count: 1024,
+            // This is a DirectX limitation
             max_task_mesh_workgroups_per_dimension: 256,
             // Copied from compute limits, this is low enough that it should be sensible.
             max_task_invocations_per_workgroup: 256,
@@ -655,8 +654,8 @@ impl Limits {
             max_mesh_invocations_per_workgroup: 128,
             max_mesh_invocations_per_dimension: 128,
 
-            // DX12 specifies this as minimum
-            max_task_payload_size: 16_384,
+            // Metal specifies this as its max
+            max_task_payload_size: 16384 - 32,
             // DX12 limitation, revisit for vulkan
             max_mesh_output_vertices: 256,
             max_mesh_output_primitives: 256,
