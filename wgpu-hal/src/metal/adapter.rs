@@ -607,6 +607,15 @@ impl super::PrivateCapabilities {
 
         let argument_buffers = device.argument_buffers_support();
 
+        let is_virtual = device.name().to_lowercase().contains("virtual");
+
+        let mesh_shaders = family_check
+                && (device.supports_family(MTLGPUFamily::Metal3)
+                    || device.supports_family(MTLGPUFamily::Apple7)
+                    || device.supports_family(MTLGPUFamily::Mac2))
+                    // Mesh shaders don't work on virtual devices even if they should be supported.
+                && !is_virtual;
+
         Self {
             family_check,
             msl_version: if os_is_xr || version.at_least((14, 0), (17, 0), os_is_mac) {
@@ -902,6 +911,9 @@ impl super::PrivateCapabilities {
                 && (device.supports_family(MTLGPUFamily::Apple7)
                     || device.supports_family(MTLGPUFamily::Mac2)),
             supports_shared_event: version.at_least((10, 14), (12, 0), os_is_mac),
+            mesh_shaders,
+            max_mesh_task_workgroup_count: if mesh_shaders { 1024 } else { 0 },
+            max_task_payload_size: if mesh_shaders { 16384 - 32 } else { 0 },
             supported_vertex_amplification_factor: {
                 let mut factor = 1;
                 // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=8
@@ -937,7 +949,7 @@ impl super::PrivateCapabilities {
             | F::MAPPABLE_PRIMARY_BUFFERS
             | F::VERTEX_WRITABLE_STORAGE
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-            | F::PUSH_CONSTANTS
+            | F::IMMEDIATES
             | F::POLYGON_MODE_LINE
             | F::CLEAR_TEXTURE
             | F::TEXTURE_FORMAT_16BIT_NORM
@@ -986,6 +998,13 @@ impl super::PrivateCapabilities {
                 && self.argument_buffers as u64 >= MTLArgumentBuffersTier::Tier2 as u64,
         );
         features.set(
+            F::STORAGE_RESOURCE_BINDING_ARRAY,
+            self.msl_version >= MTLLanguageVersion::V3_0
+                && self.supports_arrays_of_textures
+                && self.supports_arrays_of_textures_write
+                && self.argument_buffers as u64 >= MTLArgumentBuffersTier::Tier2 as u64,
+        );
+        features.set(
             F::SHADER_INT64,
             self.int64 && self.msl_version >= MTLLanguageVersion::V2_3,
         );
@@ -1022,6 +1041,8 @@ impl super::PrivateCapabilities {
         if self.supports_simd_scoped_operations {
             features.insert(F::SUBGROUP | F::SUBGROUP_BARRIER);
         }
+
+        features.set(F::EXPERIMENTAL_MESH_SHADER, self.mesh_shaders);
 
         if self.supported_vertex_amplification_factor > 1 {
             features.insert(F::MULTIVIEW);
@@ -1083,9 +1104,7 @@ impl super::PrivateCapabilities {
                 max_vertex_buffers: self.max_vertex_buffers,
                 max_vertex_attributes: 31,
                 max_vertex_buffer_array_stride: base.max_vertex_buffer_array_stride,
-                min_subgroup_size: 4,
-                max_subgroup_size: 64,
-                max_push_constant_size: 0x1000,
+                max_immediate_size: 0x1000,
                 min_uniform_buffer_offset_alignment: self.buffer_alignment as u32,
                 min_storage_buffer_offset_alignment: self.buffer_alignment as u32,
                 max_inter_stage_shader_components: self.max_varying_components,
@@ -1102,16 +1121,18 @@ impl super::PrivateCapabilities {
                 max_buffer_size: self.max_buffer_size,
                 max_non_sampler_bindings: u32::MAX,
 
-                max_task_mesh_workgroup_total_count: 0,
-                max_task_mesh_workgroups_per_dimension: 0,
-                max_task_invocations_per_workgroup: 0,
-                max_task_invocations_per_dimension: 0,
-                max_mesh_invocations_per_workgroup: 0,
-                max_mesh_invocations_per_dimension: 0,
-                max_task_payload_size: 0,
-                max_mesh_output_vertices: 0,
-                max_mesh_output_primitives: 0,
-                max_mesh_output_layers: 0,
+                // Should be not too large
+                max_task_mesh_workgroup_total_count: self.max_mesh_task_workgroup_count,
+                max_task_mesh_workgroups_per_dimension: self.max_mesh_task_workgroup_count,
+                max_task_invocations_per_workgroup: if self.mesh_shaders { 1024 } else { 0 },
+                max_task_invocations_per_dimension: if self.mesh_shaders { 1024 } else { 0 },
+                max_mesh_invocations_per_workgroup: if self.mesh_shaders { 1024 } else { 0 },
+                max_mesh_invocations_per_dimension: if self.mesh_shaders { 1024 } else { 0 },
+                // Using certain variables or debuggers can reduce the size by 32 bytes
+                max_task_payload_size: self.max_task_payload_size,
+                max_mesh_output_vertices: 256,
+                max_mesh_output_primitives: 256,
+                max_mesh_output_layers: self.max_texture_layers as u32,
                 max_mesh_multiview_view_count: 0,
 
                 max_blas_primitive_count: 0, // When added: 2^28 from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits

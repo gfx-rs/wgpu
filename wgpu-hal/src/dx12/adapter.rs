@@ -116,6 +116,15 @@ impl super::Adapter {
         }
         .unwrap();
 
+        let mut features1 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS1::default();
+        let hr = unsafe {
+            device.CheckFeatureSupport(
+                Direct3D12::D3D12_FEATURE_D3D12_OPTIONS1,
+                <*mut _>::cast(&mut features1),
+                size_of_val(&features1) as u32,
+            )
+        };
+
         let driver_version = unsafe { adapter.CheckInterfaceSupport(&Dxgi::IDXGIDevice::IID) }
             .ok()
             .map(|i| {
@@ -156,6 +165,8 @@ impl super::Adapter {
                 driver_version.0, driver_version.1, driver_version.2, driver_version.3
             ),
             driver_info: String::new(),
+            subgroup_min_size: features1.WaveLaneCountMin,
+            subgroup_max_size: features1.WaveLaneCountMax,
             transient_saves_memory: false,
         };
 
@@ -364,12 +375,12 @@ impl super::Adapter {
                 Direct3D12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_2,
                 64,
             ),
-            Direct3D12::D3D12_RESOURCE_BINDING_TIER_3 => (
+            tier if tier.0 >= Direct3D12::D3D12_RESOURCE_BINDING_TIER_3.0 => (
                 tier3_practical_descriptor_limit,
                 tier3_practical_descriptor_limit,
             ),
             other => {
-                log::warn!("Unknown resource binding tier {other:?}");
+                log::debug!("Got zero or negative value for resource binding tier {other:?}");
                 (
                     Direct3D12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_1,
                     8,
@@ -395,7 +406,7 @@ impl super::Adapter {
             | wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D
             | wgt::Features::CLEAR_TEXTURE
             | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
-            | wgt::Features::PUSH_CONSTANTS
+            | wgt::Features::IMMEDIATES
             | wgt::Features::SHADER_PRIMITIVE_INDEX
             | wgt::Features::RG11B10UFLOAT_RENDERABLE
             | wgt::Features::DUAL_SOURCE_BLENDING
@@ -483,15 +494,6 @@ impl super::Adapter {
         };
         features.set(wgt::Features::TEXTURE_FORMAT_P010, p010_format_supported);
 
-        let mut features1 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS1::default();
-        let hr = unsafe {
-            device.CheckFeatureSupport(
-                Direct3D12::D3D12_FEATURE_D3D12_OPTIONS1,
-                <*mut _>::cast(&mut features1),
-                size_of_val(&features1) as u32,
-            )
-        };
-
         features.set(
             wgt::Features::SHADER_INT64,
             shader_model >= naga::back::hlsl::ShaderModel::V6_0
@@ -514,13 +516,6 @@ impl super::Adapter {
         features.set(
             wgt::Features::SHADER_F16,
             shader_model >= naga::back::hlsl::ShaderModel::V6_2 && float16_supported,
-        );
-
-        features.set(
-            wgt::Features::TEXTURE_INT64_ATOMIC,
-            shader_model >= naga::back::hlsl::ShaderModel::V6_6
-                && hr.is_ok()
-                && features1.Int64ShaderOps.as_bool(),
         );
 
         features.set(
@@ -550,23 +545,62 @@ impl super::Adapter {
             supports_ray_tracing,
         );
 
-        let atomic_int64_on_typed_resource_supported = {
+        // Check for Int64 atomic support on buffers. This is very convoluted, but is based on a conservative reading
+        // of https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_Int64_and_Float_Atomics.html#integer-64-bit-capabilities.
+        let atomic_int64_buffers;
+        let atomic_int64_textures;
+        {
             let mut features9 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS9::default();
-            unsafe {
+            let hr9 = unsafe {
                 device.CheckFeatureSupport(
                     Direct3D12::D3D12_FEATURE_D3D12_OPTIONS9,
                     <*mut _>::cast(&mut features9),
                     size_of_val(&features9) as u32,
                 )
             }
-            .is_ok()
-                && features9.AtomicInt64OnGroupSharedSupported.as_bool()
+            .is_ok();
+
+            let mut features11 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS11::default();
+            let hr11 = unsafe {
+                device.CheckFeatureSupport(
+                    Direct3D12::D3D12_FEATURE_D3D12_OPTIONS11,
+                    <*mut _>::cast(&mut features11),
+                    size_of_val(&features11) as u32,
+                )
+            }
+            .is_ok();
+
+            atomic_int64_buffers = hr9 && hr11 && hr.is_ok()
+                // Int64 atomics show up in SM6.6.
+                && shader_model >= naga::back::hlsl::ShaderModel::V6_6
+                // They require Int64 to be available in the shader at all.
+                && features1.Int64ShaderOps.as_bool()
+                // As our RWByteAddressBuffers can exist on both descriptor heaps and
+                // as root descriptors, we need to ensure that both cases are supported.
+                // base SM6.6 only guarantees Int64 atomics on resources in root descriptors.
+                && features11.AtomicInt64OnDescriptorHeapResourceSupported.as_bool()
+                // Our Int64 atomic caps currently require groupshared. This
+                // prevents Intel or Qcomm from using Int64 currently.
+                // https://github.com/gfx-rs/wgpu/issues/8666
+                && features9.AtomicInt64OnGroupSharedSupported.as_bool();
+
+            atomic_int64_textures = hr9 && hr11 && hr.is_ok()
+                // Int64 atomics show up in SM6.6.
+                && shader_model >= naga::back::hlsl::ShaderModel::V6_6
+                // They require Int64 to be available in the shader at all.
+                && features1.Int64ShaderOps.as_bool()
+                // Textures are typed resources, so we need this flag.
                 && features9.AtomicInt64OnTypedResourceSupported.as_bool()
+                // As textures can only exist in descriptor heaps, we require this.
+                // However, all architectures that support atomics on typed resources
+                // support this as well, so this is somewhat redundant.
+                && features11.AtomicInt64OnDescriptorHeapResourceSupported.as_bool();
         };
         features.set(
             wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
-            atomic_int64_on_typed_resource_supported,
+            atomic_int64_buffers,
         );
+        features.set(wgt::Features::TEXTURE_INT64_ATOMIC, atomic_int64_textures);
         let mesh_shader_supported = {
             let mut features7 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS7::default();
             unsafe {
@@ -601,13 +635,20 @@ impl super::Adapter {
             shader_barycentrics_supported,
         );
 
-        // Re-enable this when multiview is supported on DX12
-        // features.set(wgt::Features::MULTIVIEW, view_instancing);
-        // features.set(wgt::Features::SELECTIVE_MULTIVIEW, view_instancing);
+        features.set(
+            wgt::Features::MULTIVIEW,
+            view_instancing && shader_model >= naga::back::hlsl::ShaderModel::V6_1,
+        );
+        features.set(
+            wgt::Features::SELECTIVE_MULTIVIEW,
+            view_instancing && shader_model >= naga::back::hlsl::ShaderModel::V6_1,
+        );
 
         features.set(
             wgt::Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
-            mesh_shader_supported && view_instancing,
+            mesh_shader_supported
+                && view_instancing
+                && shader_model >= naga::back::hlsl::ShaderModel::V6_1,
         );
 
         // TODO: Determine if IPresentationManager is supported
@@ -687,13 +728,11 @@ impl super::Adapter {
                         .min(crate::MAX_VERTEX_BUFFERS as u32),
                     max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
                     max_vertex_buffer_array_stride: Direct3D12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
-                    min_subgroup_size: 4, // Not using `features1.WaveLaneCountMin` as it is unreliable
-                    max_subgroup_size: 128,
-                    // The push constants are part of the root signature which
+                    // The immediates are part of the root signature which
                     // has a limit of 64 DWORDS (256 bytes), but other resources
                     // also share the root signature:
                     //
-                    // - push constants consume a `DWORD` for each `4 bytes` of data
+                    // - immediates consume a `DWORD` for each `4 bytes` of data
                     // - If a bind group has buffers it will consume a `DWORD`
                     //   for the descriptor table
                     // - If a bind group has samplers it will consume a `DWORD`
@@ -709,7 +748,7 @@ impl super::Adapter {
                     // constants needs to be set to a reasonable number instead.
                     //
                     // Source: https://learn.microsoft.com/en-us/windows/win32/direct3d12/root-signature-limits#memory-limits-and-costs
-                    max_push_constant_size: 128,
+                    max_immediate_size: 128,
                     min_uniform_buffer_offset_alignment:
                         Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
                     min_storage_buffer_offset_alignment: 4,

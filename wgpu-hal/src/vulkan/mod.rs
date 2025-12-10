@@ -696,10 +696,22 @@ pub struct AccelerationStructure {
 impl crate::DynAccelerationStructure for AccelerationStructure {}
 
 #[derive(Debug)]
+pub enum TextureMemory {
+    // shared memory in GPU allocator (owned by wgpu-hal)
+    Block(gpu_alloc::MemoryBlock<vk::DeviceMemory>),
+
+    // dedicated memory (owned by wgpu-hal)
+    Dedicated(vk::DeviceMemory),
+
+    // memory not owned by wgpu
+    External,
+}
+
+#[derive(Debug)]
 pub struct Texture {
     raw: vk::Image,
-    external_memory: Option<vk::DeviceMemory>,
-    block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
+    memory: TextureMemory,
+
     format: wgt::TextureFormat,
     copy_size: crate::CopyExtent,
     identity: ResourceIdentity<vk::Image>,
@@ -722,8 +734,8 @@ impl Texture {
     /// # Safety
     ///
     /// - The external memory must not be manually freed
-    pub unsafe fn external_memory(&self) -> Option<vk::DeviceMemory> {
-        self.external_memory
+    pub unsafe fn memory(&self) -> &TextureMemory {
+        &self.memory
     }
 }
 

@@ -1,5 +1,5 @@
 glsl_multiview = 2
-god_mode = true
+capabilities = "MULTIVIEW"
 targets = "GLSL"
 
 [glsl]

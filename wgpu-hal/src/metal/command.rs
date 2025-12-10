@@ -7,7 +7,7 @@ use alloc::{
 use core::ops::Range;
 use metal::{
     MTLIndexType, MTLLoadAction, MTLPrimitiveType, MTLScissorRect, MTLSize, MTLStoreAction,
-    MTLViewport, MTLVisibilityResultMode, NSRange,
+    MTLViewport, MTLVisibilityResultMode, NSRange, NSUInteger,
 };
 use smallvec::SmallVec;
 
@@ -22,13 +22,80 @@ impl Default for super::CommandState {
             compute: None,
             raw_primitive_type: MTLPrimitiveType::Point,
             index: None,
-            raw_wg_size: MTLSize::new(0, 0, 0),
             stage_infos: Default::default(),
             storage_buffer_length_map: Default::default(),
             vertex_buffer_size_map: Default::default(),
-            work_group_memory_sizes: Vec::new(),
-            push_constants: Vec::new(),
+            immediates: Vec::new(),
             pending_timer_queries: Vec::new(),
+        }
+    }
+}
+
+/// Helper for passing encoders to `update_bind_group_state`.
+///
+/// Combines [`naga::ShaderStage`] and an encoder of the appropriate type for
+/// that stage.
+enum Encoder<'e> {
+    Vertex(&'e metal::RenderCommandEncoder),
+    Fragment(&'e metal::RenderCommandEncoder),
+    Task(&'e metal::RenderCommandEncoder),
+    Mesh(&'e metal::RenderCommandEncoder),
+    Compute(&'e metal::ComputeCommandEncoder),
+}
+
+impl Encoder<'_> {
+    fn stage(&self) -> naga::ShaderStage {
+        match self {
+            Self::Vertex(_) => naga::ShaderStage::Vertex,
+            Self::Fragment(_) => naga::ShaderStage::Fragment,
+            Self::Task(_) => naga::ShaderStage::Task,
+            Self::Mesh(_) => naga::ShaderStage::Mesh,
+            Self::Compute(_) => naga::ShaderStage::Compute,
+        }
+    }
+
+    fn set_buffer(
+        &self,
+        index: NSUInteger,
+        buffer: Option<&metal::BufferRef>,
+        offset: wgt::BufferAddress,
+    ) {
+        match *self {
+            Self::Vertex(enc) => enc.set_vertex_buffer(index, buffer, offset),
+            Self::Fragment(enc) => enc.set_fragment_buffer(index, buffer, offset),
+            Self::Task(enc) => enc.set_object_buffer(index, buffer, offset),
+            Self::Mesh(enc) => enc.set_mesh_buffer(index, buffer, offset),
+            Self::Compute(enc) => enc.set_buffer(index, buffer, offset),
+        }
+    }
+
+    fn set_bytes(&self, index: NSUInteger, length: u64, bytes: *const core::ffi::c_void) {
+        match *self {
+            Self::Vertex(enc) => enc.set_vertex_bytes(index, length, bytes),
+            Self::Fragment(enc) => enc.set_fragment_bytes(index, length, bytes),
+            Self::Task(enc) => enc.set_object_bytes(index, length, bytes),
+            Self::Mesh(enc) => enc.set_mesh_bytes(index, length, bytes),
+            Self::Compute(enc) => enc.set_bytes(index, length, bytes),
+        }
+    }
+
+    fn set_sampler_state(&self, index: NSUInteger, state: Option<&metal::SamplerStateRef>) {
+        match *self {
+            Self::Vertex(enc) => enc.set_vertex_sampler_state(index, state),
+            Self::Fragment(enc) => enc.set_fragment_sampler_state(index, state),
+            Self::Task(enc) => enc.set_object_sampler_state(index, state),
+            Self::Mesh(enc) => enc.set_mesh_sampler_state(index, state),
+            Self::Compute(enc) => enc.set_sampler_state(index, state),
+        }
+    }
+
+    fn set_texture(&self, index: NSUInteger, texture: Option<&metal::TextureRef>) {
+        match *self {
+            Self::Vertex(enc) => enc.set_vertex_texture(index, texture),
+            Self::Fragment(enc) => enc.set_fragment_texture(index, texture),
+            Self::Task(enc) => enc.set_object_texture(index, texture),
+            Self::Mesh(enc) => enc.set_mesh_texture(index, texture),
+            Self::Compute(enc) => enc.set_texture(index, texture),
         }
     }
 }
@@ -146,6 +213,90 @@ impl super::CommandEncoder {
         self.state.reset();
         self.leave_blit();
     }
+
+    /// Updates the bindings for a single shader stage, called in `set_bind_group`.
+    fn update_bind_group_state(
+        &mut self,
+        encoder: Encoder<'_>,
+        index_base: super::ResourceData<u32>,
+        bg_info: &super::BindGroupLayoutInfo,
+        dynamic_offsets: &[wgt::DynamicOffset],
+        group_index: u32,
+        group: &super::BindGroup,
+    ) {
+        use naga::ShaderStage as S;
+        let resource_indices = match encoder.stage() {
+            S::Vertex => &bg_info.base_resource_indices.vs,
+            S::Fragment => &bg_info.base_resource_indices.fs,
+            S::Task => &bg_info.base_resource_indices.ts,
+            S::Mesh => &bg_info.base_resource_indices.ms,
+            S::Compute => &bg_info.base_resource_indices.cs,
+        };
+        let buffers = match encoder.stage() {
+            S::Vertex => group.counters.vs.buffers,
+            S::Fragment => group.counters.fs.buffers,
+            S::Task => group.counters.ts.buffers,
+            S::Mesh => group.counters.ms.buffers,
+            S::Compute => group.counters.cs.buffers,
+        };
+        let mut changes_sizes_buffer = false;
+        for index in 0..buffers {
+            let buf = &group.buffers[(index_base.buffers + index) as usize];
+            let mut offset = buf.offset;
+            if let Some(dyn_index) = buf.dynamic_index {
+                offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
+            }
+            let index = (resource_indices.buffers + index) as u64;
+            let buffer = Some(buf.ptr.as_native());
+            encoder.set_buffer(index, buffer, offset);
+            if let Some(size) = buf.binding_size {
+                let br = naga::ResourceBinding {
+                    group: group_index,
+                    binding: buf.binding_location,
+                };
+                self.state.storage_buffer_length_map.insert(br, size);
+                changes_sizes_buffer = true;
+            }
+        }
+        if changes_sizes_buffer {
+            if let Some((index, sizes)) = self
+                .state
+                .make_sizes_buffer_update(encoder.stage(), &mut self.temp.binding_sizes)
+            {
+                let index = index as _;
+                let length = (sizes.len() * WORD_SIZE) as u64;
+                let bytes_ptr = sizes.as_ptr().cast();
+                encoder.set_bytes(index, length, bytes_ptr);
+            }
+        }
+        let samplers = match encoder.stage() {
+            S::Vertex => group.counters.vs.samplers,
+            S::Fragment => group.counters.fs.samplers,
+            S::Task => group.counters.ts.samplers,
+            S::Mesh => group.counters.ms.samplers,
+            S::Compute => group.counters.cs.samplers,
+        };
+        for index in 0..samplers {
+            let res = group.samplers[(index_base.samplers + index) as usize];
+            let index = (resource_indices.samplers + index) as u64;
+            let state = Some(res.as_native());
+            encoder.set_sampler_state(index, state);
+        }
+
+        let textures = match encoder.stage() {
+            S::Vertex => group.counters.vs.textures,
+            S::Fragment => group.counters.fs.textures,
+            S::Task => group.counters.ts.textures,
+            S::Mesh => group.counters.ms.textures,
+            S::Compute => group.counters.cs.textures,
+        };
+        for index in 0..textures {
+            let res = group.textures[(index_base.textures + index) as usize];
+            let index = (resource_indices.textures + index) as u64;
+            let texture = Some(res.as_native());
+            encoder.set_texture(index, texture);
+        }
+    }
 }
 
 impl super::CommandState {
@@ -155,8 +306,9 @@ impl super::CommandState {
         self.stage_infos.vs.clear();
         self.stage_infos.fs.clear();
         self.stage_infos.cs.clear();
-        self.work_group_memory_sizes.clear();
-        self.push_constants.clear();
+        self.stage_infos.ts.clear();
+        self.stage_infos.ms.clear();
+        self.immediates.clear();
     }
 
     fn make_sizes_buffer_update<'a>(
@@ -550,9 +702,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
                     }
                     let load_action = if at.ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
-                    } else {
+                    } else if at.ops.contains(crate::AttachmentOps::LOAD_DONT_CARE) {
+                        MTLLoadAction::DontCare
+                    } else if at.ops.contains(crate::AttachmentOps::LOAD_CLEAR) {
                         at_descriptor.set_clear_color(conv::map_clear_color(&at.clear_value));
                         MTLLoadAction::Clear
+                    } else {
+                        unreachable!()
                     };
                     let store_action = conv::map_store_action(
                         at.ops.contains(crate::AttachmentOps::STORE),
@@ -570,9 +726,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
                     let load_action = if at.depth_ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
-                    } else {
+                    } else if at.depth_ops.contains(crate::AttachmentOps::LOAD_DONT_CARE) {
+                        MTLLoadAction::DontCare
+                    } else if at.depth_ops.contains(crate::AttachmentOps::LOAD_CLEAR) {
                         at_descriptor.set_clear_depth(at.clear_value.0 as f64);
                         MTLLoadAction::Clear
+                    } else {
+                        unreachable!();
                     };
                     let store_action = if at.depth_ops.contains(crate::AttachmentOps::STORE) {
                         MTLStoreAction::Store
@@ -593,9 +753,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
                     let load_action = if at.stencil_ops.contains(crate::AttachmentOps::LOAD) {
                         MTLLoadAction::Load
-                    } else {
+                    } else if at
+                        .stencil_ops
+                        .contains(crate::AttachmentOps::LOAD_DONT_CARE)
+                    {
+                        MTLLoadAction::DontCare
+                    } else if at.stencil_ops.contains(crate::AttachmentOps::LOAD_CLEAR) {
                         at_descriptor.set_clear_stencil(at.clear_value.1);
                         MTLLoadAction::Clear
+                    } else {
+                        unreachable!()
                     };
                     let store_action = if at.stencil_ops.contains(crate::AttachmentOps::STORE) {
                         MTLStoreAction::Store
@@ -702,168 +869,80 @@ impl crate::CommandEncoder for super::CommandEncoder {
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
         let bg_info = &layout.bind_group_infos[group_index as usize];
-
-        if let Some(ref encoder) = self.state.render {
-            let mut changes_sizes_buffer = false;
-            for index in 0..group.counters.vs.buffers {
-                let buf = &group.buffers[index as usize];
-                let mut offset = buf.offset;
-                if let Some(dyn_index) = buf.dynamic_index {
-                    offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
-                }
-                encoder.set_vertex_buffer(
-                    (bg_info.base_resource_indices.vs.buffers + index) as u64,
-                    Some(buf.ptr.as_native()),
-                    offset,
-                );
-                if let Some(size) = buf.binding_size {
-                    let br = naga::ResourceBinding {
-                        group: group_index,
-                        binding: buf.binding_location,
-                    };
-                    self.state.storage_buffer_length_map.insert(br, size);
-                    changes_sizes_buffer = true;
-                }
-            }
-            if changes_sizes_buffer {
-                if let Some((index, sizes)) = self.state.make_sizes_buffer_update(
-                    naga::ShaderStage::Vertex,
-                    &mut self.temp.binding_sizes,
-                ) {
-                    encoder.set_vertex_bytes(
-                        index as _,
-                        (sizes.len() * WORD_SIZE) as u64,
-                        sizes.as_ptr().cast(),
-                    );
-                }
-            }
-
-            changes_sizes_buffer = false;
-            for index in 0..group.counters.fs.buffers {
-                let buf = &group.buffers[(group.counters.vs.buffers + index) as usize];
-                let mut offset = buf.offset;
-                if let Some(dyn_index) = buf.dynamic_index {
-                    offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
-                }
-                encoder.set_fragment_buffer(
-                    (bg_info.base_resource_indices.fs.buffers + index) as u64,
-                    Some(buf.ptr.as_native()),
-                    offset,
-                );
-                if let Some(size) = buf.binding_size {
-                    let br = naga::ResourceBinding {
-                        group: group_index,
-                        binding: buf.binding_location,
-                    };
-                    self.state.storage_buffer_length_map.insert(br, size);
-                    changes_sizes_buffer = true;
-                }
-            }
-            if changes_sizes_buffer {
-                if let Some((index, sizes)) = self.state.make_sizes_buffer_update(
-                    naga::ShaderStage::Fragment,
-                    &mut self.temp.binding_sizes,
-                ) {
-                    encoder.set_fragment_bytes(
-                        index as _,
-                        (sizes.len() * WORD_SIZE) as u64,
-                        sizes.as_ptr().cast(),
-                    );
-                }
-            }
-
-            for index in 0..group.counters.vs.samplers {
-                let res = group.samplers[index as usize];
-                encoder.set_vertex_sampler_state(
-                    (bg_info.base_resource_indices.vs.samplers + index) as u64,
-                    Some(res.as_native()),
-                );
-            }
-            for index in 0..group.counters.fs.samplers {
-                let res = group.samplers[(group.counters.vs.samplers + index) as usize];
-                encoder.set_fragment_sampler_state(
-                    (bg_info.base_resource_indices.fs.samplers + index) as u64,
-                    Some(res.as_native()),
-                );
-            }
-
-            for index in 0..group.counters.vs.textures {
-                let res = group.textures[index as usize];
-                encoder.set_vertex_texture(
-                    (bg_info.base_resource_indices.vs.textures + index) as u64,
-                    Some(res.as_native()),
-                );
-            }
-            for index in 0..group.counters.fs.textures {
-                let res = group.textures[(group.counters.vs.textures + index) as usize];
-                encoder.set_fragment_texture(
-                    (bg_info.base_resource_indices.fs.textures + index) as u64,
-                    Some(res.as_native()),
-                );
-            }
-
+        let render_encoder = self.state.render.clone();
+        let compute_encoder = self.state.compute.clone();
+        if let Some(encoder) = render_encoder {
+            self.update_bind_group_state(
+                Encoder::Vertex(&encoder),
+                // All zeros, as vs comes first
+                super::ResourceData::default(),
+                bg_info,
+                dynamic_offsets,
+                group_index,
+                group,
+            );
+            self.update_bind_group_state(
+                Encoder::Task(&encoder),
+                // All zeros, as ts comes first
+                super::ResourceData::default(),
+                bg_info,
+                dynamic_offsets,
+                group_index,
+                group,
+            );
+            self.update_bind_group_state(
+                Encoder::Mesh(&encoder),
+                group.counters.ts.clone(),
+                bg_info,
+                dynamic_offsets,
+                group_index,
+                group,
+            );
+            self.update_bind_group_state(
+                Encoder::Fragment(&encoder),
+                super::ResourceData {
+                    buffers: group.counters.vs.buffers
+                        + group.counters.ts.buffers
+                        + group.counters.ms.buffers,
+                    textures: group.counters.vs.textures
+                        + group.counters.ts.textures
+                        + group.counters.ms.textures,
+                    samplers: group.counters.vs.samplers
+                        + group.counters.ts.samplers
+                        + group.counters.ms.samplers,
+                },
+                bg_info,
+                dynamic_offsets,
+                group_index,
+                group,
+            );
             // Call useResource on all textures and buffers used indirectly so they are alive
             for (resource, use_info) in group.resources_to_use.iter() {
                 encoder.use_resource_at(resource.as_native(), use_info.uses, use_info.stages);
             }
         }
-
-        if let Some(ref encoder) = self.state.compute {
-            let index_base = super::ResourceData {
-                buffers: group.counters.vs.buffers + group.counters.fs.buffers,
-                samplers: group.counters.vs.samplers + group.counters.fs.samplers,
-                textures: group.counters.vs.textures + group.counters.fs.textures,
-            };
-
-            let mut changes_sizes_buffer = false;
-            for index in 0..group.counters.cs.buffers {
-                let buf = &group.buffers[(index_base.buffers + index) as usize];
-                let mut offset = buf.offset;
-                if let Some(dyn_index) = buf.dynamic_index {
-                    offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
-                }
-                encoder.set_buffer(
-                    (bg_info.base_resource_indices.cs.buffers + index) as u64,
-                    Some(buf.ptr.as_native()),
-                    offset,
-                );
-                if let Some(size) = buf.binding_size {
-                    let br = naga::ResourceBinding {
-                        group: group_index,
-                        binding: buf.binding_location,
-                    };
-                    self.state.storage_buffer_length_map.insert(br, size);
-                    changes_sizes_buffer = true;
-                }
-            }
-            if changes_sizes_buffer {
-                if let Some((index, sizes)) = self.state.make_sizes_buffer_update(
-                    naga::ShaderStage::Compute,
-                    &mut self.temp.binding_sizes,
-                ) {
-                    encoder.set_bytes(
-                        index as _,
-                        (sizes.len() * WORD_SIZE) as u64,
-                        sizes.as_ptr().cast(),
-                    );
-                }
-            }
-
-            for index in 0..group.counters.cs.samplers {
-                let res = group.samplers[(index_base.samplers + index) as usize];
-                encoder.set_sampler_state(
-                    (bg_info.base_resource_indices.cs.samplers + index) as u64,
-                    Some(res.as_native()),
-                );
-            }
-            for index in 0..group.counters.cs.textures {
-                let res = group.textures[(index_base.textures + index) as usize];
-                encoder.set_texture(
-                    (bg_info.base_resource_indices.cs.textures + index) as u64,
-                    Some(res.as_native()),
-                );
-            }
-
+        if let Some(encoder) = compute_encoder {
+            self.update_bind_group_state(
+                Encoder::Compute(&encoder),
+                super::ResourceData {
+                    buffers: group.counters.vs.buffers
+                        + group.counters.ts.buffers
+                        + group.counters.ms.buffers
+                        + group.counters.fs.buffers,
+                    textures: group.counters.vs.textures
+                        + group.counters.ts.textures
+                        + group.counters.ms.textures
+                        + group.counters.fs.textures,
+                    samplers: group.counters.vs.samplers
+                        + group.counters.ts.samplers
+                        + group.counters.ms.samplers
+                        + group.counters.fs.samplers,
+                },
+                bg_info,
+                dynamic_offsets,
+                group_index,
+                group,
+            );
             // Call useResource on all textures and buffers used indirectly so they are alive
             for (resource, use_info) in group.resources_to_use.iter() {
                 if !use_info.visible_in_compute {
@@ -874,16 +953,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn set_push_constants(
+    unsafe fn set_immediates(
         &mut self,
         layout: &super::PipelineLayout,
         stages: wgt::ShaderStages,
         offset_bytes: u32,
         data: &[u32],
     ) {
-        let state_pc = &mut self.state.push_constants;
-        if state_pc.len() < layout.total_push_constants as usize {
-            state_pc.resize(layout.total_push_constants as usize, 0);
+        let state_pc = &mut self.state.immediates;
+        if state_pc.len() < layout.total_immediates as usize {
+            state_pc.resize(layout.total_immediates as usize, 0);
         }
         debug_assert_eq!(offset_bytes as usize % WORD_SIZE, 0);
 
@@ -892,22 +971,36 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
         if stages.contains(wgt::ShaderStages::COMPUTE) {
             self.state.compute.as_ref().unwrap().set_bytes(
-                layout.push_constants_infos.cs.unwrap().buffer_index as _,
-                (layout.total_push_constants as usize * WORD_SIZE) as _,
+                layout.immediates_infos.cs.unwrap().buffer_index as _,
+                (layout.total_immediates as usize * WORD_SIZE) as _,
                 state_pc.as_ptr().cast(),
             )
         }
         if stages.contains(wgt::ShaderStages::VERTEX) {
             self.state.render.as_ref().unwrap().set_vertex_bytes(
-                layout.push_constants_infos.vs.unwrap().buffer_index as _,
-                (layout.total_push_constants as usize * WORD_SIZE) as _,
+                layout.immediates_infos.vs.unwrap().buffer_index as _,
+                (layout.total_immediates as usize * WORD_SIZE) as _,
                 state_pc.as_ptr().cast(),
             )
         }
         if stages.contains(wgt::ShaderStages::FRAGMENT) {
             self.state.render.as_ref().unwrap().set_fragment_bytes(
-                layout.push_constants_infos.fs.unwrap().buffer_index as _,
-                (layout.total_push_constants as usize * WORD_SIZE) as _,
+                layout.immediates_infos.fs.unwrap().buffer_index as _,
+                (layout.total_immediates as usize * WORD_SIZE) as _,
+                state_pc.as_ptr().cast(),
+            )
+        }
+        if stages.contains(wgt::ShaderStages::TASK) {
+            self.state.render.as_ref().unwrap().set_object_bytes(
+                layout.immediates_infos.ts.unwrap().buffer_index as _,
+                (layout.total_immediates as usize * WORD_SIZE) as _,
+                state_pc.as_ptr().cast(),
+            )
+        }
+        if stages.contains(wgt::ShaderStages::MESH) {
+            self.state.render.as_ref().unwrap().set_object_bytes(
+                layout.immediates_infos.ms.unwrap().buffer_index as _,
+                (layout.total_immediates as usize * WORD_SIZE) as _,
                 state_pc.as_ptr().cast(),
             )
         }
@@ -935,10 +1028,21 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         self.state.raw_primitive_type = pipeline.raw_primitive_type;
-        self.state.stage_infos.vs.assign_from(&pipeline.vs_info);
+        match pipeline.vs_info {
+            Some(ref info) => self.state.stage_infos.vs.assign_from(info),
+            None => self.state.stage_infos.vs.clear(),
+        }
         match pipeline.fs_info {
             Some(ref info) => self.state.stage_infos.fs.assign_from(info),
             None => self.state.stage_infos.fs.clear(),
+        }
+        match pipeline.ts_info {
+            Some(ref info) => self.state.stage_infos.ts.assign_from(info),
+            None => self.state.stage_infos.ts.clear(),
+        }
+        match pipeline.ms_info {
+            Some(ref info) => self.state.stage_infos.ms.assign_from(info),
+            None => self.state.stage_infos.ms.clear(),
         }
 
         let encoder = self.state.render.as_ref().unwrap();
@@ -954,7 +1058,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             encoder.set_depth_bias(bias.constant as f32, bias.slope_scale, bias.clamp);
         }
 
-        {
+        if pipeline.vs_info.is_some() {
             if let Some((index, sizes)) = self
                 .state
                 .make_sizes_buffer_update(naga::ShaderStage::Vertex, &mut self.temp.binding_sizes)
@@ -966,12 +1070,62 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 );
             }
         }
-        if pipeline.fs_lib.is_some() {
+        if pipeline.fs_info.is_some() {
             if let Some((index, sizes)) = self
                 .state
                 .make_sizes_buffer_update(naga::ShaderStage::Fragment, &mut self.temp.binding_sizes)
             {
                 encoder.set_fragment_bytes(
+                    index as _,
+                    (sizes.len() * WORD_SIZE) as u64,
+                    sizes.as_ptr().cast(),
+                );
+            }
+        }
+        if let Some(ts_info) = &pipeline.ts_info {
+            // update the threadgroup memory sizes
+            while self.state.stage_infos.ms.work_group_memory_sizes.len()
+                < ts_info.work_group_memory_sizes.len()
+            {
+                self.state.stage_infos.ms.work_group_memory_sizes.push(0);
+            }
+            for (index, (cur_size, pipeline_size)) in self
+                .state
+                .stage_infos
+                .ms
+                .work_group_memory_sizes
+                .iter_mut()
+                .zip(ts_info.work_group_memory_sizes.iter())
+                .enumerate()
+            {
+                let size = pipeline_size.next_multiple_of(16);
+                if *cur_size != size {
+                    *cur_size = size;
+                    encoder.set_object_threadgroup_memory_length(index as _, size as _);
+                }
+            }
+            if let Some((index, sizes)) = self
+                .state
+                .make_sizes_buffer_update(naga::ShaderStage::Task, &mut self.temp.binding_sizes)
+            {
+                encoder.set_object_bytes(
+                    index as _,
+                    (sizes.len() * WORD_SIZE) as u64,
+                    sizes.as_ptr().cast(),
+                );
+            }
+        }
+        if let Some(_ms_info) = &pipeline.ms_info {
+            // So there isn't an equivalent to
+            // https://developer.apple.com/documentation/metal/mtlrendercommandencoder/setthreadgroupmemorylength(_:offset:index:)
+            // for mesh shaders. This is probably because the CPU has less control over the dispatch sizes and such. Interestingly
+            // it also affects mesh shaders without task/object shaders, even though none of compute, task or fragment shaders
+            // behave this way.
+            if let Some((index, sizes)) = self
+                .state
+                .make_sizes_buffer_update(naga::ShaderStage::Mesh, &mut self.temp.binding_sizes)
+            {
+                encoder.set_mesh_bytes(
                     index as _,
                     (sizes.len() * WORD_SIZE) as u64,
                     sizes.as_ptr().cast(),
@@ -1140,11 +1294,21 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn draw_mesh_tasks(
         &mut self,
-        _group_count_x: u32,
-        _group_count_y: u32,
-        _group_count_z: u32,
+        group_count_x: u32,
+        group_count_y: u32,
+        group_count_z: u32,
     ) {
-        unreachable!()
+        let encoder = self.state.render.as_ref().unwrap();
+        let size = MTLSize {
+            width: group_count_x as u64,
+            height: group_count_y as u64,
+            depth: group_count_z as u64,
+        };
+        encoder.draw_mesh_threadgroups(
+            size,
+            self.state.stage_infos.ts.raw_wg_size,
+            self.state.stage_infos.ms.raw_wg_size,
+        );
     }
 
     unsafe fn draw_indirect(
@@ -1183,11 +1347,20 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn draw_mesh_tasks_indirect(
         &mut self,
-        _buffer: &<Self::A as crate::Api>::Buffer,
-        _offset: wgt::BufferAddress,
-        _draw_count: u32,
+        buffer: &<Self::A as crate::Api>::Buffer,
+        mut offset: wgt::BufferAddress,
+        draw_count: u32,
     ) {
-        unreachable!()
+        let encoder = self.state.render.as_ref().unwrap();
+        for _ in 0..draw_count {
+            encoder.draw_mesh_threadgroups_with_indirect_buffer(
+                &buffer.raw,
+                offset,
+                self.state.stage_infos.ts.raw_wg_size,
+                self.state.stage_infos.ms.raw_wg_size,
+            );
+            offset += size_of::<wgt::DispatchIndirectArgs>() as wgt::BufferAddress;
+        }
     }
 
     unsafe fn draw_indirect_count(
@@ -1295,7 +1468,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
     }
 
     unsafe fn set_compute_pipeline(&mut self, pipeline: &super::ComputePipeline) {
-        self.state.raw_wg_size = pipeline.work_group_size;
+        let previous_sizes =
+            core::mem::take(&mut self.state.stage_infos.cs.work_group_memory_sizes);
         self.state.stage_infos.cs.assign_from(&pipeline.cs_info);
 
         let encoder = self.state.compute.as_ref().unwrap();
@@ -1313,20 +1487,23 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
 
         // update the threadgroup memory sizes
-        while self.state.work_group_memory_sizes.len() < pipeline.work_group_memory_sizes.len() {
-            self.state.work_group_memory_sizes.push(0);
-        }
-        for (index, (cur_size, pipeline_size)) in self
+        for (i, current_size) in self
             .state
+            .stage_infos
+            .cs
             .work_group_memory_sizes
             .iter_mut()
-            .zip(pipeline.work_group_memory_sizes.iter())
             .enumerate()
         {
-            let size = pipeline_size.next_multiple_of(16);
-            if *cur_size != size {
-                *cur_size = size;
-                encoder.set_threadgroup_memory_length(index as _, size as _);
+            let prev_size = if i < previous_sizes.len() {
+                previous_sizes[i]
+            } else {
+                u32::MAX
+            };
+            let size: u32 = current_size.next_multiple_of(16);
+            *current_size = size;
+            if size != prev_size {
+                encoder.set_threadgroup_memory_length(i as _, size as _);
             }
         }
     }
@@ -1339,13 +1516,17 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 height: count[1] as u64,
                 depth: count[2] as u64,
             };
-            encoder.dispatch_thread_groups(raw_count, self.state.raw_wg_size);
+            encoder.dispatch_thread_groups(raw_count, self.state.stage_infos.cs.raw_wg_size);
         }
     }
 
     unsafe fn dispatch_indirect(&mut self, buffer: &super::Buffer, offset: wgt::BufferAddress) {
         let encoder = self.state.compute.as_ref().unwrap();
-        encoder.dispatch_thread_groups_indirect(&buffer.raw, offset, self.state.raw_wg_size);
+        encoder.dispatch_thread_groups_indirect(
+            &buffer.raw,
+            offset,
+            self.state.stage_infos.cs.raw_wg_size,
+        );
     }
 
     unsafe fn build_acceleration_structures<'a, T>(

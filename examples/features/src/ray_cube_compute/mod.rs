@@ -1,4 +1,4 @@
-use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task};
+use std::{borrow::Cow, iter, mem};
 
 use bytemuck::{Pod, Zeroable};
 use glam::{Affine3A, Mat4, Quat, Vec3};
@@ -96,28 +96,6 @@ fn affine_to_rows(mat: &Affine3A) -> [f32; 12] {
         row_2.z,
         translation.z,
     ]
-}
-
-/// A wrapper for `pop_error_scope` futures that panics if an error occurs.
-///
-/// Given a future `inner` of an `Option<E>` for some error type `E`,
-/// wait for the future to be ready, and panic if its value is `Some`.
-///
-/// This can be done simpler with `FutureExt`, but we don't want to add
-/// a dependency just for this small case.
-struct ErrorFuture<F> {
-    inner: F,
-}
-impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
-    type Output = ();
-    fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<()> {
-        let inner = unsafe { self.map_unchecked_mut(|me| &mut me.inner) };
-        inner.poll(cx).map(|error| {
-            if let Some(e) = error {
-                panic!("Rendering {e}");
-            }
-        })
-    }
 }
 
 struct Example {
@@ -420,8 +398,6 @@ impl crate::framework::Example for Example {
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        device.push_error_scope(wgpu::ErrorFilter::Validation);
-
         let anim_time = self.animation_timer.time();
 
         self.tlas[0].as_mut().unwrap().transform =

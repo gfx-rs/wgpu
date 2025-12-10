@@ -6,7 +6,7 @@ struct Pc {
     inner: vec4f,
 }
 
-var<push_constant> data2: Pc;
+var<immediate> data2: Pc;
 
 struct VsOut {
     @builtin(position) position: vec4f,

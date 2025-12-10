@@ -11,19 +11,7 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
 
     let targets = params.targets.unwrap();
 
-    let (capabilities, subgroup_stages, subgroup_operations) = if params.god_mode {
-        (
-            naga::valid::Capabilities::all(),
-            naga::valid::ShaderStages::all(),
-            naga::valid::SubgroupOperationSet::all(),
-        )
-    } else {
-        (
-            naga::valid::Capabilities::default(),
-            naga::valid::ShaderStages::empty(),
-            naga::valid::SubgroupOperationSet::empty(),
-        )
-    };
+    let capabilities = params.capabilities.unwrap_or_default();
 
     {
         if targets.contains(Targets::IR) {
@@ -40,8 +28,6 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
     };
 
     let info = naga::valid::Validator::new(validation_flags, capabilities)
-        .subgroup_stages(subgroup_stages)
-        .subgroup_operations(subgroup_operations)
         .validate(module)
         .unwrap_or_else(|err| {
             panic!("Naga module validation failed on test `{name}`:\n{err:?}");
@@ -65,8 +51,6 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
         }
 
         naga::valid::Validator::new(validation_flags, capabilities)
-            .subgroup_stages(subgroup_stages)
-            .subgroup_operations(subgroup_operations)
             .validate(module)
             .unwrap_or_else(|err| {
                 panic!("Post-compaction module validation failed on test '{name}':\n<{err:?}")

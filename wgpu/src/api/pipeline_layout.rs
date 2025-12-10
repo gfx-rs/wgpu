@@ -36,12 +36,12 @@ pub struct PipelineLayoutDescriptor<'a> {
     /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
     /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
     pub bind_group_layouts: &'a [&'a BindGroupLayout],
-    /// Set of push constant ranges this pipeline uses. Each shader stage that uses push constants
-    /// must define the range in push constant memory that corresponds to its single `var<push_constant>`
+    /// Set of immediate data ranges this pipeline uses. Each shader stage that uses immediates
+    /// must define the range in immediate data memory that corresponds to its single `var<immediate>`
     /// buffer.
     ///
-    /// If this array is non-empty, the [`Features::PUSH_CONSTANTS`] must be enabled.
-    pub push_constant_ranges: &'a [PushConstantRange],
+    /// If this array is non-empty, the [`Features::IMMEDIATES`] must be enabled.
+    pub immediates_ranges: &'a [ImmediateRange],
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(PipelineLayoutDescriptor<'_>: Send, Sync);

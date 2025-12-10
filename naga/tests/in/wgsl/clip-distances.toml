@@ -1,4 +1,4 @@
-god_mode = true
+capabilities = "CLIP_DISTANCE"
 targets = "SPIRV | GLSL | WGSL"
 
 [glsl]

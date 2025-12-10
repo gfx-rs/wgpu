@@ -124,7 +124,7 @@
             bind_group_layouts: [
                 PointerId(0x10),
             ],
-            push_constant_ranges: [],
+            immediates_ranges: [],
         )),
         CreateComputePipeline(
             id: PointerId(0x10),
@@ -155,7 +155,7 @@
                     ],
                     dynamic_offsets: [],
                     string_data: [],
-                    push_constant_data: [],
+                    immediates_data: [],
                 ),
             )
         ]),

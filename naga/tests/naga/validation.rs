@@ -1100,3 +1100,55 @@ fn used() {
         Some("_ = arr2[3];"),
     );
 }
+
+/// Expects parsing `input` to succeed and its validation to fail with error equal to `snapshot`.
+#[track_caller]
+fn check_wgsl_validation_error_message(input: &str, snapshot: &str) {
+    let module = naga::front::wgsl::parse_str(input).unwrap();
+    let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .expect_err("module should be invalid")
+        .emit_to_string(input);
+    if err != snapshot {
+        for diff in diff::lines(snapshot, &err) {
+            match diff {
+                diff::Result::Left(l) => println!("-{l}"),
+                diff::Result::Both(l, _) => println!(" {l}"),
+                diff::Result::Right(r) => println!("+{r}"),
+            }
+        }
+        panic!("Error does not match the expected snapshot");
+    }
+}
+
+#[test]
+fn image_store_type_mismatch() {
+    check_wgsl_validation_error_message(
+        r#"
+@group(0) @binding(0)
+var input_texture: texture_depth_2d;
+@group(0) @binding(1)
+var input_sampler: sampler;
+@group(0) @binding(2)
+var output_texture: texture_storage_2d<r32float,write>;
+
+@compute @workgroup_size(1, 1)
+fn main() {
+    let d: vec4<f32> = textureGather(input_texture, input_sampler, vec2f(0.0));
+    let min_d = min(min(d[0], d[1]), min(d[2], d[3]));
+    textureStore(output_texture, vec2u(1), min_d);
+}
+"#,
+        r#"error: Entry point main at Compute is invalid
+   ┌─ wgsl:12:17
+   │
+12 │     let min_d = min(min(d[0], d[1]), min(d[2], d[3]));
+   │                 ^^^ this value is of type Scalar(Scalar { kind: Float, width: 4 })
+13 │     textureStore(output_texture, vec2u(1), min_d);
+   │     ^^^^^^^^^^^^ expects a value argument of type Vector { size: Quad, scalar: Scalar { kind: Float, width: 4 } }
+   │
+   = Image store value parameter type mismatch
+
+"#,
+    );
+}

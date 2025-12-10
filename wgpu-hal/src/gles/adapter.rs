@@ -190,6 +190,8 @@ impl super::Adapter {
             device_pci_bus_id: String::new(),
             driver_info: version,
             backend: wgt::Backend::Gl,
+            subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
+            subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
             transient_saves_memory: false,
         }
     }
@@ -309,10 +311,11 @@ impl super::Adapter {
             es_supported || full_supported
         };
 
-        let supports_storage =
-            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_shader_storage_buffer_object");
-        let supports_compute =
-            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_compute_shader");
+        // Naga won't let you emit storage buffers at versions below this, so
+        // we currently can't support GL_ARB_shader_storage_buffer_object.
+        let supports_storage = supported((3, 1), (4, 3));
+        // Same with compute shaders and GL_ARB_compute_shader
+        let supports_compute = supported((3, 1), (4, 3));
         let supports_work_group_params = supports_compute;
 
         // ANGLE provides renderer strings like: "ANGLE (Apple, Apple M1 Pro, OpenGL 4.1)"
@@ -327,7 +330,7 @@ impl super::Adapter {
                 // Windows doesn't recognize `GL_MAX_VERTEX_ATTRIB_STRIDE`.
                 let new = (unsafe { gl.get_parameter_i32(glow::MAX_COMPUTE_SHADER_STORAGE_BLOCKS) }
                     as u32);
-                log::warn!("Max vertex shader storage blocks is zero, but GL_ARB_shader_storage_buffer_object is specified. Assuming the compute value {new}");
+                log::debug!("Max vertex shader storage blocks is zero, but GL_ARB_shader_storage_buffer_object is specified. Assuming the compute value {new}");
                 new
             } else {
                 value
@@ -366,7 +369,7 @@ impl super::Adapter {
             vertex_shader_storage_blocks == 0 && vertex_shader_storage_textures != 0;
         if vertex_ssbo_false_zero {
             // We only care about fragment here as the 0 is a lie.
-            log::warn!("Max vertex shader SSBO == 0 and SSTO != 0. Interpreting as false zero.");
+            log::debug!("Max vertex shader SSBO == 0 and SSTO != 0. Interpreting as false zero.");
         }
 
         let max_storage_buffers_per_shader_stage = if vertex_shader_storage_blocks == 0 {
@@ -443,7 +446,7 @@ impl super::Adapter {
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::CLEAR_TEXTURE
-            | wgt::Features::PUSH_CONSTANTS
+            | wgt::Features::IMMEDIATES
             | wgt::Features::DEPTH32FLOAT_STENCIL8;
         features.set(
             wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO,
@@ -736,13 +739,13 @@ impl super::Adapter {
                             // This should be at least 2048, but the driver for AMD Radeon HD 5870 on
                             // Windows doesn't recognize `GL_MAX_VERTEX_ATTRIB_STRIDE`.
 
-                            log::warn!("Max vertex attribute stride is 0. Assuming it is 2048");
+                            log::debug!("Max vertex attribute stride is 0. Assuming it is the OpenGL minimum spec 2048");
                             2048
                         } else {
                             value
                         }
                     } else {
-                        log::warn!("Max vertex attribute stride unknown. Assuming it is 2048");
+                        log::debug!("Max vertex attribute stride unknown. Assuming it is the OpenGL minimum spec 2048");
                         2048
                     }
                 } else {
@@ -751,9 +754,7 @@ impl super::Adapter {
             } else {
                 !0
             },
-            min_subgroup_size: 0,
-            max_subgroup_size: 0,
-            max_push_constant_size: super::MAX_PUSH_CONSTANTS as u32 * 4,
+            max_immediate_size: super::MAX_IMMEDIATES as u32 * 4,
             min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment,
             max_inter_stage_shader_components: {
@@ -839,7 +840,7 @@ impl super::Adapter {
             && r.split(&[' ', '(', ')'][..])
                 .any(|substr| substr.len() == 3 && substr.chars().nth(2) == Some('l'))
         {
-            log::warn!(
+            log::debug!(
                 "Detected skylake derivative running on mesa i915. Clears to srgb textures will \
                 use manual shader clears."
             );
@@ -962,7 +963,7 @@ impl super::Adapter {
         let linked_ok = unsafe { gl.get_program_link_status(program) };
         let msg = unsafe { gl.get_program_info_log(program) };
         if !msg.is_empty() {
-            log::warn!("Shader link error: {msg}");
+            log::error!("Shader link error: {msg}");
         }
         if !linked_ok {
             return None;

@@ -4,10 +4,10 @@ use crate::proc::overloads::any_overload_set::AnyOverloadSet;
 use crate::proc::overloads::list::List;
 use crate::proc::overloads::regular::regular;
 use crate::proc::overloads::utils::{
-    concrete_int_scalars, float_scalars, float_scalars_unimplemented_abstract, list, pairs, rule,
-    scalar_or_vecn, triples, vector_sizes,
+    float_scalars, float_scalars_unimplemented_abstract, list, pairs, rule, scalar_or_vecn, triples,
 };
 use crate::proc::overloads::OverloadSet;
+use crate::proc::type_methods::{concrete_int_scalars, vector_sizes};
 
 use crate::ir;
 

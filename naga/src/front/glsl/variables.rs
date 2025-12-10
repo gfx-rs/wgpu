@@ -555,7 +555,7 @@ impl Frontend {
                         TypeInner::Sampler { .. } => space = AddressSpace::Handle,
                         _ => {
                             if qualifiers.none_layout_qualifier("push_constant", &mut self.errors) {
-                                space = AddressSpace::PushConstant
+                                space = AddressSpace::Immediate
                             }
                         }
                     },

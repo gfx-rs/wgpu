@@ -1,4 +1,4 @@
-god_mode = true
+capabilities = "SUBGROUP | SUBGROUP_BARRIER"
 
 [msl]
 fake_missing_bindings = false

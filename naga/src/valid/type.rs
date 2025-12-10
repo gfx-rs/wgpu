@@ -173,14 +173,14 @@ pub enum WidthError {
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
-pub enum PushConstantError {
-    #[error("The scalar type {0:?} is not supported in push constants")]
+pub enum ImmediateError {
+    #[error("The scalar type {0:?} is not supported in immediates")]
     InvalidScalar(crate::Scalar),
 }
 
 // Only makes sense if `flags.contains(HOST_SHAREABLE)`
 type LayoutCompatibility = Result<Alignment, (Handle<crate::Type>, Disalignment)>;
-type PushConstantCompatibility = Result<(), PushConstantError>;
+type ImmediateCompatibility = Result<(), ImmediateError>;
 
 fn check_member_layout(
     accum: &mut LayoutCompatibility,
@@ -223,7 +223,7 @@ const fn ptr_space_argument_flag(space: crate::AddressSpace) -> TypeFlags {
         As::Uniform
         | As::Storage { .. }
         | As::Handle
-        | As::PushConstant
+        | As::Immediate
         | As::WorkGroup
         | As::TaskPayload => TypeFlags::empty(),
     }
@@ -234,7 +234,7 @@ pub(super) struct TypeInfo {
     pub flags: TypeFlags,
     pub uniform_layout: LayoutCompatibility,
     pub storage_layout: LayoutCompatibility,
-    pub push_constant_compatibility: PushConstantCompatibility,
+    pub immediates_compatibility: ImmediateCompatibility,
 }
 
 impl TypeInfo {
@@ -243,7 +243,7 @@ impl TypeInfo {
             flags: TypeFlags::empty(),
             uniform_layout: Ok(Alignment::ONE),
             storage_layout: Ok(Alignment::ONE),
-            push_constant_compatibility: Ok(()),
+            immediates_compatibility: Ok(()),
         }
     }
 
@@ -252,7 +252,7 @@ impl TypeInfo {
             flags,
             uniform_layout: Ok(alignment),
             storage_layout: Ok(alignment),
-            push_constant_compatibility: Ok(()),
+            immediates_compatibility: Ok(()),
         }
     }
 }
@@ -271,15 +271,15 @@ impl super::Validator {
     /// If `scalar` is not a width allowed by the selected [`Capabilities`],
     /// return an error explaining why.
     ///
-    /// If `scalar` is allowed, return a [`PushConstantCompatibility`] result
-    /// that says whether `scalar` is allowed specifically in push constants.
+    /// If `scalar` is allowed, return a [`ImmediateCompatibility`] result
+    /// that says whether `scalar` is allowed specifically in immediates.
     ///
     /// [`Capabilities`]: crate::valid::Capabilities
     pub(super) const fn check_width(
         &self,
         scalar: crate::Scalar,
-    ) -> Result<PushConstantCompatibility, WidthError> {
-        let mut push_constant_compatibility = Ok(());
+    ) -> Result<ImmediateCompatibility, WidthError> {
+        let mut immediates_compatibility = Ok(());
         let good = match scalar.kind {
             crate::ScalarKind::Bool => scalar.width == crate::BOOL_WIDTH,
             crate::ScalarKind::Float => match scalar.width {
@@ -300,7 +300,7 @@ impl super::Validator {
                         });
                     }
 
-                    push_constant_compatibility = Err(PushConstantError::InvalidScalar(scalar));
+                    immediates_compatibility = Err(ImmediateError::InvalidScalar(scalar));
 
                     true
                 }
@@ -337,7 +337,7 @@ impl super::Validator {
             }
         };
         if good {
-            Ok(push_constant_compatibility)
+            Ok(immediates_compatibility)
         } else {
             Err(WidthError::Invalid(scalar.kind, scalar.width))
         }
@@ -357,7 +357,7 @@ impl super::Validator {
         use crate::TypeInner as Ti;
         Ok(match gctx.types[handle].inner {
             Ti::Scalar(scalar) => {
-                let push_constant_compatibility = self.check_width(scalar)?;
+                let immediates_compatibility = self.check_width(scalar)?;
                 let shareable = if scalar.kind.is_numeric() {
                     TypeFlags::IO_SHAREABLE | TypeFlags::HOST_SHAREABLE
                 } else {
@@ -373,11 +373,11 @@ impl super::Validator {
                         | shareable,
                     Alignment::from_width(scalar.width),
                 );
-                type_info.push_constant_compatibility = push_constant_compatibility;
+                type_info.immediates_compatibility = immediates_compatibility;
                 type_info
             }
             Ti::Vector { size, scalar } => {
-                let push_constant_compatibility = self.check_width(scalar)?;
+                let immediates_compatibility = self.check_width(scalar)?;
                 let shareable = if scalar.kind.is_numeric() {
                     TypeFlags::IO_SHAREABLE | TypeFlags::HOST_SHAREABLE
                 } else {
@@ -393,7 +393,7 @@ impl super::Validator {
                         | shareable,
                     Alignment::from(size) * Alignment::from_width(scalar.width),
                 );
-                type_info.push_constant_compatibility = push_constant_compatibility;
+                type_info.immediates_compatibility = immediates_compatibility;
                 type_info
             }
             Ti::Matrix {
@@ -404,7 +404,7 @@ impl super::Validator {
                 if scalar.kind != crate::ScalarKind::Float {
                     return Err(TypeError::MatrixElementNotFloat);
                 }
-                let push_constant_compatibility = self.check_width(scalar)?;
+                let immediates_compatibility = self.check_width(scalar)?;
                 let mut type_info = TypeInfo::new(
                     TypeFlags::DATA
                         | TypeFlags::SIZED
@@ -415,7 +415,7 @@ impl super::Validator {
                         | TypeFlags::CREATION_RESOLVED,
                     Alignment::from(rows) * Alignment::from_width(scalar.width),
                 );
-                type_info.push_constant_compatibility = push_constant_compatibility;
+                type_info.immediates_compatibility = immediates_compatibility;
                 type_info
             }
             Ti::Atomic(scalar) => {
@@ -597,7 +597,7 @@ impl super::Validator {
                     flags: base_info.flags & type_info_mask,
                     uniform_layout,
                     storage_layout,
-                    push_constant_compatibility: base_info.push_constant_compatibility.clone(),
+                    immediates_compatibility: base_info.immediates_compatibility.clone(),
                 }
             }
             Ti::Struct { ref members, span } => {
@@ -678,9 +678,8 @@ impl super::Validator {
                         base_info.storage_layout,
                         handle,
                     );
-                    if base_info.push_constant_compatibility.is_err() {
-                        ti.push_constant_compatibility =
-                            base_info.push_constant_compatibility.clone();
+                    if base_info.immediates_compatibility.is_err() {
+                        ti.immediates_compatibility = base_info.immediates_compatibility.clone();
                     }
 
                     // Validate rule: If a structure member itself has a structure type S,
@@ -803,6 +802,7 @@ impl super::Validator {
 
                 if base_info.flags.contains(TypeFlags::DATA) {
                     // Currently Naga only supports binding arrays of structs for non-handle types.
+                    // `validate_global_var` relies on ray queries (which are `DATA`) being rejected here
                     match gctx.types[base].inner {
                         crate::TypeInner::Struct { .. } => {}
                         _ => return Err(TypeError::BindingArrayBaseTypeNotStruct(base)),
@@ -816,7 +816,8 @@ impl super::Validator {
                     }
                 ) {
                     // Binding arrays of external textures are not yet supported.
-                    // https://github.com/gfx-rs/wgpu/issues/8027
+                    // See <https://github.com/gfx-rs/wgpu/issues/8027>. Note that
+                    // `validate_global_var` relies on this error being raised here.
                     return Err(TypeError::BindingArrayBaseExternalTextures);
                 }
 

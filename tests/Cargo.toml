@@ -94,4 +94,5 @@ wasm-bindgen.workspace = true
 web-sys = { workspace = true, features = ["CanvasRenderingContext2d", "Blob"] }
 
 [lints.clippy]
+bool_assert_comparison = "allow"
 disallowed_types = "allow"

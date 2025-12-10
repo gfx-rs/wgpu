@@ -15,8 +15,7 @@ use alloc::{
     vec::Vec,
 };
 use core::{
-    cell::OnceCell,
-    cell::RefCell,
+    cell::{Cell, OnceCell, RefCell},
     fmt,
     future::Future,
     ops::Range,
@@ -819,10 +818,7 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_compute_workgroup_size_y: limits.max_compute_workgroup_size_y(),
         max_compute_workgroup_size_z: limits.max_compute_workgroup_size_z(),
         max_compute_workgroups_per_dimension: limits.max_compute_workgroups_per_dimension(),
-        // The following are not part of WebGPU
-        min_subgroup_size: wgt::Limits::default().min_subgroup_size,
-        max_subgroup_size: wgt::Limits::default().max_subgroup_size,
-        max_push_constant_size: wgt::Limits::default().max_push_constant_size,
+        max_immediate_size: wgt::Limits::default().max_immediate_size,
         max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
         max_inter_stage_shader_components: wgt::Limits::default().max_inter_stage_shader_components,
 
@@ -958,6 +954,7 @@ fn future_request_device(
                 WebDevice {
                     inner: device,
                     ident: crate::cmp::Identifier::create(),
+                    error_scope_count: Rc::new(Cell::new(0)),
                 }
                 .into(),
                 WebQueue {
@@ -1181,6 +1178,8 @@ pub struct WebDevice {
     pub(crate) inner: webgpu_sys::GpuDevice,
     /// Unique identifier for this Device.
     ident: crate::cmp::Identifier,
+    /// Current number of error scopes that have been pushed on the device.
+    error_scope_count: Rc<Cell<u32>>,
 }
 
 #[derive(Debug, Clone)]
@@ -1727,6 +1726,8 @@ impl dispatch::AdapterInterface for WebAdapter {
             driver: String::new(),
             driver_info: String::new(),
             backend: wgt::Backend::BrowserWebGpu,
+            subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
+            subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
             transient_saves_memory: false,
         }
     }
@@ -2316,7 +2317,7 @@ impl dispatch::DeviceInterface for WebDevice {
         let mapped_desc = webgpu_sys::GpuTextureDescriptor::new(
             map_texture_format(desc.format),
             &map_extent_3d(desc.size),
-            desc.usage.bits(),
+            (desc.usage - crate::TextureUsages::TRANSIENT).bits(),
         );
         if let Some(label) = desc.label {
             mapped_desc.set_label(label);
@@ -2493,15 +2494,36 @@ impl dispatch::DeviceInterface for WebDevice {
         f.forget();
     }
 
-    fn push_error_scope(&self, filter: crate::ErrorFilter) {
+    fn push_error_scope(&self, filter: crate::ErrorFilter) -> u32 {
+        let index = self.error_scope_count.get();
+        self.error_scope_count.set(
+            index
+                .checked_add(1)
+                .expect("Greater than 2^32 nested error scopes"),
+        );
         self.inner.push_error_scope(match filter {
             crate::ErrorFilter::OutOfMemory => webgpu_sys::GpuErrorFilter::OutOfMemory,
             crate::ErrorFilter::Validation => webgpu_sys::GpuErrorFilter::Validation,
             crate::ErrorFilter::Internal => webgpu_sys::GpuErrorFilter::Internal,
         });
+        index
     }
 
-    fn pop_error_scope(&self) -> Pin<Box<dyn dispatch::PopErrorScopeFuture>> {
+    fn pop_error_scope(&self, index: u32) -> Pin<Box<dyn dispatch::PopErrorScopeFuture>> {
+        let current_scope_count = self.error_scope_count.get();
+        let is_panicking = crate::util::is_panicking();
+        if current_scope_count == 0 && !is_panicking {
+            panic!("Mismatched pop_error_scope call: no error scope for this thread. Error scopes are thread-local.");
+        }
+        if index + 1 != current_scope_count && !is_panicking {
+            panic!(
+                "Mismatched pop_error_scope call: error scopes must be popped in reverse order."
+            );
+        }
+        // Decrement the error scope count. We've asserted that the current
+        // size is `index + 1` above.
+        self.error_scope_count.set(index);
+
         let error_promise = self.inner.pop_error_scope();
         Box::pin(MakeSendFuture::new(
             wasm_bindgen_futures::JsFuture::from(error_promise),
@@ -2596,11 +2618,11 @@ impl dispatch::QueueInterface for WebQueue {
             return None;
         }
         let write_size = u64::from(size);
-        if write_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+        if !write_size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             log::error!("Copy size {size} does not respect `COPY_BUFFER_ALIGNMENT`");
             return None;
         }
-        if offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+        if !offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             log::error!(
                 "Buffer offset {offset} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`"
             );
@@ -3063,6 +3085,13 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
                             clear_value = Some(wasm_bindgen::JsValue::from(map_color(color)));
                             webgpu_sys::GpuLoadOp::Clear
                         }
+                        crate::LoadOp::DontCare(_token) => {
+                            // WebGPU can't safely have a ClearOp::DontCare, so we clear to black
+                            // which is ideal for most GPUs.
+                            clear_value =
+                                Some(wasm_bindgen::JsValue::from(map_color(crate::Color::BLACK)));
+                            webgpu_sys::GpuLoadOp::Clear
+                        }
                         crate::LoadOp::Load => webgpu_sys::GpuLoadOp::Load,
                     };
 
@@ -3104,6 +3133,11 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
                         mapped_depth_stencil_attachment.set_depth_clear_value(v);
                         webgpu_sys::GpuLoadOp::Clear
                     }
+                    crate::LoadOp::DontCare(_token) => {
+                        // WebGPU can't safely have a ClearOp::DontCare, so we clear to 1.0
+                        mapped_depth_stencil_attachment.set_depth_clear_value(1.0);
+                        webgpu_sys::GpuLoadOp::Clear
+                    }
                     crate::LoadOp::Load => webgpu_sys::GpuLoadOp::Load,
                 };
                 mapped_depth_stencil_attachment.set_depth_load_op(load_op);
@@ -3114,6 +3148,11 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
                 let load_op = match ops.load {
                     crate::LoadOp::Clear(v) => {
                         mapped_depth_stencil_attachment.set_stencil_clear_value(v);
+                        webgpu_sys::GpuLoadOp::Clear
+                    }
+                    crate::LoadOp::DontCare(_token) => {
+                        // WebGPU can't safely have a ClearOp::DontCare, so we clear to 0
+                        mapped_depth_stencil_attachment.set_stencil_clear_value(0);
                         webgpu_sys::GpuLoadOp::Clear
                     }
                     crate::LoadOp::Load => webgpu_sys::GpuLoadOp::Load,
@@ -3309,8 +3348,8 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
         }
     }
 
-    fn set_push_constants(&mut self, _offset: u32, _data: &[u8]) {
-        panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
+    fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
+        panic!("IMMEDIATES feature must be enabled to call set_immediates")
     }
 
     fn insert_debug_marker(&mut self, _label: &str) {
@@ -3448,8 +3487,8 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         }
     }
 
-    fn set_push_constants(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
-        panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
+    fn set_immediates(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
+        panic!("IMMEDIATES feature must be enabled to call multi_draw_indexed_indirect")
     }
 
     fn set_blend_constant(&mut self, color: crate::Color) {
@@ -3754,8 +3793,8 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         }
     }
 
-    fn set_push_constants(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
-        panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
+    fn set_immediates(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
+        panic!("IMMEDIATES feature must be enabled to call multi_draw_indexed_indirect")
     }
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {

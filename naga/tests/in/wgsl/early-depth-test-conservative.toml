@@ -1,4 +1,4 @@
-god_mode = true
+capabilities = "EARLY_DEPTH_TEST"
 targets = "SPIRV | GLSL"
 
 [glsl]

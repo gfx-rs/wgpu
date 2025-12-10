@@ -53,6 +53,8 @@ Commands:
 
         `<to_commit>` is the tip of the `git diff` that will be used for checking (1).
 
+    --allow-released-changes  Only reports issues as warnings, rather than reporting errors and forcing a non-zero exit code.
+
   miri
     Run all miri-compatible tests under miri. Requires a nightly toolchain
     with the x86_64-unknown-linux-gnu target and miri component installed.

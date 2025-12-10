@@ -1,4 +1,4 @@
-use crate::VertexFormat;
+use crate::{link_to_wgpu_docs, link_to_wgpu_item, VertexFormat};
 #[cfg(feature = "serde")]
 use alloc::fmt;
 use alloc::vec::Vec;
@@ -62,6 +62,9 @@ mod webgpu_impl {
 
     #[doc(hidden)]
     pub const WEBGPU_FEATURE_CLIP_DISTANCES: u64 = 1 << 14;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_IMMEDIATES: u64 = 1 << 15;
 }
 
 macro_rules! bitflags_array_impl {
@@ -800,39 +803,11 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         ///
-        /// [`RenderPass::multi_draw_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indirect
-        /// [`RenderPass::multi_draw_indexed_indirect`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indexed_indirect
-        /// [`RenderPass::multi_draw_indirect_count`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indirect_count
-        /// [`RenderPass::multi_draw_indexed_indirect_count`]: ../wgpu/struct.RenderPass.html#method.multi_draw_indexed_indirect_count
+        #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indirect`"]: "struct.RenderPass.html#method.multi_draw_indirect")]
+        #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indexed_indirect`"]: "struct.RenderPass.html#method.multi_draw_indexed_indirect")]
+        #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indirect_count`"]: "struct.RenderPass.html#method.multi_draw_indirect_count")]
+        #[doc = link_to_wgpu_docs!(["`RenderPass::multi_draw_indexed_indirect_count`"]: "struct.RenderPass.html#method.multi_draw_indexed_indirect_count")]
         const MULTI_DRAW_INDIRECT_COUNT = 1 << 15;
-        /// Allows the use of push constants: small, fast bits of memory that can be updated
-        /// inside a [`RenderPass`].
-        ///
-        /// Allows the user to call [`RenderPass::set_push_constants`], provide a non-empty array
-        /// to [`PipelineLayoutDescriptor`], and provide a non-zero limit to [`Limits::max_push_constant_size`].
-        ///
-        /// A block of push constants can be declared in WGSL with `var<push_constant>`:
-        ///
-        /// ```rust,ignore
-        /// struct PushConstants { example: f32, }
-        /// var<push_constant> c: PushConstants;
-        /// ```
-        ///
-        /// In GLSL, this corresponds to `layout(push_constant) uniform Name {..}`.
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Vulkan
-        /// - Metal
-        /// - OpenGL (emulated with uniforms)
-        ///
-        /// This is a native only feature.
-        ///
-        /// [`RenderPass`]: ../wgpu/struct.RenderPass.html
-        /// [`PipelineLayoutDescriptor`]: ../wgpu/struct.PipelineLayoutDescriptor.html
-        /// [`RenderPass::set_push_constants`]: ../wgpu/struct.RenderPass.html#method.set_push_constants
-        /// [`Limits::max_push_constant_size`]: super::Limits
-        const PUSH_CONSTANTS = 1 << 16;
         /// Allows the use of [`AddressMode::ClampToBorder`] with a border color
         /// of [`SamplerBorderColor::Zero`].
         ///
@@ -920,9 +895,8 @@ bitflags_array! {
         /// Supported platforms:
         /// - Vulkan
         /// - Metal
+        /// - DX12
         /// - OpenGL (web only)
-        ///
-        /// DX12 support is a WIP.
         ///
         /// This is a native only feature.
         const MULTIVIEW = 1 << 26;
@@ -1169,12 +1143,11 @@ bitflags_array! {
         /// This is a native only feature.
         const UNIFORM_BUFFER_BINDING_ARRAYS = 1 << 47;
 
-        /// Enables mesh shaders and task shaders in mesh shader pipelines.
+        /// Enables mesh shaders and task shaders in mesh shader pipelines. This extension does NOT imply support for
+        /// compiling mesh shaders at runtime. Rather, the user must use custom passthrough shaders.
         ///
         /// Supported platforms:
         /// - Vulkan (with [VK_EXT_mesh_shader](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_mesh_shader.html))
-        ///
-        /// Potential Platforms:
         /// - DX12
         /// - Metal
         ///
@@ -1250,8 +1223,8 @@ bitflags_array! {
         ///
         /// Supported platforms
         /// - Vulkan
+        /// - DX12
         ///
-        /// DX12 will support this when it supports multiview in general.
         ///
         /// While metal supports this in theory, the behavior of `view_index` differs from vulkan and dx12 so the feature isn't exposed.
         const SELECTIVE_MULTIVIEW = 1 << 54;
@@ -1265,6 +1238,15 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const EXPERIMENTAL_MESH_SHADER_POINTS = 1 << 55;
+
+        /// Enables creating texture arrays that are also multisampled.
+        ///
+        /// Without this feature, you cannot create a texture that has both a `sample_count` higher
+        /// than 1, and a `depth_or_array_layers` higher than 1.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (except VK_KHR_portability_subset if multisampleArrayImage is not available)
+        const MULTISAMPLE_ARRAY = 1 << 56;
     }
 
     /// Features that are not guaranteed to be supported.
@@ -1442,7 +1424,7 @@ bitflags_array! {
         const INDIRECT_FIRST_INSTANCE = WEBGPU_FEATURE_INDIRECT_FIRST_INSTANCE;
 
         /// Allows shaders to use 16-bit floating point types. You may use them uniform buffers,
-        /// storage buffers, and local variables. You may not use them in push constants.
+        /// storage buffers, and local variables. You may not use them in immediates.
         ///
         /// In order to use this in WGSL shaders, you must add `enable f16;` to the top of your shader,
         /// before any global items.
@@ -1514,6 +1496,37 @@ bitflags_array! {
         ///
         /// This is a web and native feature.
         const CLIP_DISTANCES = WEBGPU_FEATURE_CLIP_DISTANCES;
+
+        /// Allows the use of immediate data: small, fast bits of memory that can be updated
+        /// inside a [`RenderPass`].
+        ///
+        /// Allows the user to call [`RenderPass::set_immediates`], provide a non-zero immediate data size
+        /// to [`PipelineLayoutDescriptor`], and provide a non-zero limit to [`Limits::max_immediate_size`].
+        ///
+        /// A block of immediate data can be declared in WGSL with `var<immediate>`:
+        ///
+        /// ```rust,ignore
+        /// struct Immediates { example: f32, }
+        /// var<immediate> c: Immediates;
+        /// ```
+        ///
+        /// In GLSL, this corresponds to `layout(immediates) uniform Name {..}`.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        /// - Metal
+        /// - OpenGL (emulated with uniforms)
+        ///
+        /// WebGPU support is currently a proposal and will be available in browsers in the future.
+        ///
+        /// This is a web and native feature.
+        ///
+        #[doc = link_to_wgpu_item!(struct RenderPass)]
+        #[doc = link_to_wgpu_item!(struct PipelineLayoutDescriptor)]
+        #[doc = link_to_wgpu_docs!(["`RenderPass::set_immediates`"]: "struct.RenderPass.html#method.set_immediates")]
+        /// [`Limits::max_immediate_size`]: super::Limits
+        const IMMEDIATES = WEBGPU_FEATURE_IMMEDIATES;
     }
 }
 

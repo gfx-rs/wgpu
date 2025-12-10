@@ -9,6 +9,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.push(DRAW_MULTIVIEW_SINGLE);
     vec.push(DRAW_MULTIVIEW);
     vec.push(DRAW_MULTIVIEW_NONCONTIGUOUS);
+    vec.push(DRAW_MULTIVIEW_MULTISAMPLE);
 }
 
 #[gpu_test]
@@ -21,7 +22,7 @@ static DRAW_MULTIVIEW_SINGLE: GpuTestConfiguration = GpuTestConfiguration::new()
                 ..Limits::defaults()
             }),
     )
-    .run_async(|ctx| run_test(ctx, 0b1));
+    .run_async(|ctx| run_test(ctx, 0b1, 1));
 
 #[gpu_test]
 static DRAW_MULTIVIEW: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -33,7 +34,7 @@ static DRAW_MULTIVIEW: GpuTestConfiguration = GpuTestConfiguration::new()
                 ..Limits::defaults()
             }),
     )
-    .run_async(|ctx| run_test(ctx, 0b11));
+    .run_async(|ctx| run_test(ctx, 0b11, 1));
 
 #[gpu_test]
 static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -45,9 +46,21 @@ static DRAW_MULTIVIEW_NONCONTIGUOUS: GpuTestConfiguration = GpuTestConfiguration
                 ..Limits::defaults()
             }),
     )
-    .run_async(|ctx| run_test(ctx, 0b1001));
+    .run_async(|ctx| run_test(ctx, 0b1001, 1));
 
-async fn run_test(ctx: TestingContext, layer_mask: u32) {
+#[gpu_test]
+static DRAW_MULTIVIEW_MULTISAMPLE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(Features::MULTIVIEW | Features::MULTISAMPLE_ARRAY)
+            .limits(Limits {
+                max_multiview_view_count: 2,
+                ..Limits::defaults()
+            }),
+    )
+    .run_async(|ctx| run_test(ctx, 0b11, 4));
+
+async fn run_test(ctx: TestingContext, layer_mask: u32, sample_count: u32) {
     let num_layers = 32 - layer_mask.leading_zeros();
 
     let shader_src = include_str!("shader.wgsl");
@@ -79,7 +92,10 @@ async fn run_test(ctx: TestingContext, layer_mask: u32) {
             })],
         }),
         multiview_mask: NonZero::new(layer_mask),
-        multisample: Default::default(),
+        multisample: wgpu::MultisampleState {
+            count: sample_count,
+            ..Default::default()
+        },
         layout: None,
         depth_stencil: None,
         cache: None,
@@ -87,7 +103,8 @@ async fn run_test(ctx: TestingContext, layer_mask: u32) {
 
     const TEXTURE_SIZE: u32 = 256;
     let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
-    let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+
+    let texture_desc = wgpu::TextureDescriptor {
         label: None,
         size: wgpu::Extent3d {
             width: TEXTURE_SIZE,
@@ -95,13 +112,14 @@ async fn run_test(ctx: TestingContext, layer_mask: u32) {
             depth_or_array_layers: 32 - layer_mask.leading_zeros(),
         },
         mip_level_count: 1,
-        sample_count: 1,
+        sample_count,
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::R8Unorm,
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
         view_formats: &[],
-    });
-    let entire_texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
+    };
+    let texture = ctx.device.create_texture(&texture_desc);
+    let texture_view_desc = wgpu::TextureViewDescriptor {
         label: None,
         format: Some(wgpu::TextureFormat::R8Unorm),
         dimension: Some(wgpu::TextureViewDimension::D2Array),
@@ -111,7 +129,21 @@ async fn run_test(ctx: TestingContext, layer_mask: u32) {
         mip_level_count: None,
         base_array_layer: 0,
         array_layer_count: Some(num_layers),
-    });
+    };
+    let entire_texture_view = texture.create_view(&texture_view_desc);
+
+    let (resolve_texture, resolve_texture_view) = if sample_count != 1 {
+        let mut texture_desc = texture_desc.clone();
+        texture_desc.sample_count = 1;
+
+        let resolve_texture = ctx.device.create_texture(&texture_desc);
+        let resolve_texture_view = resolve_texture.create_view(&texture_view_desc);
+
+        (Some(resolve_texture), Some(resolve_texture_view))
+    } else {
+        (None, None)
+    };
+
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: TEXTURE_SIZE as u64 * TEXTURE_SIZE as u64 * num_layers as u64,
@@ -130,7 +162,7 @@ async fn run_test(ctx: TestingContext, layer_mask: u32) {
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: &entire_texture_view,
                 depth_slice: None,
-                resolve_target: None,
+                resolve_target: resolve_texture_view.as_ref(),
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                     store: wgpu::StoreOp::Store,
@@ -146,7 +178,7 @@ async fn run_test(ctx: TestingContext, layer_mask: u32) {
     }
     encoder.copy_texture_to_buffer(
         wgpu::TexelCopyTextureInfo {
-            texture: &texture,
+            texture: resolve_texture.as_ref().unwrap_or(&texture),
             mip_level: 0,
             origin: wgpu::Origin3d { x: 0, y: 0, z: 0 },
             aspect: wgpu::TextureAspect::All,
