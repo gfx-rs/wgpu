@@ -143,6 +143,7 @@ webgpu:api,validation,resource_usages,texture,in_pass_encoder:unused_bindings_in
 webgpu:api,validation,resource_usages,texture,in_render_common:subresources,color_attachments:*
 webgpu:api,validation,resource_usages,texture,in_render_common:subresources,color_attachment_and_bind_group:*
 // FAIL: webgpu:api,validation,resource_usages,texture,in_render_common:subresources,depth_stencil_attachment_and_bind_group:*
+// https://github.com/gfx-rs/wgpu/issues/8705
 webgpu:api,validation,resource_usages,texture,in_render_common:subresources,multiple_bind_groups:*
 webgpu:api,validation,resource_usages,texture,in_render_common:subresources,depth_stencil_texture_in_bind_groups:*
 webgpu:api,validation,texture,rg11b10ufloat_renderable:*
