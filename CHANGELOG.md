@@ -205,6 +205,7 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 
 - Prevent UB with invalid ray query calls on spirv. By @Vecvec in [#8390](https://github.com/gfx-rs/wgpu/pull/8390).
 - Update the set of binding_array capabilities. In most cases, they are set automatically from `wgpu` features, and this change should not be user-visible. By @andyleiserson in [#8671](https://github.com/gfx-rs/wgpu/pull/8671).
+- Naga now accepts the `var<function>` syntax for declaring local variables. By @andyleiserson in [#8710](https://github.com/gfx-rs/wgpu/pull/8710).
 
 ### Bug Fixes
 
