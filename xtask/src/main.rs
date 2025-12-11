@@ -28,6 +28,8 @@ Commands:
     --llvm-cov              Run with LLVM code coverage
     --backend <backend>     Specify the backend (metal, dx12, or vulkan). Used
                             to evaluate `fails-if` conditions in the test list.
+    --filter <regex>        Filter tests by selector using a regex pattern.
+                            Applied after all tests are collected.
 
   run-wasm
     Build and run web examples
