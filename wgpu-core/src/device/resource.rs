@@ -9,7 +9,7 @@ use core::{
     fmt,
     mem::{self, ManuallyDrop},
     num::NonZeroU32,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{AtomicBool, AtomicU32, Ordering},
 };
 use hal::ShouldBeNonZeroExt;
 
@@ -278,6 +278,8 @@ pub struct Device {
 pub(crate) enum DeferredDestroy {
     TextureViews(WeakVec<TextureView>),
     BindGroups(WeakVec<BindGroup>),
+    Buffer(Weak<Buffer>),
+    Texture(Weak<Texture>),
 }
 
 impl fmt::Debug for Device {
@@ -705,6 +707,18 @@ impl Device {
                         }
                     }
                 }
+                DeferredDestroy::Buffer(buffer) => {
+                    // Call destroy() now that we're in a safe context (no locks held).
+                    if let Some(buffer) = buffer.upgrade() {
+                        buffer.destroy();
+                    }
+                }
+                DeferredDestroy::Texture(texture) => {
+                    // Call destroy() now that we're in a safe context (no locks held).
+                    if let Some(texture) = texture.upgrade() {
+                        texture.destroy();
+                    }
+                }
             }
         }
     }
@@ -1051,6 +1065,8 @@ impl Device {
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
             timestamp_normalization_bind_group,
             indirect_validation_bind_groups,
+            destroyed: AtomicBool::new(false),
+            in_flight_count: AtomicU32::new(0),
         };
 
         let buffer = Arc::new(buffer);
@@ -1234,6 +1250,8 @@ impl Device {
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
             timestamp_normalization_bind_group,
             indirect_validation_bind_groups,
+            destroyed: AtomicBool::new(false),
+            in_flight_count: AtomicU32::new(0),
         };
 
         let buffer = Arc::new(buffer);

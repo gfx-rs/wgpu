@@ -6,6 +6,7 @@ use core::{
     num::NonZeroU64,
     ops::Range,
     ptr::NonNull,
+    sync::atomic::{AtomicBool, AtomicU32, Ordering},
 };
 use smallvec::SmallVec;
 use thiserror::Error;
@@ -438,6 +439,14 @@ pub struct Buffer {
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
     pub(crate) timestamp_normalization_bind_group: Snatchable<TimestampNormalizationBindGroup>,
     pub(crate) indirect_validation_bind_groups: Snatchable<crate::indirect_validation::BindGroups>,
+    /// Set to true when destroy() is called. This makes check_destroyed() fail immediately,
+    /// but the actual raw resource cleanup may be deferred if in_flight_count > 0.
+    pub(crate) destroyed: AtomicBool,
+    /// Count of command buffer trackers that currently hold a reference to this buffer.
+    /// Incremented when inserted into a command buffer's tracker, decremented when the
+    /// tracker is cleared (on command buffer submission or drop).
+    /// When destroy() is called and this is > 0, raw resource cleanup is deferred to drop().
+    pub(crate) in_flight_count: AtomicU32,
 }
 
 impl Drop for Buffer {
@@ -472,6 +481,11 @@ impl Buffer {
         &self,
         guard: &SnatchGuard,
     ) -> Result<(), DestroyedResourceError> {
+        // Check the destroyed flag first - this is set by destroy() even if
+        // the raw resource hasn't been snatched yet (deferred cleanup case).
+        if self.destroyed.load(Ordering::Acquire) {
+            return Err(DestroyedResourceError(self.error_ident()));
+        }
         self.raw
             .get(guard)
             .map(|_| ())
@@ -903,8 +917,23 @@ impl Buffer {
     }
 
     pub fn destroy(self: &Arc<Self>) {
+        // Mark as destroyed. This makes check_destroyed() fail,
+        // so any future use of this buffer will return an error.
+        self.destroyed.store(true, Ordering::Release);
+
         let device = &self.device;
 
+        // Check if this buffer is currently in any command buffer's tracker.
+        // If so, we should NOT snatch the raw resource yet - the tracker's Drop
+        // will call destroy() again when the count reaches 0.
+        if self.in_flight_count.load(Ordering::Acquire) > 0 {
+            // Buffer is in a recording command buffer.
+            // The raw resource will be cleaned up when the command buffer is
+            // submitted/dropped and the tracker calls destroy() again.
+            return;
+        }
+
+        // Not in any command buffer tracker, safe to snatch and cleanup now.
         let temp = {
             let mut snatch_guard = device.snatchable_lock.write();
 
@@ -1255,6 +1284,14 @@ pub struct Texture {
     pub(crate) clear_mode: RwLock<TextureClearMode>,
     pub(crate) views: Mutex<WeakVec<TextureView>>,
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
+    /// Set to true when destroy() is called. This makes check_destroyed() fail immediately,
+    /// but the actual raw resource cleanup may be deferred if in_flight_count > 0.
+    pub(crate) destroyed: AtomicBool,
+    /// Count of command buffer trackers that currently hold a reference to this texture.
+    /// Incremented when inserted into a command buffer's tracker, decremented when the
+    /// tracker is cleared (on command buffer submission or drop).
+    /// When destroy() is called and this is > 0, raw resource cleanup is deferred to drop().
+    pub(crate) in_flight_count: AtomicU32,
 }
 
 impl Texture {
@@ -1290,6 +1327,8 @@ impl Texture {
             clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
+            destroyed: AtomicBool::new(false),
+            in_flight_count: AtomicU32::new(0),
         }
     }
 
@@ -1353,6 +1392,19 @@ impl RawResourceAccess for Texture {
     fn raw<'a>(&'a self, guard: &'a SnatchGuard) -> Option<&'a Self::DynResource> {
         self.inner.get(guard).map(|t| t.raw())
     }
+
+    fn try_raw<'a>(
+        &'a self,
+        guard: &'a SnatchGuard,
+    ) -> Result<&'a Self::DynResource, DestroyedResourceError> {
+        // Check the destroyed flag first - this is set by destroy() even if
+        // the raw resource hasn't been snatched yet (deferred cleanup case).
+        if self.destroyed.load(Ordering::Acquire) {
+            return Err(DestroyedResourceError(self.error_ident()));
+        }
+        self.raw(guard)
+            .ok_or_else(|| DestroyedResourceError(self.error_ident()))
+    }
 }
 
 impl Texture {
@@ -1360,6 +1412,11 @@ impl Texture {
         &'a self,
         guard: &'a SnatchGuard,
     ) -> Result<&'a TextureInner, DestroyedResourceError> {
+        // Check the destroyed flag first - this is set by destroy() even if
+        // the raw resource hasn't been snatched yet (deferred cleanup case).
+        if self.destroyed.load(Ordering::Acquire) {
+            return Err(DestroyedResourceError(self.error_ident()));
+        }
         self.inner
             .get(guard)
             .ok_or_else(|| DestroyedResourceError(self.error_ident()))
@@ -1369,6 +1426,11 @@ impl Texture {
         &self,
         guard: &SnatchGuard,
     ) -> Result<(), DestroyedResourceError> {
+        // Check the destroyed flag first - this is set by destroy() even if
+        // the raw resource hasn't been snatched yet (deferred cleanup case).
+        if self.destroyed.load(Ordering::Acquire) {
+            return Err(DestroyedResourceError(self.error_ident()));
+        }
         self.inner
             .get(guard)
             .map(|_| ())
@@ -1405,8 +1467,23 @@ impl Texture {
     }
 
     pub fn destroy(self: &Arc<Self>) {
+        // Mark as destroyed. This makes check_destroyed() fail,
+        // so any future use of this texture will return an error.
+        self.destroyed.store(true, Ordering::Release);
+
         let device = &self.device;
 
+        // Check if this texture is currently in any command buffer's tracker.
+        // If so, we should NOT snatch the raw resource yet - the tracker's Drop
+        // will call destroy() again when the count reaches 0.
+        if self.in_flight_count.load(Ordering::Acquire) > 0 {
+            // Texture is in a recording command buffer.
+            // The raw resource will be cleaned up when the command buffer is
+            // submitted/dropped and the tracker calls destroy() again.
+            return;
+        }
+
+        // Not in any command buffer tracker, safe to snatch and cleanup now.
         let temp = {
             let raw = match self.inner.snatch(&mut device.snatchable_lock.write()) {
                 Some(TextureInner::Native { raw }) => raw,

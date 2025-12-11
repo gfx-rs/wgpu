@@ -38,7 +38,7 @@ use alloc::{
     sync::{Arc, Weak},
     vec::{Drain, Vec},
 };
-use core::iter;
+use core::{iter, sync::atomic::Ordering};
 
 impl ResourceUses for TextureUses {
     const EXCLUSIVE: Self = Self::EXCLUSIVE;
@@ -667,6 +667,25 @@ impl TextureTrackerSetSingle for TextureTracker {
     }
 }
 
+impl Drop for TextureTracker {
+    fn drop(&mut self) {
+        // Decrement in_flight_count for all textures in this tracker.
+        // If this was the last command buffer using a destroyed texture,
+        // queue it for deferred destruction (we can't call destroy() directly
+        // here as it might cause lock recursion).
+        for texture in self.metadata.owned_resources() {
+            let prev_count = texture.in_flight_count.fetch_sub(1, Ordering::Release);
+            if prev_count == 1 && texture.destroyed.load(Ordering::Acquire) {
+                // This was the last command buffer using this destroyed texture.
+                // Queue it for deferred destruction.
+                texture.device.deferred_destroy.lock().push(
+                    crate::device::resource::DeferredDestroy::Texture(Arc::downgrade(texture)),
+                );
+            }
+        }
+    }
+}
+
 /// Stores all texture state within a device.
 pub(crate) struct DeviceTextureTracker {
     current_state_set: TextureStateSet,
@@ -1038,6 +1057,11 @@ unsafe fn insert_or_barrier_update(
     let currently_owned = unsafe { resource_metadata.contains_unchecked(index) };
 
     if !currently_owned {
+        // Increment the in_flight_count for the texture being inserted.
+        // This is decremented when the tracker is dropped.
+        let texture = unsafe { metadata_provider.get(index) };
+        texture.in_flight_count.fetch_add(1, Ordering::Release);
+
         unsafe {
             insert(
                 Some(texture_selector),

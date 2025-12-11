@@ -8,6 +8,7 @@ use alloc::{
     sync::{Arc, Weak},
     vec::Vec,
 };
+use core::sync::atomic::Ordering;
 
 use hal::BufferBarrier;
 use wgt::{strict_assert, strict_assert_eq, BufferUses};
@@ -530,6 +531,11 @@ impl BufferTracker {
         let currently_owned = unsafe { self.metadata.contains_unchecked(index) };
 
         if !currently_owned {
+            // Increment the in_flight_count for the buffer being inserted.
+            // This is decremented when the tracker is dropped.
+            let buffer = unsafe { metadata_provider.get(index) };
+            buffer.in_flight_count.fetch_add(1, Ordering::Release);
+
             unsafe {
                 insert(
                     Some(&mut self.start),
@@ -549,6 +555,25 @@ impl BufferTracker {
         unsafe { barrier(&mut self.end, index, start_state_provider, &mut self.temp) };
 
         unsafe { update(&mut self.end, index, update_state_provider) };
+    }
+}
+
+impl Drop for BufferTracker {
+    fn drop(&mut self) {
+        // Decrement in_flight_count for all buffers in this tracker.
+        // If this was the last command buffer using a destroyed buffer,
+        // queue it for deferred destruction (we can't call destroy() directly
+        // here as it might cause lock recursion).
+        for buffer in self.metadata.owned_resources() {
+            let prev_count = buffer.in_flight_count.fetch_sub(1, Ordering::Release);
+            if prev_count == 1 && buffer.destroyed.load(Ordering::Acquire) {
+                // This was the last command buffer using this destroyed buffer.
+                // Queue it for deferred destruction.
+                buffer.device.deferred_destroy.lock().push(
+                    crate::device::resource::DeferredDestroy::Buffer(Arc::downgrade(buffer)),
+                );
+            }
+        }
     }
 }
 
