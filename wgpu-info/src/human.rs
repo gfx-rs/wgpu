@@ -77,7 +77,7 @@ pub enum PrintingVerbosity {
 // Lets keep these print statements on one line
 #[rustfmt::skip]
 fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize, verbosity: PrintingVerbosity) -> io::Result<()> {
-    let AdapterReport { 
+    let AdapterReport {
         info,
         features,
         limits,
