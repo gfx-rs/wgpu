@@ -200,6 +200,7 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 #### Metal
 
 - Add support for mesh shaders. By @SupaMaggie70Incorporated in [#8139](https://github.com/gfx-rs/wgpu/pull/8139)
+- Expose render layer. By @xiaopengli89 in [#8707](https://github.com/gfx-rs/wgpu/pull/8707)
 
 #### Naga
 

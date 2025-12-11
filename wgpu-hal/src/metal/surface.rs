@@ -50,6 +50,10 @@ impl super::Surface {
         Self::new(layer.to_owned())
     }
 
+    pub fn render_layer(&self) -> &Mutex<metal::MetalLayer> {
+        &self.render_layer
+    }
+
     /// Get or create a new `CAMetalLayer` associated with the given `NSView`
     /// or `UIView`.
     ///
