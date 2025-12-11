@@ -220,9 +220,26 @@ webgpu:shader,validation,expression,binary,short_circuiting_and_or:array_overrid
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:invalid_types:*
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:scalar_vector:op="%26%26";lhs="bool";rhs="bool"
 webgpu:shader,validation,expression,call,builtin,all:arguments:test="ptr_deref"
+webgpu:shader,validation,expression,call,builtin,arrayLength:*
+webgpu:shader,validation,expression,call,builtin,barriers:*
+webgpu:shader,validation,expression,call,builtin,cos:*
 webgpu:shader,validation,expression,call,builtin,distance:values:stage="constant";type="f32"
+webgpu:shader,validation,expression,call,builtin,floor:*
+webgpu:shader,validation,expression,call,builtin,fract:*
 webgpu:shader,validation,expression,call,builtin,length:scalar:stage="constant";type="f32"
-webgpu:shader,validation,expression,call,builtin,max:values:*
+webgpu:shader,validation,expression,call,builtin,max:*
+webgpu:shader,validation,expression,call,builtin,min:*
+webgpu:shader,validation,expression,call,builtin,radians:*
+webgpu:shader,validation,expression,call,builtin,sign:*
+webgpu:shader,validation,expression,call,builtin,sin:*
+webgpu:shader,validation,expression,call,builtin,step:*
+webgpu:shader,validation,expression,call,builtin,tan:*
+webgpu:shader,validation,expression,call,builtin,tanh:*
+webgpu:shader,validation,expression,call,builtin,textureNumLayers:*
+webgpu:shader,validation,expression,call,builtin,textureNumLevels:*
+webgpu:shader,validation,expression,call,builtin,textureNumSamples:*
+webgpu:shader,validation,expression,call,builtin,textureStore:*
+webgpu:shader,validation,expression,call,builtin,trunc:*
 // FAIL: others in `value_constructor` due to https://github.com/gfx-rs/wgpu/issues/4720, possibly more
 webgpu:shader,validation,expression,call,builtin,value_constructor:array_value:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:matrix_zero_value:*
@@ -231,15 +248,7 @@ webgpu:shader,validation,expression,call,builtin,value_constructor:scalar_zero_v
 webgpu:shader,validation,expression,call,builtin,value_constructor:struct_value:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:vector_splat:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:vector_zero_value:*
-// NOTE: This is supposed to be an exhaustive listing underneath
-// `webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:*`, so exceptions can be
-// worked around.
-//FAIL: https://github.com/gfx-rs/wgpu/pull/8713
-// webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:must_use:use=false
-webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:must_use:use=true
-webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:no_atomics:*
-webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:only_in_compute:*
-webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:param_constructible_only:*
+webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:*
 webgpu:shader,validation,extension,dual_source_blending:blend_src_syntax_validation:*
 webgpu:shader,validation,extension,pointer_composite_access:*
 webgpu:shader,validation,parse,requires:*

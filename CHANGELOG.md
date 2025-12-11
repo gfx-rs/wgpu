@@ -87,6 +87,7 @@ Bottom level categories:
 - Fix some cases where f16 constants were not working. By @andyleiserson in [#8816](https://github.com/gfx-rs/wgpu/pull/8816).
 - Use wrapping arithmetic when evaluating constant expressions involving `u32`. By @andyleiserson in [#8912](https://github.com/gfx-rs/wgpu/pull/8912).
 - Fix missing side effects from sequence expressions in GLSL. By @Vipitis in [#8787](https://github.com/gfx-rs/wgpu/pull/8787).
+- Naga now enforces the `@must_use` attribute on WGSL built-in functions, when applicable. You can waive the error with a phony assignment, e.g., `_ = subgroupElect()`. By @andyleiserson in [#8713](https://github.com/gfx-rs/wgpu/pull/8713).
 - Reject zero-value construction of a runtime-sized array with a validation error. Previously it would crash in the HLSL backend. By @mooori in [#8741](https://github.com/gfx-rs/wgpu/pull/8741).
 - Reject splat vector construction if the argument type does not match the type of the vector's scalar. Previously it would succeed. By @mooori in [#8829](https://github.com/gfx-rs/wgpu/pull/8829).
 - Fixed `workgroupUniformLoad` incorrectly returning an atomic when called on an atomic, it now returns the inner `T` as per the spec. By @cryvosh in [#8791](https://github.com/gfx-rs/wgpu/pull/8791).

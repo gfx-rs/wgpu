@@ -1237,6 +1237,23 @@ enum AbstractRule {
     Allow,
 }
 
+/// Whether `@must_use` applies to a call expression.
+#[derive(Debug, Copy, Clone)]
+enum MustUse {
+    Yes,
+    No,
+}
+
+impl From<bool> for MustUse {
+    fn from(value: bool) -> Self {
+        if value {
+            MustUse::Yes
+        } else {
+            MustUse::No
+        }
+    }
+}
+
 pub struct Lowerer<'source, 'temp> {
     index: &'temp Index<'source>,
 }
@@ -2918,8 +2935,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         call_span: Span,
         ctx: &mut ExpressionContext<'source, '_, '_>,
         is_statement: bool,
-    ) -> Result<'source, Option<Handle<ir::Expression>>> {
-        let expr = if let Some(fun) = conv::map_relational_fun(function_name) {
+    ) -> Result<'source, Option<(Handle<ir::Expression>, MustUse)>> {
+        let (expr, must_use) = if let Some(fun) = conv::map_relational_fun(function_name) {
             let mut args = ctx.prepare_args(arguments, 1, function_span);
             let argument = self.expression(args.next()?, ctx)?;
             args.finish()?;
@@ -2939,37 +2956,43 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             };
 
             if argument_unmodified {
-                return Ok(Some(argument));
+                return Ok(Some((argument, MustUse::No)));
             } else {
-                ir::Expression::Relational { fun, argument }
+                (ir::Expression::Relational { fun, argument }, MustUse::No)
             }
         } else if let Some((axis, ctrl)) = conv::map_derivative(function_name) {
             let mut args = ctx.prepare_args(arguments, 1, function_span);
             let expr = self.expression(args.next()?, ctx)?;
             args.finish()?;
 
-            ir::Expression::Derivative { axis, ctrl, expr }
+            (
+                ir::Expression::Derivative { axis, ctrl, expr },
+                MustUse::Yes,
+            )
         } else if let Some(fun) = conv::map_standard_fun(function_name) {
-            self.math_function_helper(function_span, fun, arguments, ctx)?
+            (
+                self.math_function_helper(function_span, fun, arguments, ctx)?,
+                MustUse::Yes,
+            )
         } else if let Some(fun) = Texture::map(function_name) {
-            self.texture_sample_helper(fun, arguments, function_span, ctx)?
+            (
+                self.texture_sample_helper(fun, arguments, function_span, ctx)?,
+                MustUse::Yes,
+            )
         } else if let Some((op, cop)) = conv::map_subgroup_operation(function_name) {
-            return Ok(Some(self.subgroup_operation_helper(
-                function_span,
-                op,
-                cop,
-                arguments,
-                ctx,
-            )?));
+            return Ok(Some((
+                self.subgroup_operation_helper(function_span, op, cop, arguments, ctx)?,
+                MustUse::Yes,
+            )));
         } else if let Some(mode) = SubgroupGather::map(function_name) {
-            return Ok(Some(self.subgroup_gather_helper(
-                function_span,
-                mode,
-                arguments,
-                ctx,
-            )?));
+            return Ok(Some((
+                self.subgroup_gather_helper(function_span, mode, arguments, ctx)?,
+                MustUse::Yes,
+            )));
         } else if let Some(fun) = ir::AtomicFunction::map(function_name) {
-            return self.atomic_helper(function_span, fun, arguments, is_statement, ctx);
+            return Ok(self
+                .atomic_helper(function_span, fun, arguments, is_statement, ctx)?
+                .map(|result| (result, MustUse::No)));
         } else {
             match function_name {
                 "bitcast" => {
@@ -2992,11 +3015,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                     };
 
-                    ir::Expression::As {
-                        expr,
-                        kind: element_scalar.kind,
-                        convert: None,
-                    }
+                    (
+                        ir::Expression::As {
+                            expr,
+                            kind: element_scalar.kind,
+                            convert: None,
+                        },
+                        MustUse::Yes,
+                    )
                 }
                 "coopLoad" | "coopLoadT" => {
                     let row_major = function_name.ends_with("T");
@@ -3029,16 +3055,19 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     };
                     args.finish()?;
 
-                    crate::Expression::CooperativeLoad {
-                        columns,
-                        rows,
-                        role,
-                        data: crate::CooperativeData {
-                            pointer,
-                            stride,
-                            row_major,
+                    (
+                        crate::Expression::CooperativeLoad {
+                            columns,
+                            rows,
+                            role,
+                            data: crate::CooperativeData {
+                                pointer,
+                                stride,
+                                row_major,
+                            },
                         },
-                    }
+                        MustUse::Yes,
+                    )
                 }
                 "select" => {
                     let mut args = ctx.prepare_args(arguments, 3, function_span);
@@ -3103,25 +3132,28 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let [reject, accept] = values;
 
-                    ir::Expression::Select {
-                        reject,
-                        accept,
-                        condition,
-                    }
+                    (
+                        ir::Expression::Select {
+                            reject,
+                            accept,
+                            condition,
+                        },
+                        MustUse::Yes,
+                    )
                 }
                 "arrayLength" => {
                     let mut args = ctx.prepare_args(arguments, 1, function_span);
                     let expr = self.expression(args.next()?, ctx)?;
                     args.finish()?;
 
-                    ir::Expression::ArrayLength(expr)
+                    (ir::Expression::ArrayLength(expr), MustUse::Yes)
                 }
                 "atomicLoad" => {
                     let mut args = ctx.prepare_args(arguments, 1, function_span);
                     let (pointer, _scalar) = self.atomic_pointer(args.next()?, ctx)?;
                     args.finish()?;
 
-                    ir::Expression::Load { pointer }
+                    (ir::Expression::Load { pointer }, MustUse::No)
                 }
                 "atomicStore" => {
                     let mut args = ctx.prepare_args(arguments, 2, function_span);
@@ -3173,7 +3205,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         },
                         function_span,
                     );
-                    return Ok(Some(result));
+                    return Ok(Some((result, MustUse::No)));
                 }
                 "textureAtomicMin" | "textureAtomicMax" | "textureAtomicAdd"
                 | "textureAtomicAnd" | "textureAtomicOr" | "textureAtomicXor" => {
@@ -3310,7 +3342,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         function_span,
                     );
 
-                    return Ok(Some(result));
+                    return Ok(Some((result, MustUse::Yes)));
                 }
                 "textureStore" => {
                     let mut args = ctx.prepare_args(arguments, 3, function_span);
@@ -3383,13 +3415,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     args.finish()?;
 
-                    ir::Expression::ImageLoad {
-                        image,
-                        coordinate,
-                        array_index,
-                        level,
-                        sample,
-                    }
+                    (
+                        ir::Expression::ImageLoad {
+                            image,
+                            coordinate,
+                            array_index,
+                            level,
+                            sample,
+                        },
+                        MustUse::Yes,
+                    )
                 }
                 "textureDimensions" => {
                     let mut args = ctx.prepare_args(arguments, 1, function_span);
@@ -3401,40 +3436,52 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .transpose()?;
                     args.finish()?;
 
-                    ir::Expression::ImageQuery {
-                        image,
-                        query: ir::ImageQuery::Size { level },
-                    }
+                    (
+                        ir::Expression::ImageQuery {
+                            image,
+                            query: ir::ImageQuery::Size { level },
+                        },
+                        MustUse::Yes,
+                    )
                 }
                 "textureNumLevels" => {
                     let mut args = ctx.prepare_args(arguments, 1, function_span);
                     let image = self.expression(args.next()?, ctx)?;
                     args.finish()?;
 
-                    ir::Expression::ImageQuery {
-                        image,
-                        query: ir::ImageQuery::NumLevels,
-                    }
+                    (
+                        ir::Expression::ImageQuery {
+                            image,
+                            query: ir::ImageQuery::NumLevels,
+                        },
+                        MustUse::Yes,
+                    )
                 }
                 "textureNumLayers" => {
                     let mut args = ctx.prepare_args(arguments, 1, function_span);
                     let image = self.expression(args.next()?, ctx)?;
                     args.finish()?;
 
-                    ir::Expression::ImageQuery {
-                        image,
-                        query: ir::ImageQuery::NumLayers,
-                    }
+                    (
+                        ir::Expression::ImageQuery {
+                            image,
+                            query: ir::ImageQuery::NumLayers,
+                        },
+                        MustUse::Yes,
+                    )
                 }
                 "textureNumSamples" => {
                     let mut args = ctx.prepare_args(arguments, 1, function_span);
                     let image = self.expression(args.next()?, ctx)?;
                     args.finish()?;
 
-                    ir::Expression::ImageQuery {
-                        image,
-                        query: ir::ImageQuery::NumSamples,
-                    }
+                    (
+                        ir::Expression::ImageQuery {
+                            image,
+                            query: ir::ImageQuery::NumSamples,
+                        },
+                        MustUse::Yes,
+                    )
                 }
                 "rayQueryInitialize" => {
                     let mut args = ctx.prepare_args(arguments, 3, function_span);
@@ -3464,10 +3511,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let _ = ctx.module.generate_vertex_return_type();
 
-                    ir::Expression::RayQueryVertexPositions {
-                        query,
-                        committed: true,
-                    }
+                    (
+                        ir::Expression::RayQueryVertexPositions {
+                            query,
+                            committed: true,
+                        },
+                        MustUse::No,
+                    )
                 }
                 "getCandidateHitVertexPositions" => {
                     let mut args = ctx.prepare_args(arguments, 1, function_span);
@@ -3476,10 +3526,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let _ = ctx.module.generate_vertex_return_type();
 
-                    ir::Expression::RayQueryVertexPositions {
-                        query,
-                        committed: false,
-                    }
+                    (
+                        ir::Expression::RayQueryVertexPositions {
+                            query,
+                            committed: false,
+                        },
+                        MustUse::No,
+                    )
                 }
                 "rayQueryProceed" => {
                     let mut args = ctx.prepare_args(arguments, 1, function_span);
@@ -3492,7 +3545,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let rctx = ctx.runtime_expression_ctx(function_span)?;
                     rctx.block
                         .push(ir::Statement::RayQuery { query, fun }, function_span);
-                    return Ok(Some(result));
+                    return Ok(Some((result, MustUse::No)));
                 }
                 "rayQueryGenerateIntersection" => {
                     let mut args = ctx.prepare_args(arguments, 2, function_span);
@@ -3534,10 +3587,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     args.finish()?;
 
                     let _ = ctx.module.generate_ray_intersection_type();
-                    ir::Expression::RayQueryGetIntersection {
-                        query,
-                        committed: true,
-                    }
+                    (
+                        ir::Expression::RayQueryGetIntersection {
+                            query,
+                            committed: true,
+                        },
+                        MustUse::No,
+                    )
                 }
                 "rayQueryGetCandidateIntersection" => {
                     let mut args = ctx.prepare_args(arguments, 1, function_span);
@@ -3545,10 +3601,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     args.finish()?;
 
                     let _ = ctx.module.generate_ray_intersection_type();
-                    ir::Expression::RayQueryGetIntersection {
-                        query,
-                        committed: false,
-                    }
+                    (
+                        ir::Expression::RayQueryGetIntersection {
+                            query,
+                            committed: false,
+                        },
+                        MustUse::No,
+                    )
                 }
                 "subgroupBallot" => {
                     let mut args = ctx.prepare_args(arguments, 0, function_span);
@@ -3566,7 +3625,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         ir::Statement::SubgroupBallot { result, predicate },
                         function_span,
                     );
-                    return Ok(Some(result));
+                    return Ok(Some((result, MustUse::Yes)));
                 }
                 "quadSwapX" => {
                     let mut args = ctx.prepare_args(arguments, 1, function_span);
@@ -3589,7 +3648,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         },
                         function_span,
                     );
-                    return Ok(Some(result));
+                    return Ok(Some((result, MustUse::Yes)));
                 }
                 "quadSwapY" => {
                     let mut args = ctx.prepare_args(arguments, 1, function_span);
@@ -3612,7 +3671,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         },
                         function_span,
                     );
-                    return Ok(Some(result));
+                    return Ok(Some((result, MustUse::Yes)));
                 }
                 "quadSwapDiagonal" => {
                     let mut args = ctx.prepare_args(arguments, 1, function_span);
@@ -3635,7 +3694,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         },
                         function_span,
                     );
-                    return Ok(Some(result));
+                    return Ok(Some((result, MustUse::Yes)));
                 }
                 "coopStore" | "coopStoreT" => {
                     let row_major = function_name.ends_with("T");
@@ -3685,14 +3744,17 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     let c = self.expression(args.next()?, ctx)?;
                     args.finish()?;
 
-                    ir::Expression::CooperativeMultiplyAdd { a, b, c }
+                    (
+                        ir::Expression::CooperativeMultiplyAdd { a, b, c },
+                        MustUse::Yes,
+                    )
                 }
                 _ => return Err(Box::new(Error::UnknownIdent(function_span, function_name))),
             }
         };
 
         let expr = ctx.append_expression(expr, function_span)?;
-        Ok(Some(expr))
+        Ok(Some((expr, must_use)))
     }
 
     /// Generate Naga IR for call expressions and statements, and type
@@ -3734,25 +3796,27 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
         let mut tl = TemplateListIter::new(function_span, &call_phrase.function.template_list);
 
-        match ctx.globals.get(function_name) {
+        let result = match ctx.globals.get(function_name) {
             Some(&LoweredGlobalDecl::Type(ty)) => {
                 // user-declared types can't make use of template lists
                 tl.finish(ctx)?;
 
                 let handle =
                     self.construct(span, Constructor::Type(ty), function_span, arguments, ctx)?;
-                Ok(Some(handle))
+                Some((handle, MustUse::Yes))
             }
             Some(
                 &LoweredGlobalDecl::Const(_)
                 | &LoweredGlobalDecl::Override(_)
                 | &LoweredGlobalDecl::Var(_),
-            ) => Err(Box::new(Error::Unexpected(
-                function_span,
-                ExpectedToken::Function,
-            ))),
+            ) => {
+                return Err(Box::new(Error::Unexpected(
+                    function_span,
+                    ExpectedToken::Function,
+                )))
+            }
             Some(&LoweredGlobalDecl::EntryPoint(_)) => {
-                Err(Box::new(Error::CalledEntryPoint(function_span)))
+                return Err(Box::new(Error::CalledEntryPoint(function_span)));
             }
             Some(&LoweredGlobalDecl::Function {
                 handle: function,
@@ -3786,10 +3850,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                 let has_result = ctx.module.functions[function].result.is_some();
 
-                if must_use && is_statement {
-                    return Err(Box::new(Error::FunctionMustUseUnused(function_span)));
-                }
-
                 let rctx = ctx.runtime_expression_ctx(span)?;
                 // we need to always do this before a fn call since all arguments need to be emitted before the fn call
                 rctx.block
@@ -3801,19 +3861,19 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         .append(ir::Expression::CallResult(function), span);
                     rctx.local_expression_kind_tracker
                         .insert(result, proc::ExpressionKind::Runtime);
-                    result
+                    (result, must_use.into())
                 });
                 rctx.emitter.start(&rctx.function.expressions);
                 rctx.block.push(
                     ir::Statement::Call {
                         function,
                         arguments,
-                        result,
+                        result: result.map(|(expr, _)| expr),
                     },
                     span,
                 );
 
-                Ok(result)
+                result
             }
             None => {
                 // If the name refers to a predeclared type, this is a construction expression.
@@ -3847,25 +3907,29 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     tl.finish(ctx)?;
                     let handle =
                         self.construct(span, constructor_ty, function_span, arguments, ctx)?;
-                    return Ok(Some(handle));
-                };
-
-                // Otherwise, it must be a call to a builtin function.
-                let expr = self.call_builtin(
-                    function_name,
-                    function_span,
-                    arguments,
-                    &mut tl,
-                    span,
-                    ctx,
-                    is_statement,
-                )?;
-
-                tl.finish(ctx)?;
-
-                Ok(expr)
+                    Some((handle, MustUse::Yes))
+                } else {
+                    // Otherwise, it must be a call to a builtin function.
+                    let result = self.call_builtin(
+                        function_name,
+                        function_span,
+                        arguments,
+                        &mut tl,
+                        span,
+                        ctx,
+                        is_statement,
+                    )?;
+                    tl.finish(ctx)?;
+                    result
+                }
             }
+        };
+
+        let result_used = !is_statement;
+        if matches!(result, Some((_, MustUse::Yes))) && !result_used {
+            return Err(Box::new(Error::FunctionMustUseUnused(function_span)));
         }
+        Ok(result.map(|(expr, _)| expr))
     }
 
     /// Generate a Naga IR [`Math`] expression.
