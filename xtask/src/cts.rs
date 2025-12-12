@@ -65,6 +65,25 @@ pub fn run_cts(
     let llvm_cov = args.contains("--llvm-cov");
     let release = args.contains("--release");
     let running_on_backend = args.opt_value_from_str::<_, String>("--backend")?;
+    let mut filter_pattern = args.opt_value_from_str::<_, String>("--filter")?;
+    let mut filter_invert = false;
+
+    if let Some(filter) = filter_pattern.as_deref() {
+        if let Some(filter) = filter.strip_prefix('!') {
+            filter_pattern = Some(filter.to_owned());
+            filter_invert = true;
+        }
+    }
+
+    // Compile filter regex early to fail fast on invalid patterns
+    let filter = if let Some(pattern) = filter_pattern {
+        Some(
+            Regex::new(&pattern)
+                .context(format!("Invalid regex pattern '{pattern}' for --filter"))?,
+        )
+    } else {
+        None
+    };
 
     if running_on_backend.is_none() {
         log::warn!(
@@ -123,6 +142,33 @@ pub fn run_cts(
                     .unwrap_or_default(),
             })
         }))
+    }
+
+    // Apply filter if specified
+    if let Some(ref filter) = filter {
+        let original_count = tests.len();
+        tests.retain(|test| {
+            let selector_str = test.selector.to_string_lossy();
+            let matched = filter.is_match(&selector_str);
+            if filter_invert {
+                !matched
+            } else {
+                matched
+            }
+        });
+        let filtered_count = tests.len();
+        if filtered_count == original_count {
+            log::warn!("Filter did not exclude any tests");
+        } else if filtered_count != 0 {
+            log::info!(
+                "Filter selected {filtered_count} of {original_count} test{}",
+                if original_count == 1 { "" } else { "s" },
+            );
+        } else if filtered_count == 0 {
+            bail!("Filter did not select any tests");
+        } else {
+            bail!("Filtering introduced additional tests??");
+        }
     }
 
     let wgpu_cargo_toml = std::path::absolute(shell.current_dir().join("Cargo.toml"))

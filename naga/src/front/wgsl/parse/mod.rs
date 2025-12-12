@@ -2273,6 +2273,16 @@ impl Parser {
                         "var" => {
                             let _ = lexer.next();
 
+                            if lexer.skip(Token::Paren('<')) {
+                                let (class_str, span) = lexer.next_ident_with_span()?;
+                                if class_str != "function" {
+                                    return Err(Box::new(Error::InvalidLocalVariableAddressSpace(
+                                        span,
+                                    )));
+                                }
+                                lexer.expect(Token::Paren('>'))?;
+                            }
+
                             let name = lexer.next_ident()?;
                             let ty = if lexer.skip(Token::Separator(':')) {
                                 let ty = this.type_decl(lexer, ctx)?;

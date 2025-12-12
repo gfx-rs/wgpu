@@ -175,6 +175,7 @@ webgpu:shader,execution,flow_control,return:*
 // Many other vertex_buffer_access subtests also passing, but there are too many to enumerate.
 // Fails on Metal in CI only, not when running locally.
 fails-if(metal) webgpu:shader,execution,robust_access_vertex:vertex_buffer_access:indexed=true;indirect=false;drawCallTestParameter="baseVertex";type="float32x4";additionalBuffers=4;partialLastNumber=false;offsetVertexBuffer=true
+webgpu:shader,validation,expression,call,builtin,all:arguments:test="ptr_deref"
 webgpu:shader,validation,expression,call,builtin,max:values:*
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="break"
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="break_if"
