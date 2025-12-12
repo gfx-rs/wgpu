@@ -11,7 +11,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
     vec.extend([PARTIAL_UPDATE, RENDER_PASS_TEST]);
 }
 
-/// We want to test that partial updates to push constants work as expected.
+/// We want to test that partial updates to immediates work as expected.
 ///
 /// As such, we dispatch two compute passes, one which writes the values
 /// before a partial update, and one which writes the values after the partial update.
@@ -22,9 +22,9 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 static PARTIAL_UPDATE: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgpu::Features::PUSH_CONSTANTS)
+            .features(wgpu::Features::IMMEDIATES)
             .limits(wgpu::Limits {
-                max_push_constant_size: 32,
+                max_immediate_size: 32,
                 ..Default::default()
             }),
     )
@@ -36,7 +36,7 @@ const SHADER: &str = r#"
         vector: vec4f,
     }
 
-    var<push_constant> pc: Pc;
+    var<immediate> pc: Pc;
 
     @group(0) @binding(0)
     var<storage, read_write> output: array<vec4f>;
@@ -99,7 +99,7 @@ async fn partial_update_test(ctx: TestingContext) {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline_layout"),
             bind_group_layouts: &[&bgl],
-            push_constant_ranges: &[wgpu::PushConstantRange {
+            immediates_ranges: &[wgpu::ImmediateRange {
                 stages: wgpu::ShaderStages::COMPUTE,
                 range: 0..32,
             }],
@@ -133,17 +133,17 @@ async fn partial_update_test(ctx: TestingContext) {
         // -- Dispatch 0 --
 
         // Dispatch number
-        cpass.set_push_constants(0, bytemuck::bytes_of(&[0_u32]));
+        cpass.set_immediates(0, bytemuck::bytes_of(&[0_u32]));
         // Update the whole vector.
-        cpass.set_push_constants(16, bytemuck::bytes_of(&[1.0_f32, 2.0, 3.0, 4.0]));
+        cpass.set_immediates(16, bytemuck::bytes_of(&[1.0_f32, 2.0, 3.0, 4.0]));
         cpass.dispatch_workgroups(1, 1, 1);
 
         // -- Dispatch 1 --
 
         // Dispatch number
-        cpass.set_push_constants(0, bytemuck::bytes_of(&[1_u32]));
+        cpass.set_immediates(0, bytemuck::bytes_of(&[1_u32]));
         // Update just the y component of the vector.
-        cpass.set_push_constants(20, bytemuck::bytes_of(&[5.0_f32]));
+        cpass.set_immediates(20, bytemuck::bytes_of(&[5.0_f32]));
         cpass.dispatch_workgroups(1, 1, 1);
     }
 
@@ -166,9 +166,9 @@ async fn partial_update_test(ctx: TestingContext) {
 static RENDER_PASS_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::PUSH_CONSTANTS | Features::VERTEX_WRITABLE_STORAGE)
+            .features(Features::IMMEDIATES | Features::VERTEX_WRITABLE_STORAGE)
             .limits(wgpu::Limits {
-                max_push_constant_size: 64,
+                max_immediate_size: 64,
                 ..Default::default()
             }),
     )
@@ -178,19 +178,19 @@ static RENDER_PASS_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
         }
     });
 
-// This shader simply  moves the values from vector_constants and push_constants into the
+// This shader simply  moves the values from vector_constants and immediates into the
 // result buffer.  It expects to be called 4 times (with vector_index in 0..4) with its
 // topology being PointList, so that each vertex shader call leads to exactly one fragment
 // call.
 const SHADER2: &str = "
     const POSITION: vec4f = vec4f(0, 0, 0, 1);
 
-    struct PushConstants {
+    struct ImmediateData {
         vertex_constants: vec4i,
         fragment_constants: vec4i,
     }
 
-    var<push_constant> push_constants: PushConstants;
+    var<immediate> immediates: ImmediateData;
 
     @group(0) @binding(0) var<storage, read_write> result: array<i32>;
 
@@ -202,14 +202,14 @@ const SHADER2: &str = "
     @vertex fn vertex(
         @builtin(vertex_index) ix: u32,
     ) -> VertexOutput {
-        result[ix] = push_constants.vertex_constants[ix];
+        result[ix] = immediates.vertex_constants[ix];
         return VertexOutput(POSITION, ix);
     }
 
     @fragment fn fragment(
         @location(0) ix: u32,
      ) -> @location(0) vec4f {
-        result[ix + 4u] = push_constants.fragment_constants[ix];
+        result[ix + 4u] = immediates.fragment_constants[ix];
         return vec4f();
     }
 ";
@@ -271,7 +271,7 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
         .device
         .create_pipeline_layout(&PipelineLayoutDescriptor {
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[PushConstantRange {
+            immediates_ranges: &[ImmediateRange {
                 stages: ShaderStages::VERTEX_FRAGMENT,
                 range: 0..8 * size_of::<u32>() as u32,
             }],
@@ -338,7 +338,7 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
     ) {
         let data_as_u8: &[u8] = bytemuck::cast_slice(data.as_slice());
         encoder.set_pipeline(pipeline);
-        encoder.set_push_constants(ShaderStages::VERTEX_FRAGMENT, 0, data_as_u8);
+        encoder.set_immediates(ShaderStages::VERTEX_FRAGMENT, 0, data_as_u8);
         encoder.set_bind_group(0, Some(bind_group), &[]);
         encoder.draw(0..4, 0..1);
     }

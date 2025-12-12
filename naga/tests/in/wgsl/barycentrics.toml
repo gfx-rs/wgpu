@@ -1,4 +1,4 @@
-god_mode = true
+capabilities = "SHADER_BARYCENTRICS"
 
 [msl]
 lang_version = [2, 3]

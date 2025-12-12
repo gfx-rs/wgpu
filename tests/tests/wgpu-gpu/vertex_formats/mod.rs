@@ -4,7 +4,7 @@ use std::num::NonZeroU64;
 
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
     vec.extend([VERTEX_FORMATS_ALL, VERTEX_FORMATS_10_10_10_2]);
@@ -254,7 +254,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bgl],
-            push_constant_ranges: &[],
+            immediates_ranges: &[],
         });
 
     let dummy = ctx
@@ -428,7 +428,6 @@ static VERTEX_FORMATS_ALL: GpuTestConfiguration = GpuTestConfiguration::new()
 static VERTEX_FORMATS_10_10_10_2: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .expect_fail(FailureCase::backend(wgpu::Backends::GL))
             .test_features_limits()
             .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
     )

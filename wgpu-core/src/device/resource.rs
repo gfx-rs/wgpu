@@ -52,7 +52,7 @@ use crate::{
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     timestamp_normalization::TIMESTAMP_NORMALIZATION_BUFFER_USES,
     track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
-    validation::{self, validate_color_attachment_bytes_per_sample},
+    validation,
     weak_vec::WeakVec,
     FastHashMap, LabelHelpers, OnceCellOrLock,
 };
@@ -433,14 +433,17 @@ impl Device {
         }
         .map_err(DeviceError::from_hal)?;
 
+        // Cloned as we need them below anyway.
         let alignments = adapter.raw.capabilities.alignments.clone();
         let downlevel = adapter.raw.capabilities.downlevel.clone();
+        let limits = &adapter.raw.capabilities.limits;
 
         let enable_indirect_validation = instance_flags
             .contains(wgt::InstanceFlags::VALIDATION_INDIRECT_CALL)
-            && downlevel
-                .flags
-                .contains(wgt::DownlevelFlags::INDIRECT_EXECUTION);
+            && downlevel.flags.contains(
+                wgt::DownlevelFlags::INDIRECT_EXECUTION | wgt::DownlevelFlags::COMPUTE_SHADERS,
+            )
+            && limits.max_storage_buffers_per_shader_stage >= 2;
 
         let indirect_validation = if enable_indirect_validation {
             Some(crate::indirect_validation::IndirectValidation::new(
@@ -1436,7 +1439,9 @@ impl Device {
                 });
             }
 
-            if desc.size.depth_or_array_layers != 1 {
+            if desc.size.depth_or_array_layers != 1
+                && !self.features.contains(wgt::Features::MULTISAMPLE_ARRAY)
+            {
                 return Err(CreateTextureError::InvalidDimension(
                     TextureDimensionError::MultisampledDepthOrArrayLayer(
                         desc.size.depth_or_array_layers,
@@ -1741,11 +1746,17 @@ impl Device {
 
         // check if multisampled texture is seen as anything but 2D
         if texture.desc.sample_count > 1 && resolved_dimension != TextureViewDimension::D2 {
-            return Err(
-                resource::CreateTextureViewError::InvalidMultisampledTextureViewDimension(
-                    resolved_dimension,
-                ),
-            );
+            // Multisample is allowed on 2D arrays, only if explicitly supported
+            let multisample_array_exception = resolved_dimension == TextureViewDimension::D2Array
+                && self.features.contains(wgt::Features::MULTISAMPLE_ARRAY);
+
+            if !multisample_array_exception {
+                return Err(
+                    resource::CreateTextureViewError::InvalidMultisampledTextureViewDimension(
+                        resolved_dimension,
+                    ),
+                );
+            }
         }
 
         // check if the dimension is compatible with the texture
@@ -3559,14 +3570,14 @@ impl Device {
             });
         }
 
-        if !desc.push_constant_ranges.is_empty() {
-            self.require_features(wgt::Features::PUSH_CONSTANTS)?;
+        if !desc.immediates_ranges.is_empty() {
+            self.require_features(wgt::Features::IMMEDIATES)?;
         }
 
         let mut used_stages = wgt::ShaderStages::empty();
-        for (index, pc) in desc.push_constant_ranges.iter().enumerate() {
+        for (index, pc) in desc.immediates_ranges.iter().enumerate() {
             if pc.stages.intersects(used_stages) {
-                return Err(Error::MoreThanOnePushConstantRangePerStage {
+                return Err(Error::MoreThanOneImmediateRangePerStage {
                     index,
                     provided: pc.stages,
                     intersected: pc.stages & used_stages,
@@ -3574,23 +3585,23 @@ impl Device {
             }
             used_stages |= pc.stages;
 
-            let device_max_pc_size = self.limits.max_push_constant_size;
+            let device_max_pc_size = self.limits.max_immediate_size;
             if device_max_pc_size < pc.range.end {
-                return Err(Error::PushConstantRangeTooLarge {
+                return Err(Error::ImmediateRangeTooLarge {
                     index,
                     range: pc.range.clone(),
                     max: device_max_pc_size,
                 });
             }
 
-            if pc.range.start % wgt::PUSH_CONSTANT_ALIGNMENT != 0 {
-                return Err(Error::MisalignedPushConstantRange {
+            if pc.range.start % wgt::IMMEDIATES_ALIGNMENT != 0 {
+                return Err(Error::MisalignedImmediateRange {
                     index,
                     bound: pc.range.start,
                 });
             }
-            if pc.range.end % wgt::PUSH_CONSTANT_ALIGNMENT != 0 {
-                return Err(Error::MisalignedPushConstantRange {
+            if pc.range.end % wgt::IMMEDIATES_ALIGNMENT != 0 {
+                return Err(Error::MisalignedImmediateRange {
                     index,
                     bound: pc.range.end,
                 });
@@ -3632,7 +3643,7 @@ impl Device {
                 | hal::PipelineLayoutFlags::NUM_WORK_GROUPS
                 | additional_flags,
             bind_group_layouts: &raw_bind_group_layouts,
-            push_constant_ranges: desc.push_constant_ranges.as_ref(),
+            immediates_ranges: desc.immediates_ranges.as_ref(),
         };
 
         let raw = unsafe { self.raw().create_pipeline_layout(&hal_desc) }
@@ -3645,7 +3656,7 @@ impl Device {
             device: self.clone(),
             label: desc.label.to_string(),
             bind_group_layouts,
-            push_constant_ranges: desc.push_constant_ranges.iter().cloned().collect(),
+            immediates_ranges: desc.immediates_ranges.iter().cloned().collect(),
         };
 
         let layout = Arc::new(layout);
@@ -3692,7 +3703,7 @@ impl Device {
         let layout_desc = binding_model::ResolvedPipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: Cow::Owned(bind_group_layouts),
-            push_constant_ranges: Cow::Borrowed(&[]), //TODO?
+            immediates_ranges: Cow::Borrowed(&[]), //TODO?
         };
 
         let layout = self.create_pipeline_layout(&layout_desc)?;
@@ -4123,15 +4134,11 @@ impl Device {
             }
         }
 
-        let limit = self.limits.max_color_attachment_bytes_per_sample;
-        let formats = color_targets
-            .iter()
-            .map(|cs| cs.as_ref().map(|cs| cs.format));
-        if let Err(total) = validate_color_attachment_bytes_per_sample(formats, limit) {
-            return Err(pipeline::CreateRenderPipelineError::ColorAttachment(
-                command::ColorAttachmentError::TooManyBytesPerSample { total, limit },
-            ));
-        }
+        validation::validate_color_attachment_bytes_per_sample(
+            color_targets.iter().flatten().map(|cs| cs.format),
+            self.limits.max_color_attachment_bytes_per_sample,
+        )
+        .map_err(pipeline::CreateRenderPipelineError::ColorAttachment)?;
 
         if let Some(ds) = depth_stencil_state {
             target_specified = true;

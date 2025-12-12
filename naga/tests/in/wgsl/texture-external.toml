@@ -1,4 +1,4 @@
-god_mode = true
+capabilities = "TEXTURE_EXTERNAL"
 targets = "HLSL | IR | METAL | WGSL"
 
 [msl.per_entry_point_map.compute_main]

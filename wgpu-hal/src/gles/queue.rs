@@ -1637,7 +1637,7 @@ impl super::Queue {
                     }
                 };
             }
-            C::SetPushConstants {
+            C::SetImmediates {
                 ref uniform,
                 offset,
             } => {

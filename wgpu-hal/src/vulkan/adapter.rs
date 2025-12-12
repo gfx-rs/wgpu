@@ -130,6 +130,11 @@ pub struct PhysicalDeviceFeatures {
 
     /// Features provided by `VK_KHR_fragment_shader_barycentric`
     shader_barycentrics: Option<vk::PhysicalDeviceFragmentShaderBarycentricFeaturesKHR<'static>>,
+
+    /// Features provided by `VK_KHR_portability_subset`.
+    ///
+    /// Strictly speaking this tells us what features we *don't* have compared to core.
+    portability_subset: Option<vk::PhysicalDevicePortabilitySubsetFeaturesKHR<'static>>,
 }
 
 impl PhysicalDeviceFeatures {
@@ -204,6 +209,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.shader_barycentrics {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.portability_subset {
             info = info.push_next(feature);
         }
         info
@@ -551,6 +559,17 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            portability_subset: if enabled_extensions.contains(&khr::portability_subset::NAME) {
+                let multisample_array_needed =
+                    requested_features.intersects(wgt::Features::MULTISAMPLE_ARRAY);
+
+                Some(
+                    vk::PhysicalDevicePortabilitySubsetFeaturesKHR::default()
+                        .multisample_array_image(multisample_array_needed),
+                )
+            } else {
+                None
+            },
         }
     }
 
@@ -571,7 +590,7 @@ impl PhysicalDeviceFeatures {
         use wgt::{DownlevelFlags as Df, Features as F};
         let mut features = F::empty()
             | F::MAPPABLE_PRIMARY_BUFFERS
-            | F::PUSH_CONSTANTS
+            | F::IMMEDIATES
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::ADDRESS_MODE_CLAMP_TO_ZERO
             | F::TIMESTAMP_QUERY
@@ -927,6 +946,15 @@ impl PhysicalDeviceFeatures {
                 mesh_shader.multiview_mesh_shader != 0,
             );
         }
+
+        // Not supported by default by `VK_KHR_portability_subset`, which we use on apple platforms.
+        features.set(
+            F::MULTISAMPLE_ARRAY,
+            self.portability_subset
+                .map(|p| p.multisample_array_image == vk::TRUE)
+                .unwrap_or(true),
+        );
+
         (features, dl_flags)
     }
 }
@@ -1331,15 +1359,7 @@ impl PhysicalDeviceProperties {
                 .min(crate::MAX_VERTEX_BUFFERS as u32),
             max_vertex_attributes: limits.max_vertex_input_attributes,
             max_vertex_buffer_array_stride: limits.max_vertex_input_binding_stride,
-            min_subgroup_size: self
-                .subgroup_size_control
-                .map(|subgroup_size| subgroup_size.min_subgroup_size)
-                .unwrap_or(0),
-            max_subgroup_size: self
-                .subgroup_size_control
-                .map(|subgroup_size| subgroup_size.max_subgroup_size)
-                .unwrap_or(0),
-            max_push_constant_size: limits.max_push_constants_size,
+            max_immediate_size: limits.max_push_constants_size,
             min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as u32,
             min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as u32,
             max_inter_stage_shader_components: limits
@@ -1698,6 +1718,13 @@ impl super::InstanceShared {
                 features2 = features2.push_next(next);
             }
 
+            if capabilities.supports_extension(khr::portability_subset::NAME) {
+                let next = features
+                    .portability_subset
+                    .insert(vk::PhysicalDevicePortabilitySubsetFeaturesKHR::default());
+                features2 = features2.push_next(next);
+            }
+
             unsafe { get_device_properties.get_physical_device_features2(phd, &mut features2) };
             features2.features
         } else {
@@ -1776,6 +1803,14 @@ impl super::Instance {
                     .to_owned()
             },
             backend: wgt::Backend::Vulkan,
+            subgroup_min_size: phd_capabilities
+                .subgroup_size_control
+                .map(|subgroup_size| subgroup_size.min_subgroup_size)
+                .unwrap_or(wgt::MINIMUM_SUBGROUP_MIN_SIZE),
+            subgroup_max_size: phd_capabilities
+                .subgroup_size_control
+                .map(|subgroup_size| subgroup_size.max_subgroup_size)
+                .unwrap_or(wgt::MAXIMUM_SUBGROUP_MAX_SIZE),
             transient_saves_memory: supports_lazily_allocated,
         };
         let (available_features, mut downlevel_flags) =

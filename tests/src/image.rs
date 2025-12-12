@@ -347,7 +347,7 @@ fn copy_via_compute(
     let pll = device.create_pipeline_layout(&PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[&bgl],
-        push_constant_ranges: &[],
+        immediates_ranges: &[],
     });
 
     let source = String::from(include_str!("copy_texture_to_buffer.wgsl"));

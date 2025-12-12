@@ -1,6 +1,6 @@
 //! Generic pass functions that both compute and render passes need.
 
-use crate::binding_model::{BindError, BindGroup, PushConstantUploadError};
+use crate::binding_model::{BindError, BindGroup, ImmediateUploadError};
 use crate::command::bind::Binder;
 use crate::command::encoder::EncodingState;
 use crate::command::memory_init::SurfacesInDiscardState;
@@ -217,14 +217,14 @@ where
         f();
 
         let non_overlapping =
-            super::bind::compute_nonoverlapping_ranges(&pipeline_layout.push_constant_ranges);
+            super::bind::compute_nonoverlapping_ranges(&pipeline_layout.immediates_ranges);
 
-        // Clear push constant ranges
+        // Clear immediate data ranges
         for range in non_overlapping {
             let offset = range.range.start;
             let size_bytes = range.range.end - offset;
-            super::push_constant_clear(offset, size_bytes, |clear_offset, clear_data| unsafe {
-                state.base.raw_encoder.set_push_constants(
+            super::immediates_clear(offset, size_bytes, |clear_offset, clear_data| unsafe {
+                state.base.raw_encoder.set_immediates(
                     pipeline_layout.raw(),
                     range.stages,
                     clear_offset,
@@ -236,9 +236,9 @@ where
     Ok(())
 }
 
-pub(crate) fn set_push_constant<E, F: FnOnce(&[u32])>(
+pub(crate) fn set_immediates<E, F: FnOnce(&[u32])>(
     state: &mut PassState,
-    push_constant_data: &[u32],
+    immediates_data: &[u32],
     stages: wgt::ShaderStages,
     offset: u32,
     size_bytes: u32,
@@ -246,15 +246,15 @@ pub(crate) fn set_push_constant<E, F: FnOnce(&[u32])>(
     f: F,
 ) -> Result<(), E>
 where
-    E: From<PushConstantUploadError> + From<InvalidValuesOffset> + From<MissingPipeline>,
+    E: From<ImmediateUploadError> + From<InvalidValuesOffset> + From<MissingPipeline>,
 {
-    api_log!("Pass::set_push_constants");
+    api_log!("Pass::set_immediates");
 
     let values_offset = values_offset.ok_or(InvalidValuesOffset)?;
 
     let end_offset_bytes = offset + size_bytes;
-    let values_end_offset = (values_offset + size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
-    let data_slice = &push_constant_data[(values_offset as usize)..values_end_offset];
+    let values_end_offset = (values_offset + size_bytes / wgt::IMMEDIATES_ALIGNMENT) as usize;
+    let data_slice = &immediates_data[(values_offset as usize)..values_end_offset];
 
     let pipeline_layout = state
         .binder
@@ -262,7 +262,7 @@ where
         .as_ref()
         .ok_or(MissingPipeline)?;
 
-    pipeline_layout.validate_push_constant_ranges(stages, offset, end_offset_bytes)?;
+    pipeline_layout.validate_immediates_ranges(stages, offset, end_offset_bytes)?;
 
     f(data_slice);
 
@@ -270,7 +270,7 @@ where
         state
             .base
             .raw_encoder
-            .set_push_constants(pipeline_layout.raw(), stages, offset, data_slice)
+            .set_immediates(pipeline_layout.raw(), stages, offset, data_slice)
     }
     Ok(())
 }

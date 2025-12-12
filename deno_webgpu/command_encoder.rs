@@ -3,6 +3,8 @@
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::num::NonZero;
+#[cfg(target_vendor = "apple")]
+use std::sync::OnceLock;
 
 use deno_core::cppgc::Ptr;
 use deno_core::op2;
@@ -30,6 +32,11 @@ pub struct GPUCommandEncoder {
 
   pub id: wgpu_core::id::CommandEncoderId,
   pub label: String,
+
+  // Weak reference to the JS object so we can attach a finalizer.
+  // See `GPUDevice::create_command_encoder`.
+  #[cfg(target_vendor = "apple")]
+  pub(crate) weak: OnceLock<v8::Weak<v8::Object>>,
 }
 
 impl Drop for GPUCommandEncoder {

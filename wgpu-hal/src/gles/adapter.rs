@@ -190,6 +190,8 @@ impl super::Adapter {
             device_pci_bus_id: String::new(),
             driver_info: version,
             backend: wgt::Backend::Gl,
+            subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
+            subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
             transient_saves_memory: false,
         }
     }
@@ -309,10 +311,11 @@ impl super::Adapter {
             es_supported || full_supported
         };
 
-        let supports_storage =
-            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_shader_storage_buffer_object");
-        let supports_compute =
-            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_compute_shader");
+        // Naga won't let you emit storage buffers at versions below this, so
+        // we currently can't support GL_ARB_shader_storage_buffer_object.
+        let supports_storage = supported((3, 1), (4, 3));
+        // Same with compute shaders and GL_ARB_compute_shader
+        let supports_compute = supported((3, 1), (4, 3));
         let supports_work_group_params = supports_compute;
 
         // ANGLE provides renderer strings like: "ANGLE (Apple, Apple M1 Pro, OpenGL 4.1)"
@@ -443,7 +446,7 @@ impl super::Adapter {
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::CLEAR_TEXTURE
-            | wgt::Features::PUSH_CONSTANTS
+            | wgt::Features::IMMEDIATES
             | wgt::Features::DEPTH32FLOAT_STENCIL8;
         features.set(
             wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO,
@@ -751,9 +754,7 @@ impl super::Adapter {
             } else {
                 !0
             },
-            min_subgroup_size: 0,
-            max_subgroup_size: 0,
-            max_push_constant_size: super::MAX_PUSH_CONSTANTS as u32 * 4,
+            max_immediate_size: super::MAX_IMMEDIATES as u32 * 4,
             min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment,
             max_inter_stage_shader_components: {

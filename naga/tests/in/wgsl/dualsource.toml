@@ -1,4 +1,4 @@
-god_mode = true
+capabilities = "DUAL_SOURCE_BLENDING"
 
 [msl]
 fake_missing_bindings = false

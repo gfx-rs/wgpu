@@ -424,8 +424,9 @@ fn map_texture_tagged_copy_view(
 }
 
 fn map_load_op<V: Copy>(load: &LoadOp<V>) -> LoadOp<Option<V>> {
-    match load {
-        LoadOp::Clear(clear_value) => LoadOp::Clear(Some(*clear_value)),
+    match *load {
+        LoadOp::Clear(clear_value) => LoadOp::Clear(Some(clear_value)),
+        LoadOp::DontCare(token) => LoadOp::DontCare(token),
         LoadOp::Load => LoadOp::Load,
     }
 }
@@ -555,6 +556,7 @@ pub struct CoreRenderBundleEncoder {
 
 #[derive(Debug)]
 pub struct CoreRenderBundle {
+    context: ContextWgpuCore,
     id: wgc::id::RenderBundleId,
 }
 
@@ -620,6 +622,7 @@ pub struct CoreTlas {
 pub struct CoreSurfaceOutputDetail {
     context: ContextWgpuCore,
     surface_id: wgc::id::SurfaceId,
+    error_sink: ErrorSink,
 }
 
 type ErrorSink = Arc<Mutex<ErrorSinkRaw>>;
@@ -1283,7 +1286,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         let descriptor = wgc::binding_model::PipelineLayoutDescriptor {
             label: desc.label.map(Borrowed),
             bind_group_layouts: Borrowed(&temp_layouts),
-            push_constant_ranges: Borrowed(desc.push_constant_ranges),
+            immediates_ranges: Borrowed(desc.immediates_ranges),
         };
 
         let (id, error) = self
@@ -1803,22 +1806,58 @@ impl dispatch::DeviceInterface for CoreDevice {
         error_sink.uncaptured_handler = Some(handler);
     }
 
-    fn push_error_scope(&self, filter: crate::ErrorFilter) {
+    fn push_error_scope(&self, filter: crate::ErrorFilter) -> u32 {
         let mut error_sink = self.error_sink.lock();
         let thread_id = thread_id::ThreadId::current();
         let scopes = error_sink.scopes.entry(thread_id).or_default();
+        let index = scopes
+            .len()
+            .try_into()
+            .expect("Greater than 2^32 nested error scopes");
         scopes.push(ErrorScope {
             error: None,
             filter,
         });
+        index
     }
 
-    fn pop_error_scope(&self) -> Pin<Box<dyn dispatch::PopErrorScopeFuture>> {
+    fn pop_error_scope(&self, index: u32) -> Pin<Box<dyn dispatch::PopErrorScopeFuture>> {
         let mut error_sink = self.error_sink.lock();
+
+        // We go out of our way to avoid panicking while unwinding, because that would abort the process,
+        // and we are supposed to just drop the error scope on the floor.
+        let is_panicking = crate::util::is_panicking();
         let thread_id = thread_id::ThreadId::current();
         let err = "Mismatched pop_error_scope call: no error scope for this thread. Error scopes are thread-local.";
-        let scopes = error_sink.scopes.get_mut(&thread_id).expect(err);
-        let scope = scopes.pop().expect(err);
+        let scopes = match error_sink.scopes.get_mut(&thread_id) {
+            Some(s) => s,
+            None => {
+                if !is_panicking {
+                    panic!("{err}");
+                } else {
+                    return Box::pin(ready(None));
+                }
+            }
+        };
+        if scopes.is_empty() && !is_panicking {
+            panic!("{err}");
+        }
+        if index as usize != scopes.len() - 1 && !is_panicking {
+            panic!(
+                "Mismatched pop_error_scope call: error scopes must be popped in reverse order."
+            );
+        }
+
+        // It would be more correct in this case to use `remove` here so that when unwinding is occurring
+        // we would remove the correct error scope, but we don't have such a primitive on the web
+        // and having consistent behavior here is more important. If you are unwinding and it unwinds
+        // the guards in the wrong order, it's totally reasonable to have incorrect behavior.
+        let scope = match scopes.pop() {
+            Some(s) => s,
+            None if !is_panicking => unreachable!(),
+            None => return Box::pin(ready(None)),
+        };
+
         Box::pin(ready(scope.error))
     }
 
@@ -2893,17 +2932,17 @@ impl dispatch::ComputePassInterface for CoreComputePass {
         }
     }
 
-    fn set_push_constants(&mut self, offset: u32, data: &[u8]) {
-        if let Err(cause) =
-            self.context
-                .0
-                .compute_pass_set_push_constants(&mut self.pass, offset, data)
+    fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        if let Err(cause) = self
+            .context
+            .0
+            .compute_pass_set_immediates(&mut self.pass, offset, data)
         {
             self.context.handle_error(
                 &self.error_sink,
                 cause,
                 self.pass.label(),
-                "ComputePass::set_push_constant",
+                "ComputePass::set_immediates",
             );
         }
     }
@@ -3146,17 +3185,17 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         }
     }
 
-    fn set_push_constants(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]) {
+    fn set_immediates(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]) {
         if let Err(cause) =
             self.context
                 .0
-                .render_pass_set_push_constants(&mut self.pass, stages, offset, data)
+                .render_pass_set_immediates(&mut self.pass, stages, offset, data)
         {
             self.context.handle_error(
                 &self.error_sink,
                 cause,
                 self.pass.label(),
-                "RenderPass::set_push_constants",
+                "RenderPass::set_immediates",
             );
         }
     }
@@ -3722,9 +3761,9 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
         wgpu_render_bundle_set_vertex_buffer(&mut self.encoder, slot, buffer.id, offset, size)
     }
 
-    fn set_push_constants(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]) {
+    fn set_immediates(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]) {
         unsafe {
-            wgpu_render_bundle_set_push_constants(
+            wgpu_render_bundle_set_immediates(
                 &mut self.encoder,
                 stages,
                 offset,
@@ -3792,11 +3831,21 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
             self.context
                 .handle_error_fatal(err, "RenderBundleEncoder::finish");
         }
-        CoreRenderBundle { id }.into()
+        CoreRenderBundle {
+            context: self.context.clone(),
+            id,
+        }
+        .into()
     }
 }
 
 impl dispatch::RenderBundleInterface for CoreRenderBundle {}
+
+impl Drop for CoreRenderBundle {
+    fn drop(&mut self) {
+        self.context.0.render_bundle_drop(self.id)
+    }
+}
 
 impl dispatch::SurfaceInterface for CoreSurface {
     fn get_capabilities(&self, adapter: &dispatch::DispatchAdapter) -> wgt::SurfaceCapabilities {
@@ -3828,9 +3877,16 @@ impl dispatch::SurfaceInterface for CoreSurface {
         crate::SurfaceStatus,
         dispatch::DispatchSurfaceOutputDetail,
     ) {
+        let error_sink = if let Some(error_sink) = self.error_sink.lock().as_ref() {
+            error_sink.clone()
+        } else {
+            Arc::new(Mutex::new(ErrorSinkRaw::new()))
+        };
+
         let output_detail = CoreSurfaceOutputDetail {
             context: self.context.clone(),
             surface_id: self.id,
+            error_sink: error_sink.clone(),
         }
         .into();
 
@@ -3843,7 +3899,7 @@ impl dispatch::SurfaceInterface for CoreSurface {
                     .map(|id| CoreTexture {
                         context: self.context.clone(),
                         id,
-                        error_sink: Arc::new(Mutex::new(ErrorSinkRaw::new())),
+                        error_sink,
                     })
                     .map(Into::into);
 
@@ -3879,7 +3935,10 @@ impl dispatch::SurfaceOutputDetailInterface for CoreSurfaceOutputDetail {
     fn present(&self) {
         match self.context.0.surface_present(self.surface_id) {
             Ok(_status) => (),
-            Err(err) => self.context.handle_error_fatal(err, "Surface::present"),
+            Err(err) => {
+                self.context
+                    .handle_error_nolabel(&self.error_sink, err, "Surface::present");
+            }
         }
     }
 

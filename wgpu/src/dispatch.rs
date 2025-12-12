@@ -193,8 +193,9 @@ pub trait DeviceInterface: CommonTraits {
     fn set_device_lost_callback(&self, device_lost_callback: BoxDeviceLostCallback);
 
     fn on_uncaptured_error(&self, handler: Arc<dyn crate::UncapturedErrorHandler>);
-    fn push_error_scope(&self, filter: crate::ErrorFilter);
-    fn pop_error_scope(&self) -> Pin<Box<dyn PopErrorScopeFuture>>;
+    // Returns index on the stack of the pushed error scope.
+    fn push_error_scope(&self, filter: crate::ErrorFilter) -> u32;
+    fn pop_error_scope(&self, index: u32) -> Pin<Box<dyn PopErrorScopeFuture>>;
 
     unsafe fn start_graphics_debugger_capture(&self);
     unsafe fn stop_graphics_debugger_capture(&self);
@@ -376,7 +377,7 @@ pub trait ComputePassInterface: CommonTraits {
         bind_group: Option<&DispatchBindGroup>,
         offsets: &[crate::DynamicOffset],
     );
-    fn set_push_constants(&mut self, offset: u32, data: &[u8]);
+    fn set_immediates(&mut self, offset: u32, data: &[u8]);
 
     fn insert_debug_marker(&mut self, label: &str);
     fn push_debug_group(&mut self, group_label: &str);
@@ -416,7 +417,7 @@ pub trait RenderPassInterface: CommonTraits {
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     );
-    fn set_push_constants(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]);
+    fn set_immediates(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]);
     fn set_blend_constant(&mut self, color: crate::Color);
     fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32);
     fn set_viewport(
@@ -529,7 +530,7 @@ pub trait RenderBundleEncoderInterface: CommonTraits {
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     );
-    fn set_push_constants(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]);
+    fn set_immediates(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]);
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>);
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>);

@@ -41,29 +41,29 @@ pub enum RenderCommand<R: ReferenceType> {
     },
     SetScissor(Rect<u32>),
 
-    /// Set a range of push constants to values stored in [`BasePass::push_constant_data`].
+    /// Set a range of immediates to values stored in [`BasePass::immediates_data`].
     ///
-    /// See [`wgpu::RenderPass::set_push_constants`] for a detailed explanation
+    /// See [`wgpu::RenderPass::set_immediates`] for a detailed explanation
     /// of the restrictions these commands must satisfy.
-    SetPushConstant {
-        /// Which stages we are setting push constant values for.
+    SetImmediate {
+        /// Which stages we are setting immediate data values for.
         stages: wgt::ShaderStages,
 
-        /// The byte offset within the push constant storage to write to.  This
+        /// The byte offset within the immediate data storage to write to.  This
         /// must be a multiple of four.
         offset: u32,
 
         /// The number of bytes to write. This must be a multiple of four.
         size_bytes: u32,
 
-        /// Index in [`BasePass::push_constant_data`] of the start of the data
+        /// Index in [`BasePass::immediates_data`] of the start of the data
         /// to be written.
         ///
         /// Note: this is not a byte offset like `offset`. Rather, it is the
-        /// index of the first `u32` element in `push_constant_data` to read.
+        /// index of the first `u32` element in `immediates_data` to read.
         ///
         /// `None` means zeros should be written to the destination range, and
-        /// there is no corresponding data in `push_constant_data`. This is used
+        /// there is no corresponding data in `immediates_data`. This is used
         /// by render bundles, which explicitly clear out any state that
         /// post-bundle code might see.
         values_offset: Option<u32>,

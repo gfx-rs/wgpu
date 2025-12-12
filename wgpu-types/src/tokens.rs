@@ -43,3 +43,32 @@ impl ExperimentalFeatures {
         self.enabled
     }
 }
+
+/// Token of the user agreeing to use [`LoadOp::DontCare`](crate::LoadOp::DontCare).
+#[derive(Debug, Default, Copy, Clone, Hash, PartialEq, Eq)]
+pub struct LoadOpDontCare {
+    // Private to prevent construction outside of the unsafe
+    // enabled() function.
+    _private: (),
+}
+
+impl LoadOpDontCare {
+    /// Using [`LoadOp::DontCare`](crate::LoadOp::DontCare) will result
+    /// in the render target having undefined contents at the start of the render pass.
+    /// This may lead to undefined behavior if you read from the any of the
+    /// render target pixels without first writing to them.
+    ///
+    /// Blending also becomes undefined behavior if the source
+    /// pixels are undefined.
+    ///
+    /// All pixels in the render target must be written to before
+    /// any blending or a [`StoreOp::Store`](crate::StoreOp::Store) occurs.
+    ///
+    /// # Safety
+    ///
+    /// - You acknowledge that using `LoadOp::DontCare` may lead to undefined behavior
+    ///   if the above conditions are not met.
+    pub const unsafe fn enabled() -> Self {
+        Self { _private: () }
+    }
+}

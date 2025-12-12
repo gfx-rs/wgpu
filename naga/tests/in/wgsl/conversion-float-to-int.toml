@@ -2,7 +2,7 @@
 # conversion specially there anyway.
 # MSL does not support f64. See conversion-float-to-int-no-f64.wgsl.
 targets = "SPIRV | HLSL | WGSL"
-god_mode = true
+capabilities = "SHADER_FLOAT16 | FLOAT64 | SHADER_INT64"
 
 [hlsl]
 shader_model = "V6_0"
