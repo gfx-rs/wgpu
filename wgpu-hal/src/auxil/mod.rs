@@ -130,6 +130,7 @@ impl crate::TextureCopy {
 /// Clamp the limits in `limits` to honor any HAL-imposed maximums.
 ///
 /// Limits that do not have a HAL-defined maximum are left unchanged.
+#[cfg_attr(not(any_backend), allow(dead_code))]
 pub(crate) fn apply_hal_limits(mut limits: wgt::Limits) -> wgt::Limits {
     // The Metal backend wants to have its own consistent view of the limits, so
     // it may duplicate some of these limits.

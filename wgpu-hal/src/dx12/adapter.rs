@@ -695,7 +695,7 @@ impl super::Adapter {
             info,
             features,
             capabilities: crate::Capabilities {
-                limits: crate::auxil::apply_hal_limits(wgt::Limits {
+                limits: auxil::apply_hal_limits(wgt::Limits {
                     max_texture_dimension_1d: Direct3D12::D3D12_REQ_TEXTURE1D_U_DIMENSION,
                     max_texture_dimension_2d: Direct3D12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION
                         .min(Direct3D12::D3D12_REQ_TEXTURECUBE_DIMENSION),
