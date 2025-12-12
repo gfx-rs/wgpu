@@ -1172,20 +1172,19 @@ impl Interface {
         layouts: &mut BindingLayoutSource<'_>,
         shader_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         entry_point_name: &str,
-        shader_stage: naga::ShaderStage,
+        shader_stage: ShaderStageForValidation,
         inputs: StageIo,
-        compare_function: Option<wgt::CompareFunction>,
     ) -> Result<StageIo, StageError> {
         // Since a shader module can have multiple entry points with the same name,
         // we need to look for one with the right execution model.
-        let pair = (shader_stage, entry_point_name.to_string());
+        let pair = (shader_stage.to_naga(), entry_point_name.to_string());
         let entry_point = match self.entry_points.get(&pair) {
             Some(some) => some,
             None => return Err(StageError::MissingEntryPoint(pair.1)),
         };
         let (_, entry_point_name) = pair;
 
-        let stage_bit = stage_bit_from_shader_stage(shader_stage);
+        let stage_bit = shader_stage.to_wgt_bit();
 
         // check resources visibility
         for &handle in entry_point.resources.iter() {
@@ -1308,13 +1307,13 @@ impl Interface {
         }
 
         // check workgroup size limits
-        if shader_stage.compute_like() {
+        if shader_stage.to_naga().compute_like() {
             let (
                 max_workgroup_size_limits,
                 max_workgroup_size_total,
                 per_dimension_limit,
                 total_limit,
-            ) = match shader_stage {
+            ) = match shader_stage.to_naga() {
                 naga::ShaderStage::Compute => (
                     [
                         self.limits.max_compute_workgroup_size_x,
@@ -1380,7 +1379,7 @@ impl Interface {
                         .ok_or(InputError::Missing)
                         .and_then(|provided| {
                             let (compatible, num_components, per_primitive_correct) =
-                                match shader_stage {
+                                match shader_stage.to_naga() {
                                     // For vertex attributes, there are defaults filled out
                                     // by the driver if data is not provided.
                                     naga::ShaderStage::Vertex => {
@@ -1445,7 +1444,7 @@ impl Interface {
         }
 
         match shader_stage {
-            naga::ShaderStage::Vertex => {
+            ShaderStageForValidation::Vertex { compare_function } => {
                 for output in entry_point.outputs.iter() {
                     //TODO: count builtins towards the limit?
                     inter_stage_components += match *output {
@@ -1478,7 +1477,7 @@ impl Interface {
                     }
                 }
             }
-            naga::ShaderStage::Fragment => {
+            ShaderStageForValidation::Fragment => {
                 for output in &entry_point.outputs {
                     let &Varying::Local { location, ref iv } = output else {
                         continue;
@@ -1524,7 +1523,7 @@ impl Interface {
                 });
             }
         }
-        if shader_stage == naga::ShaderStage::Mesh
+        if shader_stage.to_naga() == naga::ShaderStage::Mesh
             && entry_point.task_payload_size != inputs.task_payload_size
         {
             return Err(StageError::TaskPayloadMustMatch {
@@ -1534,18 +1533,18 @@ impl Interface {
         }
 
         // Fragment shader primitive index is treated like a varying
-        if shader_stage == naga::ShaderStage::Fragment
+        if shader_stage.to_naga() == naga::ShaderStage::Fragment
             && this_stage_primitive_index
             && inputs.primitive_index == Some(false)
         {
             return Err(StageError::InvalidPrimitiveIndex);
-        } else if shader_stage == naga::ShaderStage::Fragment
+        } else if shader_stage.to_naga() == naga::ShaderStage::Fragment
             && !this_stage_primitive_index
             && inputs.primitive_index == Some(true)
         {
             return Err(StageError::MissingPrimitiveIndex);
         }
-        if shader_stage == naga::ShaderStage::Mesh
+        if shader_stage.to_naga() == naga::ShaderStage::Mesh
             && inputs.task_payload_size.is_some()
             && has_draw_id
         {
@@ -1564,7 +1563,7 @@ impl Interface {
         Ok(StageIo {
             task_payload_size: entry_point.task_payload_size,
             varyings: outputs,
-            primitive_index: if shader_stage == naga::ShaderStage::Mesh {
+            primitive_index: if shader_stage.to_naga() == naga::ShaderStage::Mesh {
                 Some(this_stage_primitive_index)
             } else {
                 None
@@ -1614,12 +1613,34 @@ pub fn validate_color_attachment_bytes_per_sample(
     Ok(())
 }
 
-pub(crate) fn stage_bit_from_shader_stage(shader_stage: naga::ShaderStage) -> wgt::ShaderStages {
-    match shader_stage {
-        naga::ShaderStage::Vertex => wgt::ShaderStages::VERTEX,
-        naga::ShaderStage::Fragment => wgt::ShaderStages::FRAGMENT,
-        naga::ShaderStage::Compute => wgt::ShaderStages::COMPUTE,
-        naga::ShaderStage::Mesh => wgt::ShaderStages::MESH,
-        naga::ShaderStage::Task => wgt::ShaderStages::TASK,
+pub enum ShaderStageForValidation {
+    Vertex {
+        compare_function: Option<wgt::CompareFunction>,
+    },
+    Mesh,
+    Fragment,
+    Compute,
+    Task,
+}
+
+impl ShaderStageForValidation {
+    pub fn to_naga(&self) -> naga::ShaderStage {
+        match self {
+            Self::Vertex { .. } => naga::ShaderStage::Vertex,
+            Self::Mesh => naga::ShaderStage::Mesh,
+            Self::Fragment => naga::ShaderStage::Fragment,
+            Self::Compute => naga::ShaderStage::Compute,
+            Self::Task => naga::ShaderStage::Task,
+        }
+    }
+
+    pub fn to_wgt_bit(&self) -> wgt::ShaderStages {
+        match self {
+            Self::Vertex { .. } => wgt::ShaderStages::VERTEX,
+            Self::Mesh { .. } => wgt::ShaderStages::MESH,
+            Self::Fragment { .. } => wgt::ShaderStages::FRAGMENT,
+            Self::Compute => wgt::ShaderStages::COMPUTE,
+            Self::Task => wgt::ShaderStages::TASK,
+        }
     }
 }
