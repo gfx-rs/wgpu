@@ -1148,10 +1148,9 @@ impl Interface {
 
     pub fn finalize_entry_point_name(
         &self,
-        stage_bit: wgt::ShaderStages,
+        stage: naga::ShaderStage,
         entry_point_name: Option<&str>,
     ) -> Result<String, StageError> {
-        let stage = shader_stage_from_stage_bit(stage_bit);
         entry_point_name
             .map(|ep| ep.to_string())
             .map(Ok)
@@ -1173,19 +1172,20 @@ impl Interface {
         layouts: &mut BindingLayoutSource<'_>,
         shader_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         entry_point_name: &str,
-        stage_bit: wgt::ShaderStages,
+        shader_stage: naga::ShaderStage,
         inputs: StageIo,
         compare_function: Option<wgt::CompareFunction>,
     ) -> Result<StageIo, StageError> {
         // Since a shader module can have multiple entry points with the same name,
         // we need to look for one with the right execution model.
-        let shader_stage = shader_stage_from_stage_bit(stage_bit);
         let pair = (shader_stage, entry_point_name.to_string());
         let entry_point = match self.entry_points.get(&pair) {
             Some(some) => some,
             None => return Err(StageError::MissingEntryPoint(pair.1)),
         };
         let (_, entry_point_name) = pair;
+
+        let stage_bit = stage_bit_from_shader_stage(shader_stage);
 
         // check resources visibility
         for &handle in entry_point.resources.iter() {
@@ -1614,13 +1614,12 @@ pub fn validate_color_attachment_bytes_per_sample(
     Ok(())
 }
 
-pub(crate) fn shader_stage_from_stage_bit(stage_bit: wgt::ShaderStages) -> naga::ShaderStage {
-    match stage_bit {
-        wgt::ShaderStages::VERTEX => naga::ShaderStage::Vertex,
-        wgt::ShaderStages::FRAGMENT => naga::ShaderStage::Fragment,
-        wgt::ShaderStages::COMPUTE => naga::ShaderStage::Compute,
-        wgt::ShaderStages::MESH => naga::ShaderStage::Mesh,
-        wgt::ShaderStages::TASK => naga::ShaderStage::Task,
-        _ => unreachable!(),
+pub(crate) fn stage_bit_from_shader_stage(shader_stage: naga::ShaderStage) -> wgt::ShaderStages {
+    match shader_stage {
+        naga::ShaderStage::Vertex => wgt::ShaderStages::VERTEX,
+        naga::ShaderStage::Fragment => wgt::ShaderStages::FRAGMENT,
+        naga::ShaderStage::Compute => wgt::ShaderStages::COMPUTE,
+        naga::ShaderStage::Mesh => wgt::ShaderStages::MESH,
+        naga::ShaderStage::Task => wgt::ShaderStages::TASK,
     }
 }
