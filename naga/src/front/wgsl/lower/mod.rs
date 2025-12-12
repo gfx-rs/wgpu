@@ -560,6 +560,28 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         }
     }
 
+    fn const_eval_expr_to_bool(&self, handle: Handle<ir::Expression>) -> Option<bool> {
+        match self.expr_type {
+            ExpressionContextType::Runtime(ref ctx) => {
+                if !ctx.local_expression_kind_tracker.is_const(handle) {
+                    return None;
+                }
+
+                self.module
+                    .to_ctx()
+                    .eval_expr_to_bool_from(handle, &ctx.function.expressions)
+            }
+            ExpressionContextType::Constant(Some(ref ctx)) => {
+                assert!(ctx.local_expression_kind_tracker.is_const(handle));
+                self.module
+                    .to_ctx()
+                    .eval_expr_to_bool_from(handle, &ctx.function.expressions)
+            }
+            ExpressionContextType::Constant(None) => self.module.to_ctx().eval_expr_to_bool(handle),
+            ExpressionContextType::Override => None,
+        }
+    }
+
     /// Return `true` if `handle` is a constant expression.
     fn is_const(&self, handle: Handle<ir::Expression>) -> bool {
         use ExpressionContextType as Ect;
@@ -2538,22 +2560,27 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 result_var,
             )))
         } else {
-            let left_expr = ctx.get(left);
-            // Constant or override context in either function or module scope
-            let &crate::Expression::Literal(crate::Literal::Bool(left_val)) = left_expr else {
-                return Err(Box::new(Error::NotBool(span)));
-            };
+            let left_val = ctx.const_eval_expr_to_bool(left);
 
-            if op == crate::BinaryOperator::LogicalAnd && !left_val
-                || op == crate::BinaryOperator::LogicalOr && left_val
-            {
-                // Short-circuit behavior: don't evaluate the RHS. Ideally we
-                // would do _some_ validity checks of the RHS here, but that's
-                // tricky, because the RHS is allowed to have things that aren't
-                // legal in const contexts.
+            if left_val.is_some_and(|left_val| {
+                op == crate::BinaryOperator::LogicalAnd && !left_val
+                    || op == crate::BinaryOperator::LogicalOr && left_val
+            }) {
+                // Short-circuit behavior: don't evaluate the RHS.
 
-                Ok(Typed::Plain(left_expr.clone()))
+                // TODO(https://github.com/gfx-rs/wgpu/issues/8440): We shouldn't ignore the
+                // RHS completely, it should still be type-checked. Preserving it for type
+                // checking is a bit tricky, because we're trying to produce an expression
+                // for a const context, but the RHS is allowed to have things that aren't
+                // const.
+
+                Ok(Typed::Plain(ctx.get(left).clone()))
             } else {
+                // Evaluate the RHS and construct the entire binary expression as we
+                // normally would. This case applies to well-formed constant logical
+                // expressions that don't short-circuit (handled by the constant evaluator
+                // shortly), to override expressions (handled when overrides are processed)
+                // and to non-well-formed expressions (rejected by type checking).
                 let right = self.expression_for_abstract(right, ctx)?;
                 ctx.grow_types(right)?;
 
