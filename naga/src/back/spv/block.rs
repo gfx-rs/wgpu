@@ -221,8 +221,13 @@ impl Writer {
         ir_result: &crate::FunctionResult,
         result_members: &[ResultMember],
         body: &mut Vec<Instruction>,
-    ) -> Result<(), Error> {
+        task_payload: Option<Word>,
+    ) -> Result<Instruction, Error> {
         for (index, res_member) in result_members.iter().enumerate() {
+            // This isn't a real builtin, and is handled elsewhere
+            if res_member.built_in == Some(crate::BuiltIn::MeshTaskSize) {
+                continue;
+            }
             let member_value_id = match ir_result.binding {
                 Some(_) => value_id,
                 None => {
@@ -253,7 +258,7 @@ impl Writer {
                 _ => {}
             }
         }
-        Ok(())
+        self.write_entry_point_task_return(value_id, ir_result, result_members, body, task_payload)
     }
 }
 
@@ -3251,21 +3256,27 @@ impl BlockContext<'_> {
                     let instruction = match self.function.entry_point_context {
                         // If this is an entry point, and we need to return anything,
                         // let's instead store the output variables and return `void`.
-                        Some(ref context) => {
-                            self.writer.write_entry_point_return(
-                                value_id,
-                                self.ir_function.result.as_ref().unwrap(),
-                                &context.results,
-                                &mut block.body,
-                            )?;
-                            Instruction::return_void()
-                        }
+                        Some(ref context) => self.writer.write_entry_point_return(
+                            value_id,
+                            self.ir_function.result.as_ref().unwrap(),
+                            &context.results,
+                            &mut block.body,
+                            context.task_payload_variable_id,
+                        )?,
                         None => Instruction::return_value(value_id),
                     };
                     self.function.consume(block, instruction);
                     return Ok(BlockExitDisposition::Discarded);
                 }
                 Statement::Return { value: None } => {
+                    if let Some(super::EntryPointContext {
+                        mesh_state: Some(ref mesh_state),
+                        ..
+                    }) = self.function.entry_point_context
+                    {
+                        self.writer
+                            .write_mesh_shader_return(mesh_state, &mut block)?;
+                    };
                     self.function.consume(block, Instruction::return_void());
                     return Ok(BlockExitDisposition::Discarded);
                 }
