@@ -116,7 +116,6 @@ fn make_spirv_be_pass() {
 macro_rules! include_spirv {
     ($($token:tt)*) => {
         {
-            //log::info!("including '{}'", $($token)*);
             $crate::ShaderModuleDescriptor {
                 label: Some($($token)*),
                 source: $crate::ShaderSource::SpirV(
@@ -140,7 +139,6 @@ static SPIRV: crate::ShaderModuleDescriptor<'_> = include_spirv!("le-aligned.spv
 macro_rules! include_spirv_raw {
     ($($token:tt)*) => {
         {
-            //log::info!("including '{}'", $($token)*);
             $crate::ShaderModuleDescriptorPassthrough {
                 label: $crate::__macro_helpers::Some($($token)*),
                 spirv: Some($crate::__macro_helpers::Cow::Borrowed($crate::include_spirv_source!($($token)*))),
@@ -177,7 +175,6 @@ static SPIRV_RAW: crate::ShaderModuleDescriptorPassthrough<'_> =
 macro_rules! include_wgsl {
     ($($token:tt)*) => {
         {
-            //log::info!("including '{}'", $($token)*);
             $crate::ShaderModuleDescriptor {
                 label: $crate::__macro_helpers::Some($($token)*),
                 source: $crate::ShaderSource::Wgsl($crate::__macro_helpers::Cow::Borrowed($crate::__macro_helpers::include_str!($($token)*))),

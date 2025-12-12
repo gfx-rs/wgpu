@@ -39,9 +39,9 @@ pub fn fail<T>(
     callback: impl FnOnce() -> T,
     expected_msg_substring: Option<&str>,
 ) -> T {
-    device.push_error_scope(wgpu::ErrorFilter::Validation);
+    let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
     let result = callback();
-    let validation_error = pollster::block_on(device.pop_error_scope())
+    let validation_error = pollster::block_on(scope.pop())
         .expect("expected validation error in callback, but no validation error was emitted");
     if let Some(expected_msg_substring) = expected_msg_substring {
         let lowered_expected = expected_msg_substring.to_lowercase();
@@ -63,9 +63,9 @@ pub fn fail<T>(
 /// Run some code in an error scope and assert that validation succeeds.
 #[track_caller]
 pub fn valid<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> T {
-    device.push_error_scope(wgpu::ErrorFilter::Validation);
+    let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
     let result = callback();
-    if let Some(error) = pollster::block_on(device.pop_error_scope()) {
+    if let Some(error) = pollster::block_on(scope.pop()) {
         panic!(
             "`valid` block at {} encountered wgpu error:\n{error}",
             std::panic::Location::caller()
@@ -95,9 +95,9 @@ fn did_fill_error_scope<T>(
     callback: impl FnOnce() -> T,
     filter: wgpu::ErrorFilter,
 ) -> (bool, T) {
-    device.push_error_scope(filter);
+    let scope = device.push_error_scope(filter);
     let result = callback();
-    let validation_error = pollster::block_on(device.pop_error_scope());
+    let validation_error = pollster::block_on(scope.pop());
     let failed = validation_error.is_some();
 
     (failed, result)

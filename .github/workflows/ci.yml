@@ -37,7 +37,7 @@ env:
   RUSTFLAGS: -D warnings
   RUSTDOCFLAGS: -D warnings
   WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
-  CACHE_SUFFIX: d # cache busting
+  CACHE_SUFFIX: e # cache busting
   WGPU_CI: true
 
 # Every time a PR is pushed to, cancel any previous jobs. This
@@ -194,7 +194,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install toolchain (repo MSRV - tier 1 or 2)
         if: matrix.tier == 1 || matrix.tier == 2
@@ -375,7 +375,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install core MSRV toolchain
         run: |
@@ -432,7 +432,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install toolchain
         run: |
@@ -473,7 +473,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install repo MSRV toolchain
         run: |
@@ -519,7 +519,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install repo MSRV toolchain
         run: |
@@ -588,16 +588,6 @@ jobs:
           # Delete snapshots so we can ensure there aren't any excess output files.
           rm -r naga/tests/out
 
-      - name: Run `wgpu-info`
-        shell: bash
-        run: |
-          echo "$PATH"
-
-          export RUST_LOG=trace
-
-          # This needs to match the command in xtask/tests.rs
-          cargo --locked llvm-cov --no-cfg-coverage --no-report run --bin wgpu-info -- -vv
-
       - name: Run tests
         shell: bash
         run: |
@@ -610,12 +600,22 @@ jobs:
         run: git add . && git diff --exit-code HEAD naga/tests/out
 
       - uses: actions/upload-artifact@v5
+        name: Upload comparison images
         if: always() # We want artifacts even if the tests fail.
         with:
           name: comparison-images-${{ matrix.os }}
           path: |
             **/*-actual.png
             **/*-difference.png
+
+      # Print GPU configuration so we can see what features were available during the test.
+      - name: Print GPU configurations
+        if: always() # We want this information even if the tests fail.
+        shell: bash
+        run: |
+          set -e
+
+          cat .gpuconfig
 
       - name: Generate coverage report
         id: coverage
@@ -642,7 +642,7 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install repo MSRV toolchain
         run: |
@@ -670,7 +670,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install repo MSRV toolchain
         run: |
@@ -691,7 +691,7 @@ jobs:
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.39.0
+        uses: crate-ci/typos@v1.40.0
 
   check-cts-runner:
     # runtime is normally 2 minutes
@@ -701,7 +701,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install MSRV toolchain
         run: |
@@ -739,7 +739,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v2
@@ -757,7 +757,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Run `cargo deny check`
         uses: EmbarkStudios/cargo-deny-action@v2

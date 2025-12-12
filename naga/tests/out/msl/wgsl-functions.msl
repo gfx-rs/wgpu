@@ -13,14 +13,22 @@ metal::float2 test_fma(
     return metal::fma(a, b, c);
 }
 
+int naga_dot_int2(metal::int2 a, metal::int2 b) {
+    return ( + a.x * b.x + a.y * b.y);
+}
+
+uint naga_dot_uint3(metal::uint3 a, metal::uint3 b) {
+    return ( + a.x * b.x + a.y * b.y + a.z * b.z);
+}
+
 int test_integer_dot_product(
 ) {
     metal::int2 a_2_ = metal::int2(1);
     metal::int2 b_2_ = metal::int2(1);
-    int c_2_ = ( + a_2_.x * b_2_.x + a_2_.y * b_2_.y);
+    int c_2_ = naga_dot_int2(a_2_, b_2_);
     metal::uint3 a_3_ = metal::uint3(1u);
     metal::uint3 b_3_ = metal::uint3(1u);
-    uint c_3_ = ( + a_3_.x * b_3_.x + a_3_.y * b_3_.y + a_3_.z * b_3_.z);
+    uint c_3_ = naga_dot_uint3(a_3_, b_3_);
     return 32;
 }
 

@@ -428,14 +428,14 @@ impl crate::framework::Example for Example {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("water"),
                 bind_group_layouts: &[&water_bind_group_layout],
-                push_constant_ranges: &[],
+                immediates_ranges: &[],
             });
 
         let terrain_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("terrain"),
                 bind_group_layouts: &[&terrain_bind_group_layout],
-                push_constant_ranges: &[],
+                immediates_ranges: &[],
             });
 
         let water_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -842,6 +842,6 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
             behavior: wgpu_test::FailureBehavior::AssertFailure,
             ..Default::default()
         }),
-    comparisons: &[wgpu_test::ComparisonType::Mean(0.01)],
+    comparisons: &[wgpu_test::ComparisonType::Mean(0.018)], // Bounded by Apple A9
     _phantom: std::marker::PhantomData::<Example>,
 };

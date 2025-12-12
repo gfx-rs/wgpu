@@ -4,7 +4,7 @@ use bit_set::BitSet;
 
 use super::{
     analyzer::{FunctionInfo, GlobalUse},
-    Capabilities, Disalignment, FunctionError, ModuleInfo, PushConstantError,
+    Capabilities, Disalignment, FunctionError, ImmediateError, ModuleInfo,
 };
 use crate::arena::{Handle, UniqueArena};
 use crate::span::{AddSpan as _, MapErrWithSpan as _, SpanProvider as _, WithSpan};
@@ -18,6 +18,8 @@ pub enum GlobalVariableError {
     InvalidUsage(crate::AddressSpace),
     #[error("Type isn't compatible with address space {0:?}")]
     InvalidType(crate::AddressSpace),
+    #[error("Type {0:?} isn't compatible with binding arrays")]
+    InvalidBindingArray(Handle<crate::Type>),
     #[error("Type flags {seen:?} do not meet the required {required:?}")]
     MissingTypeFlags {
         required: super::TypeFlags,
@@ -41,8 +43,8 @@ pub enum GlobalVariableError {
     InitializerNotAllowed(crate::AddressSpace),
     #[error("Storage address space doesn't support write-only access")]
     StorageAddressSpaceWriteOnlyNotSupported,
-    #[error("Type is not valid for use as a push constant")]
-    InvalidPushConstantType(#[source] PushConstantError),
+    #[error("Type is not valid for use as a immediate data")]
+    InvalidImmediateType(#[source] ImmediateError),
     #[error("Task payload must not be zero-sized")]
     ZeroSizedTaskPayload,
 }
@@ -65,8 +67,8 @@ pub enum VaryingError {
     MissingInterpolation,
     #[error("Built-in {0:?} is not available at this stage")]
     InvalidBuiltInStage(crate::BuiltIn),
-    #[error("Built-in type for {0:?} is invalid")]
-    InvalidBuiltInType(crate::BuiltIn),
+    #[error("Built-in type for {0:?} is invalid. Found {1:?}")]
+    InvalidBuiltInType(crate::BuiltIn, crate::TypeInner),
     #[error("Entry point arguments and return values must all have bindings")]
     MissingBinding,
     #[error("Struct member {0} is missing a binding")]
@@ -117,8 +119,8 @@ pub enum EntryPointError {
     ForbiddenStageOperations,
     #[error("Global variable {0:?} is used incorrectly as {1:?}")]
     InvalidGlobalUsage(Handle<crate::GlobalVariable>, GlobalUse),
-    #[error("More than 1 push constant variable is used")]
-    MoreThanOnePushConstantUsed,
+    #[error("More than 1 immediate data variable is used")]
+    MoreThanOneImmediateUsed,
     #[error("Bindings for {0:?} conflict with other resource")]
     BindingCollision(Handle<crate::GlobalVariable>),
     #[error("Argument {0} varying error")]
@@ -426,8 +428,7 @@ impl VaryingContext<'_> {
                     return Err(VaryingError::InvalidBuiltInStage(built_in));
                 }
                 if !type_good {
-                    log::warn!("Wrong builtin type: {ty_inner:?}");
-                    return Err(VaryingError::InvalidBuiltInType(built_in));
+                    return Err(VaryingError::InvalidBuiltInType(built_in, ty_inner.clone()));
                 }
             }
             crate::Binding::Location {
@@ -644,9 +645,80 @@ impl super::Validator {
             // series of individually bound resources, so we can (mostly)
             // validate a `binding_array<T>` as if it were just a plain `T`.
             crate::TypeInner::BindingArray { base, .. } => match var.space {
-                crate::AddressSpace::Storage { .. }
-                | crate::AddressSpace::Uniform
-                | crate::AddressSpace::Handle => base,
+                crate::AddressSpace::Storage { .. } => {
+                    if !self
+                        .capabilities
+                        .contains(Capabilities::STORAGE_BUFFER_BINDING_ARRAY)
+                    {
+                        return Err(GlobalVariableError::UnsupportedCapability(
+                            Capabilities::STORAGE_BUFFER_BINDING_ARRAY,
+                        ));
+                    }
+                    base
+                }
+                crate::AddressSpace::Uniform => {
+                    if !self
+                        .capabilities
+                        .contains(Capabilities::BUFFER_BINDING_ARRAY)
+                    {
+                        return Err(GlobalVariableError::UnsupportedCapability(
+                            Capabilities::BUFFER_BINDING_ARRAY,
+                        ));
+                    }
+                    base
+                }
+                crate::AddressSpace::Handle => {
+                    match gctx.types[base].inner {
+                        crate::TypeInner::Image { class, .. } => match class {
+                            crate::ImageClass::Storage { .. } => {
+                                if !self
+                                    .capabilities
+                                    .contains(Capabilities::STORAGE_TEXTURE_BINDING_ARRAY)
+                                {
+                                    return Err(GlobalVariableError::UnsupportedCapability(
+                                        Capabilities::STORAGE_TEXTURE_BINDING_ARRAY,
+                                    ));
+                                }
+                            }
+                            crate::ImageClass::Sampled { .. } | crate::ImageClass::Depth { .. } => {
+                                if !self
+                                    .capabilities
+                                    .contains(Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY)
+                                {
+                                    return Err(GlobalVariableError::UnsupportedCapability(
+                                        Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY,
+                                    ));
+                                }
+                            }
+                            crate::ImageClass::External => {
+                                // This should have been rejected in `validate_type`.
+                                unreachable!("binding arrays of external images are not supported");
+                            }
+                        },
+                        crate::TypeInner::Sampler { .. } => {
+                            if !self
+                                .capabilities
+                                .contains(Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY)
+                            {
+                                return Err(GlobalVariableError::UnsupportedCapability(
+                                    Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY,
+                                ));
+                            }
+                        }
+                        crate::TypeInner::AccelerationStructure { .. } => {
+                            return Err(GlobalVariableError::InvalidBindingArray(base));
+                        }
+                        crate::TypeInner::RayQuery { .. } => {
+                            // This should have been rejected in `validate_type`.
+                            unreachable!("binding arrays of ray queries are not supported");
+                        }
+                        _ => {
+                            // Fall through to the regular validation, which will reject `base`
+                            // as invalid in `AddressSpace::Handle`.
+                        }
+                    }
+                    base
+                }
                 _ => return Err(GlobalVariableError::InvalidUsage(var.space)),
             },
             _ => var.ty,
@@ -741,14 +813,14 @@ impl super::Validator {
                 }
                 (TypeFlags::DATA | TypeFlags::SIZED, false)
             }
-            crate::AddressSpace::PushConstant => {
-                if !self.capabilities.contains(Capabilities::PUSH_CONSTANT) {
+            crate::AddressSpace::Immediate => {
+                if !self.capabilities.contains(Capabilities::IMMEDIATES) {
                     return Err(GlobalVariableError::UnsupportedCapability(
-                        Capabilities::PUSH_CONSTANT,
+                        Capabilities::IMMEDIATES,
                     ));
                 }
-                if let Err(ref err) = type_info.push_constant_compatibility {
-                    return Err(GlobalVariableError::InvalidPushConstantType(err.clone()));
+                if let Err(ref err) = type_info.immediates_compatibility {
+                    return Err(GlobalVariableError::InvalidImmediateType(err.clone()));
                 }
                 (
                     TypeFlags::DATA
@@ -1032,16 +1104,16 @@ impl super::Validator {
         }
 
         {
-            let mut used_push_constants = module
+            let mut used_immediates = module
                 .global_variables
                 .iter()
-                .filter(|&(_, var)| var.space == crate::AddressSpace::PushConstant)
+                .filter(|&(_, var)| var.space == crate::AddressSpace::Immediate)
                 .map(|(handle, _)| handle)
                 .filter(|&handle| !info[handle].is_empty());
-            // Check if there is more than one push constant, and error if so.
+            // Check if there is more than one immediate data, and error if so.
             // Use a loop for when returning multiple errors is supported.
-            if let Some(handle) = used_push_constants.nth(1) {
-                return Err(EntryPointError::MoreThanOnePushConstantUsed
+            if let Some(handle) = used_immediates.nth(1) {
+                return Err(EntryPointError::MoreThanOneImmediateUsed
                     .with_span_handle(handle, &module.global_variables));
             }
         }
@@ -1095,7 +1167,7 @@ impl super::Validator {
                             GlobalUse::empty()
                         }
                 }
-                crate::AddressSpace::PushConstant => GlobalUse::READ,
+                crate::AddressSpace::Immediate => GlobalUse::READ,
             };
             if !allowed_usage.contains(usage) {
                 log::warn!("\tUsage error for: {var:?}");

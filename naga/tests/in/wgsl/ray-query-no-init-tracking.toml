@@ -1,4 +1,4 @@
-god_mode = true
+capabilities = "RAY_QUERY"
 targets = "SPIRV | METAL | HLSL"
 
 [msl]

@@ -12,8 +12,8 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 /// we will not properly bind uniform buffers to both the vertex and fragment
 /// shaders. This turned out to not reproduce at all with this test case.
 ///
-/// However, it also caught issues with the push constant implementation,
-/// making sure that it works correctly with different definitions for the push constant
+/// However, it also caught issues with the immediate data implementation,
+/// making sure that it works correctly with different definitions for the immediate data
 /// block in vertex and fragment shaders.
 ///
 /// This test needs to be able to run on GLES 3.0
@@ -22,18 +22,18 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 /// data source.
 ///
 /// top left: Vertex Shader / Uniform Buffer
-/// top right: Vertex Shader / Push Constant
+/// top right: Vertex Shader / Immediate data
 /// bottom left: Fragment Shader / Uniform Buffer
-/// bottom right: Fragment Shader / Push Constant
+/// bottom right: Fragment Shader / Immediate data
 ///
 /// We then validate the data is correct from every position.
 #[gpu_test]
 static MULTI_STAGE_DATA_BINDING: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgpu::Features::PUSH_CONSTANTS)
+            .features(wgpu::Features::IMMEDIATES)
             .limits(wgpu::Limits {
-                max_push_constant_size: 16,
+                max_immediate_size: 16,
                 ..Default::default()
             }),
     )
@@ -41,7 +41,7 @@ static MULTI_STAGE_DATA_BINDING: GpuTestConfiguration = GpuTestConfiguration::ne
 
 async fn multi_stage_data_binding_test(ctx: TestingContext) {
     // We use different shader modules to allow us to use different
-    // types for the uniform and push constant blocks between stages.
+    // types for the uniform and immediate data blocks between stages.
     let vs_sm = ctx
         .device
         .create_shader_module(wgpu::include_wgsl!("issue_3349.vs.wgsl"));
@@ -93,7 +93,7 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pll"),
             bind_group_layouts: &[&bgl],
-            push_constant_ranges: &[wgpu::PushConstantRange {
+            immediates_ranges: &[wgpu::ImmediateRange {
                 stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
                 range: 0..16,
             }],
@@ -171,7 +171,7 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
 
         rpass.set_pipeline(&pipeline);
         rpass.set_bind_group(0, &bg, &[]);
-        rpass.set_push_constants(
+        rpass.set_immediates(
             wgpu::ShaderStages::VERTEX_FRAGMENT,
             0,
             bytemuck::cast_slice(&input),

@@ -1,1 +1,1 @@
-god_mode = true
+capabilities = "SHADER_FLOAT16"

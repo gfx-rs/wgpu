@@ -21,7 +21,7 @@ struct CompilationContext<'a> {
     layout: &'a super::PipelineLayout,
     sampler_map: &'a mut super::SamplerBindMap,
     name_binding_map: &'a mut NameBindingMap,
-    push_constant_items: &'a mut Vec<naga::back::glsl::PushConstantItem>,
+    immediates_items: &'a mut Vec<naga::back::glsl::ImmediateItem>,
     multiview_mask: Option<NonZeroU32>,
     clip_distance_count: &'a mut u32,
 }
@@ -103,7 +103,7 @@ impl CompilationContext<'_> {
             }
         }
 
-        *self.push_constant_items = reflection_info.push_constant_items;
+        *self.immediates_items = reflection_info.immediates_items;
 
         if naga_stage == naga::ShaderStage::Vertex {
             *self.clip_distance_count = reflection_info.clip_distance_count;
@@ -194,7 +194,7 @@ impl super::Device {
         let msg = unsafe { gl.get_shader_info_log(raw) };
         if compiled_ok {
             if !msg.is_empty() {
-                log::warn!("\tCompile: {msg}");
+                log::debug!("\tCompile message: {msg}");
             }
             Ok(raw)
         } else {
@@ -375,7 +375,7 @@ impl super::Device {
         }
 
         let mut name_binding_map = NameBindingMap::default();
-        let mut push_constant_items = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
+        let mut immediates_items = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
         let mut sampler_map = [None; super::MAX_TEXTURE_SLOTS];
         let mut has_stages = wgt::ShaderStages::empty();
         let mut shaders_to_delete = ArrayVec::<_, { crate::MAX_CONCURRENT_SHADER_STAGES }>::new();
@@ -384,14 +384,14 @@ impl super::Device {
         for &(naga_stage, stage) in &shaders {
             has_stages |= map_naga_stage(naga_stage);
             let pc_item = {
-                push_constant_items.push(Vec::new());
-                push_constant_items.last_mut().unwrap()
+                immediates_items.push(Vec::new());
+                immediates_items.last_mut().unwrap()
             };
             let context = CompilationContext {
                 layout,
                 sampler_map: &mut sampler_map,
                 name_binding_map: &mut name_binding_map,
-                push_constant_items: pc_item,
+                immediates_items: pc_item,
                 multiview_mask,
                 clip_distance_count: &mut clip_distance_count,
             };
@@ -403,7 +403,7 @@ impl super::Device {
         // Create empty fragment shader if only vertex shader is present
         if has_stages == wgt::ShaderStages::VERTEX {
             let shader_src = format!("#version {glsl_version}\n void main(void) {{}}",);
-            log::info!("Only vertex shader is present. Creating an empty fragment shader",);
+            log::debug!("Only vertex shader is present. Creating an empty fragment shader",);
             let shader = unsafe {
                 Self::compile_shader(
                     gl,
@@ -432,7 +432,7 @@ impl super::Device {
             return Err(crate::PipelineError::Linkage(has_stages, msg));
         }
         if !msg.is_empty() {
-            log::warn!("\tLink: {msg}");
+            log::debug!("\tLink message: {msg}");
         }
 
         if !private_caps.contains(PrivateCapabilities::SHADER_BINDING_LAYOUT) {
@@ -463,7 +463,7 @@ impl super::Device {
 
         let mut uniforms = ArrayVec::new();
 
-        for (stage_idx, stage_items) in push_constant_items.into_iter().enumerate() {
+        for (stage_idx, stage_items) in immediates_items.into_iter().enumerate() {
             for item in stage_items {
                 let naga_module = &shaders[stage_idx].1.module.source.module;
                 let type_inner = &naga_module.types[item.ty].inner;
@@ -471,7 +471,7 @@ impl super::Device {
                 let location = unsafe { gl.get_uniform_location(program, &item.access_path) };
 
                 log::trace!(
-                    "push constant item: name={}, ty={:?}, offset={}, location={:?}",
+                    "immediate data item: name={}, ty={:?}, offset={}, location={:?}",
                     item.access_path,
                     type_inner,
                     item.offset,
@@ -479,7 +479,7 @@ impl super::Device {
                 );
 
                 if let Some(location) = location {
-                    uniforms.push(super::PushConstantDesc {
+                    uniforms.push(super::ImmediateDesc {
                         location,
                         offset: item.offset,
                         size_bytes: type_inner.size(naga_module.to_ctx()),
@@ -500,7 +500,7 @@ impl super::Device {
             program,
             sampler_map,
             first_instance_location,
-            push_constant_descs: uniforms,
+            immediates_descs: uniforms,
             clip_distance_count,
         }))
     }

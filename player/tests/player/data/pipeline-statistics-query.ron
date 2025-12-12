@@ -12,7 +12,7 @@
         CreatePipelineLayout(PointerId(0x10), (
             label: Some("empty"),
             bind_group_layouts: [],
-            push_constant_ranges: [],
+            immediates_ranges: [],
         )),
         CreateShaderModule(
             id: PointerId(0x10),
@@ -67,7 +67,7 @@
                     ],
                     dynamic_offsets: [],
                     string_data: [],
-                    push_constant_data: [],
+                    immediates_data: [],
                 ),
             ),
             ResolveQuerySet(

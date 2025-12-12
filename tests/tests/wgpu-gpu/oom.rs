@@ -46,7 +46,7 @@ static TEXTURE_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {
         let mut textures = Vec::new();
         for _ in 0..LOOP_BOUND {
-            ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
+            let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let texture = ctx.device.create_texture(&TextureDescriptor {
                 label: None,
                 size: Extent3d {
@@ -61,7 +61,7 @@ static TEXTURE_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
                 usage: TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
             });
-            if let Some(err) = ctx.device.pop_error_scope().await {
+            if let Some(err) = scope.pop().await {
                 match err {
                     Error::OutOfMemory { .. } => {
                         return;
@@ -85,14 +85,14 @@ static BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {
         let mut buffers = Vec::new();
         for _ in 0..LOOP_BOUND {
-            ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
+            let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let buffer = ctx.device.create_buffer(&BufferDescriptor {
                 label: None,
                 size: 256 * 1024 * 1024,
                 usage: BufferUsages::STORAGE,
                 mapped_at_creation: false,
             });
-            if let Some(err) = ctx.device.pop_error_scope().await {
+            if let Some(err) = scope.pop().await {
                 match err {
                     Error::OutOfMemory { .. } => {
                         return;
@@ -116,14 +116,14 @@ static MAPPING_BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new
     .run_async(|ctx| async move {
         let mut buffers = Vec::new();
         for _ in 0..LOOP_BOUND {
-            ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
+            let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let buffer = ctx.device.create_buffer(&BufferDescriptor {
                 label: None,
                 size: 256 * 1024 * 1024,
                 usage: BufferUsages::COPY_SRC | BufferUsages::MAP_WRITE,
                 mapped_at_creation: false,
             });
-            if let Some(err) = ctx.device.pop_error_scope().await {
+            if let Some(err) = scope.pop().await {
                 match err {
                     Error::OutOfMemory { .. } => {
                         return;
@@ -148,13 +148,13 @@ static QUERY_SET_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {
         let mut query_sets = Vec::new();
         for _ in 0..LOOP_BOUND {
-            ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
+            let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let query_set = ctx.device.create_query_set(&QuerySetDescriptor {
                 label: None,
                 ty: QueryType::Occlusion,
                 count: 4096,
             });
-            if let Some(err) = ctx.device.pop_error_scope().await {
+            if let Some(err) = scope.pop().await {
                 match err {
                     Error::OutOfMemory { .. } => {
                         return;
@@ -179,7 +179,7 @@ static BLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {
         let mut blases = Vec::new();
         for _ in 0..LOOP_BOUND {
-            ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
+            let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let blas = ctx.device.create_blas(
                 &CreateBlasDescriptor {
                     label: None,
@@ -196,7 +196,7 @@ static BLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
                     }],
                 },
             );
-            if let Some(err) = ctx.device.pop_error_scope().await {
+            if let Some(err) = scope.pop().await {
                 match err {
                     Error::OutOfMemory { .. } => {
                         return;
@@ -221,14 +221,14 @@ static TLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_async(|ctx| async move {
         let mut tlases = Vec::new();
         for _ in 0..LOOP_BOUND {
-            ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
+            let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let tlas = ctx.device.create_tlas(&CreateTlasDescriptor {
                 label: None,
                 max_instances: 1024 * 1024,
                 flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                 update_mode: AccelerationStructureUpdateMode::Build,
             });
-            if let Some(err) = ctx.device.pop_error_scope().await {
+            if let Some(err) = scope.pop().await {
                 match err {
                     Error::OutOfMemory { .. } => {
                         return;

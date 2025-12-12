@@ -643,7 +643,6 @@ impl<'a> BufferSlice<'a> {
             size: self.size,
             offset: self.offset,
             inner: range,
-            readable: self.buffer.usage.contains(BufferUsages::MAP_READ),
         }
     }
 
@@ -945,7 +944,6 @@ pub struct BufferViewMut {
     offset: BufferAddress,
     size: BufferSize,
     inner: dispatch::DispatchBufferMappedRange,
-    readable: bool,
 }
 
 impl AsMut<[u8]> for BufferViewMut {
@@ -959,10 +957,6 @@ impl Deref for BufferViewMut {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
-        if !self.readable {
-            log::warn!("Reading from a BufferViewMut is slow and not recommended.");
-        }
-
         self.inner.slice()
     }
 }
