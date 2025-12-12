@@ -2794,7 +2794,19 @@ impl Device {
 
         buffer.check_usage(pub_usage)?;
 
-        let (bb, bind_size) = buffer.binding(bb.offset, bb.size, snatch_guard)?;
+        let req_size = match bb.size.map(wgt::BufferSize::new) {
+            // Requested a non-zero size
+            Some(non_zero @ Some(_)) => non_zero,
+            // Requested size not specified
+            None => None,
+            // Requested zero size
+            Some(None) => {
+                return Err(binding_model::CreateBindGroupError::BindingZeroSize(
+                    buffer.error_ident(),
+                ))
+            }
+        };
+        let (bb, bind_size) = buffer.binding(bb.offset, req_size, snatch_guard)?;
 
         if matches!(binding_ty, wgt::BufferBindingType::Storage { .. })
             && bind_size % u64::from(wgt::STORAGE_BINDING_SIZE_ALIGNMENT) != 0

@@ -1184,7 +1184,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     arrayed_buffer_bindings.extend(array.iter().map(|binding| bm::BufferBinding {
                         buffer: binding.buffer.inner.as_core().id,
                         offset: binding.offset,
-                        size: binding.size,
+                        size: binding.size.map(wgt::BufferSize::get),
                     }));
                 }
             }
@@ -1204,7 +1204,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     }) => bm::BindingResource::Buffer(bm::BufferBinding {
                         buffer: buffer.inner.as_core().id,
                         offset,
-                        size,
+                        size: size.map(wgt::BufferSize::get),
                     }),
                     BindingResource::BufferArray(array) => {
                         let slice = &remaining_arrayed_buffer_bindings[..array.len()];
