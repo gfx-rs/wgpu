@@ -585,7 +585,6 @@ impl super::PrivateCapabilities {
             // `TimestampQuerySupport::INSIDE_WGPU_PASSES` emerges from the other flags.
         }
 
-        // TODO: is this check something we can comfortably run?
         let argument_buffers = version
             .at_least((10, 13), (11, 0), (11, 0), (1, 0), os_type)
             .then(|| device.argument_buffers_support());
@@ -730,7 +729,6 @@ impl super::PrivateCapabilities {
                 31
             },
             max_samplers_per_stage: 16,
-            // TODO: check
             max_binding_array_elements: if argument_buffers == Some(MTLArgumentBuffersTier::Tier2) {
                 1_000_000
             } else if family_check && device.supports_family(MTLGPUFamily::Apple4) {
@@ -759,7 +757,6 @@ impl super::PrivateCapabilities {
                 64
             },
             max_buffer_size: if version.at_least((10, 14), (12, 0), (12, 0), (1, 0), os_type) {
-                // maxBufferLength available on macOS 10.14+ and iOS 12.0+
                 let buffer_size: NSInteger = unsafe { msg_send![device.as_ref(), maxBufferLength] };
                 buffer_size as _
             } else if os_type == super::OsType::Macos {
@@ -893,11 +890,8 @@ impl super::PrivateCapabilities {
                 device,
                 &[
                     MTLFeatureSet::iOS_GPUFamily3_v2,
-                    MTLFeatureSet::iOS_GPUFamily4_v1,
-                    MTLFeatureSet::iOS_GPUFamily5_v1,
                     MTLFeatureSet::tvOS_GPUFamily2_v1,
                     MTLFeatureSet::macOS_GPUFamily1_v3,
-                    MTLFeatureSet::macOS_GPUFamily2_v1,
                 ],
             ),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
