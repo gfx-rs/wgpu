@@ -34,6 +34,7 @@ webgpu:api,validation,buffer,create:*
 webgpu:api,validation,buffer,destroy:*
 fails-if(dx12) webgpu:api,validation,capability_checks,limits,maxBindGroups:setBindGroup,*
 webgpu:api,validation,createBindGroup:buffer,effective_buffer_binding_size:*
+webgpu:api,validation,createBindGroup:buffer,resource_binding_size:*
 // Fails because we coerce a size of 0 in `GPUDevice.createBindGroup(…)` to `buffer.size - offset`.
 // FAIL webgpu:api,validation,createBindGroup:buffer_offset_and_size_for_bind_groups_match:*
 webgpu:api,validation,encoding,beginComputePass:*

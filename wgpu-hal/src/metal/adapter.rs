@@ -1074,72 +1074,92 @@ impl super::PrivateCapabilities {
         downlevel
             .flags
             .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
+
         let base = wgt::Limits::default();
-        crate::Capabilities {
-            limits: wgt::Limits {
-                max_texture_dimension_1d: self.max_texture_size as u32,
-                max_texture_dimension_2d: self.max_texture_size as u32,
-                max_texture_dimension_3d: self.max_texture_3d_size as u32,
-                max_texture_array_layers: self.max_texture_layers as u32,
-                max_bind_groups: 8,
-                max_bindings_per_bind_group: 65535,
-                max_dynamic_uniform_buffers_per_pipeline_layout: base
-                    .max_dynamic_uniform_buffers_per_pipeline_layout,
-                max_dynamic_storage_buffers_per_pipeline_layout: base
-                    .max_dynamic_storage_buffers_per_pipeline_layout,
-                max_sampled_textures_per_shader_stage: self.max_textures_per_stage,
-                max_samplers_per_shader_stage: self.max_samplers_per_stage,
-                max_storage_buffers_per_shader_stage: self.max_buffers_per_stage,
-                max_storage_textures_per_shader_stage: self.max_textures_per_stage,
-                max_uniform_buffers_per_shader_stage: self.max_buffers_per_stage,
-                max_binding_array_elements_per_shader_stage: self.max_binding_array_elements,
-                max_binding_array_sampler_elements_per_shader_stage: self
-                    .max_sampler_binding_array_elements,
-                max_uniform_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32,
-                max_storage_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32,
-                max_vertex_buffers: self.max_vertex_buffers,
-                max_vertex_attributes: 31,
-                max_vertex_buffer_array_stride: base.max_vertex_buffer_array_stride,
-                max_immediate_size: 0x1000,
-                min_uniform_buffer_offset_alignment: self.buffer_alignment as u32,
-                min_storage_buffer_offset_alignment: self.buffer_alignment as u32,
-                max_inter_stage_shader_components: self.max_varying_components,
-                max_color_attachments: (self.max_color_render_targets as u32)
-                    .min(crate::MAX_COLOR_ATTACHMENTS as u32),
-                max_color_attachment_bytes_per_sample: self.max_color_attachment_bytes_per_sample
-                    as u32,
-                max_compute_workgroup_storage_size: self.max_total_threadgroup_memory,
-                max_compute_invocations_per_workgroup: self.max_threads_per_group,
-                max_compute_workgroup_size_x: self.max_threads_per_group,
-                max_compute_workgroup_size_y: self.max_threads_per_group,
-                max_compute_workgroup_size_z: self.max_threads_per_group,
-                max_compute_workgroups_per_dimension: 0xFFFF,
-                max_buffer_size: self.max_buffer_size,
-                max_non_sampler_bindings: u32::MAX,
 
-                // See https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf, Maximum threadgroups per mesh shader grid
-                max_task_workgroup_total_count: 1024,
-                max_task_workgroups_per_dimension: 1024,
-                max_mesh_multiview_view_count: 0,
-                max_mesh_output_layers: self.max_texture_layers as u32,
+        // Be careful adjusting limits here. The `AdapterShared` stores the
+        // original `PrivateCapabilities`, so code could accidentally use
+        // the wrong value.
 
-                max_blas_primitive_count: 0, // When added: 2^28 from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits
-                max_blas_geometry_count: 0,  // When added: 2^24
-                max_tlas_instance_count: 0,  // When added: 2^24
-                // Unsure what this will be when added: acceleration structures count as a buffer so
-                // it may be worth using argument buffers for this all acceleration structures, then
-                // there will be no limit.
-                // From 2.17.7 in https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
-                // > [Acceleration structures] are opaque objects that can be bound directly using
-                // buffer binding points or via argument buffers
-                max_acceleration_structures_per_shader_stage: 0,
+        let limits = wgt::Limits {
+            max_texture_dimension_1d: self.max_texture_size as u32,
+            max_texture_dimension_2d: self.max_texture_size as u32,
+            max_texture_dimension_3d: self.max_texture_3d_size as u32,
+            max_texture_array_layers: self.max_texture_layers as u32,
+            max_bind_groups: 8,
+            max_bindings_per_bind_group: 65535,
+            max_dynamic_uniform_buffers_per_pipeline_layout: base
+                .max_dynamic_uniform_buffers_per_pipeline_layout,
+            max_dynamic_storage_buffers_per_pipeline_layout: base
+                .max_dynamic_storage_buffers_per_pipeline_layout,
+            max_sampled_textures_per_shader_stage: self.max_textures_per_stage,
+            max_samplers_per_shader_stage: self.max_samplers_per_stage,
+            max_storage_buffers_per_shader_stage: self.max_buffers_per_stage,
+            max_storage_textures_per_shader_stage: self.max_textures_per_stage,
+            max_uniform_buffers_per_shader_stage: self.max_buffers_per_stage,
+            max_binding_array_elements_per_shader_stage: self.max_binding_array_elements,
+            max_binding_array_sampler_elements_per_shader_stage: self
+                .max_sampler_binding_array_elements,
+            // Note: any adjustment here will not be reflected in the stored `PrivateCapabilities`.
+            max_uniform_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32,
+            max_storage_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32
+                & !(wgt::STORAGE_BINDING_SIZE_ALIGNMENT - 1),
+            max_vertex_buffers: self.max_vertex_buffers,
+            max_vertex_attributes: 31,
+            max_vertex_buffer_array_stride: base.max_vertex_buffer_array_stride,
+            max_immediate_size: 0x1000,
+            min_uniform_buffer_offset_alignment: self.buffer_alignment as u32,
+            min_storage_buffer_offset_alignment: self.buffer_alignment as u32,
+            max_inter_stage_shader_components: self.max_varying_components,
+            max_color_attachments: self.max_color_render_targets as u32,
+            max_color_attachment_bytes_per_sample: self.max_color_attachment_bytes_per_sample
+                as u32,
+            max_compute_workgroup_storage_size: self.max_total_threadgroup_memory,
+            max_compute_invocations_per_workgroup: self.max_threads_per_group,
+            max_compute_workgroup_size_x: self.max_threads_per_group,
+            max_compute_workgroup_size_y: self.max_threads_per_group,
+            max_compute_workgroup_size_z: self.max_threads_per_group,
+            max_compute_workgroups_per_dimension: 0xFFFF,
+            max_buffer_size: self.max_buffer_size,
+            max_non_sampler_bindings: u32::MAX,
 
-                max_multiview_view_count: if self.supported_vertex_amplification_factor > 1 {
-                    self.supported_vertex_amplification_factor
-                } else {
-                    0
-                },
+            // See https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf, Maximum threadgroups per mesh shader grid
+            max_task_workgroup_total_count: 1024,
+            max_task_workgroups_per_dimension: 1024,
+            max_mesh_multiview_view_count: 0,
+            max_mesh_output_layers: self.max_texture_layers as u32,
+
+            max_blas_primitive_count: 0, // When added: 2^28 from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits
+            max_blas_geometry_count: 0,  // When added: 2^24
+            max_tlas_instance_count: 0,  // When added: 2^24
+            // Unsure what this will be when added: acceleration structures count as a buffer so
+            // it may be worth using argument buffers for this all acceleration structures, then
+            // there will be no limit.
+            // From 2.17.7 in https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
+            // > [Acceleration structures] are opaque objects that can be bound directly using
+            // buffer binding points or via argument buffers
+            max_acceleration_structures_per_shader_stage: 0,
+
+            max_multiview_view_count: if self.supported_vertex_amplification_factor > 1 {
+                self.supported_vertex_amplification_factor
+            } else {
+                0
             },
+        };
+
+        // Since a bunch of the limits are duplicated between `Limits` and
+        // `PrivateCapabilities`, reducing the limits at this point could make
+        // things inconsistent and lead to confusion. Make sure that doesn't
+        // happen.
+        debug_assert!(
+            crate::auxil::apply_hal_limits(limits.clone()) == limits,
+            "Limits were modified by apply_hal_limits\nOriginal:\n{:#?}\nModified:\n{:#?}",
+            limits,
+            crate::auxil::apply_hal_limits(limits.clone())
+        );
+
+        crate::Capabilities {
+            limits,
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),
                 buffer_copy_pitch: wgt::BufferSize::new(4).unwrap(),

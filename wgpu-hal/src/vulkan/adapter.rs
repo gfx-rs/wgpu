@@ -1328,14 +1328,12 @@ impl PhysicalDeviceProperties {
             .map(|a| a.max_multiview_view_count.min(32))
             .unwrap_or(0);
 
-        wgt::Limits {
+        crate::auxil::apply_hal_limits(wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
             max_texture_dimension_2d: limits.max_image_dimension2_d,
             max_texture_dimension_3d: limits.max_image_dimension3_d,
             max_texture_array_layers: limits.max_image_array_layers,
-            max_bind_groups: limits
-                .max_bound_descriptor_sets
-                .min(crate::MAX_BIND_GROUPS as u32),
+            max_bind_groups: limits.max_bound_descriptor_sets,
             max_bindings_per_bind_group: wgt::Limits::default().max_bindings_per_bind_group,
             max_dynamic_uniform_buffers_per_pipeline_layout: limits
                 .max_descriptor_set_uniform_buffers_dynamic,
@@ -1354,9 +1352,7 @@ impl PhysicalDeviceProperties {
             max_storage_buffer_binding_size: limits
                 .max_storage_buffer_range
                 .min(crate::auxil::MAX_I32_BINDING_SIZE),
-            max_vertex_buffers: limits
-                .max_vertex_input_bindings
-                .min(crate::MAX_VERTEX_BUFFERS as u32),
+            max_vertex_buffers: limits.max_vertex_input_bindings,
             max_vertex_attributes: limits.max_vertex_input_attributes,
             max_vertex_buffer_array_stride: limits.max_vertex_input_binding_stride,
             max_immediate_size: limits.max_push_constants_size,
@@ -1365,9 +1361,7 @@ impl PhysicalDeviceProperties {
             max_inter_stage_shader_components: limits
                 .max_vertex_output_components
                 .min(limits.max_fragment_input_components),
-            max_color_attachments: limits
-                .max_color_attachments
-                .min(crate::MAX_COLOR_ATTACHMENTS as u32),
+            max_color_attachments: limits.max_color_attachments,
             max_color_attachment_bytes_per_sample,
             max_compute_workgroup_storage_size: limits.max_compute_shared_memory_size,
             max_compute_invocations_per_workgroup: limits.max_compute_work_group_invocations,
@@ -1389,7 +1383,7 @@ impl PhysicalDeviceProperties {
             max_acceleration_structures_per_shader_stage,
 
             max_multiview_view_count,
-        }
+        })
     }
 
     /// Return a `wgpu_hal::Alignments` structure describing this adapter.
