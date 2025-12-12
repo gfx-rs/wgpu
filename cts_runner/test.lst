@@ -81,14 +81,10 @@ webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:*
 //FAIL: webgpu:api,validation,encoding,encoder_open_state:render_bundle_commands:*
 // https://github.com/gfx-rs/wgpu/issues/7857
 webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_binding_mismatch:encoderType="compute%20pass";*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_binding_mismatch:encoderType="render%20pass";*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_resource_type_mismatch:encoderType="compute%20pass";*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_resource_type_mismatch:encoderType="render%20pass";*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_visibility_mismatch:encoderType="compute%20pass";*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_visibility_mismatch:encoderType="render%20pass";*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bind_groups_and_pipeline_layout_mismatch:encoderType="compute%20pass";*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bind_groups_and_pipeline_layout_mismatch:encoderType="render%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_binding_mismatch:*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_resource_type_mismatch:*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_visibility_mismatch:*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bind_groups_and_pipeline_layout_mismatch:*
 webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:buffer_binding,render_pipeline:*
 webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:sampler_binding,render_pipeline:*
 webgpu:api,validation,encoding,queries,general:occlusion_query,query_index:*
