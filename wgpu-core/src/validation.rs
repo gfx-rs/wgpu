@@ -1151,7 +1151,7 @@ impl Interface {
         stage_bit: wgt::ShaderStages,
         entry_point_name: Option<&str>,
     ) -> Result<String, StageError> {
-        let stage = Self::shader_stage_from_stage_bit(stage_bit);
+        let stage = shader_stage_from_stage_bit(stage_bit);
         entry_point_name
             .map(|ep| ep.to_string())
             .map(Ok)
@@ -1168,17 +1168,6 @@ impl Interface {
             })
     }
 
-    pub(crate) fn shader_stage_from_stage_bit(stage_bit: wgt::ShaderStages) -> naga::ShaderStage {
-        match stage_bit {
-            wgt::ShaderStages::VERTEX => naga::ShaderStage::Vertex,
-            wgt::ShaderStages::FRAGMENT => naga::ShaderStage::Fragment,
-            wgt::ShaderStages::COMPUTE => naga::ShaderStage::Compute,
-            wgt::ShaderStages::MESH => naga::ShaderStage::Mesh,
-            wgt::ShaderStages::TASK => naga::ShaderStage::Task,
-            _ => unreachable!(),
-        }
-    }
-
     pub fn check_stage(
         &self,
         layouts: &mut BindingLayoutSource<'_>,
@@ -1190,7 +1179,7 @@ impl Interface {
     ) -> Result<StageIo, StageError> {
         // Since a shader module can have multiple entry points with the same name,
         // we need to look for one with the right execution model.
-        let shader_stage = Self::shader_stage_from_stage_bit(stage_bit);
+        let shader_stage = shader_stage_from_stage_bit(stage_bit);
         let pair = (shader_stage, entry_point_name.to_string());
         let entry_point = match self.entry_points.get(&pair) {
             Some(some) => some,
@@ -1623,4 +1612,15 @@ pub fn validate_color_attachment_bytes_per_sample(
     }
 
     Ok(())
+}
+
+pub(crate) fn shader_stage_from_stage_bit(stage_bit: wgt::ShaderStages) -> naga::ShaderStage {
+    match stage_bit {
+        wgt::ShaderStages::VERTEX => naga::ShaderStage::Vertex,
+        wgt::ShaderStages::FRAGMENT => naga::ShaderStage::Fragment,
+        wgt::ShaderStages::COMPUTE => naga::ShaderStage::Compute,
+        wgt::ShaderStages::MESH => naga::ShaderStage::Mesh,
+        wgt::ShaderStages::TASK => naga::ShaderStage::Task,
+        _ => unreachable!(),
+    }
 }
