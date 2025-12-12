@@ -44,7 +44,7 @@ use crate::{
         ParentDevice, QuerySet, Texture, TextureView, TextureViewNotRenderableReason,
     },
     track::{ResourceUsageCompatibilityError, Tracker, UsageScope},
-    Label,
+    validation, Label,
 };
 
 #[cfg(feature = "serde")]
@@ -1276,6 +1276,15 @@ impl RenderPassInfo {
                     ColorAttachmentError::UnneededDepthSlice,
                 ));
             }
+
+            validation::validate_color_attachment_bytes_per_sample(
+                color_attachments
+                    .iter()
+                    .flatten()
+                    .map(|at| at.view.desc.format),
+                device.limits.max_color_attachment_bytes_per_sample,
+            )
+            .map_err(RenderPassErrorInner::ColorAttachment)?;
 
             fn check_attachment_overlap(
                 attachment_set: &mut crate::FastHashSet<(crate::track::TrackerIndex, u32, u32)>,

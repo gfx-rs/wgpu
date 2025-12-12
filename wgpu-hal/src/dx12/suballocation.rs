@@ -7,6 +7,7 @@ use windows::Win32::Graphics::{Direct3D12, Dxgi};
 use crate::{
     auxil::dxgi::{name::ObjectExt as _, result::HResult as _},
     dx12::conv,
+    AllocationSizes,
 };
 
 #[derive(Debug)]
@@ -74,36 +75,14 @@ impl Allocator {
         memory_hints: &wgt::MemoryHints,
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     ) -> Result<Self, crate::DeviceError> {
-        // TODO: the allocator's configuration should take hardware capability into
-        // account.
-        const MB: u64 = 1024 * 1024;
-        let (device_memblock_size, host_memblock_size) = match memory_hints {
-            wgt::MemoryHints::Performance => (256 * MB, 64 * MB),
-            wgt::MemoryHints::MemoryUsage => (8 * MB, 4 * MB),
-            wgt::MemoryHints::Manual {
-                suballocated_device_memory_block_size,
-            } => {
-                // TODO: Would it be useful to expose the host size in memory hints
-                // instead of always using half of the device size?
-                let device_size = suballocated_device_memory_block_size.start;
-                let host_size = device_size / 2;
-                (device_size, host_size)
-            }
-        };
-
-        // gpu_allocator clamps the sizes between 4MiB and 256MiB, but we clamp them ourselves since we use
-        // the sizes when detecting high memory pressure and there is no way to query the values otherwise.
-
-        let device_memblock_size = device_memblock_size.clamp(4 * MB, 256 * MB);
-        let host_memblock_size = host_memblock_size.clamp(4 * MB, 256 * MB);
-
-        let allocation_sizes =
-            gpu_allocator::AllocationSizes::new(device_memblock_size, host_memblock_size);
+        let allocation_sizes = AllocationSizes::from_memory_hints(memory_hints);
+        let device_memblock_size = allocation_sizes.min_device_memblock_size;
+        let host_memblock_size = allocation_sizes.min_host_memblock_size;
 
         let allocator_desc = gpu_allocator::d3d12::AllocatorCreateDesc {
             device: gpu_allocator::d3d12::ID3D12DeviceVersion::Device(raw.clone()),
             debug_settings: Default::default(),
-            allocation_sizes,
+            allocation_sizes: allocation_sizes.into(),
         };
 
         let allocator = gpu_allocator::d3d12::Allocator::new(&allocator_desc).inspect_err(|e| {
@@ -620,39 +599,5 @@ impl<'a> DeviceAllocationContext<'a> {
         }
 
         Ok(allocation_info)
-    }
-}
-
-impl From<gpu_allocator::AllocationError> for crate::DeviceError {
-    fn from(result: gpu_allocator::AllocationError) -> Self {
-        match result {
-            gpu_allocator::AllocationError::OutOfMemory => Self::OutOfMemory,
-            gpu_allocator::AllocationError::FailedToMap(e) => {
-                log::error!("DX12 gpu-allocator: Failed to map: {e}");
-                Self::Lost
-            }
-            gpu_allocator::AllocationError::NoCompatibleMemoryTypeFound => {
-                log::error!("DX12 gpu-allocator: No Compatible Memory Type Found");
-                Self::Lost
-            }
-            gpu_allocator::AllocationError::InvalidAllocationCreateDesc => {
-                log::error!("DX12 gpu-allocator: Invalid Allocation Creation Description");
-                Self::Lost
-            }
-            gpu_allocator::AllocationError::InvalidAllocatorCreateDesc(e) => {
-                log::error!("DX12 gpu-allocator: Invalid Allocator Creation Description: {e}");
-                Self::Lost
-            }
-
-            gpu_allocator::AllocationError::Internal(e) => {
-                log::error!("DX12 gpu-allocator: Internal Error: {e}");
-                Self::Lost
-            }
-            gpu_allocator::AllocationError::BarrierLayoutNeedsDevice10
-            | gpu_allocator::AllocationError::CastableFormatsRequiresEnhancedBarriers
-            | gpu_allocator::AllocationError::CastableFormatsRequiresAtLeastDevice12 => {
-                unreachable!()
-            }
-        }
     }
 }

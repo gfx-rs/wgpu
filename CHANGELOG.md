@@ -43,6 +43,14 @@ Bottom level categories:
 
 ### Major Changes
 
+#### Switch from `gpu-alloc` to `gpu-allocator` in the `vulkan` backend
+
+`gpu-allocator` is the allocator used in the `dx12` backend, allowing to configure
+the allocator the same way in those two backends converging their behavior.
+
+This also brings the `Device::generate_allocator_report` feature to
+the vulkan backend.
+
 #### `wgpu::Instance::enumerate_adapters` is now `async` & available on WebGPU
 
 BREAKING CHANGE: `enumerate_adapters` is now `async`:
@@ -181,6 +189,7 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 - Added support for binding arrays of storage textures on Metal. By @msvbg in [#8464](https://github.com/gfx-rs/wgpu/pull/8464)
 - Added support for multisampled texture arrays on Vulkan through adapter feature `MULTISAMPLE_ARRAY`. By @LaylBongers in [#8571](https://github.com/gfx-rs/wgpu/pull/8571).
 - Added `get_configuration` to `wgpu::Surface`, that returns the current configuration of `wgpu::Surface`. By @sagudev in [#8664](https://github.com/gfx-rs/wgpu/pull/8664).
+- Add `wgpu_core::Global::create_bind_group_layout_error`. By @ErichDonGubler in [#8650](https://github.com/gfx-rs/wgpu/pull/8650).
 
 ### Changes
 
@@ -195,15 +204,18 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 - Corrected documentation of the minimum alignment of the _end_ of a mapped range of a buffer (it is 4, not 8). By @kpreid in [#8450](https://github.com/gfx-rs/wgpu/pull/8450).
 - `util::StagingBelt` now takes a `Device` when it is created instead of when it is used. By @kpreid in [#8462](https://github.com/gfx-rs/wgpu/pull/8462).
 - `wgpu_hal::vulkan::Texture` API changes to handle externally-created textures and memory more flexibly. By @s-ol in [#8512](https://github.com/gfx-rs/wgpu/pull/8512), [#8521](https://github.com/gfx-rs/wgpu/pull/8521).
+- Render passes are now validated against the `maxColorAttachmentBytesPerSample` limit. By @andyleiserson in [#8697](https://github.com/gfx-rs/wgpu/pull/8697).
 
 #### Metal
 
 - Add support for mesh shaders. By @SupaMaggie70Incorporated in [#8139](https://github.com/gfx-rs/wgpu/pull/8139)
+- Expose render layer. By @xiaopengli89 in [#8707](https://github.com/gfx-rs/wgpu/pull/8707)
 
 #### Naga
 
 - Prevent UB with invalid ray query calls on spirv. By @Vecvec in [#8390](https://github.com/gfx-rs/wgpu/pull/8390).
 - Update the set of binding_array capabilities. In most cases, they are set automatically from `wgpu` features, and this change should not be user-visible. By @andyleiserson in [#8671](https://github.com/gfx-rs/wgpu/pull/8671).
+- Naga now accepts the `var<function>` syntax for declaring local variables. By @andyleiserson in [#8710](https://github.com/gfx-rs/wgpu/pull/8710).
 
 ### Bug Fixes
 
@@ -239,6 +251,9 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 
 - Fixed a validation error regarding atomic memory semantics. By @atlv24 in [#8391](https://github.com/gfx-rs/wgpu/pull/8391).
 
+#### Metal
+- Fixed a variety of feature detection related bugs. By @inner-daemons in [#8439](https://github.com/gfx-rs/wgpu/pull/8439).
+
 #### WebGPU
 
 - Fixed a bug where the texture aspect was not passed through when calling `copy_texture_to_buffer` in WebGPU, causing the copy to fail for depth/stencil textures. By @Tim-Evans-Seequent in [#8445](https://github.com/gfx-rs/wgpu/pull/8445).
@@ -248,6 +263,7 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 - Fix race when downloading texture from compute shader pass. By @SpeedCrash100 in [#8527](https://github.com/gfx-rs/wgpu/pull/8527)
 - Fix double window class registration when dynamic libraries are used. By @Azorlogh in [#8548](https://github.com/gfx-rs/wgpu/pull/8548)
 - Fix context loss on device initialization on GL3.3-4.1 contexts. By @cwfitzgerald in [#8674](https://github.com/gfx-rs/wgpu/pull/8674).
+- `VertexFormat::Unorm10_10_10_2` can now be used on `gl` backends. By @mooori in [#8717](https://github.com/gfx-rs/wgpu/pull/8717).
 
 #### hal
 
