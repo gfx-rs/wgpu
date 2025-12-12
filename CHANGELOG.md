@@ -251,6 +251,7 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 - Fix race when downloading texture from compute shader pass. By @SpeedCrash100 in [#8527](https://github.com/gfx-rs/wgpu/pull/8527)
 - Fix double window class registration when dynamic libraries are used. By @Azorlogh in [#8548](https://github.com/gfx-rs/wgpu/pull/8548)
 - Fix context loss on device initialization on GL3.3-4.1 contexts. By @cwfitzgerald in [#8674](https://github.com/gfx-rs/wgpu/pull/8674).
+- `VertexFormat::Unorm10_10_10_2` can now be used on `gl` backends. By @mooori in [#8717](https://github.com/gfx-rs/wgpu/pull/8717).
 
 #### hal
 
