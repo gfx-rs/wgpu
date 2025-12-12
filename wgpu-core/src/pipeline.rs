@@ -89,11 +89,11 @@ impl ShaderModule {
 
     pub(crate) fn finalize_entry_point_name(
         &self,
-        stage_bit: wgt::ShaderStages,
+        stage: naga::ShaderStage,
         entry_point: Option<&str>,
     ) -> Result<String, validation::StageError> {
         match &self.interface {
-            Some(interface) => interface.finalize_entry_point_name(stage_bit, entry_point),
+            Some(interface) => interface.finalize_entry_point_name(stage, entry_point),
             None => entry_point
                 .map(|ep| ep.to_string())
                 .ok_or(validation::StageError::NoEntryPointFound),
