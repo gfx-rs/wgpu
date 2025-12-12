@@ -397,9 +397,6 @@ pub struct Surface {
     render_layer: Mutex<metal::MetalLayer>,
     swapchain_format: RwLock<Option<wgt::TextureFormat>>,
     extent: RwLock<wgt::Extent3d>,
-    // Useful for UI-intensive applications that are sensitive to
-    // window resizing.
-    pub present_with_transaction: bool,
 }
 
 unsafe impl Send for Surface {}
@@ -409,6 +406,8 @@ unsafe impl Sync for Surface {}
 pub struct SurfaceTexture {
     texture: Texture,
     drawable: metal::MetalDrawable,
+    // Useful for UI-intensive applications that are sensitive to
+    // window resizing.
     present_with_transaction: bool,
 }
 
