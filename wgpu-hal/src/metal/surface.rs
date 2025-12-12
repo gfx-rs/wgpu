@@ -28,7 +28,6 @@ impl super::Surface {
             render_layer: Mutex::new(layer),
             swapchain_format: RwLock::new(None),
             extent: RwLock::new(wgt::Extent3d::default()),
-            present_with_transaction: false,
         }
     }
 
@@ -168,7 +167,6 @@ impl crate::Surface for super::Surface {
         render_layer.set_device(&device_raw);
         render_layer.set_pixel_format(caps.map_format(config.format));
         render_layer.set_framebuffer_only(framebuffer_only);
-        render_layer.set_presents_with_transaction(self.present_with_transaction);
         // opt-in to Metal EDR
         // EDR potentially more power used in display and more bandwidth, memory footprint.
         let wants_edr = config.format == wgt::TextureFormat::Rgba16Float;
@@ -224,7 +222,7 @@ impl crate::Surface for super::Surface {
                 },
             },
             drawable,
-            present_with_transaction: self.present_with_transaction,
+            present_with_transaction: render_layer.presents_with_transaction(),
         };
 
         Ok(Some(crate::AcquiredSurfaceTexture {
