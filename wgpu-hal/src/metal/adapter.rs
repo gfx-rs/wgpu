@@ -624,7 +624,6 @@ impl super::PrivateCapabilities {
             msaa_apple7: family_check && device.supports_family(MTLGPUFamily::Apple7),
             resource_heaps: Self::supports_any(device, RESOURCE_HEAP_SUPPORT),
             argument_buffers,
-            shared_textures: os_type != super::OsType::Macos,
             mutable_comparison_samplers: Self::supports_any(
                 device,
                 MUTABLE_COMPARISON_SAMPLER_SUPPORT,

@@ -213,7 +213,6 @@ struct PrivateCapabilities {
     msaa_apple7: bool,
     resource_heaps: bool,
     argument_buffers: Option<MTLArgumentBuffersTier>,
-    shared_textures: bool,
     mutable_comparison_samplers: bool,
     sampler_clamp_to_border: bool,
     indirect_draw_dispatch: bool,
