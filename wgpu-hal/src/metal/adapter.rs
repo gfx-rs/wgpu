@@ -263,7 +263,6 @@ impl crate::Adapter for super::Adapter {
             }
             Tf::Depth16Unorm => {
                 if pc.format_depth16unorm {
-                    // TODO: what does SAMPLED_LINEAR mean?!?
                     let mut flags =
                         Tfc::DEPTH_STENCIL_ATTACHMENT | msaa_count | msaa_resolve_apple3x_if;
                     if pc.format_depth16unorm_filter {
@@ -528,62 +527,16 @@ impl super::PrivateCapabilities {
     }
 
     pub fn new(device: &metal::Device) -> Self {
-        #[repr(C)]
-        #[derive(Clone, Copy, Debug)]
-        #[allow(clippy::upper_case_acronyms)]
-        struct NSOperatingSystemVersion {
-            major: usize,
-            minor: usize,
-            patch: usize,
-        }
-
-        impl NSOperatingSystemVersion {
-            fn at_least(
-                &self,
-                mac_version: (usize, usize),
-                ios_version: (usize, usize),
-                tvos_version: (usize, usize),
-                visionos_version: (usize, usize),
-                os_type: super::OsType,
-            ) -> bool {
-                let required = match os_type {
-                    super::OsType::Macos => mac_version,
-                    super::OsType::Ios => ios_version,
-                    super::OsType::Tvos => tvos_version,
-                    super::OsType::VisionOs => visionos_version,
-                };
-                self.major > required.0 || (self.major == required.0 && self.minor >= required.1)
-            }
-        }
-
         let version: NSOperatingSystemVersion = unsafe {
             let process_info: *mut objc::runtime::Object =
                 msg_send![class!(NSProcessInfo), processInfo];
             msg_send![process_info, operatingSystemVersion]
         };
 
-        let os_type = {
-            // Metal was first introduced in OS X 10.11 and iOS 8. The current version number of visionOS is 1.0.0. Additionally,
-            // on the Simulator, Apple only provides the Apple2 GPU capability, and the Apple2+ GPU capability covers the capabilities of Apple2.
-            // Therefore, the following conditions can be used to determine if it is visionOS.
-            // https://developer.apple.com/documentation/metal/developing_metal_apps_that_run_in_simulator
-            let os_is_xr = version.major < 8 && device.supports_family(MTLGPUFamily::Apple2);
-            let os_is_mac = device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1);
-            let os_is_tvos = device.supports_feature_set(MTLFeatureSet::tvOS_GPUFamily1_v1);
-            if os_is_xr {
-                super::OsType::VisionOs
-            } else if os_is_mac {
-                super::OsType::Macos
-            } else if os_is_tvos {
-                super::OsType::Tvos
-            } else {
-                super::OsType::Ios
-            }
-        };
+        let os_type = super::OsType::new(version, device);
         let family_check = version.at_least((10, 15), (13, 0), (13, 0), (1, 0), os_type);
         let metal3 = family_check && device.supports_family(MTLGPUFamily::Metal3);
         let metal4 = family_check && device.supports_family(MTLGPUFamily::Metal4);
-
         let mut sample_count_mask = crate::TextureFormatCapabilities::MULTISAMPLE_X4; // 1 and 4 samples are supported on all devices
         if device.supports_texture_sample_count(2) {
             sample_count_mask |= crate::TextureFormatCapabilities::MULTISAMPLE_X2;
@@ -1450,5 +1403,54 @@ impl super::PrivateDisabilities {
                 && !device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v4),
             broken_layered_clear_image: is_intel,
         }
+    }
+}
+
+impl super::OsType {
+    fn new(version: NSOperatingSystemVersion, device: &metal::Device) -> Self {
+        // Metal was first introduced in OS X 10.11 and iOS 8. The current version number of visionOS is 1.0.0. Additionally,
+        // on the Simulator, Apple only provides the Apple2 GPU capability, and the Apple2+ GPU capability covers the capabilities of Apple2.
+        // Therefore, the following conditions can be used to determine if it is visionOS.
+        // https://developer.apple.com/documentation/metal/developing_metal_apps_that_run_in_simulator
+        let os_is_vision = version.major < 8 && device.supports_family(MTLGPUFamily::Apple2);
+        let os_is_mac = device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1);
+        let os_is_tvos = device.supports_feature_set(MTLFeatureSet::tvOS_GPUFamily1_v1);
+        if os_is_vision {
+            Self::VisionOs
+        } else if os_is_mac {
+            Self::Macos
+        } else if os_is_tvos {
+            Self::Tvos
+        } else {
+            Self::Ios
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+#[allow(clippy::upper_case_acronyms)]
+struct NSOperatingSystemVersion {
+    major: usize,
+    minor: usize,
+    patch: usize,
+}
+
+impl NSOperatingSystemVersion {
+    fn at_least(
+        &self,
+        mac_version: (usize, usize),
+        ios_version: (usize, usize),
+        tvos_version: (usize, usize),
+        visionos_version: (usize, usize),
+        os_type: super::OsType,
+    ) -> bool {
+        let required = match os_type {
+            super::OsType::Macos => mac_version,
+            super::OsType::Ios => ios_version,
+            super::OsType::Tvos => tvos_version,
+            super::OsType::VisionOs => visionos_version,
+        };
+        (self.major, self.minor) >= required
     }
 }
