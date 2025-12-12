@@ -52,7 +52,7 @@ use crate::{
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     timestamp_normalization::TIMESTAMP_NORMALIZATION_BUFFER_USES,
     track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
-    validation::{self, stage_bit_from_shader_stage},
+    validation,
     weak_vec::WeakVec,
     FastHashMap, LabelHelpers, OnceCellOrLock,
 };
@@ -3743,10 +3743,10 @@ impl Device {
         let final_entry_point_name;
 
         {
-            let stage = naga::ShaderStage::Compute;
+            let stage = validation::ShaderStageForValidation::Compute;
 
             final_entry_point_name = shader_module.finalize_entry_point_name(
-                stage,
+                stage.to_naga(),
                 desc.stage.entry_point.as_ref().map(|ep| ep.as_ref()),
             )?;
 
@@ -3757,7 +3757,6 @@ impl Device {
                     &final_entry_point_name,
                     stage,
                     io,
-                    None,
                 )?;
             }
         }
@@ -4230,8 +4229,10 @@ impl Device {
             pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) => {
                 vertex_stage = {
                     let stage_desc = &vertex.stage;
-                    let stage = naga::ShaderStage::Vertex;
-                    let stage_bit = stage_bit_from_shader_stage(stage);
+                    let stage = validation::ShaderStageForValidation::Vertex {
+                        compare_function: desc.depth_stencil.as_ref().map(|d| d.depth_compare),
+                    };
+                    let stage_bit = stage.to_wgt_bit();
 
                     let vertex_shader_module = &stage_desc.module;
                     vertex_shader_module.same_device(self)?;
@@ -4243,7 +4244,7 @@ impl Device {
 
                     _vertex_entry_point_name = vertex_shader_module
                         .finalize_entry_point_name(
-                            stage,
+                            stage.to_naga(),
                             stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
                         )
                         .map_err(stage_err)?;
@@ -4256,7 +4257,6 @@ impl Device {
                                 &_vertex_entry_point_name,
                                 stage,
                                 io,
-                                desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                             )
                             .map_err(stage_err)?;
                         validated_stages |= stage_bit;
@@ -4275,8 +4275,8 @@ impl Device {
 
                 task_stage = if let Some(task) = task {
                     let stage_desc = &task.stage;
-                    let stage = naga::ShaderStage::Task;
-                    let stage_bit = stage_bit_from_shader_stage(stage);
+                    let stage = validation::ShaderStageForValidation::Task;
+                    let stage_bit = stage.to_wgt_bit();
                     let task_shader_module = &stage_desc.module;
                     task_shader_module.same_device(self)?;
 
@@ -4287,7 +4287,7 @@ impl Device {
 
                     _task_entry_point_name = task_shader_module
                         .finalize_entry_point_name(
-                            stage,
+                            stage.to_naga(),
                             stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
                         )
                         .map_err(stage_err)?;
@@ -4300,7 +4300,6 @@ impl Device {
                                 &_task_entry_point_name,
                                 stage,
                                 io,
-                                desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                             )
                             .map_err(stage_err)?;
                         validated_stages |= stage_bit;
@@ -4317,8 +4316,8 @@ impl Device {
                 };
                 mesh_stage = {
                     let stage_desc = &mesh.stage;
-                    let stage = naga::ShaderStage::Mesh;
-                    let stage_bit = stage_bit_from_shader_stage(stage);
+                    let stage = validation::ShaderStageForValidation::Mesh;
+                    let stage_bit = stage.to_wgt_bit();
                     let mesh_shader_module = &stage_desc.module;
                     mesh_shader_module.same_device(self)?;
 
@@ -4329,7 +4328,7 @@ impl Device {
 
                     _mesh_entry_point_name = mesh_shader_module
                         .finalize_entry_point_name(
-                            stage,
+                            stage.to_naga(),
                             stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
                         )
                         .map_err(stage_err)?;
@@ -4342,7 +4341,6 @@ impl Device {
                                 &_mesh_entry_point_name,
                                 stage,
                                 io,
-                                desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                             )
                             .map_err(stage_err)?;
                         validated_stages |= stage_bit;
@@ -4361,8 +4359,8 @@ impl Device {
         let fragment_entry_point_name;
         let fragment_stage = match desc.fragment {
             Some(ref fragment_state) => {
-                let stage = naga::ShaderStage::Fragment;
-                let stage_bit = stage_bit_from_shader_stage(stage);
+                let stage = validation::ShaderStageForValidation::Fragment;
+                let stage_bit = stage.to_wgt_bit();
 
                 let shader_module = &fragment_state.stage.module;
                 shader_module.same_device(self)?;
@@ -4374,7 +4372,7 @@ impl Device {
 
                 fragment_entry_point_name = shader_module
                     .finalize_entry_point_name(
-                        stage,
+                        stage.to_naga(),
                         fragment_state
                             .stage
                             .entry_point
@@ -4391,7 +4389,6 @@ impl Device {
                             &fragment_entry_point_name,
                             stage,
                             io,
-                            desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                         )
                         .map_err(stage_err)?;
                     validated_stages |= stage_bit;
