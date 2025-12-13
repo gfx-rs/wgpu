@@ -457,6 +457,41 @@ fn parse_assignment_statements() {
 }
 
 #[test]
+fn parse_local_var_address_space() {
+    parse_str(
+        "
+        fn foo() {
+            var<function> a = true;
+            var<function> b: i32 = 5;
+            var c = 10;
+        }",
+    )
+    .unwrap();
+
+    let error = parse_str(
+        "fn foo() {
+            var<private> x: i32 = 5;
+        }",
+    )
+    .unwrap_err();
+    assert_eq!(
+        error.message(),
+        "invalid address space for local variable: `private`",
+    );
+
+    let error = parse_str(
+        "fn foo() {
+            var<storage> x: i32 = 5;
+        }",
+    )
+    .unwrap_err();
+    assert_eq!(
+        error.message(),
+        "invalid address space for local variable: `storage`",
+    );
+}
+
+#[test]
 fn binary_expression_mixed_scalar_and_vector_operands() {
     for (operand, expect_splat) in [
         ('<', false),

@@ -894,7 +894,6 @@ fn dispatch_indirect(
         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
 
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
-    buffer.check_destroyed(state.pass.base.snatch_guard)?;
 
     if offset % 4 != 0 {
         return Err(ComputePassErrorInner::UnalignedIndirectBufferOffset(offset));
@@ -908,6 +907,8 @@ fn dispatch_indirect(
             buffer_size: buffer.size,
         });
     }
+
+    buffer.check_destroyed(state.pass.base.snatch_guard)?;
 
     let stride = 3 * 4; // 3 integers, x/y/z group size
     state.pass.base.buffer_memory_init_actions.extend(

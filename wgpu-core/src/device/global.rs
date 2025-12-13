@@ -215,6 +215,23 @@ impl Global {
         fid.assign(Fallible::Invalid(Arc::new(desc.label.to_string())));
     }
 
+    /// Assign `id_in` an error with the given `label`.
+    ///
+    /// In JavaScript environments, it is possible to call `GPUDevice.createBindGroupLayout` with
+    /// entries that are invalid. Because our Rust's types for bind group layouts prevent even
+    /// calling [`Self::device_create_bind_group`], we let standards-compliant environments
+    /// register an invalid bind group layout so this crate's API can still be consistently used.
+    ///
+    /// See [`Self::create_buffer_error`] for additional context and explanation.
+    pub fn create_bind_group_layout_error(
+        &self,
+        id_in: Option<id::BindGroupLayoutId>,
+        label: Option<Cow<'_, str>>,
+    ) {
+        let fid = self.hub.bind_group_layouts.prepare(id_in);
+        fid.assign(Fallible::Invalid(Arc::new(label.to_string())));
+    }
+
     pub fn buffer_destroy(&self, buffer_id: id::BufferId) {
         profiling::scope!("Buffer::destroy");
         api_log!("Buffer::destroy {buffer_id:?}");

@@ -52,7 +52,7 @@ use crate::{
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     timestamp_normalization::TIMESTAMP_NORMALIZATION_BUFFER_USES,
     track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
-    validation::{self, validate_color_attachment_bytes_per_sample},
+    validation,
     weak_vec::WeakVec,
     FastHashMap, LabelHelpers, OnceCellOrLock,
 };
@@ -4134,15 +4134,11 @@ impl Device {
             }
         }
 
-        let limit = self.limits.max_color_attachment_bytes_per_sample;
-        let formats = color_targets
-            .iter()
-            .map(|cs| cs.as_ref().map(|cs| cs.format));
-        if let Err(total) = validate_color_attachment_bytes_per_sample(formats, limit) {
-            return Err(pipeline::CreateRenderPipelineError::ColorAttachment(
-                command::ColorAttachmentError::TooManyBytesPerSample { total, limit },
-            ));
-        }
+        validation::validate_color_attachment_bytes_per_sample(
+            color_targets.iter().flatten().map(|cs| cs.format),
+            self.limits.max_color_attachment_bytes_per_sample,
+        )
+        .map_err(pipeline::CreateRenderPipelineError::ColorAttachment)?;
 
         if let Some(ds) = depth_stencil_state {
             target_specified = true;

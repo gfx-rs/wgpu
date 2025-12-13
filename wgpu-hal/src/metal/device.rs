@@ -1695,7 +1695,7 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn destroy_query_set(&self, _set: super::QuerySet) {
-        self.counters.query_sets.add(1);
+        self.counters.query_sets.sub(1);
     }
 
     unsafe fn create_fence(&self) -> DeviceResult<super::Fence> {

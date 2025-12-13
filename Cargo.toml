@@ -200,7 +200,7 @@ which = "8"
 xshell = "0.2.2"
 
 # Metal dependencies
-metal = "0.32"
+metal = { git = "https://github.com/gfx-rs/metal-rs.git", rev = "8ee6e61686e52ffede7d1d4925180eb520587447", version = "0.32.0" }
 block = "0.1.6"
 core-graphics-types = "0.2"
 objc = "0.2.5"
@@ -208,16 +208,17 @@ objc = "0.2.5"
 # Vulkan dependencies
 android_system_properties = "0.1.1"
 ash = "0.38"
-gpu-alloc = "0.6"
 gpu-descriptor = "0.3.2"
 
 # DX12 dependencies
-gpu-allocator = { version = "0.28", default-features = false, features = [
-    "hashbrown",
-] }
 range-alloc = "0.1"
 mach-dxcompiler-rs = { version = "0.1.4", default-features = false } # remember to increase max_shader_model if applicable
 windows-core = { version = "0.62", default-features = false }
+
+# DX12 and Vulkan dependencies
+gpu-allocator = { version = "0.28", default-features = false, features = [
+    "hashbrown",
+] }
 
 # Gles dependencies
 khronos-egl = "6"

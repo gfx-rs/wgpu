@@ -1411,17 +1411,17 @@ impl Interface {
     }
 }
 
-// https://gpuweb.github.io/gpuweb/#abstract-opdef-calculating-color-attachment-bytes-per-sample
+/// Validate a list of color attachment formats against `maxColorAttachmentBytesPerSample`.
+///
+/// The color attachments can be from a render pass descriptor or a pipeline descriptor.
+///
+/// Implements <https://gpuweb.github.io/gpuweb/#abstract-opdef-calculating-color-attachment-bytes-per-sample>.
 pub fn validate_color_attachment_bytes_per_sample(
-    attachment_formats: impl Iterator<Item = Option<wgt::TextureFormat>>,
+    attachment_formats: impl IntoIterator<Item = wgt::TextureFormat>,
     limit: u32,
-) -> Result<(), u32> {
+) -> Result<(), crate::command::ColorAttachmentError> {
     let mut total_bytes_per_sample: u32 = 0;
     for format in attachment_formats {
-        let Some(format) = format else {
-            continue;
-        };
-
         let byte_cost = format.target_pixel_byte_cost().unwrap();
         let alignment = format.target_component_alignment().unwrap();
 
@@ -1430,7 +1430,12 @@ pub fn validate_color_attachment_bytes_per_sample(
     }
 
     if total_bytes_per_sample > limit {
-        return Err(total_bytes_per_sample);
+        return Err(
+            crate::command::ColorAttachmentError::TooManyBytesPerSample {
+                total: total_bytes_per_sample,
+                limit,
+            },
+        );
     }
 
     Ok(())
