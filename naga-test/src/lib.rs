@@ -190,8 +190,10 @@ pub struct FragmentModule {
 #[derive(Default, serde::Deserialize)]
 #[serde(default)]
 pub struct Parameters {
-    // -- GOD MODE --
-    pub god_mode: bool,
+    // -- validation options --
+    //
+    // Capabilities to enable. Defaults to `Capabilities::default()`.
+    pub capabilities: Option<naga::valid::Capabilities>,
 
     // -- wgsl-in options --
     #[serde(rename = "wgsl-in")]

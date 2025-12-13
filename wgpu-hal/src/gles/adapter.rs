@@ -311,10 +311,11 @@ impl super::Adapter {
             es_supported || full_supported
         };
 
-        let supports_storage =
-            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_shader_storage_buffer_object");
-        let supports_compute =
-            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_compute_shader");
+        // Naga won't let you emit storage buffers at versions below this, so
+        // we currently can't support GL_ARB_shader_storage_buffer_object.
+        let supports_storage = supported((3, 1), (4, 3));
+        // Same with compute shaders and GL_ARB_compute_shader
+        let supports_compute = supported((3, 1), (4, 3));
         let supports_work_group_params = supports_compute;
 
         // ANGLE provides renderer strings like: "ANGLE (Apple, Apple M1 Pro, OpenGL 4.1)"

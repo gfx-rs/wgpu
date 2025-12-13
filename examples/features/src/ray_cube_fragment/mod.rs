@@ -2,7 +2,7 @@ use crate::utils;
 use bytemuck::{Pod, Zeroable};
 use glam::{Mat4, Quat, Vec3};
 use std::ops::IndexMut;
-use std::{borrow::Cow, future::Future, iter, mem, pin::Pin, task};
+use std::{borrow::Cow, iter, mem};
 use wgpu::util::DeviceExt;
 
 // from cube
@@ -71,28 +71,6 @@ fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
 struct Uniforms {
     view_inverse: Mat4,
     proj_inverse: Mat4,
-}
-
-/// A wrapper for `pop_error_scope` futures that panics if an error occurs.
-///
-/// Given a future `inner` of an `Option<E>` for some error type `E`,
-/// wait for the future to be ready, and panic if its value is `Some`.
-///
-/// This can be done simpler with `FutureExt`, but we don't want to add
-/// a dependency just for this small case.
-struct ErrorFuture<F> {
-    inner: F,
-}
-impl<F: Future<Output = Option<wgpu::Error>>> Future for ErrorFuture<F> {
-    type Output = ();
-    fn poll(self: Pin<&mut Self>, cx: &mut task::Context<'_>) -> task::Poll<()> {
-        let inner = unsafe { self.map_unchecked_mut(|me| &mut me.inner) };
-        inner.poll(cx).map(|error| {
-            if let Some(e) = error {
-                panic!("Rendering {e}");
-            }
-        })
-    }
 }
 
 struct Example {

@@ -718,7 +718,7 @@ impl<A: hal::Api> Example<A> {
                 },
                 depth_slice: None,
                 resolve_target: None,
-                ops: hal::AttachmentOps::STORE,
+                ops: hal::AttachmentOps::STORE | hal::AttachmentOps::LOAD_CLEAR,
                 clear_value: wgpu_types::Color {
                     r: 0.1,
                     g: 0.2,

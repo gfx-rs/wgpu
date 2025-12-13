@@ -424,8 +424,9 @@ fn map_texture_tagged_copy_view(
 }
 
 fn map_load_op<V: Copy>(load: &LoadOp<V>) -> LoadOp<Option<V>> {
-    match load {
-        LoadOp::Clear(clear_value) => LoadOp::Clear(Some(*clear_value)),
+    match *load {
+        LoadOp::Clear(clear_value) => LoadOp::Clear(Some(clear_value)),
+        LoadOp::DontCare(token) => LoadOp::DontCare(token),
         LoadOp::Load => LoadOp::Load,
     }
 }

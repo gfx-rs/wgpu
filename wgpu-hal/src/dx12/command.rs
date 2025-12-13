@@ -964,7 +964,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.pass.resolves.clear();
         for (rtv, cat) in color_views.iter().zip(desc.color_attachments.iter()) {
             if let Some(cat) = cat.as_ref() {
-                if !cat.ops.contains(crate::AttachmentOps::LOAD) {
+                if cat.ops.contains(crate::AttachmentOps::LOAD_CLEAR) {
                     let value = [
                         cat.clear_value.r as f32,
                         cat.clear_value.g as f32,
@@ -989,12 +989,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         if let Some(ref ds) = desc.depth_stencil_attachment {
             let mut flags = Direct3D12::D3D12_CLEAR_FLAGS::default();
             let aspects = ds.target.view.aspects;
-            if !ds.depth_ops.contains(crate::AttachmentOps::LOAD)
+            if ds.depth_ops.contains(crate::AttachmentOps::LOAD_CLEAR)
                 && aspects.contains(crate::FormatAspects::DEPTH)
             {
                 flags |= Direct3D12::D3D12_CLEAR_FLAG_DEPTH;
             }
-            if !ds.stencil_ops.contains(crate::AttachmentOps::LOAD)
+            if ds.stencil_ops.contains(crate::AttachmentOps::LOAD_CLEAR)
                 && aspects.contains(crate::FormatAspects::STENCIL)
             {
                 flags |= Direct3D12::D3D12_CLEAR_FLAG_STENCIL;

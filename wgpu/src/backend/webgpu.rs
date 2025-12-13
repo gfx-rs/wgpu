@@ -2605,11 +2605,11 @@ impl dispatch::QueueInterface for WebQueue {
             return None;
         }
         let write_size = u64::from(size);
-        if write_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+        if !write_size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             log::error!("Copy size {size} does not respect `COPY_BUFFER_ALIGNMENT`");
             return None;
         }
-        if offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+        if !offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             log::error!(
                 "Buffer offset {offset} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`"
             );
@@ -3072,6 +3072,13 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
                             clear_value = Some(wasm_bindgen::JsValue::from(map_color(color)));
                             webgpu_sys::GpuLoadOp::Clear
                         }
+                        crate::LoadOp::DontCare(_token) => {
+                            // WebGPU can't safely have a ClearOp::DontCare, so we clear to black
+                            // which is ideal for most GPUs.
+                            clear_value =
+                                Some(wasm_bindgen::JsValue::from(map_color(crate::Color::BLACK)));
+                            webgpu_sys::GpuLoadOp::Clear
+                        }
                         crate::LoadOp::Load => webgpu_sys::GpuLoadOp::Load,
                     };
 
@@ -3113,6 +3120,11 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
                         mapped_depth_stencil_attachment.set_depth_clear_value(v);
                         webgpu_sys::GpuLoadOp::Clear
                     }
+                    crate::LoadOp::DontCare(_token) => {
+                        // WebGPU can't safely have a ClearOp::DontCare, so we clear to 1.0
+                        mapped_depth_stencil_attachment.set_depth_clear_value(1.0);
+                        webgpu_sys::GpuLoadOp::Clear
+                    }
                     crate::LoadOp::Load => webgpu_sys::GpuLoadOp::Load,
                 };
                 mapped_depth_stencil_attachment.set_depth_load_op(load_op);
@@ -3123,6 +3135,11 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
                 let load_op = match ops.load {
                     crate::LoadOp::Clear(v) => {
                         mapped_depth_stencil_attachment.set_stencil_clear_value(v);
+                        webgpu_sys::GpuLoadOp::Clear
+                    }
+                    crate::LoadOp::DontCare(_token) => {
+                        // WebGPU can't safely have a ClearOp::DontCare, so we clear to 0
+                        mapped_depth_stencil_attachment.set_stencil_clear_value(0);
                         webgpu_sys::GpuLoadOp::Clear
                     }
                     crate::LoadOp::Load => webgpu_sys::GpuLoadOp::Load,

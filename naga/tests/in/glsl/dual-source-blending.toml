@@ -1,2 +1,2 @@
 # TODO(https://github.com/gfx-rs/wgpu/issues/8154): enable only `DUAL_SOURCE_BLENDING` capability
-god_mode = true
+capabilities = "DUAL_SOURCE_BLENDING"

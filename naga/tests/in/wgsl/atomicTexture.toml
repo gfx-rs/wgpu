@@ -1,4 +1,4 @@
-god_mode = true
+capabilities = "TEXTURE_ATOMIC"
 
 [msl]
 fake_missing_bindings = true

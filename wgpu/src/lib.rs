@@ -139,7 +139,7 @@ pub use wgt::{
     ExperimentalFeatures, Extent3d, ExternalTextureFormat, ExternalTextureTransferFunction, Face,
     Features, FeaturesWGPU, FeaturesWebGPU, FilterMode, FrontFace, GlBackendOptions,
     GlFenceBehavior, Gles3MinorVersion, HalCounters, ImageSubresourceRange, ImmediateRange,
-    IndexFormat, InstanceDescriptor, InstanceFlags, InternalCounters, Limits,
+    IndexFormat, InstanceDescriptor, InstanceFlags, InternalCounters, Limits, LoadOpDontCare,
     MemoryBudgetThresholds, MemoryHints, MipmapFilterMode, MultisampleState, NoopBackendOptions,
     Origin2d, Origin3d, PipelineStatisticsTypes, PollError, PollStatus, PolygonMode,
     PowerPreference, PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState,

@@ -215,6 +215,10 @@ impl FunctionCtx<'_> {
                     external_texture_key,
                 )
             }
+            // This is a const function, which _sometimes_ gets called,
+            // so this lint is _sometimes_ triggered, depending on feature set.
+            #[expect(clippy::allow_attributes)]
+            #[allow(clippy::panic)]
             FunctionType::EntryPoint(_) => {
                 panic!("External textures cannot be used as arguments to entry points")
             }

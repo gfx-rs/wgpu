@@ -1,2 +1,2 @@
-god_mode = true
+capabilities = "RAY_TRACING_PIPELINE"
 targets = "IR"

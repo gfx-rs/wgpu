@@ -5,18 +5,13 @@ use serde::Deserialize;
 #[cfg(feature = "serialize")]
 use serde::Serialize;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Coord {
+    #[default]
     Normalized,
     Pixel,
-}
-
-impl Default for Coord {
-    fn default() -> Self {
-        Self::Normalized
-    }
 }
 
 impl Coord {
@@ -28,21 +23,16 @@ impl Coord {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Address {
     Repeat,
     MirroredRepeat,
+    #[default]
     ClampToEdge,
     ClampToZero,
     ClampToBorder,
-}
-
-impl Default for Address {
-    fn default() -> Self {
-        Self::ClampToEdge
-    }
 }
 
 impl Address {
@@ -57,19 +47,14 @@ impl Address {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum BorderColor {
+    #[default]
     TransparentBlack,
     OpaqueBlack,
     OpaqueWhite,
-}
-
-impl Default for BorderColor {
-    fn default() -> Self {
-        Self::TransparentBlack
-    }
 }
 
 impl BorderColor {
@@ -82,10 +67,11 @@ impl BorderColor {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Filter {
+    #[default]
     Nearest,
     Linear,
 }
@@ -99,16 +85,11 @@ impl Filter {
     }
 }
 
-impl Default for Filter {
-    fn default() -> Self {
-        Self::Nearest
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum CompareFunc {
+    #[default]
     Never,
     Less,
     LessEqual,
@@ -117,12 +98,6 @@ pub enum CompareFunc {
     Equal,
     NotEqual,
     Always,
-}
-
-impl Default for CompareFunc {
-    fn default() -> Self {
-        Self::Never
-    }
 }
 
 impl CompareFunc {

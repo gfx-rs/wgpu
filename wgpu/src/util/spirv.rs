@@ -60,7 +60,7 @@ const fn assert_has_spirv_magic_number_and_length(bytes: &[u8]) -> bool {
         Some(needs_byte_swap) => {
             // Note: this assertion is relied upon for the soundness of `make_spirv_const()`.
             assert!(
-                bytes.len() % size_of::<u32>() == 0,
+                bytes.len().is_multiple_of(mem::size_of::<u32>()),
                 "SPIR-V data must be a multiple of 4 bytes long"
             );
 
@@ -75,6 +75,7 @@ const fn assert_has_spirv_magic_number_and_length(bytes: &[u8]) -> bool {
     }
 }
 
+#[cfg_attr(not(feature = "spirv"), expect(rustdoc::broken_intra_doc_links))]
 /// Version of [`make_spirv()`] intended for use with
 /// [`Device::create_shader_module_passthrough()`].
 ///

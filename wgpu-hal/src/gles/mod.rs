@@ -253,17 +253,12 @@ bitflags::bitflags! {
 
 type BindTarget = u32;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 enum VertexAttribKind {
+    #[default]
     Float, // glVertexAttribPointer
     Integer, // glVertexAttribIPointer
-           //Double,  // glVertexAttribLPointer
-}
-
-impl Default for VertexAttribKind {
-    fn default() -> Self {
-        Self::Float
-    }
+             //Double,  // glVertexAttribLPointer
 }
 
 #[derive(Clone, Debug)]

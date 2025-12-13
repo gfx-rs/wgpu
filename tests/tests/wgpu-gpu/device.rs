@@ -88,11 +88,19 @@ static MULTIPLE_DEVICES: GpuTestConfiguration = GpuTestConfiguration::new()
     .run_sync(|ctx| {
         use pollster::FutureExt as _;
         ctx.adapter
-            .request_device(&wgpu::DeviceDescriptor::default())
+            .request_device(&wgpu::DeviceDescriptor {
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::downlevel_webgl2_defaults(),
+                ..Default::default()
+            })
             .block_on()
             .expect("failed to create device");
         ctx.adapter
-            .request_device(&wgpu::DeviceDescriptor::default())
+            .request_device(&wgpu::DeviceDescriptor {
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::downlevel_webgl2_defaults(),
+                ..Default::default()
+            })
             .block_on()
             .expect("failed to create device");
     });

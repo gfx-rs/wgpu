@@ -52,7 +52,7 @@ use crate::{
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     timestamp_normalization::TIMESTAMP_NORMALIZATION_BUFFER_USES,
     track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
-    validation::{self, validate_color_attachment_bytes_per_sample},
+    validation,
     weak_vec::WeakVec,
     FastHashMap, LabelHelpers, OnceCellOrLock,
 };
@@ -433,14 +433,17 @@ impl Device {
         }
         .map_err(DeviceError::from_hal)?;
 
+        // Cloned as we need them below anyway.
         let alignments = adapter.raw.capabilities.alignments.clone();
         let downlevel = adapter.raw.capabilities.downlevel.clone();
+        let limits = &adapter.raw.capabilities.limits;
 
         let enable_indirect_validation = instance_flags
             .contains(wgt::InstanceFlags::VALIDATION_INDIRECT_CALL)
-            && downlevel
-                .flags
-                .contains(wgt::DownlevelFlags::INDIRECT_EXECUTION);
+            && downlevel.flags.contains(
+                wgt::DownlevelFlags::INDIRECT_EXECUTION | wgt::DownlevelFlags::COMPUTE_SHADERS,
+            )
+            && limits.max_storage_buffers_per_shader_stage >= 2;
 
         let indirect_validation = if enable_indirect_validation {
             Some(crate::indirect_validation::IndirectValidation::new(
@@ -4131,15 +4134,11 @@ impl Device {
             }
         }
 
-        let limit = self.limits.max_color_attachment_bytes_per_sample;
-        let formats = color_targets
-            .iter()
-            .map(|cs| cs.as_ref().map(|cs| cs.format));
-        if let Err(total) = validate_color_attachment_bytes_per_sample(formats, limit) {
-            return Err(pipeline::CreateRenderPipelineError::ColorAttachment(
-                command::ColorAttachmentError::TooManyBytesPerSample { total, limit },
-            ));
-        }
+        validation::validate_color_attachment_bytes_per_sample(
+            color_targets.iter().flatten().map(|cs| cs.format),
+            self.limits.max_color_attachment_bytes_per_sample,
+        )
+        .map_err(pipeline::CreateRenderPipelineError::ColorAttachment)?;
 
         if let Some(ds) = depth_stencil_state {
             target_specified = true;

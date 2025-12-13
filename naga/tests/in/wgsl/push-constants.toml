@@ -1,4 +1,4 @@
-god_mode = true
+capabilities = "IMMEDIATES"
 targets = "GLSL | HLSL"
 
 [hlsl]

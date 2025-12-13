@@ -567,7 +567,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                                 .resolve_attachments
                                 .push((attachment, rat.view.clone()));
                         }
-                        if !cat.ops.contains(crate::AttachmentOps::STORE) {
+                        if cat.ops.contains(crate::AttachmentOps::STORE_DISCARD) {
                             self.state.invalidate_attachments.push(attachment);
                         }
                     }
@@ -585,14 +585,16 @@ impl crate::CommandEncoder for super::CommandEncoder {
                         depth_slice: None,
                     });
                     if aspects.contains(crate::FormatAspects::DEPTH)
-                        && !dsat.depth_ops.contains(crate::AttachmentOps::STORE)
+                        && dsat.depth_ops.contains(crate::AttachmentOps::STORE_DISCARD)
                     {
                         self.state
                             .invalidate_attachments
                             .push(glow::DEPTH_ATTACHMENT);
                     }
                     if aspects.contains(crate::FormatAspects::STENCIL)
-                        && !dsat.stencil_ops.contains(crate::AttachmentOps::STORE)
+                        && dsat
+                            .stencil_ops
+                            .contains(crate::AttachmentOps::STORE_DISCARD)
                     {
                         self.state
                             .invalidate_attachments
@@ -628,7 +630,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             .filter_map(|at| at.as_ref())
             .enumerate()
         {
-            if !cat.ops.contains(crate::AttachmentOps::LOAD) {
+            if cat.ops.contains(crate::AttachmentOps::LOAD_CLEAR) {
                 let c = &cat.clear_value;
                 self.cmd_buffer.commands.push(
                     match cat.target.view.format.sample_type(None, None).unwrap() {
@@ -652,8 +654,8 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
 
         if let Some(ref dsat) = desc.depth_stencil_attachment {
-            let clear_depth = !dsat.depth_ops.contains(crate::AttachmentOps::LOAD);
-            let clear_stencil = !dsat.stencil_ops.contains(crate::AttachmentOps::LOAD);
+            let clear_depth = dsat.depth_ops.contains(crate::AttachmentOps::LOAD_CLEAR);
+            let clear_stencil = dsat.stencil_ops.contains(crate::AttachmentOps::LOAD_CLEAR);
 
             if clear_depth && clear_stencil {
                 self.cmd_buffer.commands.push(C::ClearDepthAndStencil(

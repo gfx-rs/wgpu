@@ -44,7 +44,7 @@ use crate::{
         ParentDevice, QuerySet, Texture, TextureView, TextureViewNotRenderableReason,
     },
     track::{ResourceUsageCompatibilityError, Tracker, UsageScope},
-    Label,
+    validation, Label,
 };
 
 #[cfg(feature = "serde")]
@@ -65,14 +65,15 @@ pub use wgt::{LoadOp, StoreOp};
 fn load_hal_ops<V>(load: LoadOp<V>) -> hal::AttachmentOps {
     match load {
         LoadOp::Load => hal::AttachmentOps::LOAD,
-        LoadOp::Clear(_) => hal::AttachmentOps::empty(),
+        LoadOp::Clear(_) => hal::AttachmentOps::LOAD_CLEAR,
+        LoadOp::DontCare(_) => hal::AttachmentOps::LOAD_DONT_CARE,
     }
 }
 
 fn store_hal_ops(store: StoreOp) -> hal::AttachmentOps {
     match store {
         StoreOp::Store => hal::AttachmentOps::STORE,
-        StoreOp::Discard => hal::AttachmentOps::empty(),
+        StoreOp::Discard => hal::AttachmentOps::STORE_DISCARD,
     }
 }
 
@@ -115,6 +116,7 @@ impl<V: Copy + Default> PassChannel<Option<V>> {
             Ok(ResolvedPassChannel::Operational(wgt::Operations {
                 load: match self.load_op.ok_or(AttachmentError::NoLoad)? {
                     LoadOp::Clear(clear_value) => LoadOp::Clear(handle_clear(clear_value)?),
+                    LoadOp::DontCare(token) => LoadOp::DontCare(token),
                     LoadOp::Load => LoadOp::Load,
                 },
                 store: self.store_op.ok_or(AttachmentError::NoStore)?,
@@ -204,7 +206,7 @@ impl ArcRenderPassColorAttachment {
     fn clear_value(&self) -> Color {
         match self.load_op {
             LoadOp::Clear(clear_value) => clear_value,
-            LoadOp::Load => Color::default(),
+            LoadOp::DontCare(_) | LoadOp::Load => Color::default(),
         }
     }
 }
@@ -1275,6 +1277,15 @@ impl RenderPassInfo {
                 ));
             }
 
+            validation::validate_color_attachment_bytes_per_sample(
+                color_attachments
+                    .iter()
+                    .flatten()
+                    .map(|at| at.view.desc.format),
+                device.limits.max_color_attachment_bytes_per_sample,
+            )
+            .map_err(RenderPassErrorInner::ColorAttachment)?;
+
             fn check_attachment_overlap(
                 attachment_set: &mut crate::FastHashSet<(crate::track::TrackerIndex, u32, u32)>,
                 view: &TextureView,
@@ -1552,13 +1563,13 @@ impl RenderPassInfo {
         if let Some((aspect, view)) = self.divergent_discarded_depth_stencil_aspect {
             let (depth_ops, stencil_ops) = if aspect == wgt::TextureAspect::DepthOnly {
                 (
-                    hal::AttachmentOps::STORE,                            // clear depth
-                    hal::AttachmentOps::LOAD | hal::AttachmentOps::STORE, // unchanged stencil
+                    hal::AttachmentOps::LOAD_CLEAR | hal::AttachmentOps::STORE, // clear depth
+                    hal::AttachmentOps::LOAD | hal::AttachmentOps::STORE,       // unchanged stencil
                 )
             } else {
                 (
                     hal::AttachmentOps::LOAD | hal::AttachmentOps::STORE, // unchanged stencil
-                    hal::AttachmentOps::STORE,                            // clear depth
+                    hal::AttachmentOps::LOAD_CLEAR | hal::AttachmentOps::STORE, // clear depth
                 )
             };
             let desc = hal::RenderPassDescriptor::<'_, _, dyn hal::DynTextureView> {
@@ -2238,6 +2249,18 @@ pub(super) fn encode_render_pass(
                 RenderPassErrorInner::DebugGroupError(DebugGroupError::MissingPop)
                     .map_pass_err(pass_scope),
             )?;
+        }
+        if state.active_occlusion_query.is_some() {
+            Err(RenderPassErrorInner::QueryUse(QueryUseError::MissingEnd {
+                query_type: super::SimplifiedQueryType::Occlusion,
+            })
+            .map_pass_err(pass_scope))?;
+        }
+        if state.active_pipeline_statistics_query.is_some() {
+            Err(RenderPassErrorInner::QueryUse(QueryUseError::MissingEnd {
+                query_type: super::SimplifiedQueryType::PipelineStatistics,
+            })
+            .map_pass_err(pass_scope))?;
         }
 
         state
@@ -3158,9 +3181,7 @@ impl Global {
         }
 
         let mut bind_group = None;
-        if bind_group_id.is_some() {
-            let bind_group_id = bind_group_id.unwrap();
-
+        if let Some(bind_group_id) = bind_group_id {
             let hub = &self.hub;
             bind_group = Some(pass_try!(
                 base,

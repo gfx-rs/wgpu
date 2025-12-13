@@ -94,14 +94,14 @@ bitflags::bitflags! {
         ///
         /// [1]: crate::BuiltIn::PrimitiveIndex
         const PRIMITIVE_INDEX = 1 << 2;
-        /// Support for non-uniform indexing of sampled textures and storage buffer arrays.
-        const SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 1 << 3;
-        /// Support for non-uniform indexing of storage texture arrays.
-        const STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 1 << 4;
-        /// Support for non-uniform indexing of uniform buffer arrays.
-        const UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 1 << 5;
-        /// Support for non-uniform indexing of samplers.
-        const SAMPLER_NON_UNIFORM_INDEXING = 1 << 6;
+        /// Support for binding arrays of sampled textures and samplers.
+        const TEXTURE_AND_SAMPLER_BINDING_ARRAY = 1 << 3;
+        /// Support for binding arrays of uniform buffers.
+        const BUFFER_BINDING_ARRAY = 1 << 4;
+        /// Support for binding arrays of storage textures.
+        const STORAGE_TEXTURE_BINDING_ARRAY = 1 << 5;
+        /// Support for binding arrays of storage buffers.
+        const STORAGE_BUFFER_BINDING_ARRAY = 1 << 6;
         /// Support for [`BuiltIn::ClipDistance`].
         ///
         /// [`BuiltIn::ClipDistance`]: crate::BuiltIn::ClipDistance
@@ -192,8 +192,16 @@ bitflags::bitflags! {
         const MESH_SHADER = 1 << 30;
         /// Support for mesh shaders which output points.
         const MESH_SHADER_POINT_TOPOLOGY = 1 << 31;
+        /// Support for non-uniform indexing of binding arrays of sampled textures and samplers.
+        const TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 32;
+        /// Support for non-uniform indexing of binding arrays of uniform buffers.
+        const BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 33;
+        /// Support for non-uniform indexing of binding arrays of storage textures.
+        const STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 34;
+        /// Support for non-uniform indexing of binding arrays of storage buffers.
+        const STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 35;
         /// Support for ray generation, any hit, closest hit, and miss shaders.
-        const RAY_TRACING_PIPELINE = 1 << 32;
+        const RAY_TRACING_PIPELINE = 1 << 36;
     }
 }
 
@@ -585,11 +593,13 @@ impl Validator {
         }
     }
 
+    // TODO(https://github.com/gfx-rs/wgpu/issues/8207): Consider removing this
     pub fn subgroup_stages(&mut self, stages: ShaderStages) -> &mut Self {
         self.subgroup_stages = stages;
         self
     }
 
+    // TODO(https://github.com/gfx-rs/wgpu/issues/8207): Consider removing this
     pub fn subgroup_operations(&mut self, operations: SubgroupOperationSet) -> &mut Self {
         self.subgroup_operations = operations;
         self
