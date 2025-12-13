@@ -4615,7 +4615,7 @@ fn check_ray_tracing_pipeline_incoming_payload_required() {
         let stage_arrows = "^".to_string().repeat(stage.len());
         check(
             &format!("enable wgpu_ray_tracing_pipeline; @{stage} fn main() {{}}"),
-            &format!("error: incoming payload is missing on ray hit or miss shader entry point
+            &format!("error: incoming payload is missing on a `closest_hit`, `any_hit` or `miss` shader entry point
   ┌─ wgsl:1:36
   │
 1 │ enable wgpu_ray_tracing_pipeline; @{stage} fn main() {{}}
