@@ -1,0 +1,12 @@
+(
+    vertex:[
+    ],
+    fragment:[
+    ],
+    compute:[
+        (
+            entry_point:"main",
+            target_profile:"cs_6_0",
+        ),
+    ],
+)

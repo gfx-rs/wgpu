@@ -1,0 +1,24 @@
+(
+    vertex:[
+        (
+            entry_point:"vertex",
+            target_profile:"vs_5_1",
+        ),
+        (
+            entry_point:"vertex_two_structs",
+            target_profile:"vs_5_1",
+        ),
+    ],
+    fragment:[
+        (
+            entry_point:"fragment",
+            target_profile:"ps_5_1",
+        ),
+    ],
+    compute:[
+        (
+            entry_point:"compute",
+            target_profile:"cs_5_1",
+        ),
+    ],
+)

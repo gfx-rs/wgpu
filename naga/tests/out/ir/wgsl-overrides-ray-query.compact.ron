@@ -1,0 +1,273 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Float,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: AccelerationStructure(
+                vertex_return: false,
+            ),
+        ),
+        (
+            name: None,
+            inner: RayQuery(
+                vertex_return: false,
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Tri,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: Some("RayDesc"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("flags"),
+                        ty: 3,
+                        binding: None,
+                        offset: 0,
+                    ),
+                    (
+                        name: Some("cull_mask"),
+                        ty: 3,
+                        binding: None,
+                        offset: 4,
+                    ),
+                    (
+                        name: Some("tmin"),
+                        ty: 0,
+                        binding: None,
+                        offset: 8,
+                    ),
+                    (
+                        name: Some("tmax"),
+                        ty: 0,
+                        binding: None,
+                        offset: 12,
+                    ),
+                    (
+                        name: Some("origin"),
+                        ty: 4,
+                        binding: None,
+                        offset: 16,
+                    ),
+                    (
+                        name: Some("dir"),
+                        ty: 4,
+                        binding: None,
+                        offset: 32,
+                    ),
+                ],
+                span: 48,
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: Some(5),
+        ray_intersection: None,
+        ray_vertex_return: None,
+        external_texture_params: None,
+        external_texture_transfer_function: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [
+        (
+            name: Some("o"),
+            id: None,
+            ty: 0,
+            init: None,
+        ),
+    ],
+    global_variables: [
+        (
+            name: Some("acc_struct"),
+            space: Handle,
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 1,
+            init: None,
+        ),
+    ],
+    global_expressions: [],
+    functions: [],
+    entry_points: [
+        (
+            name: "main",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("main"),
+                arguments: [],
+                result: None,
+                local_variables: [
+                    (
+                        name: Some("rq"),
+                        ty: 2,
+                        init: None,
+                    ),
+                ],
+                expressions: [
+                    LocalVariable(0),
+                    Literal(U32(4)),
+                    Literal(U32(255)),
+                    Override(0),
+                    Literal(F32(17.0)),
+                    Binary(
+                        op: Multiply,
+                        left: 3,
+                        right: 4,
+                    ),
+                    Override(0),
+                    Literal(F32(19.0)),
+                    Binary(
+                        op: Multiply,
+                        left: 6,
+                        right: 7,
+                    ),
+                    Override(0),
+                    Literal(F32(23.0)),
+                    Binary(
+                        op: Multiply,
+                        left: 9,
+                        right: 10,
+                    ),
+                    Splat(
+                        size: Tri,
+                        value: 11,
+                    ),
+                    Override(0),
+                    Literal(F32(29.0)),
+                    Binary(
+                        op: Multiply,
+                        left: 13,
+                        right: 14,
+                    ),
+                    Override(0),
+                    Literal(F32(31.0)),
+                    Binary(
+                        op: Multiply,
+                        left: 16,
+                        right: 17,
+                    ),
+                    Override(0),
+                    Literal(F32(37.0)),
+                    Binary(
+                        op: Multiply,
+                        left: 19,
+                        right: 20,
+                    ),
+                    Compose(
+                        ty: 4,
+                        components: [
+                            15,
+                            18,
+                            21,
+                        ],
+                    ),
+                    Compose(
+                        ty: 5,
+                        components: [
+                            1,
+                            2,
+                            5,
+                            8,
+                            12,
+                            22,
+                        ],
+                    ),
+                    GlobalVariable(0),
+                    RayQueryProceedResult,
+                ],
+                named_expressions: {
+                    23: "desc",
+                },
+                body: [
+                    Emit((
+                        start: 5,
+                        end: 6,
+                    )),
+                    Emit((
+                        start: 8,
+                        end: 9,
+                    )),
+                    Emit((
+                        start: 11,
+                        end: 13,
+                    )),
+                    Emit((
+                        start: 15,
+                        end: 16,
+                    )),
+                    Emit((
+                        start: 18,
+                        end: 19,
+                    )),
+                    Emit((
+                        start: 21,
+                        end: 24,
+                    )),
+                    RayQuery(
+                        query: 0,
+                        fun: Initialize(
+                            acceleration_structure: 24,
+                            descriptor: 23,
+                        ),
+                    ),
+                    Loop(
+                        body: [
+                            RayQuery(
+                                query: 0,
+                                fun: Proceed(
+                                    result: 25,
+                                ),
+                            ),
+                            If(
+                                condition: 25,
+                                accept: [],
+                                reject: [
+                                    Break,
+                                ],
+                            ),
+                            Block([]),
+                        ],
+                        continuing: [],
+                        break_if: None,
+                    ),
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+            mesh_info: None,
+            task_payload: None,
+        ),
+    ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+    doc_comments: None,
+)

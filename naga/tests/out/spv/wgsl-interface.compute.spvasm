@@ -1,0 +1,83 @@
+; SPIR-V
+; Version: 1.0
+; Generator: rspirv
+; Bound: 53
+OpCapability Shader
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %29 "compute" %17 %20 %22 %25 %27
+OpExecutionMode %29 LocalSize 1 1 1
+OpMemberDecorate %5 0 Offset 0
+OpMemberDecorate %5 1 Offset 16
+OpMemberDecorate %7 0 Offset 0
+OpMemberDecorate %7 1 Offset 4
+OpMemberDecorate %7 2 Offset 8
+OpDecorate %9 ArrayStride 4
+OpMemberDecorate %12 0 Offset 0
+OpMemberDecorate %13 0 Offset 0
+OpDecorate %17 BuiltIn GlobalInvocationId
+OpDecorate %20 BuiltIn LocalInvocationId
+OpDecorate %22 BuiltIn LocalInvocationIndex
+OpDecorate %25 BuiltIn WorkgroupId
+OpDecorate %27 BuiltIn NumWorkgroups
+%2 = OpTypeVoid
+%3 = OpTypeFloat 32
+%4 = OpTypeVector %3 4
+%5 = OpTypeStruct %4 %3
+%6 = OpTypeInt 32 0
+%7 = OpTypeStruct %3 %6 %3
+%8 = OpTypeBool
+%10 = OpConstant  %6  1
+%9 = OpTypeArray %6 %10
+%11 = OpTypeVector %6 3
+%12 = OpTypeStruct %6
+%13 = OpTypeStruct %6
+%15 = OpTypePointer Workgroup %9
+%14 = OpVariable  %15  Workgroup
+%18 = OpTypePointer Input %11
+%17 = OpVariable  %18  Input
+%20 = OpVariable  %18  Input
+%23 = OpTypePointer Input %6
+%22 = OpVariable  %23  Input
+%25 = OpVariable  %18  Input
+%27 = OpVariable  %18  Input
+%30 = OpTypeFunction %2
+%32 = OpConstantNull  %9
+%33 = OpConstantNull  %11
+%34 = OpTypeVector %8 3
+%39 = OpConstant  %6  2
+%40 = OpConstant  %6  264
+%42 = OpTypePointer Workgroup %6
+%51 = OpConstant  %6  0
+%29 = OpFunction  %2  None %30
+%16 = OpLabel
+%19 = OpLoad  %11  %17
+%21 = OpLoad  %11  %20
+%24 = OpLoad  %6  %22
+%26 = OpLoad  %11  %25
+%28 = OpLoad  %11  %27
+OpBranch %31
+%31 = OpLabel
+%35 = OpIEqual  %34  %21 %33
+%36 = OpAll  %8  %35
+OpSelectionMerge %37 None
+OpBranchConditional %36 %38 %37
+%38 = OpLabel
+OpStore %14 %32
+OpBranch %37
+%37 = OpLabel
+OpControlBarrier %39 %39 %40
+OpBranch %41
+%41 = OpLabel
+%43 = OpCompositeExtract  %6  %19 0
+%44 = OpCompositeExtract  %6  %21 0
+%45 = OpIAdd  %6  %43 %44
+%46 = OpIAdd  %6  %45 %24
+%47 = OpCompositeExtract  %6  %26 0
+%48 = OpIAdd  %6  %46 %47
+%49 = OpCompositeExtract  %6  %28 0
+%50 = OpIAdd  %6  %48 %49
+%52 = OpAccessChain  %42  %14 %51
+OpStore %52 %50
+OpReturn
+OpFunctionEnd

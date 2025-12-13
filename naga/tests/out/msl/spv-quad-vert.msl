@@ -1,0 +1,60 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct type_3 {
+    float inner[1];
+};
+struct gl_PerVertex {
+    metal::float4 gl_Position;
+    float gl_PointSize;
+    type_3 gl_ClipDistance;
+    type_3 gl_CullDistance;
+    char _pad4[4];
+};
+struct VertexOutput {
+    metal::float2 member;
+    char _pad1[8];
+    metal::float4 gl_Position;
+};
+
+void main_1(
+    thread metal::float2& v_uv,
+    thread metal::float2& a_uv_1,
+    thread gl_PerVertex& unnamed,
+    thread metal::float2& a_pos_1
+) {
+    metal::float2 _e6 = a_uv_1;
+    v_uv = _e6;
+    metal::float2 _e7 = a_pos_1;
+    unnamed.gl_Position = metal::float4(_e7.x, _e7.y, 0.0, 1.0);
+    return;
+}
+
+struct main_Input {
+    metal::float2 a_uv [[attribute(1)]];
+    metal::float2 a_pos [[attribute(0)]];
+};
+struct main_Output {
+    metal::float2 member [[user(loc0), center_perspective]];
+    metal::float4 gl_Position [[position]];
+};
+vertex main_Output main_(
+  main_Input varyings [[stage_in]]
+) {
+    metal::float2 v_uv = {};
+    metal::float2 a_uv_1 = {};
+    gl_PerVertex unnamed = gl_PerVertex {metal::float4(0.0, 0.0, 0.0, 1.0), 1.0, type_3 {}, type_3 {}};
+    metal::float2 a_pos_1 = {};
+    const auto a_uv = varyings.a_uv;
+    const auto a_pos = varyings.a_pos;
+    a_uv_1 = a_uv;
+    a_pos_1 = a_pos;
+    main_1(v_uv, a_uv_1, unnamed, a_pos_1);
+    metal::float2 _e7 = v_uv;
+    metal::float4 _e8 = unnamed.gl_Position;
+    const auto _tmp = VertexOutput {_e7, {}, _e8};
+    return main_Output { _tmp.member, _tmp.gl_Position };
+}

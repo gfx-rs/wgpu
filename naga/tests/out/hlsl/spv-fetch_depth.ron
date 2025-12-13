@@ -1,0 +1,12 @@
+(
+    vertex:[
+    ],
+    fragment:[
+    ],
+    compute:[
+        (
+            entry_point:"cull_fetch_depth",
+            target_profile:"cs_5_1",
+        ),
+    ],
+)

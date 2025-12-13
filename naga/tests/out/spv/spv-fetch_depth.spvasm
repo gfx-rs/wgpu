@@ -1,0 +1,74 @@
+; SPIR-V
+; Version: 1.1
+; Generator: rspirv
+; Bound: 46
+OpCapability Shader
+OpExtension "SPV_KHR_storage_buffer_storage_class"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %40 "cull::fetch_depth"
+OpExecutionMode %40 LocalSize 32 1 1
+OpMemberDecorate %5 0 Offset 0
+OpMemberDecorate %8 0 Offset 0
+OpDecorate %11 DescriptorSet 0
+OpDecorate %11 Binding 0
+OpDecorate %12 Block
+OpMemberDecorate %12 0 Offset 0
+OpDecorate %14 NonWritable
+OpDecorate %14 DescriptorSet 0
+OpDecorate %14 Binding 1
+OpDecorate %15 Block
+OpMemberDecorate %15 0 Offset 0
+OpDecorate %17 DescriptorSet 0
+OpDecorate %17 Binding 2
+%2 = OpTypeVoid
+%3 = OpTypeFloat 32
+%4 = OpTypeInt 32 1
+%5 = OpTypeStruct %3
+%7 = OpTypeInt 32 0
+%6 = OpTypeVector %7 2
+%8 = OpTypeStruct %6
+%9 = OpTypeImage %3 2D 1 0 0 1 Unknown
+%10 = OpConstant  %4  0
+%12 = OpTypeStruct %5
+%13 = OpTypePointer StorageBuffer %12
+%11 = OpVariable  %13  StorageBuffer
+%15 = OpTypeStruct %8
+%16 = OpTypePointer StorageBuffer %15
+%14 = OpVariable  %16  StorageBuffer
+%18 = OpTypePointer UniformConstant %9
+%17 = OpVariable  %18  UniformConstant
+%21 = OpTypeFunction %2
+%22 = OpTypePointer StorageBuffer %5
+%23 = OpConstant  %7  0
+%25 = OpTypePointer StorageBuffer %8
+%29 = OpTypePointer StorageBuffer %3
+%30 = OpTypePointer StorageBuffer %6
+%33 = OpTypeVector %3 4
+%20 = OpFunction  %2  None %21
+%19 = OpLabel
+%24 = OpAccessChain  %22  %11 %23
+%26 = OpAccessChain  %25  %14 %23
+%27 = OpLoad  %9  %17
+OpBranch %28
+%28 = OpLabel
+%31 = OpAccessChain  %30  %26 %23
+%32 = OpLoad  %6  %31
+%34 = OpImageFetch  %33  %27 %32 Lod %10
+%35 = OpCompositeExtract  %3  %34 0
+%36 = OpCompositeConstruct  %33  %35 %35 %35 %35
+%37 = OpCompositeExtract  %3  %36 0
+%38 = OpAccessChain  %29  %24 %23
+OpStore %38 %37
+OpReturn
+OpFunctionEnd
+%40 = OpFunction  %2  None %21
+%39 = OpLabel
+%41 = OpAccessChain  %22  %11 %23
+%42 = OpAccessChain  %25  %14 %23
+%43 = OpLoad  %9  %17
+OpBranch %44
+%44 = OpLabel
+%45 = OpFunctionCall  %2  %20
+OpReturn
+OpFunctionEnd

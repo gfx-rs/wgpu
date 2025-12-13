@@ -1,0 +1,141 @@
+; SPIR-V
+; Version: 1.2
+; Generator: rspirv
+; Bound: 54
+OpCapability Shader
+OpExtension "SPV_KHR_storage_buffer_storage_class"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %47 "main"
+OpExecutionMode %47 LocalSize 1 1 1
+%3 = OpString "pointers.wgsl"
+OpSource Unknown 0 %3 "fn f() {
+   var v: mat2x2<f32>;
+   let px = &v[0];
+   *px = vec2<f32>(10.0);
+}
+
+struct DynamicArray {
+    arr: array<u32>
+}
+
+@group(0) @binding(0)
+var<storage, read_write> dynamic_array: DynamicArray;
+
+fn index_unsized(i: i32, v: u32) {
+   let p: ptr<storage, DynamicArray, read_write> = &dynamic_array;
+
+   let val = (*p).arr[i];
+   (*p).arr[i] = val + v;
+}
+
+fn index_dynamic_array(i: i32, v: u32) {
+   let p: ptr<storage, array<u32>, read_write> = &dynamic_array.arr;
+
+   let val = (*p)[i];
+   (*p)[i] = val + v;
+}
+
+@compute @workgroup_size(1)
+fn main() {
+    f();
+    index_unsized(1, 1);
+    index_dynamic_array(1, 1);
+}
+"
+OpMemberName %9 0 "arr"
+OpName %9 "DynamicArray"
+OpName %11 "dynamic_array"
+OpName %14 "f"
+OpName %18 "v"
+OpName %26 "i"
+OpName %27 "v"
+OpName %28 "index_unsized"
+OpName %38 "i"
+OpName %39 "v"
+OpName %40 "index_dynamic_array"
+OpName %47 "main"
+OpDecorate %8 ArrayStride 4
+OpMemberDecorate %9 0 Offset 0
+OpDecorate %9 Block
+OpDecorate %11 DescriptorSet 0
+OpDecorate %11 Binding 0
+%2 = OpTypeVoid
+%6 = OpTypeFloat 32
+%5 = OpTypeVector %6 2
+%4 = OpTypeMatrix %5 2
+%7 = OpTypeInt 32 0
+%8 = OpTypeRuntimeArray %7
+%9 = OpTypeStruct %8
+%10 = OpTypeInt 32 1
+%12 = OpTypePointer StorageBuffer %9
+%11 = OpVariable  %12  StorageBuffer
+%15 = OpTypeFunction %2
+%16 = OpConstant  %6  10
+%17 = OpConstantComposite  %5  %16 %16
+%19 = OpTypePointer Function %4
+%20 = OpConstantNull  %4
+%22 = OpTypePointer Function %5
+%23 = OpConstant  %7  0
+%29 = OpTypeFunction %2 %10 %7
+%31 = OpTypePointer StorageBuffer %8
+%32 = OpTypePointer StorageBuffer %7
+%48 = OpConstant  %10  1
+%49 = OpConstant  %7  1
+%14 = OpFunction  %2  None %15
+%13 = OpLabel
+%18 = OpVariable  %19  Function %20
+OpBranch %21
+%21 = OpLabel
+OpLine %3 3 14
+OpLine %3 4 10
+OpLine %3 4 4
+%24 = OpAccessChain  %22  %18 %23
+OpStore %24 %17
+OpReturn
+OpFunctionEnd
+%28 = OpFunction  %2  None %29
+%26 = OpFunctionParameter  %10
+%27 = OpFunctionParameter  %7
+%25 = OpLabel
+OpBranch %30
+%30 = OpLabel
+OpLine %3 17 14
+%33 = OpAccessChain  %32  %11 %23 %26
+%34 = OpLoad  %7  %33
+OpLine %3 18 4
+%35 = OpIAdd  %7  %34 %27
+OpLine %3 18 4
+%36 = OpAccessChain  %32  %11 %23 %26
+OpStore %36 %35
+OpReturn
+OpFunctionEnd
+%40 = OpFunction  %2  None %29
+%38 = OpFunctionParameter  %10
+%39 = OpFunctionParameter  %7
+%37 = OpLabel
+OpBranch %41
+%41 = OpLabel
+OpLine %3 22 51
+OpLine %3 24 14
+%42 = OpAccessChain  %32  %11 %23 %38
+%43 = OpLoad  %7  %42
+OpLine %3 25 4
+%44 = OpIAdd  %7  %43 %39
+OpLine %3 25 4
+%45 = OpAccessChain  %32  %11 %23 %38
+OpStore %45 %44
+OpReturn
+OpFunctionEnd
+%47 = OpFunction  %2  None %15
+%46 = OpLabel
+OpBranch %50
+%50 = OpLabel
+OpLine %3 30 5
+%51 = OpFunctionCall  %2  %14
+OpLine %3 31 5
+%52 = OpFunctionCall  %2  %28 %48 %49
+OpLine %3 32 5
+%53 = OpFunctionCall  %2  %40 %48 %49
+OpReturn
+OpFunctionEnd
