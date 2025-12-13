@@ -1028,6 +1028,12 @@ macro_rules! check_one_validation {
 ///
 /// NOTE: The only reason we don't use a function for this is because we need to syntactically
 /// re-use `$val_err_pat`.
+/// 
+/// The optional $other_caps argument at the end specifies capabilities that
+/// allow, the shader or would change the error message if enabled, but do not
+/// get enabled by the specified enable extension. This is only currently the
+/// case for `acceleration_structures` which are enabled by both ray queries
+/// and ray tracing pipelines. 
 macro_rules! check_extension_validation {
     ( $caps:expr, $source:expr, $parse_err:expr, $val_err_pat:pat $(, $other_caps:expr)? ) => {
         #[allow(unused_mut, unused_assignments)]
@@ -4535,49 +4541,22 @@ fn check_ray_tracing_pipeline_bindings() {
         ("world_to_object", "mat4x3<f32>"),
         ("hit_kind", "u32"),
     ] {
-        check_one_validation!(
-            &format!(
-                "@compute
-        @workgroup_size(1)
-        fn main(@builtin({builtin}) v: {ty}) {{}}
-        "
-            ),
-            Err(naga::valid::ValidationError::EntryPoint {
-                source: naga::valid::EntryPointError::Argument(
-                    0,
-                    naga::valid::VaryingError::InvalidBuiltInStage(_),
+        for stage in ["@compute @workgroup_size(1)", " @vertex", "@fragment"] {
+            check_one_validation!(
+                &format!(
+                    "{stage}
+            fn main(@builtin({builtin}) v: {ty}) {{}}
+            "
                 ),
-                ..
-            },)
-        );
-        check_one_validation!(
-            &format!(
-                "@vertex
-        fn main(@builtin({builtin}) v: {ty}) {{}}
-        "
-            ),
-            Err(naga::valid::ValidationError::EntryPoint {
-                source: naga::valid::EntryPointError::Argument(
-                    0,
-                    naga::valid::VaryingError::InvalidBuiltInStage(_),
-                ),
-                ..
-            },)
-        );
-        check_one_validation!(
-            &format!(
-                "@fragment
-        fn main(@builtin({builtin}) v: {ty}) {{}}
-        "
-            ),
-            Err(naga::valid::ValidationError::EntryPoint {
-                source: naga::valid::EntryPointError::Argument(
-                    0,
-                    naga::valid::VaryingError::InvalidBuiltInStage(_),
-                ),
-                ..
-            },)
-        );
+                Err(naga::valid::ValidationError::EntryPoint {
+                    source: naga::valid::EntryPointError::Argument(
+                        0,
+                        naga::valid::VaryingError::InvalidBuiltInStage(_),
+                    ),
+                    ..
+                },)
+            );
+        }
     }
 }
 
