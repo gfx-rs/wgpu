@@ -47,7 +47,7 @@
         CreatePipelineLayout(PointerId(0x10), (
             label: None,
             bind_group_layouts: [],
-            push_constant_ranges: [],
+            immediates_ranges: [],
         )),
         CreateGeneralRenderPipeline(
             id: PointerId(0x10),
@@ -96,7 +96,7 @@
                     ],
                     dynamic_offsets: [],
                     string_data: [],
-                    push_constant_data: [],
+                    immediates_data: [],
                 ),
                 color_attachments: [
                     Some((

@@ -537,6 +537,8 @@ impl Queue {
         let data_size = if let Some(data_size) = wgt::BufferSize::new(data_size) {
             data_size
         } else {
+            // This must happen after parameter validation (so that errors are reported
+            // as required by the spec), but before any side effects.
             log::trace!("Ignoring write_buffer of size 0");
             return Ok(());
         };
@@ -791,6 +793,8 @@ impl Queue {
 
         let dst_raw = dst.try_raw(&snatch_guard)?;
 
+        // This must happen after parameter validation (so that errors are reported
+        // as required by the spec), but before any side effects.
         if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
             log::trace!("Ignoring write_texture of size 0");
             return Ok(());
@@ -963,11 +967,6 @@ impl Queue {
 
         self.device.check_is_valid()?;
 
-        if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
-            log::trace!("Ignoring write_texture of size 0");
-            return Ok(());
-        }
-
         let mut needs_flag = false;
         needs_flag |= matches!(source.source, wgt::ExternalImageSource::OffscreenCanvas(_));
         needs_flag |= source.origin != wgt::Origin2d::ZERO;
@@ -1050,6 +1049,13 @@ impl Queue {
             validate_texture_copy_range(&destination, &dst.desc, CopySide::Destination, &size)?;
 
         let (selector, dst_base) = extract_texture_selector(&destination, &size, &dst)?;
+
+        // This must happen after parameter validation (so that errors are reported
+        // as required by the spec), but before any side effects.
+        if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
+            log::trace!("Ignoring copy_external_image_to_texture of size 0");
+            return Ok(());
+        }
 
         let mut pending_writes = self.pending_writes.lock();
         let encoder = pending_writes.activate();

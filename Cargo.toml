@@ -68,6 +68,7 @@ authors = ["gfx-rs developers"]
 naga = { version = "27.0.0", path = "./naga" }
 naga-test = { path = "./naga-test" }
 wgpu = { version = "27.0.0", path = "./wgpu", default-features = false, features = [
+    "std",
     "serde",
     "wgsl",
     "vulkan",
@@ -109,7 +110,6 @@ bytemuck = { version = "1.22", features = [
 cargo_metadata = "0.23"
 cfg_aliases = "0.2.1"
 cfg-if = "1"
-criterion = "0.7"
 codespan-reporting = { version = "0.12", default-features = false }
 ctor = "0.6"
 diff = "0.1"
@@ -175,7 +175,7 @@ rayon = "1.3"
 regex-lite = "0.1"
 renderdoc-sys = "1"
 rspirv = "0.12"
-ron = "0.11"
+ron = "0.12"
 # NOTE: rustc-hash v2 is a completely different hasher with different performance characteristics
 # see discussion here (including with some other alternatives): https://github.com/gfx-rs/wgpu/issues/6999
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
@@ -200,7 +200,7 @@ which = "8"
 xshell = "0.2.2"
 
 # Metal dependencies
-metal = "0.32"
+metal = { git = "https://github.com/gfx-rs/metal-rs.git", rev = "8ee6e61686e52ffede7d1d4925180eb520587447", version = "0.32.0" }
 block = "0.1.6"
 core-graphics-types = "0.2"
 objc = "0.2.5"
@@ -208,16 +208,17 @@ objc = "0.2.5"
 # Vulkan dependencies
 android_system_properties = "0.1.1"
 ash = "0.38"
-gpu-alloc = "0.6"
 gpu-descriptor = "0.3.2"
 
 # DX12 dependencies
-gpu-allocator = { version = "0.28", default-features = false, features = [
-    "hashbrown",
-] }
 range-alloc = "0.1"
 mach-dxcompiler-rs = { version = "0.1.4", default-features = false } # remember to increase max_shader_model if applicable
 windows-core = { version = "0.62", default-features = false }
+
+# DX12 and Vulkan dependencies
+gpu-allocator = { version = "0.28", default-features = false, features = [
+    "hashbrown",
+] }
 
 # Gles dependencies
 khronos-egl = "6"
@@ -250,7 +251,7 @@ deno_webgpu = { version = "0.181.0", path = "./deno_webgpu" }
 deno_unsync = "0.4.4"
 deno_error = "0.7.0"
 tokio = "1.47"
-termcolor = "1.1.3"
+termcolor = "1.4.1"
 
 # android dependencies
 ndk-sys = "0.6"

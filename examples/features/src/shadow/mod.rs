@@ -466,7 +466,7 @@ impl crate::framework::Example for Example {
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("shadow"),
                 bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
-                push_constant_ranges: &[],
+                immediates_ranges: &[],
             });
 
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -494,7 +494,7 @@ impl crate::framework::Example for Example {
                     module: &shader,
                     entry_point: Some("vs_bake"),
                     compilation_options: Default::default(),
-                    buffers: &[vb_desc.clone()],
+                    buffers: std::slice::from_ref(&vb_desc),
                 },
                 fragment: None,
                 primitive: wgpu::PrimitiveState {
@@ -582,7 +582,7 @@ impl crate::framework::Example for Example {
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("main"),
                 bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
-                push_constant_ranges: &[],
+                immediates_ranges: &[],
             });
 
             let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
@@ -854,6 +854,6 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
             wgpu::Backends::VULKAN,
             "V3D",
         )),
-    comparisons: &[wgpu_test::ComparisonType::Mean(0.02)],
+    comparisons: &[wgpu_test::ComparisonType::Mean(0.026)], // Bounded by Apple A9
     _phantom: std::marker::PhantomData::<Example>,
 };

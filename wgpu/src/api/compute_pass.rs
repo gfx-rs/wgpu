@@ -111,18 +111,18 @@ impl ComputePass<'_> {
     }
 }
 
-/// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
+/// [`Features::IMMEDIATES`] must be enabled on the device in order to call these functions.
 impl ComputePass<'_> {
-    /// Set push constant data for subsequent dispatch calls.
+    /// Set immediate data data for subsequent dispatch calls.
     ///
-    /// Write the bytes in `data` at offset `offset` within push constant
+    /// Write the bytes in `data` at offset `offset` within immediate data
     /// storage.  Both `offset` and the length of `data` must be
-    /// multiples of [`PUSH_CONSTANT_ALIGNMENT`], which is always 4.
+    /// multiples of [`IMMEDIATES_ALIGNMENT`], which is always 4.
     ///
     /// For example, if `offset` is `4` and `data` is eight bytes long, this
-    /// call will write `data` to bytes `4..12` of push constant storage.
-    pub fn set_push_constants(&mut self, offset: u32, data: &[u8]) {
-        self.inner.set_push_constants(offset, data);
+    /// call will write `data` to bytes `4..12` of immediate data storage.
+    pub fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        self.inner.set_immediates(offset, data);
     }
 }
 

@@ -81,8 +81,10 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     }
 
     let level = match message_severity {
-        vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::Level::Debug,
-        vk::DebugUtilsMessageSeverityFlagsEXT::INFO => log::Level::Info,
+        // We intentionally suppress info messages down to debug
+        // so that users are not innundated with info messages from the runtime.
+        vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::Level::Trace,
+        vk::DebugUtilsMessageSeverityFlagsEXT::INFO => log::Level::Debug,
         vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => log::Level::Warn,
         vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => log::Level::Error,
         _ => log::Level::Warn,
@@ -271,8 +273,7 @@ impl super::Instance {
             extensions.push(ext::acquire_drm_display::NAME);
             extensions.push(ext::direct_mode_display::NAME);
             extensions.push(khr::display::NAME);
-            //  VK_EXT_physical_device_drm -> VK_KHR_get_physical_device_properties2
-            extensions.push(ext::physical_device_drm::NAME);
+            extensions.push(khr::get_physical_device_properties2::NAME);
             extensions.push(khr::get_display_properties2::NAME);
         }
 
@@ -298,7 +299,7 @@ impl super::Instance {
             {
                 true
             } else {
-                log::warn!("Unable to find extension: {}", ext.to_string_lossy());
+                log::debug!("Unable to find extension: {}", ext.to_string_lossy());
                 false
             }
         });
@@ -334,7 +335,7 @@ impl super::Instance {
 
         let debug_utils = if let Some(debug_utils_create_info) = debug_utils_create_info {
             if extensions.contains(&ext::debug_utils::NAME) {
-                log::info!("Enabling debug utils");
+                log::debug!("Enabling debug utils");
 
                 let extension = ext::debug_utils::Instance::new(&entry, &raw_instance);
                 let vk_info = debug_utils_create_info.to_vk_create_info();
@@ -708,7 +709,7 @@ impl super::Instance {
                         });
                 }
             } else {
-                log::warn!(
+                log::debug!(
                     "InstanceFlags::VALIDATION requested, but unable to find layer: {}",
                     validation_layer_name.to_string_lossy()
                 );
@@ -965,7 +966,7 @@ impl crate::Instance for super::Instance {
                     }) {
                         if version < (21, 2) {
                             // See https://gitlab.freedesktop.org/mesa/mesa/-/issues/4688
-                            log::warn!(
+                            log::debug!(
                                 concat!(
                                     "Disabling presentation on '{}' (id {:?}) ",
                                     "due to NV Optimus and Intel Mesa < v21.2"

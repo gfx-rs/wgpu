@@ -1278,6 +1278,10 @@ impl super::Queue {
                 }
                 unsafe { gl.memory_barrier(flags) };
             }
+            // because `STORAGE_WRITE_ONLY` and `STORAGE_READ_WRITE` are only states
+            // we can transit from due OpenGL memory barriers are used to make _subsequent_
+            // operations see changes from the _shader_ side. We filter out usage changes that are
+            // does not comes from the shader side in `transition_textures`
             C::TextureBarrier(usage) => {
                 let mut flags = 0;
                 if usage.contains(wgt::TextureUses::RESOURCE) {
@@ -1289,6 +1293,9 @@ impl super::Queue {
                         | wgt::TextureUses::STORAGE_READ_WRITE,
                 ) {
                     flags |= glow::SHADER_IMAGE_ACCESS_BARRIER_BIT;
+                }
+                if usage.intersects(wgt::TextureUses::COPY_SRC) {
+                    flags |= glow::PIXEL_BUFFER_BARRIER_BIT;
                 }
                 if usage.contains(wgt::TextureUses::COPY_DST) {
                     flags |= glow::TEXTURE_UPDATE_BARRIER_BIT;
@@ -1651,7 +1658,7 @@ impl super::Queue {
                     }
                 };
             }
-            C::SetPushConstants {
+            C::SetImmediates {
                 ref uniform,
                 offset,
             } => {

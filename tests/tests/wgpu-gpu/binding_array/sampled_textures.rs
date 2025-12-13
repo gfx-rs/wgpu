@@ -17,6 +17,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
 static BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
+            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
             .features(
                 Features::TEXTURE_BINDING_ARRAY
                     | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
@@ -32,6 +33,7 @@ static BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestConfigurati
 static PARTIAL_BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
+            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
             .features(
                 Features::TEXTURE_BINDING_ARRAY
                     | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
@@ -179,7 +181,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
         .create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            immediates_ranges: &[],
         });
 
     let pipeline = ctx

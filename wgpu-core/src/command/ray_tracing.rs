@@ -340,7 +340,7 @@ pub(crate) fn build_acceleration_structures(
     } in &tlas_storage
     {
         if tlas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
-            log::info!("only rebuild implemented")
+            log::warn!("build_acceleration_structures called with PreferUpdate, but only rebuild is implemented");
         }
         tlas_descriptors.push(hal::BuildAccelerationStructureDescriptor {
             entries,
@@ -941,7 +941,7 @@ fn map_blas<'a>(
         scratch_buffer_offset,
     } = storage;
     if blas.update_mode == wgt::AccelerationStructureUpdateMode::PreferUpdate {
-        log::info!("only rebuild implemented")
+        log::debug!("only rebuild implemented")
     }
     let raw = blas.try_raw(snatch_guard)?;
 

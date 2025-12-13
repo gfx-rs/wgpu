@@ -49,6 +49,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
         cube::TEST,
         cube::TEST_LINES,
         hello_synchronization::tests::SYNC,
+        mesh_shader::TEST,
         mipmap::TEST,
         mipmap::TEST_QUERY,
         msaa_line::TEST,

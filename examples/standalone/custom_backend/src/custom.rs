@@ -251,11 +251,11 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
-    fn push_error_scope(&self, _filter: wgpu::ErrorFilter) {
+    fn push_error_scope(&self, _filter: wgpu::ErrorFilter) -> u32 {
         unimplemented!()
     }
 
-    fn pop_error_scope(&self) -> Pin<Box<dyn wgpu::custom::PopErrorScopeFuture>> {
+    fn pop_error_scope(&self, _index: u32) -> Pin<Box<dyn wgpu::custom::PopErrorScopeFuture>> {
         unimplemented!()
     }
 

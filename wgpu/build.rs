@@ -45,7 +45,7 @@ fn main() {
         // its own re-export of naga, which can be used in other situations
         naga: { any(feature = "naga-ir", feature = "spirv", feature = "glsl") },
         // ⚠️ Keep in sync with target.cfg() definition in wgpu-hal/Cargo.toml and cfg_alias in `wgpu-hal` crate ⚠️
-        static_dxc: { all(target_os = "windows", feature = "static-dxc", not(target_arch = "aarch64")) },
+        static_dxc: { all(target_os = "windows", feature = "static-dxc", not(target_arch = "aarch64"), target_env = "msvc") },
         supports_64bit_atomics: { target_has_atomic = "64" },
         custom: {any(feature = "custom")},
         std: { any(

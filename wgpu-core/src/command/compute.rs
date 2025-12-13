@@ -14,7 +14,7 @@ use crate::{
     resource::{RawResourceAccess, Trackable},
 };
 use crate::{
-    binding_model::{LateMinBufferBindingSizeMismatch, PushConstantUploadError},
+    binding_model::{ImmediateUploadError, LateMinBufferBindingSizeMismatch},
     command::{
         bind::{Binder, BinderError},
         compute_command::ArcComputeCommand,
@@ -177,13 +177,13 @@ pub enum ComputePassErrorInner {
     #[error(transparent)]
     Bind(#[from] BindError),
     #[error(transparent)]
-    PushConstants(#[from] PushConstantUploadError),
-    #[error("Push constant offset must be aligned to 4 bytes")]
-    PushConstantOffsetAlignment,
-    #[error("Push constant size must be aligned to 4 bytes")]
-    PushConstantSizeAlignment,
-    #[error("Ran out of push constant space. Don't set 4gb of push constants per ComputePass.")]
-    PushConstantOutOfMemory,
+    ImmediateData(#[from] ImmediateUploadError),
+    #[error("Immediate data offset must be aligned to 4 bytes")]
+    ImmediateOffsetAlignment,
+    #[error("Immediate data size must be aligned to 4 bytes")]
+    ImmediateDataizeAlignment,
+    #[error("Ran out of immediate data space. Don't set 4gb of immediates per ComputePass.")]
+    ImmediateOutOfMemory,
     #[error(transparent)]
     QueryUse(#[from] QueryUseError),
     #[error(transparent)]
@@ -241,7 +241,7 @@ impl WebGpuError for ComputePassError {
             ComputePassErrorInner::MissingBufferUsage(e) => e,
             ComputePassErrorInner::Dispatch(e) => e,
             ComputePassErrorInner::Bind(e) => e,
-            ComputePassErrorInner::PushConstants(e) => e,
+            ComputePassErrorInner::ImmediateData(e) => e,
             ComputePassErrorInner::QueryUse(e) => e,
             ComputePassErrorInner::MissingFeatures(e) => e,
             ComputePassErrorInner::MissingDownlevelFlags(e) => e,
@@ -253,9 +253,9 @@ impl WebGpuError for ComputePassError {
             | ComputePassErrorInner::BindGroupIndexOutOfRange { .. }
             | ComputePassErrorInner::UnalignedIndirectBufferOffset(_)
             | ComputePassErrorInner::IndirectBufferOverrun { .. }
-            | ComputePassErrorInner::PushConstantOffsetAlignment
-            | ComputePassErrorInner::PushConstantSizeAlignment
-            | ComputePassErrorInner::PushConstantOutOfMemory
+            | ComputePassErrorInner::ImmediateOffsetAlignment
+            | ComputePassErrorInner::ImmediateDataizeAlignment
+            | ComputePassErrorInner::ImmediateOutOfMemory
             | ComputePassErrorInner::PassEnded => return ErrorType::Validation,
         };
         e.webgpu_error_type()
@@ -269,7 +269,7 @@ struct State<'scope, 'snatch_guard, 'cmd_enc> {
 
     active_query: Option<(Arc<resource::QuerySet>, u32)>,
 
-    push_constants: Vec<u32>,
+    immediates: Vec<u32>,
 
     intermediate_trackers: Tracker,
 }
@@ -491,22 +491,21 @@ impl Global {
 
         let base = pass.base.take();
 
-        if matches!(
-            base,
-            Err(ComputePassError {
-                inner: ComputePassErrorInner::EncoderState(EncoderStateError::Ended),
-                scope: _,
-            })
-        ) {
-            // If the encoder was already finished at time of pass creation,
-            // then it was not put in the locked state, so we need to
-            // generate a validation error here and now due to the encoder not
-            // being locked. The encoder already holds an error from when the
-            // pass was opened, or earlier.
+        if let Err(ComputePassError {
+            inner:
+                ComputePassErrorInner::EncoderState(
+                    err @ (EncoderStateError::Locked | EncoderStateError::Ended),
+                ),
+            scope: _,
+        }) = base
+        {
+            // Most encoding errors are detected and raised within `finish()`.
             //
-            // All other errors are propagated to the encoder within `push_with`,
-            // and will be reported later.
-            return Err(EncoderStateError::Ended);
+            // However, we raise a validation error here if the pass was opened
+            // within another pass, or on a finished encoder. The latter is
+            // particularly important, because in that case reporting errors via
+            // `CommandEncoder::finish` is not possible.
+            return Err(err.clone());
         }
 
         cmd_buf_data.push_with(|| -> Result<_, ComputePassError> {
@@ -566,7 +565,7 @@ pub(super) fn encode_compute_pass(
         },
         active_query: None,
 
-        push_constants: Vec::new(),
+        immediates: Vec::new(),
 
         intermediate_trackers: Tracker::new(),
     };
@@ -660,23 +659,23 @@ pub(super) fn encode_compute_pass(
                 let scope = PassErrorScope::SetPipelineCompute;
                 set_pipeline(&mut state, device, pipeline).map_pass_err(scope)?;
             }
-            ArcComputeCommand::SetPushConstant {
+            ArcComputeCommand::SetImmediate {
                 offset,
                 size_bytes,
                 values_offset,
             } => {
-                let scope = PassErrorScope::SetPushConstant;
-                pass::set_push_constant::<ComputePassErrorInner, _>(
+                let scope = PassErrorScope::SetImmediate;
+                pass::set_immediates::<ComputePassErrorInner, _>(
                     &mut state.pass,
-                    &base.push_constant_data,
+                    &base.immediates_data,
                     wgt::ShaderStages::COMPUTE,
                     offset,
                     size_bytes,
                     Some(values_offset),
                     |data_slice| {
-                        let offset_in_elements = (offset / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
-                        let size_in_elements = (size_bytes / wgt::PUSH_CONSTANT_ALIGNMENT) as usize;
-                        state.push_constants[offset_in_elements..][..size_in_elements]
+                        let offset_in_elements = (offset / wgt::IMMEDIATES_ALIGNMENT) as usize;
+                        let size_in_elements = (size_bytes / wgt::IMMEDIATES_ALIGNMENT) as usize;
+                        state.immediates[offset_in_elements..][..size_in_elements]
                             .copy_from_slice(data_slice);
                     },
                 )
@@ -825,20 +824,20 @@ fn set_pipeline(
         &pipeline.layout,
         &pipeline.late_sized_buffer_groups,
         || {
-            // This only needs to be here for compute pipelines because they use push constants for
+            // This only needs to be here for compute pipelines because they use immediates for
             // validating indirect draws.
-            state.push_constants.clear();
-            // Note that can only be one range for each stage. See the `MoreThanOnePushConstantRangePerStage` error.
-            if let Some(push_constant_range) =
-                pipeline.layout.push_constant_ranges.iter().find_map(|pcr| {
+            state.immediates.clear();
+            // Note that can only be one range for each stage. See the `MoreThanOneImmediateRangePerStage` error.
+            if let Some(immediates_range) =
+                pipeline.layout.immediates_ranges.iter().find_map(|pcr| {
                     pcr.stages
                         .contains(wgt::ShaderStages::COMPUTE)
                         .then_some(pcr.range.clone())
                 })
             {
                 // Note that non-0 range start doesn't work anyway https://github.com/gfx-rs/wgpu/issues/4502
-                let len = push_constant_range.len() / wgt::PUSH_CONSTANT_ALIGNMENT as usize;
-                state.push_constants.extend(core::iter::repeat_n(0, len));
+                let len = immediates_range.len() / wgt::IMMEDIATES_ALIGNMENT as usize;
+                state.immediates.extend(core::iter::repeat_n(0, len));
             }
         },
     )
@@ -895,7 +894,6 @@ fn dispatch_indirect(
         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
 
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
-    buffer.check_destroyed(state.pass.base.snatch_guard)?;
 
     if offset % 4 != 0 {
         return Err(ComputePassErrorInner::UnalignedIndirectBufferOffset(offset));
@@ -909,6 +907,8 @@ fn dispatch_indirect(
             buffer_size: buffer.size,
         });
     }
+
+    buffer.check_destroyed(state.pass.base.snatch_guard)?;
 
     let stride = 3 * 4; // 3 integers, x/y/z group size
     state.pass.base.buffer_memory_init_actions.extend(
@@ -935,7 +935,7 @@ fn dispatch_indirect(
         }
 
         unsafe {
-            state.pass.base.raw_encoder.set_push_constants(
+            state.pass.base.raw_encoder.set_immediates(
                 params.pipeline_layout,
                 wgt::ShaderStages::COMPUTE,
                 0,
@@ -1011,13 +1011,13 @@ fn dispatch_indirect(
                     .set_compute_pipeline(pipeline.raw());
             }
 
-            if !state.push_constants.is_empty() {
+            if !state.immediates.is_empty() {
                 unsafe {
-                    state.pass.base.raw_encoder.set_push_constants(
+                    state.pass.base.raw_encoder.set_immediates(
                         pipeline.layout.raw(),
                         wgt::ShaderStages::COMPUTE,
                         0,
-                        &state.push_constants,
+                        &state.immediates,
                     );
                 }
             }
@@ -1111,9 +1111,7 @@ impl Global {
         }
 
         let mut bind_group = None;
-        if bind_group_id.is_some() {
-            let bind_group_id = bind_group_id.unwrap();
-
+        if let Some(bind_group_id) = bind_group_id {
             let hub = &self.hub;
             bind_group = Some(pass_try!(
                 base,
@@ -1156,45 +1154,45 @@ impl Global {
         Ok(())
     }
 
-    pub fn compute_pass_set_push_constants(
+    pub fn compute_pass_set_immediates(
         &self,
         pass: &mut ComputePass,
         offset: u32,
         data: &[u8],
     ) -> Result<(), PassStateError> {
-        let scope = PassErrorScope::SetPushConstant;
+        let scope = PassErrorScope::SetImmediate;
         let base = pass_base!(pass, scope);
 
-        if offset & (wgt::PUSH_CONSTANT_ALIGNMENT - 1) != 0 {
+        if offset & (wgt::IMMEDIATES_ALIGNMENT - 1) != 0 {
             pass_try!(
                 base,
                 scope,
-                Err(ComputePassErrorInner::PushConstantOffsetAlignment),
+                Err(ComputePassErrorInner::ImmediateOffsetAlignment),
             );
         }
 
-        if data.len() as u32 & (wgt::PUSH_CONSTANT_ALIGNMENT - 1) != 0 {
+        if data.len() as u32 & (wgt::IMMEDIATES_ALIGNMENT - 1) != 0 {
             pass_try!(
                 base,
                 scope,
-                Err(ComputePassErrorInner::PushConstantSizeAlignment),
+                Err(ComputePassErrorInner::ImmediateDataizeAlignment),
             )
         }
         let value_offset = pass_try!(
             base,
             scope,
-            base.push_constant_data
+            base.immediates_data
                 .len()
                 .try_into()
-                .map_err(|_| ComputePassErrorInner::PushConstantOutOfMemory)
+                .map_err(|_| ComputePassErrorInner::ImmediateOutOfMemory)
         );
 
-        base.push_constant_data.extend(
-            data.chunks_exact(wgt::PUSH_CONSTANT_ALIGNMENT as usize)
+        base.immediates_data.extend(
+            data.chunks_exact(wgt::IMMEDIATES_ALIGNMENT as usize)
                 .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
         );
 
-        base.commands.push(ArcComputeCommand::SetPushConstant {
+        base.commands.push(ArcComputeCommand::SetImmediate {
             offset,
             size_bytes: data.len() as u32,
             values_offset: value_offset,

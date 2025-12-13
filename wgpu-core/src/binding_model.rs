@@ -777,20 +777,20 @@ pub enum CreatePipelineLayoutError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(
-        "Push constant at index {index} has range bound {bound} not aligned to {}",
-        wgt::PUSH_CONSTANT_ALIGNMENT
+        "Immediate data at index {index} has range bound {bound} not aligned to {}",
+        wgt::IMMEDIATES_ALIGNMENT
     )]
-    MisalignedPushConstantRange { index: usize, bound: u32 },
+    MisalignedImmediateRange { index: usize, bound: u32 },
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
-    #[error("Push constant range (index {index}) provides for stage(s) {provided:?} but there exists another range that provides stage(s) {intersected:?}. Each stage may only be provided by one range")]
-    MoreThanOnePushConstantRangePerStage {
+    #[error("Immediate data range (index {index}) provides for stage(s) {provided:?} but there exists another range that provides stage(s) {intersected:?}. Each stage may only be provided by one range")]
+    MoreThanOneImmediateRangePerStage {
         index: usize,
         provided: wgt::ShaderStages,
         intersected: wgt::ShaderStages,
     },
-    #[error("Push constant at index {index} has range {}..{} which exceeds device push constant size limit 0..{max}", range.start, range.end)]
-    PushConstantRangeTooLarge {
+    #[error("Immediate data at index {index} has range {}..{} which exceeds device immediate data size limit 0..{max}", range.start, range.end)]
+    ImmediateRangeTooLarge {
         index: usize,
         range: Range<u32>,
         max: u32,
@@ -810,9 +810,9 @@ impl WebGpuError for CreatePipelineLayoutError {
             Self::MissingFeatures(e) => e,
             Self::InvalidResource(e) => e,
             Self::TooManyBindings(e) => e,
-            Self::MisalignedPushConstantRange { .. }
-            | Self::MoreThanOnePushConstantRangePerStage { .. }
-            | Self::PushConstantRangeTooLarge { .. }
+            Self::MisalignedImmediateRange { .. }
+            | Self::MoreThanOneImmediateRangePerStage { .. }
+            | Self::ImmediateRangeTooLarge { .. }
             | Self::TooManyGroups { .. } => return ErrorType::Validation,
         };
         e.webgpu_error_type()
@@ -821,36 +821,36 @@ impl WebGpuError for CreatePipelineLayoutError {
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
-pub enum PushConstantUploadError {
-    #[error("Provided push constant with indices {offset}..{end_offset} overruns matching push constant range at index {idx}, with stage(s) {:?} and indices {:?}", range.stages, range.range)]
+pub enum ImmediateUploadError {
+    #[error("Provided immediate data with indices {offset}..{end_offset} overruns matching immediate data range at index {idx}, with stage(s) {:?} and indices {:?}", range.stages, range.range)]
     TooLarge {
         offset: u32,
         end_offset: u32,
         idx: usize,
-        range: wgt::PushConstantRange,
+        range: wgt::ImmediateRange,
     },
-    #[error("Provided push constant is for stage(s) {actual:?}, stage with a partial match found at index {idx} with stage(s) {matched:?}, however push constants must be complete matches")]
+    #[error("Provided immediate data is for stage(s) {actual:?}, stage with a partial match found at index {idx} with stage(s) {matched:?}, however immediates must be complete matches")]
     PartialRangeMatch {
         actual: wgt::ShaderStages,
         idx: usize,
         matched: wgt::ShaderStages,
     },
-    #[error("Provided push constant is for stage(s) {actual:?}, but intersects a push constant range (at index {idx}) with stage(s) {missing:?}. Push constants must provide the stages for all ranges they intersect")]
+    #[error("Provided immediate data is for stage(s) {actual:?}, but intersects a immediate data range (at index {idx}) with stage(s) {missing:?}. Immediates must provide the stages for all ranges they intersect")]
     MissingStages {
         actual: wgt::ShaderStages,
         idx: usize,
         missing: wgt::ShaderStages,
     },
-    #[error("Provided push constant is for stage(s) {actual:?}, however the pipeline layout has no push constant range for the stage(s) {unmatched:?}")]
+    #[error("Provided immediate data is for stage(s) {actual:?}, however the pipeline layout has no immediate data range for the stage(s) {unmatched:?}")]
     UnmatchedStages {
         actual: wgt::ShaderStages,
         unmatched: wgt::ShaderStages,
     },
-    #[error("Provided push constant offset {0} does not respect `PUSH_CONSTANT_ALIGNMENT`")]
+    #[error("Provided immediate data offset {0} does not respect `IMMEDIATES_ALIGNMENT`")]
     Unaligned(u32),
 }
 
-impl WebGpuError for PushConstantUploadError {
+impl WebGpuError for ImmediateUploadError {
     fn webgpu_error_type(&self) -> ErrorType {
         ErrorType::Validation
     }
@@ -878,14 +878,14 @@ where
         serde(bound(deserialize = "<[BGL] as ToOwned>::Owned: Deserialize<'de>"))
     )]
     pub bind_group_layouts: Cow<'a, [BGL]>,
-    /// Set of push constant ranges this pipeline uses. Each shader stage that
-    /// uses push constants must define the range in push constant memory that
-    /// corresponds to its single `layout(push_constant)` uniform block.
+    /// Set of immediate data ranges this pipeline uses. Each shader stage that
+    /// uses immediates must define the range in immediate data memory that
+    /// corresponds to its single `layout(immediates)` uniform block.
     ///
     /// If this array is non-empty, the
-    /// [`Features::PUSH_CONSTANTS`](wgt::Features::PUSH_CONSTANTS) feature must
+    /// [`Features::IMMEDIATES`](wgt::Features::IMMEDIATES) feature must
     /// be enabled.
-    pub push_constant_ranges: Cow<'a, [wgt::PushConstantRange]>,
+    pub immediates_ranges: Cow<'a, [wgt::ImmediateRange]>,
 }
 
 /// cbindgen:ignore
@@ -899,7 +899,7 @@ pub struct PipelineLayout {
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) bind_group_layouts: ArrayVec<Arc<BindGroupLayout>, { hal::MAX_BIND_GROUPS }>,
-    pub(crate) push_constant_ranges: ArrayVec<wgt::PushConstantRange, { SHADER_STAGE_COUNT }>,
+    pub(crate) immediates_ranges: ArrayVec<wgt::ImmediateRange, { SHADER_STAGE_COUNT }>,
 }
 
 impl Drop for PipelineLayout {
@@ -925,46 +925,46 @@ impl PipelineLayout {
             .collect()
     }
 
-    /// Validate push constants match up with expected ranges.
-    pub(crate) fn validate_push_constant_ranges(
+    /// Validate immediates match up with expected ranges.
+    pub(crate) fn validate_immediates_ranges(
         &self,
         stages: wgt::ShaderStages,
         offset: u32,
         end_offset: u32,
-    ) -> Result<(), PushConstantUploadError> {
-        // Don't need to validate size against the push constant size limit here,
-        // as push constant ranges are already validated to be within bounds,
+    ) -> Result<(), ImmediateUploadError> {
+        // Don't need to validate size against the immediate data size limit here,
+        // as immediate data ranges are already validated to be within bounds,
         // and we validate that they are within the ranges.
 
-        if offset % wgt::PUSH_CONSTANT_ALIGNMENT != 0 {
-            return Err(PushConstantUploadError::Unaligned(offset));
+        if offset % wgt::IMMEDIATES_ALIGNMENT != 0 {
+            return Err(ImmediateUploadError::Unaligned(offset));
         }
 
-        // Push constant validation looks very complicated on the surface, but
+        // Immediate data validation looks very complicated on the surface, but
         // the problem can be range-reduced pretty well.
         //
-        // Push constants require (summarized from the vulkan spec):
+        // Immediates require (summarized from the vulkan spec):
         // 1. For each byte in the range and for each shader stage in stageFlags,
-        //    there must be a push constant range in the layout that includes that
+        //    there must be a immediate data range in the layout that includes that
         //    byte and that stage.
-        // 2. For each byte in the range and for each push constant range that overlaps that byte,
-        //    `stage` must include all stages in that push constant range’s `stage`.
+        // 2. For each byte in the range and for each immediate data range that overlaps that byte,
+        //    `stage` must include all stages in that immediate data range’s `stage`.
         //
         // However there are some additional constraints that help us:
-        // 3. All push constant ranges are the only range that can access that stage.
+        // 3. All immediate data ranges are the only range that can access that stage.
         //    i.e. if one range has VERTEX, no other range has VERTEX
         //
         // Therefore we can simplify the checks in the following ways:
-        // - Because 3 guarantees that the push constant range has a unique stage,
+        // - Because 3 guarantees that the immediate data range has a unique stage,
         //   when we check for 1, we can simply check that our entire updated range
-        //   is within a push constant range. i.e. our range for a specific stage cannot
-        //   intersect more than one push constant range.
+        //   is within a immediate data range. i.e. our range for a specific stage cannot
+        //   intersect more than one immediate data range.
         let mut used_stages = wgt::ShaderStages::NONE;
-        for (idx, range) in self.push_constant_ranges.iter().enumerate() {
+        for (idx, range) in self.immediates_ranges.iter().enumerate() {
             // contains not intersects due to 2
             if stages.contains(range.stages) {
                 if !(range.range.start <= offset && end_offset <= range.range.end) {
-                    return Err(PushConstantUploadError::TooLarge {
+                    return Err(ImmediateUploadError::TooLarge {
                         offset,
                         end_offset,
                         idx,
@@ -975,18 +975,18 @@ impl PipelineLayout {
             } else if stages.intersects(range.stages) {
                 // Will be caught by used stages check below, but we can do this because of 1
                 // and is more helpful to the user.
-                return Err(PushConstantUploadError::PartialRangeMatch {
+                return Err(ImmediateUploadError::PartialRangeMatch {
                     actual: stages,
                     idx,
                     matched: range.stages,
                 });
             }
 
-            // The push constant range intersects range we are uploading
+            // The immediate data range intersects range we are uploading
             if offset < range.range.end && range.range.start < end_offset {
                 // But requires stages we don't provide
                 if !stages.contains(range.stages) {
-                    return Err(PushConstantUploadError::MissingStages {
+                    return Err(ImmediateUploadError::MissingStages {
                         actual: stages,
                         idx,
                         missing: stages,
@@ -995,7 +995,7 @@ impl PipelineLayout {
             }
         }
         if used_stages != stages {
-            return Err(PushConstantUploadError::UnmatchedStages {
+            return Err(ImmediateUploadError::UnmatchedStages {
                 actual: stages,
                 unmatched: stages - used_stages,
             });

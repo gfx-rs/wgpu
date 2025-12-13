@@ -177,15 +177,15 @@ use crate::{back, ir, proc};
 ///
 /// The [`back::hlsl::Options`] structure provides `BindTarget`s for various
 /// situations in which Naga may need to generate an HLSL global variable, like
-/// [`binding_map`] for Naga global variables, or [`push_constants_target`] for
-/// a module's sole [`PushConstant`] variable. See those fields' documentation
+/// [`binding_map`] for Naga global variables, or [`immediates_target`] for
+/// a module's sole [`Immediate`] variable. See those fields' documentation
 /// for details.
 ///
 /// [`Storage`]: crate::ir::AddressSpace::Storage
 /// [`back::hlsl::Options`]: Options
 /// [`binding_map`]: Options::binding_map
-/// [`push_constants_target`]: Options::push_constants_target
-/// [`PushConstant`]: crate::ir::AddressSpace::PushConstant
+/// [`immediates_target`]: Options::immediates_target
+/// [`Immediate`]: crate::ir::AddressSpace::Immediate
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
@@ -498,16 +498,16 @@ pub struct Options {
     /// to make them work like in Vulkan/Metal, with help of the host.
     pub special_constants_binding: Option<BindTarget>,
 
-    /// HLSL binding information for the [`PushConstant`] global, if present.
+    /// HLSL binding information for the [`Immediate`] global, if present.
     ///
-    /// If a module contains a global in the [`PushConstant`] address space, the
+    /// If a module contains a global in the [`Immediate`] address space, the
     /// `dx12` backend stores its value directly in the root signature as a
     /// series of [`D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS`], whose binding
     /// information is given here.
     ///
-    /// [`PushConstant`]: crate::ir::AddressSpace::PushConstant
+    /// [`Immediate`]: crate::ir::AddressSpace::Immediate
     /// [`D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS`]: https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_root_parameter_type
-    pub push_constants_target: Option<BindTarget>,
+    pub immediates_target: Option<BindTarget>,
 
     /// HLSL binding information for the sampler heap and comparison sampler heap.
     pub sampler_heap_target: SamplerHeapBindTargets,
@@ -554,7 +554,7 @@ impl Default for Options {
             special_constants_binding: None,
             sampler_heap_target: SamplerHeapBindTargets::default(),
             sampler_buffer_binding_map: alloc::collections::BTreeMap::default(),
-            push_constants_target: None,
+            immediates_target: None,
             dynamic_storage_buffer_offsets_targets: alloc::collections::BTreeMap::new(),
             external_texture_binding_map: ExternalTextureBindingMap::default(),
             zero_initialize_workgroup_memory: true,

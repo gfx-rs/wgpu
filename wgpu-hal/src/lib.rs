@@ -381,6 +381,107 @@ pub enum DeviceError {
     Unexpected,
 }
 
+#[cfg(any(dx12, vulkan))]
+impl From<gpu_allocator::AllocationError> for DeviceError {
+    fn from(result: gpu_allocator::AllocationError) -> Self {
+        match result {
+            gpu_allocator::AllocationError::OutOfMemory => Self::OutOfMemory,
+            gpu_allocator::AllocationError::FailedToMap(e) => {
+                log::error!("gpu-allocator: Failed to map: {e}");
+                Self::Lost
+            }
+            gpu_allocator::AllocationError::NoCompatibleMemoryTypeFound => {
+                log::error!("gpu-allocator: No Compatible Memory Type Found");
+                Self::Lost
+            }
+            gpu_allocator::AllocationError::InvalidAllocationCreateDesc => {
+                log::error!("gpu-allocator: Invalid Allocation Creation Description");
+                Self::Lost
+            }
+            gpu_allocator::AllocationError::InvalidAllocatorCreateDesc(e) => {
+                log::error!("gpu-allocator: Invalid Allocator Creation Description: {e}");
+                Self::Lost
+            }
+
+            gpu_allocator::AllocationError::Internal(e) => {
+                log::error!("gpu-allocator: Internal Error: {e}");
+                Self::Lost
+            }
+            gpu_allocator::AllocationError::BarrierLayoutNeedsDevice10
+            | gpu_allocator::AllocationError::CastableFormatsRequiresEnhancedBarriers
+            | gpu_allocator::AllocationError::CastableFormatsRequiresAtLeastDevice12 => {
+                unreachable!()
+            }
+        }
+    }
+}
+
+// A copy of gpu_allocator::AllocationSizes, allowing to read the configured value for
+// the dx12 backend, we should instead add getters to gpu_allocator::AllocationSizes
+// and remove this type.
+// https://github.com/Traverse-Research/gpu-allocator/issues/295
+#[cfg_attr(not(any(dx12, vulkan)), expect(dead_code))]
+pub(crate) struct AllocationSizes {
+    pub(crate) min_device_memblock_size: u64,
+    pub(crate) max_device_memblock_size: u64,
+    pub(crate) min_host_memblock_size: u64,
+    pub(crate) max_host_memblock_size: u64,
+}
+
+impl AllocationSizes {
+    #[allow(dead_code)] // may be unused on some platforms
+    pub(crate) fn from_memory_hints(memory_hints: &wgt::MemoryHints) -> Self {
+        // TODO: the allocator's configuration should take hardware capability into
+        // account.
+        const MB: u64 = 1024 * 1024;
+
+        match memory_hints {
+            wgt::MemoryHints::Performance => Self {
+                min_device_memblock_size: 128 * MB,
+                max_device_memblock_size: 256 * MB,
+                min_host_memblock_size: 64 * MB,
+                max_host_memblock_size: 128 * MB,
+            },
+            wgt::MemoryHints::MemoryUsage => Self {
+                min_device_memblock_size: 8 * MB,
+                max_device_memblock_size: 64 * MB,
+                min_host_memblock_size: 4 * MB,
+                max_host_memblock_size: 32 * MB,
+            },
+            wgt::MemoryHints::Manual {
+                suballocated_device_memory_block_size,
+            } => {
+                // TODO: https://github.com/gfx-rs/wgpu/issues/8625
+                // Would it be useful to expose the host size in memory hints
+                // instead of always using half of the device size?
+                let device_size = suballocated_device_memory_block_size;
+                let host_size = device_size.start / 2..device_size.end / 2;
+
+                // gpu_allocator clamps the sizes between 4MiB and 256MiB, but we clamp them ourselves since we use
+                // the sizes when detecting high memory pressure and there is no way to query the values otherwise.
+                Self {
+                    min_device_memblock_size: device_size.start.clamp(4 * MB, 256 * MB),
+                    max_device_memblock_size: device_size.end.clamp(4 * MB, 256 * MB),
+                    min_host_memblock_size: host_size.start.clamp(4 * MB, 256 * MB),
+                    max_host_memblock_size: host_size.end.clamp(4 * MB, 256 * MB),
+                }
+            }
+        }
+    }
+}
+
+#[cfg(any(dx12, vulkan))]
+impl From<AllocationSizes> for gpu_allocator::AllocationSizes {
+    fn from(value: AllocationSizes) -> gpu_allocator::AllocationSizes {
+        gpu_allocator::AllocationSizes::new(
+            value.min_device_memblock_size,
+            value.min_host_memblock_size,
+        )
+        .with_max_device_memblock_size(value.max_device_memblock_size)
+        .with_max_host_memblock_size(value.max_host_memblock_size)
+    }
+}
+
 #[allow(dead_code)] // may be unused on some platforms
 #[cold]
 fn hal_usage_error<T: fmt::Display>(txt: T) -> ! {
@@ -1366,15 +1467,15 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         dynamic_offsets: &[wgt::DynamicOffset],
     );
 
-    /// Sets a range in push constant data.
+    /// Sets a range in immediate data data.
     ///
     /// IMPORTANT: while the data is passed as words, the offset is in bytes!
     ///
     /// # Safety
     ///
     /// - `offset_bytes` must be a multiple of 4.
-    /// - The range of push constants written must be valid for the pipeline layout at draw time.
-    unsafe fn set_push_constants(
+    /// - The range of immediates written must be valid for the pipeline layout at draw time.
+    unsafe fn set_immediates(
         &mut self,
         layout: &<Self::A as Api>::PipelineLayout,
         stages: wgt::ShaderStages,
@@ -1414,7 +1515,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// This clears any bindings established by the following calls:
     ///
     /// - [`set_bind_group`](CommandEncoder::set_bind_group)
-    /// - [`set_push_constants`](CommandEncoder::set_push_constants)
+    /// - [`set_immediates`](CommandEncoder::set_immediates)
     /// - [`begin_query`](CommandEncoder::begin_query)
     /// - [`set_render_pipeline`](CommandEncoder::set_render_pipeline)
     /// - [`set_index_buffer`](CommandEncoder::set_index_buffer)
@@ -1536,7 +1637,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     /// This clears any bindings established by the following calls:
     ///
     /// - [`set_bind_group`](CommandEncoder::set_bind_group)
-    /// - [`set_push_constants`](CommandEncoder::set_push_constants)
+    /// - [`set_immediates`](CommandEncoder::set_immediates)
     /// - [`begin_query`](CommandEncoder::begin_query)
     /// - [`set_compute_pipeline`](CommandEncoder::set_compute_pipeline)
     ///
@@ -1615,9 +1716,9 @@ bitflags!(
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct PipelineLayoutFlags: u32 {
         /// D3D12: Add support for `first_vertex` and `first_instance` builtins
-        /// via push constants for direct execution.
+        /// via immediates for direct execution.
         const FIRST_VERTEX_INSTANCE = 1 << 0;
-        /// D3D12: Add support for `num_workgroups` builtins via push constants
+        /// D3D12: Add support for `num_workgroups` builtins via immediates
         /// for direct execution.
         const NUM_WORK_GROUPS = 1 << 1;
         /// D3D12: Add support for the builtins that the other flags enable for
@@ -1751,13 +1852,22 @@ bitflags!(
     }
 );
 
-//TODO: it's not intuitive for the backends to consider `LOAD` being optional.
-
 bitflags!(
+    /// Attachment load and store operations.
+    ///
+    /// There must be at least one flag from the LOAD group and one from the STORE group set.
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
     pub struct AttachmentOps: u8 {
+        /// Load the existing contents of the attachment.
         const LOAD = 1 << 0;
-        const STORE = 1 << 1;
+        /// Clear the attachment to a specified value.
+        const LOAD_CLEAR = 1 << 1;
+        /// The contents of the attachment are undefined.
+        const LOAD_DONT_CARE = 1 << 2;
+        /// Store the contents of the attachment.
+        const STORE = 1 << 3;
+        /// The contents of the attachment are undefined after the pass.
+        const STORE_DISCARD = 1 << 4;
     }
 );
 
@@ -1974,7 +2084,7 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
     pub label: Label<'a>,
     pub flags: PipelineLayoutFlags,
     pub bind_group_layouts: &'a [&'a B],
-    pub push_constant_ranges: &'a [wgt::PushConstantRange],
+    pub immediates_ranges: &'a [wgt::ImmediateRange],
 }
 
 /// A region of a buffer made visible to shaders via a [`BindGroup`].
