@@ -1028,12 +1028,12 @@ macro_rules! check_one_validation {
 ///
 /// NOTE: The only reason we don't use a function for this is because we need to syntactically
 /// re-use `$val_err_pat`.
-/// 
+///
 /// The optional $other_caps argument at the end specifies capabilities that
 /// allow, the shader or would change the error message if enabled, but do not
 /// get enabled by the specified enable extension. This is only currently the
 /// case for `acceleration_structures` which are enabled by both ray queries
-/// and ray tracing pipelines. 
+/// and ray tracing pipelines.
 macro_rules! check_extension_validation {
     ( $caps:expr, $source:expr, $parse_err:expr, $val_err_pat:pat $(, $other_caps:expr)? ) => {
         #[allow(unused_mut, unused_assignments)]
