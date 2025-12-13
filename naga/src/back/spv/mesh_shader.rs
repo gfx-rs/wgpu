@@ -22,10 +22,10 @@ struct PerOutputTypeMeshReturnInfo {
     array_type_id: Word,
     struct_members: Vec<MeshReturnMember>,
 
-    // * In vulkan, all builtins must be in the same block.
+    // * Most builtins must be in the same block.
     // * All bindings must be in their own unique block.
-    // * Also, the primitive indices builtin family needs its own block.
-    // * Also also, cull primitive doesn't care about having its own block, but
+    // * The primitive indices builtin family needs its own block.
+    // * Cull primitive doesn't care about having its own block, but
     //   some older validation layers didn't respect this.
     builtin_block: Option<Word>,
     bindings: Vec<Word>,
