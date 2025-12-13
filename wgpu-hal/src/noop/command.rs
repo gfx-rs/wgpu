@@ -162,7 +162,7 @@ impl crate::CommandEncoder for CommandBuffer {
         dynamic_offsets: &[wgt::DynamicOffset],
     ) {
     }
-    unsafe fn set_push_constants(
+    unsafe fn set_immediates(
         &mut self,
         layout: &Resource,
         stages: wgt::ShaderStages,

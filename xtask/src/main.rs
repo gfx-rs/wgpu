@@ -28,6 +28,8 @@ Commands:
     --llvm-cov              Run with LLVM code coverage
     --backend <backend>     Specify the backend (metal, dx12, or vulkan). Used
                             to evaluate `fails-if` conditions in the test list.
+    --filter <regex>        Filter tests by selector using a regex pattern.
+                            Applied after all tests are collected.
 
   run-wasm
     Build and run web examples
@@ -52,6 +54,8 @@ Commands:
         `<from_branch>` is used to determine the base of the diff to be performed. The base is set to fork point between `<to_commit>` and this branch.
 
         `<to_commit>` is the tip of the `git diff` that will be used for checking (1).
+
+    --allow-released-changes  Only reports issues as warnings, rather than reporting errors and forcing a non-zero exit code.
 
   miri
     Run all miri-compatible tests under miri. Requires a nightly toolchain

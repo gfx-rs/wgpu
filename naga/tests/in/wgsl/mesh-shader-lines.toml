@@ -1,2 +1,2 @@
-god_mode = true
+capabilities = "MESH_SHADER"
 targets = "IR | ANALYSIS"

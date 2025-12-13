@@ -439,7 +439,7 @@ impl<W> Writer<'_, W> {
             }
         }
 
-        let mut push_constant_used = false;
+        let mut immediates_used = false;
 
         for (handle, global) in self.module.global_variables.iter() {
             if ep_info[handle].is_empty() {
@@ -448,11 +448,11 @@ impl<W> Writer<'_, W> {
             match global.space {
                 AddressSpace::WorkGroup => self.features.request(Features::COMPUTE_SHADER),
                 AddressSpace::Storage { .. } => self.features.request(Features::BUFFER_STORAGE),
-                AddressSpace::PushConstant => {
-                    if push_constant_used {
-                        return Err(Error::MultiplePushConstants);
+                AddressSpace::Immediate => {
+                    if immediates_used {
+                        return Err(Error::MultipleImmediateData);
                     }
-                    push_constant_used = true;
+                    immediates_used = true;
                 }
                 _ => {}
             }

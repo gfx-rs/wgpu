@@ -1325,22 +1325,22 @@ fn float16_capability_and_enable() {
 }
 
 #[test]
-fn float16_in_push_constant() {
+fn float16_in_immediate() {
     check_validation! {
-        "enable f16; var<push_constant> input: f16;",
-        "enable f16; var<push_constant> input: vec2<f16>;",
-        "enable f16; var<push_constant> input: mat4x4<f16>;",
-        "enable f16; struct S { a: f16 }; var<push_constant> input: S;",
-        "enable f16; struct S1 { a: f16 }; struct S2 { a : S1 } var<push_constant> input: S2;":
+        "enable f16; var<immediate> input: f16;",
+        "enable f16; var<immediate> input: vec2<f16>;",
+        "enable f16; var<immediate> input: mat4x4<f16>;",
+        "enable f16; struct S { a: f16 }; var<immediate> input: S;",
+        "enable f16; struct S1 { a: f16 }; struct S2 { a : S1 } var<immediate> input: S2;":
         Err(naga::valid::ValidationError::GlobalVariable {
-            source: naga::valid::GlobalVariableError::InvalidPushConstantType(
-                naga::valid::PushConstantError::InvalidScalar(
+            source: naga::valid::GlobalVariableError::InvalidImmediateType(
+                naga::valid::ImmediateError::InvalidScalar(
                     naga::Scalar::F16
                 )
             ),
             ..
         }),
-        naga::valid::Capabilities::SHADER_FLOAT16 | naga::valid::Capabilities::PUSH_CONSTANT
+        naga::valid::Capabilities::SHADER_FLOAT16 | naga::valid::Capabilities::IMMEDIATES
     }
 }
 
@@ -3093,6 +3093,19 @@ fn binding_array_non_struct() {
             ..
         })
     }
+
+    check_validation! {
+        r#"
+            enable wgpu_ray_query;
+            @group(0) @binding(0)
+            var<storage> ray_query_array: binding_array<ray_query, 10>;
+        "#:
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::BindingArrayBaseTypeNotStruct(_),
+            ..
+        }),
+        Capabilities::RAY_QUERY
+    }
 }
 
 #[test]
@@ -4090,7 +4103,7 @@ fn invalid_clip_distances() {
         Err(naga::valid::ValidationError::EntryPoint {
             stage: naga::ShaderStage::Vertex,
             source: naga::valid::EntryPointError::Result(
-                naga::valid::VaryingError::InvalidBuiltInType(naga::ir::BuiltIn::ClipDistance)
+                naga::valid::VaryingError::InvalidBuiltInType(naga::ir::BuiltIn::ClipDistance, _)
             ),
             ..
         }),
@@ -4282,4 +4295,197 @@ fn source_with_control_char() {
 
 ",
     );
+}
+
+#[test]
+fn ray_query_enable_extension() {
+    check_extension_validation!(
+        Capabilities::RAY_QUERY,
+        r#"fn foo() {
+            var a: ray_query;
+        }
+        "#,
+        r#"error: the `wgpu_ray_query` enable extension is not enabled
+  ┌─ wgsl:2:20
+  │
+2 │             var a: ray_query;
+  │                    ^^^^^^^^^ the `wgpu_ray_query` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_query;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::MissingCapability(Capabilities::RAY_QUERY),
+            ..
+        })
+    );
+
+    check_extension_validation!(
+        Capabilities::RAY_QUERY,
+        r#"@group(0) @binding(0)
+        var acc_struct: acceleration_structure;
+        "#,
+        r#"error: the `wgpu_ray_query` enable extension is not enabled
+  ┌─ wgsl:2:25
+  │
+2 │         var acc_struct: acceleration_structure;
+  │                         ^^^^^^^^^^^^^^^^^^^^^^ the `wgpu_ray_query` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_query;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::MissingCapability(Capabilities::RAY_QUERY),
+            ..
+        })
+    );
+}
+
+#[test]
+fn ray_query_vertex_return_enable_extension() {
+    check_extension_validation!(
+        Capabilities::RAY_HIT_VERTEX_POSITION,
+        r#"enable wgpu_ray_query;
+
+        fn foo() {
+            var a: ray_query<vertex_return>;
+        }
+        "#,
+        r#"error: the `wgpu_ray_query_vertex_return` enable extension is not enabled
+  ┌─ wgsl:4:20
+  │
+4 │             var a: ray_query<vertex_return>;
+  │                    ^^^^^^^^^ the `wgpu_ray_query_vertex_return` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_query_vertex_return;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::MissingCapability(
+                Capabilities::RAY_HIT_VERTEX_POSITION
+            ),
+            ..
+        })
+    );
+
+    check_extension_validation!(
+        Capabilities::RAY_HIT_VERTEX_POSITION,
+        r#"enable wgpu_ray_query;
+
+        @group(0) @binding(0)
+        var acc_struct: acceleration_structure<vertex_return>;
+        "#,
+        r#"error: the `wgpu_ray_query_vertex_return` enable extension is not enabled
+  ┌─ wgsl:4:25
+  │
+4 │         var acc_struct: acceleration_structure<vertex_return>;
+  │                         ^^^^^^^^^^^^^^^^^^^^^^ the `wgpu_ray_query_vertex_return` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_query_vertex_return;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::MissingCapability(
+                Capabilities::RAY_HIT_VERTEX_POSITION
+            ),
+            ..
+        })
+    );
+}
+
+#[test]
+fn binding_array_requires_capability() {
+    check_validation! {
+        r#"
+            struct Buffer { data: u32 }
+            @group(0) @binding(0)
+            var<storage> storage_array: binding_array<Buffer, 10>;
+        "#:
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::STORAGE_BUFFER_BINDING_ARRAY
+            ),
+            ..
+        })
+    }
+
+    check_validation! {
+        r#"
+            struct Buffer { data: u32 }
+            @group(0) @binding(0)
+            var<uniform> uniform_array: binding_array<Buffer, 10>;
+        "#:
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::BUFFER_BINDING_ARRAY
+            ),
+            ..
+        })
+    }
+
+    check_validation! {
+        r#"
+            @group(0) @binding(0)
+            var storage_texture_array: binding_array<texture_storage_2d<rgba8unorm, write>, 10>;
+        "#:
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::STORAGE_TEXTURE_BINDING_ARRAY
+            ),
+            ..
+        })
+    }
+
+    check_validation! {
+        r#"
+            @group(0) @binding(0)
+            var sampled_texture_array: binding_array<texture_2d<f32>, 10>;
+        "#:
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+            ),
+            ..
+        })
+    }
+
+    check_validation! {
+        r#"
+            @group(0) @binding(0)
+            var sampler_array: binding_array<sampler, 10>;
+        "#:
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+            ),
+            ..
+        })
+    }
+
+    // Binding arrays of external textures are not yet supported.
+    check_validation! {
+        r#"
+            @group(0) @binding(0)
+            var external_texture_array: binding_array<texture_external, 10>;
+        "#:
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::BindingArrayBaseExternalTextures,
+            ..
+        }),
+        Capabilities::TEXTURE_EXTERNAL
+    }
+
+    // Acceleration structures are not allowed in binding arrays
+    check_validation! {
+        r#"
+            enable wgpu_ray_query;
+            @group(0) @binding(0)
+            var acc_struct_array: binding_array<acceleration_structure, 10>;
+        "#:
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::InvalidBindingArray(_),
+            ..
+        }),
+        Capabilities::all()
+    }
 }

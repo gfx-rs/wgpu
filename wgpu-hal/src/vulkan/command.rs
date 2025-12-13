@@ -813,10 +813,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 });
                 let color = super::ColorAttachmentKey {
                     base: cat.target.make_attachment_key(cat.ops),
-                    resolve: cat
-                        .resolve_target
-                        .as_ref()
-                        .map(|target| target.make_attachment_key(crate::AttachmentOps::STORE)),
+                    resolve: cat.resolve_target.as_ref().map(|target| {
+                        target.make_attachment_key(
+                            crate::AttachmentOps::LOAD_CLEAR | crate::AttachmentOps::STORE,
+                        )
+                    }),
                 };
 
                 rp_key.colors.push(Some(color));
@@ -939,7 +940,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             )
         };
     }
-    unsafe fn set_push_constants(
+    unsafe fn set_immediates(
         &mut self,
         layout: &super::PipelineLayout,
         stages: wgt::ShaderStages,

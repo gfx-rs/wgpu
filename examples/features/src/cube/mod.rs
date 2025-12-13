@@ -158,7 +158,7 @@ impl crate::framework::Example for Example {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            immediates_ranges: &[],
         });
 
         // Create the texture
@@ -391,7 +391,7 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
     optional_features: wgpu::Features::default(),
     base_test_parameters: wgpu_test::TestParameters::default(),
     comparisons: &[
-        wgpu_test::ComparisonType::Mean(0.04), // Bounded by Intel 630 on Vk/Windows
+        wgpu_test::ComparisonType::Mean(0.041), // Bounded by Apple A9
     ],
     _phantom: std::marker::PhantomData::<Example>,
 };

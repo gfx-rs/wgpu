@@ -40,6 +40,11 @@ fn bool_cast(x: vec3<f32>) -> vec3<f32> {
     return vec3<f32>(y);
 }
 
+fn p() -> bool { return true; }
+fn q() -> bool { return false; }
+fn r() -> bool { return true; }
+fn s() -> bool { return false; }
+
 fn logical() {
     let t = true;
     let f = false;
@@ -55,6 +60,7 @@ fn logical() {
     let bitwise_or1 = vec3(t) | vec3(f);
     let bitwise_and0 = t & f;
     let bitwise_and1 = vec4(t) & vec4(f);
+    let short_circuit = (p() || q()) && (r() || s());
 }
 
 fn arithmetic() {

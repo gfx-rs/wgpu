@@ -48,16 +48,74 @@ float3 bool_cast(float3 x)
     return float3(y);
 }
 
+bool p()
+{
+    return true;
+}
+
+bool q()
+{
+    return false;
+}
+
+bool r()
+{
+    return true;
+}
+
+bool s()
+{
+    return false;
+}
+
 void logical()
 {
+    bool local = (bool)0;
+    bool local_1 = (bool)0;
+    bool local_2 = (bool)0;
+    bool local_3 = (bool)0;
+    bool local_4 = (bool)0;
+
     bool neg0_ = !(true);
     bool2 neg1_ = !((true).xx);
-    bool or_ = (true || false);
-    bool and_ = (true && false);
+    if (!(true)) {
+        local = false;
+    } else {
+        local = true;
+    }
+    bool or_ = local;
+    if (true) {
+        local_1 = false;
+    } else {
+        local_1 = false;
+    }
+    bool and_ = local_1;
     bool bitwise_or0_ = (true | false);
     bool3 bitwise_or1_ = ((true).xxx | (false).xxx);
     bool bitwise_and0_ = (true & false);
     bool4 bitwise_and1_ = ((true).xxxx & (false).xxxx);
+    const bool _e22 = p();
+    if (!(_e22)) {
+        const bool _e26 = q();
+        local_2 = _e26;
+    } else {
+        local_2 = true;
+    }
+    bool _e28 = local_2;
+    if (_e28) {
+        const bool _e31 = r();
+        if (!(_e31)) {
+            const bool _e35 = s();
+            local_4 = _e35;
+        } else {
+            local_4 = true;
+        }
+        bool _e37 = local_4;
+        local_3 = _e37;
+    } else {
+        local_3 = false;
+    }
+    bool short_circuit = local_3;
     return;
 }
 

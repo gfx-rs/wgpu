@@ -31,7 +31,7 @@ pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
 pub use function::{CallError, FunctionError, LocalVariableError, SubgroupError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
-pub use r#type::{Disalignment, PushConstantError, TypeError, TypeFlags, WidthError};
+pub use r#type::{Disalignment, ImmediateError, TypeError, TypeFlags, WidthError};
 
 use self::handles::InvalidHandleError;
 
@@ -83,25 +83,25 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub struct Capabilities: u32 {
-        /// Support for [`AddressSpace::PushConstant`][1].
+    pub struct Capabilities: u64 {
+        /// Support for [`AddressSpace::Immediate`][1].
         ///
-        /// [1]: crate::AddressSpace::PushConstant
-        const PUSH_CONSTANT = 1 << 0;
+        /// [1]: crate::AddressSpace::Immediate
+        const IMMEDIATES = 1 << 0;
         /// Float values with width = 8.
         const FLOAT64 = 1 << 1;
         /// Support for [`BuiltIn::PrimitiveIndex`][1].
         ///
         /// [1]: crate::BuiltIn::PrimitiveIndex
         const PRIMITIVE_INDEX = 1 << 2;
-        /// Support for non-uniform indexing of sampled textures and storage buffer arrays.
-        const SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 1 << 3;
-        /// Support for non-uniform indexing of storage texture arrays.
-        const STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 1 << 4;
-        /// Support for non-uniform indexing of uniform buffer arrays.
-        const UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING = 1 << 5;
-        /// Support for non-uniform indexing of samplers.
-        const SAMPLER_NON_UNIFORM_INDEXING = 1 << 6;
+        /// Support for binding arrays of sampled textures and samplers.
+        const TEXTURE_AND_SAMPLER_BINDING_ARRAY = 1 << 3;
+        /// Support for binding arrays of uniform buffers.
+        const BUFFER_BINDING_ARRAY = 1 << 4;
+        /// Support for binding arrays of storage textures.
+        const STORAGE_TEXTURE_BINDING_ARRAY = 1 << 5;
+        /// Support for binding arrays of storage buffers.
+        const STORAGE_BUFFER_BINDING_ARRAY = 1 << 6;
         /// Support for [`BuiltIn::ClipDistance`].
         ///
         /// [`BuiltIn::ClipDistance`]: crate::BuiltIn::ClipDistance
@@ -191,7 +191,15 @@ bitflags::bitflags! {
         /// Support for task shaders, mesh shaders, and per-primitive fragment inputs
         const MESH_SHADER = 1 << 30;
         /// Support for mesh shaders which output points.
-        const MESH_SHADER_POINT_TOPOLOGY = 1 << 30;
+        const MESH_SHADER_POINT_TOPOLOGY = 1 << 31;
+        /// Support for non-uniform indexing of binding arrays of sampled textures and samplers.
+        const TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 32;
+        /// Support for non-uniform indexing of binding arrays of uniform buffers.
+        const BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 33;
+        /// Support for non-uniform indexing of binding arrays of storage textures.
+        const STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 34;
+        /// Support for non-uniform indexing of binding arrays of storage buffers.
+        const STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 35;
     }
 }
 
@@ -208,6 +216,8 @@ impl Capabilities {
             // NOTE: `SHADER_FLOAT16_IN_FLOAT32` _does not_ require the `f16` extension
             Self::SHADER_FLOAT16 => Some(Ext::F16),
             Self::CLIP_DISTANCE => Some(Ext::ClipDistances),
+            Self::RAY_QUERY => Some(Ext::WgpuRayQuery),
+            Self::RAY_HIT_VERTEX_POSITION => Some(Ext::WgpuRayQueryVertexReturn),
             _ => None,
         }
     }
@@ -561,11 +571,13 @@ impl Validator {
         }
     }
 
+    // TODO(https://github.com/gfx-rs/wgpu/issues/8207): Consider removing this
     pub fn subgroup_stages(&mut self, stages: ShaderStages) -> &mut Self {
         self.subgroup_stages = stages;
         self
     }
 
+    // TODO(https://github.com/gfx-rs/wgpu/issues/8207): Consider removing this
     pub fn subgroup_operations(&mut self, operations: SubgroupOperationSet) -> &mut Self {
         self.subgroup_operations = operations;
         self

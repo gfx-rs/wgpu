@@ -1669,7 +1669,7 @@ impl MacroCall {
                         num_args += 1;
 
                         if shadow {
-                            log::warn!("Assuming LOD {:?} is zero", args[2],);
+                            log::debug!("Assuming LOD {:?} is zero", args[2],);
 
                             SampleLevel::Zero
                         } else {
@@ -1681,7 +1681,7 @@ impl MacroCall {
                         num_args += 2;
 
                         if shadow {
-                            log::warn!(
+                            log::debug!(
                                 "Assuming gradients {:?} and {:?} are not greater than 1",
                                 args[2],
                                 args[3],

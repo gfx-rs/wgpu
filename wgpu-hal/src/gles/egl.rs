@@ -7,7 +7,7 @@ use hashbrown::HashMap;
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard, RwLock};
 
 /// The amount of time to wait while trying to obtain a lock to the adapter context
-const CONTEXT_LOCK_TIMEOUT_SECS: u64 = 1;
+const CONTEXT_LOCK_TIMEOUT_SECS: u64 = 6;
 
 const EGL_CONTEXT_FLAGS_KHR: i32 = 0x30FC;
 const EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR: i32 = 0x0001;
@@ -88,8 +88,11 @@ unsafe extern "system" fn egl_debug_proc(
     let log_severity = match message_type {
         EGL_DEBUG_MSG_CRITICAL_KHR | EGL_DEBUG_MSG_ERROR_KHR => log::Level::Error,
         EGL_DEBUG_MSG_WARN_KHR => log::Level::Warn,
-        EGL_DEBUG_MSG_INFO_KHR => log::Level::Info,
-        _ => log::Level::Debug,
+        // We intentionally suppress info messages down to debug
+        // so that users are not innundated with info messages from
+        // the runtime.
+        EGL_DEBUG_MSG_INFO_KHR => log::Level::Debug,
+        _ => log::Level::Trace,
     };
     let command = unsafe { ffi::CStr::from_ptr(command_raw) }.to_string_lossy();
     let message = if message_raw.is_null() {
@@ -263,7 +266,7 @@ fn choose_config(
                 if tier_max == 1 {
                     //Note: this has been confirmed to malfunction on Intel+NV laptops,
                     // but also on Angle.
-                    log::warn!("EGL says it can present to the window but not natively",);
+                    log::info!("EGL says it can present to the window but not natively",);
                 }
                 // Android emulator can't natively present either.
                 let tier_threshold =
@@ -275,7 +278,7 @@ fn choose_config(
                 return Ok((config, tier_max >= tier_threshold));
             }
             Ok(None) => {
-                log::warn!("No config found!");
+                log::debug!("No config found!");
             }
             Err(e) => {
                 log::error!("error in choose_first_config: {e:?}");
@@ -545,7 +548,7 @@ impl Inner {
             log::debug!("\tEGL surface: +srgb khr");
             SrgbFrameBufferKind::Khr
         } else {
-            log::warn!("\tEGL surface: -srgb");
+            log::debug!("\tEGL surface: -srgb");
             SrgbFrameBufferKind::None
         };
 
@@ -902,7 +905,7 @@ impl crate::Instance for Instance {
         let (display, display_owner, wsi_kind) = if let (Some(library), Some(egl)) =
             (wayland_library, egl1_5)
         {
-            log::info!("Using Wayland platform");
+            log::debug!("Using Wayland platform");
             let display_attributes = [khronos_egl::ATTRIB_NONE];
             let display = unsafe {
                 egl.get_platform_display(
@@ -914,7 +917,7 @@ impl crate::Instance for Instance {
             .map_err(instance_err("failed to get Wayland display"))?;
             (display, Some(Rc::new(library)), WindowKind::Wayland)
         } else if let (Some(display_owner), Some(egl)) = (x11_display_library, egl1_5) {
-            log::info!("Using X11 platform");
+            log::debug!("Using X11 platform");
             let display_attributes = [khronos_egl::ATTRIB_NONE];
             let display = unsafe {
                 egl.get_platform_display(
@@ -926,7 +929,7 @@ impl crate::Instance for Instance {
             .map_err(instance_err("failed to get x11 display"))?;
             (display, Some(Rc::new(display_owner)), WindowKind::X11)
         } else if let (Some(display_owner), Some(egl)) = (angle_x11_display_library, egl1_5) {
-            log::info!("Using Angle platform with X11");
+            log::debug!("Using Angle platform with X11");
             let display_attributes = [
                 EGL_PLATFORM_ANGLE_NATIVE_PLATFORM_TYPE_ANGLE as khronos_egl::Attrib,
                 EGL_PLATFORM_X11_KHR as khronos_egl::Attrib,
@@ -944,7 +947,7 @@ impl crate::Instance for Instance {
             .map_err(instance_err("failed to get Angle display"))?;
             (display, Some(Rc::new(display_owner)), WindowKind::AngleX11)
         } else if client_ext_str.contains("EGL_MESA_platform_surfaceless") {
-            log::warn!("No windowing system present. Using surfaceless platform");
+            log::debug!("No windowing system present. Using surfaceless platform");
             #[allow(clippy::unnecessary_literal_unwrap)] // This is only a literal on Emscripten
             let egl = egl1_5.expect("Failed to get EGL 1.5 for surfaceless");
             let display = unsafe {
@@ -958,7 +961,7 @@ impl crate::Instance for Instance {
 
             (display, None, WindowKind::Unknown)
         } else {
-            log::warn!("EGL_MESA_platform_surfaceless not available. Using default platform");
+            log::debug!("EGL_MESA_platform_surfaceless not available. Using default platform");
             let display = unsafe { egl.get_display(khronos_egl::DEFAULT_DISPLAY) }
                 .ok_or_else(|| crate::InstanceError::new("Failed to get default display".into()))?;
             (display, None, WindowKind::Unknown)
