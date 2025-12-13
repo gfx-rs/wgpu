@@ -1,2 +1,2 @@
-god_mode = true
-targets = "IR | ANALYSIS | WGSL"
+capabilities = "MESH_SHADER | MESH_SHADER_POINT_TOPOLOGY"
+targets = "WGSL"
