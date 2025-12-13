@@ -1835,8 +1835,6 @@ impl Writer {
                 super::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
             );
 
-            // Can't find anything to suggest double calling this function is invalid.
-
             let not_finished_id = self.id_gen.next();
             block.body.push(Instruction::unary(
                 spirv::Op::LogicalNot,
