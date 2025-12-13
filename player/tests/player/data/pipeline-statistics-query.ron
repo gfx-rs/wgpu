@@ -12,7 +12,7 @@
         CreatePipelineLayout(PointerId(0x10), (
             label: Some("empty"),
             bind_group_layouts: [],
-            immediates_ranges: [],
+            immediate_size: 0,
         )),
         CreateShaderModule(
             id: PointerId(0x10),

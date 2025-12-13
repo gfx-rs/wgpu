@@ -216,22 +216,17 @@ where
 
         f();
 
-        let non_overlapping =
-            super::bind::compute_nonoverlapping_ranges(&pipeline_layout.immediates_ranges);
-
-        // Clear immediate data ranges
-        for range in non_overlapping {
-            let offset = range.range.start;
-            let size_bytes = range.range.end - offset;
-            super::immediates_clear(offset, size_bytes, |clear_offset, clear_data| unsafe {
+        super::immediates_clear(
+            0,
+            pipeline_layout.immediate_size,
+            |clear_offset, clear_data| unsafe {
                 state.base.raw_encoder.set_immediates(
                     pipeline_layout.raw(),
-                    range.stages,
                     clear_offset,
                     clear_data,
                 );
-            });
-        }
+            },
+        );
     }
     Ok(())
 }
@@ -239,7 +234,6 @@ where
 pub(crate) fn set_immediates<E, F: FnOnce(&[u32])>(
     state: &mut PassState,
     immediates_data: &[u32],
-    stages: wgt::ShaderStages,
     offset: u32,
     size_bytes: u32,
     values_offset: Option<u32>,
@@ -253,7 +247,7 @@ where
     let values_offset = values_offset.ok_or(InvalidValuesOffset)?;
 
     let end_offset_bytes = offset + size_bytes;
-    let values_end_offset = (values_offset + size_bytes / wgt::IMMEDIATES_ALIGNMENT) as usize;
+    let values_end_offset = (values_offset + size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT) as usize;
     let data_slice = &immediates_data[(values_offset as usize)..values_end_offset];
 
     let pipeline_layout = state
@@ -262,7 +256,7 @@ where
         .as_ref()
         .ok_or(MissingPipeline)?;
 
-    pipeline_layout.validate_immediates_ranges(stages, offset, end_offset_bytes)?;
+    pipeline_layout.validate_immediates_ranges(offset, end_offset_bytes)?;
 
     f(data_slice);
 
@@ -270,7 +264,7 @@ where
         state
             .base
             .raw_encoder
-            .set_immediates(pipeline_layout.raw(), stages, offset, data_slice)
+            .set_immediates(pipeline_layout.raw(), offset, data_slice)
     }
     Ok(())
 }

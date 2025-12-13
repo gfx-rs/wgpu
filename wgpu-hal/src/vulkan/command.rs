@@ -943,7 +943,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_immediates(
         &mut self,
         layout: &super::PipelineLayout,
-        stages: wgt::ShaderStages,
         offset_bytes: u32,
         data: &[u32],
     ) {
@@ -951,7 +950,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             self.device.raw.cmd_push_constants(
                 self.active,
                 layout.raw,
-                conv::map_shader_stage(stages),
+                vk::ShaderStageFlags::ALL,
                 offset_bytes,
                 bytemuck::cast_slice(data),
             )

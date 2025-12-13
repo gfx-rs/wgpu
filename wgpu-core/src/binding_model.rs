@@ -18,9 +18,7 @@ use serde::Serialize;
 use wgt::error::{ErrorType, WebGpuError};
 
 use crate::{
-    device::{
-        bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures, SHADER_STAGE_COUNT,
-    },
+    device::{bgl, Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
     id::{BindGroupLayoutId, BufferId, ExternalTextureId, SamplerId, TextureViewId, TlasId},
     init_tracker::{BufferInitTrackerAction, TextureInitTrackerAction},
     pipeline::{ComputePipeline, RenderPipeline},
@@ -777,24 +775,16 @@ pub enum CreatePipelineLayoutError {
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error(
-        "Immediate data at index {index} has range bound {bound} not aligned to {}",
-        wgt::IMMEDIATES_ALIGNMENT
+        "Immediate data has range bound {size} which is not aligned to IMMEDIATE_DATA_ALIGNMENT ({})",
+        wgt::IMMEDIATE_DATA_ALIGNMENT
     )]
-    MisalignedImmediateRange { index: usize, bound: u32 },
+    MisalignedImmediateSize { size: u32 },
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
-    #[error("Immediate data range (index {index}) provides for stage(s) {provided:?} but there exists another range that provides stage(s) {intersected:?}. Each stage may only be provided by one range")]
-    MoreThanOneImmediateRangePerStage {
-        index: usize,
-        provided: wgt::ShaderStages,
-        intersected: wgt::ShaderStages,
-    },
-    #[error("Immediate data at index {index} has range {}..{} which exceeds device immediate data size limit 0..{max}", range.start, range.end)]
-    ImmediateRangeTooLarge {
-        index: usize,
-        range: Range<u32>,
-        max: u32,
-    },
+    #[error(
+        "Immediate data has size {size} which exceeds device immediate data size limit 0..{max}"
+    )]
+    ImmediateRangeTooLarge { size: u32, max: u32 },
     #[error(transparent)]
     TooManyBindings(BindingTypeMaxCountError),
     #[error("Bind group layout count {actual} exceeds device bind group limit {max}")]
@@ -810,8 +800,7 @@ impl WebGpuError for CreatePipelineLayoutError {
             Self::MissingFeatures(e) => e,
             Self::InvalidResource(e) => e,
             Self::TooManyBindings(e) => e,
-            Self::MisalignedImmediateRange { .. }
-            | Self::MoreThanOneImmediateRangePerStage { .. }
+            Self::MisalignedImmediateSize { .. }
             | Self::ImmediateRangeTooLarge { .. }
             | Self::TooManyGroups { .. } => return ErrorType::Validation,
         };
@@ -822,31 +811,16 @@ impl WebGpuError for CreatePipelineLayoutError {
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
 pub enum ImmediateUploadError {
-    #[error("Provided immediate data with indices {offset}..{end_offset} overruns matching immediate data range at index {idx}, with stage(s) {:?} and indices {:?}", range.stages, range.range)]
+    #[error("Provided immediate data written to offset {offset}..{end_offset} overruns the immediate data range with a size of {size}")]
     TooLarge {
         offset: u32,
         end_offset: u32,
-        idx: usize,
-        range: wgt::ImmediateRange,
+        size: u32,
     },
-    #[error("Provided immediate data is for stage(s) {actual:?}, stage with a partial match found at index {idx} with stage(s) {matched:?}, however immediates must be complete matches")]
-    PartialRangeMatch {
-        actual: wgt::ShaderStages,
-        idx: usize,
-        matched: wgt::ShaderStages,
-    },
-    #[error("Provided immediate data is for stage(s) {actual:?}, but intersects a immediate data range (at index {idx}) with stage(s) {missing:?}. Immediates must provide the stages for all ranges they intersect")]
-    MissingStages {
-        actual: wgt::ShaderStages,
-        idx: usize,
-        missing: wgt::ShaderStages,
-    },
-    #[error("Provided immediate data is for stage(s) {actual:?}, however the pipeline layout has no immediate data range for the stage(s) {unmatched:?}")]
-    UnmatchedStages {
-        actual: wgt::ShaderStages,
-        unmatched: wgt::ShaderStages,
-    },
-    #[error("Provided immediate data offset {0} does not respect `IMMEDIATES_ALIGNMENT`")]
+    #[error(
+        "Provided immediate data offset {0} does not respect `IMMEDIATE_DATA_ALIGNMENT` ({ida})",
+        ida = wgt::IMMEDIATE_DATA_ALIGNMENT
+    )]
     Unaligned(u32),
 }
 
@@ -878,14 +852,12 @@ where
         serde(bound(deserialize = "<[BGL] as ToOwned>::Owned: Deserialize<'de>"))
     )]
     pub bind_group_layouts: Cow<'a, [BGL]>,
-    /// Set of immediate data ranges this pipeline uses. Each shader stage that
-    /// uses immediates must define the range in immediate data memory that
-    /// corresponds to its single `layout(immediates)` uniform block.
+    /// The number of bytes of immediate data that are allocated for use
+    /// in the shader. The `var<immediate>`s in the shader attached to
+    /// this pipeline must be equal or smaller than this size.
     ///
-    /// If this array is non-empty, the
-    /// [`Features::IMMEDIATES`](wgt::Features::IMMEDIATES) feature must
-    /// be enabled.
-    pub immediates_ranges: Cow<'a, [wgt::ImmediateRange]>,
+    /// If this value is non-zero, [`wgt::Features::IMMEDIATES`] must be enabled.
+    pub immediate_size: u32,
 }
 
 /// cbindgen:ignore
@@ -899,7 +871,7 @@ pub struct PipelineLayout {
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) bind_group_layouts: ArrayVec<Arc<BindGroupLayout>, { hal::MAX_BIND_GROUPS }>,
-    pub(crate) immediates_ranges: ArrayVec<wgt::ImmediateRange, { SHADER_STAGE_COUNT }>,
+    pub(crate) immediate_size: u32,
 }
 
 impl Drop for PipelineLayout {
@@ -928,7 +900,6 @@ impl PipelineLayout {
     /// Validate immediates match up with expected ranges.
     pub(crate) fn validate_immediates_ranges(
         &self,
-        stages: wgt::ShaderStages,
         offset: u32,
         end_offset: u32,
     ) -> Result<(), ImmediateUploadError> {
@@ -936,68 +907,15 @@ impl PipelineLayout {
         // as immediate data ranges are already validated to be within bounds,
         // and we validate that they are within the ranges.
 
-        if offset % wgt::IMMEDIATES_ALIGNMENT != 0 {
+        if offset % wgt::IMMEDIATE_DATA_ALIGNMENT != 0 {
             return Err(ImmediateUploadError::Unaligned(offset));
         }
 
-        // Immediate data validation looks very complicated on the surface, but
-        // the problem can be range-reduced pretty well.
-        //
-        // Immediates require (summarized from the vulkan spec):
-        // 1. For each byte in the range and for each shader stage in stageFlags,
-        //    there must be a immediate data range in the layout that includes that
-        //    byte and that stage.
-        // 2. For each byte in the range and for each immediate data range that overlaps that byte,
-        //    `stage` must include all stages in that immediate data range’s `stage`.
-        //
-        // However there are some additional constraints that help us:
-        // 3. All immediate data ranges are the only range that can access that stage.
-        //    i.e. if one range has VERTEX, no other range has VERTEX
-        //
-        // Therefore we can simplify the checks in the following ways:
-        // - Because 3 guarantees that the immediate data range has a unique stage,
-        //   when we check for 1, we can simply check that our entire updated range
-        //   is within a immediate data range. i.e. our range for a specific stage cannot
-        //   intersect more than one immediate data range.
-        let mut used_stages = wgt::ShaderStages::NONE;
-        for (idx, range) in self.immediates_ranges.iter().enumerate() {
-            // contains not intersects due to 2
-            if stages.contains(range.stages) {
-                if !(range.range.start <= offset && end_offset <= range.range.end) {
-                    return Err(ImmediateUploadError::TooLarge {
-                        offset,
-                        end_offset,
-                        idx,
-                        range: range.clone(),
-                    });
-                }
-                used_stages |= range.stages;
-            } else if stages.intersects(range.stages) {
-                // Will be caught by used stages check below, but we can do this because of 1
-                // and is more helpful to the user.
-                return Err(ImmediateUploadError::PartialRangeMatch {
-                    actual: stages,
-                    idx,
-                    matched: range.stages,
-                });
-            }
-
-            // The immediate data range intersects range we are uploading
-            if offset < range.range.end && range.range.start < end_offset {
-                // But requires stages we don't provide
-                if !stages.contains(range.stages) {
-                    return Err(ImmediateUploadError::MissingStages {
-                        actual: stages,
-                        idx,
-                        missing: stages,
-                    });
-                }
-            }
-        }
-        if used_stages != stages {
-            return Err(ImmediateUploadError::UnmatchedStages {
-                actual: stages,
-                unmatched: stages - used_stages,
+        if end_offset > self.immediate_size {
+            return Err(ImmediateUploadError::TooLarge {
+                offset,
+                end_offset,
+                size: self.immediate_size,
             });
         }
         Ok(())

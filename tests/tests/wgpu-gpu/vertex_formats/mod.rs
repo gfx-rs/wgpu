@@ -254,7 +254,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bgl],
-            immediates_ranges: &[],
+            immediate_size: 0,
         });
 
     let dummy = ctx

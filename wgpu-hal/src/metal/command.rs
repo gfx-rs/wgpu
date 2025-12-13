@@ -956,7 +956,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_immediates(
         &mut self,
         layout: &super::PipelineLayout,
-        stages: wgt::ShaderStages,
         offset_bytes: u32,
         data: &[u32],
     ) {
@@ -969,40 +968,46 @@ impl crate::CommandEncoder for super::CommandEncoder {
         let offset_words = offset_bytes as usize / WORD_SIZE;
         state_pc[offset_words..offset_words + data.len()].copy_from_slice(data);
 
-        if stages.contains(wgt::ShaderStages::COMPUTE) {
-            self.state.compute.as_ref().unwrap().set_bytes(
+        if let Some(ref compute) = self.state.compute {
+            compute.set_bytes(
                 layout.immediates_infos.cs.unwrap().buffer_index as _,
                 (layout.total_immediates as usize * WORD_SIZE) as _,
                 state_pc.as_ptr().cast(),
             )
         }
-        if stages.contains(wgt::ShaderStages::VERTEX) {
-            self.state.render.as_ref().unwrap().set_vertex_bytes(
-                layout.immediates_infos.vs.unwrap().buffer_index as _,
-                (layout.total_immediates as usize * WORD_SIZE) as _,
-                state_pc.as_ptr().cast(),
-            )
-        }
-        if stages.contains(wgt::ShaderStages::FRAGMENT) {
-            self.state.render.as_ref().unwrap().set_fragment_bytes(
-                layout.immediates_infos.fs.unwrap().buffer_index as _,
-                (layout.total_immediates as usize * WORD_SIZE) as _,
-                state_pc.as_ptr().cast(),
-            )
-        }
-        if stages.contains(wgt::ShaderStages::TASK) {
-            self.state.render.as_ref().unwrap().set_object_bytes(
-                layout.immediates_infos.ts.unwrap().buffer_index as _,
-                (layout.total_immediates as usize * WORD_SIZE) as _,
-                state_pc.as_ptr().cast(),
-            )
-        }
-        if stages.contains(wgt::ShaderStages::MESH) {
-            self.state.render.as_ref().unwrap().set_object_bytes(
-                layout.immediates_infos.ms.unwrap().buffer_index as _,
-                (layout.total_immediates as usize * WORD_SIZE) as _,
-                state_pc.as_ptr().cast(),
-            )
+        if let Some(ref render) = self.state.render {
+            if let Some(vs) = layout.immediates_infos.vs {
+                render.set_vertex_bytes(
+                    vs.buffer_index as _,
+                    (layout.total_immediates as usize * WORD_SIZE) as _,
+                    state_pc.as_ptr().cast(),
+                )
+            }
+            if let Some(fs) = layout.immediates_infos.fs {
+                render.set_fragment_bytes(
+                    fs.buffer_index as _,
+                    (layout.total_immediates as usize * WORD_SIZE) as _,
+                    state_pc.as_ptr().cast(),
+                )
+            }
+            if let Some(ts) = layout.immediates_infos.ts {
+                if self.shared.private_caps.mesh_shaders {
+                    render.set_object_bytes(
+                        ts.buffer_index as _,
+                        (layout.total_immediates as usize * WORD_SIZE) as _,
+                        state_pc.as_ptr().cast(),
+                    )
+                }
+            }
+            if let Some(ms) = layout.immediates_infos.ms {
+                if self.shared.private_caps.mesh_shaders {
+                    render.set_object_bytes(
+                        ms.buffer_index as _,
+                        (layout.total_immediates as usize * WORD_SIZE) as _,
+                        state_pc.as_ptr().cast(),
+                    )
+                }
+            }
         }
     }
 

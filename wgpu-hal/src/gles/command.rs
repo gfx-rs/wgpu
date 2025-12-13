@@ -34,7 +34,7 @@ pub(super) struct State {
     active_first_instance: u32,
     first_instance_location: Option<glow::UniformLocation>,
     immediates_descs: ArrayVec<super::ImmediateDesc, { super::MAX_IMMEDIATES_COMMANDS }>,
-    // The current state of the immediate data data block.
+    // The current state of the immediate data block.
     current_immediates_data: [u32; super::MAX_IMMEDIATES],
     end_of_pass_timestamp: Option<glow::Query>,
     clip_distance_count: u32,
@@ -792,7 +792,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_immediates(
         &mut self,
         _layout: &super::PipelineLayout,
-        _stages: wgt::ShaderStages,
         offset_bytes: u32,
         data: &[u32],
     ) {

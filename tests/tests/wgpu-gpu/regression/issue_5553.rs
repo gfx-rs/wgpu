@@ -26,7 +26,7 @@ static ALLOW_INPUT_NOT_CONSUMED: GpuTestConfiguration = GpuTestConfiguration::ne
             .create_pipeline_layout(&PipelineLayoutDescriptor {
                 label: Some("Pipeline Layout"),
                 bind_group_layouts: &[],
-                immediates_ranges: &[],
+                immediate_size: 0,
             });
 
         let _ = ctx

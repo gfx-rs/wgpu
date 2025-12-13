@@ -201,7 +201,7 @@ impl crate::framework::Example for Example {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&global_bind_group_layout, &local_bind_group_layout],
-            immediates_ranges: &[],
+            immediate_size: 0,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

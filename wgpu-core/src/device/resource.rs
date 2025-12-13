@@ -3570,42 +3570,19 @@ impl Device {
             });
         }
 
-        if !desc.immediates_ranges.is_empty() {
+        if desc.immediate_size != 0 {
             self.require_features(wgt::Features::IMMEDIATES)?;
         }
-
-        let mut used_stages = wgt::ShaderStages::empty();
-        for (index, pc) in desc.immediates_ranges.iter().enumerate() {
-            if pc.stages.intersects(used_stages) {
-                return Err(Error::MoreThanOneImmediateRangePerStage {
-                    index,
-                    provided: pc.stages,
-                    intersected: pc.stages & used_stages,
-                });
-            }
-            used_stages |= pc.stages;
-
-            let device_max_pc_size = self.limits.max_immediate_size;
-            if device_max_pc_size < pc.range.end {
-                return Err(Error::ImmediateRangeTooLarge {
-                    index,
-                    range: pc.range.clone(),
-                    max: device_max_pc_size,
-                });
-            }
-
-            if pc.range.start % wgt::IMMEDIATES_ALIGNMENT != 0 {
-                return Err(Error::MisalignedImmediateRange {
-                    index,
-                    bound: pc.range.start,
-                });
-            }
-            if pc.range.end % wgt::IMMEDIATES_ALIGNMENT != 0 {
-                return Err(Error::MisalignedImmediateRange {
-                    index,
-                    bound: pc.range.end,
-                });
-            }
+        if self.limits.max_immediate_size < desc.immediate_size {
+            return Err(Error::ImmediateRangeTooLarge {
+                size: desc.immediate_size,
+                max: self.limits.max_immediate_size,
+            });
+        }
+        if desc.immediate_size % wgt::IMMEDIATE_DATA_ALIGNMENT != 0 {
+            return Err(Error::MisalignedImmediateSize {
+                size: desc.immediate_size,
+            });
         }
 
         let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
@@ -3643,7 +3620,7 @@ impl Device {
                 | hal::PipelineLayoutFlags::NUM_WORK_GROUPS
                 | additional_flags,
             bind_group_layouts: &raw_bind_group_layouts,
-            immediates_ranges: desc.immediates_ranges.as_ref(),
+            immediate_size: desc.immediate_size,
         };
 
         let raw = unsafe { self.raw().create_pipeline_layout(&hal_desc) }
@@ -3656,7 +3633,7 @@ impl Device {
             device: self.clone(),
             label: desc.label.to_string(),
             bind_group_layouts,
-            immediates_ranges: desc.immediates_ranges.iter().cloned().collect(),
+            immediate_size: desc.immediate_size,
         };
 
         let layout = Arc::new(layout);
@@ -3703,7 +3680,7 @@ impl Device {
         let layout_desc = binding_model::ResolvedPipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: Cow::Owned(bind_group_layouts),
-            immediates_ranges: Cow::Borrowed(&[]), //TODO?
+            immediate_size: 0, //TODO?
         };
 
         let layout = self.create_pipeline_layout(&layout_desc)?;

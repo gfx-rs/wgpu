@@ -3474,8 +3474,8 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         }
     }
 
-    fn set_immediates(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
-        panic!("IMMEDIATES feature must be enabled to call multi_draw_indexed_indirect")
+    fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
+        panic!("IMMEDIATES feature must be enabled to call set_immediates")
     }
 
     fn set_blend_constant(&mut self, color: crate::Color) {
@@ -3780,8 +3780,8 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         }
     }
 
-    fn set_immediates(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
-        panic!("IMMEDIATES feature must be enabled to call multi_draw_indexed_indirect")
+    fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
+        panic!("IMMEDIATES feature must be enabled to call set_immediates")
     }
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
