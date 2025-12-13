@@ -956,7 +956,11 @@ impl super::PrivateCapabilities {
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             // NOTE: This doesn't entirely match the docs, see PR #XXXX.
             supports_memoryless_storage: metal4
-                || if family_check { device.supports_family(MTLGPUFamily::Apple1) } else { version.at_least((11, 0), (10, 0), (10, 0), (1, 0), os_type) },
+                || if family_check {
+                    device.supports_family(MTLGPUFamily::Apple1)
+                } else {
+                    version.at_least((11, 0), (10, 0), (10, 0), (1, 0), os_type)
+                },
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             mesh_shaders: family_check
                 && (device.supports_family(MTLGPUFamily::Metal3)
