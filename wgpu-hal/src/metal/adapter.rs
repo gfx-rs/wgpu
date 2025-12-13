@@ -954,7 +954,7 @@ impl super::PrivateCapabilities {
                 || (version.at_least((10, 15), (14, 0), (16, 0), (1, 0), os_type)
                     && device.supports_shader_barycentric_coordinates()),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
-            // NOTE: This doesn't entirely match the docs, see PR #XXXX.
+            // NOTE: This doesn't entirely match the docs, see https://github.com/gfx-rs/wgpu/pull/8725.
             supports_memoryless_storage: metal4
                 || if family_check {
                     device.supports_family(MTLGPUFamily::Apple1)
