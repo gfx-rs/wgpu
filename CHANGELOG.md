@@ -164,6 +164,12 @@ By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206
 
 - `DropCallback`s are now called after dropping all other fields of their parent structs. By @jerzywilczek in [#8353](https://github.com/gfx-rs/wgpu/pull/8353)
 
+### Performance
+
+#### GLES / OpenGL
+
+- The GL backend would now try to take advantage of `GL_EXT_multisampled_render_to_texture` extension when applicable to skip the multi-sample resolve operation. By @opstic in [#8536](https://github.com/gfx-rs/wgpu/pull/8536).
+
 ## v27.0.4 (2025-10-23)
 
 This release includes `wgpu-hal` version `27.0.4`. All other crates remain at their previous versions.
