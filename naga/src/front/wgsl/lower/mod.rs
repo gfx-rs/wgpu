@@ -745,7 +745,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     /// Resolve the types of all expressions up through `handle`.
     ///
     /// Ensure that [`self.typifier`] has a [`TypeResolution`] for
-    /// every expression in [`self.function.expressions`].
+    /// every expression in `self.function.expressions`.
     ///
     /// This does not add types to any arena. The [`Typifier`]
     /// documentation explains the steps we take to avoid filling

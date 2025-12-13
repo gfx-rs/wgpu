@@ -35,7 +35,7 @@ pub struct IdReferences;
 /// This is used for trace recording and playback. Recording stores the pointer
 /// value of `Arc` references in the trace. Playback uses the integer values
 /// as keys to a `HashMap`.
-#[cfg(feature = "serde")]
+#[cfg(any(feature = "trace", feature = "replay"))]
 #[doc(hidden)]
 #[derive(Clone, Debug)]
 pub struct PointerReferences;
@@ -59,7 +59,7 @@ impl ReferenceType for IdReferences {
     type Tlas = id::TlasId;
 }
 
-#[cfg(feature = "serde")]
+#[cfg(any(feature = "trace", feature = "replay"))]
 impl ReferenceType for PointerReferences {
     type Buffer = id::PointerId<id::markers::Buffer>;
     type Surface = id::PointerId<id::markers::Surface>;

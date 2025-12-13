@@ -96,7 +96,7 @@ For an overview of all the components in the gfx-rs ecosystem, see [the big pict
 
 ## MSRV policy
 
-TL;DR: If you're using `wgpu`, our MSRV is **1.88**.
+TL;DR: If you're using `wgpu`, our MSRV is **1.92**.
 
 <details>
 <summary> Specific Details </summary>
@@ -104,7 +104,7 @@ TL;DR: If you're using `wgpu`, our MSRV is **1.88**.
 Due to complex dependants, we have two MSRV policies:
 
 - `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.82**.
-- The rest of the workspace has an MSRV of **1.88**.
+- The rest of the workspace has an MSRV of **1.92**.
 
 It is enforced on CI (in "/.github/workflows/ci.yml") with the `CORE_MSRV` and `REPO_MSRV` variables.
 This version can only be upgraded in breaking releases, though we release a breaking version every three months.

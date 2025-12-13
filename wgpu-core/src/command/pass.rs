@@ -74,13 +74,10 @@ where
         + From<DestroyedResourceError>
         + From<BindError>,
 {
-    if bind_group.is_none() {
-        api_log!("Pass::set_bind_group {index} None");
+    if let Some(ref bind_group) = bind_group {
+        api_log!("Pass::set_bind_group {index} {}", bind_group.error_ident());
     } else {
-        api_log!(
-            "Pass::set_bind_group {index} {}",
-            bind_group.as_ref().unwrap().error_ident()
-        );
+        api_log!("Pass::set_bind_group {index} None");
     }
 
     let max_bind_groups = state.base.device.limits.max_bind_groups;

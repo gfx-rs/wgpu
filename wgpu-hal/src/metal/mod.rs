@@ -998,7 +998,7 @@ struct CommandState {
     ///   checks and the WGSL `arrayLength` function.
     ///
     /// For each stage `S` in `stage_infos`, we consult this to find the sizes
-    /// of the buffers listed in [`stage_infos.S.sized_bindings`], which we must
+    /// of the buffers listed in `stage_infos.S.sized_bindings`, which we must
     /// pass to the entry point.
     ///
     /// See `device::CompiledShader::sized_bindings` for more details.
