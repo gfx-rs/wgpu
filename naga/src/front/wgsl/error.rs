@@ -1402,7 +1402,7 @@ impl<'a> Error<'a> {
                 )],
             },
             Error::MissingIncomingPayload(span) => ParseError {
-                message: "incoming payload is missing on ray hit or miss shader entry point".to_string(),
+                message: "incoming payload is missing on a `closest_hit`, `any_hit` or `miss` shader entry point".to_string(),
                 labels: vec![(
                     span,
                     "must be paired with a `@incoming_payload` attribute".into(),
