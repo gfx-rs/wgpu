@@ -1,0 +1,75 @@
+// language: metal1.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+
+struct type_7 {
+    float inner[2];
+};
+struct type_8 {
+    int inner[2];
+};
+struct type_9 {
+    uint inner[2];
+};
+struct S {
+    float f;
+    int i;
+    uint u;
+};
+constant metal::int2 xvipaiai = metal::int2(42, 43);
+constant metal::uint2 xvupaiai = metal::uint2(44u, 45u);
+constant metal::float2 xvfpaiai = metal::float2(46.0, 47.0);
+constant metal::float2 xvfpafaf = metal::float2(48.0, 49.0);
+constant metal::float2 xvfpaiaf = metal::float2(48.0, 49.0);
+constant metal::uint2 xvupuai = metal::uint2(42u, 43u);
+constant metal::uint2 xvupaiu = metal::uint2(42u, 43u);
+constant metal::uint2 xvuuai = metal::uint2(42u, 43u);
+constant metal::uint2 xvuaiu = metal::uint2(42u, 43u);
+constant metal::int2 xvip = metal::int2(0, 0);
+constant metal::uint2 xvup = metal::uint2(0u, 0u);
+constant metal::float2 xvfp = metal::float2(0.0, 0.0);
+constant metal::float2x2 xmfp = metal::float2x2(metal::float2(0.0, 0.0), metal::float2(0.0, 0.0));
+constant metal::float2x2 xmfpaiaiaiai = metal::float2x2(metal::float2(1.0, 2.0), metal::float2(3.0, 4.0));
+constant metal::float2x2 xmfpafaiaiai = metal::float2x2(metal::float2(1.0, 2.0), metal::float2(3.0, 4.0));
+constant metal::float2x2 xmfpaiafaiai = metal::float2x2(metal::float2(1.0, 2.0), metal::float2(3.0, 4.0));
+constant metal::float2x2 xmfpaiaiafai = metal::float2x2(metal::float2(1.0, 2.0), metal::float2(3.0, 4.0));
+constant metal::float2x2 xmfpaiaiaiaf = metal::float2x2(metal::float2(1.0, 2.0), metal::float2(3.0, 4.0));
+constant metal::int2 ivis_ai = metal::int2(1);
+constant metal::uint2 ivus_ai = metal::uint2(1u);
+constant metal::float2 ivfs_ai = metal::float2(1.0);
+constant metal::float2 ivfs_af = metal::float2(1.0);
+constant type_7 iafafaf = type_7 {1.0, 2.0};
+constant type_7 iafaiai = type_7 {1.0, 2.0};
+constant type_8 xaipaiai = type_8 {1, 2};
+constant type_9 xaupaiai = type_9 {1u, 2u};
+constant type_7 xafpaiaf = type_7 {1.0, 2.0};
+constant type_7 xafpafai = type_7 {1.0, 2.0};
+constant type_7 xafpafaf = type_7 {1.0, 2.0};
+constant S s_f_i_u = S {1.0, 1, 1u};
+constant S s_f_iai = S {1.0, 1, 1u};
+constant S s_fai_u = S {1.0, 1, 1u};
+constant S s_faiai = S {1.0, 1, 1u};
+constant S saf_i_u = S {1.0, 1, 1u};
+constant S saf_iai = S {1.0, 1, 1u};
+constant S safai_u = S {1.0, 1, 1u};
+constant S safaiai = S {1.0, 1, 1u};
+constant metal::int2 xvisai = metal::int2(1);
+constant metal::uint2 xvusai = metal::uint2(1u);
+constant metal::float2 xvfsai = metal::float2(1.0);
+constant metal::float2 xvfsaf = metal::float2(1.0);
+constant metal::float3 ivfr_f_f = metal::float3(metal::float2(1.0, 2.0), 3.0);
+constant metal::float3 ivfr_f_af = metal::float3(metal::float2(1.0, 2.0), 3.0);
+constant metal::float3 ivfraf_f = metal::float3(metal::float2(1.0, 2.0), 3.0);
+constant metal::float3 ivfraf_af = metal::float3(metal::float2(1.0, 2.0), 3.0);
+constant metal::float3 ivf_fr_f = metal::float3(1.0, metal::float2(2.0, 3.0));
+constant metal::float3 ivf_fraf = metal::float3(1.0, metal::float2(2.0, 3.0));
+constant metal::float3 ivf_afr_f = metal::float3(1.0, metal::float2(2.0, 3.0));
+constant metal::float3 ivf_afraf = metal::float3(1.0, metal::float2(2.0, 3.0));
+constant metal::float3 ivfr_f_ai = metal::float3(metal::float2(1.0, 2.0), 3.0);
+constant metal::float3 ivfrai_f = metal::float3(metal::float2(1.0, 2.0), 3.0);
+constant metal::float3 ivfrai_ai = metal::float3(metal::float2(1.0, 2.0), 3.0);
+constant metal::float3 ivf_frai = metal::float3(1.0, metal::float2(2.0, 3.0));
+constant metal::float3 ivf_air_f = metal::float3(1.0, metal::float2(2.0, 3.0));
+constant metal::float3 ivf_airai = metal::float3(1.0, metal::float2(2.0, 3.0));

@@ -1,0 +1,168 @@
+// language: metal3.0
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using metal::uint;
+struct DefaultConstructible {
+    template<typename T>
+    operator T() && {
+        return T {};
+    }
+};
+
+struct UniformIndex {
+    uint index;
+};
+template <typename T>
+struct NagaArgumentBufferWrapper {
+    T inner;
+};
+struct FragmentIn {
+    uint index;
+};
+
+struct main_Input {
+    uint index [[user(loc0), flat]];
+};
+struct main_Output {
+    metal::float4 member [[color(0)]];
+};
+fragment main_Output main_(
+  main_Input varyings [[stage_in]]
+, constant NagaArgumentBufferWrapper<metal::texture2d<float, metal::access::sample>>* texture_array_unbounded [[buffer(0)]]
+, constant NagaArgumentBufferWrapper<metal::texture2d<float, metal::access::sample>>* texture_array_bounded [[user(fake0)]]
+, constant NagaArgumentBufferWrapper<metal::texture2d_array<float, metal::access::sample>>* texture_array_2darray [[user(fake0)]]
+, constant NagaArgumentBufferWrapper<metal::texture2d_ms<float, metal::access::read>>* texture_array_multisampled [[user(fake0)]]
+, constant NagaArgumentBufferWrapper<metal::depth2d<float, metal::access::sample>>* texture_array_depth [[user(fake0)]]
+, constant NagaArgumentBufferWrapper<metal::texture2d<float, metal::access::write>>* texture_array_storage [[user(fake0)]]
+, constant NagaArgumentBufferWrapper<metal::sampler>* samp [[user(fake0)]]
+, constant NagaArgumentBufferWrapper<metal::sampler>* samp_comp [[user(fake0)]]
+, constant UniformIndex& uni [[user(fake0)]]
+) {
+    const FragmentIn fragment_in = { varyings.index };
+    uint u1_ = 0u;
+    metal::uint2 u2_ = metal::uint2(0u);
+    float v1_ = 0.0;
+    metal::float4 v4_ = metal::float4(0.0);
+    uint uniform_index = uni.index;
+    uint non_uniform_index = fragment_in.index;
+    metal::float2 uv = metal::float2(0.0);
+    metal::int2 pix = metal::int2(0);
+    metal::uint2 _e22 = u2_;
+    u2_ = _e22 + metal::uint2(texture_array_unbounded[0].inner.get_width(), texture_array_unbounded[0].inner.get_height());
+    metal::uint2 _e27 = u2_;
+    u2_ = _e27 + metal::uint2(texture_array_unbounded[uniform_index].inner.get_width(), texture_array_unbounded[uniform_index].inner.get_height());
+    metal::uint2 _e32 = u2_;
+    u2_ = _e32 + metal::uint2(texture_array_unbounded[non_uniform_index].inner.get_width(), texture_array_unbounded[non_uniform_index].inner.get_height());
+    metal::float4 _e38 = texture_array_bounded[0].inner.gather(samp[0].inner, uv);
+    metal::float4 _e39 = v4_;
+    v4_ = _e39 + _e38;
+    metal::float4 _e45 = texture_array_bounded[uniform_index].inner.gather(samp[uniform_index].inner, uv);
+    metal::float4 _e46 = v4_;
+    v4_ = _e46 + _e45;
+    metal::float4 _e52 = texture_array_bounded[non_uniform_index].inner.gather(samp[non_uniform_index].inner, uv);
+    metal::float4 _e53 = v4_;
+    v4_ = _e53 + _e52;
+    metal::float4 _e60 = texture_array_depth[0].inner.gather_compare(samp_comp[0].inner, uv, 0.0);
+    metal::float4 _e61 = v4_;
+    v4_ = _e61 + _e60;
+    metal::float4 _e68 = texture_array_depth[uniform_index].inner.gather_compare(samp_comp[uniform_index].inner, uv, 0.0);
+    metal::float4 _e69 = v4_;
+    v4_ = _e69 + _e68;
+    metal::float4 _e76 = texture_array_depth[non_uniform_index].inner.gather_compare(samp_comp[non_uniform_index].inner, uv, 0.0);
+    metal::float4 _e77 = v4_;
+    v4_ = _e77 + _e76;
+    metal::float4 _e82 = (uint(0) < texture_array_unbounded[0].inner.get_num_mip_levels() && metal::all(metal::uint2(pix) < metal::uint2(texture_array_unbounded[0].inner.get_width(0), texture_array_unbounded[0].inner.get_height(0))) ? texture_array_unbounded[0].inner.read(metal::uint2(pix), 0): DefaultConstructible());
+    metal::float4 _e83 = v4_;
+    v4_ = _e83 + _e82;
+    metal::float4 _e88 = (uint(0) < texture_array_unbounded[uniform_index].inner.get_num_mip_levels() && metal::all(metal::uint2(pix) < metal::uint2(texture_array_unbounded[uniform_index].inner.get_width(0), texture_array_unbounded[uniform_index].inner.get_height(0))) ? texture_array_unbounded[uniform_index].inner.read(metal::uint2(pix), 0): DefaultConstructible());
+    metal::float4 _e89 = v4_;
+    v4_ = _e89 + _e88;
+    metal::float4 _e94 = (uint(0) < texture_array_unbounded[non_uniform_index].inner.get_num_mip_levels() && metal::all(metal::uint2(pix) < metal::uint2(texture_array_unbounded[non_uniform_index].inner.get_width(0), texture_array_unbounded[non_uniform_index].inner.get_height(0))) ? texture_array_unbounded[non_uniform_index].inner.read(metal::uint2(pix), 0): DefaultConstructible());
+    metal::float4 _e95 = v4_;
+    v4_ = _e95 + _e94;
+    uint _e100 = u1_;
+    u1_ = _e100 + texture_array_2darray[0].inner.get_array_size();
+    uint _e105 = u1_;
+    u1_ = _e105 + texture_array_2darray[uniform_index].inner.get_array_size();
+    uint _e110 = u1_;
+    u1_ = _e110 + texture_array_2darray[non_uniform_index].inner.get_array_size();
+    uint _e115 = u1_;
+    u1_ = _e115 + texture_array_bounded[0].inner.get_num_mip_levels();
+    uint _e120 = u1_;
+    u1_ = _e120 + texture_array_bounded[uniform_index].inner.get_num_mip_levels();
+    uint _e125 = u1_;
+    u1_ = _e125 + texture_array_bounded[non_uniform_index].inner.get_num_mip_levels();
+    uint _e130 = u1_;
+    u1_ = _e130 + texture_array_multisampled[0].inner.get_num_samples();
+    uint _e135 = u1_;
+    u1_ = _e135 + texture_array_multisampled[uniform_index].inner.get_num_samples();
+    uint _e140 = u1_;
+    u1_ = _e140 + texture_array_multisampled[non_uniform_index].inner.get_num_samples();
+    metal::float4 _e146 = texture_array_bounded[0].inner.sample(samp[0].inner, uv);
+    metal::float4 _e147 = v4_;
+    v4_ = _e147 + _e146;
+    metal::float4 _e153 = texture_array_bounded[uniform_index].inner.sample(samp[uniform_index].inner, uv);
+    metal::float4 _e154 = v4_;
+    v4_ = _e154 + _e153;
+    metal::float4 _e160 = texture_array_bounded[non_uniform_index].inner.sample(samp[non_uniform_index].inner, uv);
+    metal::float4 _e161 = v4_;
+    v4_ = _e161 + _e160;
+    metal::float4 _e168 = texture_array_bounded[0].inner.sample(samp[0].inner, uv, metal::bias(0.0));
+    metal::float4 _e169 = v4_;
+    v4_ = _e169 + _e168;
+    metal::float4 _e176 = texture_array_bounded[uniform_index].inner.sample(samp[uniform_index].inner, uv, metal::bias(0.0));
+    metal::float4 _e177 = v4_;
+    v4_ = _e177 + _e176;
+    metal::float4 _e184 = texture_array_bounded[non_uniform_index].inner.sample(samp[non_uniform_index].inner, uv, metal::bias(0.0));
+    metal::float4 _e185 = v4_;
+    v4_ = _e185 + _e184;
+    float _e192 = texture_array_depth[0].inner.sample_compare(samp_comp[0].inner, uv, 0.0);
+    float _e193 = v1_;
+    v1_ = _e193 + _e192;
+    float _e200 = texture_array_depth[uniform_index].inner.sample_compare(samp_comp[uniform_index].inner, uv, 0.0);
+    float _e201 = v1_;
+    v1_ = _e201 + _e200;
+    float _e208 = texture_array_depth[non_uniform_index].inner.sample_compare(samp_comp[non_uniform_index].inner, uv, 0.0);
+    float _e209 = v1_;
+    v1_ = _e209 + _e208;
+    float _e216 = texture_array_depth[0].inner.sample_compare(samp_comp[0].inner, uv, 0.0);
+    float _e217 = v1_;
+    v1_ = _e217 + _e216;
+    float _e224 = texture_array_depth[uniform_index].inner.sample_compare(samp_comp[uniform_index].inner, uv, 0.0);
+    float _e225 = v1_;
+    v1_ = _e225 + _e224;
+    float _e232 = texture_array_depth[non_uniform_index].inner.sample_compare(samp_comp[non_uniform_index].inner, uv, 0.0);
+    float _e233 = v1_;
+    v1_ = _e233 + _e232;
+    metal::float4 _e239 = texture_array_bounded[0].inner.sample(samp[0].inner, uv, metal::gradient2d(uv, uv));
+    metal::float4 _e240 = v4_;
+    v4_ = _e240 + _e239;
+    metal::float4 _e246 = texture_array_bounded[uniform_index].inner.sample(samp[uniform_index].inner, uv, metal::gradient2d(uv, uv));
+    metal::float4 _e247 = v4_;
+    v4_ = _e247 + _e246;
+    metal::float4 _e253 = texture_array_bounded[non_uniform_index].inner.sample(samp[non_uniform_index].inner, uv, metal::gradient2d(uv, uv));
+    metal::float4 _e254 = v4_;
+    v4_ = _e254 + _e253;
+    metal::float4 _e261 = texture_array_bounded[0].inner.sample(samp[0].inner, uv, metal::level(0.0));
+    metal::float4 _e262 = v4_;
+    v4_ = _e262 + _e261;
+    metal::float4 _e269 = texture_array_bounded[uniform_index].inner.sample(samp[uniform_index].inner, uv, metal::level(0.0));
+    metal::float4 _e270 = v4_;
+    v4_ = _e270 + _e269;
+    metal::float4 _e277 = texture_array_bounded[non_uniform_index].inner.sample(samp[non_uniform_index].inner, uv, metal::level(0.0));
+    metal::float4 _e278 = v4_;
+    v4_ = _e278 + _e277;
+    metal::float4 _e282 = v4_;
+    texture_array_storage[0].inner.write(_e282, metal::uint2(pix));
+    metal::float4 _e285 = v4_;
+    texture_array_storage[uniform_index].inner.write(_e285, metal::uint2(pix));
+    metal::float4 _e288 = v4_;
+    texture_array_storage[non_uniform_index].inner.write(_e288, metal::uint2(pix));
+    metal::uint2 _e289 = u2_;
+    uint _e290 = u1_;
+    metal::float2 v2_ = static_cast<metal::float2>(_e289 + metal::uint2(_e290));
+    metal::float4 _e294 = v4_;
+    float _e301 = v1_;
+    return main_Output { (_e294 + metal::float4(v2_.x, v2_.y, v2_.x, v2_.y)) + metal::float4(_e301) };
+}

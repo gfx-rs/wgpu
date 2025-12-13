@@ -1,0 +1,78 @@
+; SPIR-V
+; Version: 1.1
+; Generator: rspirv
+; Bound: 68
+OpCapability Shader
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint GLCompute %6 "f"
+OpExecutionMode %6 LocalSize 1 1 1
+%2 = OpTypeVoid
+%3 = OpTypeInt 32 1
+%4 = OpTypeFloat 32
+%7 = OpTypeFunction %2
+%8 = OpConstant  %3  1
+%9 = OpConstant  %4  1
+%11 = OpTypePointer Function %3
+%13 = OpTypePointer Function %4
+%6 = OpFunction  %2  None %7
+%5 = OpLabel
+%66 = OpVariable  %13  Function %9
+%63 = OpVariable  %13  Function %9
+%60 = OpVariable  %13  Function %9
+%57 = OpVariable  %13  Function %9
+%54 = OpVariable  %11  Function %8
+%51 = OpVariable  %13  Function %9
+%48 = OpVariable  %11  Function %8
+%45 = OpVariable  %13  Function %9
+%42 = OpVariable  %13  Function %9
+%39 = OpVariable  %13  Function %9
+%36 = OpVariable  %11  Function %8
+%33 = OpVariable  %11  Function %8
+%30 = OpVariable  %13  Function %9
+%27 = OpVariable  %13  Function %9
+%24 = OpVariable  %13  Function %9
+%21 = OpVariable  %13  Function %9
+%18 = OpVariable  %13  Function %9
+%15 = OpVariable  %13  Function %9
+%10 = OpVariable  %11  Function %8
+%64 = OpVariable  %13  Function %9
+%61 = OpVariable  %13  Function %9
+%58 = OpVariable  %13  Function %9
+%55 = OpVariable  %13  Function %9
+%52 = OpVariable  %13  Function %9
+%49 = OpVariable  %13  Function %9
+%46 = OpVariable  %11  Function %8
+%43 = OpVariable  %13  Function %9
+%40 = OpVariable  %13  Function %9
+%37 = OpVariable  %13  Function %9
+%34 = OpVariable  %11  Function %8
+%31 = OpVariable  %13  Function %9
+%28 = OpVariable  %13  Function %9
+%25 = OpVariable  %13  Function %9
+%22 = OpVariable  %13  Function %9
+%19 = OpVariable  %11  Function %8
+%16 = OpVariable  %13  Function %9
+%12 = OpVariable  %13  Function %9
+%65 = OpVariable  %13  Function %9
+%62 = OpVariable  %13  Function %9
+%59 = OpVariable  %13  Function %9
+%56 = OpVariable  %13  Function %9
+%53 = OpVariable  %11  Function %8
+%50 = OpVariable  %13  Function %9
+%47 = OpVariable  %13  Function %9
+%44 = OpVariable  %13  Function %9
+%41 = OpVariable  %13  Function %9
+%38 = OpVariable  %13  Function %9
+%35 = OpVariable  %11  Function %8
+%32 = OpVariable  %13  Function %9
+%29 = OpVariable  %13  Function %9
+%26 = OpVariable  %13  Function %9
+%23 = OpVariable  %13  Function %9
+%20 = OpVariable  %11  Function %8
+%17 = OpVariable  %13  Function %9
+%14 = OpVariable  %11  Function %8
+OpBranch %67
+%67 = OpLabel
+OpReturn
+OpFunctionEnd

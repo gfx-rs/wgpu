@@ -1,0 +1,138 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Sint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Atomic((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Bool,
+                width: 1,
+            )),
+        ),
+        (
+            name: Some("__atomic_compare_exchange_result<Uint,4>"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("old_value"),
+                        ty: 2,
+                        binding: None,
+                        offset: 0,
+                    ),
+                    (
+                        name: Some("exchanged"),
+                        ty: 3,
+                        binding: None,
+                        offset: 4,
+                    ),
+                ],
+                span: 8,
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: None,
+        ray_intersection: None,
+        ray_vertex_return: None,
+        external_texture_params: None,
+        external_texture_transfer_function: None,
+        predeclared_types: {
+            AtomicCompareExchangeWeakResult((
+                kind: Uint,
+                width: 4,
+            )): 4,
+        },
+    ),
+    constants: [],
+    overrides: [
+        (
+            name: Some("o"),
+            id: None,
+            ty: 0,
+            init: None,
+        ),
+    ],
+    global_variables: [
+        (
+            name: Some("a"),
+            space: WorkGroup,
+            binding: None,
+            ty: 1,
+            init: None,
+        ),
+    ],
+    global_expressions: [],
+    functions: [],
+    entry_points: [
+        (
+            name: "f",
+            stage: Compute,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("f"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [
+                    GlobalVariable(0),
+                    Override(0),
+                    As(
+                        expr: 1,
+                        kind: Uint,
+                        convert: Some(4),
+                    ),
+                    Literal(U32(1)),
+                    AtomicResult(
+                        ty: 4,
+                        comparison: true,
+                    ),
+                ],
+                named_expressions: {},
+                body: [
+                    Emit((
+                        start: 2,
+                        end: 3,
+                    )),
+                    Atomic(
+                        pointer: 0,
+                        fun: Exchange(
+                            compare: Some(2),
+                        ),
+                        value: 3,
+                        result: Some(4),
+                    ),
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+            mesh_info: None,
+            task_payload: None,
+        ),
+    ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+    doc_comments: None,
+)
