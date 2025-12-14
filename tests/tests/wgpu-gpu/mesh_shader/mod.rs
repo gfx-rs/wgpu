@@ -372,7 +372,7 @@ fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
                     },
             )
             .limits(wgpu::Limits::default().using_recommended_minimum_mesh_shader_values())
-            .expect_fail(wgpu_test::FailureCase {
+            .skip(wgpu_test::FailureCase {
                 backends: None,
                 // Mesa
                 vendor: Some(0x10005),
@@ -381,7 +381,7 @@ fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
                 reasons: vec![],
                 behavior: wgpu_test::FailureBehavior::Ignore,
             })
-            .expect_fail(wgpu_test::FailureCase {
+            .skip(wgpu_test::FailureCase {
                 backends: None,
                 // AMD
                 vendor: Some(0x1002),
