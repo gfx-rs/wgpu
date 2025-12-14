@@ -163,6 +163,49 @@ async fn run() {
             .expect("Failed to create device")
     };
 
+    let results = execute(&device, &queue, config).await;
+
+    log::info!(
+        "Matrix multiplication {M}x{K}x{N} completed using {} precision!",
+        if use_f16 { "f16" } else { "f32" }
+    );
+    log::info!("Max error vs CPU reference: {:.6}", results.max_error);
+
+    if results.max_error < results.tolerance {
+        log::info!(
+            "✓ Results match CPU reference within tolerance ({})",
+            results.tolerance
+        );
+    } else {
+        log::warn!(
+            "✗ Results differ from CPU reference (tolerance: {})",
+            results.tolerance
+        );
+    }
+
+    // Print a small sample of the result
+    log::info!("Sample of result matrix C (top-left 4x4):");
+    for i in 0..4 {
+        let row: Vec<String> = (0..4)
+            .map(|j| format!("{:6.2}", results.matrix[i * N as usize + j]))
+            .collect();
+        log::info!("  [{}]", row.join(", "));
+    }
+}
+
+struct ExecuteResults {
+    max_error: f32,
+    tolerance: f32,
+    matrix: Vec<f32>,
+}
+
+async fn execute(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    config: &wgpu::CooperativeMatrixProperties,
+) -> ExecuteResults {
+    let use_f16 = config.ab_type == wgpu::CooperativeScalarType::F16;
+
     // Select the appropriate shader based on configuration
     let shader_source = if use_f16 {
         include_str!("shader_f16_16x16.wgsl")
@@ -347,7 +390,7 @@ async fn run() {
         compute_pass.set_pipeline(&pipeline);
         compute_pass.set_bind_group(0, &bind_group, &[]);
         // Dispatch one workgroup per tile of the output
-        compute_pass.dispatch_workgroups(M / tile_size, N / tile_size, 1);
+        compute_pass.dispatch_workgroups(M / config.m_size, N / config.m_size, 1);
     }
 
     // Copy result to staging buffer
@@ -398,29 +441,11 @@ async fn run() {
         max_error = max_error.max(error);
     }
 
-    log::info!(
-        "Matrix multiplication {M}x{K}x{N} completed using {} precision!",
-        if use_f16 { "f16" } else { "f32" }
-    );
-    log::info!("Max error vs CPU reference: {max_error:.6}");
-
-    if max_error < tolerance {
-        log::info!("✓ Results match CPU reference within tolerance ({tolerance})");
-    } else {
-        log::warn!("✗ Results differ from CPU reference (tolerance: {tolerance})");
+    ExecuteResults {
+        max_error,
+        tolerance,
+        matrix: result,
     }
-
-    // Print a small sample of the result
-    log::info!("Sample of result matrix C (top-left 4x4):");
-    for i in 0..4 {
-        let row: Vec<String> = (0..4)
-            .map(|j| format!("{:6.2}", result[i * N as usize + j]))
-            .collect();
-        log::info!("  [{}]", row.join(", "));
-    }
-
-    drop(data);
-    staging_buffer.unmap();
 }
 
 pub fn main() {
@@ -440,3 +465,6 @@ pub fn main() {
         wasm_bindgen_futures::spawn_local(run());
     }
 }
+
+#[cfg(test)]
+pub mod tests;

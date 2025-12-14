@@ -2377,7 +2377,7 @@ impl super::Adapter {
             }
             if features.contains(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX) {
                 capabilities.push(spv::Capability::CooperativeMatrixKHR);
-                //TODO: expose this more generally
+                // TODO: expose this more generally
                 capabilities.push(spv::Capability::VulkanMemoryModel);
             }
             if self.private_caps.shader_integer_dot_product {

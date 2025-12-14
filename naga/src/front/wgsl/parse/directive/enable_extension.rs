@@ -17,7 +17,7 @@ pub struct EnableExtensions {
     /// Whether `enable f16;` was written earlier in the shader module.
     f16: bool,
     clip_distances: bool,
-    experimental_cooperative_matrix: bool,
+    wgpu_cooperative_matrix: bool,
 }
 
 impl EnableExtensions {
@@ -29,7 +29,7 @@ impl EnableExtensions {
             f16: false,
             dual_source_blending: false,
             clip_distances: false,
-            experimental_cooperative_matrix: false,
+            wgpu_cooperative_matrix: false,
         }
     }
 
@@ -44,9 +44,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::DualSourceBlending => &mut self.dual_source_blending,
             ImplementedEnableExtension::F16 => &mut self.f16,
             ImplementedEnableExtension::ClipDistances => &mut self.clip_distances,
-            ImplementedEnableExtension::ExperimentalCooperativeMatrix => {
-                &mut self.experimental_cooperative_matrix
-            }
+            ImplementedEnableExtension::WgpuCooperativeMatrix => &mut self.wgpu_cooperative_matrix,
         };
         *field = true;
     }
@@ -62,9 +60,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::DualSourceBlending => self.dual_source_blending,
             ImplementedEnableExtension::F16 => self.f16,
             ImplementedEnableExtension::ClipDistances => self.clip_distances,
-            ImplementedEnableExtension::ExperimentalCooperativeMatrix => {
-                self.experimental_cooperative_matrix
-            }
+            ImplementedEnableExtension::WgpuCooperativeMatrix => self.wgpu_cooperative_matrix,
         }
     }
 }
@@ -97,7 +93,7 @@ impl EnableExtension {
     const MESH_SHADER: &'static str = "wgpu_mesh_shader";
     const RAY_QUERY: &'static str = "wgpu_ray_query";
     const RAY_QUERY_VERTEX_RETURN: &'static str = "wgpu_ray_query_vertex_return";
-    const EXPERIMENTAL_COOPERATIVE_MATRIX: &'static str = "experimental_cooperative_matrix";
+    const COOPERATIVE_MATRIX: &'static str = "wgpu_cooperative_matrix";
     const SUBGROUPS: &'static str = "subgroups";
     const PRIMITIVE_INDEX: &'static str = "primitive_index";
 
@@ -114,8 +110,8 @@ impl EnableExtension {
             Self::RAY_QUERY_VERTEX_RETURN => {
                 Self::Implemented(ImplementedEnableExtension::WgpuRayQueryVertexReturn)
             }
-            Self::EXPERIMENTAL_COOPERATIVE_MATRIX => {
-                Self::Implemented(ImplementedEnableExtension::ExperimentalCooperativeMatrix)
+            Self::COOPERATIVE_MATRIX => {
+                Self::Implemented(ImplementedEnableExtension::WgpuCooperativeMatrix)
             }
             Self::SUBGROUPS => Self::Unimplemented(UnimplementedEnableExtension::Subgroups),
             Self::PRIMITIVE_INDEX => {
@@ -134,9 +130,7 @@ impl EnableExtension {
                 ImplementedEnableExtension::WgpuRayQueryVertexReturn => {
                     Self::RAY_QUERY_VERTEX_RETURN
                 }
-                ImplementedEnableExtension::ExperimentalCooperativeMatrix => {
-                    Self::EXPERIMENTAL_COOPERATIVE_MATRIX
-                }
+                ImplementedEnableExtension::WgpuCooperativeMatrix => Self::COOPERATIVE_MATRIX,
                 ImplementedEnableExtension::DualSourceBlending => Self::DUAL_SOURCE_BLENDING,
                 ImplementedEnableExtension::F16 => Self::F16,
                 ImplementedEnableExtension::ClipDistances => Self::CLIP_DISTANCES,
@@ -176,8 +170,8 @@ pub enum ImplementedEnableExtension {
     WgpuRayQuery,
     /// Enables the `wgpu_ray_query_vertex_return` extension, native only.
     WgpuRayQueryVertexReturn,
-    /// Enables the `experimental_cooperative_matrix` extension, native only.
-    ExperimentalCooperativeMatrix,
+    /// Enables the `wgpu_cooperative_matrix` extension, native only.
+    WgpuCooperativeMatrix,
 }
 
 /// A variant of [`EnableExtension::Unimplemented`].

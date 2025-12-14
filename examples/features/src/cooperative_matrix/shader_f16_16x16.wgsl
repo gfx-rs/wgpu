@@ -11,7 +11,7 @@
 // and accumulates the result into C.
 
 enable f16;
-enable experimental_cooperative_matrix;
+enable wgpu_cooperative_matrix;
 
 // Matrix dimensions (16x16 tiles)
 const TILE_SIZE: u32 = 16u;

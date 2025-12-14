@@ -13,7 +13,7 @@ OpExecutionMode %19 LocalSize 1 1 1
 OpExecutionMode %43 LocalSize 1 1 1
 OpExecutionMode %43 OutputPoints
 OpExecutionMode %43 OutputVertices 1
-OpExecutionMode %43 OutputPrimitivesNV 1
+OpExecutionMode %43 OutputPrimitivesEXT 1
 OpDecorate %29 BuiltIn LocalInvocationIndex
 OpMemberDecorate %36 0 BuiltIn Position
 OpDecorate %36 Block

@@ -531,7 +531,6 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         span: Span,
     ) -> Result<'source, Handle<ir::Expression>> {
         let mut eval = self.as_const_evaluator();
-        log::debug!("appending {expr:?}");
         eval.try_eval_and_append(expr, span)
             .map_err(|e| Box::new(Error::ConstantEvaluatorError(e.into(), span)))
     }
