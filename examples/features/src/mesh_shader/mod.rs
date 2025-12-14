@@ -185,7 +185,6 @@ pub fn main() {
 #[wgpu_test::gpu_test]
 pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "mesh_shader",
-    // Generated on 1080ti on Vk/Windows
     image_path: "/examples/features/src/mesh_shader/screenshot.png",
     width: 1024,
     height: 768,
