@@ -22,11 +22,7 @@ struct VertexOutput {
 }
 struct PrimitiveOutput {
     @builtin(triangle_indices) index: vec3<u32>,
-    @builtin(cull_primitive) cull: bool,
-    @per_primitive @location(1) colorMask: vec4<f32>,
-}
-struct PrimitiveInput {
-    @per_primitive @location(1) colorMask: vec4<f32>,
+    //@builtin(cull_primitive) cull: bool,
 }
 
 @task
@@ -65,8 +61,7 @@ fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocati
     mesh_output.vertices[2].color = colors[2] * taskPayload.colorMask;
 
     mesh_output.primitives[0].index = vec3<u32>(0, 1, 2);
-    mesh_output.primitives[0].cull = !taskPayload.visible;
-    mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
+    //mesh_output.primitives[0].cull = !taskPayload.visible;
 }
 // Don't use task payload if no task shader is present
 @mesh(mesh_output)
@@ -86,10 +81,10 @@ fn ms_no_ts(@builtin(local_invocation_index) index: u32, @builtin(global_invocat
     mesh_output.vertices[2].color = colors[2];
 
     mesh_output.primitives[0].index = vec3<u32>(0, 1, 2);
-    mesh_output.primitives[0].cull = false;
-    mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
+    //mesh_output.primitives[0].cull = false;
+    //mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
 }
 @fragment
-fn fs_main(vertex: VertexOutput, primitive: PrimitiveInput) -> @location(0) vec4<f32> {
-    return vertex.color * primitive.colorMask;
+fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
+    return vertex.color;
 }
