@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.4
 ; Generator: rspirv
-; Bound: 101
+; Bound: 98
 OpCapability Shader
 OpCapability MeshShadingEXT
 OpExtension "SPV_EXT_mesh_shader"
@@ -69,10 +69,9 @@ OpDecorate %43 BuiltIn LocalInvocationId
 %65 = OpTypePointer Workgroup %10
 %66 = OpConstant  %3  0
 %68 = OpTypePointer Workgroup %12
-%75 = OpTypePointer Workgroup %7
-%79 = OpTypePointer Output %5
-%89 = OpTypePointer Workgroup %8
-%93 = OpTypePointer Output %3
+%75 = OpTypePointer Workgroup %5
+%78 = OpTypePointer Output %5
+%90 = OpTypePointer Output %3
 %19 = OpFunction  %2  None %20
 %18 = OpLabel
 OpBranch %22
@@ -114,47 +113,45 @@ OpSetMeshOutputsEXT %59 %63
 OpStore %30 %29
 OpBranch %69
 %69 = OpLabel
-OpLoopMerge %71 %81 None
+OpLoopMerge %71 %80 None
+OpBranch %79
+%79 = OpLabel
+%82 = OpLoad  %3  %30
+%83 = OpULessThan  %48  %82 %59
+OpBranchConditional %83 %81 %71
+%81 = OpLabel
+%73 = OpLoad  %3  %30
+%74 = OpAccessChain  %75  %64 %73 %66
+%76 = OpLoad  %5  %74
+%77 = OpAccessChain  %78  %36 %73 %66
+OpStore %77 %76
 OpBranch %80
 %80 = OpLabel
-%83 = OpLoad  %3  %30
-%84 = OpULessThan  %48  %83 %59
-OpBranchConditional %84 %82 %71
-%82 = OpLabel
-%73 = OpLoad  %3  %30
-%74 = OpAccessChain  %75  %64 %73
-%76 = OpLoad  %7  %74
-%77 = OpCompositeExtract  %5  %76 0
-%78 = OpAccessChain  %79  %36 %73 %66
-OpStore %78 %77
-OpBranch %81
-%81 = OpLabel
-%85 = OpLoad  %3  %30
-%86 = OpIAdd  %3  %85 %11
-OpStore %30 %86
+%84 = OpLoad  %3  %30
+%85 = OpIAdd  %3  %84 %11
+OpStore %30 %85
 OpBranch %69
 %71 = OpLabel
 OpStore %31 %29
 OpBranch %70
 %70 = OpLabel
-OpLoopMerge %72 %95 None
-OpBranch %94
-%94 = OpLabel
-%97 = OpLoad  %3  %31
-%98 = OpULessThan  %48  %97 %63
-OpBranchConditional %98 %96 %72
-%96 = OpLabel
-%87 = OpLoad  %3  %31
-%88 = OpAccessChain  %89  %67 %87
-%90 = OpLoad  %8  %88
-%91 = OpCompositeExtract  %3  %90 0
-%92 = OpAccessChain  %93  %39 %87
-OpStore %92 %91
-OpBranch %95
-%95 = OpLabel
-%99 = OpLoad  %3  %31
-%100 = OpIAdd  %3  %99 %11
-OpStore %31 %100
+OpLoopMerge %72 %92 None
+OpBranch %91
+%91 = OpLabel
+%94 = OpLoad  %3  %31
+%95 = OpULessThan  %48  %94 %63
+OpBranchConditional %95 %93 %72
+%93 = OpLabel
+%86 = OpLoad  %3  %31
+%87 = OpAccessChain  %57  %67 %86 %66
+%88 = OpLoad  %3  %87
+%89 = OpAccessChain  %90  %39 %86
+OpStore %89 %88
+OpBranch %92
+%92 = OpLabel
+%96 = OpLoad  %3  %31
+%97 = OpIAdd  %3  %96 %11
+OpStore %31 %97
 OpBranch %70
 %72 = OpLabel
 OpReturn

@@ -18,7 +18,6 @@ pub struct MeshReturnMember {
 
 struct PerOutputTypeMeshReturnInfo {
     max_length_constant: Word,
-    type_id: Word,
     array_type_id: Word,
     struct_members: Vec<MeshReturnMember>,
 
@@ -208,7 +207,6 @@ impl super::Writer {
             loop_counter_primitives: loop_counter_2,
 
             vertex_info: PerOutputTypeMeshReturnInfo {
-                type_id: self.get_handle_type_id(mesh_info.vertex_output_type),
                 array_type_id: vertex_array_type_id,
                 struct_members: vertex_members,
                 max_length_constant: self
@@ -217,7 +215,6 @@ impl super::Writer {
                 builtin_block: None,
             },
             primitive_info: PerOutputTypeMeshReturnInfo {
-                type_id: self.get_handle_type_id(mesh_info.primitive_output_type),
                 array_type_id: primitive_array_type_id,
                 struct_members: primitive_members,
                 max_length_constant: self
@@ -593,7 +590,6 @@ impl super::Writer {
         prim_array_ptr: u32,
     ) -> Vec<Instruction> {
         let u32_type_id = self.get_u32_type_id();
-        let zero_u32 = self.get_constant_scalar(crate::Literal::U32(0));
         let mut body = Vec::new();
         // Current index to copy
         let val_i = self.id_gen.next();
@@ -610,30 +606,28 @@ impl super::Writer {
             vert_array_ptr
         };
 
-        let to_copy_ptr = self.id_gen.next();
-        body.push(Instruction::access_chain(
-            self.get_pointer_type_id(info.type_id, spirv::StorageClass::Workgroup),
-            to_copy_ptr,
-            array_ptr,
-            &[val_i],
-        ));
-
-        // Load the entire vertex value
-        let to_copy = self.id_gen.next();
-        body.push(Instruction::load(info.type_id, to_copy, to_copy_ptr, None));
-
         let mut builtin_index = 0;
         let mut binding_index = 0;
         // Write individual members of the vertex
         for (member_id, member) in info.struct_members.iter().enumerate() {
+            let val_to_copy_ptr = self.id_gen.next();
+            body.push(Instruction::access_chain(
+                self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Workgroup),
+                val_to_copy_ptr,
+                array_ptr,
+                &[
+                    val_i,
+                    self.get_constant_scalar(crate::Literal::U32(member_id as u32)),
+                ],
+            ));
             let val_to_copy = self.id_gen.next();
-            let mut needs_y_flip = false;
-            body.push(Instruction::composite_extract(
+            body.push(Instruction::load(
                 member.ty_id,
                 val_to_copy,
-                to_copy,
-                &[member_id as u32],
+                val_to_copy_ptr,
+                None,
             ));
+            let mut needs_y_flip = false;
             let ptr_to_copy_to = self.id_gen.next();
             // Get a pointer to the struct member to copy
             match member.binding {
@@ -668,7 +662,7 @@ impl super::Writer {
                         self.get_pointer_type_id(member.ty_id, spirv::StorageClass::Output),
                         ptr_to_copy_to,
                         info.bindings[binding_index],
-                        &[val_i, zero_u32],
+                        &[val_i],
                     ));
                     binding_index += 1;
                 }
