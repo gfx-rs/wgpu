@@ -1151,6 +1151,9 @@ bitflags_array! {
         /// - DX12
         /// - Metal
         ///
+        /// Naga is only supported on vulkan on NVIDIA or Intel GPUs. On other platforms you will have to use passthrough shaders.
+        /// AMD GPUs and some Mesa drivers fail to run the naga generated code. This is a bug and will be addressed.
+        ///
         /// This is a native only feature.
         const EXPERIMENTAL_MESH_SHADER = 1 << 48;
 
