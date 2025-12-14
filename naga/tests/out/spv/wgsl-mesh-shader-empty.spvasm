@@ -17,7 +17,6 @@ OpExecutionMode %40 OutputPrimitivesNV 1
 OpDecorate %28 BuiltIn LocalInvocationIndex
 OpMemberDecorate %33 0 BuiltIn Position
 OpDecorate %33 Block
-OpDecorate %39 PerPrimitiveNV
 OpDecorate %39 BuiltIn PrimitiveTriangleIndicesEXT
 OpMemberDecorate %4 0 Offset 0
 OpMemberDecorate %7 0 Offset 0

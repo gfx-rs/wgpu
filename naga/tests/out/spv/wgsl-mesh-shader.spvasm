@@ -24,7 +24,6 @@ OpDecorate %65 Block
 OpDecorate %68 PerPrimitiveNV
 OpDecorate %69 Block
 OpMemberDecorate %69 0 Location 0
-OpDecorate %75 PerPrimitiveNV
 OpDecorate %75 BuiltIn PrimitiveTriangleIndicesEXT
 OpDecorate %76 Block
 OpMemberDecorate %76 0 Location 1
