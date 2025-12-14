@@ -12,7 +12,7 @@ const colors = array(
 );
 struct TaskPayload {
     colorMask: vec4<f32>,
-    visible: bool,
+    visible: u32,
 }
 var<task_payload> taskPayload: TaskPayload;
 var<workgroup> workgroupData: f32;
@@ -22,7 +22,11 @@ struct VertexOutput {
 }
 struct PrimitiveOutput {
     @builtin(triangle_indices) index: vec3<u32>,
-    //@builtin(cull_primitive) cull: bool,
+    @builtin(cull_primitive) cull: bool,
+    @per_primitive @location(1) colorMask: vec4<f32>,
+}
+struct PrimitiveInput {
+    @per_primitive @location(1) colorMask: vec4<f32>,
 }
 
 @task
@@ -31,7 +35,7 @@ struct PrimitiveOutput {
 fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
     workgroupData = 1.0;
     taskPayload.colorMask = vec4(1.0, 1.0, 0.0, 1.0);
-    taskPayload.visible = true;
+    taskPayload.visible = 1;
     return vec3(3, 1, 1);
 }
 
@@ -61,7 +65,8 @@ fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocati
     mesh_output.vertices[2].color = colors[2] * taskPayload.colorMask;
 
     mesh_output.primitives[0].index = vec3<u32>(0, 1, 2);
-    //mesh_output.primitives[0].cull = !taskPayload.visible;
+    mesh_output.primitives[0].cull = taskPayload.visible != 0;
+    mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
 }
 // Don't use task payload if no task shader is present
 @mesh(mesh_output)
@@ -81,10 +86,10 @@ fn ms_no_ts(@builtin(local_invocation_index) index: u32, @builtin(global_invocat
     mesh_output.vertices[2].color = colors[2];
 
     mesh_output.primitives[0].index = vec3<u32>(0, 1, 2);
-    //mesh_output.primitives[0].cull = false;
-    //mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
+    mesh_output.primitives[0].cull = false;
+    mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
 }
 @fragment
-fn fs_main(vertex: VertexOutput) -> @location(0) vec4<f32> {
-    return vertex.color;
+fn fs_main(vertex: VertexOutput, primitive: PrimitiveInput) -> @location(0) vec4<f32> {
+    return vertex.color * primitive.colorMask;
 }
