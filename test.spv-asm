@@ -1,0 +1,301 @@
+; SPIR-V
+; Version: 1.5
+; Generator: Khronos Glslang Reference Front End; 11
+; Bound: 180
+; Schema: 0
+               OpCapability MeshShadingEXT
+               OpExtension "SPV_EXT_mesh_shader"
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint MeshEXT %main "main" %gl_LocalInvocationID %workgroupData %mesh_output %taskPayload %gl_LocalInvocationIndex %gl_MeshVerticesEXT %vertexColors %gl_PrimitiveTriangleIndicesEXT %gl_MeshPrimitivesEXT %primitiveMasks
+               OpExecutionMode %main LocalSize 1 1 1
+               OpExecutionMode %main OutputVertices 3
+               OpExecutionMode %main OutputPrimitivesEXT 1
+               OpExecutionMode %main OutputTrianglesEXT
+               OpSource GLSL 450
+               OpSourceExtension "GL_EXT_mesh_shader"
+               OpName %main "main"
+               OpName %gl_LocalInvocationID "gl_LocalInvocationID"
+               OpName %workgroupData "workgroupData"
+               OpName %VertexOutput "VertexOutput"
+               OpMemberName %VertexOutput 0 "position"
+               OpMemberName %VertexOutput 1 "color"
+               OpName %PrimitiveOutput "PrimitiveOutput"
+               OpMemberName %PrimitiveOutput 0 "indices"
+               OpMemberName %PrimitiveOutput 1 "cull"
+               OpMemberName %PrimitiveOutput 2 "colorMask"
+               OpName %MeshOutput "MeshOutput"
+               OpMemberName %MeshOutput 0 "vertices"
+               OpMemberName %MeshOutput 1 "primitives"
+               OpMemberName %MeshOutput 2 "vertex_count"
+               OpMemberName %MeshOutput 3 "primitive_count"
+               OpName %mesh_output "mesh_output"
+               OpName %TaskPayload "TaskPayload"
+               OpMemberName %TaskPayload 0 "colorMask"
+               OpMemberName %TaskPayload 1 "visible"
+               OpName %taskPayload "taskPayload"
+               OpName %numVerts "numVerts"
+               OpName %numPrims "numPrims"
+               OpName %i "i"
+               OpName %gl_LocalInvocationIndex "gl_LocalInvocationIndex"
+               OpName %gl_MeshPerVertexEXT "gl_MeshPerVertexEXT"
+               OpMemberName %gl_MeshPerVertexEXT 0 "gl_Position"
+               OpMemberName %gl_MeshPerVertexEXT 1 "gl_PointSize"
+               OpMemberName %gl_MeshPerVertexEXT 2 "gl_ClipDistance"
+               OpMemberName %gl_MeshPerVertexEXT 3 "gl_CullDistance"
+               OpName %gl_MeshVerticesEXT "gl_MeshVerticesEXT"
+               OpName %vertexColors "vertexColors"
+               OpName %i_0 "i"
+               OpName %gl_PrimitiveTriangleIndicesEXT "gl_PrimitiveTriangleIndicesEXT"
+               OpName %gl_MeshPerPrimitiveEXT "gl_MeshPerPrimitiveEXT"
+               OpMemberName %gl_MeshPerPrimitiveEXT 0 "gl_PrimitiveID"
+               OpMemberName %gl_MeshPerPrimitiveEXT 1 "gl_Layer"
+               OpMemberName %gl_MeshPerPrimitiveEXT 2 "gl_ViewportIndex"
+               OpMemberName %gl_MeshPerPrimitiveEXT 3 "gl_CullPrimitiveEXT"
+               OpName %gl_MeshPrimitivesEXT "gl_MeshPrimitivesEXT"
+               OpName %primitiveMasks "primitiveMasks"
+               OpDecorate %gl_LocalInvocationID BuiltIn LocalInvocationId
+               OpDecorate %gl_LocalInvocationIndex BuiltIn LocalInvocationIndex
+               OpDecorate %gl_MeshPerVertexEXT Block
+               OpMemberDecorate %gl_MeshPerVertexEXT 0 BuiltIn Position
+               OpMemberDecorate %gl_MeshPerVertexEXT 1 BuiltIn PointSize
+               OpMemberDecorate %gl_MeshPerVertexEXT 2 BuiltIn ClipDistance
+               OpMemberDecorate %gl_MeshPerVertexEXT 3 BuiltIn CullDistance
+               OpDecorate %vertexColors Location 0
+               OpDecorate %gl_PrimitiveTriangleIndicesEXT BuiltIn PrimitiveTriangleIndicesEXT
+               OpDecorate %gl_MeshPerPrimitiveEXT Block
+               OpMemberDecorate %gl_MeshPerPrimitiveEXT 0 BuiltIn PrimitiveId
+               OpMemberDecorate %gl_MeshPerPrimitiveEXT 0 PerPrimitiveEXT
+               OpMemberDecorate %gl_MeshPerPrimitiveEXT 1 BuiltIn Layer
+               OpMemberDecorate %gl_MeshPerPrimitiveEXT 1 PerPrimitiveEXT
+               OpMemberDecorate %gl_MeshPerPrimitiveEXT 2 BuiltIn ViewportIndex
+               OpMemberDecorate %gl_MeshPerPrimitiveEXT 2 PerPrimitiveEXT
+               OpMemberDecorate %gl_MeshPerPrimitiveEXT 3 BuiltIn CullPrimitiveEXT
+               OpMemberDecorate %gl_MeshPerPrimitiveEXT 3 PerPrimitiveEXT
+               OpDecorate %primitiveMasks Location 1
+               OpDecorate %primitiveMasks PerPrimitiveEXT
+               OpDecorate %gl_WorkGroupSize BuiltIn WorkgroupSize
+       %void = OpTypeVoid
+          %3 = OpTypeFunction %void
+       %uint = OpTypeInt 32 0
+     %v3uint = OpTypeVector %uint 3
+%_ptr_Input_v3uint = OpTypePointer Input %v3uint
+%gl_LocalInvocationID = OpVariable %_ptr_Input_v3uint Input
+     %uint_0 = OpConstant %uint 0
+         %12 = OpConstantComposite %v3uint %uint_0 %uint_0 %uint_0
+       %bool = OpTypeBool
+     %v3bool = OpTypeVector %bool 3
+      %float = OpTypeFloat 32
+%_ptr_Workgroup_float = OpTypePointer Workgroup %float
+%workgroupData = OpVariable %_ptr_Workgroup_float Workgroup
+    %float_0 = OpConstant %float 0
+    %v4float = OpTypeVector %float 4
+%VertexOutput = OpTypeStruct %v4float %v4float
+     %uint_3 = OpConstant %uint 3
+%_arr_VertexOutput_uint_3 = OpTypeArray %VertexOutput %uint_3
+%PrimitiveOutput = OpTypeStruct %v3uint %bool %v4float
+     %uint_1 = OpConstant %uint 1
+%_arr_PrimitiveOutput_uint_1 = OpTypeArray %PrimitiveOutput %uint_1
+ %MeshOutput = OpTypeStruct %_arr_VertexOutput_uint_3 %_arr_PrimitiveOutput_uint_1 %uint %uint
+%_ptr_Workgroup_MeshOutput = OpTypePointer Workgroup %MeshOutput
+%mesh_output = OpVariable %_ptr_Workgroup_MeshOutput Workgroup
+         %33 = OpConstantComposite %v4float %float_0 %float_0 %float_0 %float_0
+         %34 = OpConstantComposite %VertexOutput %33 %33
+         %35 = OpConstantComposite %_arr_VertexOutput_uint_3 %34 %34 %34
+      %false = OpConstantFalse %bool
+         %37 = OpConstantComposite %PrimitiveOutput %12 %false %33
+         %38 = OpConstantComposite %_arr_PrimitiveOutput_uint_1 %37
+         %39 = OpConstantComposite %MeshOutput %35 %38 %uint_0 %uint_0
+     %uint_2 = OpConstant %uint 2
+   %uint_264 = OpConstant %uint 264
+        %int = OpTypeInt 32 1
+      %int_2 = OpConstant %int 2
+%_ptr_Workgroup_uint = OpTypePointer Workgroup %uint
+      %int_3 = OpConstant %int 3
+    %float_2 = OpConstant %float 2
+      %int_0 = OpConstant %int 0
+    %float_1 = OpConstant %float 1
+         %51 = OpConstantComposite %v4float %float_0 %float_1 %float_0 %float_1
+%_ptr_Workgroup_v4float = OpTypePointer Workgroup %v4float
+      %int_1 = OpConstant %int 1
+%TaskPayload = OpTypeStruct %v4float %bool
+%_ptr_TaskPayloadWorkgroupEXT_TaskPayload = OpTypePointer TaskPayloadWorkgroupEXT %TaskPayload
+%taskPayload = OpVariable %_ptr_TaskPayloadWorkgroupEXT_TaskPayload TaskPayloadWorkgroupEXT
+%_ptr_TaskPayloadWorkgroupEXT_v4float = OpTypePointer TaskPayloadWorkgroupEXT %v4float
+   %float_n1 = OpConstant %float -1
+         %64 = OpConstantComposite %v4float %float_n1 %float_n1 %float_0 %float_1
+         %66 = OpConstantComposite %v4float %float_0 %float_0 %float_1 %float_1
+         %71 = OpConstantComposite %v4float %float_1 %float_n1 %float_0 %float_1
+         %73 = OpConstantComposite %v4float %float_1 %float_0 %float_0 %float_1
+         %78 = OpConstantComposite %v3uint %uint_0 %uint_1 %uint_2
+%_ptr_Workgroup_v3uint = OpTypePointer Workgroup %v3uint
+%_ptr_TaskPayloadWorkgroupEXT_bool = OpTypePointer TaskPayloadWorkgroupEXT %bool
+%_ptr_Workgroup_bool = OpTypePointer Workgroup %bool
+         %87 = OpConstantComposite %v4float %float_1 %float_0 %float_1 %float_1
+%_ptr_Function_uint = OpTypePointer Function %uint
+%_ptr_Input_uint = OpTypePointer Input %uint
+%gl_LocalInvocationIndex = OpVariable %_ptr_Input_uint Input
+%_arr_float_uint_1 = OpTypeArray %float %uint_1
+%gl_MeshPerVertexEXT = OpTypeStruct %v4float %float %_arr_float_uint_1 %_arr_float_uint_1
+%_arr_gl_MeshPerVertexEXT_uint_3 = OpTypeArray %gl_MeshPerVertexEXT %uint_3
+%_ptr_Output__arr_gl_MeshPerVertexEXT_uint_3 = OpTypePointer Output %_arr_gl_MeshPerVertexEXT_uint_3
+%gl_MeshVerticesEXT = OpVariable %_ptr_Output__arr_gl_MeshPerVertexEXT_uint_3 Output
+%_ptr_Output_v4float = OpTypePointer Output %v4float
+%_ptr_Output_float = OpTypePointer Output %float
+%_arr_v4float_uint_3 = OpTypeArray %v4float %uint_3
+%_ptr_Output__arr_v4float_uint_3 = OpTypePointer Output %_arr_v4float_uint_3
+%vertexColors = OpVariable %_ptr_Output__arr_v4float_uint_3 Output
+%_arr_v3uint_uint_1 = OpTypeArray %v3uint %uint_1
+%_ptr_Output__arr_v3uint_uint_1 = OpTypePointer Output %_arr_v3uint_uint_1
+%gl_PrimitiveTriangleIndicesEXT = OpVariable %_ptr_Output__arr_v3uint_uint_1 Output
+%_ptr_Output_v3uint = OpTypePointer Output %v3uint
+%gl_MeshPerPrimitiveEXT = OpTypeStruct %int %int %int %bool
+%_arr_gl_MeshPerPrimitiveEXT_uint_1 = OpTypeArray %gl_MeshPerPrimitiveEXT %uint_1
+%_ptr_Output__arr_gl_MeshPerPrimitiveEXT_uint_1 = OpTypePointer Output %_arr_gl_MeshPerPrimitiveEXT_uint_1
+%gl_MeshPrimitivesEXT = OpVariable %_ptr_Output__arr_gl_MeshPerPrimitiveEXT_uint_1 Output
+%_ptr_Output_bool = OpTypePointer Output %bool
+%_arr_v4float_uint_1 = OpTypeArray %v4float %uint_1
+%_ptr_Output__arr_v4float_uint_1 = OpTypePointer Output %_arr_v4float_uint_1
+%primitiveMasks = OpVariable %_ptr_Output__arr_v4float_uint_1 Output
+%gl_WorkGroupSize = OpConstantComposite %v3uint %uint_1 %uint_1 %uint_1
+       %main = OpFunction %void None %3
+          %5 = OpLabel
+   %numVerts = OpVariable %_ptr_Function_uint Function
+   %numPrims = OpVariable %_ptr_Function_uint Function
+          %i = OpVariable %_ptr_Function_uint Function
+        %i_0 = OpVariable %_ptr_Function_uint Function
+         %10 = OpLoad %v3uint %gl_LocalInvocationID
+         %15 = OpIEqual %v3bool %10 %12
+         %16 = OpAll %bool %15
+               OpSelectionMerge %18 None
+               OpBranchConditional %16 %17 %18
+         %17 = OpLabel
+               OpStore %workgroupData %float_0
+               OpStore %mesh_output %39
+               OpBranch %18
+         %18 = OpLabel
+               OpControlBarrier %uint_2 %uint_2 %uint_264
+         %45 = OpAccessChain %_ptr_Workgroup_uint %mesh_output %int_2
+               OpStore %45 %uint_3
+         %47 = OpAccessChain %_ptr_Workgroup_uint %mesh_output %int_3
+               OpStore %47 %uint_1
+               OpStore %workgroupData %float_2
+         %53 = OpAccessChain %_ptr_Workgroup_v4float %mesh_output %int_0 %int_0 %int_0
+               OpStore %53 %51
+         %59 = OpAccessChain %_ptr_TaskPayloadWorkgroupEXT_v4float %taskPayload %int_0
+         %60 = OpLoad %v4float %59
+         %61 = OpFMul %v4float %51 %60
+         %62 = OpAccessChain %_ptr_Workgroup_v4float %mesh_output %int_0 %int_0 %int_1
+               OpStore %62 %61
+         %65 = OpAccessChain %_ptr_Workgroup_v4float %mesh_output %int_0 %int_1 %int_0
+               OpStore %65 %64
+         %67 = OpAccessChain %_ptr_TaskPayloadWorkgroupEXT_v4float %taskPayload %int_0
+         %68 = OpLoad %v4float %67
+         %69 = OpFMul %v4float %66 %68
+         %70 = OpAccessChain %_ptr_Workgroup_v4float %mesh_output %int_0 %int_1 %int_1
+               OpStore %70 %69
+         %72 = OpAccessChain %_ptr_Workgroup_v4float %mesh_output %int_0 %int_2 %int_0
+               OpStore %72 %71
+         %74 = OpAccessChain %_ptr_TaskPayloadWorkgroupEXT_v4float %taskPayload %int_0
+         %75 = OpLoad %v4float %74
+         %76 = OpFMul %v4float %73 %75
+         %77 = OpAccessChain %_ptr_Workgroup_v4float %mesh_output %int_0 %int_2 %int_1
+               OpStore %77 %76
+         %80 = OpAccessChain %_ptr_Workgroup_v3uint %mesh_output %int_1 %int_0 %int_0
+               OpStore %80 %78
+         %82 = OpAccessChain %_ptr_TaskPayloadWorkgroupEXT_bool %taskPayload %int_1
+         %83 = OpLoad %bool %82
+         %84 = OpLogicalNot %bool %83
+         %86 = OpAccessChain %_ptr_Workgroup_bool %mesh_output %int_1 %int_0 %int_1
+               OpStore %86 %84
+         %88 = OpAccessChain %_ptr_Workgroup_v4float %mesh_output %int_1 %int_0 %int_2
+               OpStore %88 %87
+               OpControlBarrier %uint_2 %uint_2 %uint_264
+         %91 = OpAccessChain %_ptr_Workgroup_uint %mesh_output %int_2
+         %92 = OpLoad %uint %91
+         %93 = OpExtInst %uint %1 UMin %92 %uint_3
+               OpStore %numVerts %93
+         %95 = OpAccessChain %_ptr_Workgroup_uint %mesh_output %int_3
+         %96 = OpLoad %uint %95
+         %97 = OpExtInst %uint %1 UMin %96 %uint_1
+               OpStore %numPrims %97
+         %98 = OpLoad %uint %numVerts
+         %99 = OpLoad %uint %numPrims
+               OpSetMeshOutputsEXT %98 %99
+        %103 = OpLoad %uint %gl_LocalInvocationIndex
+               OpStore %i %103
+               OpBranch %104
+        %104 = OpLabel
+               OpLoopMerge %106 %107 None
+               OpBranch %108
+        %108 = OpLabel
+        %109 = OpLoad %uint %i
+        %110 = OpLoad %uint %numVerts
+        %111 = OpULessThan %bool %109 %110
+               OpBranchConditional %111 %105 %106
+        %105 = OpLabel
+        %117 = OpLoad %uint %i
+        %118 = OpLoad %uint %i
+        %119 = OpAccessChain %_ptr_Workgroup_v4float %mesh_output %int_0 %118 %int_0
+        %120 = OpLoad %v4float %119
+        %122 = OpAccessChain %_ptr_Output_v4float %gl_MeshVerticesEXT %117 %int_0
+               OpStore %122 %120
+        %123 = OpLoad %uint %i
+        %124 = OpLoad %uint %i
+        %125 = OpAccessChain %_ptr_Workgroup_float %mesh_output %int_0 %124 %int_0 %uint_1
+        %126 = OpLoad %float %125
+        %127 = OpFNegate %float %126
+        %129 = OpAccessChain %_ptr_Output_float %gl_MeshVerticesEXT %123 %int_0 %uint_1
+               OpStore %129 %127
+        %133 = OpLoad %uint %i
+        %134 = OpLoad %uint %i
+        %135 = OpAccessChain %_ptr_Workgroup_v4float %mesh_output %int_0 %134 %int_1
+        %136 = OpLoad %v4float %135
+        %137 = OpAccessChain %_ptr_Output_v4float %vertexColors %133
+               OpStore %137 %136
+               OpBranch %107
+        %107 = OpLabel
+        %138 = OpLoad %uint %i
+        %139 = OpIAdd %uint %138 %int_1
+               OpStore %i %139
+               OpBranch %104
+        %106 = OpLabel
+        %141 = OpLoad %uint %gl_LocalInvocationIndex
+               OpStore %i_0 %141
+               OpBranch %142
+        %142 = OpLabel
+               OpLoopMerge %144 %145 None
+               OpBranch %146
+        %146 = OpLabel
+        %147 = OpLoad %uint %i_0
+        %148 = OpLoad %uint %numPrims
+        %149 = OpULessThan %bool %147 %148
+               OpBranchConditional %149 %143 %144
+        %143 = OpLabel
+        %153 = OpLoad %uint %i_0
+        %154 = OpLoad %uint %i_0
+        %155 = OpAccessChain %_ptr_Workgroup_v3uint %mesh_output %int_1 %154 %int_0
+        %156 = OpLoad %v3uint %155
+        %158 = OpAccessChain %_ptr_Output_v3uint %gl_PrimitiveTriangleIndicesEXT %153
+               OpStore %158 %156
+        %163 = OpLoad %uint %i_0
+        %164 = OpLoad %uint %i_0
+        %165 = OpAccessChain %_ptr_Workgroup_bool %mesh_output %int_1 %164 %int_1
+        %166 = OpLoad %bool %165
+        %168 = OpAccessChain %_ptr_Output_bool %gl_MeshPrimitivesEXT %163 %int_3
+               OpStore %168 %166
+        %172 = OpLoad %uint %i_0
+        %173 = OpLoad %uint %i_0
+        %174 = OpAccessChain %_ptr_Workgroup_v4float %mesh_output %int_1 %173 %int_2
+        %175 = OpLoad %v4float %174
+        %176 = OpAccessChain %_ptr_Output_v4float %primitiveMasks %172
+               OpStore %176 %175
+               OpBranch %145
+        %145 = OpLabel
+        %177 = OpLoad %uint %i_0
+        %178 = OpIAdd %uint %177 %int_1
+               OpStore %i_0 %178
+               OpBranch %142
+        %144 = OpLabel
+               OpReturn
+               OpFunctionEnd
