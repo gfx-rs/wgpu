@@ -1,0 +1,391 @@
+; SPIR-V
+; Version: 1.6
+; Generator: Khronos; 28
+; Bound: 148
+; Schema: 0
+               OpCapability Shader
+               OpCapability MeshShadingEXT
+               OpExtension "SPV_EXT_mesh_shader"
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint MeshEXT %ms_main "ms_main" %index %id %taskPayload %naga_vertex_builtin_outputs %naga_primitive_builtin_outputs %45 %naga_primitive_indices_outputs %52 %workgroupData %mesh_output
+               OpExecutionMode %ms_main LocalSize 1 1 1
+               OpExecutionMode %ms_main OutputTrianglesEXT
+               OpExecutionMode %ms_main OutputVertices 3
+               OpExecutionMode %ms_main OutputPrimitivesEXT 1
+          %3 = OpString "shader"
+               OpSource WGSL 0 %3 "enable wgpu_mesh_shader;
+
+const positions = array(
+    vec4(0., 1., 0., 1.),
+    vec4(-1., -1., 0., 1.),
+    vec4(1., -1., 0., 1.)
+);
+const colors = array(
+    vec4(0., 1., 0., 1.),
+    vec4(0., 0., 1., 1.),
+    vec4(1., 0., 0., 1.)
+);
+
+struct TaskPayload {
+    colorMask: vec4<f32>,
+    visible: bool,
+}
+struct VertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) color: vec4<f32>,
+}
+struct PrimitiveOutput {
+    @builtin(triangle_indices) indices: vec3<u32>,
+    @builtin(cull_primitive) cull: bool,
+    @per_primitive @location(1) colorMask: vec4<f32>,
+}
+struct PrimitiveInput {
+    @per_primitive @location(1) colorMask: vec4<f32>,
+}
+
+var<task_payload> taskPayload: TaskPayload;
+var<workgroup> workgroupData: f32;
+
+@task
+@payload(taskPayload)
+@workgroup_size(1)
+fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
+    workgroupData = 1.0;
+    taskPayload.colorMask = vec4(1.0, 1.0, 0.0, 1.0);
+    taskPayload.visible = true;
+    return vec3(1, 1, 1);
+}
+
+struct MeshOutput {
+    @builtin(vertices) vertices: array<VertexOutput, 3>,
+    @builtin(primitives) primitives: array<PrimitiveOutput, 1>,
+    @builtin(vertex_count) vertex_count: u32,
+    @builtin(primitive_count) primitive_count: u32,
+}
+var<workgroup> mesh_output: MeshOutput;
+
+@mesh(mesh_output)
+@payload(taskPayload)
+@workgroup_size(1)
+fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocation_id) id: vec3<u32>) {
+    mesh_output.vertex_count = 3;
+    mesh_output.primitive_count = 1;
+    workgroupData = 2.0;
+
+    mesh_output.vertices[0].position = positions[0];
+    mesh_output.vertices[0].color = colors[0] * taskPayload.colorMask;
+
+    mesh_output.vertices[1].position = positions[1];
+    mesh_output.vertices[1].color = colors[1] * taskPayload.colorMask;
+
+    mesh_output.vertices[2].position = positions[2];
+    mesh_output.vertices[2].color = colors[2] * taskPayload.colorMask;
+
+    mesh_output.primitives[0].indices = vec3<u32>(0, 1, 2);
+    mesh_output.primitives[0].cull = !taskPayload.visible;
+    mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
+}
+
+@fragment
+fn fs_main(vertex: VertexOutput, primitive: PrimitiveInput) -> @location(0) vec4<f32> {
+    return vertex.color * primitive.colorMask;
+}
+"
+               OpMemberName %TaskPayload 0 "colorMask"
+               OpMemberName %TaskPayload 1 "visible"
+               OpName %TaskPayload "TaskPayload"
+               OpMemberName %VertexOutput 0 "position"
+               OpMemberName %VertexOutput 1 "color"
+               OpName %VertexOutput "VertexOutput"
+               OpMemberName %PrimitiveOutput 0 "indices"
+               OpMemberName %PrimitiveOutput 1 "cull"
+               OpMemberName %PrimitiveOutput 2 "colorMask"
+               OpName %PrimitiveOutput "PrimitiveOutput"
+               OpMemberName %MeshOutput 0 "vertices"
+               OpMemberName %MeshOutput 1 "primitives"
+               OpMemberName %MeshOutput 2 "vertex_count"
+               OpMemberName %MeshOutput 3 "primitive_count"
+               OpName %MeshOutput "MeshOutput"
+               OpName %taskPayload "taskPayload"
+               OpName %workgroupData "workgroupData"
+               OpName %mesh_output "mesh_output"
+               OpName %index "index"
+               OpName %id "id"
+               OpName %naga_vertex_builtin_outputs "naga_vertex_builtin_outputs"
+               OpName %naga_primitive_builtin_outputs "naga_primitive_builtin_outputs"
+               OpName %naga_primitive_indices_outputs "naga_primitive_indices_outputs"
+               OpName %ms_main "ms_main"
+               OpMemberDecorate %_struct_34 0 BuiltIn Position
+               OpDecorate %_struct_34 Block
+               OpMemberDecorate %_struct_38 0 BuiltIn CullPrimitiveEXT
+               OpMemberDecorate %_struct_38 0 PerPrimitiveEXT
+               OpDecorate %_struct_38 Block
+               OpDecorate %naga_primitive_builtin_outputs PerPrimitiveEXT
+               OpDecorate %_struct_42 Block
+               OpMemberDecorate %_struct_42 0 Location 0
+               OpDecorate %naga_primitive_indices_outputs PerPrimitiveEXT
+               OpDecorate %naga_primitive_indices_outputs BuiltIn PrimitiveTriangleIndicesEXT
+               OpDecorate %_struct_49 Block
+               OpMemberDecorate %_struct_49 0 Location 1
+               OpDecorate %52 PerPrimitiveEXT
+               OpMemberDecorate %TaskPayload 0 Offset 0
+               OpMemberDecorate %TaskPayload 1 Offset 16
+               OpMemberDecorate %VertexOutput 0 Offset 0
+               OpMemberDecorate %VertexOutput 1 Offset 16
+               OpMemberDecorate %PrimitiveOutput 0 Offset 0
+               OpMemberDecorate %PrimitiveOutput 1 Offset 12
+               OpMemberDecorate %PrimitiveOutput 2 Offset 16
+               OpDecorate %_arr_VertexOutput_uint_3 ArrayStride 32
+               OpDecorate %_arr_PrimitiveOutput_uint_1 ArrayStride 32
+               OpMemberDecorate %MeshOutput 0 Offset 0
+               OpMemberDecorate %MeshOutput 1 Offset 96
+               OpMemberDecorate %MeshOutput 2 Offset 128
+               OpMemberDecorate %MeshOutput 3 Offset 132
+               OpDecorate %index BuiltIn LocalInvocationIndex
+               OpDecorate %id BuiltIn GlobalInvocationId
+       %void = OpTypeVoid
+      %float = OpTypeFloat 32
+    %v4float = OpTypeVector %float 4
+       %bool = OpTypeBool
+%TaskPayload = OpTypeStruct %v4float %bool
+%VertexOutput = OpTypeStruct %v4float %v4float
+       %uint = OpTypeInt 32 0
+     %v3uint = OpTypeVector %uint 3
+%PrimitiveOutput = OpTypeStruct %v3uint %bool %v4float
+     %uint_3 = OpConstant %uint 3
+%_arr_VertexOutput_uint_3 = OpTypeArray %VertexOutput %uint_3
+     %uint_1 = OpConstant %uint 1
+%_arr_PrimitiveOutput_uint_1 = OpTypeArray %PrimitiveOutput %uint_1
+ %MeshOutput = OpTypeStruct %_arr_VertexOutput_uint_3 %_arr_PrimitiveOutput_uint_1 %uint %uint
+%_ptr_TaskPayloadWorkgroupEXT_TaskPayload = OpTypePointer TaskPayloadWorkgroupEXT %TaskPayload
+%taskPayload = OpVariable %_ptr_TaskPayloadWorkgroupEXT_TaskPayload TaskPayloadWorkgroupEXT
+%_ptr_Workgroup_float = OpTypePointer Workgroup %float
+         %21 = OpConstantNull %float
+%workgroupData = OpVariable %_ptr_Workgroup_float Workgroup %21
+%_ptr_Workgroup_MeshOutput = OpTypePointer Workgroup %MeshOutput
+         %24 = OpConstantNull %MeshOutput
+%mesh_output = OpVariable %_ptr_Workgroup_MeshOutput Workgroup %24
+%_ptr_Input_uint = OpTypePointer Input %uint
+      %index = OpVariable %_ptr_Input_uint Input
+%_ptr_Input_v3uint = OpTypePointer Input %v3uint
+         %id = OpVariable %_ptr_Input_v3uint Input
+%_ptr_Function_uint = OpTypePointer Function %uint
+ %_struct_34 = OpTypeStruct %v4float
+%_arr__struct_34_uint_3 = OpTypeArray %_struct_34 %uint_3
+%_ptr_Output__arr__struct_34_uint_3 = OpTypePointer Output %_arr__struct_34_uint_3
+%naga_vertex_builtin_outputs = OpVariable %_ptr_Output__arr__struct_34_uint_3 Output
+ %_struct_38 = OpTypeStruct %bool
+%_arr__struct_38_uint_1 = OpTypeArray %_struct_38 %uint_1
+%_ptr_Output__arr__struct_38_uint_1 = OpTypePointer Output %_arr__struct_38_uint_1
+%naga_primitive_builtin_outputs = OpVariable %_ptr_Output__arr__struct_38_uint_1 Output
+ %_struct_42 = OpTypeStruct %v4float
+%_arr__struct_42_uint_3 = OpTypeArray %_struct_42 %uint_3
+%_ptr_Output__arr__struct_42_uint_3 = OpTypePointer Output %_arr__struct_42_uint_3
+         %45 = OpVariable %_ptr_Output__arr__struct_42_uint_3 Output
+%_arr_v3uint_uint_1 = OpTypeArray %v3uint %uint_1
+%_ptr_Output__arr_v3uint_uint_1 = OpTypePointer Output %_arr_v3uint_uint_1
+%naga_primitive_indices_outputs = OpVariable %_ptr_Output__arr_v3uint_uint_1 Output
+ %_struct_49 = OpTypeStruct %v4float
+%_arr__struct_49_uint_1 = OpTypeArray %_struct_49 %uint_1
+%_ptr_Output__arr__struct_49_uint_1 = OpTypePointer Output %_arr__struct_49_uint_1
+         %52 = OpVariable %_ptr_Output__arr__struct_49_uint_1 Output
+         %54 = OpTypeFunction %void
+    %float_2 = OpConstant %float 2
+    %float_0 = OpConstant %float 0
+    %float_1 = OpConstant %float 1
+         %58 = OpConstantComposite %v4float %float_0 %float_1 %float_0 %float_1
+   %float_n1 = OpConstant %float -1
+         %60 = OpConstantComposite %v4float %float_n1 %float_n1 %float_0 %float_1
+         %61 = OpConstantComposite %v4float %float_0 %float_0 %float_1 %float_1
+         %62 = OpConstantComposite %v4float %float_1 %float_n1 %float_0 %float_1
+         %63 = OpConstantComposite %v4float %float_1 %float_0 %float_0 %float_1
+     %uint_0 = OpConstant %uint 0
+     %uint_2 = OpConstant %uint 2
+         %66 = OpConstantComposite %v3uint %uint_0 %uint_1 %uint_2
+         %67 = OpConstantComposite %v4float %float_1 %float_0 %float_1 %float_1
+%_ptr_Workgroup_uint = OpTypePointer Workgroup %uint
+%_ptr_Workgroup__arr_VertexOutput_uint_3 = OpTypePointer Workgroup %_arr_VertexOutput_uint_3
+%_ptr_Workgroup_VertexOutput = OpTypePointer Workgroup %VertexOutput
+%_ptr_Workgroup_v4float = OpTypePointer Workgroup %v4float
+%_ptr_TaskPayloadWorkgroupEXT_v4float = OpTypePointer TaskPayloadWorkgroupEXT %v4float
+%_ptr_Workgroup__arr_PrimitiveOutput_uint_1 = OpTypePointer Workgroup %_arr_PrimitiveOutput_uint_1
+%_ptr_Workgroup_PrimitiveOutput = OpTypePointer Workgroup %PrimitiveOutput
+%_ptr_Workgroup_v3uint = OpTypePointer Workgroup %v3uint
+%_ptr_Workgroup_bool = OpTypePointer Workgroup %bool
+%_ptr_TaskPayloadWorkgroupEXT_bool = OpTypePointer TaskPayloadWorkgroupEXT %bool
+   %uint_264 = OpConstant %uint 264
+%_ptr_Output_v4float = OpTypePointer Output %v4float
+%_ptr_Output_v3uint = OpTypePointer Output %v3uint
+%_ptr_Output_bool = OpTypePointer Output %bool
+    %ms_main = OpFunction %void None %54
+         %25 = OpLabel
+         %32 = OpVariable %_ptr_Function_uint Function
+         %28 = OpLoad %uint %index
+         %31 = OpLoad %v3uint %id
+               OpBranch %68
+         %68 = OpLabel
+               OpLine %3 56 5
+               OpLine %3 56 5
+         %70 = OpAccessChain %_ptr_Workgroup_uint %mesh_output %uint_2
+               OpStore %70 %uint_3
+               OpLine %3 57 5
+               OpLine %3 57 5
+         %71 = OpAccessChain %_ptr_Workgroup_uint %mesh_output %uint_3
+               OpStore %71 %uint_1
+               OpLine %3 58 5
+               OpStore %workgroupData %float_2
+               OpLine %3 60 5
+               OpLine %3 60 5
+               OpLine %3 4 5
+               OpLine %3 5 5
+               OpLine %3 3 19
+               OpLine %3 4 5
+               OpLine %3 60 5
+         %75 = OpAccessChain %_ptr_Workgroup_v4float %mesh_output %uint_0 %uint_0 %uint_0
+               OpStore %75 %58
+               OpLine %3 61 5
+               OpLine %3 61 5
+               OpLine %3 9 5
+               OpLine %3 10 5
+               OpLine %3 8 16
+               OpLine %3 61 49
+         %77 = OpAccessChain %_ptr_TaskPayloadWorkgroupEXT_v4float %taskPayload %uint_0
+         %78 = OpLoad %v4float %77
+               OpLine %3 9 5
+         %79 = OpFMul %v4float %58 %78
+               OpLine %3 61 5
+         %80 = OpAccessChain %_ptr_Workgroup_v4float %mesh_output %uint_0 %uint_0 %uint_1
+               OpStore %80 %79
+               OpLine %3 63 5
+               OpLine %3 63 5
+               OpLine %3 4 5
+               OpLine %3 5 5
+               OpLine %3 3 19
+               OpLine %3 5 5
+               OpLine %3 63 5
+         %81 = OpAccessChain %_ptr_Workgroup_v4float %mesh_output %uint_0 %uint_1 %uint_0
+               OpStore %81 %60
+               OpLine %3 64 5
+               OpLine %3 64 5
+               OpLine %3 9 5
+               OpLine %3 10 5
+               OpLine %3 8 16
+               OpLine %3 64 49
+         %82 = OpAccessChain %_ptr_TaskPayloadWorkgroupEXT_v4float %taskPayload %uint_0
+         %83 = OpLoad %v4float %82
+               OpLine %3 10 5
+         %84 = OpFMul %v4float %61 %83
+               OpLine %3 64 5
+         %85 = OpAccessChain %_ptr_Workgroup_v4float %mesh_output %uint_0 %uint_1 %uint_1
+               OpStore %85 %84
+               OpLine %3 66 5
+               OpLine %3 66 5
+               OpLine %3 4 5
+               OpLine %3 5 5
+               OpLine %3 3 19
+               OpLine %3 6 5
+               OpLine %3 66 5
+         %86 = OpAccessChain %_ptr_Workgroup_v4float %mesh_output %uint_0 %uint_2 %uint_0
+               OpStore %86 %62
+               OpLine %3 67 5
+               OpLine %3 67 5
+               OpLine %3 9 5
+               OpLine %3 10 5
+               OpLine %3 8 16
+               OpLine %3 67 49
+         %87 = OpAccessChain %_ptr_TaskPayloadWorkgroupEXT_v4float %taskPayload %uint_0
+         %88 = OpLoad %v4float %87
+               OpLine %3 11 5
+         %89 = OpFMul %v4float %63 %88
+               OpLine %3 67 5
+         %90 = OpAccessChain %_ptr_Workgroup_v4float %mesh_output %uint_0 %uint_2 %uint_1
+               OpStore %90 %89
+               OpLine %3 69 5
+               OpLine %3 69 5
+               OpLine %3 69 41
+               OpLine %3 69 5
+         %94 = OpAccessChain %_ptr_Workgroup_v3uint %mesh_output %uint_1 %uint_0 %uint_0
+               OpStore %94 %66
+               OpLine %3 70 5
+               OpLine %3 70 5
+               OpLine %3 70 38
+         %97 = OpAccessChain %_ptr_TaskPayloadWorkgroupEXT_bool %taskPayload %uint_1
+         %98 = OpLoad %bool %97
+         %99 = OpLogicalNot %bool %98
+               OpLine %3 70 5
+        %100 = OpAccessChain %_ptr_Workgroup_bool %mesh_output %uint_1 %uint_0 %uint_1
+               OpStore %100 %99
+               OpLine %3 71 5
+               OpLine %3 71 5
+               OpLine %3 71 43
+               OpLine %3 71 5
+        %101 = OpAccessChain %_ptr_Workgroup_v4float %mesh_output %uint_1 %uint_0 %uint_2
+               OpStore %101 %67
+               OpControlBarrier %uint_2 %uint_2 %uint_264
+        %103 = OpAccessChain %_ptr_Workgroup_uint %mesh_output %uint_2
+        %104 = OpLoad %uint %103
+        %105 = OpExtInst %uint %1 UMin %104 %uint_3
+        %106 = OpAccessChain %_ptr_Workgroup_uint %mesh_output %uint_3
+        %107 = OpLoad %uint %106
+        %108 = OpExtInst %uint %1 UMin %107 %uint_1
+        %109 = OpAccessChain %_ptr_Workgroup__arr_VertexOutput_uint_3 %mesh_output %uint_0
+        %110 = OpAccessChain %_ptr_Workgroup__arr_PrimitiveOutput_uint_1 %mesh_output %uint_1
+               OpSetMeshOutputsEXT %105 %108
+               OpStore %32 %28
+               OpBranch %111
+        %111 = OpLabel
+               OpLoopMerge %113 %135 None
+               OpBranch %134
+        %134 = OpLabel
+        %137 = OpLoad %uint %32
+        %138 = OpULessThan %bool %137 %105
+               OpBranchConditional %138 %136 %113
+        %136 = OpLabel
+        %115 = OpLoad %uint %32
+        %116 = OpAccessChain %_ptr_Workgroup_VertexOutput %109 %115
+        %117 = OpLoad %VertexOutput %116
+        %118 = OpCompositeExtract %v4float %117 0
+        %119 = OpAccessChain %_ptr_Output_v4float %naga_vertex_builtin_outputs %115 %uint_0
+               OpStore %119 %118
+        %121 = OpCompositeExtract %v4float %117 1
+        %122 = OpAccessChain %_ptr_Output_v4float %45 %115 %uint_0
+               OpStore %122 %121
+               OpBranch %135
+        %135 = OpLabel
+        %139 = OpLoad %uint %32
+        %140 = OpIAdd %uint %139 %uint_1
+               OpStore %32 %140
+               OpBranch %111
+        %113 = OpLabel
+               OpStore %32 %28
+               OpBranch %112
+        %112 = OpLabel
+               OpLoopMerge %114 %142 None
+               OpBranch %141
+        %141 = OpLabel
+        %144 = OpLoad %uint %32
+        %145 = OpULessThan %bool %144 %108
+               OpBranchConditional %145 %143 %114
+        %143 = OpLabel
+        %123 = OpLoad %uint %32
+        %124 = OpAccessChain %_ptr_Workgroup_PrimitiveOutput %110 %123
+        %125 = OpLoad %PrimitiveOutput %124
+        %126 = OpCompositeExtract %v3uint %125 0
+        %127 = OpAccessChain %_ptr_Output_v3uint %naga_primitive_indices_outputs %123
+               OpStore %127 %126
+        %129 = OpCompositeExtract %bool %125 1
+        %130 = OpAccessChain %_ptr_Output_bool %naga_primitive_builtin_outputs %123 %uint_0
+               OpStore %130 %129
+        %132 = OpCompositeExtract %v4float %125 2
+        %133 = OpAccessChain %_ptr_Output_v4float %52 %123 %uint_0
+               OpStore %133 %132
+               OpBranch %142
+        %142 = OpLabel
+        %146 = OpLoad %uint %32
+        %147 = OpIAdd %uint %146 %uint_1
+               OpStore %32 %147
+               OpBranch %112
+        %114 = OpLabel
+               OpReturn
+               OpFunctionEnd

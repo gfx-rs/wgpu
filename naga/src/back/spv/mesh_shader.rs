@@ -378,16 +378,14 @@ impl super::Writer {
                     let s_type = self.id_gen.next();
                     Instruction::type_struct(s_type, &[member.ty_id])
                         .to_words(&mut self.logical_layout.declarations);
+                    // Decorate type with block
                     Instruction::decorate(s_type, spirv::Decoration::Block, &[])
                         .to_words(&mut self.logical_layout.annotations);
-                    Instruction::member_decorate(
-                        s_type,
-                        0,
-                        spirv::Decoration::Location,
-                        &[location],
-                    )
-                    .to_words(&mut self.logical_layout.annotations);
+                    // Create variable with type
                     let v = self.write_mesh_return_global_variable(s_type, vert_array_size_id)?;
+                    // Decorate the variable with Location
+                    Instruction::decorate(v, spirv::Decoration::Location, &[location])
+                        .to_words(&mut self.logical_layout.annotations);
                     iface.varying_ids.push(v);
                     mesh_return_info.vertex_info.bindings.push(v);
                 }
@@ -431,17 +429,21 @@ impl super::Writer {
                     let s_type = self.id_gen.next();
                     Instruction::type_struct(s_type, &[member.ty_id])
                         .to_words(&mut self.logical_layout.declarations);
+                    // Decorate type with block
                     Instruction::decorate(s_type, spirv::Decoration::Block, &[])
                         .to_words(&mut self.logical_layout.annotations);
+                    // Decorate only member with PerPrimitiveEXT
                     Instruction::member_decorate(
                         s_type,
                         0,
-                        spirv::Decoration::Location,
-                        &[location],
+                        spirv::Decoration::PerPrimitiveEXT,
+                        &[],
                     )
                     .to_words(&mut self.logical_layout.annotations);
+                    // Create variable with type
                     let v = self.write_mesh_return_global_variable(s_type, prim_array_size_id)?;
-                    Instruction::decorate(v, spirv::Decoration::PerPrimitiveEXT, &[])
+                    // Decorate the variable with Location
+                    Instruction::decorate(v, spirv::Decoration::Location, &[location])
                         .to_words(&mut self.logical_layout.annotations);
                     iface.varying_ids.push(v);
 

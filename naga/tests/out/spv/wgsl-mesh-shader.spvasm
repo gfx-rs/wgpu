@@ -23,11 +23,11 @@ OpMemberDecorate %65 0 PerPrimitiveNV
 OpDecorate %65 Block
 OpDecorate %68 PerPrimitiveNV
 OpDecorate %69 Block
-OpMemberDecorate %69 0 Location 0
+OpDecorate %72 Location 0
 OpDecorate %75 BuiltIn PrimitiveTriangleIndicesEXT
 OpDecorate %76 Block
-OpMemberDecorate %76 0 Location 1
-OpDecorate %79 PerPrimitiveNV
+OpMemberDecorate %76 0 PerPrimitiveNV
+OpDecorate %79 Location 1
 OpMemberDecorate %6 0 Offset 0
 OpMemberDecorate %6 1 Offset 16
 OpMemberDecorate %7 0 Offset 0
