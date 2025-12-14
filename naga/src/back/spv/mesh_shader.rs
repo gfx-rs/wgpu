@@ -459,7 +459,7 @@ impl super::Writer {
         Ok(())
     }
 
-    pub(super) fn write_entry_point_task_return(
+    pub(super) fn try_write_entry_point_task_return(
         &mut self,
         value_id: Word,
         ir_result: &crate::FunctionResult,

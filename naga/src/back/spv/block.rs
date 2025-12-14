@@ -258,7 +258,13 @@ impl Writer {
                 _ => {}
             }
         }
-        self.write_entry_point_task_return(value_id, ir_result, result_members, body, task_payload)
+        self.try_write_entry_point_task_return(
+            value_id,
+            ir_result,
+            result_members,
+            body,
+            task_payload,
+        )
     }
 }
 
