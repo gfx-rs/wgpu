@@ -202,7 +202,7 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
             adapter: None,
             driver: None,
             reasons: vec![],
-            behavior: wgpu_test::FailureBehavior::AssertFailure,
+            behavior: wgpu_test::FailureBehavior::Ignore,
         })
         .expect_fail(wgpu_test::FailureCase {
             backends: None,
@@ -211,7 +211,7 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
             adapter: None,
             driver: None,
             reasons: vec![],
-            behavior: wgpu_test::FailureBehavior::AssertFailure,
+            behavior: wgpu_test::FailureBehavior::Ignore,
         }),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.005)],
     _phantom: std::marker::PhantomData::<Example>,

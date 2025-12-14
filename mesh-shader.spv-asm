@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.4
 ; Generator: Khronos; 28
-; Bound: 194
+; Bound: 195
 ; Schema: 0
                OpCapability Shader
                OpCapability MeshShadingEXT
@@ -10,7 +10,7 @@
                OpMemoryModel Logical GLSL450
                OpEntryPoint TaskEXT %ts_main "ts_main" %taskPayload %workgroupData %gl_LocalInvocationID
                OpEntryPoint MeshEXT %ms_main "ms_main" %index %id %taskPayload %naga_vertex_builtin_outputs %naga_primitive_builtin_outputs %72 %naga_primitive_indices_outputs %78 %workgroupData %mesh_output %gl_LocalInvocationID_0
-               OpEntryPoint Fragment %fs_main "fs_main" %position %color %colorMask %188
+               OpEntryPoint Fragment %fs_main "fs_main" %position %color %colorMask %189
                OpExecutionMode %ts_main LocalSize 1 1 1
                OpExecutionMode %ms_main LocalSize 1 1 1
                OpExecutionMode %ms_main OutputTrianglesEXT
@@ -80,7 +80,7 @@
                OpDecorate %color Location 0
                OpDecorate %colorMask Location 1
                OpDecorate %colorMask PerPrimitiveEXT
-               OpDecorate %188 Location 0
+               OpDecorate %189 Location 0
        %void = OpTypeVoid
       %float = OpTypeFloat 32
     %v4float = OpTypeVector %float 4
@@ -166,7 +166,7 @@
    %position = OpVariable %_ptr_Input_v4float Input
       %color = OpVariable %_ptr_Input_v4float Input
   %colorMask = OpVariable %_ptr_Input_v4float Input
-        %188 = OpVariable %_ptr_Output_v4float Output
+        %189 = OpVariable %_ptr_Output_v4float Output
     %ts_main = OpFunction %void None %25
          %23 = OpLabel
                OpBranch %31
@@ -270,17 +270,17 @@
                OpBranchConditional %157 %155 %139
         %155 = OpLabel
         %141 = OpLoad %uint %59
-        %142 = OpAccessChain %_ptr_Workgroup_VertexOutput %135 %141
-        %143 = OpLoad %VertexOutput %142
-        %144 = OpCompositeExtract %v4float %143 0
-        %145 = OpAccessChain %_ptr_Output_v4float %naga_vertex_builtin_outputs %141 %uint_0
-               OpStore %145 %144
-        %147 = OpCompositeExtract %float %144 1
-        %148 = OpFNegate %float %147
-        %149 = OpAccessChain %_ptr_Output_float %145 %uint_1
-               OpStore %149 %148
-        %151 = OpCompositeExtract %v4float %143 1
-        %152 = OpAccessChain %_ptr_Output_v4float %72 %141 %uint_0
+        %142 = OpAccessChain %_ptr_Workgroup_v4float %135 %141 %uint_0
+        %143 = OpLoad %v4float %142
+        %144 = OpAccessChain %_ptr_Output_v4float %naga_vertex_builtin_outputs %141 %uint_0
+               OpStore %144 %143
+        %146 = OpCompositeExtract %float %143 1
+        %147 = OpFNegate %float %146
+        %148 = OpAccessChain %_ptr_Output_float %144 %uint_1
+               OpStore %148 %147
+        %150 = OpAccessChain %_ptr_Workgroup_v4float %135 %141 %uint_1
+        %151 = OpLoad %v4float %150
+        %152 = OpAccessChain %_ptr_Output_v4float %72 %141
                OpStore %152 %151
                OpBranch %154
         %154 = OpLabel
@@ -292,46 +292,47 @@
                OpStore %60 %56
                OpBranch %138
         %138 = OpLabel
-               OpLoopMerge %140 %172 None
-               OpBranch %171
-        %171 = OpLabel
-        %174 = OpLoad %uint %60
-        %175 = OpULessThan %bool %174 %134
-               OpBranchConditional %175 %173 %140
-        %173 = OpLabel
-        %160 = OpLoad %uint %60
-        %161 = OpAccessChain %_ptr_Workgroup_PrimitiveOutput %136 %160
-        %162 = OpLoad %PrimitiveOutput %161
-        %163 = OpCompositeExtract %v3uint %162 0
-        %164 = OpAccessChain %_ptr_Output_v3uint %naga_primitive_indices_outputs %160
-               OpStore %164 %163
-        %166 = OpCompositeExtract %bool %162 1
-        %167 = OpAccessChain %_ptr_Output_bool %naga_primitive_builtin_outputs %160 %uint_0
-               OpStore %167 %166
-        %169 = OpCompositeExtract %v4float %162 2
-        %170 = OpAccessChain %_ptr_Output_v4float %78 %160 %uint_0
-               OpStore %170 %169
+               OpLoopMerge %140 %173 None
                OpBranch %172
         %172 = OpLabel
-        %176 = OpLoad %uint %60
-        %177 = OpIAdd %uint %176 %uint_1
-               OpStore %60 %177
+        %175 = OpLoad %uint %60
+        %176 = OpULessThan %bool %175 %134
+               OpBranchConditional %176 %174 %140
+        %174 = OpLabel
+        %160 = OpLoad %uint %60
+        %161 = OpAccessChain %_ptr_Workgroup_v3uint %136 %160 %uint_0
+        %162 = OpLoad %v3uint %161
+        %163 = OpAccessChain %_ptr_Output_v3uint %naga_primitive_indices_outputs %160
+               OpStore %163 %162
+        %165 = OpAccessChain %_ptr_Workgroup_bool %136 %160 %uint_1
+        %166 = OpLoad %bool %165
+        %167 = OpAccessChain %_ptr_Output_bool %naga_primitive_builtin_outputs %160 %uint_0
+               OpStore %167 %166
+        %169 = OpAccessChain %_ptr_Workgroup_v4float %136 %160 %uint_2
+        %170 = OpLoad %v4float %169
+        %171 = OpAccessChain %_ptr_Output_v4float %78 %160
+               OpStore %171 %170
+               OpBranch %173
+        %173 = OpLabel
+        %177 = OpLoad %uint %60
+        %178 = OpIAdd %uint %177 %uint_1
+               OpStore %60 %178
                OpBranch %138
         %140 = OpLabel
                OpReturn
                OpFunctionEnd
     %fs_main = OpFunction %void None %25
-        %178 = OpLabel
-        %182 = OpLoad %v4float %position
-        %184 = OpLoad %v4float %color
-        %179 = OpCompositeConstruct %VertexOutput %182 %184
-        %187 = OpLoad %v4float %colorMask
-        %185 = OpCompositeConstruct %PrimitiveInput %187
-               OpBranch %190
-        %190 = OpLabel
-        %191 = OpCompositeExtract %v4float %179 1
-        %192 = OpCompositeExtract %v4float %185 0
-        %193 = OpFMul %v4float %191 %192
-               OpStore %188 %193
+        %179 = OpLabel
+        %183 = OpLoad %v4float %position
+        %185 = OpLoad %v4float %color
+        %180 = OpCompositeConstruct %VertexOutput %183 %185
+        %188 = OpLoad %v4float %colorMask
+        %186 = OpCompositeConstruct %PrimitiveInput %188
+               OpBranch %191
+        %191 = OpLabel
+        %192 = OpCompositeExtract %v4float %180 1
+        %193 = OpCompositeExtract %v4float %186 0
+        %194 = OpFMul %v4float %192 %193
+               OpStore %189 %194
                OpReturn
                OpFunctionEnd

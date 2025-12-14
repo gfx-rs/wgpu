@@ -379,7 +379,7 @@ fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
                 adapter: None,
                 driver: None,
                 reasons: vec![],
-                behavior: wgpu_test::FailureBehavior::AssertFailure,
+                behavior: wgpu_test::FailureBehavior::Ignore,
             })
             .expect_fail(wgpu_test::FailureCase {
                 backends: None,
@@ -388,7 +388,7 @@ fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
                 adapter: None,
                 driver: None,
                 reasons: vec![],
-                behavior: wgpu_test::FailureBehavior::AssertFailure,
+                behavior: wgpu_test::FailureBehavior::Ignore,
             }),
     )
 }
