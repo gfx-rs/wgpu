@@ -406,8 +406,7 @@ impl super::Writer {
                     // This is written here instead of as part of the builtin block
                     let v =
                         self.write_mesh_return_global_variable(member.ty_id, prim_array_size_id)?;
-                    Instruction::decorate(v, spirv::Decoration::PerPrimitiveEXT, &[])
-                        .to_words(&mut self.logical_layout.annotations);
+                    // This shouldn't be marked as PerPrimitiveEXT
                     Instruction::decorate(
                         v,
                         spirv::Decoration::BuiltIn,
