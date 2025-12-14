@@ -383,15 +383,6 @@ fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
             })
             .expect_fail(wgpu_test::FailureCase {
                 backends: None,
-                // Intel/arc
-                vendor: Some(0x8086),
-                adapter: None,
-                driver: None,
-                reasons: vec![],
-                behavior: wgpu_test::FailureBehavior::AssertFailure,
-            })
-            .expect_fail(wgpu_test::FailureCase {
-                backends: None,
                 // AMD
                 vendor: Some(0x1002),
                 adapter: None,

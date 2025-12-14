@@ -206,15 +206,6 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
         })
         .expect_fail(wgpu_test::FailureCase {
             backends: None,
-            // Intel/arc
-            vendor: Some(0x8086),
-            adapter: None,
-            driver: None,
-            reasons: vec![],
-            behavior: wgpu_test::FailureBehavior::AssertFailure,
-        })
-        .expect_fail(wgpu_test::FailureCase {
-            backends: None,
             // AMD
             vendor: Some(0x1002),
             adapter: None,
