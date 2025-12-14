@@ -371,7 +371,34 @@ fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
                         DrawType::MultiIndirectCount => wgpu::Features::MULTI_DRAW_INDIRECT_COUNT,
                     },
             )
-            .limits(wgpu::Limits::default().using_recommended_minimum_mesh_shader_values()),
+            .limits(wgpu::Limits::default().using_recommended_minimum_mesh_shader_values())
+            .expect_fail(wgpu_test::FailureCase {
+                backends: None,
+                // Mesa
+                vendor: Some(0x10005),
+                adapter: None,
+                driver: None,
+                reasons: vec![],
+                behavior: wgpu_test::FailureBehavior::AssertFailure,
+            })
+            .expect_fail(wgpu_test::FailureCase {
+                backends: None,
+                // Intel/arc
+                vendor: Some(0x8086),
+                adapter: None,
+                driver: None,
+                reasons: vec![],
+                behavior: wgpu_test::FailureBehavior::AssertFailure,
+            })
+            .expect_fail(wgpu_test::FailureCase {
+                backends: None,
+                // AMD
+                vendor: Some(0x1002),
+                adapter: None,
+                driver: None,
+                reasons: vec![],
+                behavior: wgpu_test::FailureBehavior::AssertFailure,
+            }),
     )
 }
 

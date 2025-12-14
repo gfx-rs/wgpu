@@ -1144,7 +1144,7 @@ bitflags_array! {
         const UNIFORM_BUFFER_BINDING_ARRAYS = 1 << 47;
 
         /// Enables mesh shaders and task shaders in mesh shader pipelines. This extension does NOT imply support for
-        /// compiling mesh shaders at runtime. Rather, the user must use custom passthrough shaders.
+        /// compiling mesh shaders at runtime.
         ///
         /// Supported platforms:
         /// - Vulkan (with [VK_EXT_mesh_shader](https://registry.khronos.org/vulkan/specs/latest/man/html/VK_EXT_mesh_shader.html))
@@ -1152,7 +1152,8 @@ bitflags_array! {
         /// - Metal
         ///
         /// Naga is only supported on vulkan on NVIDIA or Intel GPUs. On other platforms you will have to use passthrough shaders.
-        /// AMD GPUs and some Mesa drivers fail to run the naga generated code. This is a bug and will be addressed.
+        /// AMD GPUs and some Mesa drivers fail to run the naga generated code. This is a bug and will be addressed. Support is
+        /// still being exposed to allow users to become familiar with and give feedback on the mesh shader design.
         ///
         /// This is a native only feature.
         const EXPERIMENTAL_MESH_SHADER = 1 << 48;

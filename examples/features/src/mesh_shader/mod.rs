@@ -194,7 +194,34 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
             wgpu::Features::EXPERIMENTAL_MESH_SHADER
                 | wgpu::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS,
         )
-        .limits(wgpu::Limits::defaults().using_recommended_minimum_mesh_shader_values()),
+        .limits(wgpu::Limits::defaults().using_recommended_minimum_mesh_shader_values())
+        .expect_fail(wgpu_test::FailureCase {
+            backends: None,
+            // Mesa
+            vendor: Some(0x10005),
+            adapter: None,
+            driver: None,
+            reasons: vec![],
+            behavior: wgpu_test::FailureBehavior::AssertFailure,
+        })
+        .expect_fail(wgpu_test::FailureCase {
+            backends: None,
+            // Intel/arc
+            vendor: Some(0x8086),
+            adapter: None,
+            driver: None,
+            reasons: vec![],
+            behavior: wgpu_test::FailureBehavior::AssertFailure,
+        })
+        .expect_fail(wgpu_test::FailureCase {
+            backends: None,
+            // AMD
+            vendor: Some(0x1002),
+            adapter: None,
+            driver: None,
+            reasons: vec![],
+            behavior: wgpu_test::FailureBehavior::AssertFailure,
+        }),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.005)],
     _phantom: std::marker::PhantomData::<Example>,
 };
