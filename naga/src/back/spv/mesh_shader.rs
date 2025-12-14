@@ -40,8 +40,10 @@ pub struct MeshReturnInfo {
     local_invocation_index_id: Word,
     /// Total workgroup size (product)
     workgroup_size: u32,
-    /// The id of a function variable in the entry point for a u32
-    function_variable: Word,
+    /// Variable to be used later when saving the output as a loop index
+    loop_counter_vertices: Word,
+    /// Variable to be used later when saving the output as a loop index
+    loop_counter_primitives: Word,
 
     /// Vertex-specific info
     vertex_info: PerOutputTypeMeshReturnInfo,
@@ -174,12 +176,22 @@ impl super::Writer {
         // A general function variable that we guarantee to allow in the final return. It must be
         // declared at the top of the function. Currently it is used in the memcpy part to keep
         // track of the current index to copy.
-        let function_variable = self.id_gen.next();
+        let loop_counter_1 = self.id_gen.next();
+        let loop_counter_2 = self.id_gen.next();
         prelude.body.insert(
             0,
             Instruction::variable(
                 self.get_pointer_type_id(u32_id, spirv::StorageClass::Function),
-                function_variable,
+                loop_counter_1,
+                spirv::StorageClass::Function,
+                None,
+            ),
+        );
+        prelude.body.insert(
+            1,
+            Instruction::variable(
+                self.get_pointer_type_id(u32_id, spirv::StorageClass::Function),
+                loop_counter_2,
                 spirv::StorageClass::Function,
                 None,
             ),
@@ -192,7 +204,8 @@ impl super::Writer {
             local_invocation_index_id,
             workgroup_size: self
                 .get_constant_scalar(crate::Literal::U32(iface.workgroup_size.iter().product())),
-            function_variable,
+            loop_counter_vertices: loop_counter_1,
+            loop_counter_primitives: loop_counter_2,
 
             vertex_info: PerOutputTypeMeshReturnInfo {
                 type_id: self.get_handle_type_id(mesh_info.vertex_output_type),
@@ -802,10 +815,9 @@ impl super::Writer {
         let prim_loop_header = self.id_gen.next();
         let in_between_loops = self.id_gen.next();
         let func_end = self.id_gen.next();
-        let index_var = return_info.function_variable;
 
         block.body.push(Instruction::store(
-            index_var,
+            return_info.loop_counter_vertices,
             return_info.local_invocation_index_id,
             None,
         ));
@@ -814,14 +826,10 @@ impl super::Writer {
         let vertex_copy_body = self.write_mesh_copy_body(
             false,
             return_info,
-            index_var,
+            return_info.loop_counter_vertices,
             vert_array_ptr,
             prim_array_ptr,
         );
-
-        let primitive_copy_body =
-            self.write_mesh_copy_body(true, return_info, index_var, vert_array_ptr, prim_array_ptr);
-
         // Write vertex copy loop
         self.write_mesh_copy_loop(
             &mut block.body,
@@ -829,21 +837,29 @@ impl super::Writer {
             vertex_loop_header,
             in_between_loops,
             vert_count_id,
-            index_var,
+            return_info.loop_counter_vertices,
             return_info,
         );
+
         // In between loops, reset the initial index
         {
             block.body.push(Instruction::label(in_between_loops));
 
             block.body.push(Instruction::store(
-                index_var,
+                return_info.loop_counter_primitives,
                 return_info.local_invocation_index_id,
                 None,
             ));
 
             block.body.push(Instruction::branch(prim_loop_header));
         }
+        let primitive_copy_body = self.write_mesh_copy_body(
+            true,
+            return_info,
+            return_info.loop_counter_primitives,
+            vert_array_ptr,
+            prim_array_ptr,
+        );
         // Write primitive copy loop
         self.write_mesh_copy_loop(
             &mut block.body,
@@ -851,7 +867,7 @@ impl super::Writer {
             prim_loop_header,
             func_end,
             prim_count_id,
-            index_var,
+            return_info.loop_counter_primitives,
             return_info,
         );
 
