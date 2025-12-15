@@ -195,16 +195,16 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
                 | wgpu::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS,
         )
         .instance_flags(wgpu::InstanceFlags::advanced_debugging())
-        .limits(wgpu::Limits::defaults().using_recommended_minimum_mesh_shader_values())
-        .skip(wgpu_test::FailureCase {
-            backends: None,
-            // Skip Mesa because LLVMPIPE has what is believed to be a driver bug
-            vendor: Some(0x10005),
-            adapter: None,
-            driver: None,
-            reasons: vec![],
-            behavior: wgpu_test::FailureBehavior::Ignore,
-        }),
+        .limits(wgpu::Limits::defaults().using_recommended_minimum_mesh_shader_values()),
+    /*.skip(wgpu_test::FailureCase {
+        backends: None,
+        // Skip Mesa because LLVMPIPE has what is believed to be a driver bug
+        vendor: Some(0x10005),
+        adapter: None,
+        driver: None,
+        reasons: vec![],
+        behavior: wgpu_test::FailureBehavior::Ignore,
+    })*/
     comparisons: &[wgpu_test::ComparisonType::Mean(0.005)],
     _phantom: std::marker::PhantomData::<Example>,
 };
