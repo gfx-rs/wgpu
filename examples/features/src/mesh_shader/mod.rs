@@ -194,6 +194,7 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
             wgpu::Features::EXPERIMENTAL_MESH_SHADER
                 | wgpu::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS,
         )
+        .instance_flags(wgpu::InstanceFlags::advanced_debugging())
         .limits(wgpu::Limits::defaults().using_recommended_minimum_mesh_shader_values())
         .skip(wgpu_test::FailureCase {
             backends: None,

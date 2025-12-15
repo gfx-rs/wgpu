@@ -709,10 +709,6 @@ impl super::Writer {
         self.write_control_barrier(crate::Barrier::WORK_GROUP, block);
         let u32_id = self.get_u32_type_id();
 
-        // This is the actual value (not pointer)
-        // of the data to be outputted
-        let out_var_id = return_info.out_variable_id;
-
         // Load the actual vertex and primitive counts
         let mut load_u32_by_member_index =
             |members: &[MeshReturnMember], bi: crate::BuiltIn, max: u32| {
@@ -724,7 +720,7 @@ impl super::Writer {
                 block.body.push(Instruction::access_chain(
                     self.get_pointer_type_id(u32_id, spirv::StorageClass::Workgroup),
                     ptr_id,
-                    out_var_id,
+                    return_info.out_variable_id,
                     &[self.get_constant_scalar(crate::Literal::U32(member_index))],
                 ));
                 let before_min_id = self.id_gen.next();
