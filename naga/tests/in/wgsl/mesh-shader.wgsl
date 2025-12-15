@@ -13,7 +13,7 @@ const colors = array(
 
 struct TaskPayload {
     colorMask: vec4<f32>,
-    visible: vec4<u32>,
+    visible: bool,
 }
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -37,7 +37,7 @@ var<workgroup> workgroupData: f32;
 fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
     workgroupData = 1.0;
     taskPayload.colorMask = vec4(1.0, 1.0, 0.0, 1.0);
-    taskPayload.visible = vec4(1, 0, 0, 0);
+    taskPayload.visible = true;
     return vec3(1, 1, 1);
 }
 
@@ -68,7 +68,7 @@ fn ms_main() {
     mesh_output.vertices[2].color = colors[2] * taskPayload.colorMask;
 
     mesh_output.primitives[0].indices = vec3<u32>(0, 1, 2);
-    mesh_output.primitives[0].cull = taskPayload.visible.x != 1;
+    mesh_output.primitives[0].cull = !taskPayload.visible;
     mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
 }
 

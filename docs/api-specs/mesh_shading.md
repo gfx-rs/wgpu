@@ -241,6 +241,7 @@ struct MeshOutput {
     @builtin(vertex_count) vertex_count: u32,
     @builtin(primitive_count) primitive_count: u32,
 }
+
 var<workgroup> mesh_output: MeshOutput;
 
 @mesh(mesh_output)
