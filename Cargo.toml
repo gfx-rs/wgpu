@@ -117,7 +117,7 @@ document-features = "0.2.10"
 encase = "0.12"
 env_logger = { version = "0.11", default-features = false }
 fern = "0.7"
-flume = "0.11"
+flume = "0.12"
 futures-lite = "2"
 getrandom = "0.3"
 glam = "0.30.7"
