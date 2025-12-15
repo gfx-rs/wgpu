@@ -344,9 +344,10 @@ pub enum StageError {
         input: Option<u32>,
         shader: Option<u32>,
     },
-    #[error("Primitive index can only be used in a fragment shader if the preceding shader was a vertex shader or a mesh shader that writes to primitive index. \
-    If a mesh shader writes to primitive index, it must be read by the fragment shader.")]
-    PrimitiveIndexError,
+    #[error("Primitive index can only be used in a fragment shader if the preceding shader was a vertex shader or a mesh shader that writes to primitive index.")]
+    InvalidPrimitiveIndex,
+    #[error("If a mesh shader writes to primitive index, it must be read by the fragment shader.")]
+    MissingPrimitiveIndex,
     #[error("DrawId cannot be used in the same pipeline as a task shader")]
     DrawIdError,
 }
@@ -376,7 +377,8 @@ impl WebGpuError for StageError {
             | Self::TooManyMeshPrimitives { .. }
             | Self::TaskPayloadTooLarge { .. }
             | Self::TaskPayloadMustMatch { .. }
-            | Self::PrimitiveIndexError
+            | Self::InvalidPrimitiveIndex
+            | Self::MissingPrimitiveIndex
             | Self::DrawIdError => return ErrorType::Validation,
         };
         e.webgpu_error_type()
@@ -1527,12 +1529,16 @@ impl Interface {
         }
 
         // Fragment shader primitive index is treated like a varying
-        if let Some(previous_stage_primitive_index) = inputs.primitive_index {
-            if previous_stage_primitive_index != this_stage_primitive_index
-                && shader_stage == naga::ShaderStage::Fragment
-            {
-                return Err(StageError::PrimitiveIndexError);
-            }
+        if shader_stage == naga::ShaderStage::Fragment
+            && this_stage_primitive_index
+            && inputs.primitive_index == Some(false)
+        {
+            return Err(StageError::InvalidPrimitiveIndex);
+        } else if shader_stage == naga::ShaderStage::Fragment
+            && !this_stage_primitive_index
+            && inputs.primitive_index == Some(true)
+        {
+            return Err(StageError::MissingPrimitiveIndex);
         }
         if shader_stage == naga::ShaderStage::Mesh
             && inputs.task_payload_size.is_some()
