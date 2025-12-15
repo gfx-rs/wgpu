@@ -64,6 +64,19 @@ on their own or with task shaders.
 A full example of mesh shaders in use can be seen in the `mesh_shader` example. Below is a small snippet of shader code
 demonstrating their usage:
 ```wgsl
+@task
+@payload(taskPayload)
+@workgroup_size(1)
+fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
+    // Task shaders can use workgroup variables like compute shaders
+    workgroupData = 1.0;
+    // Pass some data to all mesh shaders dispatched by this workgroup
+    taskPayload.colorMask = vec4(1.0, 1.0, 0.0, 1.0);
+    taskPayload.visible = 1;
+    // Dispatch a mesh shader grid with one workgroup
+    return vec3(1, 1, 1);
+}
+
 @mesh(mesh_output)
 @payload(taskPayload)
 @workgroup_size(1)
@@ -71,7 +84,7 @@ fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocati
     // Set how many outputs this workgroup will generate
     mesh_output.vertex_count = 3;
     mesh_output.primitive_count = 1;
-    // Use workgroup variables like compute shaders
+    // Can also use workgroup variables
     workgroupData = 2.0;
 
     // Set vertex outputs
