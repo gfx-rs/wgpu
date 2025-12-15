@@ -240,15 +240,13 @@ pub struct Limits {
     /// to create many bind groups at the cost of a large up-front allocation at device creation.
     pub max_non_sampler_bindings: u32,
 
-    /// The maximum total value for a `RenderPass::draw_mesh_tasks(x, y, z)` operation.
-    /// Also for task shader outputs. Defaults to 65535. Higher is "better".
+    /// The maximum total value for a `RenderPass::draw_mesh_tasks(x, y, z)` operation or the
+    /// `@builtin(mesh_task_size)` returned from a task shader.  Higher is "better".
     pub max_task_mesh_workgroup_total_count: u32,
     /// The maximum value for each dimension of a `RenderPass::draw_mesh_tasks(x, y, z)` operation.
-    /// Also for task shader outputs. Defaults to 256. Higher is "better".
+    /// Also for task shader outputs. Higher is "better".
     pub max_task_mesh_workgroups_per_dimension: u32,
-    // These are fundamentally different. It is very common for limits on mesh shaders to be much lower,
-    // so as to properly use the hardware, where task shaders are usually just emulated with compute
-    // shaders. Therefore, we should have different limits for mesh vs task shaders.
+    // These are fundamentally different. It is very common for limits on mesh shaders to be much lower.
     /// Maximum total number of invocations, or threads, per task shader workgroup. Higher is "better".
     pub max_task_invocations_per_workgroup: u32,
     /// The maximum value for each dimension of a task shader's workgroup size. Higher is "better".
