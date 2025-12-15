@@ -168,7 +168,7 @@ pub enum CreateBindGroupError {
     #[error("Binding declared as a single item, but bind group is using it as an array")]
     SingleBindingExpected,
     #[error("Effective buffer binding size {size} for storage buffers is expected to align to {alignment}, but size is {size}")]
-    UnalignedEffectiveBufferBindingSizeForStorage { alignment: u8, size: u64 },
+    UnalignedEffectiveBufferBindingSizeForStorage { alignment: u32, size: u64 },
     #[error("Buffer offset {0} does not respect device's requested `{1}` limit {2}")]
     UnalignedBufferOffset(wgt::BufferAddress, &'static str, u32),
     #[error(

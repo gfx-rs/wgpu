@@ -275,6 +275,7 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 
 - Add support for mesh shaders. By @SupaMaggie70Incorporated in [#8139](https://github.com/gfx-rs/wgpu/pull/8139)
 - Expose render layer. By @xiaopengli89 in [#8707](https://github.com/gfx-rs/wgpu/pull/8707)
+- `MTLDevice` is thread-safe. By @uael in [#8168](https://github.com/gfx-rs/wgpu/pull/8168)
 
 #### Naga
 
@@ -287,6 +288,7 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 #### naga
 
 - Fix a bug that resulted in the Metal error `program scope variable must reside in constant address space` in some cases. By @teoxoy in [#8311](https://github.com/gfx-rs/wgpu/pull/8311).
+- Handle `rayQueryTerminate` in spv-out instead of ignoring it. By @Vecvec in [#8581](https://github.com/gfx-rs/wgpu/pull/8581).
 
 #### General
 
