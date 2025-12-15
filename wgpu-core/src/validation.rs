@@ -285,13 +285,16 @@ impl WebGpuError for InputError {
 #[non_exhaustive]
 pub enum StageError {
     #[error(
-        "Shader entry point's workgroup size {current:?} ({current_total} total invocations) must be less or equal to the per-dimension limit {limit:?} and the total invocation limit {total}"
+        "Shader entry point's workgroup size {current:?} ({current_total} total invocations) must be less or equal to the per-dimension
+        limit `Limits::{per_dimension_limit}` of {limit:?} and the total invocation limit `Limits::{total_limit}` of {total}"
     )]
     InvalidWorkgroupSize {
         current: [u32; 3],
         current_total: u32,
         limit: [u32; 3],
         total: u32,
+        per_dimension_limit: &'static str,
+        total_limit: &'static str,
     },
     #[error("Shader uses {used} inter-stage components above the limit of {limit}")]
     TooManyVaryings { used: u32, limit: u32 },
@@ -1318,7 +1321,12 @@ impl Interface {
 
         // check workgroup size limits
         if shader_stage.compute_like() {
-            let (max_workgroup_size_limits, max_workgroup_size_total) = match shader_stage {
+            let (
+                max_workgroup_size_limits,
+                max_workgroup_size_total,
+                per_dimension_limit,
+                total_limit,
+            ) = match shader_stage {
                 naga::ShaderStage::Compute => (
                     [
                         self.limits.max_compute_workgroup_size_x,
@@ -1326,6 +1334,8 @@ impl Interface {
                         self.limits.max_compute_workgroup_size_z,
                     ],
                     self.limits.max_compute_invocations_per_workgroup,
+                    "max_compute_workgroup_size_*",
+                    "max_compute_invocations_per_workgroup",
                 ),
                 naga::ShaderStage::Task => (
                     [
@@ -1334,6 +1344,8 @@ impl Interface {
                         self.limits.max_task_invocations_per_dimension,
                     ],
                     self.limits.max_task_invocations_per_workgroup,
+                    "max_task_invocations_per_dimension",
+                    "max_task_invocations_per_workgroup",
                 ),
                 naga::ShaderStage::Mesh => (
                     [
@@ -1342,6 +1354,8 @@ impl Interface {
                         self.limits.max_mesh_invocations_per_dimension,
                     ],
                     self.limits.max_mesh_invocations_per_workgroup,
+                    "max_mesh_invocations_per_dimension",
+                    "max_mesh_invocations_per_workgroup",
                 ),
                 _ => unreachable!(),
             };
@@ -1358,6 +1372,8 @@ impl Interface {
                     current_total: total_invocations,
                     limit: max_workgroup_size_limits,
                     total: max_workgroup_size_total,
+                    per_dimension_limit,
+                    total_limit,
                 });
             }
         }
