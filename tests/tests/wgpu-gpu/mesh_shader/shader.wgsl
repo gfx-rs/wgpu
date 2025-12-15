@@ -89,7 +89,7 @@ fn ms_no_ts(@builtin(local_invocation_index) index: u32, @builtin(global_invocat
     mesh_output.vertices[2].position = positions[2];
     mesh_output.vertices[2].color = colors[2];
 
-    mesh_output.primitives[0].index = vec3<u32>(0, 1, 2);
+    mesh_output.primitives[0].indices = vec3<u32>(0, 1, 2);
     mesh_output.primitives[0].cull = false;
     mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
 }
