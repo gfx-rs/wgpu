@@ -1,0 +1,106 @@
+AMD_IP_GFX:
+Pipeline hash: 2909f62136f2ea3
+Compute Shader:
+
+NIR:
+shader: MESA_SHADER_COMPUTE
+name: meta_fill_memory_16B
+internal: true
+workgroup_size: 64, 1, 1
+system_values_read: 0x00000000'00000000'00008400'00000000
+api_subgroup_size: 64
+max_subgroup_size: 64
+min_subgroup_size: 64
+bit_sizes_int: 0x60
+separate_shader: true
+writes_memory: true
+decl_function main () (entrypoint)
+
+impl main {
+    con block b0:       // preds:
+    con 32     %0 = @load_scalar_arg_amd (base=1, arg_upper_bound_u32_amd=0)
+    con 32     %1 = @load_scalar_arg_amd (base=2, arg_upper_bound_u32_amd=0)
+    con 32     %2 = @load_scalar_arg_amd (base=3, arg_upper_bound_u32_amd=0)
+    con 32     %3 = @load_scalar_arg_amd (base=4, arg_upper_bound_u32_amd=0)
+    con 64     %4 = pack_64_2x32_split %0, %1
+    div 32     %5 = @load_vector_arg_amd (base=7, arg_upper_bound_u32_amd=63)
+    con 32x3   %6 = @load_workgroup_id
+    con 32     %7 = load_const (0x00000006)
+    con 32     %8 = ishl %6.x, %7 (0x6)
+    div 32     %9 = iadd %5, %8
+    con 32    %10 = load_const (0x00000004)
+    div 32    %11 = ishl %9, %10 (0x4)
+    div 32    %12 = umin %11, %2
+    con 32x4  %13 = vec4 %3, %3, %3, %3
+                    @store_global_amd (%13, %4, %12) (base=0, access=none, align_mul=4, align_offset=0, wrmask=xyzw)
+                    // succs: b1
+    block b1:
+}
+
+
+ACO IR:
+After Spilling:
+ACO shader stage: SW (CS), HW (COMPUTE_SHADER)
+BB0
+/* logical preds: / linear preds: / kind: uniform, top-level, */
+	 s2: %15:s[0-1],  s1: %16:s[2],  s1: %17:s[3],  s1: %18:s[4],  s1: %19:s[5],  s1: %20:s[6],  s1: %21:s[7],  v1: %22:v[0],  v1: (kill)%23:v[1],  v1: (kill)%24:v[2] = p_startpgm
+	 s2: (kill)%26,  s1: (kill)%25:scc = p_init_scratch (kill)%15, (lateKill)%21
+	p_logical_start
+	 s2: %5 = p_create_vector (kill)%16, (kill)%17
+	 v1: %10 = v_lshl_add_u32 (kill)%20, 6, (kill)%22
+	 v1: %12 = v_lshlrev_b32 4, (kill)%10
+	 v1: %13 = v_min_u32 (kill)%18, (kill)%12
+	 v4: %31 = p_create_vector (kill)%19, (kill)%19, (kill)%19, (kill)%19
+	global_store_dwordx4 (kill)%13, (kill)%5, (kill)%31 storage:buffer
+	p_logical_end
+	s_endpgm
+
+
+DISASM:
+BB0:
+	v_lshl_add_u32 v0, s6, 6, v0                                ; d7460000 04010c06
+	v_mov_b32_e32 v4, s5                                        ; 7e080205
+	v_mov_b32_e32 v5, s5                                        ; 7e0a0205
+	v_mov_b32_e32 v6, s5                                        ; 7e0c0205
+	v_mov_b32_e32 v7, s5                                        ; 7e0e0205
+	v_lshlrev_b32_e32 v0, 4, v0                                 ; 34000084
+	v_min_u32_e32 v0, s4, v0                                    ; 26000004
+	global_store_dwordx4 v0, v[4:7], s[2:3]                     ; dc788000 00020400
+	s_waitcnt_vscnt null, 0x0                                   ; bbfd0000
+	s_endpgm                                                    ; bf810000
+
+
+Compute Shader:
+*** SHADER STATS ***
+Driver pipeline hash: 184822828303855267
+SGPRs: 128
+VGPRs: 8
+Spilled SGPRs: 0
+Spilled VGPRs: 0
+Code size: 48
+LDS size: 0
+Scratch size: 0
+Subgroups per SIMD: 32
+Combined inputs: 0
+Combined outputs: 0
+Hash: 3497546653
+Instructions: 10
+Copies: 4
+Branches: 0
+Latency: 346
+Inverse Throughput: 22
+VMEM Clause: 1
+SMEM Clause: 0
+Pre-Sched SGPRs: 9
+Pre-Sched VGPRs: 5
+VALU: 7
+SALU: 0
+VMEM: 1
+SMEM: 0
+VOPD: 0
+********************
+
+
+[1;36mThe number of active waves = 0[0m
+
+Descriptors:

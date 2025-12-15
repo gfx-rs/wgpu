@@ -466,6 +466,7 @@ impl super::Writer {
         // output variables if there are any)
         for (index, res_member) in result_members.iter().enumerate() {
             if res_member.built_in == Some(crate::BuiltIn::MeshTaskSize) {
+                self.write_control_barrier(crate::Barrier::WORK_GROUP, body);
                 // If its a function like `fn a() -> @builtin(...) vec3<u32> ...`
                 // then just use the output value. If it's a struct, extract the
                 // value from the struct.
@@ -706,7 +707,7 @@ impl super::Writer {
         block: &mut Block,
     ) -> Result<(), Error> {
         // Start with a control barrier so that everything that follows is guaranteed to see the same variables
-        self.write_control_barrier(crate::Barrier::WORK_GROUP, block);
+        self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body);
         let u32_id = self.get_u32_type_id();
 
         // Load the actual vertex and primitive counts

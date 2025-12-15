@@ -1910,7 +1910,11 @@ impl Writer {
         Ok(id)
     }
 
-    pub(super) fn write_control_barrier(&mut self, flags: crate::Barrier, block: &mut Block) {
+    pub(super) fn write_control_barrier(
+        &mut self,
+        flags: crate::Barrier,
+        body: &mut Vec<Instruction>,
+    ) {
         let memory_scope = if flags.contains(crate::Barrier::STORAGE) {
             spirv::Scope::Device
         } else if flags.contains(crate::Barrier::SUB_GROUP) {
@@ -1942,7 +1946,7 @@ impl Writer {
         };
         let mem_scope_id = self.get_index_constant(memory_scope as u32);
         let semantics_id = self.get_index_constant(semantics.bits());
-        block.body.push(Instruction::control_barrier(
+        body.push(Instruction::control_barrier(
             exec_scope_id,
             mem_scope_id,
             semantics_id,
@@ -2080,7 +2084,7 @@ impl Writer {
 
         let mut post_if_block = Block::new(merge_id);
 
-        self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut post_if_block);
+        self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut post_if_block.body);
 
         let next_id = self.id_gen.next();
         function.consume(post_if_block, Instruction::branch(next_id));

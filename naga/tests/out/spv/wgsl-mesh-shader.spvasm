@@ -157,6 +157,7 @@ OpStore %20 %27
 OpStore %48 %29
 %50 = OpAccessChain  %49  %18 %16
 OpStore %50 %31
+OpControlBarrier %44 %44 %45
 %51 = OpCompositeExtract  %5  %32 0
 %52 = OpCompositeExtract  %5  %32 1
 %53 = OpCompositeExtract  %5  %32 2

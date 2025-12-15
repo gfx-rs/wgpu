@@ -1,0 +1,76 @@
+; SPIR-V
+; Version: 1.4
+; Generator: Khronos; 28
+; Bound: 45
+; Schema: 0
+               OpCapability Shader
+               OpCapability MeshShadingEXT
+               OpExtension "SPV_EXT_mesh_shader"
+          %1 = OpExtInstImport "GLSL.std.450"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint TaskEXT %ts_main "ts_main" %taskPayload %workgroupData %gl_LocalInvocationID
+               OpExecutionMode %ts_main LocalSize 1 1 1
+               OpMemberName %TaskPayload 0 "colorMask"
+               OpMemberName %TaskPayload 1 "visible"
+               OpName %TaskPayload "TaskPayload"
+               OpName %taskPayload "taskPayload"
+               OpName %workgroupData "workgroupData"
+               OpName %ts_main "ts_main"
+               OpMemberDecorate %TaskPayload 0 Offset 0
+               OpMemberDecorate %TaskPayload 1 Offset 16
+               OpDecorate %gl_LocalInvocationID BuiltIn LocalInvocationId
+       %void = OpTypeVoid
+      %float = OpTypeFloat 32
+    %v4float = OpTypeVector %float 4
+       %uint = OpTypeInt 32 0
+     %v4uint = OpTypeVector %uint 4
+%TaskPayload = OpTypeStruct %v4float %v4uint
+     %v3uint = OpTypeVector %uint 3
+%_ptr_TaskPayloadWorkgroupEXT_TaskPayload = OpTypePointer TaskPayloadWorkgroupEXT %TaskPayload
+%taskPayload = OpVariable %_ptr_TaskPayloadWorkgroupEXT_TaskPayload TaskPayloadWorkgroupEXT
+%_ptr_Workgroup_float = OpTypePointer Workgroup %float
+%workgroupData = OpVariable %_ptr_Workgroup_float Workgroup
+         %15 = OpTypeFunction %void
+    %float_1 = OpConstant %float 1
+    %float_0 = OpConstant %float 0
+         %18 = OpConstantComposite %v4float %float_1 %float_1 %float_0 %float_1
+     %uint_1 = OpConstant %uint 1
+     %uint_0 = OpConstant %uint 0
+         %21 = OpConstantComposite %v4uint %uint_1 %uint_0 %uint_0 %uint_0
+         %22 = OpConstantComposite %v3uint %uint_1 %uint_1 %uint_1
+         %24 = OpConstantNull %float
+%_ptr_Input_v3uint = OpTypePointer Input %v3uint
+%gl_LocalInvocationID = OpVariable %_ptr_Input_v3uint Input
+         %28 = OpConstantNull %v3uint
+       %bool = OpTypeBool
+     %v3bool = OpTypeVector %bool 3
+     %uint_2 = OpConstant %uint 2
+   %uint_264 = OpConstant %uint 264
+%_ptr_TaskPayloadWorkgroupEXT_v4float = OpTypePointer TaskPayloadWorkgroupEXT %v4float
+%_ptr_TaskPayloadWorkgroupEXT_v4uint = OpTypePointer TaskPayloadWorkgroupEXT %v4uint
+    %ts_main = OpFunction %void None %15
+         %13 = OpLabel
+               OpBranch %23
+         %23 = OpLabel
+         %27 = OpLoad %v3uint %gl_LocalInvocationID
+         %31 = OpIEqual %v3bool %27 %28
+         %32 = OpAll %bool %31
+               OpSelectionMerge %33 None
+               OpBranchConditional %32 %34 %33
+         %34 = OpLabel
+               OpStore %workgroupData %24
+               OpBranch %33
+         %33 = OpLabel
+               OpControlBarrier %uint_2 %uint_2 %uint_264
+               OpBranch %37
+         %37 = OpLabel
+               OpStore %workgroupData %float_1
+         %39 = OpAccessChain %_ptr_TaskPayloadWorkgroupEXT_v4float %taskPayload %uint_0
+               OpStore %39 %18
+         %41 = OpAccessChain %_ptr_TaskPayloadWorkgroupEXT_v4uint %taskPayload %uint_1
+               OpStore %41 %21
+         %42 = OpCompositeExtract %uint %22 0
+         %43 = OpCompositeExtract %uint %22 1
+         %44 = OpCompositeExtract %uint %22 2
+               OpEmitMeshTasksEXT %42 %43 %44 %taskPayload
+               OpFunctionEnd
