@@ -777,6 +777,8 @@ impl super::Writer {
             return_info.primitive_info.array_type_id,
         );
 
+        self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body);
+
         // This must be called exactly once before any other mesh outputs are written
         {
             let mut ins = Instruction::new(spirv::Op::SetMeshOutputsEXT);
