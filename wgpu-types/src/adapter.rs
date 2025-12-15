@@ -192,6 +192,10 @@ pub enum RequestAdapterError {
     /// Attempted to obtain adapter specified by environment variable, but the environment variable
     /// was not set.
     EnvNotSet,
+
+    /// Custom error message for custom interfaces
+    //#[cfg(custom)]
+    Custom(String),
 }
 
 impl core::error::Error for RequestAdapterError {}
@@ -239,6 +243,7 @@ impl fmt::Display for RequestAdapterError {
                 }
             }
             RequestAdapterError::EnvNotSet => f.write_str("WGPU_ADAPTER_NAME not set")?,
+            RequestAdapterError::Custom(e) => f.write_str(e)?,
         }
         Ok(())
     }

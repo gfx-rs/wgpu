@@ -423,6 +423,9 @@ pub(crate) enum CreateSurfaceErrorKind {
     /// [rdh]: raw_window_handle::RawDisplayHandle
     /// [rwh]: raw_window_handle::RawWindowHandle
     RawHandle(raw_window_handle::HandleError),
+
+    #[cfg(custom)]
+    Custom(String),
 }
 static_assertions::assert_impl_all!(CreateSurfaceError: Send, Sync);
 
@@ -433,6 +436,8 @@ impl fmt::Display for CreateSurfaceError {
             CreateSurfaceErrorKind::Hal(e) => e.fmt(f),
             CreateSurfaceErrorKind::Web(e) => e.fmt(f),
             CreateSurfaceErrorKind::RawHandle(e) => e.fmt(f),
+            #[cfg(custom)]
+            CreateSurfaceErrorKind::Custom(e) => e.fmt(f),
         }
     }
 }
@@ -447,6 +452,8 @@ impl error::Error for CreateSurfaceError {
             CreateSurfaceErrorKind::RawHandle(e) => e.source(),
             #[cfg(not(feature = "std"))]
             CreateSurfaceErrorKind::RawHandle(_) => None,
+            #[cfg(custom)]
+            CreateSurfaceErrorKind::Custom(_) => None,
         }
     }
 }
@@ -456,6 +463,16 @@ impl From<wgc::instance::CreateSurfaceError> for CreateSurfaceError {
     fn from(e: wgc::instance::CreateSurfaceError) -> Self {
         Self {
             inner: CreateSurfaceErrorKind::Hal(e),
+        }
+    }
+}
+
+#[cfg(custom)]
+impl CreateSurfaceError {
+    /// Creates a custom surface creation error from a message.
+    pub fn custom(message: String) -> Self {
+        Self {
+            inner: CreateSurfaceErrorKind::Custom(message),
         }
     }
 }
