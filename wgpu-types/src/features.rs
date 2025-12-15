@@ -1151,10 +1151,13 @@ bitflags_array! {
         /// - DX12
         /// - Metal
         ///
-        /// Naga is only supported on vulkan on NVIDIA or Intel GPUs. On other platforms you will have to use passthrough shaders.
-        /// AMD GPUs and some Mesa drivers fail to run the naga generated code.
-        /// [This is a bug and will be addressed.](https://github.com/gfx-rs/wgpu/issues/8727) Support is still being exposed to
-        /// allow users to become familiar with and give feedback on the mesh shader design.
+        /// Naga is only supported on vulkan. On other platforms you will have to use passthrough shaders.
+        ///
+        /// Some Mesa drivers including LLVMPIPE but not RADV fail to run the naga generated code.
+        /// [This may be our bug and will be investigated.](https://github.com/gfx-rs/wgpu/issues/8727)
+        /// However, due to the nature of the failure, the fact that it is unique, and the random changes
+        /// that make it go away, this is believed to be a Mesa bug. See
+        /// [this Mesa issue.](https://gitlab.freedesktop.org/mesa/mesa/-/issues/14376)
         ///
         /// This is a native only feature.
         const EXPERIMENTAL_MESH_SHADER = 1 << 48;
