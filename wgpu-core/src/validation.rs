@@ -270,7 +270,7 @@ pub enum InputError {
     InterpolationMismatch(Option<naga::Interpolation>),
     #[error("Input sampling doesn't match provided {0:?}")]
     SamplingMismatch(Option<naga::Sampling>),
-    #[error("Pipeline input has perprimitive: {expected} but shader declares perprimitive: {}", !expected)]
+    #[error("Is pipeline input declared as a mesh shader `perprimitive`: {expected}, does shader expect `perprimitive`: {}", !expected)]
     WrongPerPrimitive { expected: bool },
 }
 
@@ -333,11 +333,11 @@ pub enum StageError {
         var: InterfaceVar,
         limit: u32,
     },
-    #[error("Mesh shaders are limited to {limit} output vertices, but the shader has a maximum number of {value}")]
+    #[error("Mesh shaders are limited to {limit} output vertices by `Limits::max_mesh_output_vertices`, but the shader has a maximum number of {value}")]
     TooManyMeshVertices { limit: u32, value: u32 },
-    #[error("Mesh shaders are limited to {limit} output primitives, but the shader has a maximum number of {value}")]
+    #[error("Mesh shaders are limited to {limit} output primitives by `Limits::max_mesh_output_primitives`, but the shader has a maximum number of {value}")]
     TooManyMeshPrimitives { limit: u32, value: u32 },
-    #[error("Mesh or task shaders are limited to {limit} bytes of task payload, but the shader has a task payload of size {value}")]
+    #[error("Mesh or task shaders are limited to {limit} bytes of task payload by `Limits::max_task_payload_size`, but the shader has a task payload of size {value}")]
     TaskPayloadTooLarge { limit: u32, value: u32 },
     #[error("Mesh shader's task payload has size ({shader:?}), which doesn't match the payload declared in the task stage ({input:?})")]
     TaskPayloadMustMatch {
