@@ -199,6 +199,7 @@ pub(crate) enum Error<'a> {
     InvalidIdentifierUnderscore(Span),
     ReservedIdentifierPrefix(Span),
     UnknownAddressSpace(Span),
+    InvalidLocalVariableAddressSpace(Span),
     RepeatedAttribute(Span),
     UnknownAttribute(Span),
     UnknownBuiltin(Span),
@@ -658,6 +659,11 @@ impl<'a> Error<'a> {
             Error::UnknownAddressSpace(bad_span) => ParseError {
                 message: format!("unknown address space: `{}`", &source[bad_span]),
                 labels: vec![(bad_span, "unknown address space".into())],
+                notes: vec![],
+            },
+            Error::InvalidLocalVariableAddressSpace(bad_span) => ParseError {
+                message: format!("invalid address space for local variable: `{}`", &source[bad_span]),
+                labels: vec![(bad_span, "local variables can only use 'function' address space".into())],
                 notes: vec![],
             },
             Error::RepeatedAttribute(bad_span) => ParseError {

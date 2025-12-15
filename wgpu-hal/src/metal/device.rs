@@ -2,8 +2,6 @@ use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
 use core::{ptr::NonNull, sync::atomic};
 use std::{thread, time};
 
-use parking_lot::Mutex;
-
 use super::{conv, PassthroughShader};
 use crate::auxil::map_naga_stage;
 use crate::metal::ShaderModuleSource;
@@ -215,7 +213,6 @@ impl super::Device {
                 let library = self
                     .shared
                     .device
-                    .lock()
                     .new_library_with_source(source.as_ref(), &options)
                     .map_err(|err| {
                         log::debug!("Naga generated shader:\n{source}");
@@ -362,7 +359,7 @@ impl super::Device {
         super::Buffer { raw, size }
     }
 
-    pub fn raw_device(&self) -> &Mutex<metal::Device> {
+    pub fn raw_device(&self) -> &metal::Device {
         &self.shared.device
     }
 }
@@ -386,7 +383,7 @@ impl crate::Device for super::Device {
         //TODO: HazardTrackingModeUntracked
 
         objc::rc::autoreleasepool(|| {
-            let raw = self.shared.device.lock().new_buffer(desc.size, options);
+            let raw = self.shared.device.new_buffer(desc.size, options);
             if let Some(label) = desc.label {
                 raw.set_label(label);
             }
@@ -468,7 +465,7 @@ impl crate::Device for super::Device {
             descriptor.set_usage(conv::map_texture_usage(desc.format, desc.usage));
             descriptor.set_storage_mode(mtl_storage_mode);
 
-            let raw = self.shared.device.lock().new_texture(&descriptor);
+            let raw = self.shared.device.new_texture(&descriptor);
             if raw.as_ptr().is_null() {
                 return Err(crate::DeviceError::OutOfMemory);
             }
@@ -620,7 +617,7 @@ impl crate::Device for super::Device {
             if self.features.contains(wgt::Features::TEXTURE_BINDING_ARRAY) {
                 descriptor.set_support_argument_buffers(true);
             }
-            let raw = self.shared.device.lock().new_sampler(&descriptor);
+            let raw = self.shared.device.new_sampler(&descriptor);
 
             self.counters.samplers.add(1);
 
@@ -891,7 +888,7 @@ impl crate::Device for super::Device {
                         let uses = conv::map_resource_usage(&layout.ty);
 
                         // Create argument buffer for this array
-                        let buffer = self.shared.device.lock().new_buffer(
+                        let buffer = self.shared.device.new_buffer(
                             8 * count as u64,
                             MTLResourceOptions::HazardTrackingModeUntracked
                                 | MTLResourceOptions::StorageModeShared,
@@ -1073,8 +1070,8 @@ impl crate::Device for super::Device {
                 num_workgroups,
             } => {
                 let options = metal::CompileOptions::new();
-                // Obtain the locked device from shared
-                let device = self.shared.device.lock();
+                // Obtain the device from shared
+                let device = &self.shared.device;
                 let library = device
                     .new_library_with_source(source, &options)
                     .map_err(|e| crate::ShaderError::Compilation(format!("MSL: {e:?}")))?;
@@ -1459,11 +1456,7 @@ impl crate::Device for super::Device {
                     }
 
                     let ds_descriptor = create_depth_stencil_desc(ds);
-                    let raw = self
-                        .shared
-                        .device
-                        .lock()
-                        .new_depth_stencil_state(&ds_descriptor);
+                    let raw = self.shared.device.new_depth_stencil_state(&ds_descriptor);
                     Some((raw, ds.bias))
                 }
                 None => None,
@@ -1496,10 +1489,10 @@ impl crate::Device for super::Device {
             // Create the pipeline from descriptor
             let raw = match descriptor {
                 MetalGenericRenderPipelineDescriptor::Standard(d) => {
-                    self.shared.device.lock().new_render_pipeline_state(&d)
+                    self.shared.device.new_render_pipeline_state(&d)
                 }
                 MetalGenericRenderPipelineDescriptor::Mesh(d) => {
-                    self.shared.device.lock().new_mesh_render_pipeline_state(&d)
+                    self.shared.device.new_mesh_render_pipeline_state(&d)
                 }
             }
             .map_err(|e| {
@@ -1600,7 +1593,6 @@ impl crate::Device for super::Device {
             let raw = self
                 .shared
                 .device
-                .lock()
                 .new_compute_pipeline_state(&descriptor)
                 .map_err(|e| {
                     crate::PipelineError::Linkage(
@@ -1637,7 +1629,7 @@ impl crate::Device for super::Device {
                     let size = desc.count as u64 * crate::QUERY_SIZE;
                     let options = MTLResourceOptions::empty();
                     //TODO: HazardTrackingModeUntracked
-                    let raw_buffer = self.shared.device.lock().new_buffer(size, options);
+                    let raw_buffer = self.shared.device.new_buffer(size, options);
                     if let Some(label) = desc.label {
                         raw_buffer.set_label(label);
                     }
@@ -1649,7 +1641,7 @@ impl crate::Device for super::Device {
                 }
                 wgt::QueryType::Timestamp => {
                     let size = desc.count as u64 * crate::QUERY_SIZE;
-                    let device = self.shared.device.lock();
+                    let device = &self.shared.device;
                     let destination_buffer = device.new_buffer(size, MTLResourceOptions::empty());
 
                     let csb_desc = metal::CounterSampleBufferDescriptor::new();
@@ -1701,7 +1693,7 @@ impl crate::Device for super::Device {
     unsafe fn create_fence(&self) -> DeviceResult<super::Fence> {
         self.counters.fences.add(1);
         let shared_event = if self.shared.private_caps.supports_shared_event {
-            Some(self.shared.device.lock().new_shared_event())
+            Some(self.shared.device.new_shared_event())
         } else {
             None
         };
@@ -1765,9 +1757,9 @@ impl crate::Device for super::Device {
         if !self.shared.private_caps.supports_capture_manager {
             return false;
         }
-        let device = self.shared.device.lock();
+        let device = &self.shared.device;
         let shared_capture_manager = metal::CaptureManager::shared();
-        let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&device);
+        let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(device);
         shared_capture_manager.set_default_capture_scope(&default_capture_scope);
         shared_capture_manager.start_capture_with_scope(&default_capture_scope);
         default_capture_scope.begin_scope();

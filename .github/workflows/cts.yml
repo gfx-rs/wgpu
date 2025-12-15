@@ -31,26 +31,39 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        suite: ["API Operation", "API Validation", "Other"]
+        platform: ["Windows x86_64", "Mac aarch64", "Linux x86_64"]
         include:
+          # When an `include` item matches existing matrix entries, the additional items are
+          # added only to the matching entries. The two lines above define the matrix, and
+          # the items below attach the rest of the configuration values that apply to suites
+          # and platforms.
+          - suite: API Operation
+            filter: "^webgpu:api,operation,"
+          - suite: API Validation
+            filter: "^webgpu:api,validation,"
+          - suite: Other
+            filter: "!^webgpu:api,operation,|^webgpu:api,validation,"
+
           # Windows
-          - name: Windows x86_64
+          - platform: Windows x86_64
             os: windows-2022
             target: x86_64-pc-windows-msvc
             backend: dx12
 
           # Mac
-          - name: Mac aarch64
+          - platform: Mac aarch64
             os: macos-14
             target: x86_64-apple-darwin
             backend: metal
 
           # Linux
-          - name: Linux x86_64
+          - platform: Linux x86_64
             os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             backend: vulkan
 
-    name: CTS ${{ matrix.name }}
+    name: ${{ matrix.suite }} ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -103,12 +116,13 @@ jobs:
       # Explicitly set the backend to avoid EGL messages in output,
       # because these tests check stdout.
       - name: Test cts_runner
+        if: matrix.suite == 'other'
         shell: bash
         run: DENO_WEBGPU_BACKEND=${{ matrix.backend }} cargo --locked test -p cts_runner
 
       - name: Run CTS
         shell: bash
-        run: cargo --locked xtask cts --llvm-cov --backend ${{ matrix.backend }}
+        run: cargo --locked xtask cts --llvm-cov --backend ${{ matrix.backend }} --filter '${{matrix.filter }}'
 
       - name: Generate coverage report
         id: coverage

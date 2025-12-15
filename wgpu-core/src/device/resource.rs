@@ -854,7 +854,20 @@ impl Device {
                 user_closures.mappings,
                 user_closures.blas_compact_ready,
                 queue_empty,
-            ) = queue_result
+            ) = queue_result;
+            // DEADLOCK PREVENTION: We must drop `snatch_guard` before `queue` goes out of scope.
+            //
+            // `Queue::drop` acquires the snatch guard. If we still hold it when `queue` is dropped
+            // at the end of this block, we would deadlock. This can happen in the following scenario:
+            //
+            // - Thread A calls `Device::maintain` while Thread B holds the last strong ref to the queue.
+            // - Thread A calls `self.get_queue()`, obtaining a new strong ref, and enters this branch.
+            // - Thread B drops its strong ref, making Thread A's ref the last one.
+            // - When `queue` goes out of scope here, `Queue::drop` runs and tries to acquire the
+            //   snatch guard — but Thread A (this thread) still holds it, causing a deadlock.
+            drop(snatch_guard);
+        } else {
+            drop(snatch_guard);
         };
 
         // Based on the queue empty status, and the current finished submission index, determine the result of the poll.
@@ -909,7 +922,6 @@ impl Device {
 
         // Don't hold the locks while calling release_gpu_resources.
         drop(fence);
-        drop(snatch_guard);
 
         if should_release_gpu_resource {
             self.release_gpu_resources();
@@ -2784,16 +2796,13 @@ impl Device {
 
         let (bb, bind_size) = buffer.binding(bb.offset, bb.size, snatch_guard)?;
 
-        if matches!(binding_ty, wgt::BufferBindingType::Storage { .. }) {
-            let storage_buf_size_alignment = 4;
-
-            let aligned = bind_size % u64::from(storage_buf_size_alignment) == 0;
-            if !aligned {
-                return Err(Error::UnalignedEffectiveBufferBindingSizeForStorage {
-                    alignment: storage_buf_size_alignment,
-                    size: bind_size,
-                });
-            }
+        if matches!(binding_ty, wgt::BufferBindingType::Storage { .. })
+            && bind_size % u64::from(wgt::STORAGE_BINDING_SIZE_ALIGNMENT) != 0
+        {
+            return Err(Error::UnalignedEffectiveBufferBindingSizeForStorage {
+                alignment: wgt::STORAGE_BINDING_SIZE_ALIGNMENT,
+                size: bind_size,
+            });
         }
 
         let bind_end = bb.offset + bind_size;

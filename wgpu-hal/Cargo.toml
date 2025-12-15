@@ -92,7 +92,6 @@ vulkan = [
     "dep:arrayvec",
     "dep:ash",
     "dep:bytemuck",
-    "dep:gpu-alloc",
     "dep:gpu-descriptor",
     "dep:hashbrown",
     "dep:libc",
@@ -103,6 +102,7 @@ vulkan = [
     "dep:profiling",
     "dep:smallvec",
     "dep:windows",
+    "gpu-allocator/vulkan",
     "windows/Win32",
 ]
 gles = [
@@ -224,9 +224,10 @@ glow = { workspace = true, optional = true }
 ########################
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+# Backend: Vulkan and Dx12
+gpu-allocator = { workspace = true, optional = true }
 # Backend: Vulkan
 ash = { workspace = true, optional = true }
-gpu-alloc = { workspace = true, optional = true }
 gpu-descriptor = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true, features = ["union"] }
 # Backend: GLES
@@ -253,7 +254,6 @@ windows-core = { workspace = true, optional = true }
 # Backend: Dx12
 bit-set = { workspace = true, optional = true }
 range-alloc = { workspace = true, optional = true }
-gpu-allocator = { workspace = true, optional = true, features = ["d3d12"] }
 once_cell = { workspace = true, optional = true }
 # backend: GLES
 glutin_wgl_sys = { workspace = true, optional = true }

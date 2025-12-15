@@ -126,3 +126,21 @@ impl crate::TextureCopy {
         self.size = self.size.min(&max_src_size).min(&max_dst_size);
     }
 }
+
+/// Clamp the limits in `limits` to honor any HAL-imposed maximums.
+///
+/// Limits that do not have a HAL-defined maximum are left unchanged.
+#[cfg_attr(not(any_backend), allow(dead_code))]
+pub(crate) fn apply_hal_limits(mut limits: wgt::Limits) -> wgt::Limits {
+    // The Metal backend wants to have its own consistent view of the limits, so
+    // it may duplicate some of these limits.
+    limits.max_bind_groups = limits.max_bind_groups.min(crate::MAX_BIND_GROUPS as u32);
+    limits.max_storage_buffer_binding_size &= !(wgt::STORAGE_BINDING_SIZE_ALIGNMENT - 1);
+    limits.max_vertex_buffers = limits
+        .max_vertex_buffers
+        .min(crate::MAX_VERTEX_BUFFERS as u32);
+    limits.max_color_attachments = limits
+        .max_color_attachments
+        .min(crate::MAX_COLOR_ATTACHMENTS as u32);
+    limits
+}

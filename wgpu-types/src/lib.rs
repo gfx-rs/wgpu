@@ -199,6 +199,10 @@ pub const VERTEX_STRIDE_ALIGNMENT: BufferAddress = 4;
 #[doc = link_to_wgpu_docs!(["writes to immediate data"]: "struct.RenderPass.html#method.set_immediates")]
 pub const IMMEDIATES_ALIGNMENT: u32 = 4;
 
+/// Storage buffer binding sizes must be multiples of this value.
+#[doc(hidden)]
+pub const STORAGE_BINDING_SIZE_ALIGNMENT: u32 = 4;
+
 /// Maximum queries in a [`QuerySetDescriptor`].
 pub const QUERY_SET_MAX_QUERIES: u32 = 4096;
 

@@ -459,6 +459,7 @@ enum LookupRayQueryFunction {
     ConfirmIntersection,
     GetVertexPositions { committed: bool },
     GetIntersection { committed: bool },
+    Terminate,
 }
 
 #[derive(Debug)]
