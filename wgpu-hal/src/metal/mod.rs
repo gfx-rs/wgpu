@@ -337,7 +337,7 @@ impl Default for Settings {
 }
 
 struct AdapterShared {
-    device: Mutex<metal::Device>,
+    device: metal::Device,
     disabilities: PrivateDisabilities,
     private_caps: PrivateCapabilities,
     settings: Settings,
@@ -355,7 +355,7 @@ impl AdapterShared {
         Self {
             disabilities: PrivateDisabilities::new(&device),
             private_caps,
-            device: Mutex::new(device),
+            device,
             settings: Settings::default(),
             presentation_timer: time::PresentationTimer::new(),
         }

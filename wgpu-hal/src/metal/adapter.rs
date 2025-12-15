@@ -50,11 +50,10 @@ impl crate::Adapter for super::Adapter {
         let queue = self
             .shared
             .device
-            .lock()
             .new_command_queue_with_max_command_buffer_count(MAX_COMMAND_BUFFERS);
 
         // Acquiring the meaning of timestamp ticks is hard with Metal!
-        // The only thing there is is a method correlating cpu & gpu timestamps (`device.sample_timestamps`).
+        // The only thing there is a method correlating cpu & gpu timestamps (`device.sample_timestamps`).
         // Users are supposed to call this method twice and calculate the difference,
         // see "Converting GPU Timestamps into CPU Time":
         // https://developer.apple.com/documentation/metal/gpu_counters_and_counter_sample_buffers/converting_gpu_timestamps_into_cpu_time
@@ -72,7 +71,7 @@ impl crate::Adapter for super::Adapter {
         // Based on:
         // * https://github.com/gfx-rs/wgpu/pull/2528
         // * https://github.com/gpuweb/gpuweb/issues/1325#issuecomment-761041326
-        let timestamp_period = if self.shared.device.lock().name().starts_with("Intel") {
+        let timestamp_period = if self.shared.device.name().starts_with("Intel") {
             83.333
         } else {
             // Known for Apple Silicon (at least M1 & M2, iPad Pro 2018) and AMD GPUs.
@@ -121,7 +120,7 @@ impl crate::Adapter for super::Adapter {
             Tfc::empty()
         };
         let is_not_apple1x = super::PrivateCapabilities::supports_any(
-            self.shared.device.lock().as_ref(),
+            self.shared.device.as_ref(),
             &[
                 MTLFeatureSet::iOS_GPUFamily2_v1,
                 MTLFeatureSet::macOS_GPUFamily1_v1,
