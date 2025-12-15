@@ -1186,6 +1186,7 @@ impl Interface {
         // Since a shader module can have multiple entry points with the same name,
         // we need to look for one with the right execution model.
         let shader_stage = Self::shader_stage_from_stage_bit(stage_bit);
+        let entry_point_name = entry_point_name.to_string();
         let pair = (shader_stage, entry_point_name.to_string());
         let entry_point = match self.entry_points.get(&pair) {
             Some(some) => some,
@@ -1344,14 +1345,12 @@ impl Interface {
             };
             let total_invocations = entry_point.workgroup_size.iter().product::<u32>();
 
-            if entry_point.workgroup_size.contains(&0)
-                || total_invocations > max_workgroup_size_total
-                || {
-                    entry_point.workgroup_size[0] > max_workgroup_size_limits[0]
-                        || entry_point.workgroup_size[1] > max_workgroup_size_limits[1]
-                        || entry_point.workgroup_size[2] > max_workgroup_size_limits[2]
-                }
-            {
+            let workgroup_size_is_zero = entry_point.workgroup_size.contains(&0);
+            let too_many_invocations = total_invocations > max_workgroup_size_total;
+            let dimension_too_large = entry_point.workgroup_size[0] > max_workgroup_size_limits[0]
+                || entry_point.workgroup_size[1] > max_workgroup_size_limits[1]
+                || entry_point.workgroup_size[2] > max_workgroup_size_limits[2];
+            if workgroup_size_is_zero || too_many_invocations || dimension_too_large {
                 return Err(StageError::InvalidWorkgroupSize {
                     current: entry_point.workgroup_size,
                     current_total: total_invocations,
@@ -1362,7 +1361,7 @@ impl Interface {
         }
 
         let mut inter_stage_components = 0;
-        let mut has_primitive_index = false;
+        let mut this_stage_primitive_index = false;
         let mut has_draw_id = false;
 
         // check inputs compatibility
@@ -1407,14 +1406,13 @@ impl Interface {
                                     | naga::ShaderStage::Mesh => (false, 0, false),
                                 };
                             if !compatible {
-                                Err(InputError::WrongType(provided.ty))
+                                return Err(InputError::WrongType(provided.ty));
                             } else if !per_primitive_correct {
-                                Err(InputError::WrongPerPrimitive {
+                                return Err(InputError::WrongPerPrimitive {
                                     expected: provided.per_primitive,
-                                })
-                            } else {
-                                Ok(num_components)
+                                });
                             }
+                            Ok(num_components)
                         });
                     match result {
                         Ok(num_components) => {
@@ -1430,7 +1428,7 @@ impl Interface {
                     }
                 }
                 Varying::BuiltIn(naga::BuiltIn::PrimitiveIndex) => {
-                    has_primitive_index = true;
+                    this_stage_primitive_index = true;
                 }
                 Varying::BuiltIn(naga::BuiltIn::DrawID) => {
                     has_draw_id = true;
@@ -1529,8 +1527,9 @@ impl Interface {
         }
 
         // Fragment shader primitive index is treated like a varying
-        if let Some(primitive_index) = inputs.primitive_index {
-            if primitive_index != has_primitive_index && shader_stage == naga::ShaderStage::Fragment
+        if let Some(previous_stage_primitive_index) = inputs.primitive_index {
+            if previous_stage_primitive_index != this_stage_primitive_index
+                && shader_stage == naga::ShaderStage::Fragment
             {
                 return Err(StageError::PrimitiveIndexError);
             }
@@ -1555,7 +1554,7 @@ impl Interface {
             task_payload_size: entry_point.task_payload_size,
             varyings: outputs,
             primitive_index: if shader_stage == naga::ShaderStage::Mesh {
-                Some(has_primitive_index)
+                Some(this_stage_primitive_index)
             } else {
                 None
             },

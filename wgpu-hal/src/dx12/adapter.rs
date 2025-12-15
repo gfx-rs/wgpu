@@ -770,21 +770,35 @@ impl super::Adapter {
                     max_non_sampler_bindings: 1_000_000,
 
                     // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#dispatchmesh-api
-                    max_task_mesh_workgroup_total_count: 2u32.pow(22),
+                    max_task_mesh_workgroup_total_count: if mesh_shader_supported {
+                        2u32.pow(22)
+                    } else {
+                        0
+                    },
                     // Technically it says "64k" but I highly doubt they want 65536 for compute and exactly 64,000 for task workgroups
-                    max_task_mesh_workgroups_per_dimension:
-                        Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
+                    max_task_mesh_workgroups_per_dimension: if mesh_shader_supported {
+                        Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION
+                    } else {
+                        0
+                    },
                     // Assume this inherits from compute shaders
-                    max_task_invocations_per_workgroup:
-                        Direct3D12::D3D12_CS_4_X_THREAD_GROUP_MAX_THREADS_PER_GROUP,
-                    max_task_invocations_per_dimension: Direct3D12::D3D12_CS_THREAD_GROUP_MAX_Z,
+                    max_task_invocations_per_workgroup: if mesh_shader_supported {
+                        Direct3D12::D3D12_CS_4_X_THREAD_GROUP_MAX_THREADS_PER_GROUP
+                    } else {
+                        0
+                    },
+                    max_task_invocations_per_dimension: if mesh_shader_supported {
+                        Direct3D12::D3D12_CS_THREAD_GROUP_MAX_Z
+                    } else {
+                        0
+                    },
                     // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#amplification-shader-and-mesh-shader
-                    max_mesh_invocations_per_workgroup: 128,
-                    max_mesh_invocations_per_dimension: 128,
+                    max_mesh_invocations_per_workgroup: if mesh_shader_supported { 128 } else { 0 },
+                    max_mesh_invocations_per_dimension: if mesh_shader_supported { 128 } else { 0 },
 
-                    max_task_payload_size: 16384,
-                    max_mesh_output_vertices: 256,
-                    max_mesh_output_primitives: 256,
+                    max_task_payload_size: if mesh_shader_supported { 16384 } else { 0 },
+                    max_mesh_output_vertices: if mesh_shader_supported { 256 } else { 0 },
+                    max_mesh_output_primitives: if mesh_shader_supported { 256 } else { 0 },
                     // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#sv_rendertargetarrayindex-limitations-based-on-queryable-capability
                     max_mesh_output_layers: if mesh_shader_supported { 8 } else { 0 },
                     max_mesh_multiview_view_count: if mesh_shader_supported {
