@@ -53,7 +53,7 @@ var<workgroup> mesh_output: MeshOutput;
 @mesh(mesh_output)
 @payload(taskPayload)
 @workgroup_size(1)
-fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocation_id) id: vec3<u32>) {
+fn ms_main() {
     mesh_output.vertex_count = 3;
     mesh_output.primitive_count = 1;
     workgroupData = 2.0;

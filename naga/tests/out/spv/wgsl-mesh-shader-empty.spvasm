@@ -111,6 +111,7 @@ OpControlBarrier %24 %24 %25
 %63 = OpExtInst  %3  %1 UMin %62 %13
 %64 = OpAccessChain  %65  %17 %66
 %67 = OpAccessChain  %68  %17 %13
+OpControlBarrier %24 %24 %25
 OpSetMeshOutputsEXT %60 %63
 OpStore %33 %32
 OpBranch %69
