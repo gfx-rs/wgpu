@@ -344,7 +344,7 @@ pub enum StageError {
         input: Option<u32>,
         shader: Option<u32>,
     },
-    #[error("Primitive index can only be used in a fragment shader if the preceding shader was a vertex shader or a mesh shader that writes to primitive index.
+    #[error("Primitive index can only be used in a fragment shader if the preceding shader was a vertex shader or a mesh shader that writes to primitive index. \
     If a mesh shader writes to primitive index, it must be read by the fragment shader.")]
     PrimitiveIndexError,
     #[error("DrawId cannot be used in the same pipeline as a task shader")]
