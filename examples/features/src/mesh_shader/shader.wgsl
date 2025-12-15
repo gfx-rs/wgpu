@@ -39,8 +39,8 @@ fn ts_main(@builtin(local_invocation_index) index: u32) -> @builtin(mesh_task_si
         workgroupData = 1.0;
         taskPayload.colorMask = vec4(1.0, 1.0, 0.0, 1.0);
         taskPayload.visible = vec4(1, 0, 0, 0);
-        return vec3(1, 1, 1);
     }
+    return vec3(1, 1, 1);
 }
 
 struct MeshOutput {
