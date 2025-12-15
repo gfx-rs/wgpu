@@ -27,7 +27,7 @@ use crate::COPY_BUFFER_ALIGNMENT;
 pub struct StagingBelt {
     device: Device,
     chunk_size: BufferAddress,
-    /// User-specified [`BufferUsages`] with which the chunk buffers are created.
+    /// User-specified [`BufferUsages`] used to create the chunk buffers are created.
     ///
     /// [`new`](Self::new) guarantees that this always contains
     /// [`MAP_WRITE`](BufferUsages::MAP_WRITE).
@@ -58,8 +58,8 @@ impl StagingBelt {
     ///   (per [`StagingBelt::finish()`]); and
     /// * bigger is better, within these bounds.
     ///
-    /// The buffers returned by this staging belt will have the buffer usages
-    /// [`MAP_READ | MAP_WRITE`](BufferUsages).
+    /// The buffers returned by this [`StagingBelt`] will be have the buffer usages
+    /// [`COPY_SRC | MAP_WRITE`](wgpu::BufferUsages)
     pub fn new(device: Device, chunk_size: BufferAddress) -> Self {
         Self::new_with_buffer_usages(device, chunk_size, BufferUsages::COPY_SRC)
     }
@@ -75,12 +75,13 @@ impl StagingBelt {
     ///   (per [`StagingBelt::finish()`]); and
     /// * bigger is better, within these bounds.
     ///
-    /// `buffer_usages` specifies with which [`BufferUsages`] the staging buffers
-    /// will be created. [`MAP_WRITE`](BufferUsages::MAP_WRITE) will be added
+    /// `buffer_usages` specifies the [`BufferUsages`] the staging buffers
+    /// will be created with. [`MAP_WRITE`](BufferUsages::MAP_WRITE) will be added
     /// automatically. The method will panic if the combination of usages is not
-    /// supported. Because [`MAP_WRITE`](BufferUsages::MAP_WRITE) is implied, only
-    /// [`COPY_SRC`](BufferUsages::COPY_SRC) can be used, except if
-    /// [`Features::MAPPABLE_PRIMARY_BUFFERS`] is enabled.
+    /// supported. Because [`MAP_WRITE`](BufferUsages::MAP_WRITE) is implied, the allowed usages
+    /// depends on if [`Features::MAPPABLE_PRIMARY_BUFFERS`] is enabled.
+    /// - If enabled: any usage is valid.
+    /// - If disabled: only [`COPY_SRC`](BufferUsages::COPY_SRC) can be used.
     #[track_caller]
     pub fn new_with_buffer_usages(
         device: Device,
