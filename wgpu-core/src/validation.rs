@@ -270,8 +270,8 @@ pub enum InputError {
     InterpolationMismatch(Option<naga::Interpolation>),
     #[error("Input sampling doesn't match provided {0:?}")]
     SamplingMismatch(Option<naga::Sampling>),
-    #[error("Is pipeline input declared as a mesh shader `perprimitive`: {expected}, does shader expect `perprimitive`: {}", !expected)]
-    WrongPerPrimitive { expected: bool },
+    #[error("Pipeline input has per_primitive={pipeline_input}, but shader expects per_primitive={shader_expectation}")]
+    WrongPerPrimitive { pipeline_input: bool, shader_expectation: bool },
 }
 
 impl WebGpuError for InputError {
