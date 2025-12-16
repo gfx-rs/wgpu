@@ -184,7 +184,6 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_task_invocations_per_dimension,
         max_mesh_invocations_per_workgroup,
         max_mesh_invocations_per_dimension,
-        
         max_task_payload_size,
         max_mesh_output_vertices,
         max_mesh_output_primitives,
