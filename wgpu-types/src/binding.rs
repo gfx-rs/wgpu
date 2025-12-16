@@ -224,11 +224,11 @@ bitflags::bitflags! {
         /// Binding is visible from the ray generation shader of a ray tracing pipeline.
         const RAY_GENERATION = 1 << 5;
         /// Binding is visible from the ray any hit shader of a ray tracing pipeline.
-        const ANY_HIT = 1 << 5;
+        const ANY_HIT = 1 << 6;
         /// Binding is visible from the ray closest hit shader of a ray tracing pipeline.
-        const CLOSEST_HIT = 1 << 6;
+        const CLOSEST_HIT = 1 << 7;
         /// Binding is visible from the ray miss shader of a ray tracing pipeline.
-        const MISS = 1 << 7;
+        const MISS = 1 << 8;
     }
 }
 
