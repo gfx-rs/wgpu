@@ -1143,13 +1143,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
             };
         } else {
             for i in 0..draw_count {
+                let indirect_offset = offset
+                    + i as wgt::BufferAddress
+                        * size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
                 unsafe {
                     self.device.raw.cmd_draw_indirect(
                         self.active,
                         buffer.raw,
-                        offset
-                            + i as wgt::BufferAddress
-                                * size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress,
+                        indirect_offset,
                         1,
                         size_of::<wgt::DrawIndirectArgs>() as u32,
                     )
@@ -1178,13 +1179,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
             };
         } else {
             for i in 0..draw_count {
+                let indirect_offset = offset
+                    + i as wgt::BufferAddress
+                        * size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
                 unsafe {
                     self.device.raw.cmd_draw_indexed_indirect(
                         self.active,
                         buffer.raw,
-                        offset
-                            + i as wgt::BufferAddress
-                                * size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress,
+                        indirect_offset,
                         1,
                         size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
                     )
