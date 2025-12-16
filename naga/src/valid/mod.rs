@@ -9,6 +9,7 @@ mod function;
 mod handles;
 mod interface;
 mod r#type;
+mod zero_value;
 
 use alloc::{boxed::Box, string::String, vec, vec::Vec};
 use core::ops;
@@ -32,6 +33,7 @@ pub use expression::{ConstExpressionError, ExpressionError};
 pub use function::{CallError, FunctionError, LocalVariableError, SubgroupError};
 pub use interface::{EntryPointError, GlobalVariableError, VaryingError};
 pub use r#type::{Disalignment, ImmediateError, TypeError, TypeFlags, WidthError};
+pub use zero_value::ZeroValueError;
 
 use self::handles::InvalidHandleError;
 
