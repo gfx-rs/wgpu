@@ -270,8 +270,8 @@ pub enum InputError {
     InterpolationMismatch(Option<naga::Interpolation>),
     #[error("Input sampling doesn't match provided {0:?}")]
     SamplingMismatch(Option<naga::Sampling>),
-    #[error("Pipeline input has per_primitive={pipeline_input}, but shader expects per_primitive={shader_expectation}")]
-    WrongPerPrimitive { pipeline_input: bool, shader_expectation: bool },
+    #[error("Pipeline input has per_primitive={pipeline_input}, but shader expects per_primitive={shader}")]
+    WrongPerPrimitive { pipeline_input: bool, shader: bool },
 }
 
 impl WebGpuError for InputError {
@@ -1191,7 +1191,6 @@ impl Interface {
         // Since a shader module can have multiple entry points with the same name,
         // we need to look for one with the right execution model.
         let shader_stage = Self::shader_stage_from_stage_bit(stage_bit);
-        let entry_point_name = entry_point_name.to_string();
         let pair = (shader_stage, entry_point_name.to_string());
         let entry_point = match self.entry_points.get(&pair) {
             Some(some) => some,
@@ -1427,7 +1426,8 @@ impl Interface {
                                 return Err(InputError::WrongType(provided.ty));
                             } else if !per_primitive_correct {
                                 return Err(InputError::WrongPerPrimitive {
-                                    expected: provided.per_primitive,
+                                    pipeline_input: provided.per_primitive,
+                                    shader: iv.per_primitive,
                                 });
                             }
                             Ok(num_components)

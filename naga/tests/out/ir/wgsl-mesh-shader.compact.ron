@@ -327,6 +327,147 @@
             task_payload: Some(0),
         ),
         (
+            name: "ts_divergent",
+            stage: Task,
+            early_depth_test: None,
+            workgroup_size: (2, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("ts_divergent"),
+                arguments: [
+                    (
+                        name: Some("thread_id"),
+                        ty: 5,
+                        binding: Some(BuiltIn(LocalInvocationIndex)),
+                    ),
+                ],
+                result: Some((
+                    ty: 6,
+                    binding: Some(BuiltIn(MeshTaskSize)),
+                )),
+                local_variables: [],
+                expressions: [
+                    FunctionArgument(0),
+                    Literal(U32(0)),
+                    Binary(
+                        op: Equal,
+                        left: 0,
+                        right: 1,
+                    ),
+                    GlobalVariable(0),
+                    AccessIndex(
+                        base: 3,
+                        index: 0,
+                    ),
+                    Literal(F32(1.0)),
+                    Literal(F32(1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            5,
+                            6,
+                            7,
+                            8,
+                        ],
+                    ),
+                    GlobalVariable(0),
+                    AccessIndex(
+                        base: 10,
+                        index: 1,
+                    ),
+                    Literal(Bool(true)),
+                    Literal(U32(1)),
+                    Literal(U32(1)),
+                    Literal(U32(1)),
+                    Compose(
+                        ty: 6,
+                        components: [
+                            13,
+                            14,
+                            15,
+                        ],
+                    ),
+                    Literal(U32(2)),
+                    Literal(U32(2)),
+                    Literal(U32(2)),
+                    Compose(
+                        ty: 6,
+                        components: [
+                            17,
+                            18,
+                            19,
+                        ],
+                    ),
+                ],
+                named_expressions: {
+                    0: "thread_id",
+                },
+                body: [
+                    Emit((
+                        start: 2,
+                        end: 3,
+                    )),
+                    If(
+                        condition: 2,
+                        accept: [
+                            Emit((
+                                start: 4,
+                                end: 5,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 9,
+                                end: 10,
+                            )),
+                            Store(
+                                pointer: 4,
+                                value: 9,
+                            ),
+                            Emit((
+                                start: 11,
+                                end: 12,
+                            )),
+                            Store(
+                                pointer: 11,
+                                value: 12,
+                            ),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 16,
+                                end: 17,
+                            )),
+                            Return(
+                                value: Some(16),
+                            ),
+                        ],
+                        reject: [],
+                    ),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 20,
+                        end: 21,
+                    )),
+                    Return(
+                        value: Some(20),
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+            mesh_info: None,
+            task_payload: Some(0),
+        ),
+        (
             name: "ms_main",
             stage: Mesh,
             early_depth_test: None,
@@ -336,7 +477,7 @@
                 name: Some("ms_main"),
                 arguments: [
                     (
-                        name: Some("index"),
+                        name: Some("thread_id"),
                         ty: 5,
                         binding: Some(BuiltIn(LocalInvocationIndex)),
                     ),
@@ -637,7 +778,7 @@
                     ),
                 ],
                 named_expressions: {
-                    0: "index",
+                    0: "thread_id",
                     1: "id",
                 },
                 body: [
@@ -906,6 +1047,1033 @@
                 output_variable: 2,
             )),
             task_payload: Some(0),
+        ),
+        (
+            name: "ms_no_ts",
+            stage: Mesh,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("ms_no_ts"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 0,
+                        index: 2,
+                    ),
+                    Literal(U32(3)),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 3,
+                        index: 3,
+                    ),
+                    Literal(U32(1)),
+                    GlobalVariable(1),
+                    Literal(F32(2.0)),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 8,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 9,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 10,
+                        index: 0,
+                    ),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            12,
+                            13,
+                            14,
+                            15,
+                        ],
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 17,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 18,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 19,
+                        index: 1,
+                    ),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            21,
+                            22,
+                            23,
+                            24,
+                        ],
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 26,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 27,
+                        index: 1,
+                    ),
+                    AccessIndex(
+                        base: 28,
+                        index: 0,
+                    ),
+                    Literal(F32(-1.0)),
+                    Literal(F32(-1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            30,
+                            31,
+                            32,
+                            33,
+                        ],
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 35,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 36,
+                        index: 1,
+                    ),
+                    AccessIndex(
+                        base: 37,
+                        index: 1,
+                    ),
+                    Literal(F32(0.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            39,
+                            40,
+                            41,
+                            42,
+                        ],
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 44,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 45,
+                        index: 2,
+                    ),
+                    AccessIndex(
+                        base: 46,
+                        index: 0,
+                    ),
+                    Literal(F32(1.0)),
+                    Literal(F32(-1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            48,
+                            49,
+                            50,
+                            51,
+                        ],
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 53,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 54,
+                        index: 2,
+                    ),
+                    AccessIndex(
+                        base: 55,
+                        index: 1,
+                    ),
+                    Literal(F32(1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            57,
+                            58,
+                            59,
+                            60,
+                        ],
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 62,
+                        index: 1,
+                    ),
+                    AccessIndex(
+                        base: 63,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 64,
+                        index: 0,
+                    ),
+                    Literal(U32(0)),
+                    Literal(U32(1)),
+                    Literal(U32(2)),
+                    Compose(
+                        ty: 6,
+                        components: [
+                            66,
+                            67,
+                            68,
+                        ],
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 70,
+                        index: 1,
+                    ),
+                    AccessIndex(
+                        base: 71,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 72,
+                        index: 1,
+                    ),
+                    Literal(Bool(false)),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 75,
+                        index: 1,
+                    ),
+                    AccessIndex(
+                        base: 76,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 77,
+                        index: 2,
+                    ),
+                    Literal(F32(1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            79,
+                            80,
+                            81,
+                            82,
+                        ],
+                    ),
+                ],
+                named_expressions: {},
+                body: [
+                    Emit((
+                        start: 1,
+                        end: 2,
+                    )),
+                    Store(
+                        pointer: 1,
+                        value: 2,
+                    ),
+                    Emit((
+                        start: 4,
+                        end: 5,
+                    )),
+                    Store(
+                        pointer: 4,
+                        value: 5,
+                    ),
+                    Store(
+                        pointer: 6,
+                        value: 7,
+                    ),
+                    Emit((
+                        start: 9,
+                        end: 10,
+                    )),
+                    Emit((
+                        start: 10,
+                        end: 12,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 16,
+                        end: 17,
+                    )),
+                    Store(
+                        pointer: 11,
+                        value: 16,
+                    ),
+                    Emit((
+                        start: 18,
+                        end: 19,
+                    )),
+                    Emit((
+                        start: 19,
+                        end: 21,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 25,
+                        end: 26,
+                    )),
+                    Store(
+                        pointer: 20,
+                        value: 25,
+                    ),
+                    Emit((
+                        start: 27,
+                        end: 28,
+                    )),
+                    Emit((
+                        start: 28,
+                        end: 30,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 34,
+                        end: 35,
+                    )),
+                    Store(
+                        pointer: 29,
+                        value: 34,
+                    ),
+                    Emit((
+                        start: 36,
+                        end: 37,
+                    )),
+                    Emit((
+                        start: 37,
+                        end: 39,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 43,
+                        end: 44,
+                    )),
+                    Store(
+                        pointer: 38,
+                        value: 43,
+                    ),
+                    Emit((
+                        start: 45,
+                        end: 46,
+                    )),
+                    Emit((
+                        start: 46,
+                        end: 48,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 52,
+                        end: 53,
+                    )),
+                    Store(
+                        pointer: 47,
+                        value: 52,
+                    ),
+                    Emit((
+                        start: 54,
+                        end: 55,
+                    )),
+                    Emit((
+                        start: 55,
+                        end: 57,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 61,
+                        end: 62,
+                    )),
+                    Store(
+                        pointer: 56,
+                        value: 61,
+                    ),
+                    Emit((
+                        start: 63,
+                        end: 64,
+                    )),
+                    Emit((
+                        start: 64,
+                        end: 66,
+                    )),
+                    Emit((
+                        start: 69,
+                        end: 70,
+                    )),
+                    Store(
+                        pointer: 65,
+                        value: 69,
+                    ),
+                    Emit((
+                        start: 71,
+                        end: 72,
+                    )),
+                    Emit((
+                        start: 72,
+                        end: 74,
+                    )),
+                    Store(
+                        pointer: 73,
+                        value: 74,
+                    ),
+                    Emit((
+                        start: 76,
+                        end: 77,
+                    )),
+                    Emit((
+                        start: 77,
+                        end: 79,
+                    )),
+                    Emit((
+                        start: 83,
+                        end: 84,
+                    )),
+                    Store(
+                        pointer: 78,
+                        value: 83,
+                    ),
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+            mesh_info: Some((
+                topology: Triangles,
+                max_vertices: 3,
+                max_vertices_override: None,
+                max_primitives: 1,
+                max_primitives_override: None,
+                vertex_output_type: 4,
+                primitive_output_type: 7,
+                output_variable: 2,
+            )),
+            task_payload: None,
+        ),
+        (
+            name: "ms_divergent",
+            stage: Mesh,
+            early_depth_test: None,
+            workgroup_size: (1, 1, 1),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("ms_divergent"),
+                arguments: [
+                    (
+                        name: Some("thread_id"),
+                        ty: 5,
+                        binding: Some(BuiltIn(LocalInvocationIndex)),
+                    ),
+                ],
+                result: None,
+                local_variables: [],
+                expressions: [
+                    FunctionArgument(0),
+                    Literal(U32(0)),
+                    Binary(
+                        op: Equal,
+                        left: 0,
+                        right: 1,
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 3,
+                        index: 2,
+                    ),
+                    Literal(U32(3)),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 6,
+                        index: 3,
+                    ),
+                    Literal(U32(1)),
+                    GlobalVariable(1),
+                    Literal(F32(2.0)),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 11,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 12,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 13,
+                        index: 0,
+                    ),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            15,
+                            16,
+                            17,
+                            18,
+                        ],
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 20,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 21,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 22,
+                        index: 1,
+                    ),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            24,
+                            25,
+                            26,
+                            27,
+                        ],
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 29,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 30,
+                        index: 1,
+                    ),
+                    AccessIndex(
+                        base: 31,
+                        index: 0,
+                    ),
+                    Literal(F32(-1.0)),
+                    Literal(F32(-1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            33,
+                            34,
+                            35,
+                            36,
+                        ],
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 38,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 39,
+                        index: 1,
+                    ),
+                    AccessIndex(
+                        base: 40,
+                        index: 1,
+                    ),
+                    Literal(F32(0.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            42,
+                            43,
+                            44,
+                            45,
+                        ],
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 47,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 48,
+                        index: 2,
+                    ),
+                    AccessIndex(
+                        base: 49,
+                        index: 0,
+                    ),
+                    Literal(F32(1.0)),
+                    Literal(F32(-1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            51,
+                            52,
+                            53,
+                            54,
+                        ],
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 56,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 57,
+                        index: 2,
+                    ),
+                    AccessIndex(
+                        base: 58,
+                        index: 1,
+                    ),
+                    Literal(F32(1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            60,
+                            61,
+                            62,
+                            63,
+                        ],
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 65,
+                        index: 1,
+                    ),
+                    AccessIndex(
+                        base: 66,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 67,
+                        index: 0,
+                    ),
+                    Literal(U32(0)),
+                    Literal(U32(1)),
+                    Literal(U32(2)),
+                    Compose(
+                        ty: 6,
+                        components: [
+                            69,
+                            70,
+                            71,
+                        ],
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 73,
+                        index: 1,
+                    ),
+                    AccessIndex(
+                        base: 74,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 75,
+                        index: 1,
+                    ),
+                    Literal(Bool(false)),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 78,
+                        index: 1,
+                    ),
+                    AccessIndex(
+                        base: 79,
+                        index: 0,
+                    ),
+                    AccessIndex(
+                        base: 80,
+                        index: 2,
+                    ),
+                    Literal(F32(1.0)),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Literal(F32(1.0)),
+                    Compose(
+                        ty: 1,
+                        components: [
+                            82,
+                            83,
+                            84,
+                            85,
+                        ],
+                    ),
+                ],
+                named_expressions: {
+                    0: "thread_id",
+                },
+                body: [
+                    Emit((
+                        start: 2,
+                        end: 3,
+                    )),
+                    If(
+                        condition: 2,
+                        accept: [
+                            Emit((
+                                start: 4,
+                                end: 5,
+                            )),
+                            Store(
+                                pointer: 4,
+                                value: 5,
+                            ),
+                            Emit((
+                                start: 7,
+                                end: 8,
+                            )),
+                            Store(
+                                pointer: 7,
+                                value: 8,
+                            ),
+                            Store(
+                                pointer: 9,
+                                value: 10,
+                            ),
+                            Emit((
+                                start: 12,
+                                end: 13,
+                            )),
+                            Emit((
+                                start: 13,
+                                end: 15,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 19,
+                                end: 20,
+                            )),
+                            Store(
+                                pointer: 14,
+                                value: 19,
+                            ),
+                            Emit((
+                                start: 21,
+                                end: 22,
+                            )),
+                            Emit((
+                                start: 22,
+                                end: 24,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 28,
+                                end: 29,
+                            )),
+                            Store(
+                                pointer: 23,
+                                value: 28,
+                            ),
+                            Emit((
+                                start: 30,
+                                end: 31,
+                            )),
+                            Emit((
+                                start: 31,
+                                end: 33,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 37,
+                                end: 38,
+                            )),
+                            Store(
+                                pointer: 32,
+                                value: 37,
+                            ),
+                            Emit((
+                                start: 39,
+                                end: 40,
+                            )),
+                            Emit((
+                                start: 40,
+                                end: 42,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 46,
+                                end: 47,
+                            )),
+                            Store(
+                                pointer: 41,
+                                value: 46,
+                            ),
+                            Emit((
+                                start: 48,
+                                end: 49,
+                            )),
+                            Emit((
+                                start: 49,
+                                end: 51,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 55,
+                                end: 56,
+                            )),
+                            Store(
+                                pointer: 50,
+                                value: 55,
+                            ),
+                            Emit((
+                                start: 57,
+                                end: 58,
+                            )),
+                            Emit((
+                                start: 58,
+                                end: 60,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 0,
+                                end: 0,
+                            )),
+                            Emit((
+                                start: 64,
+                                end: 65,
+                            )),
+                            Store(
+                                pointer: 59,
+                                value: 64,
+                            ),
+                            Emit((
+                                start: 66,
+                                end: 67,
+                            )),
+                            Emit((
+                                start: 67,
+                                end: 69,
+                            )),
+                            Emit((
+                                start: 72,
+                                end: 73,
+                            )),
+                            Store(
+                                pointer: 68,
+                                value: 72,
+                            ),
+                            Emit((
+                                start: 74,
+                                end: 75,
+                            )),
+                            Emit((
+                                start: 75,
+                                end: 77,
+                            )),
+                            Store(
+                                pointer: 76,
+                                value: 77,
+                            ),
+                            Emit((
+                                start: 79,
+                                end: 80,
+                            )),
+                            Emit((
+                                start: 80,
+                                end: 82,
+                            )),
+                            Emit((
+                                start: 86,
+                                end: 87,
+                            )),
+                            Store(
+                                pointer: 81,
+                                value: 86,
+                            ),
+                            Return(
+                                value: None,
+                            ),
+                        ],
+                        reject: [
+                            Return(
+                                value: None,
+                            ),
+                        ],
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+            mesh_info: Some((
+                topology: Triangles,
+                max_vertices: 3,
+                max_vertices_override: None,
+                max_primitives: 1,
+                max_primitives_override: None,
+                vertex_output_type: 4,
+                primitive_output_type: 7,
+                output_variable: 2,
+            )),
+            task_payload: None,
         ),
         (
             name: "fs_main",
