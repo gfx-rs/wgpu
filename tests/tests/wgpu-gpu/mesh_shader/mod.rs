@@ -11,6 +11,8 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
         MESH_PIPELINE_BASIC_TASK_MESH,
         MESH_PIPELINE_BASIC_MESH_FRAG,
         MESH_PIPELINE_BASIC_TASK_MESH_FRAG,
+        MESH_DRAW,
+        MESH_DRAW_NO_TASK,
         MESH_DRAW_INDIRECT,
         MESH_MULTI_DRAW_INDIRECT,
         MESH_MULTI_DRAW_INDIRECT_COUNT,
@@ -246,7 +248,7 @@ pub enum DrawType {
     MultiIndirectCount,
 }
 
-fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
+fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, use_task: bool) {
     let backend = ctx.adapter.get_info().backend;
     if backend != wgpu::Backend::Vulkan && backend != wgpu::Backend::Dx12 {
         return;
@@ -255,13 +257,12 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
     let (_depth_image, depth_view, depth_state) = create_depth(device);
     let test_hash = hash_testing_context(ctx).to_string();
     let info = MeshPipelineTestInfo {
-        use_task: true,
+        use_task,
         use_frag: true,
         draw: true,
     };
     let (task, mesh, frag, ts_name, ms_name, fs_name) =
         get_shaders(device, backend, &test_hash, &info);
-    let task = task.unwrap();
     let frag = frag.unwrap();
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
@@ -271,8 +272,8 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType) {
     let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
         label: None,
         layout: Some(&layout),
-        task: Some(wgpu::TaskState {
-            module: &task,
+        task: task.as_ref().map(|task| wgpu::TaskState {
+            module: task,
             entry_point: Some(ts_name),
             compilation_options: Default::default(),
         }),
@@ -459,17 +460,27 @@ pub static MESH_PIPELINE_BASIC_TASK_MESH_FRAG_NO_DRAW: GpuTestConfiguration =
 
 // Mesh draw
 #[gpu_test]
+pub static MESH_DRAW: GpuTestConfiguration =
+    default_gpu_test_config(DrawType::Indirect).run_sync(|ctx| {
+        mesh_draw(&ctx, DrawType::Standard, true);
+    });
+#[gpu_test]
+pub static MESH_DRAW_NO_TASK: GpuTestConfiguration = default_gpu_test_config(DrawType::Indirect)
+    .run_sync(|ctx| {
+        mesh_draw(&ctx, DrawType::Indirect, false);
+    });
+#[gpu_test]
 pub static MESH_DRAW_INDIRECT: GpuTestConfiguration = default_gpu_test_config(DrawType::Indirect)
     .run_sync(|ctx| {
-        mesh_draw(&ctx, DrawType::Indirect);
+        mesh_draw(&ctx, DrawType::Indirect, true);
     });
 #[gpu_test]
 pub static MESH_MULTI_DRAW_INDIRECT: GpuTestConfiguration =
     default_gpu_test_config(DrawType::MultiIndirect).run_sync(|ctx| {
-        mesh_draw(&ctx, DrawType::MultiIndirect);
+        mesh_draw(&ctx, DrawType::MultiIndirect, true);
     });
 #[gpu_test]
 pub static MESH_MULTI_DRAW_INDIRECT_COUNT: GpuTestConfiguration =
     default_gpu_test_config(DrawType::MultiIndirectCount).run_sync(|ctx| {
-        mesh_draw(&ctx, DrawType::MultiIndirectCount);
+        mesh_draw(&ctx, DrawType::MultiIndirectCount, true);
     });
