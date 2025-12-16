@@ -43,6 +43,8 @@ pub struct MeshReturnInfo {
     loop_counter_vertices: Word,
     /// Variable to be used later when saving the output as a loop index
     loop_counter_primitives: Word,
+    /// The id of the label to jump to when `return` is called
+    pub entry_point_epilogue_id: Word,
 
     /// Vertex-specific info
     vertex_info: PerOutputTypeMeshReturnInfo,
@@ -205,6 +207,7 @@ impl super::Writer {
                 .get_constant_scalar(crate::Literal::U32(iface.workgroup_size.iter().product())),
             loop_counter_vertices: loop_counter_1,
             loop_counter_primitives: loop_counter_2,
+            entry_point_epilogue_id: self.id_gen.next(),
 
             vertex_info: PerOutputTypeMeshReturnInfo {
                 array_type_id: vertex_array_type_id,

@@ -3280,10 +3280,13 @@ impl BlockContext<'_> {
                         ..
                     }) = self.function.entry_point_context
                     {
-                        self.writer
-                            .write_mesh_shader_return(mesh_state, &mut block)?;
-                    };
-                    self.function.consume(block, Instruction::return_void());
+                        self.function.consume(
+                            block,
+                            Instruction::branch(mesh_state.entry_point_epilogue_id),
+                        );
+                    } else {
+                        self.function.consume(block, Instruction::return_void());
+                    }
                     return Ok(BlockExitDisposition::Discarded);
                 }
                 Statement::Kill => {
@@ -3743,6 +3746,16 @@ impl BlockContext<'_> {
             LoopContext::default(),
             debug_info,
         )?;
+        if let Some(super::EntryPointContext {
+            mesh_state: Some(ref mesh_state),
+            ..
+        }) = self.function.entry_point_context
+        {
+            let mut block = Block::new(mesh_state.entry_point_epilogue_id);
+            self.writer
+                .write_mesh_shader_return(mesh_state, &mut block)?;
+            self.function.consume(block, Instruction::return_void());
+        }
 
         Ok(())
     }
