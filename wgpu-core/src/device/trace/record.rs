@@ -469,12 +469,10 @@ impl IntoTrace for ArcRenderCommand {
             },
             C::SetScissor(rect) => C::SetScissor(rect),
             C::SetImmediate {
-                stages,
                 offset,
                 size_bytes,
                 values_offset,
             } => C::SetImmediate {
-                stages,
                 offset,
                 size_bytes,
                 values_offset,
@@ -578,7 +576,7 @@ impl<'a> IntoTrace for crate::binding_model::ResolvedPipelineLayoutDescriptor<'a
                 .iter()
                 .map(|bgl| bgl.to_trace())
                 .collect(),
-            immediates_ranges: self.immediates_ranges.clone(),
+            immediate_size: self.immediate_size,
         }
     }
 }

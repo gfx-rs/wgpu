@@ -695,7 +695,7 @@ impl super::Adapter {
             info,
             features,
             capabilities: crate::Capabilities {
-                limits: wgt::Limits {
+                limits: auxil::apply_hal_limits(wgt::Limits {
                     max_texture_dimension_1d: Direct3D12::D3D12_REQ_TEXTURE1D_U_DIMENSION,
                     max_texture_dimension_2d: Direct3D12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION
                         .min(Direct3D12::D3D12_REQ_TEXTURECUBE_DIMENSION),
@@ -724,8 +724,7 @@ impl super::Adapter {
                     max_uniform_buffer_binding_size:
                         Direct3D12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16,
                     max_storage_buffer_binding_size: auxil::MAX_I32_BINDING_SIZE,
-                    max_vertex_buffers: Direct3D12::D3D12_VS_INPUT_REGISTER_COUNT
-                        .min(crate::MAX_VERTEX_BUFFERS as u32),
+                    max_vertex_buffers: Direct3D12::D3D12_VS_INPUT_REGISTER_COUNT,
                     max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
                     max_vertex_buffer_array_stride: Direct3D12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
                     // The immediates are part of the root signature which
@@ -806,7 +805,7 @@ impl super::Adapter {
                     },
 
                     max_multiview_view_count,
-                },
+                }),
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(
                         Direct3D12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64,

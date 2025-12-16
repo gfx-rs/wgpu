@@ -104,10 +104,7 @@ use crate::{
         BasePass, BindGroupStateChange, ColorAttachmentError, DrawError, IdReferences, MapPassErr,
         PassErrorScope, RenderCommand, RenderCommandError, StateChange,
     },
-    device::{
-        AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext,
-        SHADER_STAGE_COUNT,
-    },
+    device::{AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext},
     hub::Hub,
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
@@ -355,13 +352,12 @@ impl RenderBundleEncoder {
                         .map_pass_err(scope)?;
                 }
                 &RenderCommand::SetImmediate {
-                    stages,
                     offset,
                     size_bytes,
                     values_offset,
                 } => {
                     let scope = PassErrorScope::SetImmediate;
-                    set_immediates(&mut state, stages, offset, size_bytes, values_offset)
+                    set_immediates(&mut state, offset, size_bytes, values_offset)
                         .map_pass_err(scope)?;
                 }
                 &RenderCommand::Draw {
@@ -615,8 +611,8 @@ fn set_pipeline(
         .push(ArcRenderCommand::SetPipeline(pipeline.clone()));
 
     // If this pipeline uses immediates, zero out their values.
-    if let Some(iter) = pipeline_state.zero_immediates() {
-        state.commands.extend(iter)
+    if let Some(cmd) = pipeline_state.zero_immediates() {
+        state.commands.push(cmd);
     }
 
     state.invalidate_bind_groups(&pipeline_state, &pipeline.layout);
@@ -711,7 +707,6 @@ fn set_vertex_buffer(
 
 fn set_immediates(
     state: &mut State,
-    stages: wgt::ShaderStages,
     offset: u32,
     size_bytes: u32,
     values_offset: Option<u32>,
@@ -723,10 +718,9 @@ fn set_immediates(
     pipeline_state
         .pipeline
         .layout
-        .validate_immediates_ranges(stages, offset, end_offset)?;
+        .validate_immediates_ranges(offset, end_offset)?;
 
     state.commands.push(ArcRenderCommand::SetImmediate {
-        stages,
         offset,
         size_bytes,
         values_offset,
@@ -1056,7 +1050,6 @@ impl RenderBundle {
                     unsafe { raw.set_vertex_buffer(*slot, bb) };
                 }
                 Cmd::SetImmediate {
-                    stages,
                     offset,
                     size_bytes,
                     values_offset,
@@ -1065,13 +1058,11 @@ impl RenderBundle {
 
                     if let Some(values_offset) = *values_offset {
                         let values_end_offset =
-                            (values_offset + size_bytes / wgt::IMMEDIATES_ALIGNMENT) as usize;
+                            (values_offset + size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT) as usize;
                         let data_slice =
                             &self.base.immediates_data[(values_offset as usize)..values_end_offset];
 
-                        unsafe {
-                            raw.set_immediates(pipeline_layout.raw(), *stages, *offset, data_slice)
-                        }
+                        unsafe { raw.set_immediates(pipeline_layout.raw(), *offset, data_slice) }
                     } else {
                         super::immediates_clear(
                             *offset,
@@ -1080,7 +1071,6 @@ impl RenderBundle {
                                 unsafe {
                                     raw.set_immediates(
                                         pipeline_layout.raw(),
-                                        *stages,
                                         clear_offset,
                                         clear_data,
                                     )
@@ -1333,9 +1323,8 @@ struct PipelineState {
     /// by vertex buffer slot number.
     steps: Vec<VertexStep>,
 
-    /// Ranges of immediates this pipeline uses, copied from the pipeline
-    /// layout.
-    immediates_ranges: ArrayVec<wgt::ImmediateRange, { SHADER_STAGE_COUNT }>,
+    /// Size of the immediate data ranges this pipeline uses. Copied from the pipeline layout.
+    immediate_size: u32,
 
     /// The number of bind groups this pipeline uses.
     used_bind_groups: usize,
@@ -1346,31 +1335,23 @@ impl PipelineState {
         Self {
             pipeline: pipeline.clone(),
             steps: pipeline.vertex_steps.to_vec(),
-            immediates_ranges: pipeline.layout.immediates_ranges.iter().cloned().collect(),
+            immediate_size: pipeline.layout.immediate_size,
             used_bind_groups: pipeline.layout.bind_group_layouts.len(),
         }
     }
 
     /// Return a sequence of commands to zero the immediate data ranges this
     /// pipeline uses. If no initialization is necessary, return `None`.
-    fn zero_immediates(&self) -> Option<impl Iterator<Item = ArcRenderCommand>> {
-        if !self.immediates_ranges.is_empty() {
-            let nonoverlapping_ranges =
-                super::bind::compute_nonoverlapping_ranges(&self.immediates_ranges);
-
-            Some(
-                nonoverlapping_ranges
-                    .into_iter()
-                    .map(|range| ArcRenderCommand::SetImmediate {
-                        stages: range.stages,
-                        offset: range.range.start,
-                        size_bytes: range.range.end - range.range.start,
-                        values_offset: None, // write zeros
-                    }),
-            )
-        } else {
-            None
+    fn zero_immediates(&self) -> Option<ArcRenderCommand> {
+        if self.immediate_size == 0 {
+            return None;
         }
+
+        Some(ArcRenderCommand::SetImmediate {
+            offset: 0,
+            size_bytes: self.immediate_size,
+            values_offset: None,
+        })
     }
 }
 
@@ -1487,7 +1468,7 @@ impl State {
                 }
 
                 // Any immediate data change invalidates all groups.
-                if old.immediates_ranges != new.immediates_ranges {
+                if old.immediate_size != new.immediate_size {
                     self.invalidate_bind_group_from(0);
                 } else {
                     let first_changed = self.bind.iter().zip(&layout.bind_group_layouts).position(
@@ -1739,18 +1720,17 @@ pub mod bundle_ffi {
     /// valid for `data` elements.
     pub unsafe fn wgpu_render_bundle_set_immediates(
         pass: &mut RenderBundleEncoder,
-        stages: wgt::ShaderStages,
         offset: u32,
         size_bytes: u32,
         data: *const u8,
     ) {
         assert_eq!(
-            offset & (wgt::IMMEDIATES_ALIGNMENT - 1),
+            offset & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1),
             0,
             "Immediate data offset must be aligned to 4 bytes."
         );
         assert_eq!(
-            size_bytes & (wgt::IMMEDIATES_ALIGNMENT - 1),
+            size_bytes & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1),
             0,
             "Immediate data size must be aligned to 4 bytes."
         );
@@ -1761,12 +1741,11 @@ pub mod bundle_ffi {
 
         pass.base.immediates_data.extend(
             data_slice
-                .chunks_exact(wgt::IMMEDIATES_ALIGNMENT as usize)
+                .chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
                 .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
         );
 
         pass.base.commands.push(RenderCommand::SetImmediate {
-            stages,
             offset,
             size_bytes,
             values_offset: Some(value_offset),

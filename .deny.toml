@@ -9,9 +9,6 @@ skip-tree = [
     { name = "petgraph", version = "0.6.5" },
 ]
 skip = [
-    # Flume uses an old version
-    { name = "nanorand", version = "0.7.0" },
-
     # Deno uses an old version
     { name = "bincode", version = "1.3.3" },
     { name = "which", version = "6.0.3" },

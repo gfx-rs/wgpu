@@ -6,8 +6,8 @@ use arrayvec::ArrayVec;
 use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
-    BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, ShaderStages,
-    TextureSelector, TextureUsages, TextureViewDimension, VertexStepMode,
+    BufferAddress, BufferSize, BufferUsages, Color, DynamicOffset, IndexFormat, TextureSelector,
+    TextureUsages, TextureViewDimension, VertexStepMode,
 };
 
 use crate::command::{
@@ -2021,7 +2021,6 @@ pub(super) fn encode_render_pass(
                     set_viewport(&mut state, rect, depth_min, depth_max).map_pass_err(scope)?;
                 }
                 ArcRenderCommand::SetImmediate {
-                    stages,
                     offset,
                     size_bytes,
                     values_offset,
@@ -2030,7 +2029,6 @@ pub(super) fn encode_render_pass(
                     pass::set_immediates::<RenderPassErrorInner, _>(
                         &mut state.pass,
                         &base.immediates_data,
-                        stages,
                         offset,
                         size_bytes,
                         values_offset,
@@ -3336,21 +3334,20 @@ impl Global {
     pub fn render_pass_set_immediates(
         &self,
         pass: &mut RenderPass,
-        stages: ShaderStages,
         offset: u32,
         data: &[u8],
     ) -> Result<(), PassStateError> {
         let scope = PassErrorScope::SetImmediate;
         let base = pass_base!(pass, scope);
 
-        if offset & (wgt::IMMEDIATES_ALIGNMENT - 1) != 0 {
+        if offset & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1) != 0 {
             pass_try!(
                 base,
                 scope,
                 Err(RenderPassErrorInner::ImmediateOffsetAlignment)
             );
         }
-        if data.len() as u32 & (wgt::IMMEDIATES_ALIGNMENT - 1) != 0 {
+        if data.len() as u32 & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1) != 0 {
             pass_try!(
                 base,
                 scope,
@@ -3368,12 +3365,11 @@ impl Global {
         );
 
         base.immediates_data.extend(
-            data.chunks_exact(wgt::IMMEDIATES_ALIGNMENT as usize)
+            data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
                 .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
         );
 
         base.commands.push(ArcRenderCommand::SetImmediate {
-            stages,
             offset,
             size_bytes: data.len() as u32,
             values_offset: Some(value_offset),

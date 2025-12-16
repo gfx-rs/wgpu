@@ -81,10 +81,7 @@ impl Draw {
                 src_bind_group_layout.as_ref(),
                 dst_bind_group_layout.as_ref(),
             ],
-            immediates_ranges: &[wgt::ImmediateRange {
-                stages: wgt::ShaderStages::COMPUTE,
-                range: 0..8,
-            }],
+            immediate_size: 8,
         };
         let pipeline_layout = unsafe {
             device
@@ -365,12 +362,7 @@ impl Draw {
                 (batch.metadata_buffer_offset / size_of::<MetadataEntry>() as u64) as u32;
             let metadata_count = batch.entries.len() as u32;
             unsafe {
-                encoder.set_immediates(
-                    pipeline_layout,
-                    wgt::ShaderStages::COMPUTE,
-                    0,
-                    &[metadata_start, metadata_count],
-                );
+                encoder.set_immediates(pipeline_layout, 0, &[metadata_start, metadata_count]);
             }
 
             let metadata_bind_group =

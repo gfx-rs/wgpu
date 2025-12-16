@@ -1467,7 +1467,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         dynamic_offsets: &[wgt::DynamicOffset],
     );
 
-    /// Sets a range in immediate data data.
+    /// Sets a range in immediate data.
     ///
     /// IMPORTANT: while the data is passed as words, the offset is in bytes!
     ///
@@ -1478,7 +1478,6 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     unsafe fn set_immediates(
         &mut self,
         layout: &<Self::A as Api>::PipelineLayout,
-        stages: wgt::ShaderStages,
         offset_bytes: u32,
         data: &[u32],
     );
@@ -2084,7 +2083,7 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
     pub label: Label<'a>,
     pub flags: PipelineLayoutFlags,
     pub bind_group_layouts: &'a [&'a B],
-    pub immediates_ranges: &'a [wgt::ImmediateRange],
+    pub immediate_size: u32,
 }
 
 /// A region of a buffer made visible to shaders via a [`BindGroup`].

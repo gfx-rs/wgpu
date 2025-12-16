@@ -854,7 +854,20 @@ impl Device {
                 user_closures.mappings,
                 user_closures.blas_compact_ready,
                 queue_empty,
-            ) = queue_result
+            ) = queue_result;
+            // DEADLOCK PREVENTION: We must drop `snatch_guard` before `queue` goes out of scope.
+            //
+            // `Queue::drop` acquires the snatch guard. If we still hold it when `queue` is dropped
+            // at the end of this block, we would deadlock. This can happen in the following scenario:
+            //
+            // - Thread A calls `Device::maintain` while Thread B holds the last strong ref to the queue.
+            // - Thread A calls `self.get_queue()`, obtaining a new strong ref, and enters this branch.
+            // - Thread B drops its strong ref, making Thread A's ref the last one.
+            // - When `queue` goes out of scope here, `Queue::drop` runs and tries to acquire the
+            //   snatch guard — but Thread A (this thread) still holds it, causing a deadlock.
+            drop(snatch_guard);
+        } else {
+            drop(snatch_guard);
         };
 
         // Based on the queue empty status, and the current finished submission index, determine the result of the poll.
@@ -909,7 +922,6 @@ impl Device {
 
         // Don't hold the locks while calling release_gpu_resources.
         drop(fence);
-        drop(snatch_guard);
 
         if should_release_gpu_resource {
             self.release_gpu_resources();
@@ -2784,16 +2796,13 @@ impl Device {
 
         let (bb, bind_size) = buffer.binding(bb.offset, bb.size, snatch_guard)?;
 
-        if matches!(binding_ty, wgt::BufferBindingType::Storage { .. }) {
-            let storage_buf_size_alignment = 4;
-
-            let aligned = bind_size % u64::from(storage_buf_size_alignment) == 0;
-            if !aligned {
-                return Err(Error::UnalignedEffectiveBufferBindingSizeForStorage {
-                    alignment: storage_buf_size_alignment,
-                    size: bind_size,
-                });
-            }
+        if matches!(binding_ty, wgt::BufferBindingType::Storage { .. })
+            && bind_size % u64::from(wgt::STORAGE_BINDING_SIZE_ALIGNMENT) != 0
+        {
+            return Err(Error::UnalignedEffectiveBufferBindingSizeForStorage {
+                alignment: wgt::STORAGE_BINDING_SIZE_ALIGNMENT,
+                size: bind_size,
+            });
         }
 
         let bind_end = bb.offset + bind_size;
@@ -3570,42 +3579,19 @@ impl Device {
             });
         }
 
-        if !desc.immediates_ranges.is_empty() {
+        if desc.immediate_size != 0 {
             self.require_features(wgt::Features::IMMEDIATES)?;
         }
-
-        let mut used_stages = wgt::ShaderStages::empty();
-        for (index, pc) in desc.immediates_ranges.iter().enumerate() {
-            if pc.stages.intersects(used_stages) {
-                return Err(Error::MoreThanOneImmediateRangePerStage {
-                    index,
-                    provided: pc.stages,
-                    intersected: pc.stages & used_stages,
-                });
-            }
-            used_stages |= pc.stages;
-
-            let device_max_pc_size = self.limits.max_immediate_size;
-            if device_max_pc_size < pc.range.end {
-                return Err(Error::ImmediateRangeTooLarge {
-                    index,
-                    range: pc.range.clone(),
-                    max: device_max_pc_size,
-                });
-            }
-
-            if pc.range.start % wgt::IMMEDIATES_ALIGNMENT != 0 {
-                return Err(Error::MisalignedImmediateRange {
-                    index,
-                    bound: pc.range.start,
-                });
-            }
-            if pc.range.end % wgt::IMMEDIATES_ALIGNMENT != 0 {
-                return Err(Error::MisalignedImmediateRange {
-                    index,
-                    bound: pc.range.end,
-                });
-            }
+        if self.limits.max_immediate_size < desc.immediate_size {
+            return Err(Error::ImmediateRangeTooLarge {
+                size: desc.immediate_size,
+                max: self.limits.max_immediate_size,
+            });
+        }
+        if desc.immediate_size % wgt::IMMEDIATE_DATA_ALIGNMENT != 0 {
+            return Err(Error::MisalignedImmediateSize {
+                size: desc.immediate_size,
+            });
         }
 
         let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
@@ -3643,7 +3629,7 @@ impl Device {
                 | hal::PipelineLayoutFlags::NUM_WORK_GROUPS
                 | additional_flags,
             bind_group_layouts: &raw_bind_group_layouts,
-            immediates_ranges: desc.immediates_ranges.as_ref(),
+            immediate_size: desc.immediate_size,
         };
 
         let raw = unsafe { self.raw().create_pipeline_layout(&hal_desc) }
@@ -3656,7 +3642,7 @@ impl Device {
             device: self.clone(),
             label: desc.label.to_string(),
             bind_group_layouts,
-            immediates_ranges: desc.immediates_ranges.iter().cloned().collect(),
+            immediate_size: desc.immediate_size,
         };
 
         let layout = Arc::new(layout);
@@ -3703,7 +3689,7 @@ impl Device {
         let layout_desc = binding_model::ResolvedPipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: Cow::Owned(bind_group_layouts),
-            immediates_ranges: Cow::Borrowed(&[]), //TODO?
+            immediate_size: 0, //TODO?
         };
 
         let layout = self.create_pipeline_layout(&layout_desc)?;

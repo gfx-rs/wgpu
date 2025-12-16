@@ -124,7 +124,7 @@
             bind_group_layouts: [
                 PointerId(0x10),
             ],
-            immediates_ranges: [],
+            immediate_size: 0,
         )),
         CreateComputePipeline(
             id: PointerId(0x10),
