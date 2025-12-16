@@ -239,7 +239,6 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                 Max Mesh Invocations Per Workgroup: {max_mesh_invocations_per_workgroup}")?;
     writeln!(output, "\t\t                 Max Mesh Invocations Per Dimension: {max_mesh_invocations_per_dimension}")?;
 
-
     writeln!(output, "\t\t                              Max Task Payload Size: {max_task_payload_size}")?;
     writeln!(output, "\t\t                           Max Mesh Output Vertices: {max_mesh_output_vertices}")?;
     writeln!(output, "\t\t                         Max Mesh Output Primitives: {max_mesh_output_primitives}")?;
