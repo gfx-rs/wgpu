@@ -202,6 +202,8 @@ bitflags!(
     }
 );
 
+// TODO(https://github.com/gfx-rs/wgpu/issues/8715): Eliminate duplication with
+// `wgt::Limits`. Keeping multiple sets of limits creates a risk of confusion.
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 struct PrivateCapabilities {
@@ -277,6 +279,11 @@ struct PrivateCapabilities {
     max_binding_array_elements: ResourceIndex,
     max_sampler_binding_array_elements: ResourceIndex,
     buffer_alignment: u64,
+
+    /// Platform-reported maximum buffer size
+    ///
+    /// This value is clamped to `u32::MAX` for `wgt::Limits`, so you probably
+    /// shouldn't be looking at this copy.
     max_buffer_size: u64,
     max_texture_size: u64,
     max_texture_3d_size: u64,
@@ -337,7 +344,7 @@ impl Default for Settings {
 }
 
 struct AdapterShared {
-    device: Mutex<metal::Device>,
+    device: metal::Device,
     disabilities: PrivateDisabilities,
     private_caps: PrivateCapabilities,
     settings: Settings,
@@ -355,7 +362,7 @@ impl AdapterShared {
         Self {
             disabilities: PrivateDisabilities::new(&device),
             private_caps,
-            device: Mutex::new(device),
+            device,
             settings: Settings::default(),
             presentation_timer: time::PresentationTimer::new(),
         }

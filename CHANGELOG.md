@@ -165,6 +165,39 @@ event happens. Our new log policy is as follows:
 
 By @cwfitzgerald in [#8579](https://github.com/gfx-rs/wgpu/pull/8579).
 
+#### Push constants renamed immediates, API brought in line with spec.
+
+As the "immediate data" api is getting close to stabilization in the WebGPU specification,
+we're bringing our implementation in line with what the spec dictates.
+
+First, in the `PipelineLayoutDescriptor`, you now pass a unified size for all stages:
+
+```diff
+- push_constant_ranges: &[wgpu::PushConstantRange {
+-     stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
+-     range: 0..12,
+- }]
++ immediate_size: 12,
+```
+
+Second, on the command encoder you no longer specify a shader stage, uploads apply
+to all shader stages that use immediate data.
+
+```diff
+- rpass.set_push_constants(wgpu::ShaderStages::FRAGMENT, 0, bytes);
++ rpass.set_immediates(0, bytes);
+```
+
+Finally, our implementation currently still zero-initializes the immediate data
+range you declared in the pipeline layout. This is not spec compliant and failing
+to populate immediate "slots" that are used in the shader will be a validation error
+in a future version. See [the proposal][immediate-data-spec] for details for determining
+which slots are populated in a given shader.
+
+By @cwfitzgerald in [#8724](https://github.com/gfx-rs/wgpu/pull/8724).
+
+[immediate-data-spec]: https://github.com/gpuweb/gpuweb/blob/main/proposals/immediate-data.md#immediate-slots
+
 #### `subgroup_{min,max}_size` renamed and moved from `Limits` -> `AdapterInfo`
 
 To bring our code in line with the WebGPU spec, we have moved information about subgroup size
@@ -211,6 +244,7 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 
 - Add support for mesh shaders. By @SupaMaggie70Incorporated in [#8139](https://github.com/gfx-rs/wgpu/pull/8139)
 - Expose render layer. By @xiaopengli89 in [#8707](https://github.com/gfx-rs/wgpu/pull/8707)
+- `MTLDevice` is thread-safe. By @uael in [#8168](https://github.com/gfx-rs/wgpu/pull/8168)
 
 #### Naga
 
@@ -223,6 +257,7 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 #### naga
 
 - Fix a bug that resulted in the Metal error `program scope variable must reside in constant address space` in some cases. By @teoxoy in [#8311](https://github.com/gfx-rs/wgpu/pull/8311).
+- Handle `rayQueryTerminate` in spv-out instead of ignoring it. By @Vecvec in [#8581](https://github.com/gfx-rs/wgpu/pull/8581).
 
 #### General
 

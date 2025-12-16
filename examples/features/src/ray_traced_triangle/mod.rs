@@ -269,7 +269,7 @@ impl crate::framework::Example for Example {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("pipeline layout for shader.wgsl"),
                 bind_group_layouts: &[&bgl],
-                immediates_ranges: &[],
+                immediate_size: 0,
             });
 
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -284,7 +284,7 @@ impl crate::framework::Example for Example {
         let blit_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline layout for blit.wgsl"),
             bind_group_layouts: &[&blit_bgl],
-            immediates_ranges: &[],
+            immediate_size: 0,
         });
 
         let blit_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

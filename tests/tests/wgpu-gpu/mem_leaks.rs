@@ -92,7 +92,7 @@ async fn draw_test_with_reports(
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bgl],
-            immediates_ranges: &[],
+            immediate_size: 0,
         });
 
     let global_report = ctx.instance.generate_report().unwrap();

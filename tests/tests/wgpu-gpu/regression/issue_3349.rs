@@ -93,10 +93,7 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pll"),
             bind_group_layouts: &[&bgl],
-            immediates_ranges: &[wgpu::ImmediateRange {
-                stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                range: 0..16,
-            }],
+            immediate_size: 16,
         });
 
     let pipeline = ctx
@@ -171,11 +168,7 @@ async fn multi_stage_data_binding_test(ctx: TestingContext) {
 
         rpass.set_pipeline(&pipeline);
         rpass.set_bind_group(0, &bg, &[]);
-        rpass.set_immediates(
-            wgpu::ShaderStages::VERTEX_FRAGMENT,
-            0,
-            bytemuck::cast_slice(&input),
-        );
+        rpass.set_immediates(0, bytemuck::cast_slice(&input));
         rpass.draw(0..3, 0..1);
     }
 

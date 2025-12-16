@@ -1404,20 +1404,20 @@ impl crate::Device for super::Device {
             .iter()
             .map(|bgl| bgl.raw)
             .collect::<Vec<_>>();
-        let vk_immediates_ranges = desc
-            .immediates_ranges
-            .iter()
-            .map(|pcr| vk::PushConstantRange {
-                stage_flags: conv::map_shader_stage(pcr.stages),
-                offset: pcr.range.start,
-                size: pcr.range.end - pcr.range.start,
+        let vk_immediates_ranges: Option<vk::PushConstantRange> = if desc.immediate_size != 0 {
+            Some(vk::PushConstantRange {
+                stage_flags: vk::ShaderStageFlags::ALL,
+                offset: 0,
+                size: desc.immediate_size,
             })
-            .collect::<Vec<_>>();
+        } else {
+            None
+        };
 
         let vk_info = vk::PipelineLayoutCreateInfo::default()
             .flags(vk::PipelineLayoutCreateFlags::empty())
             .set_layouts(&vk_set_layouts)
-            .push_constant_ranges(&vk_immediates_ranges);
+            .push_constant_ranges(vk_immediates_ranges.as_slice());
 
         let raw = {
             profiling::scope!("vkCreatePipelineLayout");

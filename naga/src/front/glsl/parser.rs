@@ -436,6 +436,7 @@ impl DeclarationContext<'_, '_, '_> {
                 let expr = match global {
                     GlobalOrConstant::Global(handle) => Expression::GlobalVariable(handle),
                     GlobalOrConstant::Constant(handle) => Expression::Constant(handle),
+                    GlobalOrConstant::Override(handle) => Expression::Override(handle),
                 };
                 Ok(self.ctx.add_expression(expr, meta)?)
             }
