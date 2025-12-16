@@ -103,13 +103,18 @@ fn get_shaders(
             compile_wgsl(device),
             info.use_frag.then(|| compile_wgsl(device)),
             "ts_main",
-            "ms_main",
+            if info.use_task { "ms_main" } else { "ms_no_ts" },
             "fs_main",
         ),
         wgpu::Backend::Dx12 => (
             info.use_task
                 .then(|| compile_hlsl(device, "Task", "as", test_name)),
-            compile_hlsl(device, "Mesh", "ms", test_name),
+            compile_hlsl(
+                device,
+                if info.use_task { "Mesh" } else { "MeshNoTask" },
+                "ms",
+                test_name,
+            ),
             info.use_frag
                 .then(|| compile_hlsl(device, "Frag", "ps", test_name)),
             "main",
@@ -118,7 +123,14 @@ fn get_shaders(
         ),
         wgpu::Backend::Metal => (
             info.use_task.then(|| compile_msl(device, "taskShader")),
-            compile_msl(device, "meshShader"),
+            compile_msl(
+                device,
+                if info.use_task {
+                    "meshShader"
+                } else {
+                    "meshNoTaskShader"
+                },
+            ),
             info.use_frag.then(|| compile_msl(device, "fragShader")),
             "main",
             "main",
