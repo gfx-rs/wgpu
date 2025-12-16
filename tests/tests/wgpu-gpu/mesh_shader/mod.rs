@@ -250,9 +250,6 @@ pub enum DrawType {
 
 fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, use_task: bool) {
     let backend = ctx.adapter.get_info().backend;
-    if backend != wgpu::Backend::Vulkan && backend != wgpu::Backend::Dx12 {
-        return;
-    }
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
     let test_hash = hash_testing_context(ctx).to_string();
@@ -350,7 +347,6 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, use_task: bool) {
                 1,
             ),
         }
-        pass.draw_mesh_tasks_indirect(buffer.as_ref().unwrap(), 0);
     }
     ctx.queue.submit(Some(encoder.finish()));
     ctx.device
@@ -461,13 +457,13 @@ pub static MESH_PIPELINE_BASIC_TASK_MESH_FRAG_NO_DRAW: GpuTestConfiguration =
 // Mesh draw
 #[gpu_test]
 pub static MESH_DRAW: GpuTestConfiguration =
-    default_gpu_test_config(DrawType::Indirect).run_sync(|ctx| {
+    default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
         mesh_draw(&ctx, DrawType::Standard, true);
     });
 #[gpu_test]
-pub static MESH_DRAW_NO_TASK: GpuTestConfiguration = default_gpu_test_config(DrawType::Indirect)
+pub static MESH_DRAW_NO_TASK: GpuTestConfiguration = default_gpu_test_config(DrawType::Standard)
     .run_sync(|ctx| {
-        mesh_draw(&ctx, DrawType::Indirect, false);
+        mesh_draw(&ctx, DrawType::Standard, false);
     });
 #[gpu_test]
 pub static MESH_DRAW_INDIRECT: GpuTestConfiguration = default_gpu_test_config(DrawType::Indirect)
