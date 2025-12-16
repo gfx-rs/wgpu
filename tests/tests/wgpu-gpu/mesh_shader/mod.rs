@@ -13,6 +13,7 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
         MESH_PIPELINE_BASIC_TASK_MESH_FRAG,
         MESH_DRAW,
         MESH_DRAW_NO_TASK,
+        MESH_DRAW_DIVERGENT,
         MESH_DRAW_INDIRECT,
         MESH_MULTI_DRAW_INDIRECT,
         MESH_MULTI_DRAW_INDIRECT_COUNT,
@@ -95,6 +96,9 @@ fn get_shaders(
     &'static str,
     &'static str,
 ) {
+    if info.divergent && info.use_task {
+        unreachable!();
+    }
     // In the case that the platform does support mesh shaders, the dummy
     // shader is used to avoid requiring EXPERIMENTAL_PASSTHROUGH_SHADERS.
     match backend {
@@ -103,7 +107,13 @@ fn get_shaders(
             compile_wgsl(device),
             info.use_frag.then(|| compile_wgsl(device)),
             "ts_main",
-            if info.use_task { "ms_main" } else { "ms_no_ts" },
+            if info.divergent {
+                "ms_divergent"
+            } else if info.use_task {
+                "ms_main"
+            } else {
+                "ms_no_ts"
+            },
             "fs_main",
         ),
         wgpu::Backend::Dx12 => (
@@ -173,6 +183,7 @@ struct MeshPipelineTestInfo {
     use_task: bool,
     use_frag: bool,
     draw: bool,
+    divergent: bool,
 }
 
 fn hash_testing_context(ctx: &TestingContext) -> u64 {
@@ -260,16 +271,12 @@ pub enum DrawType {
     MultiIndirectCount,
 }
 
-fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, use_task: bool) {
+fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestInfo) {
     let backend = ctx.adapter.get_info().backend;
     let device = &ctx.device;
     let (_depth_image, depth_view, depth_state) = create_depth(device);
     let test_hash = hash_testing_context(ctx).to_string();
-    let info = MeshPipelineTestInfo {
-        use_task,
-        use_frag: true,
-        draw: true,
-    };
+
     let (task, mesh, frag, ts_name, ms_name, fs_name) =
         get_shaders(device, backend, &test_hash, &info);
     let frag = frag.unwrap();
@@ -402,6 +409,7 @@ pub static MESH_PIPELINE_BASIC_MESH: GpuTestConfiguration =
                 use_task: false,
                 use_frag: false,
                 draw: true,
+                divergent: false,
             },
         );
     });
@@ -414,6 +422,7 @@ pub static MESH_PIPELINE_BASIC_TASK_MESH: GpuTestConfiguration =
                 use_task: true,
                 use_frag: false,
                 draw: true,
+                divergent: false,
             },
         );
     });
@@ -426,6 +435,7 @@ pub static MESH_PIPELINE_BASIC_MESH_FRAG: GpuTestConfiguration =
                 use_task: false,
                 use_frag: true,
                 draw: true,
+                divergent: false,
             },
         );
     });
@@ -438,6 +448,7 @@ pub static MESH_PIPELINE_BASIC_TASK_MESH_FRAG: GpuTestConfiguration =
                 use_task: true,
                 use_frag: true,
                 draw: true,
+                divergent: false,
             },
         );
     });
@@ -450,6 +461,7 @@ pub static MESH_PIPELINE_BASIC_MESH_NO_DRAW: GpuTestConfiguration =
                 use_task: false,
                 use_frag: false,
                 draw: false,
+                divergent: false,
             },
         );
     });
@@ -462,6 +474,7 @@ pub static MESH_PIPELINE_BASIC_TASK_MESH_FRAG_NO_DRAW: GpuTestConfiguration =
                 use_task: true,
                 use_frag: true,
                 draw: false,
+                divergent: false,
             },
         );
     });
@@ -470,25 +483,84 @@ pub static MESH_PIPELINE_BASIC_TASK_MESH_FRAG_NO_DRAW: GpuTestConfiguration =
 #[gpu_test]
 pub static MESH_DRAW: GpuTestConfiguration =
     default_gpu_test_config(DrawType::Standard).run_sync(|ctx| {
-        mesh_draw(&ctx, DrawType::Standard, true);
+        mesh_draw(
+            &ctx,
+            DrawType::Standard,
+            MeshPipelineTestInfo {
+                use_task: true,
+                use_frag: true,
+                draw: true,
+                divergent: false,
+            },
+        );
     });
 #[gpu_test]
 pub static MESH_DRAW_NO_TASK: GpuTestConfiguration = default_gpu_test_config(DrawType::Standard)
     .run_sync(|ctx| {
-        mesh_draw(&ctx, DrawType::Standard, false);
+        mesh_draw(
+            &ctx,
+            DrawType::Standard,
+            MeshPipelineTestInfo {
+                use_task: false,
+                use_frag: true,
+                draw: true,
+                divergent: false,
+            },
+        );
+    });
+#[gpu_test]
+pub static MESH_DRAW_DIVERGENT: GpuTestConfiguration = default_gpu_test_config(DrawType::Standard)
+    .run_sync(|ctx| {
+        mesh_draw(
+            &ctx,
+            DrawType::Standard,
+            MeshPipelineTestInfo {
+                use_task: false,
+                use_frag: true,
+                draw: true,
+                divergent: true,
+            },
+        );
     });
 #[gpu_test]
 pub static MESH_DRAW_INDIRECT: GpuTestConfiguration = default_gpu_test_config(DrawType::Indirect)
     .run_sync(|ctx| {
-        mesh_draw(&ctx, DrawType::Indirect, true);
+        mesh_draw(
+            &ctx,
+            DrawType::Indirect,
+            MeshPipelineTestInfo {
+                use_task: true,
+                use_frag: true,
+                draw: true,
+                divergent: false,
+            },
+        );
     });
 #[gpu_test]
 pub static MESH_MULTI_DRAW_INDIRECT: GpuTestConfiguration =
     default_gpu_test_config(DrawType::MultiIndirect).run_sync(|ctx| {
-        mesh_draw(&ctx, DrawType::MultiIndirect, true);
+        mesh_draw(
+            &ctx,
+            DrawType::MultiIndirect,
+            MeshPipelineTestInfo {
+                use_task: true,
+                use_frag: true,
+                draw: true,
+                divergent: false,
+            },
+        );
     });
 #[gpu_test]
 pub static MESH_MULTI_DRAW_INDIRECT_COUNT: GpuTestConfiguration =
     default_gpu_test_config(DrawType::MultiIndirectCount).run_sync(|ctx| {
-        mesh_draw(&ctx, DrawType::MultiIndirectCount, true);
+        mesh_draw(
+            &ctx,
+            DrawType::MultiIndirectCount,
+            MeshPipelineTestInfo {
+                use_task: true,
+                use_frag: true,
+                draw: true,
+                divergent: false,
+            },
+        );
     });

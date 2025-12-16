@@ -94,6 +94,31 @@ fn ms_no_ts() {
     mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
 }
 
+@mesh(mesh_output)
+@workgroup_size(2)
+fn ms_divergent(@builtin(local_invocation_index) index: u32) {
+    // Workgroup with 2 threads. They return at different points.
+    if index == 0 {
+        mesh_output.vertex_count = 3;
+        mesh_output.primitive_count = 1;
+        workgroupData = 2.0;
+
+        mesh_output.vertices[0].position = positions[0];
+        mesh_output.vertices[0].color = colors[0];
+
+        mesh_output.vertices[1].position = positions[1];
+        mesh_output.vertices[1].color = colors[1];
+
+        mesh_output.vertices[2].position = positions[2];
+        mesh_output.vertices[2].color = colors[2];
+
+        mesh_output.primitives[0].indices = vec3<u32>(0, 1, 2);
+        mesh_output.primitives[0].cull = false;
+        mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
+        return;
+    }
+}
+
 @fragment
 fn fs_main(vertex: VertexOutput, primitive: PrimitiveInput) -> @location(0) vec4<f32> {
     return vertex.color * primitive.colorMask;
