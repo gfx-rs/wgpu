@@ -297,7 +297,7 @@ bitflags::bitflags! {
         const COMPUTE = 0x4;
         const MESH = 0x8;
         const TASK = 0x10;
-        const COMPUTE_LIKE = 0x4 | 0x8 | 0x10;
+        const COMPUTE_LIKE = Self::COMPUTE.bits() | Self::TASK.bits() | Self::MESH.bits();
     }
 }
 
