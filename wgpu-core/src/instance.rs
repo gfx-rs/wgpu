@@ -1274,6 +1274,8 @@ impl Adapter {
             return Err(RequestDeviceError::LimitsExceeded(failed));
         }
 
+        normalize_max_resource_per_shader_stage_limits(&mut desc.required_limits);
+
         Ok(())
     }
 
@@ -1432,6 +1434,53 @@ fn filter_features_and_limits(
     }
 }
 
+fn normalize_max_resource_per_shader_stage_limits(limits: &mut wgt::Limits) {
+    // The next steps are from <https://www.w3.org/TR/webgpu/#a-new-device>.
+
+    // > 7. Set `limits.maxStorageBuffersPerShaderStage` to
+    // >    `max(limits.maxStorageBuffersPerShaderStage, limits.maxStorageBuffersInVertexStage,
+    // >    limits.maxStorageBuffersInFragmentStage)`.
+
+    limits.max_storage_buffers_per_shader_stage = [
+        limits.max_storage_buffers_per_shader_stage,
+        limits.max_storage_buffers_in_vertex_stage,
+        limits.max_storage_buffers_in_fragment_stage,
+    ]
+    .into_iter()
+    .max()
+    .unwrap();
+
+    // > 8. Set `limits.maxStorageTexturesPerShaderStage` to
+    // >    `max(limits.maxStorageTexturesPerShaderStage, limits.maxStorageTexturesInVertexStage,
+    // >    limits.maxStorageTexturesInFragmentStage)`.
+
+    limits.max_storage_textures_per_shader_stage = [
+        limits.max_storage_textures_per_shader_stage,
+        limits.max_storage_textures_in_vertex_stage,
+        limits.max_storage_textures_in_fragment_stage,
+    ]
+    .into_iter()
+    .max()
+    .unwrap();
+
+    // > 9. If features contains "core-features-and-limits":
+    //
+    // NOTE: We don't implement compat (yet?), so we do this unconditionally. See also:
+    // <https://github.com/gfx-rs/wgpu/issues/8124>
+
+    // >   1. Set `limits.maxStorageBuffersInVertexStage` and
+    // >      `limits.maxStorageBuffersInFragmentStage` to
+    // >      `limits.maxStorageBuffersPerShaderStage`.
+    limits.max_storage_buffers_in_vertex_stage = limits.max_storage_buffers_per_shader_stage;
+    limits.max_storage_buffers_in_fragment_stage = limits.max_storage_buffers_per_shader_stage;
+
+    // >   2. Set `limits.maxStorageTexturesInVertexStage` and
+    // >      `limits.maxStorageTexturesInFragmentStage` to
+    // >      `limits.maxStorageTexturesPerShaderStage`.
+    limits.max_storage_textures_in_vertex_stage = limits.max_storage_textures_per_shader_stage;
+    limits.max_storage_textures_in_fragment_stage = limits.max_storage_textures_per_shader_stage;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1533,5 +1582,114 @@ mod tests {
             &wgt::Limits::defaults(),
             &compliant_downlevel()
         ));
+    }
+
+    mod storage_resource_limits {
+        use super::*;
+
+        #[track_caller]
+        fn assert_normalized_eq(non_normalized: &wgt::Limits, expected: &wgt::Limits) {
+            let mut normalized = non_normalized.clone();
+            normalize_max_resource_per_shader_stage_limits(&mut normalized);
+            assert_eq!(&normalized, expected);
+        }
+
+        #[test]
+        fn normalization_is_idempotent() {
+            let original = wgt::Limits {
+                max_storage_buffers_in_vertex_stage: 16,
+                max_storage_textures_in_vertex_stage: 9,
+                ..wgt::Limits::defaults()
+            };
+
+            let mut first_normalization = original.clone();
+            normalize_max_resource_per_shader_stage_limits(&mut first_normalization);
+            assert_ne!(original, first_normalization);
+
+            let mut second_normalization = first_normalization.clone();
+            normalize_max_resource_per_shader_stage_limits(&mut second_normalization);
+            assert_eq!(first_normalization, second_normalization);
+        }
+
+        #[test]
+        fn limits_presets_already_normalized() {
+            [
+                wgt::Limits::defaults(),
+                wgt::Limits::downlevel_defaults(),
+                wgt::Limits::downlevel_webgl2_defaults(),
+                wgt::Limits::unlimited(),
+            ]
+            .iter()
+            .for_each(|l| assert_normalized_eq(l, l))
+        }
+
+        #[test]
+        fn in_stage_raises_per_shader_stage() {
+            assert_normalized_eq(
+                &wgt::Limits {
+                    max_storage_buffers_per_shader_stage: 8,
+                    max_storage_buffers_in_vertex_stage: 16,
+                    max_storage_buffers_in_fragment_stage: 16,
+                    ..wgt::Limits::defaults()
+                },
+                &wgt::Limits {
+                    max_storage_buffers_per_shader_stage: 16,
+                    max_storage_buffers_in_vertex_stage: 16,
+                    max_storage_buffers_in_fragment_stage: 16,
+                    ..wgt::Limits::defaults()
+                },
+            );
+
+            assert_normalized_eq(
+                &wgt::Limits {
+                    max_storage_textures_per_shader_stage: 8,
+                    max_storage_textures_in_vertex_stage: 9,
+                    max_storage_textures_in_fragment_stage: 9,
+                    ..wgt::Limits::defaults()
+                },
+                &wgt::Limits {
+                    max_storage_textures_per_shader_stage: 9,
+                    max_storage_textures_in_vertex_stage: 9,
+                    max_storage_textures_in_fragment_stage: 9,
+                    ..wgt::Limits::defaults()
+                },
+            );
+        }
+
+        #[test]
+        fn per_shader_stage_raises_in_stage() {
+            assert_normalized_eq(
+                &wgt::Limits {
+                    max_storage_buffers_per_shader_stage: 16,
+                    max_storage_buffers_in_vertex_stage: 4,
+                    max_storage_buffers_in_fragment_stage: 4,
+                    max_storage_textures_per_shader_stage: 8,
+                    max_storage_textures_in_vertex_stage: 4,
+                    max_storage_textures_in_fragment_stage: 4,
+                    ..wgt::Limits::defaults()
+                },
+                &wgt::Limits {
+                    max_storage_buffers_per_shader_stage: 16,
+                    max_storage_buffers_in_vertex_stage: 16,
+                    max_storage_buffers_in_fragment_stage: 16,
+                    max_storage_textures_per_shader_stage: 8,
+                    max_storage_textures_in_vertex_stage: 8,
+                    max_storage_textures_in_fragment_stage: 8,
+                    ..wgt::Limits::defaults()
+                },
+            );
+        }
+
+        #[test]
+        fn lowering_per_shader_stage_noop() {
+            assert_normalized_eq(
+                &wgt::Limits {
+                    max_storage_buffers_per_shader_stage: 1,
+                    max_storage_textures_per_shader_stage: 1,
+                    ..wgt::Limits::defaults()
+                },
+                &wgt::Limits::defaults(),
+            );
+        }
     }
 }
