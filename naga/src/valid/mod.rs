@@ -297,6 +297,7 @@ bitflags::bitflags! {
         const COMPUTE = 0x4;
         const MESH = 0x8;
         const TASK = 0x10;
+        const COMPUTE_LIKE = Self::COMPUTE | Self::TASK | Self::MESH;
     }
 }
 
@@ -548,7 +549,7 @@ impl Validator {
                 stages |= ShaderStages::VERTEX;
             }
             if capabilities.contains(Capabilities::SUBGROUP) {
-                stages |= ShaderStages::FRAGMENT | ShaderStages::COMPUTE;
+                stages |= ShaderStages::FRAGMENT | ShaderStages::COMPUTE_LIKE;
             }
             stages
         };

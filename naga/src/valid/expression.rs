@@ -1165,7 +1165,7 @@ impl super::Validator {
                     // WorkGroupUniformLoad
                     .contains(TypeFlags::SIZED | TypeFlags::CONSTRUCTIBLE)
                 {
-                    ShaderStages::COMPUTE
+                    ShaderStages::COMPUTE_LIKE
                 } else {
                     return Err(ExpressionError::InvalidWorkGroupUniformLoadResultType(ty));
                 }
