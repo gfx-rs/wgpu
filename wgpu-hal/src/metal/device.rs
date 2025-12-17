@@ -685,30 +685,14 @@ impl crate::Device for super::Device {
         let mut bind_group_infos = arrayvec::ArrayVec::new();
 
         // First, place the immediates
-        let mut total_immediates = 0;
         for info in stage_data.iter_mut() {
-            for pcr in desc.immediates_ranges {
-                if pcr.stages.contains(map_naga_stage(info.stage)) {
-                    debug_assert_eq!(pcr.range.end % 4, 0);
-                    info.pc_limit = (pcr.range.end / 4).max(info.pc_limit);
-                }
-            }
-
-            // round up the limits alignment to 4, so that it matches MTL compiler logic
-            const LIMIT_MASK: u32 = 3;
-            //TODO: figure out what and how exactly does the alignment. Clearly, it's not
-            // straightforward, given that value of 2 stays non-aligned.
-            if info.pc_limit > LIMIT_MASK {
-                info.pc_limit = (info.pc_limit + LIMIT_MASK) & !LIMIT_MASK;
-            }
+            info.pc_limit = desc.immediate_size;
 
             // handle the immediate data buffer assignment and shader overrides
             if info.pc_limit != 0 {
                 info.pc_buffer = Some(info.counters.buffers);
                 info.counters.buffers += 1;
             }
-
-            total_immediates = total_immediates.max(info.pc_limit);
         }
 
         // Second, place the described resources
@@ -842,7 +826,7 @@ impl crate::Device for super::Device {
             bind_group_infos,
             immediates_infos,
             total_counters,
-            total_immediates,
+            total_immediates: desc.immediate_size,
             per_stage_map,
         })
     }

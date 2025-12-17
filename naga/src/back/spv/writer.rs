@@ -1,5 +1,6 @@
 use alloc::{string::String, vec, vec::Vec};
 
+use arrayvec::ArrayVec;
 use hashbrown::hash_map::Entry;
 use spirv::Word;
 
@@ -13,14 +14,17 @@ use super::{
 };
 use crate::{
     arena::{Handle, HandleVec, UniqueArena},
-    back::spv::{BindingInfo, WrappedFunction},
+    back::spv::{helpers::BindingDecorations, BindingInfo, WrappedFunction},
     proc::{Alignment, TypeResolution},
     valid::{FunctionInfo, ModuleInfo},
 };
 
-struct FunctionInterface<'a> {
-    varying_ids: &'a mut Vec<Word>,
-    stage: crate::ShaderStage,
+pub struct FunctionInterface<'a> {
+    pub varying_ids: &'a mut Vec<Word>,
+    pub stage: crate::ShaderStage,
+    pub task_payload: Option<Handle<crate::GlobalVariable>>,
+    pub mesh_info: Option<crate::MeshStageInfo>,
+    pub workgroup_size: [u32; 3],
 }
 
 impl Function {
@@ -754,11 +758,20 @@ impl Writer {
         let mut ep_context = EntryPointContext {
             argument_ids: Vec::new(),
             results: Vec::new(),
+            task_payload_variable_id: if let Some(ref i) = interface {
+                i.task_payload.map(|a| self.global_variables[a].var_id)
+            } else {
+                None
+            },
+            mesh_state: None,
         };
 
         let mut local_invocation_id = None;
 
         let mut parameter_type_ids = Vec::with_capacity(ir_function.arguments.len());
+
+        let mut local_invocation_index_id = None;
+
         for argument in ir_function.arguments.iter() {
             let class = spirv::StorageClass::Input;
             let handle_ty = ir_module.types[argument.ty].inner.is_handle();
@@ -789,6 +802,10 @@ impl Writer {
 
                     if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationId) {
                         local_invocation_id = Some(id);
+                    } else if binding
+                        == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex)
+                    {
+                        local_invocation_index_id = Some(id);
                     }
 
                     id
@@ -816,6 +833,10 @@ impl Writer {
 
                         if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationId) {
                             local_invocation_id = Some(id);
+                        } else if binding
+                            == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex)
+                        {
+                            local_invocation_index_id = Some(id);
                         }
                     }
                     prelude.body.push(Instruction::composite_construct(
@@ -864,15 +885,21 @@ impl Writer {
                         has_point_size |=
                             *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize);
                         let type_id = self.get_handle_type_id(result.ty);
-                        let varying_id = self.write_varying(
-                            ir_module,
-                            iface.stage,
-                            class,
-                            None,
-                            result.ty,
-                            binding,
-                        )?;
-                        iface.varying_ids.push(varying_id);
+                        let varying_id =
+                            if *binding == crate::Binding::BuiltIn(crate::BuiltIn::MeshTaskSize) {
+                                0
+                            } else {
+                                let varying_id = self.write_varying(
+                                    ir_module,
+                                    iface.stage,
+                                    class,
+                                    None,
+                                    result.ty,
+                                    binding,
+                                )?;
+                                iface.varying_ids.push(varying_id);
+                                varying_id
+                            };
                         ep_context.results.push(ResultMember {
                             id: varying_id,
                             type_id,
@@ -887,15 +914,25 @@ impl Writer {
                             let binding = member.binding.as_ref().unwrap();
                             has_point_size |=
                                 *binding == crate::Binding::BuiltIn(crate::BuiltIn::PointSize);
-                            let varying_id = self.write_varying(
-                                ir_module,
-                                iface.stage,
-                                class,
-                                name,
-                                member.ty,
-                                binding,
-                            )?;
-                            iface.varying_ids.push(varying_id);
+                            // This isn't an actual builtin in SPIR-V. It can only appear as the
+                            // output of a task shader and the output is used when writing the
+                            // entry point return, in which case the id is ignored anyway.
+                            let varying_id = if *binding
+                                == crate::Binding::BuiltIn(crate::BuiltIn::MeshTaskSize)
+                            {
+                                0
+                            } else {
+                                let varying_id = self.write_varying(
+                                    ir_module,
+                                    iface.stage,
+                                    class,
+                                    name,
+                                    member.ty,
+                                    binding,
+                                )?;
+                                iface.varying_ids.push(varying_id);
+                                varying_id
+                            };
                             ep_context.results.push(ResultMember {
                                 id: varying_id,
                                 type_id,
@@ -935,6 +972,21 @@ impl Writer {
             None => self.void_type,
         };
 
+        if let Some(ref mut iface) = interface {
+            if let Some(task_payload) = iface.task_payload {
+                iface
+                    .varying_ids
+                    .push(self.global_variables[task_payload].var_id);
+            }
+            self.write_entry_point_mesh_shader_info(
+                iface,
+                local_invocation_index_id,
+                ir_module,
+                &mut prelude,
+                &mut ep_context,
+            )?;
+        }
+
         let lookup_function_type = LookupFunctionType {
             parameter_type_ids,
             return_type_id,
@@ -971,7 +1023,7 @@ impl Writer {
             let mut gv = self.global_variables[handle].clone();
             if let Some(ref mut iface) = interface {
                 // Have to include global variables in the interface
-                if self.physical_layout.version >= 0x10400 {
+                if self.physical_layout.version >= 0x10400 && iface.task_payload != Some(handle) {
                     iface.varying_ids.push(gv.var_id);
                 }
             }
@@ -1223,6 +1275,9 @@ impl Writer {
             Some(FunctionInterface {
                 varying_ids: &mut interface_ids,
                 stage: entry_point.stage,
+                task_payload: entry_point.task_payload,
+                mesh_info: entry_point.mesh_info.clone(),
+                workgroup_size: entry_point.workgroup_size,
             }),
             debug_info,
         )?;
@@ -1277,7 +1332,6 @@ impl Writer {
             }
             crate::ShaderStage::Compute => {
                 let execution_mode = spirv::ExecutionMode::LocalSize;
-                //self.check(execution_mode.required_capabilities())?;
                 Instruction::execution_mode(
                     function_id,
                     execution_mode,
@@ -1286,7 +1340,51 @@ impl Writer {
                 .to_words(&mut self.logical_layout.execution_modes);
                 spirv::ExecutionModel::GLCompute
             }
-            crate::ShaderStage::Task | crate::ShaderStage::Mesh => unreachable!(),
+            crate::ShaderStage::Task => {
+                let execution_mode = spirv::ExecutionMode::LocalSize;
+                Instruction::execution_mode(
+                    function_id,
+                    execution_mode,
+                    &entry_point.workgroup_size,
+                )
+                .to_words(&mut self.logical_layout.execution_modes);
+                spirv::ExecutionModel::TaskEXT
+            }
+            crate::ShaderStage::Mesh => {
+                let execution_mode = spirv::ExecutionMode::LocalSize;
+                Instruction::execution_mode(
+                    function_id,
+                    execution_mode,
+                    &entry_point.workgroup_size,
+                )
+                .to_words(&mut self.logical_layout.execution_modes);
+                let mesh_info = entry_point.mesh_info.as_ref().unwrap();
+                Instruction::execution_mode(
+                    function_id,
+                    match mesh_info.topology {
+                        crate::MeshOutputTopology::Points => spirv::ExecutionMode::OutputPoints,
+                        crate::MeshOutputTopology::Lines => spirv::ExecutionMode::OutputLinesEXT,
+                        crate::MeshOutputTopology::Triangles => {
+                            spirv::ExecutionMode::OutputTrianglesEXT
+                        }
+                    },
+                    &[],
+                )
+                .to_words(&mut self.logical_layout.execution_modes);
+                Instruction::execution_mode(
+                    function_id,
+                    spirv::ExecutionMode::OutputVertices,
+                    core::slice::from_ref(&mesh_info.max_vertices),
+                )
+                .to_words(&mut self.logical_layout.execution_modes);
+                Instruction::execution_mode(
+                    function_id,
+                    spirv::ExecutionMode::OutputPrimitivesEXT,
+                    core::slice::from_ref(&mesh_info.max_primitives),
+                )
+                .to_words(&mut self.logical_layout.execution_modes);
+                spirv::ExecutionModel::MeshEXT
+            }
         };
         //self.check(exec_model.required_capabilities())?;
 
@@ -1812,7 +1910,11 @@ impl Writer {
         Ok(id)
     }
 
-    pub(super) fn write_control_barrier(&mut self, flags: crate::Barrier, block: &mut Block) {
+    pub(super) fn write_control_barrier(
+        &mut self,
+        flags: crate::Barrier,
+        body: &mut Vec<Instruction>,
+    ) {
         let memory_scope = if flags.contains(crate::Barrier::STORAGE) {
             spirv::Scope::Device
         } else if flags.contains(crate::Barrier::SUB_GROUP) {
@@ -1844,7 +1946,7 @@ impl Writer {
         };
         let mem_scope_id = self.get_index_constant(memory_scope as u32);
         let semantics_id = self.get_index_constant(semantics.bits());
-        block.body.push(Instruction::control_barrier(
+        body.push(Instruction::control_barrier(
             exec_scope_id,
             mem_scope_id,
             semantics_id,
@@ -1982,7 +2084,7 @@ impl Writer {
 
         let mut post_if_block = Block::new(merge_id);
 
-        self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut post_if_block);
+        self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut post_if_block.body);
 
         let next_id = self.id_gen.next();
         function.consume(post_if_block, Instruction::branch(next_id));
@@ -2017,8 +2119,6 @@ impl Writer {
         ty: Handle<crate::Type>,
         binding: &crate::Binding,
     ) -> Result<Word, Error> {
-        use crate::TypeInner;
-
         let id = self.id_gen.next();
         let ty_inner = &ir_module.types[ty].inner;
         let needs_polyfill = self.needs_f16_polyfill(ty_inner);
@@ -2049,17 +2149,111 @@ impl Writer {
             }
         }
 
-        use spirv::{BuiltIn, Decoration};
+        let binding = self.map_binding(ir_module, stage, class, ty, binding)?;
+        self.write_binding(id, binding);
 
+        Ok(id)
+    }
+
+    pub fn write_binding(&mut self, id: Word, binding: BindingDecorations) {
+        match binding {
+            BindingDecorations::None => (),
+            BindingDecorations::BuiltIn(bi, others) => {
+                self.decorate(id, spirv::Decoration::BuiltIn, &[bi as u32]);
+                for other in others {
+                    self.decorate(id, other, &[]);
+                }
+            }
+            BindingDecorations::Location {
+                location,
+                others,
+                blend_src,
+            } => {
+                self.decorate(id, spirv::Decoration::Location, &[location]);
+                for other in others {
+                    self.decorate(id, other, &[]);
+                }
+                if let Some(blend_src) = blend_src {
+                    self.decorate(id, spirv::Decoration::Index, &[blend_src]);
+                }
+            }
+        }
+    }
+
+    pub fn write_binding_struct_member(
+        &mut self,
+        struct_id: Word,
+        member_idx: Word,
+        binding_info: BindingDecorations,
+    ) {
+        match binding_info {
+            BindingDecorations::None => (),
+            BindingDecorations::BuiltIn(bi, others) => {
+                self.annotations.push(Instruction::member_decorate(
+                    struct_id,
+                    member_idx,
+                    spirv::Decoration::BuiltIn,
+                    &[bi as Word],
+                ));
+                for other in others {
+                    self.annotations.push(Instruction::member_decorate(
+                        struct_id,
+                        member_idx,
+                        other,
+                        &[],
+                    ));
+                }
+            }
+            BindingDecorations::Location {
+                location,
+                others,
+                blend_src,
+            } => {
+                self.annotations.push(Instruction::member_decorate(
+                    struct_id,
+                    member_idx,
+                    spirv::Decoration::Location,
+                    &[location],
+                ));
+                for other in others {
+                    self.annotations.push(Instruction::member_decorate(
+                        struct_id,
+                        member_idx,
+                        other,
+                        &[],
+                    ));
+                }
+                if let Some(blend_src) = blend_src {
+                    self.annotations.push(Instruction::member_decorate(
+                        struct_id,
+                        member_idx,
+                        spirv::Decoration::Index,
+                        &[blend_src],
+                    ));
+                }
+            }
+        }
+    }
+
+    pub fn map_binding(
+        &mut self,
+        ir_module: &crate::Module,
+        stage: crate::ShaderStage,
+        class: spirv::StorageClass,
+        ty: Handle<crate::Type>,
+        binding: &crate::Binding,
+    ) -> Result<BindingDecorations, Error> {
+        use spirv::BuiltIn;
+        use spirv::Decoration;
         match *binding {
             crate::Binding::Location {
                 location,
                 interpolation,
                 sampling,
                 blend_src,
-                per_primitive: _,
+                per_primitive,
             } => {
-                self.decorate(id, Decoration::Location, &[location]);
+                let mut others = ArrayVec::new();
 
                 let no_decorations =
                     // VUID-StandaloneSpirv-Flat-06202
@@ -2076,10 +2270,10 @@ impl Writer {
                         // Perspective-correct interpolation is the default in SPIR-V.
                         None | Some(crate::Interpolation::Perspective) => (),
                         Some(crate::Interpolation::Flat) => {
-                            self.decorate(id, Decoration::Flat, &[]);
+                            others.push(Decoration::Flat);
                         }
                         Some(crate::Interpolation::Linear) => {
-                            self.decorate(id, Decoration::NoPerspective, &[]);
+                            others.push(Decoration::NoPerspective);
                         }
                     }
                     match sampling {
@@ -2091,27 +2285,42 @@ impl Writer {
                             | crate::Sampling::Either,
                         ) => (),
                         Some(crate::Sampling::Centroid) => {
-                            self.decorate(id, Decoration::Centroid, &[]);
+                            others.push(Decoration::Centroid);
                         }
                         Some(crate::Sampling::Sample) => {
                             self.require_any(
                                 "per-sample interpolation",
                                 &[spirv::Capability::SampleRateShading],
                             )?;
-                            self.decorate(id, Decoration::Sample, &[]);
+                            others.push(Decoration::Sample);
                         }
                     }
                 }
-                if let Some(blend_src) = blend_src {
-                    self.decorate(id, Decoration::Index, &[blend_src]);
+                if per_primitive && stage == crate::ShaderStage::Fragment {
+                    others.push(Decoration::PerPrimitiveEXT);
+                    self.require_mesh_shaders()?;
                 }
+                Ok(BindingDecorations::Location {
+                    location,
+                    others,
+                    blend_src,
+                })
             }
             crate::Binding::BuiltIn(built_in) => {
                 use crate::BuiltIn as Bi;
+                let mut others = ArrayVec::new();
+
+                if matches!(
+                    built_in,
+                    Bi::CullPrimitive | Bi::PointIndex | Bi::LineIndices | Bi::TriangleIndices
+                ) {
+                    self.require_mesh_shaders()?;
+                }
+
                 let built_in = match built_in {
                     Bi::Position { invariant } => {
                         if invariant {
-                            self.decorate(id, Decoration::Invariant, &[]);
+                            others.push(Decoration::Invariant);
                         }
 
                         if class == spirv::StorageClass::Output {
@@ -2154,6 +2363,9 @@ impl Writer {
                             "`primitive_index` built-in",
                             &[spirv::Capability::Geometry],
                         )?;
+                        if stage == crate::ShaderStage::Mesh {
+                            others.push(Decoration::PerPrimitiveEXT);
+                        }
                         BuiltIn::PrimitiveId
                     }
                     Bi::Barycentric => {
@@ -2215,18 +2427,30 @@ impl Writer {
                         )?;
                         BuiltIn::SubgroupLocalInvocationId
                     }
-                    Bi::MeshTaskSize
-                    | Bi::CullPrimitive
-                    | Bi::PointIndex
-                    | Bi::LineIndices
-                    | Bi::TriangleIndices
-                    | Bi::VertexCount
-                    | Bi::PrimitiveCount
-                    | Bi::Vertices
-                    | Bi::Primitives => unreachable!(),
+                    Bi::CullPrimitive => {
+                        self.require_mesh_shaders()?;
+                        others.push(Decoration::PerPrimitiveEXT);
+                        BuiltIn::CullPrimitiveEXT
+                    }
+                    Bi::PointIndex => {
+                        self.require_mesh_shaders()?;
+                        BuiltIn::PrimitivePointIndicesEXT
+                    }
+                    Bi::LineIndices => {
+                        self.require_mesh_shaders()?;
+                        BuiltIn::PrimitiveLineIndicesEXT
+                    }
+                    Bi::TriangleIndices => {
+                        self.require_mesh_shaders()?;
+                        BuiltIn::PrimitiveTriangleIndicesEXT
+                    }
+                    // No decoration, this EmitMeshTasksEXT is called at function return
+                    Bi::MeshTaskSize => return Ok(BindingDecorations::None),
+                    // These aren't normal builtins and don't occur in function output
+                    Bi::VertexCount | Bi::Vertices | Bi::PrimitiveCount | Bi::Primitives => {
+                        unreachable!()
+                    }
                 };
-
-                self.decorate(id, Decoration::BuiltIn, &[built_in as u32]);
 
                 use crate::ScalarKind as Sk;
 
@@ -2237,9 +2461,8 @@ impl Writer {
                 // > shader, must be decorated Flat
                 if class == spirv::StorageClass::Input && stage == crate::ShaderStage::Fragment {
                     let is_flat = match ir_module.types[ty].inner {
-                        TypeInner::Scalar(scalar) | TypeInner::Vector { scalar, .. } => match scalar
-                            .kind
-                        {
+                        crate::TypeInner::Scalar(scalar)
+                        | crate::TypeInner::Vector { scalar, .. } => match scalar.kind {
                             Sk::Uint | Sk::Sint | Sk::Bool => true,
                             Sk::Float => false,
                             Sk::AbstractInt | Sk::AbstractFloat => {
@@ -2252,13 +2475,12 @@ impl Writer {
                     };
 
                     if is_flat {
-                        self.decorate(id, Decoration::Flat, &[]);
+                        others.push(Decoration::Flat);
                     }
                 }
+                Ok(BindingDecorations::BuiltIn(built_in, others))
             }
         }
-
-        Ok(id)
     }
 
     /// Load an IO variable, converting from `f32` to `f16` if polyfill is active.
@@ -2568,6 +2790,17 @@ impl Writer {
             | ir_module.special_types.ray_intersection.is_some();
         let has_vertex_return = ir_module.special_types.ray_vertex_return.is_some();
 
+        // Ways mesh shaders are required:
+        // * Mesh entry point used - checked for
+        // * Mesh function like setVertex used outside mesh entry point, this is handled when those are written
+        // * Fragment shader with per primitive data - handled in `map_binding`
+        let has_mesh_shaders = ir_module.entry_points.iter().any(|entry| {
+            entry.stage == crate::ShaderStage::Mesh || entry.stage == crate::ShaderStage::Task
+        }) || ir_module
+            .global_variables
+            .iter()
+            .any(|gvar| gvar.1.space == crate::AddressSpace::TaskPayload);
+
         for (_, &crate::Type { ref inner, .. }) in ir_module.types.iter() {
             // spirv does not know whether these have vertex return - that is done by us
             if let &crate::TypeInner::AccelerationStructure { .. }
@@ -2593,6 +2826,9 @@ impl Writer {
         if has_vertex_return {
             Instruction::extension("SPV_KHR_ray_tracing_position_fetch")
                 .to_words(&mut self.logical_layout.extensions);
+        }
+        if has_mesh_shaders {
+            self.require_mesh_shaders()?;
         }
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
         Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")

@@ -36,12 +36,12 @@ pub struct PipelineLayoutDescriptor<'a> {
     /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
     /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
     pub bind_group_layouts: &'a [&'a BindGroupLayout],
-    /// Set of immediate data ranges this pipeline uses. Each shader stage that uses immediates
-    /// must define the range in immediate data memory that corresponds to its single `var<immediate>`
-    /// buffer.
+    /// The number of bytes of immediate data that are allocated for use
+    /// in the shader. The `var<immediate>`s in the shader attached to
+    /// this pipeline must be equal or smaller than this size.
     ///
-    /// If this array is non-empty, the [`Features::IMMEDIATES`] must be enabled.
-    pub immediates_ranges: &'a [ImmediateRange],
+    /// If this value is non-zero, [`Features::IMMEDIATES`] must be enabled.
+    pub immediate_size: u32,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(PipelineLayoutDescriptor<'_>: Send, Sync);

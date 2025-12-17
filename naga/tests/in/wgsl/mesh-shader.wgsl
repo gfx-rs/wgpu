@@ -1,5 +1,3 @@
-// Main mesh shader test file. Tests most features.
-
 enable wgpu_mesh_shader;
 
 const positions = array(
@@ -63,12 +61,13 @@ struct MeshOutput {
     @builtin(vertex_count) vertex_count: u32,
     @builtin(primitive_count) primitive_count: u32,
 }
+
 var<workgroup> mesh_output: MeshOutput;
 
 @mesh(mesh_output)
 @payload(taskPayload)
 @workgroup_size(1)
-fn ms_main(@builtin(local_invocation_index) thread_id: u32, @builtin(global_invocation_id) id: vec3<u32>) {
+fn ms_main() {
     mesh_output.vertex_count = 3;
     mesh_output.primitive_count = 1;
     workgroupData = 2.0;

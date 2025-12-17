@@ -177,10 +177,7 @@ impl Dispatch {
                 dst_bind_group_layout.as_ref(),
                 src_bind_group_layout.as_ref(),
             ],
-            immediates_ranges: &[wgt::ImmediateRange {
-                stages: wgt::ShaderStages::COMPUTE,
-                range: 0..4,
-            }],
+            immediate_size: 4,
         };
         let pipeline_layout = unsafe {
             device

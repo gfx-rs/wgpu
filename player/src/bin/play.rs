@@ -70,7 +70,7 @@ fn main() {
         .unwrap();
 
     let instance_desc = wgt::InstanceDescriptor::from_env_or_default();
-    let instance = wgc::instance::Instance::new("player", &instance_desc);
+    let instance = wgc::instance::Instance::new("player", &instance_desc, None);
 
     #[cfg(feature = "winit")]
     let surface = unsafe {

@@ -19,7 +19,7 @@ extern crate std;
 
 extern crate alloc;
 
-use core::{fmt, hash::Hash, ops::Range, time::Duration};
+use core::{fmt, hash::Hash, time::Duration};
 
 #[cfg(any(feature = "serde", test))]
 use serde::{Deserialize, Serialize};
@@ -197,7 +197,7 @@ pub const VERTEX_STRIDE_ALIGNMENT: BufferAddress = 4;
 /// Ranges of [writes to immediate data] must be at least this aligned.
 ///
 #[doc = link_to_wgpu_docs!(["writes to immediate data"]: "struct.RenderPass.html#method.set_immediates")]
-pub const IMMEDIATES_ALIGNMENT: u32 = 4;
+pub const IMMEDIATE_DATA_ALIGNMENT: u32 = 4;
 
 /// Storage buffer binding sizes must be multiples of this value.
 #[doc(hidden)]
@@ -432,18 +432,6 @@ impl Color {
         b: 1.0,
         a: 1.0,
     };
-}
-
-/// A range of immediate data memory to pass to a shader stage.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct ImmediateRange {
-    /// Stage immediate data range is visible from. Each stage can only be served by at most one range.
-    /// One range can serve multiple stages however.
-    pub stages: ShaderStages,
-    /// Range in immediate data memory to use for the stage. Must be less than [`Limits::max_immediate_size`].
-    /// Start and end must be aligned to the 4s.
-    pub range: Range<u32>,
 }
 
 /// Describes a [`CommandBuffer`](../wgpu/struct.CommandBuffer.html).

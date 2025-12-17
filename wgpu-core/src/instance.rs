@@ -92,7 +92,11 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn new(name: &str, instance_desc: &wgt::InstanceDescriptor) -> Self {
+    pub fn new(
+        name: &str,
+        instance_desc: &wgt::InstanceDescriptor,
+        telemetry: Option<hal::Telemetry>,
+    ) -> Self {
         let mut this = Self {
             name: name.to_owned(),
             instance_per_backend: Vec::new(),
@@ -102,21 +106,26 @@ impl Instance {
         };
 
         #[cfg(vulkan)]
-        this.try_add_hal(hal::api::Vulkan, instance_desc);
+        this.try_add_hal(hal::api::Vulkan, instance_desc, telemetry);
         #[cfg(metal)]
-        this.try_add_hal(hal::api::Metal, instance_desc);
+        this.try_add_hal(hal::api::Metal, instance_desc, telemetry);
         #[cfg(dx12)]
-        this.try_add_hal(hal::api::Dx12, instance_desc);
+        this.try_add_hal(hal::api::Dx12, instance_desc, telemetry);
         #[cfg(gles)]
-        this.try_add_hal(hal::api::Gles, instance_desc);
+        this.try_add_hal(hal::api::Gles, instance_desc, telemetry);
         #[cfg(feature = "noop")]
-        this.try_add_hal(hal::api::Noop, instance_desc);
+        this.try_add_hal(hal::api::Noop, instance_desc, telemetry);
 
         this
     }
 
     /// Helper for `Instance::new()`; attempts to add a single `wgpu-hal` backend to this instance.
-    fn try_add_hal<A: hal::Api>(&mut self, _: A, instance_desc: &wgt::InstanceDescriptor) {
+    fn try_add_hal<A: hal::Api>(
+        &mut self,
+        _: A,
+        instance_desc: &wgt::InstanceDescriptor,
+        telemetry: Option<hal::Telemetry>,
+    ) {
         // Whether or not the backend was requested, and whether or not it succeeds,
         // note that we *could* try it.
         self.supported_backends |= A::VARIANT.into();
@@ -131,6 +140,7 @@ impl Instance {
             flags: self.flags,
             memory_budget_thresholds: instance_desc.memory_budget_thresholds,
             backend_options: instance_desc.backend_options.clone(),
+            telemetry,
         };
 
         use hal::Instance as _;

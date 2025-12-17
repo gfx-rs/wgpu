@@ -380,7 +380,7 @@ impl GPUDevice {
     let wgpu_descriptor = wgpu_core::binding_model::PipelineLayoutDescriptor {
       label: crate::transform_label(descriptor.label.clone()),
       bind_group_layouts: Cow::Owned(bind_group_layouts),
-      immediates_ranges: Default::default(),
+      immediate_size: 0,
     };
 
     let (id, err) = self.instance.device_create_pipeline_layout(
@@ -423,14 +423,14 @@ impl GPUDevice {
             BindingResource::Buffer(wgpu_core::binding_model::BufferBinding {
               buffer: buffer.id,
               offset: 0,
-              size: NonZeroU64::new(buffer.size),
+              size: Some(buffer.size),
             })
           }
           GPUBindingResource::BufferBinding(buffer_binding) => {
             BindingResource::Buffer(wgpu_core::binding_model::BufferBinding {
               buffer: buffer_binding.buffer.id,
               offset: buffer_binding.offset,
-              size: buffer_binding.size.and_then(NonZeroU64::new),
+              size: buffer_binding.size,
             })
           }
         },

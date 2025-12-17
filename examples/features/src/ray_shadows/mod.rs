@@ -186,10 +186,7 @@ impl crate::framework::Example for Example {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bind_group_layout],
-            immediates_ranges: &[wgpu::ImmediateRange {
-                stages: wgpu::ShaderStages::FRAGMENT,
-                range: 0..12,
-            }],
+            immediate_size: 12,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -331,9 +328,9 @@ impl crate::framework::Example for Example {
 
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, Some(&self.bind_group), &[]);
-            rpass.set_immediates(wgpu::ShaderStages::FRAGMENT, 0, &0.0_f32.to_ne_bytes());
-            rpass.set_immediates(wgpu::ShaderStages::FRAGMENT, 4, &cos.to_ne_bytes());
-            rpass.set_immediates(wgpu::ShaderStages::FRAGMENT, 8, &sin.to_ne_bytes());
+            rpass.set_immediates(0, &0.0_f32.to_ne_bytes());
+            rpass.set_immediates(4, &cos.to_ne_bytes());
+            rpass.set_immediates(8, &sin.to_ne_bytes());
             rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
             rpass.set_index_buffer(self.index_buf.slice(..), IndexFormat::Uint16);
             rpass.draw_indexed(0..12, 0, 0..1);

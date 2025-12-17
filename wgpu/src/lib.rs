@@ -138,8 +138,8 @@ pub use wgt::{
     Dx12SwapchainKind, Dx12UseFrameLatencyWaitableObject, DxcShaderModel, DynamicOffset,
     ExperimentalFeatures, Extent3d, ExternalTextureFormat, ExternalTextureTransferFunction, Face,
     Features, FeaturesWGPU, FeaturesWebGPU, FilterMode, FrontFace, GlBackendOptions,
-    GlFenceBehavior, Gles3MinorVersion, HalCounters, ImageSubresourceRange, ImmediateRange,
-    IndexFormat, InstanceDescriptor, InstanceFlags, InternalCounters, Limits, LoadOpDontCare,
+    GlFenceBehavior, Gles3MinorVersion, HalCounters, ImageSubresourceRange, IndexFormat,
+    InstanceDescriptor, InstanceFlags, InternalCounters, Limits, LoadOpDontCare,
     MemoryBudgetThresholds, MemoryHints, MipmapFilterMode, MultisampleState, NoopBackendOptions,
     Origin2d, Origin3d, PipelineStatisticsTypes, PollError, PollStatus, PolygonMode,
     PowerPreference, PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState,
@@ -150,9 +150,9 @@ pub use wgt::{
     TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
     TextureTransition, TextureUsages, TextureUses, TextureViewDimension, Trace, VertexAttribute,
     VertexFormat, VertexStepMode, WasmNotSend, WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT,
-    COPY_BYTES_PER_ROW_ALIGNMENT, IMMEDIATES_ALIGNMENT, MAP_ALIGNMENT, MAXIMUM_SUBGROUP_MAX_SIZE,
-    MINIMUM_SUBGROUP_MIN_SIZE, QUERY_RESOLVE_BUFFER_ALIGNMENT, QUERY_SET_MAX_QUERIES, QUERY_SIZE,
-    VERTEX_ALIGNMENT,
+    COPY_BYTES_PER_ROW_ALIGNMENT, IMMEDIATE_DATA_ALIGNMENT, MAP_ALIGNMENT,
+    MAXIMUM_SUBGROUP_MAX_SIZE, MINIMUM_SUBGROUP_MIN_SIZE, QUERY_RESOLVE_BUFFER_ALIGNMENT,
+    QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_ALIGNMENT,
 };
 
 #[expect(deprecated)]
