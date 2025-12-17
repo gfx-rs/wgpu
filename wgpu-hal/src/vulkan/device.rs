@@ -879,7 +879,7 @@ impl crate::Device for super::Device {
                 .map_err(super::map_host_device_oom_and_ioca_err)?
         };
 
-        let requirements = unsafe { self.shared.raw.get_buffer_memory_requirements(raw) };
+        let mut requirements = unsafe { self.shared.raw.get_buffer_memory_requirements(raw) };
 
         let is_cpu_read = desc.usage.contains(wgt::BufferUses::MAP_READ);
         let is_cpu_write = desc.usage.contains(wgt::BufferUses::MAP_WRITE);
@@ -899,6 +899,16 @@ impl crate::Device for super::Device {
             })?;
 
         let name = desc.label.unwrap_or("Unlabeled buffer");
+
+        if desc
+            .usage
+            .contains(wgt::BufferUses::ACCELERATION_STRUCTURE_SCRATCH)
+        {
+            // There is no way to specify this usage to Vulkan so we must make sure the alignment requirement is large enough.
+            requirements.alignment = requirements
+                .alignment
+                .max(self.shared.private_caps.scratch_buffer_alignment as u64);
+        }
 
         let allocation = self
             .mem_allocator

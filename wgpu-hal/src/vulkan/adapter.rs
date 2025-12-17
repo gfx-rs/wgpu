@@ -1892,6 +1892,14 @@ impl super::Instance {
             );
         }
 
+        let has_robust_buffer_access2 = phd_features
+            .robustness2
+            .as_ref()
+            .map(|r| r.robust_buffer_access2 == 1)
+            .unwrap_or_default();
+
+        let alignments = phd_capabilities.to_hal_alignments(has_robust_buffer_access2);
+
         let private_caps = super::PrivateCapabilities {
             image_view_usage: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(khr::maintenance2::NAME),
@@ -1934,11 +1942,7 @@ impl super::Instance {
                     .image_robustness
                     .is_some_and(|ext| ext.robust_image_access != 0),
             },
-            robust_buffer_access2: phd_features
-                .robustness2
-                .as_ref()
-                .map(|r| r.robust_buffer_access2 == 1)
-                .unwrap_or_default(),
+            robust_buffer_access2: has_robust_buffer_access2,
             robust_image_access2: phd_features
                 .robustness2
                 .as_ref()
@@ -1963,10 +1967,11 @@ impl super::Instance {
                 .multiview
                 .map(|a| a.max_multiview_instance_index)
                 .unwrap_or(0),
+            scratch_buffer_alignment: alignments.ray_tracing_scratch_buffer_alignment,
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
-            alignments: phd_capabilities.to_hal_alignments(private_caps.robust_buffer_access2),
+            alignments,
             downlevel: wgt::DownlevelCapabilities {
                 flags: downlevel_flags,
                 limits: wgt::DownlevelLimits {},
