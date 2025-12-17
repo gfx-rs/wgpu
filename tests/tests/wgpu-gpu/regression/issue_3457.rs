@@ -46,7 +46,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration = GpuTestConfiguration::ne
             .create_pipeline_layout(&PipelineLayoutDescriptor {
                 label: Some("Pipeline Layout"),
                 bind_group_layouts: &[],
-                immediates_ranges: &[],
+                immediate_size: 0,
             });
 
         let double_pipeline = ctx

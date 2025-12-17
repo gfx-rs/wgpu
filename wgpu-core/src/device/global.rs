@@ -739,7 +739,7 @@ impl Global {
             let desc = binding_model::ResolvedPipelineLayoutDescriptor {
                 label: desc.label.clone(),
                 bind_group_layouts: Cow::Owned(bind_group_layouts),
-                immediates_ranges: desc.immediates_ranges.clone(),
+                immediate_size: desc.immediate_size,
             };
 
             let layout = match device.create_pipeline_layout(&desc) {

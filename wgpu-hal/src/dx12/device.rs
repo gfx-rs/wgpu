@@ -911,17 +911,9 @@ impl crate::Device for super::Device {
         let mut immediates_target = None;
         let mut root_constant_info = None;
 
-        let mut pc_start = u32::MAX;
-        let mut pc_end = u32::MIN;
-
-        for pc in desc.immediates_ranges.iter() {
-            pc_start = pc_start.min(pc.range.start);
-            pc_end = pc_end.max(pc.range.end);
-        }
-
-        if pc_start != u32::MAX && pc_end != u32::MIN {
+        if desc.immediate_size != 0 {
             let parameter_index = parameters.len();
-            let size = (pc_end - pc_start) / 4;
+            let size = desc.immediate_size / 4;
             parameters.push(Direct3D12::D3D12_ROOT_PARAMETER {
                 ParameterType: Direct3D12::D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
                 Anonymous: Direct3D12::D3D12_ROOT_PARAMETER_0 {
@@ -937,7 +929,7 @@ impl crate::Device for super::Device {
             bind_cbv.register += 1;
             root_constant_info = Some(super::RootConstantInfo {
                 root_index: parameter_index as u32,
-                range: (pc_start / 4)..(pc_end / 4),
+                range: 0..size,
             });
             immediates_target = Some(binding);
 
@@ -1333,7 +1325,14 @@ impl crate::Device for super::Device {
                 ShaderVisibility: Direct3D12::D3D12_SHADER_VISIBILITY_ALL, // really needed for VS and CS only,
             });
             let binding = bind_cbv;
-            bind_cbv.register += 1;
+            // This is the last time we use this, but lets increment
+            // it so if we add more later, the value behaves correctly.
+
+            // This is an allow as it doesn't trigger on 1.82, hal's MSRV.
+            #[allow(unused_assignments)]
+            {
+                bind_cbv.register += 1;
+            }
             (Some(parameter_index as u32), Some(binding))
         } else {
             (None, None)

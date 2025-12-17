@@ -51,6 +51,7 @@ impl ExternalTextureNameKey {
 #[derive(Debug, Eq, Hash, PartialEq)]
 pub enum NameKey {
     Constant(Handle<crate::Constant>),
+    Override(Handle<crate::Override>),
     GlobalVariable(Handle<crate::GlobalVariable>),
     Type(Handle<crate::Type>),
     StructMember(Handle<crate::Type>, u32),
@@ -373,6 +374,21 @@ impl Namer {
             };
             let name = self.call(label);
             output.insert(NameKey::Constant(handle), name);
+        }
+
+        for (handle, override_) in module.overrides.iter() {
+            let label = match override_.name {
+                Some(ref name) => name,
+                None => {
+                    use core::fmt::Write;
+                    // Try to be more descriptive about the override values
+                    temp.clear();
+                    write!(temp, "override_{}", output[&NameKey::Type(override_.ty)]).unwrap();
+                    &temp
+                }
+            };
+            let name = self.call(label);
+            output.insert(NameKey::Override(handle), name);
         }
     }
 }

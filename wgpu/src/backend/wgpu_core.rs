@@ -784,7 +784,7 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
     where
         Self: Sized,
     {
-        Self(Arc::new(wgc::global::Global::new("wgpu", desc)))
+        Self(Arc::new(wgc::global::Global::new("wgpu", desc, None)))
     }
 
     unsafe fn create_surface(
@@ -1184,7 +1184,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     arrayed_buffer_bindings.extend(array.iter().map(|binding| bm::BufferBinding {
                         buffer: binding.buffer.inner.as_core().id,
                         offset: binding.offset,
-                        size: binding.size,
+                        size: binding.size.map(wgt::BufferSize::get),
                     }));
                 }
             }
@@ -1204,7 +1204,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     }) => bm::BindingResource::Buffer(bm::BufferBinding {
                         buffer: buffer.inner.as_core().id,
                         offset,
-                        size,
+                        size: size.map(wgt::BufferSize::get),
                     }),
                     BindingResource::BufferArray(array) => {
                         let slice = &remaining_arrayed_buffer_bindings[..array.len()];
@@ -1286,7 +1286,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         let descriptor = wgc::binding_model::PipelineLayoutDescriptor {
             label: desc.label.map(Borrowed),
             bind_group_layouts: Borrowed(&temp_layouts),
-            immediates_ranges: Borrowed(desc.immediates_ranges),
+            immediate_size: desc.immediate_size,
         };
 
         let (id, error) = self
@@ -3185,11 +3185,11 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         }
     }
 
-    fn set_immediates(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]) {
-        if let Err(cause) =
-            self.context
-                .0
-                .render_pass_set_immediates(&mut self.pass, stages, offset, data)
+    fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        if let Err(cause) = self
+            .context
+            .0
+            .render_pass_set_immediates(&mut self.pass, offset, data)
         {
             self.context.handle_error(
                 &self.error_sink,
@@ -3761,11 +3761,10 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
         wgpu_render_bundle_set_vertex_buffer(&mut self.encoder, slot, buffer.id, offset, size)
     }
 
-    fn set_immediates(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]) {
+    fn set_immediates(&mut self, offset: u32, data: &[u8]) {
         unsafe {
             wgpu_render_bundle_set_immediates(
                 &mut self.encoder,
-                stages,
                 offset,
                 data.len().try_into().unwrap(),
                 data.as_ptr(),

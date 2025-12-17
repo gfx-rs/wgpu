@@ -8,8 +8,8 @@ use super::{
 };
 use crate::{
     AddressSpace, Binding, BuiltIn, Constant, Expression, GlobalVariable, Handle, Interpolation,
-    LocalVariable, ResourceBinding, Scalar, ScalarKind, ShaderStage, SwizzleComponent, Type,
-    TypeInner, VectorSize,
+    LocalVariable, Override, ResourceBinding, Scalar, ScalarKind, ShaderStage, SwizzleComponent,
+    Type, TypeInner, VectorSize,
 };
 
 pub struct VarDeclaration<'a, 'key> {
@@ -35,6 +35,7 @@ struct BuiltInData {
 pub enum GlobalOrConstant {
     Global(Handle<GlobalVariable>),
     Constant(Handle<Constant>),
+    Override(Handle<Override>),
 }
 
 impl Frontend {
@@ -481,25 +482,69 @@ impl Frontend {
                 (GlobalOrConstant::Global(handle), lookup)
             }
             StorageQualifier::Const => {
-                let init = init.ok_or_else(|| Error {
-                    kind: ErrorKind::SemanticError("const values must have an initializer".into()),
-                    meta,
-                })?;
+                // Check if this is a specialization constant with constant_id
+                let constant_id = qualifiers.uint_layout_qualifier("constant_id", &mut self.errors);
 
-                let constant = Constant {
-                    name: name.clone(),
-                    ty,
-                    init,
-                };
-                let handle = ctx.module.constants.append(constant, meta);
+                if let Some(id) = constant_id {
+                    // This is a specialization constant - convert to Override
+                    let id: Option<u16> = match id.try_into() {
+                        Ok(v) => Some(v),
+                        Err(_) => {
+                            self.errors.push(Error {
+                                kind: ErrorKind::SemanticError(
+                                    format!(
+                                        "constant_id value {id} is too high (maximum is {})",
+                                        u16::MAX
+                                    )
+                                    .into(),
+                                ),
+                                meta,
+                            });
+                            None
+                        }
+                    };
 
-                let lookup = GlobalLookup {
-                    kind: GlobalLookupKind::Constant(handle, ty),
-                    entry_arg: None,
-                    mutable: false,
-                };
+                    let override_handle = ctx.module.overrides.append(
+                        Override {
+                            name: name.clone(),
+                            id,
+                            ty,
+                            init,
+                        },
+                        meta,
+                    );
 
-                (GlobalOrConstant::Constant(handle), lookup)
+                    let lookup = GlobalLookup {
+                        kind: GlobalLookupKind::Override(override_handle, ty),
+                        entry_arg: None,
+                        mutable: false,
+                    };
+
+                    (GlobalOrConstant::Override(override_handle), lookup)
+                } else {
+                    // Regular constant
+                    let init = init.ok_or_else(|| Error {
+                        kind: ErrorKind::SemanticError(
+                            "const values must have an initializer".into(),
+                        ),
+                        meta,
+                    })?;
+
+                    let constant = Constant {
+                        name: name.clone(),
+                        ty,
+                        init,
+                    };
+                    let handle = ctx.module.constants.append(constant, meta);
+
+                    let lookup = GlobalLookup {
+                        kind: GlobalLookupKind::Constant(handle, ty),
+                        entry_arg: None,
+                        mutable: false,
+                    };
+
+                    (GlobalOrConstant::Constant(handle), lookup)
+                }
             }
             StorageQualifier::AddressSpace(mut space) => {
                 match space {

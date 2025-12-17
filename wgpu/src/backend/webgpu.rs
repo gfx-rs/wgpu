@@ -822,8 +822,21 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
         max_inter_stage_shader_components: wgt::Limits::default().max_inter_stage_shader_components,
 
-        max_task_workgroup_total_count: wgt::Limits::default().max_task_workgroup_total_count,
-        max_task_workgroups_per_dimension: wgt::Limits::default().max_task_workgroups_per_dimension,
+        max_task_mesh_workgroup_total_count: wgt::Limits::default()
+            .max_task_mesh_workgroup_total_count,
+        max_task_mesh_workgroups_per_dimension: wgt::Limits::default()
+            .max_task_mesh_workgroups_per_dimension,
+        max_task_invocations_per_workgroup: wgt::Limits::default()
+            .max_task_invocations_per_workgroup,
+        max_task_invocations_per_dimension: wgt::Limits::default()
+            .max_task_invocations_per_dimension,
+        max_mesh_invocations_per_workgroup: wgt::Limits::default()
+            .max_mesh_invocations_per_workgroup,
+        max_mesh_invocations_per_dimension: wgt::Limits::default()
+            .max_mesh_invocations_per_dimension,
+        max_task_payload_size: wgt::Limits::default().max_task_payload_size,
+        max_mesh_output_vertices: wgt::Limits::default().max_mesh_output_vertices,
+        max_mesh_output_primitives: wgt::Limits::default().max_mesh_output_primitives,
         max_mesh_output_layers: wgt::Limits::default().max_mesh_output_layers,
         max_mesh_multiview_view_count: wgt::Limits::default().max_mesh_multiview_view_count,
 
@@ -3474,8 +3487,8 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         }
     }
 
-    fn set_immediates(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
-        panic!("IMMEDIATES feature must be enabled to call multi_draw_indexed_indirect")
+    fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
+        panic!("IMMEDIATES feature must be enabled to call set_immediates")
     }
 
     fn set_blend_constant(&mut self, color: crate::Color) {
@@ -3780,8 +3793,8 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         }
     }
 
-    fn set_immediates(&mut self, _stages: crate::ShaderStages, _offset: u32, _data: &[u8]) {
-        panic!("IMMEDIATES feature must be enabled to call multi_draw_indexed_indirect")
+    fn set_immediates(&mut self, _offset: u32, _data: &[u8]) {
+        panic!("IMMEDIATES feature must be enabled to call set_immediates")
     }
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {

@@ -11,12 +11,14 @@ mod image;
 mod index;
 mod instructions;
 mod layout;
+mod mesh_shader;
 mod ray;
 mod recyclable;
 mod selection;
 mod subgroup;
 mod writer;
 
+pub use mesh_shader::{MeshReturnInfo, MeshReturnMember};
 pub use spirv::{Capability, SourceLanguage};
 
 use alloc::{string::String, vec::Vec};
@@ -52,6 +54,7 @@ struct LogicalLayout {
     function_definitions: Vec<Word>,
 }
 
+#[derive(Clone)]
 struct Instruction {
     op: spirv::Op,
     wc: u32,
@@ -78,6 +81,8 @@ pub enum Error {
     Override,
     #[error(transparent)]
     ResolveArraySizeError(#[from] crate::proc::ResolveArraySizeError),
+    #[error("module requires SPIRV-{0}.{1}, which isn't supported")]
+    SpirvVersionTooLow(u8, u8),
     #[error("mapping of {0:?} is missing")]
     MissingBinding(crate::ResourceBinding),
 }
@@ -144,6 +149,8 @@ struct ResultMember {
 struct EntryPointContext {
     argument_ids: Vec<Word>,
     results: Vec<ResultMember>,
+    task_payload_variable_id: Option<Word>,
+    mesh_state: Option<MeshReturnInfo>,
 }
 
 #[derive(Default)]
@@ -459,6 +466,7 @@ enum LookupRayQueryFunction {
     ConfirmIntersection,
     GetVertexPositions { committed: bool },
     GetIntersection { committed: bool },
+    Terminate,
 }
 
 #[derive(Debug)]

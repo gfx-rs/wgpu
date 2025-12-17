@@ -10,7 +10,7 @@ on:
 
 env:
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.88"
+  REPO_MSRV: "1.92"
 
   CARGO_INCREMENTAL: false
   CARGO_TERM_COLOR: always
@@ -61,7 +61,7 @@ jobs:
           RUSTC_BOOTSTRAP: 1
 
       - name: Deploy the docs
-        uses: JamesIves/github-pages-deploy-action@v4.7.4
+        uses: JamesIves/github-pages-deploy-action@v4.7.6
         if: github.ref == 'refs/heads/trunk'
         with:
           token: ${{ secrets.WEB_DEPLOY }}

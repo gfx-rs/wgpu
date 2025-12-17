@@ -335,7 +335,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline_layout"),
             bind_group_layouts: &bgl_references,
-            immediates_ranges: &[],
+            immediate_size: 0,
         });
 
     let input_image = ctx.device.create_texture(&wgpu::TextureDescriptor {

@@ -56,7 +56,7 @@ ref_as_ptr = "warn"
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.88"
+rust-version = "1.92"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
@@ -75,8 +75,10 @@ wgpu = { version = "27.0.0", path = "./wgpu", default-features = false, features
     "gles",
     "dx12",
     "metal",
+    "vulkan-portability",
+    "angle",
     "static-dxc",
-    "noop",       # This should be removed if we ever have non-test crates that depend on wgpu
+    "noop",               # This should be removed if we ever have non-test crates that depend on wgpu
 ] }
 wgpu-core = { version = "27.0.0", path = "./wgpu-core" }
 wgpu-hal = { version = "27.0.0", path = "./wgpu-hal" }
@@ -117,7 +119,7 @@ document-features = "0.2.10"
 encase = "0.12"
 env_logger = { version = "0.11", default-features = false }
 fern = "0.7"
-flume = "0.11"
+flume = "0.12"
 futures-lite = "2"
 getrandom = "0.3"
 glam = "0.30.7"

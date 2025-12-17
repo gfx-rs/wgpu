@@ -202,7 +202,7 @@ impl Player {
                 let resolved_desc = wgc::binding_model::ResolvedPipelineLayoutDescriptor {
                     label: desc.label.clone(),
                     bind_group_layouts: Cow::from(&bind_group_layouts),
-                    immediates_ranges: Cow::Borrowed(&*desc.immediates_ranges),
+                    immediate_size: desc.immediate_size,
                 };
 
                 let pipeline_layout = device
@@ -1058,12 +1058,10 @@ impl Player {
             },
             C::SetScissor(rect) => C::SetScissor(rect),
             C::SetImmediate {
-                stages,
                 offset,
                 size_bytes,
                 values_offset,
             } => C::SetImmediate {
-                stages,
                 offset,
                 size_bytes,
                 values_offset,

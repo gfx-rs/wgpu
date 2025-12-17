@@ -586,6 +586,7 @@ impl PhysicalDeviceFeatures {
         instance: &ash::Instance,
         phd: vk::PhysicalDevice,
         caps: &PhysicalDeviceProperties,
+        queue_props: &vk::QueueFamilyProperties,
     ) -> (wgt::Features, wgt::DownlevelFlags) {
         use wgt::{DownlevelFlags as Df, Features as F};
         let mut features = F::empty()
@@ -593,9 +594,6 @@ impl PhysicalDeviceFeatures {
             | F::IMMEDIATES
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::ADDRESS_MODE_CLAMP_TO_ZERO
-            | F::TIMESTAMP_QUERY
-            | F::TIMESTAMP_QUERY_INSIDE_ENCODERS
-            | F::TIMESTAMP_QUERY_INSIDE_PASSES
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE
             | F::PIPELINE_CACHE
@@ -637,6 +635,13 @@ impl PhysicalDeviceFeatures {
         );
         dl_flags.set(Df::DEPTH_BIAS_CLAMP, self.core.depth_bias_clamp != 0);
 
+        features.set(
+            F::TIMESTAMP_QUERY
+                | F::TIMESTAMP_QUERY_INSIDE_ENCODERS
+                | F::TIMESTAMP_QUERY_INSIDE_PASSES,
+            // Vulkan strictly defines this as either 36-64, or zero.
+            queue_props.timestamp_valid_bits >= 36,
+        );
         features.set(
             F::INDIRECT_FIRST_INSTANCE,
             self.core.draw_indirect_first_instance != 0,
@@ -1259,19 +1264,40 @@ impl PhysicalDeviceProperties {
             .min(limits.max_compute_work_group_count[1])
             .min(limits.max_compute_work_group_count[2]);
         let (
-            max_task_workgroup_total_count,
-            max_task_workgroups_per_dimension,
-            max_mesh_multiview_view_count,
-            max_mesh_output_layers,
-        ) = match self.mesh_shader {
-            Some(m) => (
-                m.max_task_work_group_total_count,
-                m.max_task_work_group_count.into_iter().min().unwrap(),
-                m.max_mesh_multiview_view_count,
-                m.max_mesh_output_layers,
-            ),
-            None => (0, 0, 0, 0),
-        };
+            mut max_task_mesh_workgroup_total_count,
+            mut max_task_mesh_workgroups_per_dimension,
+            mut max_task_invocations_per_workgroup,
+            mut max_task_invocations_per_dimension,
+            mut max_mesh_invocations_per_workgroup,
+            mut max_mesh_invocations_per_dimension,
+            mut max_task_payload_size,
+            mut max_mesh_output_vertices,
+            mut max_mesh_output_primitives,
+            mut max_mesh_output_layers,
+            mut max_mesh_multiview_view_count,
+        ) = Default::default();
+        if let Some(m) = self.mesh_shader {
+            max_task_mesh_workgroup_total_count = m
+                .max_task_work_group_total_count
+                .min(m.max_mesh_work_group_total_count);
+            max_task_mesh_workgroups_per_dimension = m
+                .max_task_work_group_count
+                .into_iter()
+                .chain(m.max_mesh_work_group_count)
+                .min()
+                .unwrap();
+            max_task_invocations_per_workgroup = m.max_task_work_group_invocations;
+            max_task_invocations_per_dimension =
+                m.max_task_work_group_size.into_iter().min().unwrap();
+            max_mesh_invocations_per_workgroup = m.max_mesh_work_group_invocations;
+            max_mesh_invocations_per_dimension =
+                m.max_mesh_work_group_size.into_iter().min().unwrap();
+            max_task_payload_size = m.max_task_payload_size;
+            max_mesh_output_vertices = m.max_mesh_output_vertices;
+            max_mesh_output_primitives = m.max_mesh_output_primitives;
+            max_mesh_output_layers = m.max_mesh_output_layers;
+            max_mesh_multiview_view_count = m.max_mesh_multiview_view_count;
+        }
 
         // Prevent very large buffers on mesa and most android devices, and in all cases
         // don't risk confusing JS by exceeding the range of a double.
@@ -1328,14 +1354,12 @@ impl PhysicalDeviceProperties {
             .map(|a| a.max_multiview_view_count.min(32))
             .unwrap_or(0);
 
-        wgt::Limits {
+        crate::auxil::apply_hal_limits(wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
             max_texture_dimension_2d: limits.max_image_dimension2_d,
             max_texture_dimension_3d: limits.max_image_dimension3_d,
             max_texture_array_layers: limits.max_image_array_layers,
-            max_bind_groups: limits
-                .max_bound_descriptor_sets
-                .min(crate::MAX_BIND_GROUPS as u32),
+            max_bind_groups: limits.max_bound_descriptor_sets,
             max_bindings_per_bind_group: wgt::Limits::default().max_bindings_per_bind_group,
             max_dynamic_uniform_buffers_per_pipeline_layout: limits
                 .max_descriptor_set_uniform_buffers_dynamic,
@@ -1354,9 +1378,7 @@ impl PhysicalDeviceProperties {
             max_storage_buffer_binding_size: limits
                 .max_storage_buffer_range
                 .min(crate::auxil::MAX_I32_BINDING_SIZE),
-            max_vertex_buffers: limits
-                .max_vertex_input_bindings
-                .min(crate::MAX_VERTEX_BUFFERS as u32),
+            max_vertex_buffers: limits.max_vertex_input_bindings,
             max_vertex_attributes: limits.max_vertex_input_attributes,
             max_vertex_buffer_array_stride: limits.max_vertex_input_binding_stride,
             max_immediate_size: limits.max_push_constants_size,
@@ -1365,9 +1387,7 @@ impl PhysicalDeviceProperties {
             max_inter_stage_shader_components: limits
                 .max_vertex_output_components
                 .min(limits.max_fragment_input_components),
-            max_color_attachments: limits
-                .max_color_attachments
-                .min(crate::MAX_COLOR_ATTACHMENTS as u32),
+            max_color_attachments: limits.max_color_attachments,
             max_color_attachment_bytes_per_sample,
             max_compute_workgroup_storage_size: limits.max_compute_shared_memory_size,
             max_compute_invocations_per_workgroup: limits.max_compute_work_group_invocations,
@@ -1378,10 +1398,19 @@ impl PhysicalDeviceProperties {
             max_buffer_size,
             max_non_sampler_bindings: u32::MAX,
 
-            max_task_workgroup_total_count,
-            max_task_workgroups_per_dimension,
-            max_mesh_multiview_view_count,
+            max_task_mesh_workgroup_total_count,
+            max_task_mesh_workgroups_per_dimension,
+            max_task_invocations_per_workgroup,
+            max_task_invocations_per_dimension,
+
+            max_mesh_invocations_per_workgroup,
+            max_mesh_invocations_per_dimension,
+
+            max_task_payload_size,
+            max_mesh_output_vertices,
+            max_mesh_output_primitives,
             max_mesh_output_layers,
+            max_mesh_multiview_view_count,
 
             max_blas_primitive_count,
             max_blas_geometry_count,
@@ -1389,7 +1418,7 @@ impl PhysicalDeviceProperties {
             max_acceleration_structures_per_shader_stage,
 
             max_multiview_view_count,
-        }
+        })
     }
 
     /// Return a `wgpu_hal::Alignments` structure describing this adapter.
@@ -1813,8 +1842,6 @@ impl super::Instance {
                 .unwrap_or(wgt::MAXIMUM_SUBGROUP_MAX_SIZE),
             transient_saves_memory: supports_lazily_allocated,
         };
-        let (available_features, mut downlevel_flags) =
-            phd_features.to_wgpu(&self.shared.raw, phd, &phd_capabilities);
         let mut workarounds = super::Workarounds::empty();
         {
             // TODO: only enable for particular devices
@@ -1828,15 +1855,6 @@ impl super::Instance {
                 phd_capabilities.properties.vendor_id == db::nvidia::VENDOR,
             );
         };
-
-        if info.driver == "llvmpipe" {
-            // The `F16_IN_F32` instructions do not normally require native `F16` support, but on
-            // llvmpipe, they do.
-            downlevel_flags.set(
-                wgt::DownlevelFlags::SHADER_F16_IN_F32,
-                available_features.contains(wgt::Features::SHADER_F16),
-            );
-        }
 
         if let Some(driver) = phd_capabilities.driver {
             if driver.conformance_version.major == 0 {
@@ -1881,11 +1899,36 @@ impl super::Instance {
                 .raw
                 .get_physical_device_queue_family_properties(phd)
         };
-        let queue_flags = queue_families.first()?.queue_flags;
+        let queue_family_properties = queue_families.first()?;
+        let queue_flags = queue_family_properties.queue_flags;
         if !queue_flags.contains(vk::QueueFlags::GRAPHICS) {
             log::debug!("The first queue only exposes {queue_flags:?}");
             return None;
         }
+
+        let (available_features, mut downlevel_flags) = phd_features.to_wgpu(
+            &self.shared.raw,
+            phd,
+            &phd_capabilities,
+            queue_family_properties,
+        );
+
+        if info.driver == "llvmpipe" {
+            // The `F16_IN_F32` instructions do not normally require native `F16` support, but on
+            // llvmpipe, they do.
+            downlevel_flags.set(
+                wgt::DownlevelFlags::SHADER_F16_IN_F32,
+                available_features.contains(wgt::Features::SHADER_F16),
+            );
+        }
+
+        let has_robust_buffer_access2 = phd_features
+            .robustness2
+            .as_ref()
+            .map(|r| r.robust_buffer_access2 == 1)
+            .unwrap_or_default();
+
+        let alignments = phd_capabilities.to_hal_alignments(has_robust_buffer_access2);
 
         let private_caps = super::PrivateCapabilities {
             image_view_usage: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
@@ -1918,6 +1961,7 @@ impl super::Instance {
                 depth_stencil_required_flags(),
             ),
             multi_draw_indirect: phd_features.core.multi_draw_indirect != 0,
+            max_draw_indirect_count: phd_capabilities.properties.limits.max_draw_indirect_count,
             non_coherent_map_mask: phd_capabilities.properties.limits.non_coherent_atom_size - 1,
             can_present: true,
             //TODO: make configurable
@@ -1928,11 +1972,7 @@ impl super::Instance {
                     .image_robustness
                     .is_some_and(|ext| ext.robust_image_access != 0),
             },
-            robust_buffer_access2: phd_features
-                .robustness2
-                .as_ref()
-                .map(|r| r.robust_buffer_access2 == 1)
-                .unwrap_or_default(),
+            robust_buffer_access2: has_robust_buffer_access2,
             robust_image_access2: phd_features
                 .robustness2
                 .as_ref()
@@ -1957,10 +1997,11 @@ impl super::Instance {
                 .multiview
                 .map(|a| a.max_multiview_instance_index)
                 .unwrap_or(0),
+            scratch_buffer_alignment: alignments.ray_tracing_scratch_buffer_alignment,
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
-            alignments: phd_capabilities.to_hal_alignments(private_caps.robust_buffer_access2),
+            alignments,
             downlevel: wgt::DownlevelCapabilities {
                 flags: downlevel_flags,
                 limits: wgt::DownlevelLimits {},

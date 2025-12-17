@@ -138,12 +138,6 @@ impl<W: Write> Writer<W> {
     }
 
     pub fn write(&mut self, module: &Module, info: &valid::ModuleInfo) -> BackendResult {
-        if !module.overrides.is_empty() {
-            return Err(Error::Unimplemented(
-                "Pipeline constants are not yet supported for this back-end".to_string(),
-            ));
-        }
-
         self.reset(module);
 
         // Write all `enable` declarations
@@ -171,6 +165,16 @@ impl<W: Write> Writer<W> {
             self.write_global_constant(module, handle)?;
             // Add extra newline for readability on last iteration
             if constants.peek().is_none() {
+                writeln!(self.out)?;
+            }
+        }
+
+        // Write all overrides
+        let mut overrides = module.overrides.iter().peekable();
+        while let Some((handle, _)) = overrides.next() {
+            self.write_override(module, handle)?;
+            // Add extra newline for readability on last iteration
+            if overrides.peek().is_none() {
                 writeln!(self.out)?;
             }
         }
@@ -1286,6 +1290,9 @@ impl<W: Write> Writer<W> {
                 write_expression(self, value)?;
                 write!(self.out, ")")?;
             }
+            Expression::Override(handle) => {
+                write!(self.out, "{}", self.names[&NameKey::Override(handle)])?;
+            }
             _ => unreachable!(),
         }
 
@@ -1336,7 +1343,9 @@ impl<W: Write> Writer<W> {
                     |writer, expr| writer.write_expr(module, expr, func_ctx),
                 )?;
             }
-            Expression::Override(_) => unreachable!(),
+            Expression::Override(handle) => {
+                write!(self.out, "{}", self.names[&NameKey::Override(handle)])?;
+            }
             Expression::FunctionArgument(pos) => {
                 let name_key = func_ctx.argument_key(pos);
                 let name = &self.names[&name_key];
@@ -1851,6 +1860,38 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
+    /// Helper method used to write overrides
+    ///
+    /// # Notes
+    /// Ends in a newline
+    fn write_override(
+        &mut self,
+        module: &Module,
+        handle: Handle<crate::Override>,
+    ) -> BackendResult {
+        let override_ = &module.overrides[handle];
+        let name = &self.names[&NameKey::Override(handle)];
+
+        // Write @id attribute if present
+        if let Some(id) = override_.id {
+            write!(self.out, "@id({id}) ")?;
+        }
+
+        // Write override declaration
+        write!(self.out, "override {name}: ")?;
+        self.write_type(module, override_.ty)?;
+
+        // Write initializer if present
+        if let Some(init) = override_.init {
+            write!(self.out, " = ")?;
+            self.write_const_expression(module, init, &module.global_expressions)?;
+        }
+
+        writeln!(self.out, ";")?;
+
+        Ok(())
+    }
+
     // See https://github.com/rust-lang/rust-clippy/issues/4979.
     #[allow(clippy::missing_const_for_fn)]
     pub fn finish(self) -> W {
@@ -1876,8 +1917,12 @@ impl TypeContext for WriterTypeContext<'_> {
         unreachable!("the WGSL back end should always provide type handles");
     }
 
-    fn write_override<W: Write>(&self, _: Handle<crate::Override>, _: &mut W) -> core::fmt::Result {
-        unreachable!("overrides should be validated out");
+    fn write_override<W: Write>(
+        &self,
+        handle: Handle<crate::Override>,
+        out: &mut W,
+    ) -> core::fmt::Result {
+        write!(out, "{}", self.names[&NameKey::Override(handle)])
     }
 
     fn write_non_wgsl_inner<W: Write>(&self, _: &TypeInner, _: &mut W) -> core::fmt::Result {

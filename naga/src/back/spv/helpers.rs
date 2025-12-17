@@ -1,5 +1,6 @@
 use alloc::{vec, vec::Vec};
 
+use arrayvec::ArrayVec;
 use spirv::Word;
 
 use crate::{Handle, UniqueArena};
@@ -54,7 +55,7 @@ pub(super) const fn map_storage_class(space: crate::AddressSpace) -> spirv::Stor
         crate::AddressSpace::Uniform => spirv::StorageClass::Uniform,
         crate::AddressSpace::WorkGroup => spirv::StorageClass::Workgroup,
         crate::AddressSpace::Immediate => spirv::StorageClass::PushConstant,
-        crate::AddressSpace::TaskPayload => unreachable!(),
+        crate::AddressSpace::TaskPayload => spirv::StorageClass::TaskPayloadWorkgroupEXT,
     }
 }
 
@@ -153,4 +154,15 @@ impl StrUnstable for str {
             unsafe { lower_bound + new_index.unwrap_unchecked() }
         }
     }
+}
+
+pub enum BindingDecorations {
+    BuiltIn(spirv::BuiltIn, ArrayVec<spirv::Decoration, 2>),
+    Location {
+        location: u32,
+        others: ArrayVec<spirv::Decoration, 5>,
+        /// If this is `Some`, use Decoration::Index with blend_src as an operand
+        blend_src: Option<Word>,
+    },
+    None,
 }

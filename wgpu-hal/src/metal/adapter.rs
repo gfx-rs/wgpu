@@ -50,11 +50,10 @@ impl crate::Adapter for super::Adapter {
         let queue = self
             .shared
             .device
-            .lock()
             .new_command_queue_with_max_command_buffer_count(MAX_COMMAND_BUFFERS);
 
         // Acquiring the meaning of timestamp ticks is hard with Metal!
-        // The only thing there is is a method correlating cpu & gpu timestamps (`device.sample_timestamps`).
+        // The only thing there is a method correlating cpu & gpu timestamps (`device.sample_timestamps`).
         // Users are supposed to call this method twice and calculate the difference,
         // see "Converting GPU Timestamps into CPU Time":
         // https://developer.apple.com/documentation/metal/gpu_counters_and_counter_sample_buffers/converting_gpu_timestamps_into_cpu_time
@@ -72,7 +71,7 @@ impl crate::Adapter for super::Adapter {
         // Based on:
         // * https://github.com/gfx-rs/wgpu/pull/2528
         // * https://github.com/gpuweb/gpuweb/issues/1325#issuecomment-761041326
-        let timestamp_period = if self.shared.device.lock().name().starts_with("Intel") {
+        let timestamp_period = if self.shared.device.name().starts_with("Intel") {
             83.333
         } else {
             // Known for Apple Silicon (at least M1 & M2, iPad Pro 2018) and AMD GPUs.
@@ -121,7 +120,7 @@ impl crate::Adapter for super::Adapter {
             Tfc::empty()
         };
         let is_not_apple1x = super::PrivateCapabilities::supports_any(
-            self.shared.device.lock().as_ref(),
+            self.shared.device.as_ref(),
             &[
                 MTLFeatureSet::iOS_GPUFamily2_v1,
                 MTLFeatureSet::macOS_GPUFamily1_v1,
@@ -591,6 +590,13 @@ impl super::PrivateCapabilities {
 
         let is_virtual = device.name().to_lowercase().contains("virtual");
 
+        let mesh_shaders = family_check
+                && (device.supports_family(MTLGPUFamily::Metal3)
+                    || device.supports_family(MTLGPUFamily::Apple7)
+                    || device.supports_family(MTLGPUFamily::Mac2))
+                    // Mesh shaders don't work on virtual devices even if they should be supported. CI thing
+                && !is_virtual;
+
         let msl_version = if version.at_least((14, 0), (17, 0), (17, 0), (1, 0), os_type) {
             MTLLanguageVersion::V3_1
         } else if version.at_least((13, 0), (16, 0), (16, 0), (1, 0), os_type) {
@@ -956,13 +962,6 @@ impl super::PrivateCapabilities {
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             supports_memoryless_storage: metal4
                 || (family_check && device.supports_family(MTLGPUFamily::Apple2)),
-            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
-            mesh_shaders: family_check
-                && (device.supports_family(MTLGPUFamily::Metal3)
-                    || device.supports_family(MTLGPUFamily::Apple7)
-                    || device.supports_family(MTLGPUFamily::Mac2))
-                    // Mesh shaders don't work on virtual devices even if they should be supported. CI thing
-                && !is_virtual,
             supported_vertex_amplification_factor: {
                 let mut factor = 1;
                 // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=8
@@ -984,6 +983,10 @@ impl super::PrivateCapabilities {
                 }
                 factor as u32
             },
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
+            mesh_shaders,
+            max_mesh_task_workgroup_count: if mesh_shaders { 1024 } else { 0 },
+            max_task_payload_size: if mesh_shaders { 16384 - 32 } else { 0 },
         }
     }
 
@@ -1137,72 +1140,99 @@ impl super::PrivateCapabilities {
         downlevel
             .flags
             .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
+
         let base = wgt::Limits::default();
-        crate::Capabilities {
-            limits: wgt::Limits {
-                max_texture_dimension_1d: self.max_texture_size as u32,
-                max_texture_dimension_2d: self.max_texture_size as u32,
-                max_texture_dimension_3d: self.max_texture_3d_size as u32,
-                max_texture_array_layers: self.max_texture_layers as u32,
-                max_bind_groups: 8,
-                max_bindings_per_bind_group: 65535,
-                max_dynamic_uniform_buffers_per_pipeline_layout: base
-                    .max_dynamic_uniform_buffers_per_pipeline_layout,
-                max_dynamic_storage_buffers_per_pipeline_layout: base
-                    .max_dynamic_storage_buffers_per_pipeline_layout,
-                max_sampled_textures_per_shader_stage: self.max_textures_per_stage,
-                max_samplers_per_shader_stage: self.max_samplers_per_stage,
-                max_storage_buffers_per_shader_stage: self.max_buffers_per_stage,
-                max_storage_textures_per_shader_stage: self.max_textures_per_stage,
-                max_uniform_buffers_per_shader_stage: self.max_buffers_per_stage,
-                max_binding_array_elements_per_shader_stage: self.max_binding_array_elements,
-                max_binding_array_sampler_elements_per_shader_stage: self
-                    .max_sampler_binding_array_elements,
-                max_uniform_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32,
-                max_storage_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32,
-                max_vertex_buffers: self.max_vertex_buffers,
-                max_vertex_attributes: 31,
-                max_vertex_buffer_array_stride: base.max_vertex_buffer_array_stride,
-                max_immediate_size: 0x1000,
-                min_uniform_buffer_offset_alignment: self.buffer_alignment as u32,
-                min_storage_buffer_offset_alignment: self.buffer_alignment as u32,
-                max_inter_stage_shader_components: self.max_varying_components,
-                max_color_attachments: (self.max_color_render_targets as u32)
-                    .min(crate::MAX_COLOR_ATTACHMENTS as u32),
-                max_color_attachment_bytes_per_sample: self.max_color_attachment_bytes_per_sample
-                    as u32,
-                max_compute_workgroup_storage_size: self.max_total_threadgroup_memory,
-                max_compute_invocations_per_workgroup: self.max_threads_per_group,
-                max_compute_workgroup_size_x: self.max_threads_per_group,
-                max_compute_workgroup_size_y: self.max_threads_per_group,
-                max_compute_workgroup_size_z: self.max_threads_per_group,
-                max_compute_workgroups_per_dimension: 0xFFFF,
-                max_buffer_size: self.max_buffer_size,
-                max_non_sampler_bindings: u32::MAX,
+        // Be careful adjusting limits here. The `AdapterShared` stores the
+        // original `PrivateCapabilities`, so code could accidentally use
+        // the wrong value.
 
-                // See https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf, Maximum threadgroups per mesh shader grid
-                max_task_workgroup_total_count: 1024,
-                max_task_workgroups_per_dimension: 1024,
-                max_mesh_multiview_view_count: 0,
-                max_mesh_output_layers: self.max_texture_layers as u32,
+        let limits = wgt::Limits {
+            max_texture_dimension_1d: self.max_texture_size as u32,
+            max_texture_dimension_2d: self.max_texture_size as u32,
+            max_texture_dimension_3d: self.max_texture_3d_size as u32,
+            max_texture_array_layers: self.max_texture_layers as u32,
+            max_bind_groups: 8,
+            max_bindings_per_bind_group: 65535,
+            max_dynamic_uniform_buffers_per_pipeline_layout: base
+                .max_dynamic_uniform_buffers_per_pipeline_layout,
+            max_dynamic_storage_buffers_per_pipeline_layout: base
+                .max_dynamic_storage_buffers_per_pipeline_layout,
+            max_sampled_textures_per_shader_stage: self.max_textures_per_stage,
+            max_samplers_per_shader_stage: self.max_samplers_per_stage,
+            max_storage_buffers_per_shader_stage: self.max_buffers_per_stage,
+            max_storage_textures_per_shader_stage: self.max_textures_per_stage,
+            max_uniform_buffers_per_shader_stage: self.max_buffers_per_stage,
+            max_binding_array_elements_per_shader_stage: self.max_binding_array_elements,
+            max_binding_array_sampler_elements_per_shader_stage: self
+                .max_sampler_binding_array_elements,
+            // Note: any adjustment here will not be reflected in the stored `PrivateCapabilities`.
+            max_uniform_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32,
+            max_storage_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64) as u32
+                & !(wgt::STORAGE_BINDING_SIZE_ALIGNMENT - 1),
+            max_vertex_buffers: self.max_vertex_buffers,
+            max_vertex_attributes: 31,
+            max_vertex_buffer_array_stride: base.max_vertex_buffer_array_stride,
+            max_immediate_size: 0x1000,
+            min_uniform_buffer_offset_alignment: self.buffer_alignment as u32,
+            min_storage_buffer_offset_alignment: self.buffer_alignment as u32,
+            max_inter_stage_shader_components: self.max_varying_components,
+            max_color_attachments: self.max_color_render_targets as u32,
+            max_color_attachment_bytes_per_sample: self.max_color_attachment_bytes_per_sample
+                as u32,
+            max_compute_workgroup_storage_size: self.max_total_threadgroup_memory,
+            max_compute_invocations_per_workgroup: self.max_threads_per_group,
+            max_compute_workgroup_size_x: self.max_threads_per_group,
+            max_compute_workgroup_size_y: self.max_threads_per_group,
+            max_compute_workgroup_size_z: self.max_threads_per_group,
+            max_compute_workgroups_per_dimension: 0xFFFF,
+            max_buffer_size: self.max_buffer_size,
+            max_non_sampler_bindings: u32::MAX,
 
-                max_blas_primitive_count: 0, // When added: 2^28 from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits
-                max_blas_geometry_count: 0,  // When added: 2^24
-                max_tlas_instance_count: 0,  // When added: 2^24
-                // Unsure what this will be when added: acceleration structures count as a buffer so
-                // it may be worth using argument buffers for this all acceleration structures, then
-                // there will be no limit.
-                // From 2.17.7 in https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
-                // > [Acceleration structures] are opaque objects that can be bound directly using
-                // buffer binding points or via argument buffers
-                max_acceleration_structures_per_shader_stage: 0,
+            max_blas_primitive_count: 0, // When added: 2^28 from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits
+            max_blas_geometry_count: 0,  // When added: 2^24
+            max_tlas_instance_count: 0,  // When added: 2^24
+            // Unsure what this will be when added: acceleration structures count as a buffer so
+            // it may be worth using argument buffers for this all acceleration structures, then
+            // there will be no limit.
+            // From 2.17.7 in https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf
+            // > [Acceleration structures] are opaque objects that can be bound directly using
+            // buffer binding points or via argument buffers
+            max_acceleration_structures_per_shader_stage: 0,
 
-                max_multiview_view_count: if self.supported_vertex_amplification_factor > 1 {
-                    self.supported_vertex_amplification_factor
-                } else {
-                    0
-                },
+            max_multiview_view_count: if self.supported_vertex_amplification_factor > 1 {
+                self.supported_vertex_amplification_factor
+            } else {
+                0
             },
+
+            // Should be not too large
+            max_task_mesh_workgroup_total_count: self.max_mesh_task_workgroup_count,
+            max_task_mesh_workgroups_per_dimension: self.max_mesh_task_workgroup_count,
+            max_task_invocations_per_workgroup: if self.mesh_shaders { 1024 } else { 0 },
+            max_task_invocations_per_dimension: if self.mesh_shaders { 1024 } else { 0 },
+            max_mesh_invocations_per_workgroup: if self.mesh_shaders { 1024 } else { 0 },
+            max_mesh_invocations_per_dimension: if self.mesh_shaders { 1024 } else { 0 },
+            // Using certain variables or debuggers can reduce the size by 32 bytes
+            max_task_payload_size: self.max_task_payload_size,
+            max_mesh_output_vertices: 256,
+            max_mesh_output_primitives: 256,
+            max_mesh_output_layers: self.max_texture_layers as u32,
+            max_mesh_multiview_view_count: 0,
+        };
+
+        // Since a bunch of the limits are duplicated between `Limits` and
+        // `PrivateCapabilities`, reducing the limits at this point could make
+        // things inconsistent and lead to confusion. Make sure that doesn't
+        // happen.
+        debug_assert!(
+            crate::auxil::apply_hal_limits(limits.clone()) == limits,
+            "Limits were modified by apply_hal_limits\nOriginal:\n{:#?}\nModified:\n{:#?}",
+            limits,
+            crate::auxil::apply_hal_limits(limits.clone())
+        );
+
+        crate::Capabilities {
+            limits,
             alignments: crate::Alignments {
                 buffer_copy_offset: wgt::BufferSize::new(self.buffer_alignment).unwrap(),
                 buffer_copy_pitch: wgt::BufferSize::new(4).unwrap(),

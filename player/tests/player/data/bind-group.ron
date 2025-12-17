@@ -39,7 +39,7 @@
             bind_group_layouts: [
                 PointerId(0x10),
             ],
-            immediates_ranges: [],
+            immediate_size: 0,
         )),
         CreateShaderModule(
             id: PointerId(0x10),
