@@ -316,6 +316,8 @@ struct PrivateCapabilities {
     float_atomics: bool,
     supports_shared_event: bool,
     mesh_shaders: bool,
+    max_mesh_task_workgroup_count: u32,
+    max_task_payload_size: u32,
     supported_vertex_amplification_factor: u32,
     shader_barycentrics: bool,
     supports_memoryless_storage: bool,

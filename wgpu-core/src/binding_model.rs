@@ -933,7 +933,15 @@ crate::impl_storage_item!(PipelineLayout);
 pub struct BufferBinding<B = BufferId> {
     pub buffer: B,
     pub offset: wgt::BufferAddress,
-    pub size: Option<wgt::BufferSize>,
+
+    /// Size of the binding. If `None`, the binding spans from `offset` to the
+    /// end of the buffer.
+    ///
+    /// We use `BufferAddress` to allow a size of zero on this `wgpu_core` type,
+    /// because JavaScript bindings cannot readily express `Option<NonZeroU64>`.
+    /// The `wgpu` API uses `Option<BufferSize>` (i.e. `NonZeroU64`) for this
+    /// field.
+    pub size: Option<wgt::BufferAddress>,
 }
 
 pub type ResolvedBufferBinding = BufferBinding<Arc<Buffer>>;

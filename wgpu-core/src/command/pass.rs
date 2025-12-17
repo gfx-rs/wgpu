@@ -202,18 +202,10 @@ pub(super) fn change_pipeline_layout<E, F: FnOnce()>(
 where
     E: From<DestroyedResourceError>,
 {
-    if state.binder.pipeline_layout.is_none()
-        || !state
-            .binder
-            .pipeline_layout
-            .as_ref()
-            .unwrap()
-            .is_equal(pipeline_layout)
+    if state
+        .binder
+        .change_pipeline_layout(pipeline_layout, late_sized_buffer_groups)
     {
-        state
-            .binder
-            .change_pipeline_layout(pipeline_layout, late_sized_buffer_groups);
-
         f();
 
         super::immediates_clear(

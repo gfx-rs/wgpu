@@ -388,6 +388,12 @@ struct PrivateCapabilities {
     /// if you are drawing more than 128 million instances. We still want to avoid
     /// undefined behavior in this situation, so we panic if the limit is violated.
     multiview_instance_index_limit: u32,
+
+    /// BufferUsages::ACCELERATION_STRUCTURE_SCRATCH allows usage as a scratch buffer.
+    /// Vulkan has no way to specify this as a usage, and it maps to other usages, but
+    /// these usages do not have as high of an alignment requirement using the buffer as
+    ///  a scratch buffer when building acceleration structures.
+    scratch_buffer_alignment: u32,
 }
 
 bitflags::bitflags!(

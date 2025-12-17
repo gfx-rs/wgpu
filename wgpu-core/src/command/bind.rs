@@ -7,7 +7,7 @@ use thiserror::Error;
 use crate::{
     binding_model::{BindGroup, LateMinBufferBindingSizeMismatch, PipelineLayout},
     pipeline::LateSizedBufferGroup,
-    resource::{Labeled, ResourceErrorIdent},
+    resource::{Labeled, ParentDevice, ResourceErrorIdent},
 };
 
 mod compat {
@@ -336,12 +336,20 @@ impl Binder {
         }
     }
 
+    /// Returns `true` if the pipeline layout has been changed, i.e. if the
+    /// new PL was not the same as the old PL.
     pub(super) fn change_pipeline_layout<'a>(
         &'a mut self,
         new: &Arc<PipelineLayout>,
         late_sized_buffer_groups: &[LateSizedBufferGroup],
-    ) {
-        let old_id_opt = self.pipeline_layout.replace(new.clone());
+    ) -> bool {
+        if let Some(old) = self.pipeline_layout.as_ref() {
+            if old.is_equal(new) {
+                return false;
+            }
+        }
+
+        let old = self.pipeline_layout.replace(new.clone());
 
         self.manager.update_expectations(&new.bind_group_layouts);
 
@@ -372,12 +380,14 @@ impl Binder {
             }
         }
 
-        if let Some(old) = old_id_opt {
+        if let Some(old) = old {
             // root constants are the base compatibility property
             if old.immediate_size != new.immediate_size {
                 self.manager.update_start_index(0);
             }
         }
+
+        true
     }
 
     pub(super) fn assign_group<'a>(

@@ -1,2 +1,6 @@
 capabilities = "MESH_SHADER | MESH_SHADER_POINT_TOPOLOGY"
-targets = "IR | ANALYSIS"
+targets = "SPIRV"
+
+[spv]
+version = [1, 4]
+capabilities = ["MeshShadingEXT"]

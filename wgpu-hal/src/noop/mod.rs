@@ -98,6 +98,7 @@ impl crate::Instance for Context {
             name: _,
             flags: _,
             memory_budget_thresholds: _,
+            telemetry: _,
         } = *desc;
         if enable {
             Ok(Context)
@@ -194,10 +195,17 @@ pub const CAPABILITIES: crate::Capabilities = {
             max_immediate_size: ALLOC_MAX_U32,
             max_non_sampler_bindings: ALLOC_MAX_U32,
 
-            max_task_workgroup_total_count: ALLOC_MAX_U32,
-            max_task_workgroups_per_dimension: ALLOC_MAX_U32,
-            max_mesh_multiview_view_count: ALLOC_MAX_U32,
+            max_task_mesh_workgroup_total_count: ALLOC_MAX_U32,
+            max_task_mesh_workgroups_per_dimension: ALLOC_MAX_U32,
+            max_task_invocations_per_workgroup: ALLOC_MAX_U32,
+            max_task_invocations_per_dimension: ALLOC_MAX_U32,
+            max_mesh_invocations_per_workgroup: ALLOC_MAX_U32,
+            max_mesh_invocations_per_dimension: ALLOC_MAX_U32,
+            max_task_payload_size: ALLOC_MAX_U32,
+            max_mesh_output_vertices: ALLOC_MAX_U32,
+            max_mesh_output_primitives: ALLOC_MAX_U32,
             max_mesh_output_layers: ALLOC_MAX_U32,
+            max_mesh_multiview_view_count: ALLOC_MAX_U32,
 
             max_blas_primitive_count: ALLOC_MAX_U32,
             max_blas_geometry_count: ALLOC_MAX_U32,

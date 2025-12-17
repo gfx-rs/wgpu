@@ -112,6 +112,7 @@ impl crate::Instance for super::Instance {
             memory_budget_thresholds: desc.memory_budget_thresholds,
             compiler_container: Arc::new(compiler_container),
             options: desc.backend_options.dx12.clone(),
+            telemetry: desc.telemetry,
         })
     }
 
@@ -164,6 +165,7 @@ impl crate::Instance for super::Instance {
                     self.memory_budget_thresholds,
                     self.compiler_container.clone(),
                     self.options.clone(),
+                    self.telemetry,
                 )
             })
             .collect()

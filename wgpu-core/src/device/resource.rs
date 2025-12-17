@@ -2794,7 +2794,19 @@ impl Device {
 
         buffer.check_usage(pub_usage)?;
 
-        let (bb, bind_size) = buffer.binding(bb.offset, bb.size, snatch_guard)?;
+        let req_size = match bb.size.map(wgt::BufferSize::new) {
+            // Requested a non-zero size
+            Some(non_zero @ Some(_)) => non_zero,
+            // Requested size not specified
+            None => None,
+            // Requested zero size
+            Some(None) => {
+                return Err(binding_model::CreateBindGroupError::BindingZeroSize(
+                    buffer.error_ident(),
+                ))
+            }
+        };
+        let (bb, bind_size) = buffer.binding(bb.offset, req_size, snatch_guard)?;
 
         if matches!(binding_ty, wgt::BufferBindingType::Storage { .. })
             && bind_size % u64::from(wgt::STORAGE_BINDING_SIZE_ALIGNMENT) != 0
@@ -3971,7 +3983,7 @@ impl Device {
                         self.require_features(wgt::Features::VERTEX_ATTRIBUTE_64BIT)?;
                     }
 
-                    let previous = io.insert(
+                    let previous = io.varyings.insert(
                         attribute.shader_location,
                         validation::InterfaceVar::vertex_attribute(attribute.format),
                     );
@@ -4358,20 +4370,18 @@ impl Device {
                     )
                     .map_err(stage_err)?;
 
-                if validated_stages == wgt::ShaderStages::VERTEX {
-                    if let Some(ref interface) = shader_module.interface {
-                        io = interface
-                            .check_stage(
-                                &mut binding_layout_source,
-                                &mut shader_binding_sizes,
-                                &fragment_entry_point_name,
-                                stage,
-                                io,
-                                desc.depth_stencil.as_ref().map(|d| d.depth_compare),
-                            )
-                            .map_err(stage_err)?;
-                        validated_stages |= stage;
-                    }
+                if let Some(ref interface) = shader_module.interface {
+                    io = interface
+                        .check_stage(
+                            &mut binding_layout_source,
+                            &mut shader_binding_sizes,
+                            &fragment_entry_point_name,
+                            stage,
+                            io,
+                            desc.depth_stencil.as_ref().map(|d| d.depth_compare),
+                        )
+                        .map_err(stage_err)?;
+                    validated_stages |= stage;
                 }
 
                 if let Some(ref interface) = shader_module.interface {
@@ -4407,7 +4417,7 @@ impl Device {
         }
 
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
-            for (i, output) in io.iter() {
+            for (i, output) in io.varyings.iter() {
                 match color_targets.get(*i as usize) {
                     Some(Some(state)) => {
                         validation::check_texture_format(state.format, &output.ty).map_err(
