@@ -1430,6 +1430,51 @@ fn filter_features_and_limits(
         *features &= wgt::Features::all_webgpu_mask() | limits::EXEMPT_FEATURES;
         limits.zero_native_only();
     }
+
+    // The next steps are from <https://www.w3.org/TR/webgpu/#a-new-device>.
+
+    // > 7. Set `limits.maxStorageBuffersPerShaderStage` to
+    // >    `max(limits.maxStorageBuffersPerShaderStage, limits.maxStorageBuffersInVertexStage,
+    // >    limits.maxStorageBuffersInFragmentStage)`.
+
+    limits.max_storage_buffers_per_shader_stage = [
+        limits.max_storage_buffers_per_shader_stage,
+        limits.max_storage_buffers_in_vertex_stage,
+        limits.max_storage_buffers_in_fragment_stage,
+    ]
+    .into_iter()
+    .max()
+    .unwrap();
+
+    // > 8. Set `limits.maxStorageTexturesPerShaderStage` to
+    // >    `max(limits.maxStorageTexturesPerShaderStage, limits.maxStorageTexturesInVertexStage,
+    // >    limits.maxStorageTexturesInFragmentStage)`.
+
+    limits.max_storage_textures_per_shader_stage = [
+        limits.max_storage_textures_per_shader_stage,
+        limits.max_storage_textures_in_vertex_stage,
+        limits.max_storage_textures_in_fragment_stage,
+    ]
+    .into_iter()
+    .max()
+    .unwrap();
+
+    // > 9. If features contains "core-features-and-limits":
+    //
+    // NOTE: We don't implement compat (yet?), so we do this unconditionally. See also:
+    // <https://github.com/gfx-rs/wgpu/issues/8124>
+
+    // >   1. Set `limits.maxStorageBuffersInVertexStage` and
+    // >      `limits.maxStorageBuffersInFragmentStage` to
+    // >      `limits.maxStorageBuffersPerShaderStage`.
+    limits.max_storage_buffers_in_vertex_stage = limits.max_storage_buffers_per_shader_stage;
+    limits.max_storage_buffers_in_fragment_stage = limits.max_storage_buffers_per_shader_stage;
+
+    // >   2. Set `limits.maxStorageTexturesInVertexStage` and
+    // >      `limits.maxStorageTexturesInFragmentStage` to
+    // >      `limits.maxStorageTexturesPerShaderStage`.
+    limits.max_storage_textures_in_vertex_stage = limits.max_storage_textures_per_shader_stage;
+    limits.max_storage_textures_in_fragment_stage = limits.max_storage_textures_per_shader_stage;
 }
 
 #[cfg(test)]

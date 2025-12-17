@@ -578,10 +578,18 @@ impl BindingTypeMaxCountValidator {
             limits.max_storage_buffers_per_shader_stage,
             BindingTypeMaxCountErrorKind::StorageBuffers,
         )?;
+        // NOTE: We don't explicitly check `max_storage_buffers_in_vertex_stage` or
+        // `max_storage_buffers_in_fragment_stage` because we don't assign different values between
+        // those and `max_storage_buffers_per_shader_stage`. If this changes, this needs to be
+        // fixed!
         self.storage_textures.validate(
             limits.max_storage_textures_per_shader_stage,
             BindingTypeMaxCountErrorKind::StorageTextures,
         )?;
+        // NOTE: We don't explicitly check `max_storage_textures_in_vertex_stage` or
+        // `max_storage_textures_in_fragment_stage` because we don't assign different values between
+        // those and `max_storage_textures_per_shader_stage`. If this changes, this needs to be
+        // fixed!
         self.uniform_buffers.validate(
             limits.max_uniform_buffers_per_shader_stage,
             BindingTypeMaxCountErrorKind::UniformBuffers,

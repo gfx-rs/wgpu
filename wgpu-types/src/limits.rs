@@ -35,7 +35,11 @@ macro_rules! with_limits {
         $macro_name!(max_sampled_textures_per_shader_stage, Ordering::Less);
         $macro_name!(max_samplers_per_shader_stage, Ordering::Less);
         $macro_name!(max_storage_buffers_per_shader_stage, Ordering::Less);
+        $macro_name!(max_storage_buffers_in_vertex_stage, Ordering::Less);
+        $macro_name!(max_storage_buffers_in_fragment_stage, Ordering::Less);
         $macro_name!(max_storage_textures_per_shader_stage, Ordering::Less);
+        $macro_name!(max_storage_textures_in_vertex_stage, Ordering::Less);
+        $macro_name!(max_storage_textures_in_fragment_stage, Ordering::Less);
         $macro_name!(max_uniform_buffers_per_shader_stage, Ordering::Less);
         $macro_name!(max_binding_array_elements_per_shader_stage, Ordering::Less);
         $macro_name!(
@@ -171,8 +175,32 @@ pub struct Limits {
     pub max_samplers_per_shader_stage: u32,
     /// Amount of storage buffers visible in a single shader stage. Defaults to 8. Higher is "better".
     pub max_storage_buffers_per_shader_stage: u32,
+    /// Amount of storage buffers visible in a vertex shader stage. Defaults to 8. Higher is "better".
+    ///
+    /// Outside of compat mode (which is not implemented, see
+    /// <https://github.com/gfx-rs/wgpu/issues/8124>), this is clamped to the value
+    /// of `max_storage_buffers_per_shader_stage`.
+    pub max_storage_buffers_in_vertex_stage: u32,
+    /// Amount of storage buffers visible in a fragment shader stage. Defaults to 8. Higher is "better".
+    ///
+    /// Outside of compat mode (which is not implemented, see
+    /// <https://github.com/gfx-rs/wgpu/issues/8124>), this is clamped to the value
+    /// of `max_storage_buffers_per_shader_stage`.
+    pub max_storage_buffers_in_fragment_stage: u32,
     /// Amount of storage textures visible in a single shader stage. Defaults to 4. Higher is "better".
     pub max_storage_textures_per_shader_stage: u32,
+    /// Amount of storage textures visible in a vertex shader stage. Defaults to 4. Higher is "better".
+    ///
+    /// Outside of compat mode (which is not implemented, see
+    /// <https://github.com/gfx-rs/wgpu/issues/8124>), this is clamped to the value
+    /// of `max_storage_textures_per_shader_stage`.
+    pub max_storage_textures_in_vertex_stage: u32,
+    /// Amount of storage textures visible in a fragment shader stage. Defaults to 4. Higher is "better".
+    ///
+    /// Outside of compat mode (which is not implemented, see
+    /// <https://github.com/gfx-rs/wgpu/issues/8124>), this is clamped to the value
+    /// of `max_storage_textures_per_shader_stage`.
+    pub max_storage_textures_in_fragment_stage: u32,
     /// Amount of uniform buffers visible in a single shader stage. Defaults to 12. Higher is "better".
     pub max_uniform_buffers_per_shader_stage: u32,
     /// Amount of individual resources within binding arrays that can be accessed in a single shader stage. Applies
@@ -369,7 +397,11 @@ impl Limits {
     ///     max_sampled_textures_per_shader_stage: 16,
     ///     max_samplers_per_shader_stage: 16,
     ///     max_storage_buffers_per_shader_stage: 8,
+    ///     max_storage_buffers_in_vertex_stage: 8,
+    ///     max_storage_buffers_in_fragment_stage: 8,
     ///     max_storage_textures_per_shader_stage: 4,
+    ///     max_storage_textures_in_vertex_stage: 4,
+    ///     max_storage_textures_in_fragment_stage: 4,
     ///     max_uniform_buffers_per_shader_stage: 12,
     ///     max_binding_array_elements_per_shader_stage: 0,
     ///     max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
@@ -434,7 +466,11 @@ impl Limits {
             max_sampled_textures_per_shader_stage: 16,
             max_samplers_per_shader_stage: 16,
             max_storage_buffers_per_shader_stage: 8,
+            max_storage_buffers_in_vertex_stage: 8,
+            max_storage_buffers_in_fragment_stage: 8,
             max_storage_textures_per_shader_stage: 4,
+            max_storage_textures_in_vertex_stage: 4,
+            max_storage_textures_in_fragment_stage: 4,
             max_uniform_buffers_per_shader_stage: 12,
             max_binding_array_elements_per_shader_stage: 0,
             max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
@@ -504,7 +540,11 @@ impl Limits {
     ///     max_sampled_textures_per_shader_stage: 16,
     ///     max_samplers_per_shader_stage: 16,
     ///     max_storage_buffers_per_shader_stage: 4, // *
+    ///     max_storage_buffers_in_vertex_stage: 4, // *
+    ///     max_storage_buffers_in_fragment_stage: 4, // *
     ///     max_storage_textures_per_shader_stage: 4,
+    ///     max_storage_textures_in_vertex_stage: 4,
+    ///     max_storage_textures_in_fragment_stage: 4,
     ///     max_uniform_buffers_per_shader_stage: 12,
     ///     max_binding_array_elements_per_shader_stage: 0,
     ///     max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
@@ -562,6 +602,8 @@ impl Limits {
             max_texture_dimension_2d: 2048,
             max_texture_dimension_3d: 256,
             max_storage_buffers_per_shader_stage: 4,
+            max_storage_buffers_in_vertex_stage: 4,
+            max_storage_buffers_in_fragment_stage: 4,
             max_uniform_buffer_binding_size: 16 << 10, // (16 KiB)
             max_inter_stage_shader_variables: 15,
             max_color_attachments: 4,
@@ -591,7 +633,11 @@ impl Limits {
     ///     max_sampled_textures_per_shader_stage: 16,
     ///     max_samplers_per_shader_stage: 16,
     ///     max_storage_buffers_per_shader_stage: 0, // * +
+    ///     max_storage_buffers_in_vertex_stage: 0, // * +
+    ///     max_storage_buffers_in_fragment_stage: 0, // * +
     ///     max_storage_textures_per_shader_stage: 0, // +
+    ///     max_storage_textures_in_vertex_stage: 0, // +
+    ///     max_storage_textures_in_fragment_stage: 0, // +
     ///     max_uniform_buffers_per_shader_stage: 11, // +
     ///     max_binding_array_elements_per_shader_stage: 0,
     ///     max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
@@ -647,7 +693,11 @@ impl Limits {
         Self {
             max_uniform_buffers_per_shader_stage: 11,
             max_storage_buffers_per_shader_stage: 0,
+            max_storage_buffers_in_vertex_stage: 0,
+            max_storage_buffers_in_fragment_stage: 0,
             max_storage_textures_per_shader_stage: 0,
+            max_storage_textures_in_vertex_stage: 0,
+            max_storage_textures_in_fragment_stage: 0,
             max_dynamic_storage_buffers_per_pipeline_layout: 0,
             max_storage_buffer_binding_size: 0,
             max_vertex_buffer_array_stride: 255,
@@ -695,7 +745,11 @@ impl Limits {
             max_sampled_textures_per_shader_stage: ALLOC_MAX_U32,
             max_samplers_per_shader_stage: ALLOC_MAX_U32,
             max_storage_buffers_per_shader_stage: ALLOC_MAX_U32,
+            max_storage_buffers_in_vertex_stage: ALLOC_MAX_U32,
+            max_storage_buffers_in_fragment_stage: ALLOC_MAX_U32,
             max_storage_textures_per_shader_stage: ALLOC_MAX_U32,
+            max_storage_textures_in_vertex_stage: ALLOC_MAX_U32,
+            max_storage_textures_in_fragment_stage: ALLOC_MAX_U32,
             max_uniform_buffers_per_shader_stage: ALLOC_MAX_U32,
             max_binding_array_elements_per_shader_stage: ALLOC_MAX_U32,
             max_binding_array_sampler_elements_per_shader_stage: ALLOC_MAX_U32,
@@ -963,7 +1017,11 @@ impl Limits {
             max_sampled_textures_per_shader_stage: _,
             max_samplers_per_shader_stage: _,
             max_storage_buffers_per_shader_stage: _,
+            max_storage_buffers_in_vertex_stage: _,
+            max_storage_buffers_in_fragment_stage: _,
             max_storage_textures_per_shader_stage: _,
+            max_storage_textures_in_vertex_stage: _,
+            max_storage_textures_in_fragment_stage: _,
             max_uniform_buffers_per_shader_stage: _,
             max_uniform_buffer_binding_size: _,
             max_storage_buffer_binding_size: _,
