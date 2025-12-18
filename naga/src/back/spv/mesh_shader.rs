@@ -429,7 +429,6 @@ impl super::Writer {
             );
             body.push(instruction);
         }
-        // TODO: make this guaranteed to be uniform
         let mut instruction = Instruction::new(spirv::Op::EmitMeshTasksEXT);
         for id in values {
             instruction.add_operand(id);
@@ -880,28 +879,38 @@ impl super::Writer {
                 inner_id,
                 &[],
             ));
+            self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body);
             let final_value = if let Some(task_limits) = self.task_runtime_limits {
                 let zero_u32 = self.get_constant_scalar(crate::Literal::U32(0));
-                let max_per_dim = self.get_constant_scalar(crate::Literal::U32(
-                    task_limits.max_mesh_workgroups_per_dim,
+                // If its greater than 2<<21 then overflow is possible without being caught
+                let max_per_dim = self.get_constant_scalar(crate::Literal::U64(
+                    task_limits.max_mesh_workgroups_per_dim.min(2 << 21) as u64,
                 ));
-                let max_total = self.get_constant_scalar(crate::Literal::U32(
-                    task_limits.max_mesh_workgroups_total,
+                let max_total = self.get_constant_scalar(crate::Literal::U64(
+                    task_limits.max_mesh_workgroups_total as u64,
                 ));
-                // MESH TODO: handle overflow
+                let u64_type_id = self
+                    .get_numeric_type_id(crate::back::spv::NumericType::Scalar(crate::Scalar::U64));
                 let values = [self.id_gen.next(), self.id_gen.next(), self.id_gen.next()];
                 for (i, value) in values.into_iter().enumerate() {
+                    let u32_val = self.id_gen.next();
                     block.body.push(Instruction::composite_extract(
                         self.get_u32_type_id(),
-                        value,
+                        u32_val,
                         result,
                         &[i as u32],
+                    ));
+                    block.body.push(Instruction::unary(
+                        spirv::Op::UConvert,
+                        u64_type_id,
+                        value,
+                        u32_val,
                     ));
                 }
                 let prod_1 = self.id_gen.next();
                 block.body.push(Instruction::binary(
                     spirv::Op::IMul,
-                    self.get_u32_type_id(),
+                    u64_type_id,
                     prod_1,
                     values[0],
                     values[1],
@@ -909,7 +918,7 @@ impl super::Writer {
                 let prod = self.id_gen.next();
                 block.body.push(Instruction::binary(
                     spirv::Op::IMul,
-                    self.get_u32_type_id(),
+                    u64_type_id,
                     prod,
                     prod_1,
                     values[2],
@@ -963,7 +972,6 @@ impl super::Writer {
             } else {
                 result
             };
-            self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body);
             let ins =
                 self.write_entry_point_task_return(final_value, &mut block.body, task_payload)?;
             function.consume(block, ins);

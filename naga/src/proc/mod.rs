@@ -663,7 +663,6 @@ impl super::ShaderStage {
         }
     }
 
-    // MESH TODO: make this used in more places
     /// Mesh or task shader
     pub const fn mesh_like(self) -> bool {
         match self {
