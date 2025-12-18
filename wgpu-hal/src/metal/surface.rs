@@ -163,8 +163,8 @@ impl crate::Surface for super::Surface {
             _ => (),
         }
 
-        let device_raw = device.shared.device.lock();
-        render_layer.set_device(&device_raw);
+        let device_raw = &device.shared.device;
+        render_layer.set_device(device_raw);
         render_layer.set_pixel_format(caps.map_format(config.format));
         render_layer.set_framebuffer_only(framebuffer_only);
         // opt-in to Metal EDR

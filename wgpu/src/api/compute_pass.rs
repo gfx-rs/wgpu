@@ -113,11 +113,11 @@ impl ComputePass<'_> {
 
 /// [`Features::IMMEDIATES`] must be enabled on the device in order to call these functions.
 impl ComputePass<'_> {
-    /// Set immediate data data for subsequent dispatch calls.
+    /// Set immediate data for subsequent dispatch calls.
     ///
     /// Write the bytes in `data` at offset `offset` within immediate data
     /// storage.  Both `offset` and the length of `data` must be
-    /// multiples of [`IMMEDIATES_ALIGNMENT`], which is always 4.
+    /// multiples of [`crate::IMMEDIATE_DATA_ALIGNMENT`], which is always 4.
     ///
     /// For example, if `offset` is `4` and `data` is eight bytes long, this
     /// call will write `data` to bytes `4..12` of immediate data storage.

@@ -216,6 +216,7 @@ impl Capabilities {
             // NOTE: `SHADER_FLOAT16_IN_FLOAT32` _does not_ require the `f16` extension
             Self::SHADER_FLOAT16 => Some(Ext::F16),
             Self::CLIP_DISTANCE => Some(Ext::ClipDistances),
+            Self::MESH_SHADER => Some(Ext::WgpuMeshShader),
             Self::RAY_QUERY => Some(Ext::WgpuRayQuery),
             Self::RAY_HIT_VERTEX_POSITION => Some(Ext::WgpuRayQueryVertexReturn),
             _ => None,
@@ -296,6 +297,7 @@ bitflags::bitflags! {
         const COMPUTE = 0x4;
         const MESH = 0x8;
         const TASK = 0x10;
+        const COMPUTE_LIKE = Self::COMPUTE.bits() | Self::TASK.bits() | Self::MESH.bits();
     }
 }
 
@@ -547,7 +549,7 @@ impl Validator {
                 stages |= ShaderStages::VERTEX;
             }
             if capabilities.contains(Capabilities::SUBGROUP) {
-                stages |= ShaderStages::FRAGMENT | ShaderStages::COMPUTE;
+                stages |= ShaderStages::FRAGMENT | ShaderStages::COMPUTE_LIKE;
             }
             stages
         };

@@ -125,8 +125,9 @@ rayQueryGenerateIntersection(hit_t: f32)
 // - Commits a hit from triangular non-opaque geometry.
 rayQueryConfirmIntersection()
 
-// - Aborts the query.
-rayQueryTerminate()
+// Aborts the query which is in progress, that is, the next `rayQueryProceed` is guaranteed to return `false`
+// and any call to `rayQueryGetCommittedIntersection` will return the closest committed result so far.
+rayQueryTerminate(rq: ptr<function, ray_query>)
 
 // - Returns intersection details about a hit considered `Committed`.
 rayQueryGetCommittedIntersection(rq: ptr<function, ray_query>) -> RayIntersection

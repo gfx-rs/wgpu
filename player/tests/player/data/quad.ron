@@ -47,7 +47,7 @@
         CreatePipelineLayout(PointerId(0x10), (
             label: None,
             bind_group_layouts: [],
-            immediates_ranges: [],
+            immediate_size: 0,
         )),
         CreateGeneralRenderPipeline(
             id: PointerId(0x10),

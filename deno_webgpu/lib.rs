@@ -180,6 +180,7 @@ impl GPU {
             noop: wgpu_types::NoopBackendOptions::default(),
           },
         },
+        None,
       )));
       state.borrow::<Instance>()
     };

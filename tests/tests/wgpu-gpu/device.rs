@@ -440,7 +440,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: None,
                     bind_group_layouts: &[&invalid_bind_group_layout],
-                    immediates_ranges: &[],
+                    immediate_size: 0,
                 });
 
         let _ = ctx

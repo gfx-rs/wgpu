@@ -33,7 +33,9 @@ webgpu:api,operation,vertex_state,correctness:setVertexBuffer_offset_and_attribu
 webgpu:api,validation,buffer,create:*
 webgpu:api,validation,buffer,destroy:*
 fails-if(dx12) webgpu:api,validation,capability_checks,limits,maxBindGroups:setBindGroup,*
+webgpu:api,validation,createBindGroup:buffer_offset_and_size_for_bind_groups_match:*
 webgpu:api,validation,createBindGroup:buffer,effective_buffer_binding_size:*
+webgpu:api,validation,createBindGroup:buffer,resource_binding_size:*
 // Fails because we coerce a size of 0 in `GPUDevice.createBindGroup(…)` to `buffer.size - offset`.
 // FAIL webgpu:api,validation,createBindGroup:buffer_offset_and_size_for_bind_groups_match:*
 webgpu:api,validation,encoding,beginComputePass:*
@@ -80,14 +82,10 @@ webgpu:api,validation,encoding,encoder_open_state:render_pass_commands:*
 //FAIL: webgpu:api,validation,encoding,encoder_open_state:render_bundle_commands:*
 // https://github.com/gfx-rs/wgpu/issues/7857
 webgpu:api,validation,encoding,encoder_open_state:compute_pass_commands:*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_binding_mismatch:encoderType="compute%20pass";*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_binding_mismatch:encoderType="render%20pass";*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_resource_type_mismatch:encoderType="compute%20pass";*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_resource_type_mismatch:encoderType="render%20pass";*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_visibility_mismatch:encoderType="compute%20pass";*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_visibility_mismatch:encoderType="render%20pass";*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bind_groups_and_pipeline_layout_mismatch:encoderType="compute%20pass";*
-webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bind_groups_and_pipeline_layout_mismatch:encoderType="render%20pass";*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_binding_mismatch:*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_resource_type_mismatch:*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_visibility_mismatch:*
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bind_groups_and_pipeline_layout_mismatch:*
 webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:buffer_binding,render_pipeline:*
 webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:sampler_binding,render_pipeline:*
 webgpu:api,validation,encoding,queries,general:occlusion_query,query_index:*
@@ -179,6 +177,10 @@ webgpu:shader,execution,flow_control,return:*
 // Many other vertex_buffer_access subtests also passing, but there are too many to enumerate.
 // Fails on Metal in CI only, not when running locally.
 fails-if(metal) webgpu:shader,execution,robust_access_vertex:vertex_buffer_access:indexed=true;indirect=false;drawCallTestParameter="baseVertex";type="float32x4";additionalBuffers=4;partialLastNumber=false;offsetVertexBuffer=true
+webgpu:shader,validation,const_assert,const_assert:*
+webgpu:shader,validation,expression,binary,short_circuiting_and_or:array_override:op="%26%26";a_val=1;b_val=1
+webgpu:shader,validation,expression,binary,short_circuiting_and_or:invalid_types:*
+webgpu:shader,validation,expression,binary,short_circuiting_and_or:scalar_vector:op="%26%26";lhs="bool";rhs="bool"
 webgpu:shader,validation,expression,call,builtin,all:arguments:test="ptr_deref"
 webgpu:shader,validation,expression,call,builtin,max:values:*
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="break"

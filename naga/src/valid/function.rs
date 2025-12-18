@@ -1014,7 +1014,7 @@ impl super::Validator {
                     stages &= super::ShaderStages::FRAGMENT;
                 }
                 S::ControlBarrier(barrier) | S::MemoryBarrier(barrier) => {
-                    stages &= super::ShaderStages::COMPUTE;
+                    stages &= super::ShaderStages::COMPUTE_LIKE;
                     if barrier.contains(crate::Barrier::SUB_GROUP) {
                         if !self.capabilities.contains(
                             super::Capabilities::SUBGROUP | super::Capabilities::SUBGROUP_BARRIER,
@@ -1443,7 +1443,7 @@ impl super::Validator {
                     }
                 }
                 S::WorkGroupUniformLoad { pointer, result } => {
-                    stages &= super::ShaderStages::COMPUTE;
+                    stages &= super::ShaderStages::COMPUTE_LIKE;
                     let pointer_inner =
                         context.resolve_type_inner(pointer, &self.valid_expression_set)?;
                     match *pointer_inner {

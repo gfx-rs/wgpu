@@ -202,6 +202,8 @@ bitflags!(
     }
 );
 
+// TODO(https://github.com/gfx-rs/wgpu/issues/8715): Eliminate duplication with
+// `wgt::Limits`. Keeping multiple sets of limits creates a risk of confusion.
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 struct PrivateCapabilities {
@@ -277,6 +279,11 @@ struct PrivateCapabilities {
     max_binding_array_elements: ResourceIndex,
     max_sampler_binding_array_elements: ResourceIndex,
     buffer_alignment: u64,
+
+    /// Platform-reported maximum buffer size
+    ///
+    /// This value is clamped to `u32::MAX` for `wgt::Limits`, so you probably
+    /// shouldn't be looking at this copy.
     max_buffer_size: u64,
     max_texture_size: u64,
     max_texture_3d_size: u64,
@@ -309,6 +316,8 @@ struct PrivateCapabilities {
     float_atomics: bool,
     supports_shared_event: bool,
     mesh_shaders: bool,
+    max_mesh_task_workgroup_count: u32,
+    max_task_payload_size: u32,
     supported_vertex_amplification_factor: u32,
     shader_barycentrics: bool,
     supports_memoryless_storage: bool,
@@ -337,7 +346,7 @@ impl Default for Settings {
 }
 
 struct AdapterShared {
-    device: Mutex<metal::Device>,
+    device: metal::Device,
     disabilities: PrivateDisabilities,
     private_caps: PrivateCapabilities,
     settings: Settings,
@@ -355,7 +364,7 @@ impl AdapterShared {
         Self {
             disabilities: PrivateDisabilities::new(&device),
             private_caps,
-            device: Mutex::new(device),
+            device,
             settings: Settings::default(),
             presentation_timer: time::PresentationTimer::new(),
         }
@@ -998,7 +1007,7 @@ struct CommandState {
     ///   checks and the WGSL `arrayLength` function.
     ///
     /// For each stage `S` in `stage_infos`, we consult this to find the sizes
-    /// of the buffers listed in [`stage_infos.S.sized_bindings`], which we must
+    /// of the buffers listed in `stage_infos.S.sized_bindings`, which we must
     /// pass to the entry point.
     ///
     /// See `device::CompiledShader::sized_bindings` for more details.

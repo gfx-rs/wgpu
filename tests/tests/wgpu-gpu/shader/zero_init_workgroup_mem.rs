@@ -70,7 +70,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
             .create_pipeline_layout(&PipelineLayoutDescriptor {
                 label: None,
                 bind_group_layouts: &[&bgl],
-                immediates_ranges: &[],
+                immediate_size: 0,
             });
 
         let sm = ctx
