@@ -954,12 +954,16 @@ impl super::PrivateCapabilities {
                 || (version.at_least((10, 15), (14, 0), (16, 0), (1, 0), os_type)
                     && device.supports_shader_barycentric_coordinates()),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
-            // NOTE: This doesn't entirely match the docs, see https://github.com/gfx-rs/wgpu/pull/8725.
+            // See https://github.com/gfx-rs/wgpu/pull/8725 for more details
             supports_memoryless_storage: metal4
                 || if family_check {
+                    // Apple A7 (MTLGPUFamily::Apple1) has been tested to have support.
                     device.supports_family(MTLGPUFamily::Apple1)
                 } else {
-                    version.at_least((11, 0), (10, 0), (10, 0), (1, 0), os_type)
+                    // macOS: Always rely on family check
+                    // iOS/tvOS: API added in 10.0
+                    // visionOS: Always rely on family check
+                    version.at_least(OS_NOT_SUPPORT, (10, 0), (10, 0), OS_NOT_SUPPORT, os_type)
                 },
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             mesh_shaders: family_check
