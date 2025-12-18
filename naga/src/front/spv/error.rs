@@ -107,8 +107,10 @@ pub enum Error {
     InvalidGlobalVar(crate::Expression),
     #[error("invalid image/sampler expression {0:?}")]
     InvalidImageExpression(crate::Expression),
-    #[error("image write without format is not currently supported. See https://github.com/gfx-rs/wgpu/issues/6797")]
-    InvalidImageWriteType,
+    #[error("cannot create a OpTypeImage as both a depth and storage image")]
+    InvalidImageDepthStorage,
+    #[error("image read/write without format is not currently supported. See https://github.com/gfx-rs/wgpu/issues/6797")]
+    InvalidStorageImageWithoutFormat,
     #[error("invalid image base type {0:?}")]
     InvalidImageBaseType(Handle<crate::Type>),
     #[error("invalid image {0:?}")]

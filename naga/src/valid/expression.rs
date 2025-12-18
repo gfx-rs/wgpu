@@ -87,8 +87,10 @@ pub enum ExpressionError {
     InvalidDerivative,
     #[error("Image array index parameter is misplaced")]
     InvalidImageArrayIndex,
-    #[error("Inappropriate sample or level-of-detail index for texel access")]
-    InvalidImageOtherIndex,
+    #[error("Cannot textureLoad from a specific multisample sample on a non-multisampled image.")]
+    InvalidImageSampleSelector,
+    #[error("Cannot textureLoad from a multisampled image without specifying a sample.")]
+    MissingImageSampleSelector,
     #[error("Image array index type of {0:?} is not an integer scalar")]
     InvalidImageArrayIndexType(Handle<crate::Expression>),
     #[error("Image sample or level-of-detail index's type of {0:?} is not an integer scalar")]
@@ -715,8 +717,11 @@ impl super::Validator {
                             return Err(ExpressionError::InvalidImageOtherIndexType(sample));
                         }
                     }
-                    _ => {
-                        return Err(ExpressionError::InvalidImageOtherIndex);
+                    (Some(_), false) => {
+                        return Err(ExpressionError::InvalidImageSampleSelector);
+                    }
+                    (None, true) => {
+                        return Err(ExpressionError::MissingImageSampleSelector);
                     }
                 }
 
@@ -729,7 +734,8 @@ impl super::Validator {
                         }) => {}
                         _ => return Err(ExpressionError::InvalidImageArrayIndexType(level)),
                     },
-                    _ => {
+                    e => {
+                        std::dbg!(e, class);
                         return Err(ExpressionError::InvalidImageOtherIndex);
                     }
                 }
