@@ -1,7 +1,3 @@
-> [!NOTE]  
-> These are the examples for the development version of wgpu. If you want to see the examples for the latest crates.io release
-> of wgpu, go to the [latest release branch](https://github.com/gfx-rs/wgpu/tree/v28/examples#readme).
-
 # Examples
 
 If you are just starting your graphics programming journey entirely, we recommend going through [Learn-wgpu](https://sotrh.github.io/learn-wgpu/)
