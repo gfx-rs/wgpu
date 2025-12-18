@@ -653,7 +653,8 @@ impl super::Device {
                     || !runtime_checks.ray_query_initialization_tracking
                     || !binding_map.is_empty()
                     || naga_shader.debug_source.is_some()
-                    || !stage.zero_initialize_workgroup_memory;
+                    || !stage.zero_initialize_workgroup_memory
+                    || !runtime_checks.task_shader_dispatch_tracking;
                 let mut temp_options;
                 let options = if needs_temp_options {
                     temp_options = self.naga_options.clone();
@@ -685,6 +686,9 @@ impl super::Device {
                     if !stage.zero_initialize_workgroup_memory {
                         temp_options.zero_initialize_workgroup_memory =
                             naga::back::spv::ZeroInitializeWorkgroupMemoryMode::None;
+                    }
+                    if !runtime_checks.task_shader_dispatch_tracking {
+                        temp_options.task_runtime_limits = None;
                     }
 
                     &temp_options

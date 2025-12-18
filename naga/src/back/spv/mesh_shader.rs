@@ -880,8 +880,92 @@ impl super::Writer {
                 inner_id,
                 &[],
             ));
+            let final_value = if let Some(task_limits) = self.task_runtime_limits {
+                let zero_u32 = self.get_constant_scalar(crate::Literal::U32(0));
+                let max_per_dim = self.get_constant_scalar(crate::Literal::U32(
+                    task_limits.max_mesh_workgroups_per_dim,
+                ));
+                let max_total = self.get_constant_scalar(crate::Literal::U32(
+                    task_limits.max_mesh_workgroups_total,
+                ));
+                // MESH TODO: handle overflow
+                let values = [self.id_gen.next(), self.id_gen.next(), self.id_gen.next()];
+                for (i, value) in values.into_iter().enumerate() {
+                    block.body.push(Instruction::composite_extract(
+                        self.get_u32_type_id(),
+                        value,
+                        result,
+                        &[i as u32],
+                    ));
+                }
+                let prod_1 = self.id_gen.next();
+                block.body.push(Instruction::binary(
+                    spirv::Op::IMul,
+                    self.get_u32_type_id(),
+                    prod_1,
+                    values[0],
+                    values[1],
+                ));
+                let prod = self.id_gen.next();
+                block.body.push(Instruction::binary(
+                    spirv::Op::IMul,
+                    self.get_u32_type_id(),
+                    prod,
+                    prod_1,
+                    values[2],
+                ));
+                let total_too_large = self.id_gen.next();
+                block.body.push(Instruction::binary(
+                    spirv::Op::UGreaterThanEqual,
+                    self.get_bool_type_id(),
+                    total_too_large,
+                    prod,
+                    max_total,
+                ));
+
+                let too_large = [self.id_gen.next(), self.id_gen.next(), self.id_gen.next()];
+                for (i, value) in values.into_iter().enumerate() {
+                    block.body.push(Instruction::binary(
+                        spirv::Op::UGreaterThanEqual,
+                        self.get_bool_type_id(),
+                        too_large[i],
+                        value,
+                        max_per_dim,
+                    ));
+                }
+                let mut current = total_too_large;
+                for is_too_large in too_large {
+                    let new = self.id_gen.next();
+                    block.body.push(Instruction::binary(
+                        spirv::Op::LogicalOr,
+                        self.get_bool_type_id(),
+                        new,
+                        current,
+                        is_too_large,
+                    ));
+                    current = new;
+                }
+                let zero_vec3 = self.id_gen.next();
+                block.body.push(Instruction::composite_construct(
+                    self.get_vec3u_type_id(),
+                    zero_vec3,
+                    &[zero_u32, zero_u32, zero_u32],
+                ));
+                let final_result = self.id_gen.next();
+                block.body.push(Instruction::select(
+                    self.get_vec3u_type_id(),
+                    final_result,
+                    current,
+                    zero_vec3,
+                    result,
+                ));
+                final_result
+            } else {
+                result
+            };
             self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body);
-            let ins = self.write_entry_point_task_return(result, &mut block.body, task_payload)?;
+            let ins =
+                self.write_entry_point_task_return(final_value, &mut block.body, task_payload)?;
             function.consume(block, ins);
         }
         function.to_words(&mut self.logical_layout.function_definitions);

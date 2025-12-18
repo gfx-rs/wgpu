@@ -108,6 +108,7 @@ impl Writer {
                 options.use_storage_input_output_16,
             ),
             debug_printf: None,
+            task_runtime_limits: options.task_runtime_limits,
         })
     }
 
@@ -126,6 +127,7 @@ impl Writer {
         self.binding_map = options.binding_map.clone();
         self.io_f16_polyfills =
             super::f16_polyfill::F16IoPolyfill::new(options.use_storage_input_output_16);
+        self.task_runtime_limits = options.task_runtime_limits;
         Ok(())
     }
 
@@ -164,6 +166,7 @@ impl Writer {
             capabilities_available: take(&mut self.capabilities_available),
             fake_missing_bindings: self.fake_missing_bindings,
             binding_map: take(&mut self.binding_map),
+            task_runtime_limits: self.task_runtime_limits,
 
             // Initialized afresh:
             id_gen,
