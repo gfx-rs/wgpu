@@ -221,12 +221,11 @@ impl Writer {
         ir_result: &crate::FunctionResult,
         result_members: &[ResultMember],
         body: &mut Vec<Instruction>,
-        task_payload: Option<Word>,
     ) -> Result<Instruction, Error> {
         for (index, res_member) in result_members.iter().enumerate() {
             // This isn't a real builtin, and is handled elsewhere
             if res_member.built_in == Some(crate::BuiltIn::MeshTaskSize) {
-                continue;
+                return Ok(Instruction::return_value(value_id));
             }
             let member_value_id = match ir_result.binding {
                 Some(_) => value_id,
@@ -258,13 +257,7 @@ impl Writer {
                 _ => {}
             }
         }
-        self.try_write_entry_point_task_return(
-            value_id,
-            ir_result,
-            result_members,
-            body,
-            task_payload,
-        )
+        Ok(Instruction::return_void())
     }
 }
 
@@ -3267,7 +3260,6 @@ impl BlockContext<'_> {
                             self.ir_function.result.as_ref().unwrap(),
                             &context.results,
                             &mut block.body,
-                            context.task_payload_variable_id,
                         )?,
                         None => Instruction::return_value(value_id),
                     };
@@ -3275,18 +3267,7 @@ impl BlockContext<'_> {
                     return Ok(BlockExitDisposition::Discarded);
                 }
                 Statement::Return { value: None } => {
-                    if let Some(super::EntryPointContext {
-                        mesh_state: Some(ref mesh_state),
-                        ..
-                    }) = self.function.entry_point_context
-                    {
-                        self.function.consume(
-                            block,
-                            Instruction::branch(mesh_state.entry_point_epilogue_id),
-                        );
-                    } else {
-                        self.function.consume(block, Instruction::return_void());
-                    }
+                    self.function.consume(block, Instruction::return_void());
                     return Ok(BlockExitDisposition::Discarded);
                 }
                 Statement::Kill => {
@@ -3746,16 +3727,6 @@ impl BlockContext<'_> {
             LoopContext::default(),
             debug_info,
         )?;
-        if let Some(super::EntryPointContext {
-            mesh_state: Some(ref mesh_state),
-            ..
-        }) = self.function.entry_point_context
-        {
-            let mut block = Block::new(mesh_state.entry_point_epilogue_id);
-            self.writer
-                .write_mesh_shader_return(mesh_state, &mut block)?;
-            self.function.consume(block, Instruction::return_void());
-        }
 
         Ok(())
     }

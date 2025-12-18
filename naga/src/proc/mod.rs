@@ -662,6 +662,15 @@ impl super::ShaderStage {
             Self::Compute | Self::Task | Self::Mesh => true,
         }
     }
+
+    // MESH TODO: make this used in more places
+    /// Mesh or task shader
+    pub const fn mesh_like(self) -> bool {
+        match self {
+            Self::Task | Self::Mesh => true,
+            Self::Vertex | Self::Fragment | Self::Compute => false,
+        }
+    }
 }
 
 #[test]

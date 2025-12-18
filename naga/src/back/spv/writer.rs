@@ -770,7 +770,7 @@ impl Writer {
 
         let mut parameter_type_ids = Vec::with_capacity(ir_function.arguments.len());
 
-        let mut local_invocation_index_id = None;
+        let mut local_invocation_index_var_id = None;
 
         for argument in ir_function.arguments.iter() {
             let class = spirv::StorageClass::Input;
@@ -805,7 +805,7 @@ impl Writer {
                     } else if binding
                         == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex)
                     {
-                        local_invocation_index_id = Some(id);
+                        local_invocation_index_var_id = Some(varying_id);
                     }
 
                     id
@@ -836,7 +836,7 @@ impl Writer {
                         } else if binding
                             == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex)
                         {
-                            local_invocation_index_id = Some(id);
+                            local_invocation_index_var_id = Some(varying_id);
                         }
                     }
                     prelude.body.push(Instruction::composite_construct(
@@ -964,7 +964,11 @@ impl Writer {
                             .body
                             .push(Instruction::store(varying_id, default_value_id, None));
                     }
-                    self.void_type
+                    if iface.stage == crate::ShaderStage::Task {
+                        self.get_vec3u_type_id()
+                    } else {
+                        self.void_type
+                    }
                 } else {
                     self.get_handle_type_id(result.ty)
                 }
@@ -980,9 +984,8 @@ impl Writer {
             }
             self.write_entry_point_mesh_shader_info(
                 iface,
-                local_invocation_index_id,
+                local_invocation_index_var_id,
                 ir_module,
-                &mut prelude,
                 &mut ep_context,
             )?;
         }
@@ -1245,7 +1248,21 @@ impl Writer {
 
         function.to_words(&mut self.logical_layout.function_definitions);
 
-        Ok(function_id)
+        if let Some(EntryPointContext {
+            mesh_state: Some(ref mesh_state),
+            ..
+        }) = function.entry_point_context
+        {
+            self.write_mesh_shader_wrapper(mesh_state, function_id)
+        } else if let Some(EntryPointContext {
+            task_payload_variable_id: Some(tp),
+            ..
+        }) = function.entry_point_context
+        {
+            self.write_task_shader_wrapper(tp, function_id)
+        } else {
+            Ok(function_id)
+        }
     }
 
     fn write_execution_mode(
@@ -1268,6 +1285,7 @@ impl Writer {
         debug_info: &Option<DebugInfoInner>,
     ) -> Result<Instruction, Error> {
         let mut interface_ids = Vec::new();
+
         let function_id = self.write_function(
             &entry_point.function,
             info,
