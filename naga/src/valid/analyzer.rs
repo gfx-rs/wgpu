@@ -269,7 +269,7 @@ pub struct FunctionInfo {
     /// `FunctionInfo` implements `core::ops::Index<Handle<GlobalVariable>>`,
     /// so you can simply index this struct with a global handle to retrieve
     /// its usage information.
-    global_uses: Box<[GlobalUse]>,
+    pub global_uses: Box<[GlobalUse]>,
 
     /// Information about each expression in this function's body.
     ///

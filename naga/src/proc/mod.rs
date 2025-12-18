@@ -896,3 +896,19 @@ impl crate::Module {
         false
     }
 }
+
+impl crate::MeshOutputTopology {
+    pub const fn to_builtin(self) -> crate::BuiltIn {
+        match self {
+            Self::Points => crate::BuiltIn::PointIndex,
+            Self::Lines => crate::BuiltIn::LineIndices,
+            Self::Triangles => crate::BuiltIn::TriangleIndices,
+        }
+    }
+}
+
+impl crate::AddressSpace {
+    pub const fn is_workgroup_like(self) -> bool {
+        matches!(self, Self::WorkGroup | Self::TaskPayload)
+    }
+}
