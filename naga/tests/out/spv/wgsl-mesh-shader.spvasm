@@ -330,7 +330,6 @@ OpFunctionEnd
 %149 = OpLoad  %8  %76
 %150 = OpFunctionCall  %2  %94
 OpControlBarrier %42 %42 %43
-OpControlBarrier %42 %42 %43
 %151 = OpAccessChain  %113  %21 %42
 %152 = OpLoad  %8  %151
 %153 = OpExtInst  %8  %1 UMin %152 %13
@@ -339,7 +338,6 @@ OpControlBarrier %42 %42 %43
 %156 = OpExtInst  %8  %1 UMin %155 %15
 %157 = OpAccessChain  %116  %21 %46
 %158 = OpAccessChain  %134  %21 %15
-OpControlBarrier %42 %42 %43
 OpSetMeshOutputsEXT %153 %156
 OpStore %146 %149
 OpBranch %159
@@ -448,7 +446,6 @@ OpFunctionEnd
 %241 = OpLoad  %8  %198
 %242 = OpFunctionCall  %2  %216
 OpControlBarrier %42 %42 %43
-OpControlBarrier %42 %42 %43
 %243 = OpAccessChain  %113  %21 %42
 %244 = OpLoad  %8  %243
 %245 = OpExtInst  %8  %1 UMin %244 %13
@@ -457,7 +454,6 @@ OpControlBarrier %42 %42 %43
 %248 = OpExtInst  %8  %1 UMin %247 %15
 %249 = OpAccessChain  %116  %21 %46
 %250 = OpAccessChain  %134  %21 %15
-OpControlBarrier %42 %42 %43
 OpSetMeshOutputsEXT %245 %248
 OpStore %239 %241
 OpBranch %251
@@ -575,7 +571,6 @@ OpFunctionEnd
 %334 = OpLoad  %8  %287
 %335 = OpFunctionCall  %2  %306
 OpControlBarrier %42 %42 %43
-OpControlBarrier %42 %42 %43
 %336 = OpAccessChain  %113  %21 %42
 %337 = OpLoad  %8  %336
 %338 = OpExtInst  %8  %1 UMin %337 %13
@@ -584,7 +579,6 @@ OpControlBarrier %42 %42 %43
 %341 = OpExtInst  %8  %1 UMin %340 %15
 %342 = OpAccessChain  %116  %21 %46
 %343 = OpAccessChain  %134  %21 %15
-OpControlBarrier %42 %42 %43
 OpSetMeshOutputsEXT %338 %341
 OpStore %332 %334
 OpBranch %344

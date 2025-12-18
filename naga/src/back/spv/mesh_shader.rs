@@ -638,8 +638,6 @@ impl super::Writer {
         loop_counter_primitives: u32,
         local_invocation_index_id: Word,
     ) -> Result<(), Error> {
-        // Start with a control barrier so that everything that follows is guaranteed to see the same variables
-        self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body);
         let u32_id = self.get_u32_type_id();
 
         // Load the actual vertex and primitive counts
@@ -708,8 +706,6 @@ impl super::Writer {
             crate::BuiltIn::Primitives,
             return_info.primitive_info.array_type_id,
         );
-
-        self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body);
 
         // This must be called exactly once before any other mesh outputs are written
         {

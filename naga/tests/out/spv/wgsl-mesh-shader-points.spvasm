@@ -113,7 +113,6 @@ OpFunctionEnd
 %61 = OpLoad  %3  %33
 %62 = OpFunctionCall  %2  %42
 OpControlBarrier %27 %27 %28
-OpControlBarrier %27 %27 %28
 %63 = OpAccessChain  %64  %16 %27
 %65 = OpLoad  %3  %63
 %66 = OpExtInst  %3  %1 UMin %65 %11
@@ -122,7 +121,6 @@ OpControlBarrier %27 %27 %28
 %70 = OpExtInst  %3  %1 UMin %69 %11
 %71 = OpAccessChain  %72  %16 %73
 %74 = OpAccessChain  %75  %16 %11
-OpControlBarrier %27 %27 %28
 OpSetMeshOutputsEXT %66 %70
 OpStore %58 %61
 OpBranch %76
