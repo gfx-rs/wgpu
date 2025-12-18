@@ -55,16 +55,6 @@ pub struct MeshReturnInfo {
 }
 
 impl super::Writer {
-    pub(super) fn require_mesh_shaders(&mut self) -> Result<(), Error> {
-        self.use_extension("SPV_EXT_mesh_shader");
-        self.require_any("Mesh Shaders", &[spirv::Capability::MeshShadingEXT])?;
-        let lang_version = self.lang_version();
-        if lang_version.0 <= 1 && lang_version.1 < 4 {
-            return Err(Error::SpirvVersionTooLow(1, 4));
-        }
-        Ok(())
-    }
-
     /// Sets up an output variable that will handle part of the mesh shader output
     pub(super) fn write_mesh_return_global_variable(
         &mut self,

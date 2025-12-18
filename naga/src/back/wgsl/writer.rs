@@ -278,7 +278,6 @@ impl<W: Write> Writer<W> {
         let mut needs_f16 = false;
         let mut needs_dual_source_blending = false;
         let mut needs_clip_distances = false;
-        let mut needs_mesh_shaders = false;
 
         // Determine which `enable` declarations are needed
         for (_, ty) in module.types.iter() {
@@ -299,47 +298,12 @@ impl<W: Write> Writer<W> {
                             crate::Binding::BuiltIn(crate::BuiltIn::ClipDistance) => {
                                 needs_clip_distances = true;
                             }
-                            crate::Binding::Location {
-                                per_primitive: true,
-                                ..
-                            } => {
-                                needs_mesh_shaders = true;
-                            }
-                            crate::Binding::BuiltIn(
-                                crate::BuiltIn::MeshTaskSize
-                                | crate::BuiltIn::CullPrimitive
-                                | crate::BuiltIn::PointIndex
-                                | crate::BuiltIn::LineIndices
-                                | crate::BuiltIn::TriangleIndices
-                                | crate::BuiltIn::VertexCount
-                                | crate::BuiltIn::Vertices
-                                | crate::BuiltIn::PrimitiveCount
-                                | crate::BuiltIn::Primitives,
-                            ) => {
-                                needs_mesh_shaders = true;
-                            }
                             _ => {}
                         }
                     }
                 }
                 _ => {}
             }
-        }
-
-        if module
-            .entry_points
-            .iter()
-            .any(|ep| matches!(ep.stage, ShaderStage::Mesh | ShaderStage::Task))
-        {
-            needs_mesh_shaders = true;
-        }
-
-        if module
-            .global_variables
-            .iter()
-            .any(|gv| gv.1.space == crate::AddressSpace::TaskPayload)
-        {
-            needs_mesh_shaders = true;
         }
 
         // Write required declarations
@@ -356,7 +320,7 @@ impl<W: Write> Writer<W> {
             writeln!(self.out, "enable clip_distances;")?;
             any_written = true;
         }
-        if needs_mesh_shaders {
+        if module.uses_mesh_shaders() {
             writeln!(self.out, "enable wgpu_mesh_shader;")?;
             any_written = true;
         }

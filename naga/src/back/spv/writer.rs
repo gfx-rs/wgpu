@@ -2298,7 +2298,6 @@ impl Writer {
                 }
                 if per_primitive && stage == crate::ShaderStage::Fragment {
                     others.push(Decoration::PerPrimitiveEXT);
-                    self.require_mesh_shaders()?;
                 }
                 Ok(BindingDecorations::Location {
                     location,
@@ -2309,13 +2308,6 @@ impl Writer {
             crate::Binding::BuiltIn(built_in) => {
                 use crate::BuiltIn as Bi;
                 let mut others = ArrayVec::new();
-
-                if matches!(
-                    built_in,
-                    Bi::CullPrimitive | Bi::PointIndex | Bi::LineIndices | Bi::TriangleIndices
-                ) {
-                    self.require_mesh_shaders()?;
-                }
 
                 let built_in = match built_in {
                     Bi::Position { invariant } => {
@@ -2428,22 +2420,12 @@ impl Writer {
                         BuiltIn::SubgroupLocalInvocationId
                     }
                     Bi::CullPrimitive => {
-                        self.require_mesh_shaders()?;
                         others.push(Decoration::PerPrimitiveEXT);
                         BuiltIn::CullPrimitiveEXT
                     }
-                    Bi::PointIndex => {
-                        self.require_mesh_shaders()?;
-                        BuiltIn::PrimitivePointIndicesEXT
-                    }
-                    Bi::LineIndices => {
-                        self.require_mesh_shaders()?;
-                        BuiltIn::PrimitiveLineIndicesEXT
-                    }
-                    Bi::TriangleIndices => {
-                        self.require_mesh_shaders()?;
-                        BuiltIn::PrimitiveTriangleIndicesEXT
-                    }
+                    Bi::PointIndex => BuiltIn::PrimitivePointIndicesEXT,
+                    Bi::LineIndices => BuiltIn::PrimitiveLineIndicesEXT,
+                    Bi::TriangleIndices => BuiltIn::PrimitiveTriangleIndicesEXT,
                     // No decoration, this EmitMeshTasksEXT is called at function return
                     Bi::MeshTaskSize => return Ok(BindingDecorations::None),
                     // These aren't normal builtins and don't occur in function output
@@ -2790,17 +2772,6 @@ impl Writer {
             | ir_module.special_types.ray_intersection.is_some();
         let has_vertex_return = ir_module.special_types.ray_vertex_return.is_some();
 
-        // Ways mesh shaders are required:
-        // * Mesh entry point used - checked for
-        // * Mesh function like setVertex used outside mesh entry point, this is handled when those are written
-        // * Fragment shader with per primitive data - handled in `map_binding`
-        let has_mesh_shaders = ir_module.entry_points.iter().any(|entry| {
-            entry.stage == crate::ShaderStage::Mesh || entry.stage == crate::ShaderStage::Task
-        }) || ir_module
-            .global_variables
-            .iter()
-            .any(|gvar| gvar.1.space == crate::AddressSpace::TaskPayload);
-
         for (_, &crate::Type { ref inner, .. }) in ir_module.types.iter() {
             // spirv does not know whether these have vertex return - that is done by us
             if let &crate::TypeInner::AccelerationStructure { .. }
@@ -2827,8 +2798,13 @@ impl Writer {
             Instruction::extension("SPV_KHR_ray_tracing_position_fetch")
                 .to_words(&mut self.logical_layout.extensions);
         }
-        if has_mesh_shaders {
-            self.require_mesh_shaders()?;
+        if ir_module.uses_mesh_shaders() {
+            self.use_extension("SPV_EXT_mesh_shader");
+            self.require_any("Mesh Shaders", &[spirv::Capability::MeshShadingEXT])?;
+            let lang_version = self.lang_version();
+            if lang_version.0 <= 1 && lang_version.1 < 4 {
+                return Err(Error::SpirvVersionTooLow(1, 4));
+            }
         }
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
         Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")

@@ -260,7 +260,8 @@ impl ExampleContext {
     async fn init_async<E: Example>(surface: &mut SurfaceWrapper, window: Arc<Window>) -> Self {
         log::info!("Initializing wgpu...");
 
-        let instance_descriptor = wgpu::InstanceDescriptor::from_env_or_default();
+        let mut instance_descriptor = wgpu::InstanceDescriptor::from_env_or_default();
+        instance_descriptor.backend_options.dx12.shader_compiler = wgpu::Dx12Compiler::StaticDxc;
         let instance = wgpu::Instance::new(&instance_descriptor);
         surface.pre_adapter(&instance, window);
         let adapter = get_adapter_with_capabilities_or_from_env(
