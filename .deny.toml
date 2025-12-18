@@ -54,9 +54,6 @@ private = { ignore = true }
 allow-git = [
     # Waiting on releases; used in examples/tests only
 
-    # Pending a release for https://github.com/gfx-rs/metal-rs/pull/365
-    "https://github.com/gfx-rs/metal-rs.git",
-
     # Pending a release for https://github.com/Xudong-Huang/generator-rs/pull/75
     "https://github.com/Xudong-Huang/generator-rs",
 ]

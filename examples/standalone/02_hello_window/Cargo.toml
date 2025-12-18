@@ -7,5 +7,5 @@ publish = false
 [dependencies]
 env_logger = "0.11"
 pollster = "0.4"
-wgpu = "27.0.0"
+wgpu = "28.0.0"
 winit = { version = "0.30.8", features = ["android-native-activity"] }

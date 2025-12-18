@@ -9,7 +9,7 @@ default = ["web"]
 web = ["wgpu/web"]
 
 [dependencies]
-wgpu = { version = "27.0.0", features = [
+wgpu = { version = "28.0.0", features = [
     "custom",
     "wgsl",
 ], default-features = false }
