@@ -1340,8 +1340,7 @@ impl Writer {
                 .to_words(&mut self.logical_layout.execution_modes);
                 spirv::ExecutionModel::GLCompute
             }
-            crate::ShaderStage::Task
-            => {
+            crate::ShaderStage::Task => {
                 let execution_mode = spirv::ExecutionMode::LocalSize;
                 Instruction::execution_mode(
                     function_id,
