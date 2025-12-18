@@ -6,7 +6,7 @@ OpCapability Shader
 OpExtension "SPV_KHR_storage_buffer_storage_class"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %31 "cs_main" %28
+OpEntryPoint GLCompute %31 "cs_main" %28 %47
 OpExecutionMode %31 LocalSize 2 1 1
 OpDecorate %5 ArrayStride 4
 OpMemberDecorate %7 0 Offset 0
@@ -28,6 +28,7 @@ OpDecorate %18 Binding 2
 OpDecorate %19 Block
 OpMemberDecorate %19 0 Offset 0
 OpDecorate %28 BuiltIn LocalInvocationId
+OpDecorate %47 BuiltIn LocalInvocationIndex
 %2 = OpTypeVoid
 %3 = OpTypeInt 32 0
 %4 = OpTypeInt 32 1
@@ -66,8 +67,8 @@ OpDecorate %28 BuiltIn LocalInvocationId
 %44 = OpConstantNull  %3
 %45 = OpConstantNull  %5
 %46 = OpConstantNull  %7
-%47 = OpConstantNull  %8
-%48 = OpTypeVector %9 3
+%48 = OpTypePointer Input %3
+%47 = OpVariable  %48  Input
 %53 = OpConstant  %3  264
 %55 = OpTypePointer StorageBuffer %4
 %59 = OpTypePointer Workgroup %4
@@ -79,8 +80,8 @@ OpDecorate %28 BuiltIn LocalInvocationId
 %39 = OpAccessChain  %38  %18 %34
 OpBranch %43
 %43 = OpLabel
-%49 = OpIEqual  %48  %30 %47
-%50 = OpAll  %9  %49
+%49 = OpLoad  %3  %47
+%50 = OpIEqual  %9  %49 %34
 OpSelectionMerge %51 None
 OpBranchConditional %50 %52 %51
 %52 = OpLabel

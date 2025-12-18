@@ -1,15 +1,15 @@
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 33
+; Bound: 29
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %11 "f" %18
+OpEntryPoint GLCompute %11 "f" %17
 OpExecutionMode %11 LocalSize 1 1 1
 OpMemberDecorate %6 0 Offset 0
 OpMemberDecorate %6 1 Offset 4
-OpDecorate %18 BuiltIn LocalInvocationId
+OpDecorate %17 BuiltIn LocalInvocationIndex
 %2 = OpTypeVoid
 %3 = OpTypeInt 32 1
 %4 = OpTypeInt 32 0
@@ -22,31 +22,27 @@ OpDecorate %18 BuiltIn LocalInvocationId
 %13 = OpConstant  %4  2
 %14 = OpConstant  %4  1
 %16 = OpConstantNull  %4
-%17 = OpTypeVector %4 3
-%19 = OpTypePointer Input %17
-%18 = OpVariable  %19  Input
-%21 = OpConstantNull  %17
-%22 = OpTypeVector %5 3
-%27 = OpConstant  %4  264
-%30 = OpConstant  %4  0
+%18 = OpTypePointer Input %4
+%17 = OpVariable  %18  Input
+%20 = OpConstant  %4  0
+%24 = OpConstant  %4  264
 %11 = OpFunction  %2  None %12
 %10 = OpLabel
 OpBranch %15
 %15 = OpLabel
-%20 = OpLoad  %17  %18
-%23 = OpIEqual  %22  %20 %21
-%24 = OpAll  %5  %23
-OpSelectionMerge %25 None
-OpBranchConditional %24 %26 %25
-%26 = OpLabel
+%19 = OpLoad  %4  %17
+%21 = OpIEqual  %5  %19 %20
+OpSelectionMerge %22 None
+OpBranchConditional %21 %23 %22
+%23 = OpLabel
 OpStore %8 %16
+OpBranch %22
+%22 = OpLabel
+OpControlBarrier %13 %13 %24
 OpBranch %25
 %25 = OpLabel
-OpControlBarrier %13 %13 %27
-OpBranch %28
-%28 = OpLabel
-%31 = OpAtomicCompareExchange  %4  %8 %7 %30 %30 %14 %13
-%32 = OpIEqual  %5  %31 %13
-%29 = OpCompositeConstruct  %6  %31 %32
+%27 = OpAtomicCompareExchange  %4  %8 %7 %20 %20 %14 %13
+%28 = OpIEqual  %5  %27 %13
+%26 = OpCompositeConstruct  %6  %27 %28
 OpReturn
 OpFunctionEnd

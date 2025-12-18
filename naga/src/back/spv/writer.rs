@@ -401,14 +401,6 @@ impl Writer {
         self.get_pointer_type_id(vec2u_id, class)
     }
 
-    pub(super) fn get_vec3u_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
-        let vec3u_id = self.get_numeric_type_id(NumericType::Vector {
-            size: crate::VectorSize::Tri,
-            scalar: crate::Scalar::U32,
-        });
-        self.get_pointer_type_id(vec3u_id, class)
-    }
-
     pub(super) fn get_bool_type_id(&mut self) -> Word {
         self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::BOOL))
     }
@@ -766,11 +758,10 @@ impl Writer {
             mesh_state: None,
         };
 
-        let mut local_invocation_id = None;
-
         let mut parameter_type_ids = Vec::with_capacity(ir_function.arguments.len());
 
         let mut local_invocation_index_var_id = None;
+        let mut local_invocation_index_id = None;
 
         for argument in ir_function.arguments.iter() {
             let class = spirv::StorageClass::Input;
@@ -799,12 +790,8 @@ impl Writer {
                         varying_id,
                         argument_type_id,
                     );
-
-                    if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationId) {
-                        local_invocation_id = Some(id);
-                    } else if binding
-                        == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex)
-                    {
+                    if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex) {
+                        local_invocation_index_id = Some(id);
                         local_invocation_index_var_id = Some(varying_id);
                     }
 
@@ -830,12 +817,9 @@ impl Writer {
                         let id =
                             self.load_io_with_f16_polyfill(&mut prelude.body, varying_id, type_id);
                         constituent_ids.push(id);
-
-                        if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationId) {
-                            local_invocation_id = Some(id);
-                        } else if binding
-                            == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex)
+                        if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex)
                         {
+                            local_invocation_index_id = Some(id);
                             local_invocation_index_var_id = Some(varying_id);
                         }
                     }
@@ -1223,7 +1207,7 @@ impl Writer {
                     next_id,
                     ir_module,
                     info,
-                    local_invocation_id,
+                    local_invocation_index_id,
                     interface,
                     context.function,
                 ),
@@ -2007,7 +1991,7 @@ impl Writer {
         entry_id: Word,
         ir_module: &crate::Module,
         info: &FunctionInfo,
-        local_invocation_id: Option<Word>,
+        local_invocation_index: Option<Word>,
         interface: &mut FunctionInterface,
         function: &mut Function,
     ) -> Option<Word> {
@@ -2015,7 +1999,10 @@ impl Writer {
             .global_variables
             .iter()
             .filter(|&(handle, var)| {
-                !info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
+                let task_exception = (var.space == crate::AddressSpace::TaskPayload)
+                    && interface.stage == crate::ShaderStage::Task;
+                !info[handle].is_empty()
+                    && (var.space == crate::AddressSpace::WorkGroup || task_exception)
             })
             .map(|(handle, var)| {
                 // It's safe to use `var_id` here, not `access_id`, because only
@@ -2032,16 +2019,15 @@ impl Writer {
             return None;
         }
 
-        let uint3_type_id = self.get_vec3u_type_id();
-
         let mut pre_if_block = Block::new(entry_id);
 
-        let local_invocation_id = if let Some(local_invocation_id) = local_invocation_id {
-            local_invocation_id
+        let local_invocation_index = if let Some(local_invocation_index) = local_invocation_index {
+            local_invocation_index
         } else {
             let varying_id = self.id_gen.next();
             let class = spirv::StorageClass::Input;
-            let pointer_type_id = self.get_vec3u_pointer_type_id(class);
+            let u32_ty_id = self.get_u32_type_id();
+            let pointer_type_id = self.get_pointer_type_id(u32_ty_id, class);
 
             Instruction::variable(pointer_type_id, varying_id, class, None)
                 .to_words(&mut self.logical_layout.declarations);
@@ -2049,37 +2035,27 @@ impl Writer {
             self.decorate(
                 varying_id,
                 spirv::Decoration::BuiltIn,
-                &[spirv::BuiltIn::LocalInvocationId as u32],
+                &[spirv::BuiltIn::LocalInvocationIndex as u32],
             );
 
             interface.varying_ids.push(varying_id);
             let id = self.id_gen.next();
             pre_if_block
                 .body
-                .push(Instruction::load(uint3_type_id, id, varying_id, None));
+                .push(Instruction::load(u32_ty_id, id, varying_id, None));
 
             id
         };
 
-        let zero_id = self.get_constant_null(uint3_type_id);
-        let bool3_type_id = self.get_vec3_bool_type_id();
+        let zero_id = self.get_constant_scalar(crate::Literal::U32(0));
 
         let eq_id = self.id_gen.next();
         pre_if_block.body.push(Instruction::binary(
             spirv::Op::IEqual,
-            bool3_type_id,
+            self.get_bool_type_id(),
             eq_id,
-            local_invocation_id,
+            local_invocation_index,
             zero_id,
-        ));
-
-        let condition_id = self.id_gen.next();
-        let bool_type_id = self.get_bool_type_id();
-        pre_if_block.body.push(Instruction::relational(
-            spirv::Op::All,
-            bool_type_id,
-            condition_id,
-            eq_id,
         ));
 
         let merge_id = self.id_gen.next();
@@ -2091,7 +2067,7 @@ impl Writer {
         let accept_id = self.id_gen.next();
         function.consume(
             pre_if_block,
-            Instruction::branch_conditional(condition_id, accept_id, merge_id),
+            Instruction::branch_conditional(eq_id, accept_id, merge_id),
         );
 
         let accept_block = Block {
