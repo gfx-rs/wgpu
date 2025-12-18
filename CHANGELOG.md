@@ -41,6 +41,10 @@ Bottom level categories:
 
 ## Unreleased
 
+### New Features
+
+- Initial wgsl-in ray tracing pipelines. By @Vecvec in [#8570](https://github.com/gfx-rs/wgpu/pull/8570).
+
 ## v28.0.0 (2025-12-17)
 
 ### Major Changes
@@ -332,7 +336,6 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 - Added support for transient textures on Vulkan and Metal. By @opstic in [#8247](https://github.com/gfx-rs/wgpu/pull/8247)
 - Implement shader triangle barycentric coordinate builtins. By @atlv24 in [#8320](https://github.com/gfx-rs/wgpu/pull/8320).
 - Added support for binding arrays of storage textures on Metal. By @msvbg in [#8464](https://github.com/gfx-rs/wgpu/pull/8464)
-- Initial wgsl-in ray tracing pipelines. By @Vecvec in [#8570](https://github.com/gfx-rs/wgpu/pull/8570).
 - Added support for multisampled texture arrays on Vulkan through adapter feature `MULTISAMPLE_ARRAY`. By @LaylBongers in [#8571](https://github.com/gfx-rs/wgpu/pull/8571).
 - Added `get_configuration` to `wgpu::Surface`, that returns the current configuration of `wgpu::Surface`. By @sagudev in [#8664](https://github.com/gfx-rs/wgpu/pull/8664).
 - Add `wgpu_core::Global::create_bind_group_layout_error`. By @ErichDonGubler in [#8650](https://github.com/gfx-rs/wgpu/pull/8650).
