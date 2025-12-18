@@ -33,6 +33,7 @@ webgpu:api,operation,vertex_state,correctness:setVertexBuffer_offset_and_attribu
 webgpu:api,validation,buffer,create:*
 webgpu:api,validation,buffer,destroy:*
 fails-if(dx12) webgpu:api,validation,capability_checks,limits,maxBindGroups:setBindGroup,*
+webgpu:api,validation,createBindGroup:buffer_offset_and_size_for_bind_groups_match:*
 webgpu:api,validation,createBindGroup:buffer,effective_buffer_binding_size:*
 webgpu:api,validation,createBindGroup:buffer,resource_binding_size:*
 // Fails because we coerce a size of 0 in `GPUDevice.createBindGroup(…)` to `buffer.size - offset`.
@@ -176,6 +177,10 @@ webgpu:shader,execution,flow_control,return:*
 // Many other vertex_buffer_access subtests also passing, but there are too many to enumerate.
 // Fails on Metal in CI only, not when running locally.
 fails-if(metal) webgpu:shader,execution,robust_access_vertex:vertex_buffer_access:indexed=true;indirect=false;drawCallTestParameter="baseVertex";type="float32x4";additionalBuffers=4;partialLastNumber=false;offsetVertexBuffer=true
+webgpu:shader,validation,const_assert,const_assert:*
+webgpu:shader,validation,expression,binary,short_circuiting_and_or:array_override:op="%26%26";a_val=1;b_val=1
+webgpu:shader,validation,expression,binary,short_circuiting_and_or:invalid_types:*
+webgpu:shader,validation,expression,binary,short_circuiting_and_or:scalar_vector:op="%26%26";lhs="bool";rhs="bool"
 webgpu:shader,validation,expression,call,builtin,all:arguments:test="ptr_deref"
 webgpu:shader,validation,expression,call,builtin,max:values:*
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="break"

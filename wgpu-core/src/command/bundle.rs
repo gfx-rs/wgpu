@@ -790,8 +790,8 @@ fn draw_mesh_tasks(
 ) -> Result<(), RenderBundleErrorInner> {
     state.is_ready()?;
 
-    let groups_size_limit = state.device.limits.max_task_workgroups_per_dimension;
-    let max_groups = state.device.limits.max_task_workgroup_total_count;
+    let groups_size_limit = state.device.limits.max_task_mesh_workgroups_per_dimension;
+    let max_groups = state.device.limits.max_task_mesh_workgroup_total_count;
     if group_count_x > groups_size_limit
         || group_count_y > groups_size_limit
         || group_count_z > groups_size_limit

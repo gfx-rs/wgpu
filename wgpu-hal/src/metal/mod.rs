@@ -316,6 +316,8 @@ struct PrivateCapabilities {
     float_atomics: bool,
     supports_shared_event: bool,
     mesh_shaders: bool,
+    max_mesh_task_workgroup_count: u32,
+    max_task_payload_size: u32,
     supported_vertex_amplification_factor: u32,
     shader_barycentrics: bool,
     supports_memoryless_storage: bool,
@@ -1009,7 +1011,7 @@ struct CommandState {
     ///   checks and the WGSL `arrayLength` function.
     ///
     /// For each stage `S` in `stage_infos`, we consult this to find the sizes
-    /// of the buffers listed in [`stage_infos.S.sized_bindings`], which we must
+    /// of the buffers listed in `stage_infos.S.sized_bindings`, which we must
     /// pass to the entry point.
     ///
     /// See `device::CompiledShader::sized_bindings` for more details.

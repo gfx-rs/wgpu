@@ -154,7 +154,9 @@ impl GPUDevice {
     // error, not a validation error. (WebGPU specifies this check on the
     // content timeline.)
     if descriptor.mapped_at_creation
-      && descriptor.size % wgpu_types::COPY_BUFFER_ALIGNMENT != 0
+      && !descriptor
+        .size
+        .is_multiple_of(wgpu_types::COPY_BUFFER_ALIGNMENT)
     {
       return Err(JsErrorBox::range_error(
         format!(
@@ -423,14 +425,14 @@ impl GPUDevice {
             BindingResource::Buffer(wgpu_core::binding_model::BufferBinding {
               buffer: buffer.id,
               offset: 0,
-              size: NonZeroU64::new(buffer.size),
+              size: Some(buffer.size),
             })
           }
           GPUBindingResource::BufferBinding(buffer_binding) => {
             BindingResource::Buffer(wgpu_core::binding_model::BufferBinding {
               buffer: buffer_binding.buffer.id,
               offset: buffer_binding.offset,
-              size: buffer_binding.size.and_then(NonZeroU64::new),
+              size: buffer_binding.size,
             })
           }
         },

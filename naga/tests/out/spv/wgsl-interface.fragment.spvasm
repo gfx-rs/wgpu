@@ -17,8 +17,8 @@ OpMemberDecorate %7 2 Offset 8
 OpDecorate %9 ArrayStride 4
 OpMemberDecorate %12 0 Offset 0
 OpMemberDecorate %13 0 Offset 0
-OpDecorate %16 Invariant
 OpDecorate %16 BuiltIn FragCoord
+OpDecorate %16 Invariant
 OpDecorate %19 Location 1
 OpDecorate %22 BuiltIn FrontFacing
 OpDecorate %22 Flat

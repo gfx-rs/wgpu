@@ -182,7 +182,7 @@ impl Corpus {
                 println!("\t\tTest '{test_path:?}'");
 
                 let instance_desc = wgt::InstanceDescriptor::from_env_or_default();
-                let instance = wgc::instance::Instance::new("test", &instance_desc);
+                let instance = wgc::instance::Instance::new("test", &instance_desc, None);
                 let adapter = match instance.request_adapter(
                     &wgt::RequestAdapterOptions {
                         power_preference: wgt::PowerPreference::None,

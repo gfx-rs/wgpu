@@ -590,6 +590,13 @@ impl super::PrivateCapabilities {
 
         let is_virtual = device.name().to_lowercase().contains("virtual");
 
+        let mesh_shaders = family_check
+                && (device.supports_family(MTLGPUFamily::Metal3)
+                    || device.supports_family(MTLGPUFamily::Apple7)
+                    || device.supports_family(MTLGPUFamily::Mac2))
+                    // Mesh shaders don't work on virtual devices even if they should be supported. CI thing
+                && !is_virtual;
+
         let msl_version = if version.at_least((14, 0), (17, 0), (17, 0), (1, 0), os_type) {
             MTLLanguageVersion::V3_1
         } else if version.at_least((13, 0), (16, 0), (16, 0), (1, 0), os_type) {
@@ -955,13 +962,6 @@ impl super::PrivateCapabilities {
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             supports_memoryless_storage: metal4
                 || (family_check && device.supports_family(MTLGPUFamily::Apple2)),
-            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
-            mesh_shaders: family_check
-                && (device.supports_family(MTLGPUFamily::Metal3)
-                    || device.supports_family(MTLGPUFamily::Apple7)
-                    || device.supports_family(MTLGPUFamily::Mac2))
-                    // Mesh shaders don't work on virtual devices even if they should be supported. CI thing
-                && !is_virtual,
             supported_vertex_amplification_factor: {
                 let mut factor = 1;
                 // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=8
@@ -983,6 +983,10 @@ impl super::PrivateCapabilities {
                 }
                 factor as u32
             },
+            // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
+            mesh_shaders,
+            max_mesh_task_workgroup_count: if mesh_shaders { 1024 } else { 0 },
+            max_task_payload_size: if mesh_shaders { 16384 - 32 } else { 0 },
         }
     }
 
@@ -1138,7 +1142,6 @@ impl super::PrivateCapabilities {
             .set(wgt::DownlevelFlags::ANISOTROPIC_FILTERING, true);
 
         let base = wgt::Limits::default();
-
         // Be careful adjusting limits here. The `AdapterShared` stores the
         // original `PrivateCapabilities`, so code could accidentally use
         // the wrong value.
@@ -1185,12 +1188,6 @@ impl super::PrivateCapabilities {
             max_buffer_size: self.max_buffer_size,
             max_non_sampler_bindings: u32::MAX,
 
-            // See https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf, Maximum threadgroups per mesh shader grid
-            max_task_workgroup_total_count: 1024,
-            max_task_workgroups_per_dimension: 1024,
-            max_mesh_multiview_view_count: 0,
-            max_mesh_output_layers: self.max_texture_layers as u32,
-
             max_blas_primitive_count: 0, // When added: 2^28 from https://developer.apple.com/documentation/metal/mtlaccelerationstructureusage/extendedlimits
             max_blas_geometry_count: 0,  // When added: 2^24
             max_tlas_instance_count: 0,  // When added: 2^24
@@ -1207,6 +1204,20 @@ impl super::PrivateCapabilities {
             } else {
                 0
             },
+
+            // Should be not too large
+            max_task_mesh_workgroup_total_count: self.max_mesh_task_workgroup_count,
+            max_task_mesh_workgroups_per_dimension: self.max_mesh_task_workgroup_count,
+            max_task_invocations_per_workgroup: if self.mesh_shaders { 1024 } else { 0 },
+            max_task_invocations_per_dimension: if self.mesh_shaders { 1024 } else { 0 },
+            max_mesh_invocations_per_workgroup: if self.mesh_shaders { 1024 } else { 0 },
+            max_mesh_invocations_per_dimension: if self.mesh_shaders { 1024 } else { 0 },
+            // Using certain variables or debuggers can reduce the size by 32 bytes
+            max_task_payload_size: self.max_task_payload_size,
+            max_mesh_output_vertices: 256,
+            max_mesh_output_primitives: 256,
+            max_mesh_output_layers: self.max_texture_layers as u32,
+            max_mesh_multiview_view_count: 0,
         };
 
         // Since a bunch of the limits are duplicated between `Limits` and

@@ -1325,7 +1325,14 @@ impl crate::Device for super::Device {
                 ShaderVisibility: Direct3D12::D3D12_SHADER_VISIBILITY_ALL, // really needed for VS and CS only,
             });
             let binding = bind_cbv;
-            bind_cbv.register += 1;
+            // This is the last time we use this, but lets increment
+            // it so if we add more later, the value behaves correctly.
+
+            // This is an allow as it doesn't trigger on 1.82, hal's MSRV.
+            #[allow(unused_assignments)]
+            {
+                bind_cbv.register += 1;
+            }
             (Some(parameter_index as u32), Some(binding))
         } else {
             (None, None)

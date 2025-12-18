@@ -41,20 +41,6 @@ fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
     return vec3(1, 1, 1);
 }
 
-// This tests if we can properly write a task shader that is divergent
-@task
-@payload(taskPayload)
-@workgroup_size(2)
-fn ts_divergent(@builtin(local_invocation_index) thread_id: u32) -> @builtin(mesh_task_size) vec3<u32> {
-    if thread_id == 0 {
-        taskPayload.colorMask = vec4(1.0, 1.0, 0.0, 1.0);
-        taskPayload.visible = true;
-        return vec3(1, 1, 1);
-    }
-    // Only the first thread's value is taken
-    return vec3(2,2,2);
-}
-
 struct MeshOutput {
     @builtin(vertices) vertices: array<VertexOutput, 3>,
     @builtin(primitives) primitives: array<PrimitiveOutput, 1>,
@@ -86,6 +72,7 @@ fn ms_main() {
     mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
 }
 
+// Don't use task payload if no task shader is present
 @mesh(mesh_output)
 @workgroup_size(1)
 fn ms_no_ts() {
@@ -107,11 +94,11 @@ fn ms_no_ts() {
     mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
 }
 
-// See ts_divergent comment
 @mesh(mesh_output)
-@workgroup_size(1)
-fn ms_divergent(@builtin(local_invocation_index) thread_id: u32) {
-    if thread_id == 0 {
+@workgroup_size(2)
+fn ms_divergent(@builtin(local_invocation_index) index: u32) {
+    // Workgroup with 2 threads. They return at different points.
+    if index == 0 {
         mesh_output.vertex_count = 3;
         mesh_output.primitive_count = 1;
         workgroupData = 2.0;
@@ -128,7 +115,6 @@ fn ms_divergent(@builtin(local_invocation_index) thread_id: u32) {
         mesh_output.primitives[0].indices = vec3<u32>(0, 1, 2);
         mesh_output.primitives[0].cull = false;
         mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
-        // "Early" return
         return;
     }
 }
