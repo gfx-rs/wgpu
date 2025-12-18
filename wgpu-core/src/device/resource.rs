@@ -567,7 +567,7 @@ impl Device {
                     buffer: params_buffer,
                     usage: hal::StateTransition {
                         from: wgt::BufferUses::MAP_WRITE,
-                        to: wgt::BufferUses::COPY_SRC,
+                        to: wgt::BufferUses::COPY_DST,
                     },
                 }]);
             pending_writes.command_encoder.copy_buffer_to_buffer(
