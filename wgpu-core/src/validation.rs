@@ -8,7 +8,6 @@ use core::fmt;
 
 use arrayvec::ArrayVec;
 use hashbrown::hash_map::Entry;
-use naga::BuiltIn;
 use shader_io_deductions::{display_deductions_as_optional_list, MaxVertexShaderOutputDeduction};
 use thiserror::Error;
 use wgt::{
@@ -155,6 +154,117 @@ impl fmt::Display for InterfaceVar {
 enum Varying {
     Local { location: u32, iv: InterfaceVar },
     BuiltIn(BuiltIn),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum BuiltIn {
+    Position { invariant: bool },
+    ViewIndex,
+    BaseInstance,
+    BaseVertex,
+    ClipDistances,
+    CullDistance,
+    InstanceIndex,
+    PointSize,
+    VertexIndex,
+    DrawIndex,
+    FragDepth,
+    PointCoord,
+    FrontFacing,
+    PrimitiveIndex,
+    Barycentric { perspective: bool },
+    SampleIndex,
+    SampleMask,
+    GlobalInvocationId,
+    LocalInvocationId,
+    LocalInvocationIndex,
+    WorkGroupId,
+    WorkGroupSize,
+    NumWorkGroups,
+    NumSubgroups,
+    SubgroupId,
+    SubgroupSize,
+    SubgroupInvocationId,
+    MeshTaskSize,
+    CullPrimitive,
+    PointIndex,
+    LineIndices,
+    TriangleIndices,
+    VertexCount,
+    Vertices,
+    PrimitiveCount,
+    Primitives,
+    RayInvocationId,
+    NumRayInvocations,
+    InstanceCustomData,
+    GeometryIndex,
+    WorldRayOrigin,
+    WorldRayDirection,
+    ObjectRayOrigin,
+    ObjectRayDirection,
+    RayTmin,
+    RayTCurrentMax,
+    ObjectToWorld,
+    WorldToObject,
+    HitKind,
+}
+
+impl BuiltIn {
+    pub fn to_naga(&self) -> naga::BuiltIn {
+        match self {
+            &Self::Position { invariant } => naga::BuiltIn::Position { invariant },
+            Self::ViewIndex => naga::BuiltIn::ViewIndex,
+            Self::BaseInstance => naga::BuiltIn::BaseInstance,
+            Self::BaseVertex => naga::BuiltIn::BaseVertex,
+            Self::ClipDistances => naga::BuiltIn::ClipDistances,
+            Self::CullDistance => naga::BuiltIn::CullDistance,
+            Self::InstanceIndex => naga::BuiltIn::InstanceIndex,
+            Self::PointSize => naga::BuiltIn::PointSize,
+            Self::VertexIndex => naga::BuiltIn::VertexIndex,
+            Self::DrawIndex => naga::BuiltIn::DrawIndex,
+            Self::FragDepth => naga::BuiltIn::FragDepth,
+            Self::PointCoord => naga::BuiltIn::PointCoord,
+            Self::FrontFacing => naga::BuiltIn::FrontFacing,
+            Self::PrimitiveIndex => naga::BuiltIn::PrimitiveIndex,
+            Self::Barycentric { perspective } => naga::BuiltIn::Barycentric {
+                perspective: *perspective,
+            },
+            Self::SampleIndex => naga::BuiltIn::SampleIndex,
+            Self::SampleMask => naga::BuiltIn::SampleMask,
+            Self::GlobalInvocationId => naga::BuiltIn::GlobalInvocationId,
+            Self::LocalInvocationId => naga::BuiltIn::LocalInvocationId,
+            Self::LocalInvocationIndex => naga::BuiltIn::LocalInvocationIndex,
+            Self::WorkGroupId => naga::BuiltIn::WorkGroupId,
+            Self::WorkGroupSize => naga::BuiltIn::WorkGroupSize,
+            Self::NumWorkGroups => naga::BuiltIn::NumWorkGroups,
+            Self::NumSubgroups => naga::BuiltIn::NumSubgroups,
+            Self::SubgroupId => naga::BuiltIn::SubgroupId,
+            Self::SubgroupSize => naga::BuiltIn::SubgroupSize,
+            Self::SubgroupInvocationId => naga::BuiltIn::SubgroupInvocationId,
+            Self::MeshTaskSize => naga::BuiltIn::MeshTaskSize,
+            Self::CullPrimitive => naga::BuiltIn::CullPrimitive,
+            Self::PointIndex => naga::BuiltIn::PointIndex,
+            Self::LineIndices => naga::BuiltIn::LineIndices,
+            Self::TriangleIndices => naga::BuiltIn::TriangleIndices,
+            Self::VertexCount => naga::BuiltIn::VertexCount,
+            Self::Vertices => naga::BuiltIn::Vertices,
+            Self::PrimitiveCount => naga::BuiltIn::PrimitiveCount,
+            Self::Primitives => naga::BuiltIn::Primitives,
+            Self::RayInvocationId => naga::BuiltIn::RayInvocationId,
+            Self::NumRayInvocations => naga::BuiltIn::NumRayInvocations,
+            Self::InstanceCustomData => naga::BuiltIn::InstanceCustomData,
+            Self::GeometryIndex => naga::BuiltIn::GeometryIndex,
+            Self::WorldRayOrigin => naga::BuiltIn::WorldRayOrigin,
+            Self::WorldRayDirection => naga::BuiltIn::WorldRayDirection,
+            Self::ObjectRayOrigin => naga::BuiltIn::ObjectRayOrigin,
+            Self::ObjectRayDirection => naga::BuiltIn::ObjectRayDirection,
+            Self::RayTmin => naga::BuiltIn::RayTmin,
+            Self::RayTCurrentMax => naga::BuiltIn::RayTCurrentMax,
+            Self::ObjectToWorld => naga::BuiltIn::ObjectToWorld,
+            Self::WorldToObject => naga::BuiltIn::WorldToObject,
+            Self::HitKind => naga::BuiltIn::HitKind,
+        }
+    }
 }
 
 #[allow(unused)]
@@ -995,7 +1105,57 @@ impl Interface {
                     per_primitive,
                 },
             },
-            Some(&naga::Binding::BuiltIn(built_in)) => Varying::BuiltIn(built_in),
+            Some(&naga::Binding::BuiltIn(built_in)) => Varying::BuiltIn(match built_in {
+                naga::BuiltIn::Position { invariant } => BuiltIn::Position { invariant },
+                naga::BuiltIn::ViewIndex => BuiltIn::ViewIndex,
+                naga::BuiltIn::BaseInstance => BuiltIn::BaseInstance,
+                naga::BuiltIn::BaseVertex => BuiltIn::BaseVertex,
+                naga::BuiltIn::ClipDistances => BuiltIn::ClipDistances,
+                naga::BuiltIn::CullDistance => BuiltIn::CullDistance,
+                naga::BuiltIn::InstanceIndex => BuiltIn::InstanceIndex,
+                naga::BuiltIn::PointSize => BuiltIn::PointSize,
+                naga::BuiltIn::VertexIndex => BuiltIn::VertexIndex,
+                naga::BuiltIn::DrawIndex => BuiltIn::DrawIndex,
+                naga::BuiltIn::FragDepth => BuiltIn::FragDepth,
+                naga::BuiltIn::PointCoord => BuiltIn::PointCoord,
+                naga::BuiltIn::FrontFacing => BuiltIn::FrontFacing,
+                naga::BuiltIn::PrimitiveIndex => BuiltIn::PrimitiveIndex,
+                naga::BuiltIn::Barycentric { perspective } => BuiltIn::Barycentric { perspective },
+                naga::BuiltIn::SampleIndex => BuiltIn::SampleIndex,
+                naga::BuiltIn::SampleMask => BuiltIn::SampleMask,
+                naga::BuiltIn::GlobalInvocationId => BuiltIn::GlobalInvocationId,
+                naga::BuiltIn::LocalInvocationId => BuiltIn::LocalInvocationId,
+                naga::BuiltIn::LocalInvocationIndex => BuiltIn::LocalInvocationIndex,
+                naga::BuiltIn::WorkGroupId => BuiltIn::WorkGroupId,
+                naga::BuiltIn::WorkGroupSize => BuiltIn::WorkGroupSize,
+                naga::BuiltIn::NumWorkGroups => BuiltIn::NumWorkGroups,
+                naga::BuiltIn::NumSubgroups => BuiltIn::NumSubgroups,
+                naga::BuiltIn::SubgroupId => BuiltIn::SubgroupId,
+                naga::BuiltIn::SubgroupSize => BuiltIn::SubgroupSize,
+                naga::BuiltIn::SubgroupInvocationId => BuiltIn::SubgroupInvocationId,
+                naga::BuiltIn::MeshTaskSize => BuiltIn::MeshTaskSize,
+                naga::BuiltIn::CullPrimitive => BuiltIn::CullPrimitive,
+                naga::BuiltIn::PointIndex => BuiltIn::PointIndex,
+                naga::BuiltIn::LineIndices => BuiltIn::LineIndices,
+                naga::BuiltIn::TriangleIndices => BuiltIn::TriangleIndices,
+                naga::BuiltIn::VertexCount => BuiltIn::VertexCount,
+                naga::BuiltIn::Vertices => BuiltIn::Vertices,
+                naga::BuiltIn::PrimitiveCount => BuiltIn::PrimitiveCount,
+                naga::BuiltIn::Primitives => BuiltIn::Primitives,
+                naga::BuiltIn::RayInvocationId => BuiltIn::RayInvocationId,
+                naga::BuiltIn::NumRayInvocations => BuiltIn::NumRayInvocations,
+                naga::BuiltIn::InstanceCustomData => BuiltIn::InstanceCustomData,
+                naga::BuiltIn::GeometryIndex => BuiltIn::GeometryIndex,
+                naga::BuiltIn::WorldRayOrigin => BuiltIn::WorldRayOrigin,
+                naga::BuiltIn::WorldRayDirection => BuiltIn::WorldRayDirection,
+                naga::BuiltIn::ObjectRayOrigin => BuiltIn::ObjectRayOrigin,
+                naga::BuiltIn::ObjectRayDirection => BuiltIn::ObjectRayDirection,
+                naga::BuiltIn::RayTmin => BuiltIn::RayTmin,
+                naga::BuiltIn::RayTCurrentMax => BuiltIn::RayTCurrentMax,
+                naga::BuiltIn::ObjectToWorld => BuiltIn::ObjectToWorld,
+                naga::BuiltIn::WorldToObject => BuiltIn::WorldToObject,
+                naga::BuiltIn::HitKind => BuiltIn::HitKind,
+            }),
             None => {
                 log::error!("Missing binding for a varying");
                 return;
@@ -1510,8 +1670,8 @@ impl Interface {
                 let deductions = entry_point.inputs.iter().filter_map(|output| match output {
                     Varying::Local { .. } => None,
                     Varying::BuiltIn(builtin) => {
-                        MaxFragmentShaderInputDeduction::from_inter_stage_builtin(*builtin).or_else(
-                            || {
+                        MaxFragmentShaderInputDeduction::from_inter_stage_builtin(builtin.to_naga())
+                            .or_else(|| {
                                 unreachable!(
                                     concat!(
                                         "unexpected built-in provided; ",
@@ -1519,8 +1679,7 @@ impl Interface {
                                     ),
                                     builtin
                                 )
-                            },
-                        )
+                            })
                     }
                 });
 
