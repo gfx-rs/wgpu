@@ -76,6 +76,12 @@ Bottom level categories:
 
 - Expanded documentation of `QuerySet`, `QueryType`, and `resolve_query_set()` describing how to use queries. By @kpreid in [#8776](https://github.com/gfx-rs/wgpu/pull/8776).
 
+### Changes
+
+#### Naga
+
+- Prevent UB from incorrectly using ray queries on HLSL. By @Vecvec in [#8763](https://github.com/gfx-rs/wgpu/pull/8763).
+
 ## v28.0.0 (2025-12-17)
 
 ### Major Changes
