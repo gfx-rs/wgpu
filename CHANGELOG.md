@@ -41,6 +41,11 @@ Bottom level categories:
 
 ## Unreleased
 
+## v28.0.1 (2025-03-01)
+
+### Metal
+- Re-added support for TRANSIENT textures on Apple A7 chips. By @Opstic in [#8725](https://github.com/gfx-rs/wgpu/pull/8725).
+
 ## v28.0.0 (2025-12-17)
 
 ### Major Changes
