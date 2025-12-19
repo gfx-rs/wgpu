@@ -111,7 +111,8 @@ RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructu
         if (naga_tmin_valid && naga_tmax_valid && naga_origin_valid && naga_dir_valid && !(naga_contains_skip_triangles_aabbs || naga_contains_skip_triangles_cull || naga_contains_multiple_opaque)) {
             naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 1;
             rq_1.TraceRayInline(acs, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
-    }}
+        }
+    }
     uint2 loop_bound = uint2(4294967295u, 4294967295u);
     while(true) {
         if (all(loop_bound == uint2(0u, 0u))) { break; }
@@ -212,7 +213,8 @@ void main_candidate()
         if (naga_tmin_valid && naga_tmax_valid && naga_origin_valid && naga_dir_valid && !(naga_contains_skip_triangles_aabbs || naga_contains_skip_triangles_cull || naga_contains_multiple_opaque)) {
             naga_query_init_tracker_for_rq = naga_query_init_tracker_for_rq | 1;
             rq.TraceRayInline(acc_struct, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
-    }}
+        }
+    }
     RayIntersection intersection_1 = GetCandidateIntersection(rq, naga_query_init_tracker_for_rq);
     if ((intersection_1.kind == 3u)) {
         if (((naga_query_init_tracker_for_rq & 2) == 2) && !((naga_query_init_tracker_for_rq & 4) == 4)) {

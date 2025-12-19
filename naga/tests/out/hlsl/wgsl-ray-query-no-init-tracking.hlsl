@@ -87,7 +87,7 @@ RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructu
     {
         RayDesc_ naga_desc = ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos, dir);
         rq_1.TraceRayInline(acs, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
-    }}
+    }
     uint2 loop_bound = uint2(4294967295u, 4294967295u);
     while(true) {
         if (all(loop_bound == uint2(0u, 0u))) { break; }
@@ -157,7 +157,7 @@ void main_candidate()
     {
         RayDesc_ naga_desc = ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos_2, dir_2);
         rq.TraceRayInline(acc_struct, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
-    }}
+    }
     RayIntersection intersection_1 = GetCandidateIntersection(rq, naga_query_init_tracker_for_rq);
     if ((intersection_1.kind == 3u)) {
         rq.CommitProceduralPrimitiveHit(10.0);

@@ -379,7 +379,10 @@ impl<W: Write> super::Writer<'_, W> {
             self.out,
             ", naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));"
         )?;
-        writeln!(self.out, "{base_level}}}}}")?;
+        if self.options.ray_query_initialization_tracking {
+            writeln!(self.out, "{base_level}    }}")?;
+        }
+        writeln!(self.out, "{base_level}}}")?;
         Ok(())
     }
 

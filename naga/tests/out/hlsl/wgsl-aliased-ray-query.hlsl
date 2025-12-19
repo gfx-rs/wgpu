@@ -105,7 +105,8 @@ void main_candidate()
         if (naga_tmin_valid && naga_tmax_valid && naga_origin_valid && naga_dir_valid && !(naga_contains_skip_triangles_aabbs || naga_contains_skip_triangles_cull || naga_contains_multiple_opaque)) {
             naga_query_init_tracker_for_rq_1 = naga_query_init_tracker_for_rq_1 | 1;
             rq_1.TraceRayInline(acc_struct, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
-    }}
+        }
+    }
     RayIntersection intersection = GetCandidateIntersection(rq_1, naga_query_init_tracker_for_rq_1);
     if ((intersection.kind == 3u)) {
         if (((naga_query_init_tracker_for_rq_1 & 2) == 2) && !((naga_query_init_tracker_for_rq_1 & 4) == 4)) {
