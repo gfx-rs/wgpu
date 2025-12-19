@@ -162,7 +162,7 @@ enum BuiltIn {
     ViewIndex,
     BaseInstance,
     BaseVertex,
-    ClipDistances,
+    ClipDistances { array_size: u32 },
     CullDistance,
     InstanceIndex,
     PointSize,
@@ -216,7 +216,7 @@ impl BuiltIn {
             Self::ViewIndex => naga::BuiltIn::ViewIndex,
             Self::BaseInstance => naga::BuiltIn::BaseInstance,
             Self::BaseVertex => naga::BuiltIn::BaseVertex,
-            Self::ClipDistances => naga::BuiltIn::ClipDistances,
+            Self::ClipDistances { .. } => naga::BuiltIn::ClipDistances,
             Self::CullDistance => naga::BuiltIn::CullDistance,
             Self::InstanceIndex => naga::BuiltIn::InstanceIndex,
             Self::PointSize => naga::BuiltIn::PointSize,
@@ -1078,6 +1078,33 @@ impl Interface {
                 }
                 return;
             }
+            naga::TypeInner::Array { base, size, stride }
+                if matches!(
+                    binding,
+                    Some(naga::Binding::BuiltIn(naga::BuiltIn::ClipDistances)),
+                ) =>
+            {
+                // NOTE: We should already have validated these in `naga`.
+                debug_assert_eq!(
+                    &arena[base].inner,
+                    &naga::TypeInner::Scalar(naga::Scalar::F32)
+                );
+                debug_assert_eq!(stride, 4);
+
+                let naga::ArraySize::Constant(array_size) = size else {
+                    // NOTE: Based on the
+                    // [spec](https://gpuweb.github.io/gpuweb/wgsl/#fixed-footprint-types):
+                    //
+                    // > The only valid use of a fixed-size array with an element count that is an
+                    // > override-expression that is not a const-expression is as a memory view in
+                    // > the workgroup address space.
+                    unreachable!("non-constant array size for `clip_distances`")
+                };
+                let array_size = array_size.get();
+
+                list.push(Varying::BuiltIn(BuiltIn::ClipDistances { array_size }));
+                return;
+            }
             ref other => {
                 //Note: technically this should be at least `log::error`, but
                 // the reality is - every shader coming from `glslc` outputs an array
@@ -1110,7 +1137,7 @@ impl Interface {
                 naga::BuiltIn::ViewIndex => BuiltIn::ViewIndex,
                 naga::BuiltIn::BaseInstance => BuiltIn::BaseInstance,
                 naga::BuiltIn::BaseVertex => BuiltIn::BaseVertex,
-                naga::BuiltIn::ClipDistances => BuiltIn::ClipDistances,
+                naga::BuiltIn::ClipDistances => unreachable!(),
                 naga::BuiltIn::CullDistance => BuiltIn::CullDistance,
                 naga::BuiltIn::InstanceIndex => BuiltIn::InstanceIndex,
                 naga::BuiltIn::PointSize => BuiltIn::PointSize,
@@ -1598,7 +1625,21 @@ impl Interface {
                     None
                 };
 
-                let deductions = point_list_deduction.into_iter();
+                let clip_distance_deductions = entry_point.outputs.iter().filter_map(|output| {
+                    if let &Varying::BuiltIn(BuiltIn::ClipDistances { array_size }) = output {
+                        Some(MaxVertexShaderOutputDeduction::ClipDistances { array_size })
+                    } else {
+                        None
+                    }
+                });
+                debug_assert!(
+                    clip_distance_deductions.clone().count() <= 1,
+                    "multiple `clip_distances` outputs found"
+                );
+
+                let deductions = point_list_deduction
+                    .into_iter()
+                    .chain(clip_distance_deductions);
 
                 for deduction in deductions.clone() {
                     // NOTE: Deductions, in the current version of the spec. we implement, do not

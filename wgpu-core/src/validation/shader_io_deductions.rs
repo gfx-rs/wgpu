@@ -12,18 +12,32 @@ pub enum MaxVertexShaderOutputDeduction {
     /// When a pipeline's [`crate::pipeline::RenderPipelineDescriptor::primitive`] is set to
     /// [`wgt::PrimitiveTopology::PointList`].
     PointListPrimitiveTopology,
+    /// When a clip distances array primitive is used in an output.
+    ClipDistances { array_size: u32 },
+}
+
+impl MaxVertexShaderOutputDeduction {
+    fn variables_from_clip_distance_slot(num_slots: u32) -> u32 {
+        num_slots.div_ceil(4)
+    }
 }
 
 impl MaxVertexShaderOutputDeduction {
     pub fn for_variables(self) -> u32 {
         match self {
             Self::PointListPrimitiveTopology => 1,
+            Self::ClipDistances { array_size } => {
+                Self::variables_from_clip_distance_slot(array_size)
+            }
         }
     }
 
     pub fn for_location(self) -> u32 {
         match self {
             Self::PointListPrimitiveTopology => 0,
+            Self::ClipDistances { array_size } => {
+                Self::variables_from_clip_distance_slot(array_size)
+            }
         }
     }
 }
