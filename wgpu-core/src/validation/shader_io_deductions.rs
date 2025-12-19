@@ -28,6 +28,99 @@ impl MaxVertexShaderOutputDeduction {
     }
 }
 
+/// Max shader I/O variable deductions for vertex shader output. Used by
+/// [`StageError::TooManyUserDefinedFragmentInputs`] and
+/// [`StageError::FragmentInputLocationTooLarge`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MaxFragmentShaderInputDeduction {
+    InterStageBuiltIn(InterStageBuiltIn),
+}
+
+impl MaxFragmentShaderInputDeduction {
+    pub fn for_variables(self) -> u32 {
+        match self {
+            Self::InterStageBuiltIn(builtin) => match builtin {
+                InterStageBuiltIn::FrontFacing
+                | InterStageBuiltIn::SampleIndex
+                | InterStageBuiltIn::SampleMask
+                | InterStageBuiltIn::PrimitiveIndex
+                | InterStageBuiltIn::SubgroupInvocationId
+                | InterStageBuiltIn::SubgroupSize
+                | InterStageBuiltIn::ViewIndex
+                | InterStageBuiltIn::PointCoord => 1,
+                InterStageBuiltIn::Barycentric => 3,
+                InterStageBuiltIn::Position => 4,
+            },
+        }
+    }
+
+    pub fn from_inter_stage_builtin(builtin: naga::BuiltIn) -> Option<Self> {
+        use naga::BuiltIn;
+
+        Some(Self::InterStageBuiltIn(match builtin {
+            BuiltIn::FrontFacing => InterStageBuiltIn::FrontFacing,
+            BuiltIn::SampleIndex => InterStageBuiltIn::SampleIndex,
+            BuiltIn::SampleMask => InterStageBuiltIn::SampleMask,
+            BuiltIn::PrimitiveIndex => InterStageBuiltIn::PrimitiveIndex,
+            BuiltIn::SubgroupSize => InterStageBuiltIn::SubgroupSize,
+            BuiltIn::SubgroupInvocationId => InterStageBuiltIn::SubgroupInvocationId,
+
+            BuiltIn::PointCoord => InterStageBuiltIn::PointCoord,
+            BuiltIn::Barycentric => InterStageBuiltIn::Barycentric,
+            BuiltIn::Position { .. } => InterStageBuiltIn::Position,
+            BuiltIn::ViewIndex => InterStageBuiltIn::ViewIndex,
+
+            BuiltIn::BaseInstance
+            | BuiltIn::BaseVertex
+            | BuiltIn::ClipDistance
+            | BuiltIn::CullDistance
+            | BuiltIn::InstanceIndex
+            | BuiltIn::PointSize
+            | BuiltIn::VertexIndex
+            | BuiltIn::DrawID
+            | BuiltIn::FragDepth
+            | BuiltIn::GlobalInvocationId
+            | BuiltIn::LocalInvocationId
+            | BuiltIn::LocalInvocationIndex
+            | BuiltIn::WorkGroupId
+            | BuiltIn::WorkGroupSize
+            | BuiltIn::NumWorkGroups
+            | BuiltIn::NumSubgroups
+            | BuiltIn::SubgroupId
+            | BuiltIn::MeshTaskSize
+            | BuiltIn::CullPrimitive
+            | BuiltIn::PointIndex
+            | BuiltIn::LineIndices
+            | BuiltIn::TriangleIndices
+            | BuiltIn::VertexCount
+            | BuiltIn::Vertices
+            | BuiltIn::PrimitiveCount
+            | BuiltIn::Primitives => return None,
+        }))
+    }
+}
+
+/// A [`naga::BuiltIn`] that counts towards
+/// a [`MaxFragmentShaderInputDeduction::InterStageBuiltIn`].
+///
+/// See also <https://www.w3.org/TR/webgpu/#inter-stage-builtins>.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InterStageBuiltIn {
+    // Standard for WebGPU
+    FrontFacing,
+    SampleIndex,
+    SampleMask,
+    PrimitiveIndex,
+    SubgroupInvocationId,
+    SubgroupSize,
+
+    // Non-standard
+    PointCoord,
+    Barycentric,
+    Position,
+    ViewIndex,
+}
+
 pub(in crate::validation) fn display_deductions_as_optional_list<T>(
     deductions: &[T],
     accessor: fn(&T) -> u32,

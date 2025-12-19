@@ -14,7 +14,10 @@ use wgt::{
     BindGroupLayoutEntry, BindingType,
 };
 
-use crate::{device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
+use crate::{
+    device::bgl, resource::InvalidResourceError,
+    validation::shader_io_deductions::MaxFragmentShaderInputDeduction, FastHashMap, FastHashSet,
+};
 
 pub mod shader_io_deductions;
 
@@ -355,6 +358,32 @@ pub enum StageError {
         deductions: Vec<MaxVertexShaderOutputDeduction>,
     },
     #[error(
+        "fragment shader input location Location[{location}] ({var}) exceeds the \
+        `max_inter_stage_shader_variables` limit ({}, 0-based){}",
+        // NOTE: Remember: the limit is 0-based for indices.
+        limit - 1,
+        // NOTE: WebGPU spec. validation for fragment inputs is expressed in terms of variables
+        // (unlike vertex outputs), so we use `MaxFragmentShaderInputDeduction::for_variables` here
+        // (and not a non-existent `for_locations`).
+        display_deductions_as_optional_list(deductions, |d| d.for_variables())
+    )]
+    FragmentInputLocationTooLarge {
+        location: u32,
+        var: InterfaceVar,
+        limit: u32,
+        deductions: Vec<MaxFragmentShaderInputDeduction>,
+    },
+    #[error(
+        "found {num_found} user-defined fragment shader input variables, which exceeds the \
+        `max_inter_stage_shader_variables` limit ({limit}){}",
+        display_deductions_as_optional_list(deductions, |d| d.for_variables())
+    )]
+    TooManyUserDefinedFragmentInputs {
+        num_found: u32,
+        limit: u32,
+        deductions: Vec<MaxFragmentShaderInputDeduction>,
+    },
+    #[error(
         "Location[{location}] {var}'s index exceeds the `max_color_attachments` limit ({limit})"
     )]
     ColorAttachmentLocationTooLarge {
@@ -403,6 +432,8 @@ impl WebGpuError for StageError {
             | Self::MultipleEntryPointsFound
             | Self::VertexOutputLocationTooLarge { .. }
             | Self::TooManyUserDefinedVertexOutputs { .. }
+            | Self::FragmentInputLocationTooLarge { .. }
+            | Self::TooManyUserDefinedFragmentInputs { .. }
             | Self::ColorAttachmentLocationTooLarge { .. }
             | Self::TooManyMeshVertices { .. }
             | Self::TooManyMeshPrimitives { .. }
@@ -1552,6 +1583,62 @@ impl Interface {
                 }
             }
             ShaderStageForValidation::Fragment => {
+                let mut max_fragment_shader_input_variables =
+                    self.limits.max_inter_stage_shader_variables;
+
+                let deductions = entry_point.inputs.iter().filter_map(|output| match output {
+                    Varying::Local { .. } => None,
+                    Varying::BuiltIn(builtin) => {
+                        MaxFragmentShaderInputDeduction::from_inter_stage_builtin(*builtin).or_else(
+                            || {
+                                unreachable!(
+                                    concat!(
+                                        "unexpected built-in provided; ",
+                                        "{:?} is not used for fragment stage input",
+                                    ),
+                                    builtin
+                                )
+                            },
+                        )
+                    }
+                });
+
+                for deduction in deductions.clone() {
+                    // NOTE: Deductions, in the current version of the spec. we implement, do not
+                    // ever exceed the minimum variables available.
+                    max_fragment_shader_input_variables = max_fragment_shader_input_variables
+                        .checked_sub(deduction.for_variables())
+                        .unwrap();
+                }
+
+                let mut num_user_defined_inputs = 0;
+
+                for output in entry_point.inputs.iter() {
+                    match *output {
+                        Varying::Local { ref iv, location } => {
+                            if location >= max_fragment_shader_input_variables {
+                                return Err(StageError::FragmentInputLocationTooLarge {
+                                    location,
+                                    var: iv.clone(),
+                                    limit: self.limits.max_inter_stage_shader_variables,
+                                    deductions: deductions.collect(),
+                                });
+                            }
+                            num_user_defined_inputs += 1;
+                            inter_stage_components += iv.ty.dim.num_components()
+                        }
+                        Varying::BuiltIn(_) => {}
+                    };
+                }
+
+                if num_user_defined_inputs > max_fragment_shader_input_variables {
+                    return Err(StageError::TooManyUserDefinedFragmentInputs {
+                        num_found: num_user_defined_inputs,
+                        limit: self.limits.max_inter_stage_shader_variables,
+                        deductions: deductions.collect(),
+                    });
+                }
+
                 for output in &entry_point.outputs {
                     let &Varying::Local { location, ref iv } = output else {
                         continue;
