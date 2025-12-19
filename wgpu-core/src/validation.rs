@@ -8,6 +8,7 @@ use core::fmt;
 
 use arrayvec::ArrayVec;
 use hashbrown::hash_map::Entry;
+use naga::BuiltIn;
 use shader_io_deductions::{display_deductions_as_optional_list, MaxVertexShaderOutputDeduction};
 use thiserror::Error;
 use wgt::{
@@ -153,7 +154,7 @@ impl fmt::Display for InterfaceVar {
 #[derive(Debug, Eq, PartialEq)]
 enum Varying {
     Local { location: u32, iv: InterfaceVar },
-    BuiltIn(naga::BuiltIn),
+    BuiltIn(BuiltIn),
 }
 
 #[allow(unused)]
@@ -1412,10 +1413,10 @@ impl Interface {
                         });
                     }
                 }
-                Varying::BuiltIn(naga::BuiltIn::PrimitiveIndex) => {
+                Varying::BuiltIn(BuiltIn::PrimitiveIndex) => {
                     this_stage_primitive_index = true;
                 }
-                Varying::BuiltIn(naga::BuiltIn::DrawIndex) => {
+                Varying::BuiltIn(BuiltIn::DrawIndex) => {
                     has_draw_id = true;
                 }
                 Varying::BuiltIn(_) => {}
@@ -1472,9 +1473,7 @@ impl Interface {
                         cmp @ wgt::CompareFunction::Equal | cmp @ wgt::CompareFunction::NotEqual,
                     ) = compare_function
                     {
-                        if let Varying::BuiltIn(naga::BuiltIn::Position { invariant: false }) =
-                            *output
-                        {
+                        if let Varying::BuiltIn(BuiltIn::Position { invariant: false }) = *output {
                             log::warn!(
                                 concat!(
                                     "Vertex shader with entry point {} outputs a ",
@@ -1583,7 +1582,7 @@ impl Interface {
 
                 if entry_point
                     .outputs
-                    .contains(&Varying::BuiltIn(naga::BuiltIn::FragDepth))
+                    .contains(&Varying::BuiltIn(BuiltIn::FragDepth))
                     && !has_depth_attachment
                 {
                     return Err(StageError::MissingFragDepthAttachment);
@@ -1591,7 +1590,7 @@ impl Interface {
             }
             ShaderStageForValidation::Mesh => {
                 for output in &entry_point.outputs {
-                    if matches!(output, Varying::BuiltIn(naga::BuiltIn::PrimitiveIndex)) {
+                    if matches!(output, Varying::BuiltIn(BuiltIn::PrimitiveIndex)) {
                         this_stage_primitive_index = true;
                     }
                 }
