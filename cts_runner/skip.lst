@@ -1,0 +1,17 @@
+// CTS test selectors that are entirely or nearly entirely skipped.
+webgpu:api,validation,encoding,queries,begin_end:nesting:*
+webgpu:api,validation,gpu_external_texture_expiration:*
+webgpu:api,validation,queue,copyToTexture,CopyExternalImageToTexture:*
+
+webgpu:shader,validation,expression,call,builtin,quadBroadcast:* // https://github.com/gfx-rs/wgpu/issues/8722
+webgpu:shader,validation,expression,call,builtin,quadSwap:* // ibid.
+webgpu:shader,validation,expression,call,builtin,subgroupAdd:* // ibid.
+webgpu:shader,validation,expression,call,builtin,subgroupAnyAll:* // ibid.
+webgpu:shader,validation,expression,call,builtin,subgroupBallot:* // ibid.
+webgpu:shader,validation,expression,call,builtin,subgroupBitwise:* // ibid.
+webgpu:shader,validation,expression,call,builtin,subgroupBroadcast:* // ibid.
+webgpu:shader,validation,expression,call,builtin,subgroupBroadcastFirst:* // ibid.
+webgpu:shader,validation,expression,call,builtin,subgroupElect:* // ibid.
+webgpu:shader,validation,expression,call,builtin,subgroupMinMax:* // ibid.
+webgpu:shader,validation,expression,call,builtin,subgroupMul:* // ibid.
+webgpu:shader,validation,expression,call,builtin,subgroupShuffle:* // ibid.
