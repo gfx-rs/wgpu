@@ -487,13 +487,13 @@ enum WrappedFunction {
         class: crate::ImageClass,
     },
     CooperativeLoad {
-        space: crate::AddressSpace,
+        space_name: &'static str,
         columns: crate::CooperativeSize,
         rows: crate::CooperativeSize,
         scalar: crate::Scalar,
     },
     CooperativeMultiplyAdd {
-        space: crate::AddressSpace,
+        space_name: &'static str,
         columns: crate::CooperativeSize,
         rows: crate::CooperativeSize,
         intermediate: crate::CooperativeSize,
@@ -3509,8 +3509,23 @@ impl<W: Write> Writer<W> {
             }) => {
                 put_numeric_type(&mut self.out, scalar, &[rows, columns])?;
             }
+            TypeResolution::Value(crate::TypeInner::CooperativeMatrix {
+                columns,
+                rows,
+                scalar,
+                role: _,
+            }) => {
+                write!(
+                    self.out,
+                    "{}::simdgroup_{}{}x{}",
+                    NAMESPACE,
+                    scalar.to_msl_name(),
+                    columns as u32,
+                    rows as u32,
+                )?;
+            }
             TypeResolution::Value(ref other) => {
-                log::warn!("Type {other:?} isn't a known local"); //TEMP!
+                log::warn!("Type {other:?} isn't a known local");
                 return Err(Error::FeatureNotImplemented("weird local type".to_string()));
             }
         }
@@ -6389,6 +6404,7 @@ template <typename A>
     ) -> BackendResult {
         let ptr_ty = func_ctx.resolve_type(pointer, &module.types);
         let space = ptr_ty.pointer_space().unwrap();
+        let space_name = space.to_msl_name().unwrap_or_default();
         let scalar = ptr_ty
             .pointer_base_type()
             .unwrap()
@@ -6396,7 +6412,7 @@ template <typename A>
             .scalar()
             .unwrap();
         let wrapped = WrappedFunction::CooperativeLoad {
-            space,
+            space_name,
             columns,
             rows,
             scalar,
@@ -6404,7 +6420,6 @@ template <typename A>
         if !self.wrapped_functions.insert(wrapped) {
             return Ok(());
         }
-        let space_name = space.to_msl_name().unwrap_or_default();
         let scalar_name = scalar.to_msl_name();
         writeln!(
             self.out,
@@ -6436,6 +6451,7 @@ template <typename A>
         a: Handle<crate::Expression>,
         b: Handle<crate::Expression>,
     ) -> BackendResult {
+        let space_name = space.to_msl_name().unwrap_or_default();
         let (a_c, a_r, scalar) = match *func_ctx.resolve_type(a, &module.types) {
             crate::TypeInner::CooperativeMatrix {
                 columns,
@@ -6450,7 +6466,7 @@ template <typename A>
             _ => unreachable!(),
         };
         let wrapped = WrappedFunction::CooperativeMultiplyAdd {
-            space,
+            space_name,
             columns: b_c,
             rows: a_r,
             intermediate: a_c,
@@ -6459,7 +6475,6 @@ template <typename A>
         if !self.wrapped_functions.insert(wrapped) {
             return Ok(());
         }
-        let space_name = space.to_msl_name().unwrap_or_default();
         let scalar_name = scalar.to_msl_name();
         writeln!(
             self.out,
