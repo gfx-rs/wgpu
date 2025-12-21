@@ -47,7 +47,7 @@ impl Example {
         vertex_buffer: &wgpu::Buffer,
         vertex_count: u32,
     ) -> wgpu::RenderBundle {
-        log::info!("sample_count: {}", sample_count);
+        log::info!("sample_count: {sample_count}");
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: None,
             layout: Some(pipeline_layout),
@@ -77,7 +77,7 @@ impl Example {
                 count: sample_count,
                 ..Default::default()
             },
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
         let mut encoder =
@@ -112,7 +112,7 @@ impl Example {
             sample_count,
             dimension: wgpu::TextureDimension::D2,
             format: config.view_formats[0],
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT,
             label: None,
             view_formats: &[],
         };
@@ -161,7 +161,7 @@ impl crate::framework::Example for Example {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         let multisampled_framebuffer =
@@ -307,6 +307,7 @@ impl crate::framework::Example for Example {
                     depth_stencil_attachment: None,
                     timestamp_writes: None,
                     occlusion_query_set: None,
+                    multiview_mask: None,
                 })
                 .execute_bundles(iter::once(&self.bundle));
         }
@@ -321,7 +322,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "msaa-line",
     image_path: "/examples/features/src/msaa_line/screenshot.png",
     width: 1024,

@@ -1,13 +1,18 @@
 use wgpu::{DownlevelFlags, Limits};
 use wgpu_macros::gpu_test;
-use wgpu_test::{fail, GpuTestConfiguration, TestParameters};
+use wgpu_test::{fail, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(NON_FATAL_ERRORS_IN_QUEUE_SUBMIT);
+}
 
 #[gpu_test]
 static NON_FATAL_ERRORS_IN_QUEUE_SUBMIT: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .downlevel_flags(DownlevelFlags::COMPUTE_SHADERS)
-            .limits(Limits::downlevel_defaults()),
+            .limits(Limits::downlevel_defaults())
+            .enable_noop(),
     )
     .run_sync(|ctx| {
         let shader_with_trivial_bind_group = concat!(

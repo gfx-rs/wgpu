@@ -261,6 +261,22 @@ impl BufferUsageScope {
             )
         }
     }
+
+    /// Removes the indicated usage from the scope.
+    ///
+    /// Note that multiple uses of the same type get merged. It is only
+    /// safe to remove a usage if you are certain you aren't going to
+    /// erase another usage you don't know about.
+    pub fn remove_usage(&mut self, buffer: &Buffer, usage: BufferUses) {
+        let index = buffer.tracker_index().as_usize();
+        if self.metadata.contains(index) {
+            // SAFETY: If the buffer is part of this usage scope, then the index
+            // is in range.
+            unsafe {
+                *self.state.get_unchecked_mut(index) &= !usage;
+            }
+        }
+    }
 }
 
 /// Stores all buffer state within a command buffer.
@@ -443,11 +459,11 @@ impl BufferTracker {
     /// a given iterator of ids as a source of which IDs to look at.
     /// All the IDs must have first been added to the usage scope.
     ///
-    /// # Safety
+    /// # Panics
     ///
-    /// [`Self::set_size`] must be called with the maximum possible Buffer ID before this
-    /// method is called.
-    pub unsafe fn set_and_remove_from_usage_scope_sparse(
+    /// If a resource identified by `index_source` is not found in the usage
+    /// scope.
+    pub fn set_and_remove_from_usage_scope_sparse(
         &mut self,
         scope: &mut BufferUsageScope,
         index_source: impl IntoIterator<Item = TrackerIndex>,
@@ -465,6 +481,9 @@ impl BufferTracker {
             if unsafe { !scope.metadata.contains_unchecked(index) } {
                 continue;
             }
+
+            // SAFETY: we checked that the index is in bounds for the scope, and
+            // called `set_size` to ensure it is valid for `self`.
             unsafe {
                 self.insert_or_barrier_update(
                     index,

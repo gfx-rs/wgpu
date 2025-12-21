@@ -101,17 +101,17 @@ pub use fence::Fence;
 #[cfg(not(any(windows, webgl)))]
 pub use self::egl::{AdapterContext, AdapterContextLock};
 #[cfg(not(any(windows, webgl)))]
-use self::egl::{Instance, Surface};
+pub use self::egl::{Instance, Surface};
 
 #[cfg(webgl)]
 pub use self::web::AdapterContext;
 #[cfg(webgl)]
-use self::web::{Instance, Surface};
+pub use self::web::{Instance, Surface};
 
 #[cfg(windows)]
 use self::wgl::AdapterContext;
 #[cfg(windows)]
-use self::wgl::{Instance, Surface};
+pub use self::wgl::{Instance, Surface};
 
 use alloc::{boxed::Box, string::String, string::ToString as _, sync::Arc, vec::Vec};
 use core::{
@@ -136,11 +136,13 @@ const MAX_TEXTURE_SLOTS: usize = 16;
 const MAX_SAMPLERS: usize = 16;
 const MAX_VERTEX_ATTRIBUTES: usize = 16;
 const ZERO_BUFFER_SIZE: usize = 256 << 10;
-const MAX_PUSH_CONSTANTS: usize = 64;
-// We have to account for each push constant may need to be set for every shader.
-const MAX_PUSH_CONSTANT_COMMANDS: usize = MAX_PUSH_CONSTANTS * crate::MAX_CONCURRENT_SHADER_STAGES;
+const MAX_IMMEDIATES: usize = 64;
+// We have to account for each immediate data may need to be set for every shader.
+const MAX_IMMEDIATES_COMMANDS: usize = MAX_IMMEDIATES * crate::MAX_CONCURRENT_SHADER_STAGES;
 
 impl crate::Api for Api {
+    const VARIANT: wgt::Backend = wgt::Backend::Gl;
+
     type Instance = Instance;
     type Surface = Surface;
     type Adapter = Adapter;
@@ -251,17 +253,12 @@ bitflags::bitflags! {
 
 type BindTarget = u32;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 enum VertexAttribKind {
+    #[default]
     Float, // glVertexAttribPointer
     Integer, // glVertexAttribIPointer
-           //Double,  // glVertexAttribLPointer
-}
-
-impl Default for VertexAttribKind {
-    fn default() -> Self {
-        Self::Float
-    }
+             //Double,  // glVertexAttribLPointer
 }
 
 #[derive(Clone, Debug)]
@@ -343,6 +340,7 @@ pub struct Buffer {
     raw: Option<glow::Buffer>,
     target: BindTarget,
     size: wgt::BufferAddress,
+    /// Flags to use within calls to [`Device::map_buffer`](crate::Device::map_buffer).
     map_flags: u32,
     data: Option<Arc<MaybeMutex<Vec<u8>>>>,
     offset_of_current_mapping: Arc<MaybeMutex<wgt::BufferAddress>>,
@@ -406,13 +404,16 @@ impl TextureInner {
 #[derive(Debug)]
 pub struct Texture {
     pub inner: TextureInner,
-    pub drop_guard: Option<crate::DropGuard>,
     pub mip_level_count: u32,
     pub array_layer_count: u32,
     pub format: wgt::TextureFormat,
     #[allow(unused)]
     pub format_desc: TextureFormatDesc,
     pub copy_size: CopyExtent,
+
+    // The `drop_guard` field must be the last field of this struct so it is dropped last.
+    // Do not add new fields after it.
+    pub drop_guard: Option<crate::DropGuard>,
 }
 
 impl crate::DynTexture for Texture {}
@@ -603,7 +604,7 @@ type ShaderId = u32;
 
 #[derive(Debug)]
 pub struct ShaderModule {
-    naga: crate::NagaShader,
+    source: crate::NagaShader,
     label: Option<String>,
     id: ShaderId,
 }
@@ -647,7 +648,7 @@ struct VertexBufferDesc {
 }
 
 #[derive(Clone, Debug)]
-struct PushConstantDesc {
+struct ImmediateDesc {
     location: glow::UniformLocation,
     ty: naga::TypeInner,
     offset: u32,
@@ -655,9 +656,9 @@ struct PushConstantDesc {
 }
 
 #[cfg(send_sync)]
-unsafe impl Sync for PushConstantDesc {}
+unsafe impl Sync for ImmediateDesc {}
 #[cfg(send_sync)]
-unsafe impl Send for PushConstantDesc {}
+unsafe impl Send for ImmediateDesc {}
 
 /// For each texture in the pipeline layout, store the index of the only
 /// sampler (in this layout) that the texture is used with.
@@ -668,7 +669,7 @@ struct PipelineInner {
     program: glow::Program,
     sampler_map: SamplerBindMap,
     first_instance_location: Option<glow::UniformLocation>,
-    push_constant_descs: ArrayVec<PushConstantDesc, MAX_PUSH_CONSTANT_COMMANDS>,
+    immediates_descs: ArrayVec<ImmediateDesc, MAX_IMMEDIATES_COMMANDS>,
     clip_distance_count: u32,
 }
 
@@ -1002,8 +1003,8 @@ enum Command {
     InsertDebugMarker(Range<u32>),
     PushDebugGroup(Range<u32>),
     PopDebugGroup,
-    SetPushConstants {
-        uniform: PushConstantDesc,
+    SetImmediates {
+        uniform: ImmediateDesc,
         /// Offset from the start of the `data_bytes`
         offset: u32,
     },
@@ -1077,7 +1078,7 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
     let log_severity = match severity {
         glow::DEBUG_SEVERITY_HIGH => log::Level::Error,
         glow::DEBUG_SEVERITY_MEDIUM => log::Level::Warn,
-        glow::DEBUG_SEVERITY_LOW => log::Level::Info,
+        glow::DEBUG_SEVERITY_LOW => log::Level::Debug,
         glow::DEBUG_SEVERITY_NOTIFICATION => log::Level::Trace,
         _ => unreachable!(),
     };
@@ -1098,11 +1099,7 @@ fn gl_debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, m
     let _ = std::panic::catch_unwind(|| {
         log::log!(
             log_severity,
-            "GLES: [{}/{}] ID {} : {}",
-            source_str,
-            type_str,
-            id,
-            message
+            "GLES: [{source_str}/{type_str}] ID {id} : {message}"
         );
     });
 

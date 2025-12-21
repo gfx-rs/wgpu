@@ -2,7 +2,11 @@
 
 use std::borrow::Cow;
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(BGRA8_UNORM_STORAGE);
+}
 
 const SHADER_SRC: &str = "
 @group(0) @binding(0) var tex: texture_storage_2d<bgra8unorm, write>;
@@ -85,7 +89,7 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
         let pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bgl],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -142,7 +146,9 @@ static BGRA8_UNORM_STORAGE: GpuTestConfiguration = GpuTestConfiguration::new()
 
         let buffer_slice = readback_buffer.slice(..);
         buffer_slice.map_async(wgpu::MapMode::Read, Result::unwrap);
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
 
         {
             let texels = buffer_slice.get_mapped_range();

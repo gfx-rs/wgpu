@@ -1,7 +1,11 @@
+use alloc::sync::Arc;
 use core::ops::Range;
 
 use crate::{
-    api::{blas::BlasBuildEntry, tlas::Tlas},
+    api::{
+        blas::BlasBuildEntry, impl_deferred_command_buffer_actions, tlas::Tlas,
+        SharedDeferredCommandBufferActions,
+    },
     *,
 };
 
@@ -17,6 +21,7 @@ use crate::{
 #[derive(Debug)]
 pub struct CommandEncoder {
     pub(crate) inner: dispatch::DispatchCommandEncoder,
+    pub(crate) actions: SharedDeferredCommandBufferActions,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(CommandEncoder: Send, Sync);
@@ -52,10 +57,10 @@ static_assertions::assert_impl_all!(TexelCopyTextureInfo<'_>: Send, Sync);
 
 impl CommandEncoder {
     /// Finishes recording and returns a [`CommandBuffer`] that can be submitted for execution.
-    pub fn finish(mut self) -> CommandBuffer {
-        let buffer = self.inner.finish();
-
-        CommandBuffer { buffer }
+    pub fn finish(self) -> CommandBuffer {
+        let Self { mut inner, actions } = self;
+        let buffer = inner.finish();
+        CommandBuffer { buffer, actions }
     }
 
     /// Begins recording of a render pass.
@@ -75,6 +80,7 @@ impl CommandEncoder {
         let rpass = self.inner.begin_render_pass(desc);
         RenderPass {
             inner: rpass,
+            actions: Arc::clone(&self.actions),
             _encoder_guard: api::PhantomDrop::default(),
         }
     }
@@ -96,6 +102,7 @@ impl CommandEncoder {
         let cpass = self.inner.begin_compute_pass(desc);
         ComputePass {
             inner: cpass,
+            actions: Arc::clone(&self.actions),
             _encoder_guard: api::PhantomDrop::default(),
         }
     }
@@ -232,20 +239,35 @@ impl CommandEncoder {
         );
     }
 
-    /// Returns the inner hal CommandEncoder using a callback. The hal command encoder will be `None` if the
-    /// backend type argument does not match with this wgpu CommandEncoder
+    impl_deferred_command_buffer_actions!();
+
+    /// Get the [`wgpu_hal`] command encoder from this `CommandEncoder`.
     ///
-    /// This method will start the wgpu_core level command recording.
+    /// The returned command encoder will be ready to record onto.
+    ///
+    /// # Errors
+    ///
+    /// This method will pass in [`None`] if:
+    /// - The encoder is not from the backend specified by `A`.
+    /// - The encoder is from the `webgpu` or `custom` backend.
+    ///
+    /// # Types
+    ///
+    /// The callback argument depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("CommandEncoder")]
+    #[doc = crate::hal_type_metal!("CommandEncoder")]
+    #[doc = crate::hal_type_dx12!("CommandEncoder")]
+    #[doc = crate::hal_type_gles!("CommandEncoder")]
     ///
     /// # Safety
     ///
-    /// - The raw handle obtained from the hal CommandEncoder must not be manually destroyed
+    /// - The raw handle obtained from the `A::CommandEncoder` must not be manually destroyed.
+    /// - You must not end the command buffer; wgpu will do it when you call finish.
+    /// - The wgpu command encoder must not be interacted with in any way while recording is
+    ///   happening to the wgpu_hal or backend command encoder.
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal_mut<
-        A: wgc::hal_api::HalApi,
-        F: FnOnce(Option<&mut A::CommandEncoder>) -> R,
-        R,
-    >(
+    pub unsafe fn as_hal_mut<A: hal::Api, F: FnOnce(Option<&mut A::CommandEncoder>) -> R, R>(
         &mut self,
         hal_command_encoder_callback: F,
     ) -> R {
@@ -286,10 +308,18 @@ impl CommandEncoder {
     }
 }
 
-/// [`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE`] must be enabled on the device in order to call these functions.
+/// [`Features::EXPERIMENTAL_RAY_QUERY`] must be enabled on the device in order to call these functions.
 impl CommandEncoder {
-    /// Mark acceleration structures as being built. ***Should only*** be used with wgpu-hal
-    /// functions, all wgpu functions already mark acceleration structures as built.
+    /// When encoding the acceleration structure build with the raw Hal encoder
+    /// (obtained from [`CommandEncoder::as_hal_mut`]), this function marks the
+    /// acceleration structures as having been built.
+    ///
+    /// This function must only be used with the raw encoder API. When using the
+    /// wgpu encoding API, acceleration structure build is tracked automatically.
+    ///
+    /// # Panics
+    ///
+    /// - If the encoder is being used with the wgpu encoding API.
     ///
     /// # Safety
     ///
@@ -323,7 +353,7 @@ impl CommandEncoder {
     ///   - Each BLAS in each TLAS instance must have been being built in the current call or in a previous call to `build_acceleration_structures` or `build_acceleration_structures_unsafe_tlas`
     ///   - The number of TLAS instances must be less than or equal to the max number of tlas instances when creating (if creating a package with `TlasPackage::new()` this is already satisfied)
     ///
-    /// If the device the command encoder is created from does not have [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE] enabled then a validation error is generated
+    /// If the device the command encoder is created from does not have [Features::EXPERIMENTAL_RAY_QUERY] enabled then a validation error is generated
     ///
     /// A bottom level acceleration structure may be build and used as a reference in a top level acceleration structure in the same invocation of this function.
     ///
@@ -334,7 +364,7 @@ impl CommandEncoder {
     ///    - All the bottom level acceleration structures referenced by the top level acceleration structure are valid and have been built prior,
     ///      or at same time as the containing top level acceleration structure.
     ///
-    /// [Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE]: wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
+    /// [Features::EXPERIMENTAL_RAY_QUERY]: wgt::Features::EXPERIMENTAL_RAY_QUERY
     pub fn build_acceleration_structures<'a>(
         &mut self,
         blas: impl IntoIterator<Item = &'a BlasBuildEntry<'a>>,

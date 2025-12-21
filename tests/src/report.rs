@@ -15,6 +15,20 @@ pub(crate) struct GpuReport {
 }
 
 impl GpuReport {
+    #[cfg(not(target_arch = "wasm32"))]
+    /// Creates a new GpuReport with a single noop adapter.
+    pub(crate) fn noop_only() -> Self {
+        GpuReport {
+            devices: vec![AdapterReport {
+                info: wgpu::hal::noop::adapter_info(),
+                features: Features::all(),
+                limits: wgpu::hal::noop::CAPABILITIES.limits,
+                downlevel_caps: wgpu::hal::noop::CAPABILITIES.downlevel,
+                texture_format_features: HashMap::new(), // todo
+            }],
+        }
+    }
+
     #[cfg_attr(target_arch = "wasm32", allow(unused))]
     pub(crate) fn from_json(file: &str) -> serde_json::Result<Self> {
         profiling::scope!("Parsing .gpuconfig");

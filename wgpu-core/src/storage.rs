@@ -19,7 +19,9 @@ where
     Occupied(T, Epoch),
 }
 
-pub(crate) trait StorageItem: ResourceType {
+/// Not a public API. For use only by `player`.
+#[doc(hidden)]
+pub trait StorageItem: ResourceType {
     type Marker: Marker;
 }
 
@@ -94,7 +96,11 @@ where
 
     pub(crate) fn remove(&mut self, id: Id<T::Marker>) -> T {
         let (index, epoch) = id.unzip();
-        match mem::replace(&mut self.map[index as usize], Element::Vacant) {
+        let stored = self
+            .map
+            .get_mut(index as usize)
+            .unwrap_or_else(|| panic!("{}[{:?}] does not exist", self.kind, id));
+        match mem::replace(stored, Element::Vacant) {
             Element::Occupied(value, storage_epoch) => {
                 assert_eq!(epoch, storage_epoch, "id epoch mismatch");
                 value

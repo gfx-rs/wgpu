@@ -43,6 +43,10 @@ long naga_abs(long val) {
     return metal::select(as_type<long>(-as_type<ulong>(val)), val, val >= 0);
 }
 
+long naga_dot_long2(metal::long2 a, metal::long2 b) {
+    return ( + a.x * b.x + a.y * b.y);
+}
+
 long int64_function(
     long x,
     thread long& private_variable,
@@ -111,11 +115,9 @@ long int64_function(
     long _e130 = val;
     val = as_type<long>(as_type<ulong>(_e130) + as_type<ulong>(metal::clamp(_e126, _e127, _e128)));
     long _e132 = val;
-    metal::long2 _e133 = metal::long2(_e132);
     long _e134 = val;
-    metal::long2 _e135 = metal::long2(_e134);
     long _e137 = val;
-    val = as_type<long>(as_type<ulong>(_e137) + as_type<ulong>(( + _e133.x * _e135.x + _e133.y * _e135.y)));
+    val = as_type<long>(as_type<ulong>(_e137) + as_type<ulong>(naga_dot_long2(metal::long2(_e132), metal::long2(_e134))));
     long _e139 = val;
     long _e140 = val;
     long _e142 = val;
@@ -133,6 +135,10 @@ long int64_function(
 
 ulong naga_f2u64(float value) {
     return static_cast<ulong>(metal::clamp(value, 0.0, 18446743000000000000.0));
+}
+
+ulong naga_dot_ulong2(metal::ulong2 a, metal::ulong2 b) {
+    return ( + a.x * b.x + a.y * b.y);
 }
 
 ulong uint64_function(
@@ -199,11 +205,9 @@ ulong uint64_function(
     ulong _e125 = val_1;
     val_1 = _e125 + metal::clamp(_e121, _e122, _e123);
     ulong _e127 = val_1;
-    metal::ulong2 _e128 = metal::ulong2(_e127);
     ulong _e129 = val_1;
-    metal::ulong2 _e130 = metal::ulong2(_e129);
     ulong _e132 = val_1;
-    val_1 = _e132 + ( + _e128.x * _e130.x + _e128.y * _e130.y);
+    val_1 = _e132 + naga_dot_ulong2(metal::ulong2(_e127), metal::ulong2(_e129));
     ulong _e134 = val_1;
     ulong _e135 = val_1;
     ulong _e137 = val_1;

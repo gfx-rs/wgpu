@@ -36,7 +36,7 @@ use core::fmt;
 /// [skip]: super::TestParameters::skip
 /// [expect_fail]: super::TestParameters::expect_fail
 /// [`AdapterInfo`]: wgpu::AdapterInfo
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PartialEq)]
 pub struct FailureCase {
     /// Backends expected to fail, or `None` for any backend.
     ///
@@ -334,7 +334,7 @@ impl FailureReason {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PartialEq)]
 pub enum FailureBehavior {
     /// Assert that the test fails for the given reason.
     ///

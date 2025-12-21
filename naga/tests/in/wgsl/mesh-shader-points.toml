@@ -1,0 +1,6 @@
+capabilities = "MESH_SHADER | MESH_SHADER_POINT_TOPOLOGY"
+targets = "WGSL | SPIRV"
+
+[spv]
+version = [1, 4]
+capabilities = ["MeshShadingEXT"]

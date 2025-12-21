@@ -1,3 +1,6 @@
+# TODO(https://github.com/gfx-rs/wgpu/issues/8154): enable only `F16_IN_F32` capability
+capabilities = "SHADER_FLOAT16_IN_FLOAT32"
+
 [msl]
 fake_missing_bindings = false
 lang_version = [1, 2]

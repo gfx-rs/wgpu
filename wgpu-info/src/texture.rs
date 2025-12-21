@@ -1,6 +1,6 @@
 // Lets keep these on one line
 #[rustfmt::skip]
-pub const TEXTURE_FORMAT_LIST: [wgpu::TextureFormat; 117] = [
+pub const TEXTURE_FORMAT_LIST: [wgpu::TextureFormat; 118] = [
     wgpu::TextureFormat::R8Unorm,
     wgpu::TextureFormat::R8Snorm,
     wgpu::TextureFormat::R8Uint,
@@ -52,6 +52,7 @@ pub const TEXTURE_FORMAT_LIST: [wgpu::TextureFormat; 117] = [
     wgpu::TextureFormat::Depth32Float,
     wgpu::TextureFormat::Depth32FloatStencil8,
     wgpu::TextureFormat::NV12,
+    wgpu::TextureFormat::P010,
     wgpu::TextureFormat::Bc1RgbaUnorm,
     wgpu::TextureFormat::Bc1RgbaUnormSrgb,
     wgpu::TextureFormat::Bc2RgbaUnorm,
@@ -131,6 +132,82 @@ fn test_uniqueness_in_texture_format_list() {
         duplicated.remove(first_occurrence);
     });
     assert_eq!(duplicated, vec![]);
+}
+
+#[test]
+fn test_compute_render_extent() {
+    for format in TEXTURE_FORMAT_LIST {
+        let desc = wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: 1280,
+                height: 720,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::empty(),
+            view_formats: &[],
+        };
+
+        if format.is_multi_planar_format() {
+            let _ = desc.compute_render_extent(0, Some(0));
+        } else {
+            let _ = desc.compute_render_extent(0, None);
+        }
+    }
+
+    for format in [wgpu::TextureFormat::NV12, wgpu::TextureFormat::P010] {
+        let desc = wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d {
+                width: 8,
+                height: 4,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 2,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::empty(),
+            view_formats: &[],
+        };
+
+        assert_eq!(
+            desc.compute_render_extent(0, Some(0)),
+            wgpu::Extent3d {
+                width: 8,
+                height: 4,
+                depth_or_array_layers: 1,
+            }
+        );
+        assert_eq!(
+            desc.compute_render_extent(0, Some(1)),
+            wgpu::Extent3d {
+                width: 4,
+                height: 2,
+                depth_or_array_layers: 1,
+            }
+        );
+        assert_eq!(
+            desc.compute_render_extent(1, Some(0)),
+            wgpu::Extent3d {
+                width: 4,
+                height: 2,
+                depth_or_array_layers: 1,
+            }
+        );
+        assert_eq!(
+            desc.compute_render_extent(1, Some(1)),
+            wgpu::Extent3d {
+                width: 2,
+                height: 1,
+                depth_or_array_layers: 1,
+            }
+        );
+    }
 }
 
 pub fn max_texture_format_string_size() -> usize {

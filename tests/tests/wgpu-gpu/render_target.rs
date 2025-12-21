@@ -2,7 +2,19 @@ use wgpu::{
     util::{BufferInitDescriptor, DeviceExt},
     vertex_attr_array,
 };
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        DRAW_TO_2D_VIEW,
+        DRAW_TO_2D_ARRAY_VIEW,
+        RESOLVE_TO_2D_VIEW,
+        RESOLVE_TO_2D_ARRAY_VIEW,
+        DRAW_TO_3D_VIEW,
+    ]);
+}
 
 #[gpu_test]
 static DRAW_TO_2D_VIEW: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -94,7 +106,7 @@ async fn run_test(
                 write_mask: wgpu::ColorWrites::ALL,
             })],
         }),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     };
     let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
@@ -191,6 +203,7 @@ async fn run_test(
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             rpass.set_pipeline(&pipeline);
             rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
@@ -227,7 +240,9 @@ async fn run_test(
     let slice = readback_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
 
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     let data = slice.get_mapped_range();
     let succeeded = data.iter().all(|b| *b == u8::MAX);
@@ -304,7 +319,7 @@ async fn run_test_3d(ctx: TestingContext) {
                 write_mask: wgpu::ColorWrites::ALL,
             })],
         }),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     };
     let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
@@ -372,6 +387,7 @@ async fn run_test_3d(ctx: TestingContext) {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             rpass.set_pipeline(&pipeline);
             rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
@@ -408,7 +424,9 @@ async fn run_test_3d(ctx: TestingContext) {
     let slice = readback_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
 
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     let data = slice.get_mapped_range();
     let succeeded = data.iter().all(|b| *b == u8::MAX);

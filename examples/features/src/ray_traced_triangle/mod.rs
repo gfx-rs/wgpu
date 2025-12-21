@@ -29,8 +29,7 @@ struct Uniforms {
 
 impl crate::framework::Example for Example {
     fn required_features() -> wgpu::Features {
-        wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
-            | wgpu::Features::EXPERIMENTAL_RAY_QUERY
+        wgpu::Features::EXPERIMENTAL_RAY_QUERY
     }
 
     fn required_limits() -> wgpu::Limits {
@@ -258,7 +257,7 @@ impl crate::framework::Example for Example {
             address_mode_w: Default::default(),
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             lod_min_clamp: 1.0,
             lod_max_clamp: 1.0,
             compare: None,
@@ -270,7 +269,7 @@ impl crate::framework::Example for Example {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("pipeline layout for shader.wgsl"),
                 bind_group_layouts: &[&bgl],
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
 
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -285,7 +284,7 @@ impl crate::framework::Example for Example {
         let blit_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline layout for blit.wgsl"),
             bind_group_layouts: &[&blit_bgl],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         let blit_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -310,7 +309,7 @@ impl crate::framework::Example for Example {
                     write_mask: Default::default(),
                 })],
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -415,6 +414,7 @@ impl crate::framework::Example for Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             rpass.set_pipeline(&self.blit_pipeline);
@@ -432,7 +432,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "ray_traced_triangle",
     image_path: "/examples/features/src/ray_traced_triangle/screenshot.png",
     width: 1024,

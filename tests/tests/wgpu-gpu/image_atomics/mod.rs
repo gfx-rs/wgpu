@@ -2,8 +2,18 @@
 
 use wgpu::ShaderModuleDescriptor;
 use wgpu_test::{
-    fail, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, TestParameters, TestingContext,
+    fail, gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer,
+    TestParameters, TestingContext,
 };
+
+pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
+    tests.extend([
+        IMAGE_64_ATOMICS,
+        IMAGE_32_ATOMICS,
+        IMAGE_ATOMICS_NOT_ENABLED,
+        IMAGE_ATOMICS_NOT_SUPPORTED,
+    ]);
+}
 
 #[gpu_test]
 static IMAGE_64_ATOMICS: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -91,7 +101,7 @@ async fn test_format(
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
     let shader = ctx.device.create_shader_module(desc);
     let pipeline = ctx
@@ -162,7 +172,7 @@ async fn test_format(
 
 #[gpu_test]
 static IMAGE_ATOMICS_NOT_ENABLED: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let size = wgpu::Extent3d {
             width: 256,
@@ -190,7 +200,7 @@ static IMAGE_ATOMICS_NOT_ENABLED: GpuTestConfiguration = GpuTestConfiguration::n
 
 #[gpu_test]
 static IMAGE_ATOMICS_NOT_SUPPORTED: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_ATOMIC))
+    .parameters(TestParameters::default().features(wgpu::Features::TEXTURE_ATOMIC).enable_noop())
     .run_sync(|ctx| {
         let size = wgpu::Extent3d {
             width: 256,

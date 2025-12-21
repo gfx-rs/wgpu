@@ -187,8 +187,12 @@ impl super::Adapter {
             device: 0,
             device_type: inferred_device_type,
             driver: "".to_owned(),
+            device_pci_bus_id: String::new(),
             driver_info: version,
             backend: wgt::Backend::Gl,
+            subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
+            subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
+            transient_saves_memory: false,
         }
     }
 
@@ -220,9 +224,9 @@ impl super::Adapter {
         let vendor = unsafe { gl.get_parameter_string(vendor_const) };
         let renderer = unsafe { gl.get_parameter_string(renderer_const) };
         let version = unsafe { gl.get_parameter_string(glow::VERSION) };
-        log::debug!("Vendor: {}", vendor);
-        log::debug!("Renderer: {}", renderer);
-        log::debug!("Version: {}", version);
+        log::debug!("Vendor: {vendor}");
+        log::debug!("Renderer: {renderer}");
+        log::debug!("Version: {version}");
 
         let full_ver = Self::parse_full_version(&version).ok();
         let es_ver = full_ver.map_or_else(|| Self::parse_version(&version).ok(), |_| None);
@@ -293,7 +297,7 @@ impl super::Adapter {
             }
         };
 
-        log::debug!("Supported GL Extensions: {:#?}", extensions);
+        log::debug!("Supported GL Extensions: {extensions:#?}");
 
         let supported = |(req_es_major, req_es_minor), (req_full_major, req_full_minor)| {
             let es_supported = es_ver
@@ -307,10 +311,11 @@ impl super::Adapter {
             es_supported || full_supported
         };
 
-        let supports_storage =
-            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_shader_storage_buffer_object");
-        let supports_compute =
-            supported((3, 1), (4, 3)) || extensions.contains("GL_ARB_compute_shader");
+        // Naga won't let you emit storage buffers at versions below this, so
+        // we currently can't support GL_ARB_shader_storage_buffer_object.
+        let supports_storage = supported((3, 1), (4, 3));
+        // Same with compute shaders and GL_ARB_compute_shader
+        let supports_compute = supported((3, 1), (4, 3));
         let supports_work_group_params = supports_compute;
 
         // ANGLE provides renderer strings like: "ANGLE (Apple, Apple M1 Pro, OpenGL 4.1)"
@@ -325,7 +330,7 @@ impl super::Adapter {
                 // Windows doesn't recognize `GL_MAX_VERTEX_ATTRIB_STRIDE`.
                 let new = (unsafe { gl.get_parameter_i32(glow::MAX_COMPUTE_SHADER_STORAGE_BLOCKS) }
                     as u32);
-                log::warn!("Max vertex shader storage blocks is zero, but GL_ARB_shader_storage_buffer_object is specified. Assuming the compute value {new}");
+                log::debug!("Max vertex shader storage blocks is zero, but GL_ARB_shader_storage_buffer_object is specified. Assuming the compute value {new}");
                 new
             } else {
                 value
@@ -364,7 +369,7 @@ impl super::Adapter {
             vertex_shader_storage_blocks == 0 && vertex_shader_storage_textures != 0;
         if vertex_ssbo_false_zero {
             // We only care about fragment here as the 0 is a lie.
-            log::warn!("Max vertex shader SSBO == 0 and SSTO != 0. Interpreting as false zero.");
+            log::debug!("Max vertex shader SSBO == 0 and SSTO != 0. Interpreting as false zero.");
         }
 
         let max_storage_buffers_per_shader_stage = if vertex_shader_storage_blocks == 0 {
@@ -384,7 +389,8 @@ impl super::Adapter {
         let mut downlevel_flags = wgt::DownlevelFlags::empty()
             | wgt::DownlevelFlags::NON_POWER_OF_TWO_MIPMAPPED_TEXTURES
             | wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES
-            | wgt::DownlevelFlags::COMPARISON_SAMPLERS;
+            | wgt::DownlevelFlags::COMPARISON_SAMPLERS
+            | wgt::DownlevelFlags::SHADER_F16_IN_F32;
         downlevel_flags.set(wgt::DownlevelFlags::COMPUTE_SHADERS, supports_compute);
         downlevel_flags.set(
             wgt::DownlevelFlags::FRAGMENT_WRITABLE_STORAGE,
@@ -440,7 +446,7 @@ impl super::Adapter {
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | wgt::Features::CLEAR_TEXTURE
-            | wgt::Features::PUSH_CONSTANTS
+            | wgt::Features::IMMEDIATES
             | wgt::Features::DEPTH32FLOAT_STENCIL8;
         features.set(
             wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO,
@@ -479,8 +485,6 @@ impl super::Adapter {
             wgt::Features::SHADER_EARLY_DEPTH_TEST,
             supported((3, 1), (4, 2)) || extensions.contains("GL_ARB_shader_image_load_store"),
         );
-        // We emulate MDI with a loop of draw calls.
-        features.set(wgt::Features::MULTI_DRAW_INDIRECT, indirect_execution);
         if extensions.contains("GL_ARB_timer_query") {
             features.set(wgt::Features::TIMESTAMP_QUERY, true);
             features.set(wgt::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS, true);
@@ -676,15 +680,14 @@ impl super::Adapter {
 
         let max_color_attachments = unsafe {
             gl.get_parameter_i32(glow::MAX_COLOR_ATTACHMENTS)
-                .min(gl.get_parameter_i32(glow::MAX_DRAW_BUFFERS))
-                .min(crate::MAX_COLOR_ATTACHMENTS as i32) as u32
+                .min(gl.get_parameter_i32(glow::MAX_DRAW_BUFFERS)) as u32
         };
 
         // 16 bytes per sample is the maximum size of a color attachment.
         let max_color_attachment_bytes_per_sample =
             max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
-        let limits = wgt::Limits {
+        let limits = crate::auxil::apply_hal_limits(wgt::Limits {
             max_texture_dimension_1d: max_texture_size,
             max_texture_dimension_2d: max_texture_size,
             max_texture_dimension_3d: max_texture_3d_size,
@@ -716,8 +719,7 @@ impl super::Adapter {
                 (unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_BINDINGS) } as u32)
             } else {
                 16 // should this be different?
-            }
-            .min(crate::MAX_VERTEX_BUFFERS as u32),
+            },
             max_vertex_attributes: (unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIBS) }
                 as u32)
                 .min(super::MAX_VERTEX_ATTRIBUTES as u32),
@@ -735,13 +737,13 @@ impl super::Adapter {
                             // This should be at least 2048, but the driver for AMD Radeon HD 5870 on
                             // Windows doesn't recognize `GL_MAX_VERTEX_ATTRIB_STRIDE`.
 
-                            log::warn!("Max vertex attribute stride is 0. Assuming it is 2048");
+                            log::debug!("Max vertex attribute stride is 0. Assuming it is the OpenGL minimum spec 2048");
                             2048
                         } else {
                             value
                         }
                     } else {
-                        log::warn!("Max vertex attribute stride unknown. Assuming it is 2048");
+                        log::debug!("Max vertex attribute stride unknown. Assuming it is the OpenGL minimum spec 2048");
                         2048
                     }
                 } else {
@@ -750,9 +752,7 @@ impl super::Adapter {
             } else {
                 !0
             },
-            min_subgroup_size: 0,
-            max_subgroup_size: 0,
-            max_push_constant_size: super::MAX_PUSH_CONSTANTS as u32 * 4,
+            max_immediate_size: super::MAX_IMMEDIATES as u32 * 4,
             min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment,
             max_inter_stage_shader_components: {
@@ -801,11 +801,26 @@ impl super::Adapter {
             max_compute_workgroups_per_dimension,
             max_buffer_size: i32::MAX as u64,
             max_non_sampler_bindings: u32::MAX,
+
+            max_task_mesh_workgroup_total_count: 0,
+            max_task_mesh_workgroups_per_dimension: 0,
+            max_task_invocations_per_workgroup: 0,
+            max_task_invocations_per_dimension: 0,
+            max_mesh_invocations_per_workgroup: 0,
+            max_mesh_invocations_per_dimension: 0,
+            max_task_payload_size: 0,
+            max_mesh_output_vertices: 0,
+            max_mesh_output_primitives: 0,
+            max_mesh_output_layers: 0,
+            max_mesh_multiview_view_count: 0,
+
             max_blas_primitive_count: 0,
             max_blas_geometry_count: 0,
             max_tlas_instance_count: 0,
             max_acceleration_structures_per_shader_stage: 0,
-        };
+
+            max_multiview_view_count: 0,
+        });
 
         let mut workarounds = super::Workarounds::empty();
 
@@ -823,7 +838,7 @@ impl super::Adapter {
             && r.split(&[' ', '(', ')'][..])
                 .any(|substr| substr.len() == 3 && substr.chars().nth(2) == Some('l'))
         {
-            log::warn!(
+            log::debug!(
                 "Detected skylake derivative running on mesa i915. Clears to srgb textures will \
                 use manual shader clears."
             );
@@ -909,7 +924,7 @@ impl super::Adapter {
         if !unsafe { gl.get_shader_compile_status(shader) } {
             let msg = unsafe { gl.get_shader_info_log(shader) };
             if !msg.is_empty() {
-                log::error!("\tShader compile error: {}", msg);
+                log::error!("\tShader compile error: {msg}");
             }
             unsafe { gl.delete_shader(shader) };
             None
@@ -946,7 +961,7 @@ impl super::Adapter {
         let linked_ok = unsafe { gl.get_program_link_status(program) };
         let msg = unsafe { gl.get_program_info_log(program) };
         if !msg.is_empty() {
-            log::warn!("Shader link error: {}", msg);
+            log::error!("Shader link error: {msg}");
         }
         if !linked_ok {
             return None;
@@ -1159,6 +1174,7 @@ impl crate::Adapter for super::Adapter {
             | Tf::Depth24Plus
             | Tf::Depth24PlusStencil8 => depth,
             Tf::NV12 => empty,
+            Tf::P010 => empty,
             Tf::Rgb9e5Ufloat => filterable,
             Tf::Bc1RgbaUnorm
             | Tf::Bc1RgbaUnormSrgb

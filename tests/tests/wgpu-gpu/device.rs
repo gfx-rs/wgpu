@@ -1,10 +1,36 @@
 use std::sync::atomic::AtomicBool;
 
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        CROSS_DEVICE_BIND_GROUP_USAGE,
+        DEVICE_DESTROY_THEN_MORE,
+        DEVICE_DESTROY_THEN_LOST,
+        DIFFERENT_BGL_ORDER_BW_SHADER_AND_API,
+        DEVICE_DESTROY_THEN_BUFFER_CLEANUP,
+        DEVICE_AND_QUEUE_HAVE_DIFFERENT_IDS,
+    ]);
+
+    #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
+    {
+        vec.extend([
+            DEVICE_LIFETIME_CHECK,
+            MULTIPLE_DEVICES,
+            REQUEST_DEVICE_ERROR_MESSAGE_NATIVE,
+        ]);
+    }
+}
 
 #[gpu_test]
 static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().expect_fail(FailureCase::always()))
+    .parameters(
+        TestParameters::default()
+            .expect_fail(FailureCase::always())
+            .enable_noop(),
+    )
     .run_async(|ctx| async move {
         // Create a bind group using a layout from another device. This should be a validation
         // error but currently crashes.
@@ -31,7 +57,7 @@ static CROSS_DEVICE_BIND_GROUP_USAGE: GpuTestConfiguration = GpuTestConfiguratio
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
 #[gpu_test]
 static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         ctx.instance.poll_all(false);
 
@@ -58,15 +84,23 @@ static DEVICE_LIFETIME_CHECK: GpuTestConfiguration = GpuTestConfiguration::new()
 #[cfg(not(all(target_arch = "wasm32", not(target_os = "emscripten"))))]
 #[gpu_test]
 static MULTIPLE_DEVICES: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         use pollster::FutureExt as _;
         ctx.adapter
-            .request_device(&wgpu::DeviceDescriptor::default())
+            .request_device(&wgpu::DeviceDescriptor {
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::downlevel_webgl2_defaults(),
+                ..Default::default()
+            })
             .block_on()
             .expect("failed to create device");
         ctx.adapter
-            .request_device(&wgpu::DeviceDescriptor::default())
+            .request_device(&wgpu::DeviceDescriptor {
+                required_features: wgpu::Features::empty(),
+                required_limits: wgpu::Limits::downlevel_webgl2_defaults(),
+                ..Default::default()
+            })
             .block_on()
             .expect("failed to create device");
     });
@@ -112,7 +146,7 @@ async fn request_device_error_message() {
                 max_texture_dimension_2d: u32::MAX,
                 max_texture_dimension_3d: u32::MAX,
                 max_bind_groups: u32::MAX,
-                max_push_constant_size: u32::MAX,
+                max_immediate_size: u32::MAX,
                 ..Default::default()
             },
             ..Default::default()
@@ -130,7 +164,7 @@ async fn request_device_error_message() {
             let expected = "TypeError";
         } else {
             // This message appears whenever wgpu-core is used as the implementation.
-            let expected = "Unsupported features were requested: Features {";
+            let expected = "Unsupported features were requested:";
         }
     }
     assert!(device_error.contains(expected), "{device_error}");
@@ -140,7 +174,11 @@ async fn request_device_error_message() {
 // should turn into no-ops, per spec.
 #[gpu_test]
 static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::CLEAR_TEXTURE))
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::CLEAR_TEXTURE)
+            .enable_noop(),
+    )
     .run_sync(|ctx| {
         // Create some resources on the device that we will attempt to use *after* losing
         // the device.
@@ -316,6 +354,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
         drop(pass);
         ctx.queue.submit([encoder_for_render_pass.finish()]);
@@ -401,7 +440,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: None,
                     bind_group_layouts: &[&invalid_bind_group_layout],
-                    push_constant_ranges: &[],
+                    immediate_size: 0,
                 });
 
         let _ = ctx
@@ -428,7 +467,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
                 fragment: None,
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
 
@@ -452,7 +491,7 @@ static DEVICE_DESTROY_THEN_MORE: GpuTestConfiguration = GpuTestConfiguration::ne
 
 #[gpu_test]
 static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
         // This test checks that when device.destroy is called, the provided
         // DeviceLostClosure is called with reason DeviceLostReason::Destroyed.
@@ -474,7 +513,7 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
         // Make sure the device queues are empty, which ensures that the closure
         // has been called.
         assert!(ctx
-            .async_poll(wgpu::PollType::wait())
+            .async_poll(wgpu::PollType::wait_indefinitely())
             .await
             .unwrap()
             .is_queue_empty());
@@ -487,7 +526,7 @@ static DEVICE_DESTROY_THEN_LOST: GpuTestConfiguration = GpuTestConfiguration::ne
 
 #[gpu_test]
 static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         // This test addresses a bug found in multiple backends where `wgpu_core` and `wgpu_hal`
         // backends made different assumptions about the element order of vectors of bind group
@@ -586,7 +625,7 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
                 primitive: wgpu::PrimitiveState::default(),
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
 
@@ -614,7 +653,7 @@ static DIFFERENT_BGL_ORDER_BW_SHADER_AND_API: GpuTestConfiguration = GpuTestConf
 
 #[gpu_test]
 static DEVICE_DESTROY_THEN_BUFFER_CLEANUP: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         // When a device is destroyed, its resources should be released,
         // without causing a deadlock.
@@ -653,7 +692,7 @@ static DEVICE_DESTROY_THEN_BUFFER_CLEANUP: GpuTestConfiguration = GpuTestConfigu
 
 #[gpu_test]
 static DEVICE_AND_QUEUE_HAVE_DIFFERENT_IDS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
         let TestingContext {
             adapter,

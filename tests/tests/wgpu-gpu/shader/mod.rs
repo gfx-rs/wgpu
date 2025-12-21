@@ -9,11 +9,11 @@ use std::{borrow::Cow, fmt::Debug};
 use wgpu::{
     Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
     BindingType, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor,
-    ComputePipelineDescriptor, MapMode, PipelineLayoutDescriptor, PollType, PushConstantRange,
-    ShaderModuleDescriptor, ShaderSource, ShaderStages,
+    ComputePipelineDescriptor, MapMode, PipelineLayoutDescriptor, PollType, ShaderModuleDescriptor,
+    ShaderSource, ShaderStages,
 };
 
-use wgpu_test::TestingContext;
+use wgpu_test::{GpuTestInitializer, TestingContext};
 
 pub mod array_size_overrides;
 pub mod compilation_messages;
@@ -23,11 +23,21 @@ pub mod struct_layout;
 pub mod workgroup_size_overrides;
 pub mod zero_init_workgroup_mem;
 
+pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
+    array_size_overrides::all_tests(tests);
+    compilation_messages::all_tests(tests);
+    data_builtins::all_tests(tests);
+    numeric_builtins::all_tests(tests);
+    struct_layout::all_tests(tests);
+    workgroup_size_overrides::all_tests(tests);
+    zero_init_workgroup_mem::all_tests(tests);
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum InputStorageType {
     Uniform,
     Storage,
-    PushConstant,
+    Immediate,
 }
 
 impl InputStorageType {
@@ -35,7 +45,7 @@ impl InputStorageType {
         match self {
             InputStorageType::Uniform => "uniform",
             InputStorageType::Storage => "storage",
-            InputStorageType::PushConstant => "push_constant",
+            InputStorageType::Immediate => "immediate",
         }
     }
 }
@@ -203,11 +213,11 @@ async fn shader_input_output_test(
                     binding: 0,
                     visibility: ShaderStages::COMPUTE,
                     ty: BindingType::Buffer {
-                        // We don't use this buffer for push constants, but for simplicity
+                        // We don't use this buffer for immediates, but for simplicity
                         // we just use the storage buffer binding.
                         ty: match storage_type {
                             InputStorageType::Uniform => wgpu::BufferBindingType::Uniform,
-                            InputStorageType::Storage | InputStorageType::PushConstant => {
+                            InputStorageType::Storage | InputStorageType::Immediate => {
                                 wgpu::BufferBindingType::Storage { read_only: true }
                             }
                         },
@@ -270,12 +280,9 @@ async fn shader_input_output_test(
         .create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bgl],
-            push_constant_ranges: match storage_type {
-                InputStorageType::PushConstant => &[PushConstantRange {
-                    stages: ShaderStages::COMPUTE,
-                    range: 0..MAX_BUFFER_SIZE as u32,
-                }],
-                _ => &[],
+            immediate_size: match storage_type {
+                InputStorageType::Immediate => MAX_BUFFER_SIZE as u32,
+                _ => 0,
             },
         });
 
@@ -298,8 +305,8 @@ async fn shader_input_output_test(
             .replace("{{input_members}}", &test.custom_struct_members)
             .replace("{{body}}", &test.body);
 
-        // Add the bindings for all inputs besides push constants.
-        processed = if matches!(storage_type, InputStorageType::PushConstant) {
+        // Add the bindings for all inputs besides immediates.
+        processed = if matches!(storage_type, InputStorageType::Immediate) {
             processed.replace("{{input_bindings}}", "")
         } else {
             processed.replace("{{input_bindings}}", "@group(0) @binding(0)")
@@ -353,8 +360,8 @@ async fn shader_input_output_test(
         cpass.set_pipeline(&pipeline);
         cpass.set_bind_group(0, &bg, &[]);
 
-        if let InputStorageType::PushConstant = storage_type {
-            cpass.set_push_constants(0, bytemuck::cast_slice(&test.input_values))
+        if let InputStorageType::Immediate = storage_type {
+            cpass.set_immediates(0, bytemuck::cast_slice(&test.input_values))
         }
 
         cpass.dispatch_workgroups(1, 1, 1);
@@ -367,7 +374,7 @@ async fn shader_input_output_test(
         ctx.queue.submit(Some(encoder.finish()));
 
         mapping_buffer.slice(..).map_async(MapMode::Read, |_| ());
-        ctx.async_poll(PollType::wait()).await.unwrap();
+        ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
 
         let mapped = mapping_buffer.slice(..).get_mapped_range();
 

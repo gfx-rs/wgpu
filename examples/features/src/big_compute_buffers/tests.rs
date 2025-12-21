@@ -2,7 +2,7 @@ use super::*;
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
 
 #[gpu_test]
-static TWO_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
+pub static TWO_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .features(
@@ -10,6 +10,7 @@ static TWO_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
                     | Features::STORAGE_RESOURCE_BINDING_ARRAY
                     | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
             )
+            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
             .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
             .limits(wgpu::Limits {
                 max_buffer_size: MAX_BUFFER_SIZE,

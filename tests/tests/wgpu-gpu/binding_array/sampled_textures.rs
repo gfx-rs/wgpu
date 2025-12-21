@@ -2,13 +2,22 @@ use std::num::NonZeroU32;
 
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, GpuTestConfiguration, TestParameters, TestingContext,
+    gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
 };
+
+pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
+    tests.extend([
+        BINDING_ARRAY_SAMPLED_TEXTURES,
+        PARTIAL_BINDING_ARRAY_SAMPLED_TEXTURES,
+    ]);
+}
 
 #[gpu_test]
 static BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
+            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
             .features(
                 Features::TEXTURE_BINDING_ARRAY
                     | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING,
@@ -24,6 +33,7 @@ static BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestConfigurati
 static PARTIAL_BINDING_ARRAY_SAMPLED_TEXTURES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
+            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
             .features(
                 Features::TEXTURE_BINDING_ARRAY
                     | Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
@@ -171,7 +181,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
         .create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
     let pipeline = ctx
@@ -199,7 +209,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
             depth_stencil: None,
             multisample: MultisampleState::default(),
             cache: None,
-            multiview: None,
+            multiview_mask: None,
         });
 
     let mut encoder = ctx
@@ -220,6 +230,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
         render_pass.set_pipeline(&pipeline);
         render_pass.set_bind_group(0, &bind_group, &[]);

@@ -50,6 +50,7 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
         backend_options: wgpu::BackendOptions {
             dx12: wgpu::Dx12BackendOptions {
                 shader_compiler: dx12_shader_compiler,
+                ..Default::default()
             },
             gl: wgpu::GlBackendOptions {
                 fence_behavior: if cfg!(target_family = "wasm") {
@@ -65,8 +66,15 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
                 ..Default::default()
             }
             .with_env(),
-            // TODO(https://github.com/gfx-rs/wgpu/issues/7119): Enable noop backend?
-            noop: wgpu::NoopBackendOptions::default(),
+            // Allow the noop backend to be used in tests. This will not be used unless
+            // WGPU_GPU_TESTS_USE_NOOP_BACKEND env var is set, because wgpu-info will not
+            // enumerate the noop backend.
+            //
+            // However, we use wasm_bindgen_test to run tests on wasm, and wgpu
+            // will chose the noop on wasm32 for some reason.
+            noop: wgpu::NoopBackendOptions {
+                enable: !cfg!(target_arch = "wasm32"),
+            },
         },
     })
 }
@@ -114,7 +122,7 @@ pub async fn initialize_adapter(
 
     cfg_if::cfg_if! {
         if #[cfg(not(target_arch = "wasm32"))] {
-            let adapter_iter = instance.enumerate_adapters(backends);
+            let adapter_iter = instance.enumerate_adapters(backends).await;
             let adapter = adapter_iter.into_iter()
                 // If we have a report, we only want to match the adapter with the same info.
                 //
@@ -128,7 +136,7 @@ pub async fn initialize_adapter(
                 panic!(
                     "Could not find adapter with info {:#?} in {:#?}",
                     adapter_report.map(|r| &r.info),
-                    instance.enumerate_adapters(backends).into_iter().map(|a| a.get_info()).collect::<Vec<_>>(),
+                    instance.enumerate_adapters(backends).await.into_iter().map(|a| a.get_info()).collect::<Vec<_>>(),
                 );
             };
         } else {
@@ -155,6 +163,7 @@ pub async fn initialize_device(
             label: None,
             required_features: features,
             required_limits: limits,
+            experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Off,
         })

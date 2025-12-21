@@ -1,6 +1,10 @@
-use wgpu_test::{gpu_test, GpuTestConfiguration};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 use wgpu::*;
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(PASS_RESET_VERTEX_BUFFER);
+}
 
 /// The core issue here was that we weren't properly disabling vertex attributes on GL
 /// when a renderpass ends. This ended up being rather tricky to test for as GL is remarkably
@@ -15,8 +19,9 @@ use wgpu::*;
 /// We use non-consecutive vertex attribute locations (0 and 5) in order to also test
 /// that we unset the correct locations (see PR #3706).
 #[gpu_test]
-static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_async(|ctx| async move {
+static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_async(|ctx| async move {
         let module = ctx
             .device
             .create_shader_module(include_wgsl!("issue_3457.wgsl"));
@@ -41,7 +46,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
             .create_pipeline_layout(&PipelineLayoutDescriptor {
                 label: Some("Pipeline Layout"),
                 bind_group_layouts: &[],
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
 
         let double_pipeline = ctx
@@ -79,7 +84,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
                         write_mask: ColorWrites::all(),
                     })],
                 }),
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
 
@@ -111,7 +116,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
                         write_mask: ColorWrites::all(),
                     })],
                 }),
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
 
@@ -151,6 +156,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         double_rpass.set_pipeline(&double_pipeline);
@@ -167,7 +173,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
         drop(vertex_buffer2);
 
         // Make sure the buffers are actually deleted.
-        ctx.async_poll(PollType::wait()).await.unwrap();
+        ctx.async_poll(PollType::wait_indefinitely()).await.unwrap();
 
         let mut encoder2 = ctx
             .device
@@ -187,6 +193,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration =
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         single_rpass.set_pipeline(&single_pipeline);

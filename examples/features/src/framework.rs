@@ -60,16 +60,11 @@ fn init_logger() {
             let query_level: Option<log::LevelFilter> = parse_url_query_string(&query_string, "RUST_LOG")
                 .and_then(|x| x.parse().ok());
 
-            // We keep wgpu at Error level, as it's very noisy.
             let base_level = query_level.unwrap_or(log::LevelFilter::Info);
-            let wgpu_level = query_level.unwrap_or(log::LevelFilter::Error);
 
             // On web, we use fern, as console_log doesn't have filtering on a per-module level.
             fern::Dispatch::new()
                 .level(base_level)
-                .level_for("wgpu_core", wgpu_level)
-                .level_for("wgpu_hal", wgpu_level)
-                .level_for("naga", wgpu_level)
                 .chain(fern::Output::call(console_log::log))
                 .apply()
                 .unwrap();
@@ -79,10 +74,6 @@ fn init_logger() {
             // of these default filters.
             env_logger::builder()
                 .filter_level(log::LevelFilter::Info)
-                // We keep wgpu at Error level, as it's very noisy.
-                .filter_module("wgpu_core", log::LevelFilter::Info)
-                .filter_module("wgpu_hal", log::LevelFilter::Error)
-                .filter_module("naga", log::LevelFilter::Error)
                 .parse_default_env()
                 .init();
         }
@@ -196,6 +187,7 @@ impl SurfaceWrapper {
             config.format = format;
             config.view_formats.push(format);
         };
+        config.desired_maximum_frame_latency = 3;
 
         surface.configure(&context.device, &config);
         self.config = Some(config);
@@ -247,7 +239,7 @@ impl SurfaceWrapper {
         }
     }
 
-    fn get(&self) -> Option<&Surface> {
+    fn get(&self) -> Option<&'_ Surface<'static>> {
         self.surface.as_ref()
     }
 
@@ -268,9 +260,9 @@ impl ExampleContext {
     async fn init_async<E: Example>(surface: &mut SurfaceWrapper, window: Arc<Window>) -> Self {
         log::info!("Initializing wgpu...");
 
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::from_env_or_default());
+        let instance_descriptor = wgpu::InstanceDescriptor::from_env_or_default();
+        let instance = wgpu::Instance::new(&instance_descriptor);
         surface.pre_adapter(&instance, window);
-
         let adapter = get_adapter_with_capabilities_or_from_env(
             &instance,
             &E::required_features(),
@@ -281,12 +273,16 @@ impl ExampleContext {
         // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the surface.
         let needed_limits = E::required_limits().using_resolution(adapter.limits());
 
+        let info = adapter.get_info();
+        log::info!("Selected adapter: {} ({:?})", info.name, info.backend);
+
         let (device, queue) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: None,
                 required_features: (E::optional_features() & adapter.features())
                     | E::required_features(),
                 required_limits: needed_limits,
+                experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
                 memory_hints: wgpu::MemoryHints::MemoryUsage,
                 trace: match std::env::var_os("WGPU_TRACE") {
                     Some(path) => wgpu::Trace::Directory(path.into()),
@@ -328,7 +324,7 @@ impl FrameCounter {
             let elapsed_ms = elapsed_secs * 1000.0;
             let frame_time = elapsed_ms / self.frame_count as f32;
             let fps = self.frame_count as f32 / elapsed_secs;
-            log::info!("Frame time {:.2}ms ({:.1} FPS)", frame_time, fps);
+            log::info!("Frame time {frame_time:.2}ms ({fps:.1} FPS)");
 
             self.last_printed_instant = new_instant;
             self.frame_count = 0;
@@ -596,7 +592,9 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
 
                 let dst_buffer_slice = dst_buffer.slice(..);
                 dst_buffer_slice.map_async(wgpu::MapMode::Read, |_| ());
-                ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+                ctx.async_poll(wgpu::PollType::wait_indefinitely())
+                    .await
+                    .unwrap();
                 let bytes = dst_buffer_slice.get_mapped_range().to_vec();
 
                 wgpu_test::image::compare_image_output(

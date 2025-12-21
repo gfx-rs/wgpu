@@ -130,7 +130,7 @@ const ABI: u32 = size_of::<*const ()>() as u32;
 ///
 /// Note that wgpu does not protect against malicious writes to e.g. a file used
 /// to store a pipeline cache.
-/// That is the resonsibility of the end application, such as by using a
+/// That is the responsibility of the end application, such as by using a
 /// private space.
 const HASH_SPACE_VALUE: u64 = 0xFEDCBA9_876543210;
 
@@ -319,9 +319,13 @@ mod tests {
         vendor: 0x0002_FEED,
         device: 0xFEFE_FEFE,
         device_type: wgt::DeviceType::Other,
+        device_pci_bus_id: String::new(),
         driver: String::new(),
         driver_info: String::new(),
         backend: wgt::Backend::Vulkan,
+        subgroup_min_size: 32,
+        subgroup_max_size: 32,
+        transient_saves_memory: true,
     };
 
     // IMPORTANT: If these tests fail, then you MUST increment HEADER_VERSION

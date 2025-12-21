@@ -132,6 +132,46 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
                 }
             }
 
+            if let Some(task_payload) = e.task_payload {
+                module_tracer.global_variables_used.insert(task_payload);
+            }
+            if let Some(ref mesh_info) = e.mesh_info {
+                module_tracer
+                    .global_variables_used
+                    .insert(mesh_info.output_variable);
+                module_tracer
+                    .types_used
+                    .insert(mesh_info.vertex_output_type);
+                module_tracer
+                    .types_used
+                    .insert(mesh_info.primitive_output_type);
+                if let Some(max_vertices_override) = mesh_info.max_vertices_override {
+                    module_tracer
+                        .global_expressions_used
+                        .insert(max_vertices_override);
+                }
+                if let Some(max_primitives_override) = mesh_info.max_primitives_override {
+                    module_tracer
+                        .global_expressions_used
+                        .insert(max_primitives_override);
+                }
+            }
+            if e.stage == crate::ShaderStage::Task || e.stage == crate::ShaderStage::Mesh {
+                // u32 should always be there if the module is valid, as it is e.g. the type of some expressions
+                let u32_type = module
+                    .types
+                    .iter()
+                    .find_map(|tuple| {
+                        if tuple.1.inner == crate::TypeInner::Scalar(crate::Scalar::U32) {
+                            Some(tuple.0)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap();
+                module_tracer.types_used.insert(u32_type);
+            }
+
             let mut used = module_tracer.as_function(&e.function);
             used.trace();
             FunctionMap::from(used)
@@ -164,7 +204,7 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
     }
     while let Some(handle) = module_tracer.functions_pending.pop() {
         let function = &module.functions[handle];
-        log::trace!("tracing function {:?}", function);
+        log::trace!("tracing function {function:?}");
         let mut function_tracer = module_tracer.as_function(function);
         function_tracer.trace();
         function_maps.insert(handle, FunctionMap::from(function_tracer));
@@ -342,6 +382,24 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
             &module_map,
             &mut reused_named_expressions,
         );
+        if let Some(ref mut task_payload) = entry.task_payload {
+            module_map.globals.adjust(task_payload);
+        }
+        if let Some(ref mut mesh_info) = entry.mesh_info {
+            module_map.globals.adjust(&mut mesh_info.output_variable);
+            module_map.types.adjust(&mut mesh_info.vertex_output_type);
+            module_map
+                .types
+                .adjust(&mut mesh_info.primitive_output_type);
+            if let Some(ref mut max_vertices_override) = mesh_info.max_vertices_override {
+                module_map.global_expressions.adjust(max_vertices_override);
+            }
+            if let Some(ref mut max_primitives_override) = mesh_info.max_primitives_override {
+                module_map
+                    .global_expressions
+                    .adjust(max_primitives_override);
+            }
+        }
     }
 }
 
@@ -380,6 +438,8 @@ impl<'module> ModuleTracer<'module> {
             ref ray_intersection,
             ref ray_vertex_return,
             ref predeclared_types,
+            ref external_texture_params,
+            ref external_texture_transfer_function,
         } = *special_types;
 
         if let Some(ray_desc) = *ray_desc {
@@ -390,6 +450,15 @@ impl<'module> ModuleTracer<'module> {
         }
         if let Some(ray_vertex_return) = *ray_vertex_return {
             self.types_used.insert(ray_vertex_return);
+        }
+        // The `external_texture_params` type is generated purely as a
+        // convenience to the backends. While it will never actually be used in
+        // the IR, it must be marked as used so that it survives compaction.
+        if let Some(external_texture_params) = *external_texture_params {
+            self.types_used.insert(external_texture_params);
+        }
+        if let Some(external_texture_transfer_function) = *external_texture_transfer_function {
+            self.types_used.insert(external_texture_transfer_function);
         }
         for (_, &handle) in predeclared_types {
             self.types_used.insert(handle);
@@ -460,7 +529,7 @@ impl<'module> ModuleTracer<'module> {
         }
     }
 
-    fn as_type(&mut self) -> types::TypeTracer {
+    fn as_type(&mut self) -> types::TypeTracer<'_> {
         types::TypeTracer {
             overrides: &self.module.overrides,
             types_used: &mut self.types_used,
@@ -469,7 +538,7 @@ impl<'module> ModuleTracer<'module> {
         }
     }
 
-    fn as_const_expression(&mut self) -> expressions::ExpressionTracer {
+    fn as_const_expression(&mut self) -> expressions::ExpressionTracer<'_> {
         expressions::ExpressionTracer {
             constants: &self.module.constants,
             overrides: &self.module.overrides,
@@ -532,6 +601,8 @@ impl ModuleMap {
             ref mut ray_intersection,
             ref mut ray_vertex_return,
             ref mut predeclared_types,
+            ref mut external_texture_params,
+            ref mut external_texture_transfer_function,
         } = *special;
 
         if let Some(ref mut ray_desc) = *ray_desc {
@@ -543,6 +614,16 @@ impl ModuleMap {
 
         if let Some(ref mut ray_vertex_return) = *ray_vertex_return {
             self.types.adjust(ray_vertex_return);
+        }
+
+        if let Some(ref mut external_texture_params) = *external_texture_params {
+            self.types.adjust(external_texture_params);
+        }
+
+        if let Some(ref mut external_texture_transfer_function) =
+            *external_texture_transfer_function
+        {
+            self.types.adjust(external_texture_transfer_function);
         }
 
         for handle in predeclared_types.values_mut() {
@@ -680,7 +761,7 @@ fn type_expression_interdependence() {
     };
     let mut type_name_counter = 0;
     let mut type_needed = |module: &mut crate::Module, handle| {
-        let name = Some(format!("type{}", type_name_counter));
+        let name = Some(format!("type{type_name_counter}"));
         type_name_counter += 1;
         module.types.insert(
             crate::Type {
@@ -696,7 +777,7 @@ fn type_expression_interdependence() {
     };
     let mut override_name_counter = 0;
     let mut expression_needed = |module: &mut crate::Module, handle| {
-        let name = Some(format!("override{}", override_name_counter));
+        let name = Some(format!("override{override_name_counter}"));
         override_name_counter += 1;
         module.overrides.append(
             crate::Override {

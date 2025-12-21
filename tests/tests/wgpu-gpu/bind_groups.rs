@@ -1,7 +1,19 @@
 use std::num::NonZeroU64;
 
 use wgpu::{BufferUsages, PollType};
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        MULTIPLE_BINDINGS_WITH_DIFFERENT_SIZES,
+        BIND_GROUP_NONFILTERING_LAYOUT_NONFILTERING_SAMPLER,
+        BIND_GROUP_NONFILTERING_LAYOUT_MIN_SAMPLER,
+        BIND_GROUP_NONFILTERING_LAYOUT_MAG_SAMPLER,
+        BIND_GROUP_NONFILTERING_LAYOUT_MIPMAP_SAMPLER,
+    ]);
+}
 
 /// Create two bind groups against the same bind group layout, in the same
 /// compute pass, but against two different shaders that have different binding
@@ -58,7 +70,7 @@ fn multiple_bindings_with_differing_sizes(ctx: TestingContext) {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline_layout"),
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
     let pipelines = SHADER_SRC
@@ -113,7 +125,7 @@ fn multiple_bindings_with_differing_sizes(ctx: TestingContext) {
     ctx.queue.write_buffer(&buffer, 0, &data);
     ctx.queue.submit(Some(encoder.finish()));
 
-    ctx.device.poll(PollType::Wait).unwrap();
+    ctx.device.poll(PollType::wait_indefinitely()).unwrap();
 }
 
 /// Test `descriptor` against a bind group layout that requires non-filtering sampler.
@@ -164,14 +176,15 @@ static MULTIPLE_BINDINGS_WITH_DIFFERENT_SIZES: GpuTestConfiguration = GpuTestCon
     .parameters(
         TestParameters::default()
             .limits(wgpu::Limits::downlevel_defaults())
-            .expect_fail(FailureCase::always()), // https://github.com/gfx-rs/wgpu/issues/7359
+            .expect_fail(FailureCase::always())
+            .enable_noop(), // https://github.com/gfx-rs/wgpu/issues/7359
     )
     .run_sync(multiple_bindings_with_differing_sizes);
 
 #[gpu_test]
 static BIND_GROUP_NONFILTERING_LAYOUT_NONFILTERING_SAMPLER: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default())
+        .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             try_sampler_nonfiltering_layout(
                 ctx,
@@ -179,7 +192,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_NONFILTERING_SAMPLER: GpuTestConfiguration
                     label: Some("bind_group_non_filtering_layout_nonfiltering_sampler"),
                     min_filter: wgpu::FilterMode::Nearest,
                     mag_filter: wgpu::FilterMode::Nearest,
-                    mipmap_filter: wgpu::FilterMode::Nearest,
+                    mipmap_filter: wgpu::MipmapFilterMode::Nearest,
                     ..wgpu::SamplerDescriptor::default()
                 },
                 true,
@@ -189,7 +202,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_NONFILTERING_SAMPLER: GpuTestConfiguration
 #[gpu_test]
 static BIND_GROUP_NONFILTERING_LAYOUT_MIN_SAMPLER: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default())
+        .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             try_sampler_nonfiltering_layout(
                 ctx,
@@ -197,7 +210,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_MIN_SAMPLER: GpuTestConfiguration =
                     label: Some("bind_group_non_filtering_layout_min_sampler"),
                     min_filter: wgpu::FilterMode::Linear,
                     mag_filter: wgpu::FilterMode::Nearest,
-                    mipmap_filter: wgpu::FilterMode::Nearest,
+                    mipmap_filter: wgpu::MipmapFilterMode::Nearest,
                     ..wgpu::SamplerDescriptor::default()
                 },
                 false,
@@ -207,7 +220,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_MIN_SAMPLER: GpuTestConfiguration =
 #[gpu_test]
 static BIND_GROUP_NONFILTERING_LAYOUT_MAG_SAMPLER: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default())
+        .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             try_sampler_nonfiltering_layout(
                 ctx,
@@ -215,7 +228,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_MAG_SAMPLER: GpuTestConfiguration =
                     label: Some("bind_group_non_filtering_layout_mag_sampler"),
                     min_filter: wgpu::FilterMode::Nearest,
                     mag_filter: wgpu::FilterMode::Linear,
-                    mipmap_filter: wgpu::FilterMode::Nearest,
+                    mipmap_filter: wgpu::MipmapFilterMode::Nearest,
                     ..wgpu::SamplerDescriptor::default()
                 },
                 false,
@@ -225,7 +238,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_MAG_SAMPLER: GpuTestConfiguration =
 #[gpu_test]
 static BIND_GROUP_NONFILTERING_LAYOUT_MIPMAP_SAMPLER: GpuTestConfiguration =
     GpuTestConfiguration::new()
-        .parameters(TestParameters::default())
+        .parameters(TestParameters::default().enable_noop())
         .run_sync(|ctx| {
             try_sampler_nonfiltering_layout(
                 ctx,
@@ -233,7 +246,7 @@ static BIND_GROUP_NONFILTERING_LAYOUT_MIPMAP_SAMPLER: GpuTestConfiguration =
                     label: Some("bind_group_non_filtering_layout_mipmap_sampler"),
                     min_filter: wgpu::FilterMode::Nearest,
                     mag_filter: wgpu::FilterMode::Nearest,
-                    mipmap_filter: wgpu::FilterMode::Linear,
+                    mipmap_filter: wgpu::MipmapFilterMode::Linear,
                     ..wgpu::SamplerDescriptor::default()
                 },
                 false,

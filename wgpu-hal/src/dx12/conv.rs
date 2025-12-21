@@ -85,6 +85,13 @@ pub fn map_filter_mode(mode: wgt::FilterMode) -> Direct3D12::D3D12_FILTER_TYPE {
     }
 }
 
+pub fn map_mipmap_filter_mode(mode: wgt::MipmapFilterMode) -> Direct3D12::D3D12_FILTER_TYPE {
+    match mode {
+        wgt::MipmapFilterMode::Nearest => Direct3D12::D3D12_FILTER_TYPE_POINT,
+        wgt::MipmapFilterMode::Linear => Direct3D12::D3D12_FILTER_TYPE_LINEAR,
+    }
+}
+
 pub fn map_comparison(func: wgt::CompareFunction) -> Direct3D12::D3D12_COMPARISON_FUNC {
     use wgt::CompareFunction as Cf;
     match func {
@@ -135,7 +142,10 @@ pub fn map_binding_type(ty: &wgt::BindingType) -> Direct3D12::D3D12_DESCRIPTOR_R
         }
         | Bt::StorageTexture { .. } => Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
         Bt::AccelerationStructure { .. } => Direct3D12::D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-        Bt::ExternalTexture => unimplemented!(),
+        // External textures require multiple bindings and therefore cannot
+        // be mapped to a single descriptor range type. They must be handled
+        // separately by the caller.
+        Bt::ExternalTexture => unreachable!("External textures must be handled separately"),
     }
 }
 

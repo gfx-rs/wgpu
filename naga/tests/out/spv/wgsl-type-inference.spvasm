@@ -15,11 +15,11 @@ OpExecutionMode %18 LocalSize 1 1 1
 %8 = OpTypeVector %4 2
 %7 = OpTypeMatrix %8 2
 %9 = OpConstant  %3  1
-%10 = OpConstant  %4  1.0
+%10 = OpConstant  %4  1
 %11 = OpConstantNull  %6
 %12 = OpConstant  %5  1
 %13 = OpConstantComposite  %6  %12 %12 %12 %12
-%14 = OpConstant  %4  0.0
+%14 = OpConstant  %4  0
 %15 = OpConstantComposite  %8  %14 %14
 %16 = OpConstantComposite  %7  %15 %15
 %19 = OpTypeFunction %2

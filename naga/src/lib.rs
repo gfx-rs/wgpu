@@ -75,7 +75,8 @@ void main() {
     clippy::derive_partial_eq_without_eq,
     clippy::needless_borrowed_reference,
     clippy::single_match,
-    clippy::enum_variant_names
+    clippy::enum_variant_names,
+    clippy::result_large_err
 )]
 #![warn(
     trivial_casts,
@@ -115,7 +116,6 @@ pub mod front;
 pub mod ir;
 pub mod keywords;
 mod non_max_u32;
-mod path_like;
 pub mod proc;
 mod racy_lock;
 mod span;

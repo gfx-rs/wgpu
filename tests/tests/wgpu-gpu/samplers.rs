@@ -2,15 +2,28 @@
 //!
 //! Do some tests to ensure things are working correctly and nothing gets mad.
 
-use wgpu_test::{did_oom, gpu_test, valid, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    did_oom, gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters,
+    TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        SAMPLER_DEDUPLICATION,
+        SAMPLER_CREATION_FAILURE,
+        SAMPLER_SINGLE_BIND_GROUP,
+        SAMPLER_MULTI_BIND_GROUP,
+    ]);
+}
 
 // A number large enough to likely cause sampler caches to run out of space
 // on some devices.
 const PROBABLY_PROBLEMATIC_SAMPLER_COUNT: u32 = 8 * 1024;
 
 #[gpu_test]
-static SAMPLER_DEDUPLICATION: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_sync(sampler_deduplication);
+static SAMPLER_DEDUPLICATION: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_sync(sampler_deduplication);
 
 // Create a large number of samplers from the same two descriptors.
 //
@@ -24,7 +37,7 @@ fn sampler_deduplication(ctx: TestingContext) {
         address_mode_w: wgpu::AddressMode::ClampToEdge,
         mag_filter: wgpu::FilterMode::Nearest,
         min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::MipmapFilterMode::Nearest,
         lod_min_clamp: 0.0,
         lod_max_clamp: 100.0,
         compare: None,
@@ -39,7 +52,7 @@ fn sampler_deduplication(ctx: TestingContext) {
         address_mode_w: wgpu::AddressMode::ClampToEdge,
         mag_filter: wgpu::FilterMode::Linear,
         min_filter: wgpu::FilterMode::Linear,
-        mipmap_filter: wgpu::FilterMode::Linear,
+        mipmap_filter: wgpu::MipmapFilterMode::Linear,
         lod_min_clamp: 0.0,
         lod_max_clamp: 100.0,
         compare: None,
@@ -59,8 +72,9 @@ fn sampler_deduplication(ctx: TestingContext) {
 }
 
 #[gpu_test]
-static SAMPLER_CREATION_FAILURE: GpuTestConfiguration =
-    GpuTestConfiguration::new().run_sync(sampler_creation_failure);
+static SAMPLER_CREATION_FAILURE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_sync(sampler_creation_failure);
 
 /// We want to test that sampler creation properly fails when we hit internal sampler
 /// cache limits. As we don't actually know what the limit is, we first create as many
@@ -82,7 +96,7 @@ fn sampler_creation_failure(ctx: TestingContext) {
         address_mode_w: wgpu::AddressMode::ClampToEdge,
         mag_filter: wgpu::FilterMode::Nearest,
         min_filter: wgpu::FilterMode::Nearest,
-        mipmap_filter: wgpu::FilterMode::Nearest,
+        mipmap_filter: wgpu::MipmapFilterMode::Nearest,
         lod_min_clamp: 0.0,
         lod_max_clamp: 100.0,
         compare: None,
@@ -110,11 +124,13 @@ fn sampler_creation_failure(ctx: TestingContext) {
     let failed_count = sampler_storage.len();
 
     sampler_storage.clear();
-    ctx.device.poll(wgpu::PollType::Wait).unwrap();
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
 
     for i in 0..failed_count {
         valid(&ctx.device, || {
-            eprintln!("Trying to create sampler {}", i);
+            eprintln!("Trying to create sampler {i}");
             let sampler = ctx.device.create_sampler(&wgpu::SamplerDescriptor {
                 lod_min_clamp: i as f32 * 0.01,
                 // Change the max clamp to ensure the sampler is using different cache slots from
@@ -188,7 +204,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
         GroupType::Multi => MULTI_GROUP_BINDINGS,
     };
 
-    let full_shader = format!("{}\n{}", bindings, SAMPLER_CODE);
+    let full_shader = format!("{bindings}\n{SAMPLER_CODE}");
 
     let module = ctx
         .device
@@ -319,7 +335,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline_layout"),
             bind_group_layouts: &bgl_references,
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
     let input_image = ctx.device.create_texture(&wgpu::TextureDescriptor {
@@ -381,7 +397,7 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
             lod_min_clamp: 0.0,
             lod_max_clamp: 100.0,
             compare: None,
@@ -525,7 +541,9 @@ fn sampler_bind_group(ctx: TestingContext, group_type: GroupType) {
     let buffer_slice = transfer_buffer.slice(..);
     buffer_slice.map_async(wgpu::MapMode::Read, |_| {});
 
-    ctx.device.poll(wgpu::PollType::Wait).unwrap();
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
 
     let buffer_data = buffer_slice.get_mapped_range();
 

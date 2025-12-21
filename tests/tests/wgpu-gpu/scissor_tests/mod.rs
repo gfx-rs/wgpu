@@ -1,4 +1,13 @@
-use wgpu_test::{gpu_test, image, GpuTestConfiguration, TestingContext};
+use wgpu_test::{gpu_test, image, GpuTestConfiguration, GpuTestInitializer, TestingContext};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        SCISSOR_TEST_FULL_RECT,
+        SCISSOR_TEST_EMPTY_RECT,
+        SCISSOR_TEST_EMPTY_RECT_WITH_OFFSET,
+        SCISSOR_TEST_CUSTOM_RECT,
+    ]);
+}
 
 struct Rect {
     x: u32,
@@ -60,7 +69,7 @@ async fn scissor_test_impl(
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -89,6 +98,7 @@ async fn scissor_test_impl(
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             render_pass.set_pipeline(&pipeline);
             render_pass.set_scissor_rect(

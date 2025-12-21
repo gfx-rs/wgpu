@@ -211,6 +211,14 @@ impl<'a> Context<'a> {
                     Some((v, ty)),
                 )
             }
+            GlobalLookupKind::Override(v, _ty) => {
+                let span = self.module.overrides.get_span(v);
+                (
+                    self.add_expression(Expression::Override(v), span)?,
+                    false,
+                    None,
+                )
+            }
         };
 
         let var = VariableReference {
@@ -541,7 +549,7 @@ impl<'a> Context<'a> {
     ) -> Result<(Option<Handle<Expression>>, Span)> {
         let HirExpr { ref kind, meta } = stmt.hir_exprs[expr];
 
-        log::debug!("Lowering {:?} (kind {:?}, pos {:?})", expr, kind, pos);
+        log::debug!("Lowering {expr:?} (kind {kind:?}, pos {pos:?})");
 
         let handle = match *kind {
             HirExprKind::Access { base, index } => {
@@ -636,8 +644,7 @@ impl<'a> Context<'a> {
                             frontend.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
-                                        "Cannot apply operation to {:?} and {:?}",
-                                        left_inner, right_inner
+                                        "Cannot apply operation to {left_inner:?} and {right_inner:?}"
                                     )
                                     .into(),
                                 ),
@@ -835,8 +842,7 @@ impl<'a> Context<'a> {
                             frontend.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
-                                        "Cannot apply operation to {:?} and {:?}",
-                                        left_inner, right_inner
+                                        "Cannot apply operation to {left_inner:?} and {right_inner:?}"
                                     )
                                     .into(),
                                 ),
@@ -916,8 +922,7 @@ impl<'a> Context<'a> {
                             frontend.errors.push(Error {
                                 kind: ErrorKind::SemanticError(
                                     format!(
-                                        "Cannot apply operation to {:?} and {:?}",
-                                        left_inner, right_inner
+                                        "Cannot apply operation to {left_inner:?} and {right_inner:?}"
                                     )
                                     .into(),
                                 ),
@@ -1040,7 +1045,17 @@ impl<'a> Context<'a> {
                     if let Some((constant, _)) = self.is_const.then_some(var.constant).flatten() {
                         self.add_expression(Expression::Constant(constant), meta)?
                     } else {
-                        var.expr
+                        // Check if this is an Override expression in const context
+                        if self.is_const {
+                            if let Expression::Override(o) = self.expressions[var.expr] {
+                                // Need to add the Override expression to the global arena
+                                self.add_expression(Expression::Override(o), meta)?
+                            } else {
+                                var.expr
+                            }
+                        } else {
+                            var.expr
+                        }
                     }
                 }
             },
@@ -1339,13 +1354,7 @@ impl<'a> Context<'a> {
             }
         };
 
-        log::trace!(
-            "Lowered {:?}\n\tKind = {:?}\n\tPos = {:?}\n\tResult = {:?}",
-            expr,
-            kind,
-            pos,
-            handle
-        );
+        log::trace!("Lowered {expr:?}\n\tKind = {kind:?}\n\tPos = {pos:?}\n\tResult = {handle:?}");
 
         Ok((Some(handle), meta))
     }

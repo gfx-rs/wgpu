@@ -1,6 +1,10 @@
 use wgpu::util::DeviceExt;
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    vec.extend([DRAW, DRAW_INDEXED]);
+}
+
 //
 // These tests render two triangles to a 2x2 render target. The first triangle
 // in the vertex buffer covers the bottom-left pixel, the second triangle
@@ -146,7 +150,7 @@ async fn pulling_common(
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -189,6 +193,7 @@ async fn pulling_common(
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         rpass.set_pipeline(&pipeline);

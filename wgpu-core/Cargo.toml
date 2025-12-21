@@ -69,17 +69,17 @@ observe_locks = ["std", "dep:ron", "serde/serde_derive"]
 # --------------------------------------------------------------------
 
 ## Enables serialization via `serde` on common wgpu types.
-serde = ["dep:serde", "wgpu-types/serde", "arrayvec/serde", "hashbrown/serde"]
+serde = [
+    "dep:serde",
+    "wgpu-types/serde",
+    "arrayvec/serde",
+    "hashbrown/serde",
+    "smallvec/serde",
+    "macro_rules_attribute",
+]
 
 ## Enable API tracing.
-trace = [
-    "serde",
-    "std",
-    "dep:ron",
-    "naga/serialize",
-    "wgpu-types/trace",
-    "dep:bytemuck",
-]
+trace = ["serde", "std", "dep:ron", "naga/serialize", "wgpu-types/trace"]
 
 ## Enable API replaying
 replay = ["serde", "naga/deserialize"]
@@ -100,7 +100,7 @@ wgsl = ["naga/wgsl-in"]
 glsl = ["naga/glsl-in"]
 
 ## Enable `ShaderModuleSource::SpirV`
-spirv = ["naga/spv-in", "dep:bytemuck"]
+spirv = ["naga/spv-in"]
 
 #! ### Other
 # --------------------------------------------------------------------
@@ -168,7 +168,7 @@ wgpu-core-deps-apple = { workspace = true, optional = true }
 wgpu-core-deps-emscripten = { workspace = true, optional = true }
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 wgpu-core-deps-wasm = { workspace = true, optional = true }
-[target.'cfg(any(windows, target_os = "linux", target_os = "android"))'.dependencies]
+[target.'cfg(any(windows, target_os = "linux", target_os = "android", target_os = "freebsd"))'.dependencies]
 wgpu-core-deps-windows-linux-android = { workspace = true, optional = true }
 
 [dependencies]
@@ -180,11 +180,12 @@ arrayvec.workspace = true
 bit-vec.workspace = true
 bit-set.workspace = true
 bitflags.workspace = true
-bytemuck = { workspace = true, optional = true }
+bytemuck.workspace = true
 document-features.workspace = true
 hashbrown.workspace = true
 indexmap.workspace = true
 log.workspace = true
+macro_rules_attribute = { workspace = true, optional = true }
 once_cell = { workspace = true, features = ["std"] }
 parking_lot.workspace = true
 profiling = { workspace = true, default-features = false }

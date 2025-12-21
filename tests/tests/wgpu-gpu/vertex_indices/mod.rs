@@ -11,6 +11,10 @@ use wgpu::util::{BufferInitDescriptor, DeviceExt, RenderEncoder};
 use wgpu::RenderBundleDescriptor;
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    vec.push(VERTEX_INDICES);
+}
+
 /// Generic struct representing a draw call
 struct Draw {
     vertex: Range<u32>,
@@ -230,7 +234,7 @@ async fn vertex_index_common(ctx: TestingContext) {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bgl],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
     let mut pipeline_desc = wgpu::RenderPipelineDescriptor {
@@ -255,7 +259,7 @@ async fn vertex_index_common(ctx: TestingContext) {
                 write_mask: wgpu::ColorWrites::ALL,
             })],
         }),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     };
     let builtin_pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
@@ -362,6 +366,7 @@ async fn vertex_index_common(ctx: TestingContext) {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         {
@@ -436,11 +441,15 @@ async fn vertex_index_common(ctx: TestingContext) {
         // See https://github.com/gfx-rs/wgpu/issues/4732 for why this is split between two submissions
         // with a hard wait in between.
         ctx.queue.submit([encoder1.finish()]);
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
         ctx.queue.submit([encoder2.finish()]);
         let slice = cpu_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| ());
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
         let data: Vec<u32> = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
 
         let case_name = format!(

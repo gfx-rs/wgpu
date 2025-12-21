@@ -4,7 +4,7 @@ use core::mem::ManuallyDrop;
 use wgt::BufferUses;
 
 use crate::device::{Device, DeviceError};
-use crate::resource_log;
+use crate::{hal_label, resource_log};
 
 #[derive(Debug)]
 pub struct ScratchBuffer {
@@ -18,7 +18,7 @@ impl ScratchBuffer {
             device
                 .raw()
                 .create_buffer(&hal::BufferDescriptor {
-                    label: Some("(wgpu) scratch buffer"),
+                    label: hal_label(Some("(wgpu) scratch buffer"), device.instance_flags),
                     size: size.get(),
                     usage: BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
                     memory_flags: hal::MemoryFlags::empty(),

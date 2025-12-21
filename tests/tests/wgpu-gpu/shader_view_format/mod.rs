@@ -1,6 +1,10 @@
 use wgpu::{util::DeviceExt, DownlevelFlags, Limits, TextureFormat};
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
+pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    vec.push(REINTERPRET_SRGB);
+}
+
 #[gpu_test]
 static REINTERPRET_SRGB: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
@@ -109,7 +113,7 @@ async fn reinterpret(
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
     let bind_group = ctx.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -147,6 +151,7 @@ async fn reinterpret(
         depth_stencil_attachment: None,
         timestamp_writes: None,
         occlusion_query_set: None,
+        multiview_mask: None,
     });
     rpass.set_pipeline(&pipeline);
     rpass.set_bind_group(0, &bind_group, &[]);
@@ -185,7 +190,9 @@ async fn reinterpret(
 
     let slice = read_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     let data: Vec<u8> = slice.get_mapped_range().to_vec();
     let tolerance_data: [[u8; 4]; 4] = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [1, 1, 1, 0]];

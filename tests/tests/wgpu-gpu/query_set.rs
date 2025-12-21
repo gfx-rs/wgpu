@@ -1,12 +1,16 @@
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(DROP_FAILED_TIMESTAMP_QUERY_SET);
+}
 
 #[gpu_test]
 static DROP_FAILED_TIMESTAMP_QUERY_SET: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         // Enter an error scope, so the validation catch-all doesn't
         // report the error too early.
-        ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
+        let scope = ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
 
         // Creating this query set should fail, since we didn't include
         // TIMESTAMP_QUERY in our required features.
@@ -19,5 +23,5 @@ static DROP_FAILED_TIMESTAMP_QUERY_SET: GpuTestConfiguration = GpuTestConfigurat
         // Dropping this should not panic.
         drop(bad_query_set);
 
-        assert!(pollster::block_on(ctx.device.pop_error_scope()).is_some());
+        assert!(pollster::block_on(scope.pop()).is_some());
     });

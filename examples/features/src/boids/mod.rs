@@ -107,7 +107,7 @@ impl crate::framework::Example for Example {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compute"),
                 bind_group_layouts: &[&compute_bind_group_layout],
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
 
         // create render pipeline with empty bind group layout
@@ -116,7 +116,7 @@ impl crate::framework::Example for Example {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("render"),
                 bind_group_layouts: &[],
-                push_constant_ranges: &[],
+                immediate_size: 0,
             });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -148,7 +148,7 @@ impl crate::framework::Example for Example {
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -226,8 +226,7 @@ impl crate::framework::Example for Example {
         }
 
         // calculates number of work groups from PARTICLES_PER_GROUP constant
-        let work_group_count =
-            ((NUM_PARTICLES as f32) / (PARTICLES_PER_GROUP as f32)).ceil() as u32;
+        let work_group_count = NUM_PARTICLES.div_ceil(PARTICLES_PER_GROUP);
 
         // returns Example struct and No encoder commands
 
@@ -276,6 +275,7 @@ impl crate::framework::Example for Example {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         };
 
         // get command encoder
@@ -323,7 +323,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "boids",
     // Generated on 1080ti on Vk/Windows
     image_path: "/examples/features/src/boids/screenshot.png",
@@ -332,9 +332,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
     optional_features: wgpu::Features::default(),
     base_test_parameters: wgpu_test::TestParameters::default()
         .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
-        .limits(wgpu::Limits::downlevel_defaults())
-        // Lots of validation errors, maybe related to https://github.com/gfx-rs/wgpu/issues/3160
-        .expect_fail(wgpu_test::FailureCase::molten_vk()),
+        .limits(wgpu::Limits::downlevel_defaults()),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.005)],
     _phantom: std::marker::PhantomData::<Example>,
 };

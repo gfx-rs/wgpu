@@ -1,6 +1,6 @@
 use std::{iter, mem};
 
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 use wgpu::util::DeviceExt;
 
@@ -8,6 +8,13 @@ use crate::ray_tracing::acceleration_structure_limits;
 use glam::{Affine3A, Quat, Vec3};
 
 mod mesh_gen;
+
+pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    tests.extend([
+        ACCELERATION_STRUCTURE_BUILD_NO_INDEX,
+        ACCELERATION_STRUCTURE_BUILD_WITH_INDEX,
+    ]);
+}
 
 fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
     let max_instances = 1000;
@@ -94,7 +101,9 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
 
     ctx.queue.submit(Some(encoder.finish()));
 
-    ctx.device.poll(wgpu::PollType::Wait).unwrap();
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
 }
 
 #[gpu_test]
@@ -103,9 +112,8 @@ static ACCELERATION_STRUCTURE_BUILD_NO_INDEX: GpuTestConfiguration = GpuTestConf
         TestParameters::default()
             .test_features_limits()
             .limits(acceleration_structure_limits())
-            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
-            // https://github.com/gfx-rs/wgpu/issues/6727
-            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            .enable_noop(),
     )
     .run_sync(|ctx| {
         acceleration_structure_build(&ctx, false);
@@ -117,9 +125,8 @@ static ACCELERATION_STRUCTURE_BUILD_WITH_INDEX: GpuTestConfiguration = GpuTestCo
         TestParameters::default()
             .test_features_limits()
             .limits(acceleration_structure_limits())
-            .features(wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
-            // https://github.com/gfx-rs/wgpu/issues/6727
-            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
+            .features(wgpu::Features::EXPERIMENTAL_RAY_QUERY)
+            .enable_noop(),
     )
     .run_sync(|ctx| {
         acceleration_structure_build(&ctx, true);

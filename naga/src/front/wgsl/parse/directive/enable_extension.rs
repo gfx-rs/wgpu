@@ -10,6 +10,9 @@ use alloc::boxed::Box;
 /// Tracks the status of every enable-extension known to Naga.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EnableExtensions {
+    wgpu_mesh_shader: bool,
+    wgpu_ray_query: bool,
+    wgpu_ray_query_vertex_return: bool,
     dual_source_blending: bool,
     /// Whether `enable f16;` was written earlier in the shader module.
     f16: bool,
@@ -19,6 +22,9 @@ pub struct EnableExtensions {
 impl EnableExtensions {
     pub(crate) const fn empty() -> Self {
         Self {
+            wgpu_mesh_shader: false,
+            wgpu_ray_query: false,
+            wgpu_ray_query_vertex_return: false,
             f16: false,
             dual_source_blending: false,
             clip_distances: false,
@@ -28,6 +34,11 @@ impl EnableExtensions {
     /// Add an enable-extension to the set requested by a module.
     pub(crate) fn add(&mut self, ext: ImplementedEnableExtension) {
         let field = match ext {
+            ImplementedEnableExtension::WgpuMeshShader => &mut self.wgpu_mesh_shader,
+            ImplementedEnableExtension::WgpuRayQuery => &mut self.wgpu_ray_query,
+            ImplementedEnableExtension::WgpuRayQueryVertexReturn => {
+                &mut self.wgpu_ray_query_vertex_return
+            }
             ImplementedEnableExtension::DualSourceBlending => &mut self.dual_source_blending,
             ImplementedEnableExtension::F16 => &mut self.f16,
             ImplementedEnableExtension::ClipDistances => &mut self.clip_distances,
@@ -38,6 +49,11 @@ impl EnableExtensions {
     /// Query whether an enable-extension tracked here has been requested.
     pub(crate) const fn contains(&self, ext: ImplementedEnableExtension) -> bool {
         match ext {
+            ImplementedEnableExtension::WgpuMeshShader => self.wgpu_mesh_shader,
+            ImplementedEnableExtension::WgpuRayQuery => self.wgpu_ray_query,
+            ImplementedEnableExtension::WgpuRayQueryVertexReturn => {
+                self.wgpu_ray_query_vertex_return
+            }
             ImplementedEnableExtension::DualSourceBlending => self.dual_source_blending,
             ImplementedEnableExtension::F16 => self.f16,
             ImplementedEnableExtension::ClipDistances => self.clip_distances,
@@ -70,17 +86,29 @@ impl EnableExtension {
     const F16: &'static str = "f16";
     const CLIP_DISTANCES: &'static str = "clip_distances";
     const DUAL_SOURCE_BLENDING: &'static str = "dual_source_blending";
+    const MESH_SHADER: &'static str = "wgpu_mesh_shader";
+    const RAY_QUERY: &'static str = "wgpu_ray_query";
+    const RAY_QUERY_VERTEX_RETURN: &'static str = "wgpu_ray_query_vertex_return";
     const SUBGROUPS: &'static str = "subgroups";
+    const PRIMITIVE_INDEX: &'static str = "primitive_index";
 
     /// Convert from a sentinel word in WGSL into its associated [`EnableExtension`], if possible.
-    pub(crate) fn from_ident(word: &str, span: Span) -> Result<Self> {
+    pub(crate) fn from_ident(word: &str, span: Span) -> Result<'_, Self> {
         Ok(match word {
             Self::F16 => Self::Implemented(ImplementedEnableExtension::F16),
             Self::CLIP_DISTANCES => Self::Implemented(ImplementedEnableExtension::ClipDistances),
             Self::DUAL_SOURCE_BLENDING => {
                 Self::Implemented(ImplementedEnableExtension::DualSourceBlending)
             }
+            Self::MESH_SHADER => Self::Implemented(ImplementedEnableExtension::WgpuMeshShader),
+            Self::RAY_QUERY => Self::Implemented(ImplementedEnableExtension::WgpuRayQuery),
+            Self::RAY_QUERY_VERTEX_RETURN => {
+                Self::Implemented(ImplementedEnableExtension::WgpuRayQueryVertexReturn)
+            }
             Self::SUBGROUPS => Self::Unimplemented(UnimplementedEnableExtension::Subgroups),
+            Self::PRIMITIVE_INDEX => {
+                Self::Unimplemented(UnimplementedEnableExtension::PrimitiveIndex)
+            }
             _ => return Err(Box::new(Error::UnknownEnableExtension(span, word))),
         })
     }
@@ -89,12 +117,18 @@ impl EnableExtension {
     pub const fn to_ident(self) -> &'static str {
         match self {
             Self::Implemented(kind) => match kind {
+                ImplementedEnableExtension::WgpuMeshShader => Self::MESH_SHADER,
+                ImplementedEnableExtension::WgpuRayQuery => Self::RAY_QUERY,
+                ImplementedEnableExtension::WgpuRayQueryVertexReturn => {
+                    Self::RAY_QUERY_VERTEX_RETURN
+                }
                 ImplementedEnableExtension::DualSourceBlending => Self::DUAL_SOURCE_BLENDING,
                 ImplementedEnableExtension::F16 => Self::F16,
                 ImplementedEnableExtension::ClipDistances => Self::CLIP_DISTANCES,
             },
             Self::Unimplemented(kind) => match kind {
                 UnimplementedEnableExtension::Subgroups => Self::SUBGROUPS,
+                UnimplementedEnableExtension::PrimitiveIndex => Self::PRIMITIVE_INDEX,
             },
         }
     }
@@ -121,6 +155,12 @@ pub enum ImplementedEnableExtension {
     ///
     /// [`enable clip_distances;`]: https://www.w3.org/TR/WGSL/#extension-clip_distances
     ClipDistances,
+    /// Enables the `wgpu_mesh_shader` extension, native only
+    WgpuMeshShader,
+    /// Enables the `wgpu_ray_query` extension, native only.
+    WgpuRayQuery,
+    /// Enables the `wgpu_ray_query_vertex_return` extension, native only.
+    WgpuRayQueryVertexReturn,
 }
 
 /// A variant of [`EnableExtension::Unimplemented`].
@@ -132,12 +172,19 @@ pub enum UnimplementedEnableExtension {
     ///
     /// [`enable subgroups;`]: https://www.w3.org/TR/WGSL/#extension-subgroups
     Subgroups,
+    /// Enables the `@builtin(primitive_index)` attribute in WGSL.
+    ///
+    /// In the WGSL standard, this corresponds to [`enable primitive-index;`].
+    ///
+    /// [`enable primitive-index;`]: https://www.w3.org/TR/WGSL/#extension-primitive_index
+    PrimitiveIndex,
 }
 
 impl UnimplementedEnableExtension {
     pub(crate) const fn tracking_issue_num(self) -> u16 {
         match self {
             Self::Subgroups => 5555,
+            Self::PrimitiveIndex => 8236,
         }
     }
 }

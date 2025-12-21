@@ -169,6 +169,7 @@ impl TryToWgsl for crate::BuiltIn {
             Bi::FragDepth => "frag_depth",
             Bi::FrontFacing => "front_facing",
             Bi::PrimitiveIndex => "primitive_index",
+            Bi::Barycentric => "barycentric",
             Bi::SampleIndex => "sample_index",
             Bi::SampleMask => "sample_mask",
             Bi::GlobalInvocationId => "global_invocation_id",
@@ -182,6 +183,16 @@ impl TryToWgsl for crate::BuiltIn {
             Bi::SubgroupInvocationId => "subgroup_invocation_id",
 
             // Non-standard built-ins.
+            Bi::MeshTaskSize => "mesh_task_size",
+            Bi::TriangleIndices => "triangle_indices",
+            Bi::LineIndices => "line_indices",
+            Bi::PointIndex => "point_index",
+            Bi::Vertices => "vertices",
+            Bi::Primitives => "primitives",
+            Bi::VertexCount => "vertex_count",
+            Bi::PrimitiveCount => "primitive_count",
+            Bi::CullPrimitive => "cull_primitive",
+
             Bi::BaseInstance
             | Bi::BaseVertex
             | Bi::CullDistance
@@ -244,7 +255,7 @@ impl ToWgsl for crate::StorageFormat {
             Sf::Bgra8Unorm => "bgra8unorm",
             Sf::Rgb10a2Uint => "rgb10a2uint",
             Sf::Rgb10a2Unorm => "rgb10a2unorm",
-            Sf::Rg11b10Ufloat => "rg11b10float",
+            Sf::Rg11b10Ufloat => "rg11b10ufloat",
             Sf::R64Uint => "r64uint",
             Sf::Rg32Uint => "rg32uint",
             Sf::Rg32Sint => "rg32sint",
@@ -348,10 +359,11 @@ pub const fn address_space_str(
                     "storage"
                 }
             }
-            As::PushConstant => "push_constant",
+            As::Immediate => "immediate",
             As::WorkGroup => "workgroup",
             As::Handle => return (None, None),
             As::Function => "function",
+            As::TaskPayload => "task_payload",
         }),
         None,
     )

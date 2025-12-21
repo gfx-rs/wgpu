@@ -3,10 +3,11 @@ use super::{
     CreateIndirectValidationPipelineError,
 };
 use crate::{
+    command::RenderPassErrorInner,
     device::{queue::TempResource, Device, DeviceError},
     lock::{rank, Mutex},
     pipeline::{CreateComputePipelineError, CreateShaderModuleError},
-    resource::{StagingBuffer, Trackable},
+    resource::{RawResourceAccess as _, StagingBuffer, Trackable},
     snatch::SnatchGuard,
     track::TrackerIndex,
     FastHashMap,
@@ -41,7 +42,7 @@ const BUFFER_SIZE: wgt::BufferSize = unsafe { wgt::BufferSize::new_unchecked(1_0
 /// - max_bind_groups: 3,
 /// - max_dynamic_storage_buffers_per_pipeline_layout: 1,
 /// - max_storage_buffers_per_shader_stage: 3,
-/// - max_push_constant_size: 8,
+/// - max_immediate_size: 8,
 ///
 /// These are all indirectly satisfied by `DownlevelFlags::INDIRECT_EXECUTION`, which is also
 /// required for this module's functionality to work.
@@ -80,10 +81,7 @@ impl Draw {
                 src_bind_group_layout.as_ref(),
                 dst_bind_group_layout.as_ref(),
             ],
-            push_constant_ranges: &[wgt::PushConstantRange {
-                stages: wgt::ShaderStages::COMPUTE,
-                range: 0..8,
-            }],
+            immediate_size: 8,
         };
         let pipeline_layout = unsafe {
             device
@@ -135,14 +133,12 @@ impl Draw {
                 resource_index: 0,
                 count: 1,
             }],
-            buffers: &[hal::BufferBinding {
-                buffer,
-                offset: 0,
-                size: Some(binding_size),
-            }],
+            // SAFETY: We calculated the binding size to fit within the buffer.
+            buffers: &[hal::BufferBinding::new_unchecked(buffer, 0, binding_size)],
             samplers: &[],
             textures: &[],
             acceleration_structures: &[],
+            external_textures: &[],
         };
         unsafe {
             device
@@ -201,7 +197,7 @@ impl Draw {
         temp_resources: &mut Vec<TempResource>,
         encoder: &mut dyn hal::DynCommandEncoder,
         batcher: DrawBatcher,
-    ) -> Result<(), DeviceError> {
+    ) -> Result<(), RenderPassErrorInner> {
         let mut batches = batcher.batches;
 
         if batches.is_empty() {
@@ -366,12 +362,7 @@ impl Draw {
                 (batch.metadata_buffer_offset / size_of::<MetadataEntry>() as u64) as u32;
             let metadata_count = batch.entries.len() as u32;
             unsafe {
-                encoder.set_push_constants(
-                    pipeline_layout,
-                    wgt::ShaderStages::COMPUTE,
-                    0,
-                    &[metadata_start, metadata_count],
-                );
+                encoder.set_immediates(pipeline_layout, 0, &[metadata_start, metadata_count]);
             }
 
             let metadata_bind_group =
@@ -379,6 +370,9 @@ impl Draw {
             unsafe {
                 encoder.set_bind_group(pipeline_layout, 0, Some(metadata_bind_group), &[]);
             }
+
+            // Make sure the indirect buffer is still valid.
+            batch.src_buffer.try_raw(snatch_guard)?;
 
             let src_bind_group = batch
                 .src_buffer
@@ -485,7 +479,7 @@ fn create_validation_module(
     let module = panic!("Indirect validation requires the wgsl feature flag to be enabled!");
 
     let info = crate::device::create_validator(
-        wgt::Features::PUSH_CONSTANTS,
+        wgt::Features::IMMEDIATES,
         wgt::DownlevelFlags::empty(),
         naga::valid::ValidationFlags::all(),
     )
@@ -512,7 +506,7 @@ fn create_validation_module(
                 CreateShaderModuleError::Device(DeviceError::from_hal(error))
             }
             hal::ShaderError::Compilation(ref msg) => {
-                log::error!("Shader error: {}", msg);
+                log::error!("Shader error: {msg}");
                 CreateShaderModuleError::Generation
             }
         },
@@ -684,14 +678,16 @@ fn create_buffer_and_bind_group(
             resource_index: 0,
             count: 1,
         }],
-        buffers: &[hal::BufferBinding {
-            buffer: buffer.as_ref(),
-            offset: 0,
-            size: Some(BUFFER_SIZE),
-        }],
+        // SAFETY: We just created the buffer with this size.
+        buffers: &[hal::BufferBinding::new_unchecked(
+            buffer.as_ref(),
+            0,
+            BUFFER_SIZE,
+        )],
         samplers: &[],
         textures: &[],
         acceleration_structures: &[],
+        external_textures: &[],
     };
     let bind_group = unsafe { device.create_bind_group(&bind_group_desc) }?;
     Ok(BufferPoolEntry { buffer, bind_group })
@@ -919,7 +915,7 @@ impl DrawBatcher {
         device: &Device,
         src_buffer: &Arc<crate::resource::Buffer>,
         offset: u64,
-        indexed: bool,
+        family: crate::command::DrawCommandFamily,
         vertex_or_index_limit: u64,
         instance_limit: u64,
     ) -> Result<(usize, u64), DeviceError> {
@@ -929,7 +925,7 @@ impl DrawBatcher {
         } else {
             0
         };
-        let stride = extra + crate::command::get_stride_of_indirect_args(indexed);
+        let stride = extra + crate::command::get_stride_of_indirect_args(family);
 
         let (dst_resource_index, dst_offset) = indirect_draw_validation_resources
             .get_dst_subrange(stride, &mut self.current_dst_entry)?;
@@ -941,7 +937,7 @@ impl DrawBatcher {
         let src_buffer_tracker_index = src_buffer.tracker_index();
 
         let entry = MetadataEntry::new(
-            indexed,
+            family == crate::command::DrawCommandFamily::DrawIndexed,
             src_offset,
             dst_offset,
             vertex_or_index_limit,

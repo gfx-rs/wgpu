@@ -68,7 +68,7 @@ impl ExpressionTracer<'_> {
                 continue;
             }
 
-            log::trace!("tracing new expression {:?}", expr);
+            log::trace!("tracing new expression {expr:?}");
             self.trace_expression(expr);
         }
     }

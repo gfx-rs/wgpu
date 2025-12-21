@@ -6,6 +6,12 @@ use parking_lot::Mutex;
 use windows::{
     core::Interface as _,
     Win32::{
+        Devices::DeviceAndDriverInstallation::{
+            SetupDiDestroyDeviceInfoList, SetupDiEnumDeviceInfo, SetupDiGetClassDevsW,
+            SetupDiGetDeviceRegistryPropertyW, DIGCF_PRESENT, GUID_DEVCLASS_DISPLAY, HDEVINFO,
+            SPDRP_ADDRESS, SPDRP_BUSNUMBER, SPDRP_HARDWAREID, SP_DEVINFO_DATA,
+        },
+        Foundation::{GetLastError, ERROR_NO_MORE_ITEMS},
         Graphics::{Direct3D, Direct3D12, Dxgi},
         UI::WindowsAndMessaging,
     },
@@ -17,7 +23,7 @@ use crate::{
         self,
         dxgi::{factory::DxgiAdapter, result::HResult},
     },
-    dx12::{shader_compilation, SurfaceTarget},
+    dx12::{dcomp::DCompLib, shader_compilation, FeatureLevel, ShaderModel, SurfaceTarget},
 };
 
 impl Drop for super::Adapter {
@@ -52,25 +58,48 @@ impl super::Adapter {
         &self.raw
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn expose(
         adapter: DxgiAdapter,
         library: &Arc<D3D12Lib>,
+        dcomp_lib: &Arc<DCompLib>,
         instance_flags: wgt::InstanceFlags,
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
         compiler_container: Arc<shader_compilation::CompilerContainer>,
+        backend_options: wgt::Dx12BackendOptions,
+        telemetry: Option<crate::Telemetry>,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
+        let desc = unsafe { adapter.GetDesc2() }.unwrap();
+        let driver_version =
+            unsafe { adapter.CheckInterfaceSupport(&Dxgi::IDXGIDevice::IID) }.unwrap() as u64;
+        let driver_version = [
+            (driver_version >> 48) as u16,
+            (driver_version >> 32) as u16,
+            (driver_version >> 16) as u16,
+            driver_version as u16,
+        ];
+
         // Create the device so that we can get the capabilities.
-        let device = {
+        let res = {
             profiling::scope!("ID3D12Device::create_device");
-            library
-                .create_device(&adapter, Direct3D::D3D_FEATURE_LEVEL_11_0)
-                .ok()??
+            library.create_device(&adapter, Direct3D::D3D_FEATURE_LEVEL_11_0)
         };
+        if let Some(telemetry) = telemetry {
+            if let Err(err) = res {
+                (telemetry.d3d12_expose_adapter)(
+                    &desc,
+                    driver_version,
+                    crate::D3D12ExposeAdapterResult::CreateDeviceError(err),
+                );
+            }
+        }
+        let device = res.ok()?;
 
         profiling::scope!("feature queries");
 
         // Detect the highest supported feature level.
         let d3d_feature_level = [
+            Direct3D::D3D_FEATURE_LEVEL_12_2,
             Direct3D::D3D_FEATURE_LEVEL_12_1,
             Direct3D::D3D_FEATURE_LEVEL_12_0,
             Direct3D::D3D_FEATURE_LEVEL_11_1,
@@ -89,11 +118,14 @@ impl super::Adapter {
             )
         }
         .unwrap();
-        let max_feature_level = device_levels.MaxSupportedFeatureLevel;
-
-        // We have found a possible adapter.
-        // Acquire the device information.
-        let desc = unsafe { adapter.GetDesc2() }.unwrap();
+        let max_feature_level = match device_levels.MaxSupportedFeatureLevel {
+            Direct3D::D3D_FEATURE_LEVEL_11_0 => FeatureLevel::_11_0,
+            Direct3D::D3D_FEATURE_LEVEL_11_1 => FeatureLevel::_11_1,
+            Direct3D::D3D_FEATURE_LEVEL_12_0 => FeatureLevel::_12_0,
+            Direct3D::D3D_FEATURE_LEVEL_12_1 => FeatureLevel::_12_1,
+            Direct3D::D3D_FEATURE_LEVEL_12_2 => FeatureLevel::_12_2,
+            _ => unreachable!(),
+        };
 
         let device_name = auxil::dxgi::conv::map_adapter_name(desc.Description);
 
@@ -108,7 +140,26 @@ impl super::Adapter {
         }
         .unwrap();
 
+        let mut features1 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS1::default();
+        let hr = unsafe {
+            device.CheckFeatureSupport(
+                Direct3D12::D3D12_FEATURE_D3D12_OPTIONS1,
+                <*mut _>::cast(&mut features1),
+                size_of_val(&features1) as u32,
+            )
+        };
+
         let mut workarounds = super::Workarounds::default();
+
+        let is_warp = device_name.contains("Microsoft Basic Render Driver");
+
+        // WARP uses two different versioning schemes. Versions that ship with windows
+        // use a version that starts with 10.x.x.x. Versions that ship from Nuget use 1.0.x.x.
+        //
+        // As far as we know, this is only an issue on the Nuget versions.
+        if is_warp && driver_version >= [1, 0, 13, 0] && driver_version[0] < 10 {
+            workarounds.avoid_shader_debug_info = true;
+        }
 
         let info = wgt::AdapterInfo {
             backend: wgt::Backend::Dx12,
@@ -118,28 +169,21 @@ impl super::Adapter {
             device_type: if Dxgi::DXGI_ADAPTER_FLAG(desc.Flags as i32)
                 .contains(Dxgi::DXGI_ADAPTER_FLAG_SOFTWARE)
             {
-                workarounds.avoid_cpu_descriptor_overwrites = true;
                 wgt::DeviceType::Cpu
             } else if features_architecture.UMA.as_bool() {
                 wgt::DeviceType::IntegratedGpu
             } else {
                 wgt::DeviceType::DiscreteGpu
             },
-            driver: {
-                if let Ok(i) = unsafe { adapter.CheckInterfaceSupport(&Dxgi::IDXGIDevice::IID) } {
-                    const MASK: i64 = 0xFFFF;
-                    format!(
-                        "{}.{}.{}.{}",
-                        i >> 48,
-                        (i >> 32) & MASK,
-                        (i >> 16) & MASK,
-                        i & MASK
-                    )
-                } else {
-                    String::new()
-                }
-            },
+            device_pci_bus_id: get_adapter_pci_info(desc.VendorId, desc.DeviceId),
+            driver: format!(
+                "{}.{}.{}.{}",
+                driver_version[0], driver_version[1], driver_version[2], driver_version[3]
+            ),
             driver_info: String::new(),
+            subgroup_min_size: features1.WaveLaneCountMin,
+            subgroup_max_size: features1.WaveLaneCountMax,
+            transient_saves_memory: false,
         };
 
         let mut options = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS::default();
@@ -153,6 +197,13 @@ impl super::Adapter {
         .unwrap();
 
         if options.ResourceBindingTier.0 < Direct3D12::D3D12_RESOURCE_BINDING_TIER_2.0 {
+            if let Some(telemetry) = telemetry {
+                (telemetry.d3d12_expose_adapter)(
+                    &desc,
+                    driver_version,
+                    crate::D3D12ExposeAdapterResult::ResourceBindingTier2Requirement,
+                );
+            }
             // We require Tier 2 or higher for the ability to make samplers bindless in all cases.
             return None;
         }
@@ -170,9 +221,9 @@ impl super::Adapter {
                 && features2.DepthBoundsTestSupported.as_bool()
         };
 
-        let casting_fully_typed_format_supported = {
+        let (casting_fully_typed_format_supported, view_instancing) = {
             let mut features3 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS3::default();
-            unsafe {
+            if unsafe {
                 device.CheckFeatureSupport(
                     Direct3D12::D3D12_FEATURE_D3D12_OPTIONS3,
                     <*mut _>::cast(&mut features3),
@@ -180,7 +231,14 @@ impl super::Adapter {
                 )
             }
             .is_ok()
-                && features3.CastingFullyTypedFormatSupported.as_bool()
+            {
+                (
+                    features3.CastingFullyTypedFormatSupported.as_bool(),
+                    features3.ViewInstancingTier.0 >= Direct3D12::D3D12_VIEW_INSTANCING_TIER_1.0,
+                )
+            } else {
+                (false, false)
+            }
         };
 
         let heap_create_not_zeroed = {
@@ -196,6 +254,21 @@ impl super::Adapter {
                 )
             }
             .is_ok()
+        };
+
+        let unrestricted_buffer_texture_copy_pitch_supported = {
+            let mut features13 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS13::default();
+            unsafe {
+                device.CheckFeatureSupport(
+                    Direct3D12::D3D12_FEATURE_D3D12_OPTIONS13,
+                    <*mut _>::cast(&mut features13),
+                    size_of_val(&features13) as u32,
+                )
+            }
+            .is_ok()
+                && features13
+                    .UnrestrictedBufferTextureCopyPitchSupported
+                    .as_bool()
         };
 
         let mut max_sampler_descriptor_heap_size =
@@ -224,62 +297,86 @@ impl super::Adapter {
             }
         };
 
-        let shader_model = if let Some(max_shader_model) = compiler_container.max_shader_model() {
-            let max_shader_model = match max_shader_model {
-                wgt::DxcShaderModel::V6_0 => Direct3D12::D3D_SHADER_MODEL_6_0,
-                wgt::DxcShaderModel::V6_1 => Direct3D12::D3D_SHADER_MODEL_6_1,
-                wgt::DxcShaderModel::V6_2 => Direct3D12::D3D_SHADER_MODEL_6_2,
-                wgt::DxcShaderModel::V6_3 => Direct3D12::D3D_SHADER_MODEL_6_3,
-                wgt::DxcShaderModel::V6_4 => Direct3D12::D3D_SHADER_MODEL_6_4,
-                wgt::DxcShaderModel::V6_5 => Direct3D12::D3D_SHADER_MODEL_6_5,
-                wgt::DxcShaderModel::V6_6 => Direct3D12::D3D_SHADER_MODEL_6_6,
-                wgt::DxcShaderModel::V6_7 => Direct3D12::D3D_SHADER_MODEL_6_7,
-            };
-
-            let mut versions = [
-                Direct3D12::D3D_SHADER_MODEL_6_7,
-                Direct3D12::D3D_SHADER_MODEL_6_6,
-                Direct3D12::D3D_SHADER_MODEL_6_5,
-                Direct3D12::D3D_SHADER_MODEL_6_4,
-                Direct3D12::D3D_SHADER_MODEL_6_3,
-                Direct3D12::D3D_SHADER_MODEL_6_2,
-                Direct3D12::D3D_SHADER_MODEL_6_1,
-                Direct3D12::D3D_SHADER_MODEL_6_0,
-            ]
-            .iter()
-            .filter(|shader_model| shader_model.0 <= max_shader_model.0);
-
-            let highest_shader_model = loop {
-                if let Some(&sm) = versions.next() {
-                    let mut sm = Direct3D12::D3D12_FEATURE_DATA_SHADER_MODEL {
-                        HighestShaderModel: sm,
-                    };
-                    if unsafe {
-                        device.CheckFeatureSupport(
-                            Direct3D12::D3D12_FEATURE_SHADER_MODEL,
-                            <*mut _>::cast(&mut sm),
-                            size_of_val(&sm) as u32,
-                        )
-                    }
-                    .is_ok()
-                    {
-                        break sm.HighestShaderModel;
-                    }
-                } else {
-                    break Direct3D12::D3D_SHADER_MODEL_5_1;
+        let mut shader_models_after_5_1 = [
+            Direct3D12::D3D_SHADER_MODEL_6_9,
+            Direct3D12::D3D_SHADER_MODEL_6_8,
+            Direct3D12::D3D_SHADER_MODEL_6_7,
+            Direct3D12::D3D_SHADER_MODEL_6_6,
+            Direct3D12::D3D_SHADER_MODEL_6_5,
+            Direct3D12::D3D_SHADER_MODEL_6_4,
+            Direct3D12::D3D_SHADER_MODEL_6_3,
+            Direct3D12::D3D_SHADER_MODEL_6_2,
+            Direct3D12::D3D_SHADER_MODEL_6_1,
+            Direct3D12::D3D_SHADER_MODEL_6_0,
+        ]
+        .iter();
+        let max_device_shader_model = loop {
+            if let Some(&sm) = shader_models_after_5_1.next() {
+                let mut sm = Direct3D12::D3D12_FEATURE_DATA_SHADER_MODEL {
+                    HighestShaderModel: sm,
+                };
+                if unsafe {
+                    device.CheckFeatureSupport(
+                        Direct3D12::D3D12_FEATURE_SHADER_MODEL,
+                        <*mut _>::cast(&mut sm),
+                        size_of_val(&sm) as u32,
+                    )
                 }
+                .is_ok()
+                {
+                    break match sm.HighestShaderModel {
+                        Direct3D12::D3D_SHADER_MODEL_6_0 => ShaderModel::_6_0,
+                        Direct3D12::D3D_SHADER_MODEL_6_1 => ShaderModel::_6_1,
+                        Direct3D12::D3D_SHADER_MODEL_6_2 => ShaderModel::_6_2,
+                        Direct3D12::D3D_SHADER_MODEL_6_3 => ShaderModel::_6_3,
+                        Direct3D12::D3D_SHADER_MODEL_6_4 => ShaderModel::_6_4,
+                        Direct3D12::D3D_SHADER_MODEL_6_5 => ShaderModel::_6_5,
+                        Direct3D12::D3D_SHADER_MODEL_6_6 => ShaderModel::_6_6,
+                        Direct3D12::D3D_SHADER_MODEL_6_7 => ShaderModel::_6_7,
+                        Direct3D12::D3D_SHADER_MODEL_6_8 => ShaderModel::_6_8,
+                        Direct3D12::D3D_SHADER_MODEL_6_9 => ShaderModel::_6_9,
+                        _ => unreachable!(),
+                    };
+                }
+            } else {
+                break ShaderModel::_5_1;
+            }
+        };
+
+        let shader_model = if let Some(max_shader_model) = compiler_container.max_shader_model() {
+            let max_dxc_shader_model = match max_shader_model {
+                wgt::DxcShaderModel::V6_0 => ShaderModel::_6_0,
+                wgt::DxcShaderModel::V6_1 => ShaderModel::_6_1,
+                wgt::DxcShaderModel::V6_2 => ShaderModel::_6_2,
+                wgt::DxcShaderModel::V6_3 => ShaderModel::_6_3,
+                wgt::DxcShaderModel::V6_4 => ShaderModel::_6_4,
+                wgt::DxcShaderModel::V6_5 => ShaderModel::_6_5,
+                wgt::DxcShaderModel::V6_6 => ShaderModel::_6_6,
+                wgt::DxcShaderModel::V6_7 => ShaderModel::_6_7,
             };
 
-            match highest_shader_model {
-                Direct3D12::D3D_SHADER_MODEL_5_1 => return None, // don't expose this adapter if it doesn't support DXIL
-                Direct3D12::D3D_SHADER_MODEL_6_0 => naga::back::hlsl::ShaderModel::V6_0,
-                Direct3D12::D3D_SHADER_MODEL_6_1 => naga::back::hlsl::ShaderModel::V6_1,
-                Direct3D12::D3D_SHADER_MODEL_6_2 => naga::back::hlsl::ShaderModel::V6_2,
-                Direct3D12::D3D_SHADER_MODEL_6_3 => naga::back::hlsl::ShaderModel::V6_3,
-                Direct3D12::D3D_SHADER_MODEL_6_4 => naga::back::hlsl::ShaderModel::V6_4,
-                Direct3D12::D3D_SHADER_MODEL_6_5 => naga::back::hlsl::ShaderModel::V6_5,
-                Direct3D12::D3D_SHADER_MODEL_6_6 => naga::back::hlsl::ShaderModel::V6_6,
-                Direct3D12::D3D_SHADER_MODEL_6_7 => naga::back::hlsl::ShaderModel::V6_7,
+            let shader_model = max_device_shader_model.min(max_dxc_shader_model);
+
+            match shader_model {
+                ShaderModel::_5_1 => {
+                    if let Some(telemetry) = telemetry {
+                        (telemetry.d3d12_expose_adapter)(
+                            &desc,
+                            driver_version,
+                            crate::D3D12ExposeAdapterResult::ShaderModel6Requirement,
+                        );
+                    }
+                    // don't expose this adapter if it doesn't support DXIL
+                    return None;
+                }
+                ShaderModel::_6_0 => naga::back::hlsl::ShaderModel::V6_0,
+                ShaderModel::_6_1 => naga::back::hlsl::ShaderModel::V6_1,
+                ShaderModel::_6_2 => naga::back::hlsl::ShaderModel::V6_2,
+                ShaderModel::_6_3 => naga::back::hlsl::ShaderModel::V6_3,
+                ShaderModel::_6_4 => naga::back::hlsl::ShaderModel::V6_4,
+                ShaderModel::_6_5 => naga::back::hlsl::ShaderModel::V6_5,
+                ShaderModel::_6_6 => naga::back::hlsl::ShaderModel::V6_6,
+                ShaderModel::_6_7 => naga::back::hlsl::ShaderModel::V6_7,
                 _ => unreachable!(),
             }
         } else {
@@ -287,6 +384,7 @@ impl super::Adapter {
         };
         let private_caps = super::PrivateCapabilities {
             instance_flags,
+            workarounds,
             heterogeneous_resource_heaps: options.ResourceHeapTier
                 != Direct3D12::D3D12_RESOURCE_HEAP_TIER_1,
             memory_architecture: if features_architecture.UMA.as_bool() {
@@ -302,6 +400,7 @@ impl super::Adapter {
             suballocation_supported: !info.name.contains("Iris(R) Xe"),
             shader_model,
             max_sampler_descriptor_heap_size,
+            unrestricted_buffer_texture_copy_pitch_supported,
         };
 
         // Theoretically vram limited, but in practice 2^20 is the limit
@@ -310,7 +409,7 @@ impl super::Adapter {
         let (full_heap_count, uav_count) = match options.ResourceBindingTier {
             Direct3D12::D3D12_RESOURCE_BINDING_TIER_1 => {
                 let uav_count = match max_feature_level {
-                    Direct3D::D3D_FEATURE_LEVEL_11_0 => 8,
+                    FeatureLevel::_11_0 => 8,
                     _ => 64,
                 };
 
@@ -323,12 +422,12 @@ impl super::Adapter {
                 Direct3D12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_2,
                 64,
             ),
-            Direct3D12::D3D12_RESOURCE_BINDING_TIER_3 => (
+            tier if tier.0 >= Direct3D12::D3D12_RESOURCE_BINDING_TIER_3.0 => (
                 tier3_practical_descriptor_limit,
                 tier3_practical_descriptor_limit,
             ),
             other => {
-                log::warn!("Unknown resource binding tier {:?}", other);
+                log::debug!("Got zero or negative value for resource binding tier {other:?}");
                 (
                     Direct3D12::D3D12_MAX_SHADER_VISIBLE_DESCRIPTOR_HEAP_SIZE_TIER_1,
                     8,
@@ -342,7 +441,6 @@ impl super::Adapter {
             | wgt::Features::DEPTH32FLOAT_STENCIL8
             | wgt::Features::INDIRECT_FIRST_INSTANCE
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
-            | wgt::Features::MULTI_DRAW_INDIRECT
             | wgt::Features::MULTI_DRAW_INDIRECT_COUNT
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER
             | wgt::Features::ADDRESS_MODE_CLAMP_TO_ZERO
@@ -355,13 +453,15 @@ impl super::Adapter {
             | wgt::Features::TEXTURE_COMPRESSION_BC_SLICED_3D
             | wgt::Features::CLEAR_TEXTURE
             | wgt::Features::TEXTURE_FORMAT_16BIT_NORM
-            | wgt::Features::PUSH_CONSTANTS
+            | wgt::Features::IMMEDIATES
             | wgt::Features::SHADER_PRIMITIVE_INDEX
             | wgt::Features::RG11B10UFLOAT_RENDERABLE
             | wgt::Features::DUAL_SOURCE_BLENDING
             | wgt::Features::TEXTURE_FORMAT_NV12
             | wgt::Features::FLOAT32_FILTERABLE
-            | wgt::Features::TEXTURE_ATOMIC;
+            | wgt::Features::TEXTURE_ATOMIC
+            | wgt::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS
+            | wgt::Features::EXTERNAL_TEXTURE;
 
         //TODO: in order to expose this, we need to run a compute shader
         // that extract the necessary statistics out of the D3D12 result.
@@ -369,7 +469,7 @@ impl super::Adapter {
         // write the results there, and issue a bunch of copy commands.
         //| wgt::Features::PIPELINE_STATISTICS_QUERY
 
-        if max_feature_level.0 >= Direct3D::D3D_FEATURE_LEVEL_11_1.0 {
+        if max_feature_level >= FeatureLevel::_11_1 {
             features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
         }
 
@@ -412,14 +512,34 @@ impl super::Adapter {
             bgra8unorm_storage_supported,
         );
 
-        let mut features1 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS1::default();
-        let hr = unsafe {
-            device.CheckFeatureSupport(
-                Direct3D12::D3D12_FEATURE_D3D12_OPTIONS1,
-                <*mut _>::cast(&mut features1),
-                size_of_val(&features1) as u32,
-            )
+        let p010_format_supported = {
+            let mut p010_info = Direct3D12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
+                Format: Dxgi::Common::DXGI_FORMAT_P010,
+                ..Default::default()
+            };
+            let hr = unsafe {
+                device.CheckFeatureSupport(
+                    Direct3D12::D3D12_FEATURE_FORMAT_SUPPORT,
+                    <*mut _>::cast(&mut p010_info),
+                    size_of_val(&p010_info) as u32,
+                )
+            };
+            if hr.is_ok() {
+                let supports_texture2d = p010_info
+                    .Support1
+                    .contains(Direct3D12::D3D12_FORMAT_SUPPORT1_TEXTURE2D);
+                let supports_shader_load = p010_info
+                    .Support1
+                    .contains(Direct3D12::D3D12_FORMAT_SUPPORT1_SHADER_LOAD);
+                let supports_shader_sample = p010_info
+                    .Support1
+                    .contains(Direct3D12::D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE);
+                supports_texture2d && supports_shader_load && supports_shader_sample
+            } else {
+                false
+            }
         };
+        features.set(wgt::Features::TEXTURE_FORMAT_P010, p010_format_supported);
 
         features.set(
             wgt::Features::SHADER_INT64,
@@ -446,13 +566,6 @@ impl super::Adapter {
         );
 
         features.set(
-            wgt::Features::TEXTURE_INT64_ATOMIC,
-            shader_model >= naga::back::hlsl::ShaderModel::V6_6
-                && hr.is_ok()
-                && features1.Int64ShaderOps.as_bool(),
-        );
-
-        features.set(
             wgt::Features::SUBGROUP,
             shader_model >= naga::back::hlsl::ShaderModel::V6_0
                 && hr.is_ok()
@@ -468,35 +581,121 @@ impl super::Adapter {
         }
         .is_ok();
 
-        // Since all features for raytracing pipeline (geometry index) and ray queries both come
-        // from here, there is no point in adding an extra call here given that there will be no
-        // feature using EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE if all these are not met.
         // Once ray tracing pipelines are supported they also will go here
+        let supports_ray_tracing = features5.RaytracingTier.0
+            >= Direct3D12::D3D12_RAYTRACING_TIER_1_1.0
+            && shader_model >= naga::back::hlsl::ShaderModel::V6_5
+            && has_features5;
         features.set(
             wgt::Features::EXPERIMENTAL_RAY_QUERY
-                | wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
                 | wgt::Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
-            features5.RaytracingTier == Direct3D12::D3D12_RAYTRACING_TIER_1_1
-                && shader_model >= naga::back::hlsl::ShaderModel::V6_5
-                && has_features5,
+            supports_ray_tracing,
         );
 
-        let atomic_int64_on_typed_resource_supported = {
+        // Check for Int64 atomic support on buffers. This is very convoluted, but is based on a conservative reading
+        // of https://microsoft.github.io/DirectX-Specs/d3d/HLSL_SM_6_6_Int64_and_Float_Atomics.html#integer-64-bit-capabilities.
+        let atomic_int64_buffers;
+        let atomic_int64_textures;
+        {
             let mut features9 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS9::default();
-            unsafe {
+            let hr9 = unsafe {
                 device.CheckFeatureSupport(
                     Direct3D12::D3D12_FEATURE_D3D12_OPTIONS9,
                     <*mut _>::cast(&mut features9),
                     size_of_val(&features9) as u32,
                 )
             }
-            .is_ok()
-                && features9.AtomicInt64OnGroupSharedSupported.as_bool()
+            .is_ok();
+
+            let mut features11 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS11::default();
+            let hr11 = unsafe {
+                device.CheckFeatureSupport(
+                    Direct3D12::D3D12_FEATURE_D3D12_OPTIONS11,
+                    <*mut _>::cast(&mut features11),
+                    size_of_val(&features11) as u32,
+                )
+            }
+            .is_ok();
+
+            atomic_int64_buffers = hr9 && hr11 && hr.is_ok()
+                // Int64 atomics show up in SM6.6.
+                && shader_model >= naga::back::hlsl::ShaderModel::V6_6
+                // They require Int64 to be available in the shader at all.
+                && features1.Int64ShaderOps.as_bool()
+                // As our RWByteAddressBuffers can exist on both descriptor heaps and
+                // as root descriptors, we need to ensure that both cases are supported.
+                // base SM6.6 only guarantees Int64 atomics on resources in root descriptors.
+                && features11.AtomicInt64OnDescriptorHeapResourceSupported.as_bool()
+                // Our Int64 atomic caps currently require groupshared. This
+                // prevents Intel or Qcomm from using Int64 currently.
+                // https://github.com/gfx-rs/wgpu/issues/8666
+                && features9.AtomicInt64OnGroupSharedSupported.as_bool();
+
+            atomic_int64_textures = hr9 && hr11 && hr.is_ok()
+                // Int64 atomics show up in SM6.6.
+                && shader_model >= naga::back::hlsl::ShaderModel::V6_6
+                // They require Int64 to be available in the shader at all.
+                && features1.Int64ShaderOps.as_bool()
+                // Textures are typed resources, so we need this flag.
                 && features9.AtomicInt64OnTypedResourceSupported.as_bool()
+                // As textures can only exist in descriptor heaps, we require this.
+                // However, all architectures that support atomics on typed resources
+                // support this as well, so this is somewhat redundant.
+                && features11.AtomicInt64OnDescriptorHeapResourceSupported.as_bool();
         };
         features.set(
             wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX,
-            atomic_int64_on_typed_resource_supported,
+            atomic_int64_buffers,
+        );
+        features.set(wgt::Features::TEXTURE_INT64_ATOMIC, atomic_int64_textures);
+        let mesh_shader_supported = {
+            let mut features7 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS7::default();
+            unsafe {
+                device.CheckFeatureSupport(
+                    Direct3D12::D3D12_FEATURE_D3D12_OPTIONS7,
+                    <*mut _>::cast(&mut features7),
+                    size_of_val(&features7) as u32,
+                )
+            }
+            .is_ok()
+                && features7.MeshShaderTier != Direct3D12::D3D12_MESH_SHADER_TIER_NOT_SUPPORTED
+        };
+        features.set(
+            wgt::Features::EXPERIMENTAL_MESH_SHADER,
+            mesh_shader_supported,
+        );
+        let shader_barycentrics_supported = {
+            let mut features3 = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS3::default();
+            unsafe {
+                device.CheckFeatureSupport(
+                    Direct3D12::D3D12_FEATURE_D3D12_OPTIONS3,
+                    <*mut _>::cast(&mut features3),
+                    size_of_val(&features3) as u32,
+                )
+            }
+            .is_ok()
+                && features3.BarycentricsSupported.as_bool()
+                && shader_model >= naga::back::hlsl::ShaderModel::V6_1
+        };
+        features.set(
+            wgt::Features::SHADER_BARYCENTRICS,
+            shader_barycentrics_supported,
+        );
+
+        features.set(
+            wgt::Features::MULTIVIEW,
+            view_instancing && shader_model >= naga::back::hlsl::ShaderModel::V6_1,
+        );
+        features.set(
+            wgt::Features::SELECTIVE_MULTIVIEW,
+            view_instancing && shader_model >= naga::back::hlsl::ShaderModel::V6_1,
+        );
+
+        features.set(
+            wgt::Features::EXPERIMENTAL_MESH_SHADER_MULTIVIEW,
+            mesh_shader_supported
+                && view_instancing
+                && shader_model >= naga::back::hlsl::ShaderModel::V6_1,
         );
 
         // TODO: Determine if IPresentationManager is supported
@@ -519,28 +718,42 @@ impl super::Adapter {
         // If we also support acceleration structures these are shared so we must halve it.
         // It's unlikely that this affects anything because most devices that support ray tracing
         // probably have a higher binding tier than one.
-        let max_sampled_textures_per_shader_stage =
-            if !features.contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE) {
-                max_srv_count
-            } else {
-                max_srv_count / 2
-            };
+        let max_sampled_textures_per_shader_stage = if !supports_ray_tracing {
+            max_srv_count
+        } else {
+            max_srv_count / 2
+        };
+
+        // See https://microsoft.github.io/DirectX-Specs/d3d/ViewInstancing.html#maximum-viewinstancecount
+        let max_multiview_view_count = if view_instancing { 4 } else { 0 };
+
+        if let Some(telemetry) = telemetry {
+            (telemetry.d3d12_expose_adapter)(
+                &desc,
+                driver_version,
+                crate::D3D12ExposeAdapterResult::Success(
+                    max_feature_level,
+                    max_device_shader_model,
+                ),
+            );
+        }
 
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
                 raw: adapter,
                 device,
                 library: Arc::clone(library),
+                dcomp_lib: Arc::clone(dcomp_lib),
                 private_caps,
                 presentation_timer,
-                workarounds,
                 memory_budget_thresholds,
                 compiler_container,
+                options: backend_options,
             },
             info,
             features,
             capabilities: crate::Capabilities {
-                limits: wgt::Limits {
+                limits: auxil::apply_hal_limits(wgt::Limits {
                     max_texture_dimension_1d: Direct3D12::D3D12_REQ_TEXTURE1D_U_DIMENSION,
                     max_texture_dimension_2d: Direct3D12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION
                         .min(Direct3D12::D3D12_REQ_TEXTURECUBE_DIMENSION),
@@ -569,17 +782,14 @@ impl super::Adapter {
                     max_uniform_buffer_binding_size:
                         Direct3D12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16,
                     max_storage_buffer_binding_size: auxil::MAX_I32_BINDING_SIZE,
-                    max_vertex_buffers: Direct3D12::D3D12_VS_INPUT_REGISTER_COUNT
-                        .min(crate::MAX_VERTEX_BUFFERS as u32),
+                    max_vertex_buffers: Direct3D12::D3D12_VS_INPUT_REGISTER_COUNT,
                     max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
                     max_vertex_buffer_array_stride: Direct3D12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
-                    min_subgroup_size: 4, // Not using `features1.WaveLaneCountMin` as it is unreliable
-                    max_subgroup_size: 128,
-                    // The push constants are part of the root signature which
+                    // The immediates are part of the root signature which
                     // has a limit of 64 DWORDS (256 bytes), but other resources
                     // also share the root signature:
                     //
-                    // - push constants consume a `DWORD` for each `4 bytes` of data
+                    // - immediates consume a `DWORD` for each `4 bytes` of data
                     // - If a bind group has buffers it will consume a `DWORD`
                     //   for the descriptor table
                     // - If a bind group has samplers it will consume a `DWORD`
@@ -595,7 +805,7 @@ impl super::Adapter {
                     // constants needs to be set to a reasonable number instead.
                     //
                     // Source: https://learn.microsoft.com/en-us/windows/win32/direct3d12/root-signature-limits#memory-limits-and-costs
-                    max_push_constant_size: 128,
+                    max_immediate_size: 128,
                     min_uniform_buffer_offset_alignment:
                         Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
                     min_storage_buffer_offset_alignment: 4,
@@ -616,35 +826,68 @@ impl super::Adapter {
                     // store buffer sizes using 32 bit ints (a situation we have already encountered with vulkan).
                     max_buffer_size: i32::MAX as u64,
                     max_non_sampler_bindings: 1_000_000,
-                    max_blas_primitive_count: if features
-                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
-                    {
+
+                    // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#dispatchmesh-api
+                    max_task_mesh_workgroup_total_count: if mesh_shader_supported {
+                        2u32.pow(22)
+                    } else {
+                        0
+                    },
+                    // Technically it says "64k" but I highly doubt they want 65536 for compute and exactly 64,000 for task workgroups
+                    max_task_mesh_workgroups_per_dimension: if mesh_shader_supported {
+                        Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION
+                    } else {
+                        0
+                    },
+                    // Assume this inherits from compute shaders
+                    max_task_invocations_per_workgroup: if mesh_shader_supported {
+                        Direct3D12::D3D12_CS_4_X_THREAD_GROUP_MAX_THREADS_PER_GROUP
+                    } else {
+                        0
+                    },
+                    max_task_invocations_per_dimension: if mesh_shader_supported {
+                        Direct3D12::D3D12_CS_THREAD_GROUP_MAX_Z
+                    } else {
+                        0
+                    },
+                    // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#amplification-shader-and-mesh-shader
+                    max_mesh_invocations_per_workgroup: if mesh_shader_supported { 128 } else { 0 },
+                    max_mesh_invocations_per_dimension: if mesh_shader_supported { 128 } else { 0 },
+
+                    max_task_payload_size: if mesh_shader_supported { 16384 } else { 0 },
+                    max_mesh_output_vertices: if mesh_shader_supported { 256 } else { 0 },
+                    max_mesh_output_primitives: if mesh_shader_supported { 256 } else { 0 },
+                    // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#sv_rendertargetarrayindex-limitations-based-on-queryable-capability
+                    max_mesh_output_layers: if mesh_shader_supported { 8 } else { 0 },
+                    max_mesh_multiview_view_count: if mesh_shader_supported {
+                        max_multiview_view_count
+                    } else {
+                        0
+                    },
+
+                    max_blas_primitive_count: if supports_ray_tracing {
                         1 << 29 // 2^29
                     } else {
                         0
                     },
-                    max_blas_geometry_count: if features
-                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
-                    {
+                    max_blas_geometry_count: if supports_ray_tracing {
                         1 << 24 // 2^24
                     } else {
                         0
                     },
-                    max_tlas_instance_count: if features
-                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
-                    {
+                    max_tlas_instance_count: if supports_ray_tracing {
                         1 << 24 // 2^24
                     } else {
                         0
                     },
-                    max_acceleration_structures_per_shader_stage: if features
-                        .contains(wgt::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE)
-                    {
+                    max_acceleration_structures_per_shader_stage: if supports_ray_tracing {
                         max_srv_count / 2
                     } else {
                         0
                     },
-                },
+
+                    max_multiview_view_count,
+                }),
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(
                         Direct3D12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64,
@@ -699,8 +942,10 @@ impl crate::Adapter for super::Adapter {
             memory_hints,
             self.private_caps,
             &self.library,
+            &self.dcomp_lib,
             self.memory_budget_thresholds,
             self.compiler_container.clone(),
+            self.options.clone(),
         )?;
         Ok(crate::OpenDevice {
             device,
@@ -891,7 +1136,10 @@ impl crate::Adapter for super::Adapter {
     ) -> Option<crate::SurfaceCapabilities> {
         let current_extent = {
             match surface.target {
-                SurfaceTarget::WndHandle(wnd_handle) => {
+                SurfaceTarget::WndHandle(wnd_handle)
+                | SurfaceTarget::VisualFromWndHandle {
+                    handle: wnd_handle, ..
+                } => {
                     let mut rect = Default::default();
                     if unsafe { WindowsAndMessaging::GetClientRect(wnd_handle, &mut rect) }.is_ok()
                     {
@@ -935,6 +1183,7 @@ impl crate::Adapter for super::Adapter {
             composite_alpha_modes: match surface.target {
                 SurfaceTarget::WndHandle(_) => vec![wgt::CompositeAlphaMode::Opaque],
                 SurfaceTarget::Visual(_)
+                | SurfaceTarget::VisualFromWndHandle { .. }
                 | SurfaceTarget::SurfaceHandle(_)
                 | SurfaceTarget::SwapChainPanel(_) => vec![
                     wgt::CompositeAlphaMode::Auto,
@@ -950,4 +1199,148 @@ impl crate::Adapter for super::Adapter {
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         wgt::PresentationTimestamp(self.presentation_timer.get_timestamp_ns())
     }
+}
+
+fn get_adapter_pci_info(vendor_id: u32, device_id: u32) -> String {
+    // SAFETY: SetupDiGetClassDevsW is called with valid parameters
+    let device_info_set = unsafe {
+        match SetupDiGetClassDevsW(Some(&GUID_DEVCLASS_DISPLAY), None, None, DIGCF_PRESENT) {
+            Ok(set) => set,
+            Err(_) => return String::new(),
+        }
+    };
+
+    struct DeviceInfoSetGuard(HDEVINFO);
+    impl Drop for DeviceInfoSetGuard {
+        fn drop(&mut self) {
+            // SAFETY: device_info_set is a valid HDEVINFO and is only dropped once via this guard
+            unsafe {
+                let _ = SetupDiDestroyDeviceInfoList(self.0);
+            }
+        }
+    }
+    let _guard = DeviceInfoSetGuard(device_info_set);
+
+    let mut device_index = 0u32;
+    loop {
+        let mut device_info_data = SP_DEVINFO_DATA {
+            cbSize: size_of::<SP_DEVINFO_DATA>() as u32,
+            ..Default::default()
+        };
+
+        // SAFETY: device_info_set is a valid HDEVINFO, device_index starts at 0 and
+        // device_info_data is properly initialized above
+        unsafe {
+            if SetupDiEnumDeviceInfo(device_info_set, device_index, &mut device_info_data).is_err()
+            {
+                if GetLastError() == ERROR_NO_MORE_ITEMS {
+                    break;
+                }
+                device_index += 1;
+                continue;
+            }
+        }
+
+        let mut hardware_id_size = 0u32;
+        // SAFETY: device_info_set and device_info_data are valid
+        unsafe {
+            let _ = SetupDiGetDeviceRegistryPropertyW(
+                device_info_set,
+                &device_info_data,
+                SPDRP_HARDWAREID,
+                None,
+                None,
+                Some(&mut hardware_id_size),
+            );
+        }
+
+        if hardware_id_size == 0 {
+            device_index += 1;
+            continue;
+        }
+
+        let mut hardware_id_buffer = vec![0u8; hardware_id_size as usize];
+        // SAFETY: device_info_set and device_info_data are valid
+        unsafe {
+            if SetupDiGetDeviceRegistryPropertyW(
+                device_info_set,
+                &device_info_data,
+                SPDRP_HARDWAREID,
+                None,
+                Some(&mut hardware_id_buffer),
+                Some(&mut hardware_id_size),
+            )
+            .is_err()
+            {
+                device_index += 1;
+                continue;
+            }
+        }
+
+        let hardware_id_u16: Vec<u16> = hardware_id_buffer
+            .chunks_exact(2)
+            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+            .collect();
+        let hardware_ids: Vec<String> = hardware_id_u16
+            .split(|&c| c == 0)
+            .filter(|s| !s.is_empty())
+            .map(|s| String::from_utf16_lossy(s).to_uppercase())
+            .collect();
+
+        // https://learn.microsoft.com/en-us/windows-hardware/drivers/install/identifiers-for-pci-devices
+        let expected_id = format!("PCI\\VEN_{vendor_id:04X}&DEV_{device_id:04X}");
+        if !hardware_ids.iter().any(|id| id.contains(&expected_id)) {
+            device_index += 1;
+            continue;
+        }
+
+        let mut bus_buffer = [0u8; 4];
+        let mut data_size = bus_buffer.len() as u32;
+        // SAFETY: device_info_set and device_info_data are valid
+        let bus_number = unsafe {
+            if SetupDiGetDeviceRegistryPropertyW(
+                device_info_set,
+                &device_info_data,
+                SPDRP_BUSNUMBER,
+                None,
+                Some(&mut bus_buffer),
+                Some(&mut data_size),
+            )
+            .is_err()
+            {
+                device_index += 1;
+                continue;
+            }
+            u32::from_le_bytes(bus_buffer)
+        };
+
+        let mut addr_buffer = [0u8; 4];
+        let mut addr_size = addr_buffer.len() as u32;
+        // SAFETY: device_info_set and device_info_data are valid
+        unsafe {
+            if SetupDiGetDeviceRegistryPropertyW(
+                device_info_set,
+                &device_info_data,
+                SPDRP_ADDRESS,
+                None,
+                Some(&mut addr_buffer),
+                Some(&mut addr_size),
+            )
+            .is_err()
+            {
+                device_index += 1;
+                continue;
+            }
+        }
+        let address = u32::from_le_bytes(addr_buffer);
+
+        // https://learn.microsoft.com/en-us/windows-hardware/drivers/kernel/obtaining-device-configuration-information-at-irql---dispatch-level
+        let device = (address >> 16) & 0x0000FFFF;
+        let function = address & 0x0000FFFF;
+
+        // domain:bus:device.function
+        return format!("{:04x}:{:02x}:{:02x}.{:x}", 0, bus_number, device, function);
+    }
+
+    String::new()
 }

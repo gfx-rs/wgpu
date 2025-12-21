@@ -66,10 +66,9 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         dynamic_offsets: &[wgt::DynamicOffset],
     );
 
-    unsafe fn set_push_constants(
+    unsafe fn set_immediates(
         &mut self,
         layout: &dyn DynPipelineLayout,
-        stages: wgt::ShaderStages,
         offset_bytes: u32,
         data: &[u32],
     );
@@ -329,15 +328,14 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
         unsafe { C::set_bind_group(self, layout, index, group, dynamic_offsets) };
     }
 
-    unsafe fn set_push_constants(
+    unsafe fn set_immediates(
         &mut self,
         layout: &dyn DynPipelineLayout,
-        stages: wgt::ShaderStages,
         offset_bytes: u32,
         data: &[u32],
     ) {
         let layout = layout.expect_downcast_ref();
-        unsafe { C::set_push_constants(self, layout, stages, offset_bytes, data) };
+        unsafe { C::set_immediates(self, layout, offset_bytes, data) };
     }
 
     unsafe fn insert_debug_marker(&mut self, label: &str) {
@@ -415,7 +413,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
                     .depth_stencil_attachment
                     .as_ref()
                     .map(|ds| ds.expect_downcast()),
-                multiview: desc.multiview,
+                multiview_mask: desc.multiview_mask,
                 timestamp_writes: desc
                     .timestamp_writes
                     .as_ref()

@@ -1,0 +1,10 @@
+capabilities = "SHADER_BARYCENTRICS"
+
+[msl]
+lang_version = [2, 3]
+
+[hlsl]
+shader_model = "V6_1"
+
+[glsl]
+version.Desktop = 450

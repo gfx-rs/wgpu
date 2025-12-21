@@ -9,10 +9,13 @@ use crate::*;
 
 /// Handle to a GPU-accessible buffer.
 ///
-/// Created with [`Device::create_buffer`] or
-/// [`DeviceExt::create_buffer_init`](util::DeviceExt::create_buffer_init).
-///
-/// Corresponds to [WebGPU `GPUBuffer`](https://gpuweb.github.io/gpuweb/#buffer-interface).
+/// A `Buffer` is a memory allocation for use by the GPU, somewhat analogous to
+/// <code>[Box]&lt;[\[u8\]][primitive@slice]&gt;</code> in Rust.
+/// The contents of buffers are untyped bytes; it is up to the application to
+/// specify the interpretation of the bytes when the buffer is used, in ways
+/// such as [`VertexBufferLayout`].
+/// A single buffer can be used to hold multiple independent pieces of data at
+/// different offsets (e.g. both vertices and indices for one or more meshes).
 ///
 /// A `Buffer`'s bytes have "interior mutability": functions like
 /// [`Queue::write_buffer`] or [mapping] a buffer for writing only require a
@@ -20,7 +23,48 @@ use crate::*;
 /// prevents simultaneous reads and writes of buffer contents using run-time
 /// checks.
 ///
+/// Created with [`Device::create_buffer()`] or
+/// [`DeviceExt::create_buffer_init()`].
+///
+/// Corresponds to [WebGPU `GPUBuffer`](https://gpuweb.github.io/gpuweb/#buffer-interface).
+///
 /// [mapping]: Buffer#mapping-buffers
+///
+/// # How to get your data into a buffer
+///
+/// Every `Buffer` starts with all bytes zeroed.
+/// There are many ways to load data into a `Buffer`:
+///
+/// - When creating a buffer, you may set the [`mapped_at_creation`][mac] flag,
+///   then write to its [`get_mapped_range_mut()`][Buffer::get_mapped_range_mut].
+///   This only works when the buffer is created and has not yet been used by
+///   the GPU, but it is all you need for buffers whose contents do not change
+///   after creation.
+///   - You may use [`DeviceExt::create_buffer_init()`] as a convenient way to
+///     do that and copy data from a `&[u8]` you provide.
+/// - After creation, you may use [`Buffer::map_async()`] to map it again;
+///   however, you then need to wait until the GPU is no longer using the buffer
+///   before you begin writing.
+/// - You may use [`CommandEncoder::copy_buffer_to_buffer()`] to copy data into
+///   this buffer from another buffer.
+/// - You may use [`Queue::write_buffer()`] to copy data into the buffer from a
+///   `&[u8]`. This uses a temporary “staging” buffer managed by `wgpu` to hold
+///   the data.
+///   - [`Queue::write_buffer_with()`] allows you to write directly into temporary
+///     storage instead of providing a slice you already prepared, which may
+///     allow *your* code to save the allocation of a [`Vec`] or such.
+/// - You may use [`util::StagingBelt`] to manage a set of temporary buffers.
+///   This may be more efficient than [`Queue::write_buffer_with()`] when you
+///   have many small copies to perform, but requires more steps to use, and
+///   tuning of the belt buffer size.
+/// - You may write your own staging buffer management customized to your
+///   application, based on mapped buffers and
+///   [`CommandEncoder::copy_buffer_to_buffer()`].
+/// - A GPU computation’s results can be stored in a buffer:
+///   - A [compute shader][ComputePipeline] may write to a buffer bound as a
+///     [storage buffer][BufferBindingType::Storage].
+///   - A render pass may render to a texture which is then copied to a buffer
+///     using [`CommandEncoder::copy_texture_to_buffer()`].
 ///
 /// # Mapping buffers
 ///
@@ -172,6 +216,7 @@ use crate::*;
 /// [mac]: BufferDescriptor::mapped_at_creation
 /// [`MAP_READ`]: BufferUsages::MAP_READ
 /// [`MAP_WRITE`]: BufferUsages::MAP_WRITE
+/// [`DeviceExt::create_buffer_init()`]: util::DeviceExt::create_buffer_init
 #[derive(Debug, Clone)]
 pub struct Buffer {
     pub(crate) inner: dispatch::DispatchBuffer,
@@ -208,6 +253,15 @@ impl Buffer {
     /// Returns a guard that dereferences to the type of the hal backend
     /// which implements [`A::Buffer`].
     ///
+    /// # Types
+    ///
+    /// The returned type depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Buffer")]
+    #[doc = crate::hal_type_metal!("Buffer")]
+    #[doc = crate::hal_type_dx12!("Buffer")]
+    #[doc = crate::hal_type_gles!("Buffer")]
+    ///
     /// # Deadlocks
     ///
     /// - The returned guard holds a read-lock on a device-local "destruction"
@@ -230,7 +284,7 @@ impl Buffer {
     ///
     /// [`A::Buffer`]: hal::Api::Buffer
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn as_hal<A: hal::Api>(
         &self,
     ) -> Option<impl Deref<Target = A::Buffer> + WasmNotSendSync> {
         let buffer = self.inner.as_core_opt()?;
@@ -293,20 +347,28 @@ impl Buffer {
         self.usage
     }
 
-    /// Map the buffer to host (CPU) memory, making it available for reading or writing
-    /// via [`get_mapped_range()`](Self::get_mapped_range).
-    /// It is available once the `callback` is called with an [`Ok`] response.
+    /// Map the buffer to host (CPU) memory, making it available for reading or writing via
+    /// [`get_mapped_range()`](Self::get_mapped_range). The buffer becomes accessible once the
+    /// `callback` is invoked with [`Ok`].
     ///
-    /// For the callback to complete, either `queue.submit(..)`, `instance.poll_all(..)`, or `device.poll(..)`
-    /// must be called elsewhere in the runtime, possibly integrated into an event loop or run on a separate thread.
+    /// Use this when you want to map the buffer immediately. If you need to submit GPU work that
+    /// uses the buffer before mapping it, use `map_buffer_on_submit` on
+    /// [`CommandEncoder`][CEmbos], [`CommandBuffer`][CBmbos], [`RenderPass`][RPmbos], or
+    /// [`ComputePass`][CPmbos] to schedule the mapping after submission. This avoids extra calls to
+    /// [`Buffer::map_async()`] or [`BufferSlice::map_async()`] and lets you initiate mapping from a
+    /// more convenient place.
     ///
-    /// The callback will be called on the thread that first calls the above functions after the GPU work
-    /// has completed. There are no restrictions on the code you can run in the callback, however on native the
-    /// call to the function will not complete until the callback returns, so prefer keeping callbacks short
-    /// and used to set flags, send messages, etc.
+    /// For the callback to run, either [`queue.submit(..)`][q::s], [`instance.poll_all(..)`][i::p_a],
+    /// or [`device.poll(..)`][d::p] must be called elsewhere in the runtime, possibly integrated into
+    /// an event loop or run on a separate thread.
     ///
-    /// As long as a buffer is mapped, it is not available for use by any other commands;
-    /// at all times, either the GPU or the CPU has exclusive access to the contents of the buffer.
+    /// The callback runs on the thread that first calls one of the above functions after the GPU work
+    /// completes. There are no restrictions on the code you can run in the callback; however, on native
+    /// the polling call will not return until the callback finishes, so keep callbacks short (set flags,
+    /// send messages, etc.).
+    ///
+    /// While a buffer is mapped, it cannot be used by other commands; at any time, either the GPU or
+    /// the CPU has exclusive access to the buffer’s contents.
     ///
     /// This can also be performed using [`BufferSlice::map_async()`].
     ///
@@ -315,8 +377,16 @@ impl Buffer {
     /// - If the buffer is already mapped.
     /// - If the buffer’s [`BufferUsages`] do not allow the requested [`MapMode`].
     /// - If `bounds` is outside of the bounds of `self`.
-    /// - If `bounds` has a length less than 1.
-    /// - If the start and end of `bounds` are not be aligned to [`MAP_ALIGNMENT`].
+    /// - If `bounds` does not start at a multiple of [`MAP_ALIGNMENT`].
+    /// - If `bounds` has a length that is not a multiple of 4 greater than 0.
+    ///
+    /// [CEmbos]: CommandEncoder::map_buffer_on_submit
+    /// [CBmbos]: CommandBuffer::map_buffer_on_submit
+    /// [RPmbos]: RenderPass::map_buffer_on_submit
+    /// [CPmbos]: ComputePass::map_buffer_on_submit
+    /// [q::s]: Queue::submit
+    /// [i::p_a]: Instance::poll_all
+    /// [d::p]: Device::poll
     pub fn map_async<S: RangeBounds<BufferAddress>>(
         &self,
         mode: MapMode,
@@ -339,13 +409,14 @@ impl Buffer {
     /// # Panics
     ///
     /// - If `bounds` is outside of the bounds of `self`.
-    /// - If `bounds` has a length less than 1.
-    /// - If the start and end of `bounds` are not aligned to [`MAP_ALIGNMENT`].
+    /// - If `bounds` does not start at a multiple of [`MAP_ALIGNMENT`].
+    /// - If `bounds` has a length that is not a multiple of 4 greater than 0.
     /// - If the buffer to which `self` refers is not currently [mapped].
-    /// - If you try to create overlapping views of a buffer, mutable or otherwise.
+    /// - If you try to create a view which overlaps an existing [`BufferViewMut`].
     ///
     /// [mapped]: Buffer#mapping-buffers
-    pub fn get_mapped_range<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferView<'_> {
+    #[track_caller]
+    pub fn get_mapped_range<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferView {
         self.slice(bounds).get_mapped_range()
     }
 
@@ -362,16 +433,14 @@ impl Buffer {
     /// # Panics
     ///
     /// - If `bounds` is outside of the bounds of `self`.
-    /// - If `bounds` has a length less than 1.
-    /// - If the start and end of `bounds` are not aligned to [`MAP_ALIGNMENT`].
+    /// - If `bounds` does not start at a multiple of [`MAP_ALIGNMENT`].
+    /// - If `bounds` has a length that is not a multiple of 4 greater than 0.
     /// - If the buffer to which `self` refers is not currently [mapped].
-    /// - If you try to create overlapping views of a buffer, mutable or otherwise.
+    /// - If you try to create a view which overlaps an existing [`BufferView`] or [`BufferViewMut`].
     ///
     /// [mapped]: Buffer#mapping-buffers
-    pub fn get_mapped_range_mut<S: RangeBounds<BufferAddress>>(
-        &self,
-        bounds: S,
-    ) -> BufferViewMut<'_> {
+    #[track_caller]
+    pub fn get_mapped_range_mut<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferViewMut {
         self.slice(bounds).get_mapped_range_mut()
     }
 
@@ -455,20 +524,28 @@ impl<'a> BufferSlice<'a> {
         }
     }
 
-    /// Map the buffer to host (CPU) memory, making it available for reading or writing
-    /// via [`get_mapped_range()`](Self::get_mapped_range).
-    /// It is available once the `callback` is called with an [`Ok`] response.
+    /// Map the buffer to host (CPU) memory, making it available for reading or writing via
+    /// [`get_mapped_range()`](Self::get_mapped_range). The buffer becomes accessible once the
+    /// `callback` is invoked with [`Ok`].
     ///
-    /// For the callback to complete, either `queue.submit(..)`, `instance.poll_all(..)`, or `device.poll(..)`
-    /// must be called elsewhere in the runtime, possibly integrated into an event loop or run on a separate thread.
+    /// Use this when you want to map the buffer immediately. If you need to submit GPU work that
+    /// uses the buffer before mapping it, use `map_buffer_on_submit` on
+    /// [`CommandEncoder`][CEmbos], [`CommandBuffer`][CBmbos], [`RenderPass`][RPmbos], or
+    /// [`ComputePass`][CPmbos] to schedule the mapping after submission. This avoids extra calls to
+    /// [`Buffer::map_async()`] or [`BufferSlice::map_async()`] and lets you initiate mapping from a
+    /// more convenient place.
     ///
-    /// The callback will be called on the thread that first calls the above functions after the GPU work
-    /// has completed. There are no restrictions on the code you can run in the callback, however on native the
-    /// call to the function will not complete until the callback returns, so prefer keeping callbacks short
-    /// and used to set flags, send messages, etc.
+    /// For the callback to run, either [`queue.submit(..)`][q::s], [`instance.poll_all(..)`][i::p_a],
+    /// or [`device.poll(..)`][d::p] must be called elsewhere in the runtime, possibly integrated into
+    /// an event loop or run on a separate thread.
     ///
-    /// As long as a buffer is mapped, it is not available for use by any other commands;
-    /// at all times, either the GPU or the CPU has exclusive access to the contents of the buffer.
+    /// The callback runs on the thread that first calls one of the above functions after the GPU work
+    /// completes. There are no restrictions on the code you can run in the callback; however, on native
+    /// the polling call will not return until the callback finishes, so keep callbacks short (set flags,
+    /// send messages, etc.).
+    ///
+    /// While a buffer is mapped, it cannot be used by other commands; at any time, either the GPU or
+    /// the CPU has exclusive access to the buffer’s contents.
     ///
     /// This can also be performed using [`Buffer::map_async()`].
     ///
@@ -476,16 +553,25 @@ impl<'a> BufferSlice<'a> {
     ///
     /// - If the buffer is already mapped.
     /// - If the buffer’s [`BufferUsages`] do not allow the requested [`MapMode`].
-    /// - If the endpoints of this slice are not aligned to [`MAP_ALIGNMENT`] within the buffer.
+    /// - If the beginning of this slice is not aligned to [`MAP_ALIGNMENT`] within the buffer.
+    /// - If the length of this slice is not a multiple of 4.
+    ///
+    /// [CEmbos]: CommandEncoder::map_buffer_on_submit
+    /// [CBmbos]: CommandBuffer::map_buffer_on_submit
+    /// [RPmbos]: RenderPass::map_buffer_on_submit
+    /// [CPmbos]: ComputePass::map_buffer_on_submit
+    /// [q::s]: Queue::submit
+    /// [i::p_a]: Instance::poll_all
+    /// [d::p]: Device::poll
     pub fn map_async(
         &self,
         mode: MapMode,
         callback: impl FnOnce(Result<(), BufferAsyncError>) + WasmNotSend + 'static,
     ) {
         let mut mc = self.buffer.map_context.lock();
-        assert_eq!(mc.initial_range, 0..0, "Buffer is already mapped");
+        assert_eq!(mc.mapped_range, 0..0, "Buffer is already mapped");
         let end = self.offset + self.size.get();
-        mc.initial_range = self.offset..end;
+        mc.mapped_range = self.offset..end;
 
         self.buffer
             .inner
@@ -504,16 +590,24 @@ impl<'a> BufferSlice<'a> {
     ///
     /// # Panics
     ///
-    /// - If the endpoints of this slice are not aligned to [`MAP_ALIGNMENT`] within the buffer.
+    /// - If the beginning of this slice is not aligned to [`MAP_ALIGNMENT`] within the buffer.
+    /// - If the length of this slice is not a multiple of 4.
     /// - If the buffer to which `self` refers is not currently [mapped].
-    /// - If you try to create overlapping views of a buffer, mutable or otherwise.
+    /// - If you try to create a view which overlaps an existing [`BufferViewMut`].
     ///
     /// [mapped]: Buffer#mapping-buffers
-    pub fn get_mapped_range(&self) -> BufferView<'a> {
-        let end = self.buffer.map_context.lock().add(self.offset, self.size);
-        let range = self.buffer.inner.get_mapped_range(self.offset..end);
+    #[track_caller]
+    pub fn get_mapped_range(&self) -> BufferView {
+        let subrange = Subrange::new(self.offset, self.size, RangeMappingKind::Immutable);
+        self.buffer
+            .map_context
+            .lock()
+            .validate_and_add(subrange.clone());
+        let range = self.buffer.inner.get_mapped_range(subrange.index);
         BufferView {
-            slice: *self,
+            buffer: self.buffer.clone(),
+            size: self.size,
+            offset: self.offset,
             inner: range,
         }
     }
@@ -530,18 +624,25 @@ impl<'a> BufferSlice<'a> {
     ///
     /// # Panics
     ///
-    /// - If the endpoints of this slice are not aligned to [`MAP_ALIGNMENT`].
+    /// - If the beginning of this slice is not aligned to [`MAP_ALIGNMENT`] within the buffer.
+    /// - If the length of this slice is not a multiple of 4.
     /// - If the buffer to which `self` refers is not currently [mapped].
-    /// - If you try to create overlapping views of a buffer, mutable or otherwise.
+    /// - If you try to create a view which overlaps an existing [`BufferView`] or [`BufferViewMut`].
     ///
     /// [mapped]: Buffer#mapping-buffers
-    pub fn get_mapped_range_mut(&self) -> BufferViewMut<'a> {
-        let end = self.buffer.map_context.lock().add(self.offset, self.size);
-        let range = self.buffer.inner.get_mapped_range(self.offset..end);
+    #[track_caller]
+    pub fn get_mapped_range_mut(&self) -> BufferViewMut {
+        let subrange = Subrange::new(self.offset, self.size, RangeMappingKind::Mutable);
+        self.buffer
+            .map_context
+            .lock()
+            .validate_and_add(subrange.clone());
+        let range = self.buffer.inner.get_mapped_range(subrange.index);
         BufferViewMut {
-            slice: *self,
+            buffer: self.buffer.clone(),
+            size: self.size,
+            offset: self.offset,
             inner: range,
-            readable: self.buffer.usage.contains(BufferUsages::MAP_READ),
         }
     }
 
@@ -585,6 +686,57 @@ impl<'a> From<BufferSlice<'a>> for crate::BindingResource<'a> {
     }
 }
 
+fn range_overlaps(a: &Range<BufferAddress>, b: &Range<BufferAddress>) -> bool {
+    a.start < b.end && b.start < a.end
+}
+
+fn range_contains(a: &Range<BufferAddress>, b: &Range<BufferAddress>) -> bool {
+    a.start <= b.start && a.end >= b.end
+}
+
+#[derive(Debug, Copy, Clone)]
+enum RangeMappingKind {
+    Mutable,
+    Immutable,
+}
+
+impl RangeMappingKind {
+    /// Returns true if a range of this kind can touch the same bytes as a range of the other kind.
+    ///
+    /// This is Rust's Mutable XOR Shared rule.
+    fn allowed_concurrently_with(self, other: Self) -> bool {
+        matches!(
+            (self, other),
+            (RangeMappingKind::Immutable, RangeMappingKind::Immutable)
+        )
+    }
+}
+
+#[derive(Debug, Clone)]
+struct Subrange {
+    index: Range<BufferAddress>,
+    kind: RangeMappingKind,
+}
+
+impl Subrange {
+    fn new(offset: BufferAddress, size: BufferSize, kind: RangeMappingKind) -> Self {
+        Self {
+            index: offset..(offset + size.get()),
+            kind,
+        }
+    }
+}
+
+impl fmt::Display for Subrange {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}..{} ({:?})",
+            self.index.start, self.index.end, self.kind
+        )
+    }
+}
+
 /// The mapped portion of a buffer, if any, and its outstanding views.
 ///
 /// This ensures that views fall within the mapped range and don't overlap.
@@ -598,25 +750,31 @@ pub(crate) struct MapContext {
     /// *or has been requested to be* mapped.)
     ///
     /// All [`BufferView`]s and [`BufferViewMut`]s must fall within this range.
-    pub(crate) initial_range: Range<BufferAddress>,
+    mapped_range: Range<BufferAddress>,
 
     /// The ranges covered by all outstanding [`BufferView`]s and
     /// [`BufferViewMut`]s. These are non-overlapping, and are all contained
-    /// within `initial_range`.
-    sub_ranges: Vec<Range<BufferAddress>>,
+    /// within `mapped_range`.
+    sub_ranges: Vec<Subrange>,
 }
 
 impl MapContext {
-    pub(crate) fn new() -> Self {
+    /// Creates a new `MapContext`.
+    ///
+    /// For [`mapped_at_creation`] buffers, pass the full buffer range in the
+    /// `mapped_range` argument. For other buffers, pass `None`.
+    ///
+    /// [`mapped_at_creation`]: BufferDescriptor::mapped_at_creation
+    pub(crate) fn new(mapped_range: Option<Range<BufferAddress>>) -> Self {
         Self {
-            initial_range: 0..0,
+            mapped_range: mapped_range.unwrap_or(0..0),
             sub_ranges: Vec::new(),
         }
     }
 
     /// Record that the buffer is no longer mapped.
     fn reset(&mut self) {
-        self.initial_range = 0..0;
+        self.mapped_range = 0..0;
 
         assert!(
             self.sub_ranges.is_empty(),
@@ -626,25 +784,38 @@ impl MapContext {
 
     /// Record that the `size` bytes of the buffer at `offset` are now viewed.
     ///
-    /// Return the byte offset within the buffer of the end of the viewed range.
-    ///
     /// # Panics
     ///
-    /// This panics if the given range overlaps with any existing range.
-    fn add(&mut self, offset: BufferAddress, size: BufferSize) -> BufferAddress {
-        let end = offset + size.get();
-        assert!(self.initial_range.start <= offset && end <= self.initial_range.end);
+    /// This panics if the given range is invalid.
+    #[track_caller]
+    fn validate_and_add(&mut self, new_sub: Subrange) {
+        if self.mapped_range.is_empty() {
+            panic!("tried to call get_mapped_range(_mut) on an unmapped buffer");
+        }
+        if !range_contains(&self.mapped_range, &new_sub.index) {
+            panic!(
+                "tried to call get_mapped_range(_mut) on a range that is not entirely mapped. \
+                 Attempted to get range {}, but the mapped range is {}..{}",
+                new_sub, self.mapped_range.start, self.mapped_range.end
+            );
+        }
+
         // This check is essential for avoiding undefined behavior: it is the
         // only thing that ensures that `&mut` references to the buffer's
         // contents don't alias anything else.
         for sub in self.sub_ranges.iter() {
-            assert!(
-                end <= sub.start || offset >= sub.end,
-                "Intersecting map range with {sub:?}"
-            );
+            if range_overlaps(&sub.index, &new_sub.index)
+                && !sub.kind.allowed_concurrently_with(new_sub.kind)
+            {
+                panic!(
+                    "tried to call get_mapped_range(_mut) on a range that has already \
+                     been mapped and would break Rust memory aliasing rules. Attempted \
+                     to get range {}, and the conflicting range is {}",
+                    new_sub, sub
+                );
+            }
         }
-        self.sub_ranges.push(offset..end);
-        end
+        self.sub_ranges.push(new_sub);
     }
 
     /// Record that the `size` bytes of the buffer at `offset` are no longer viewed.
@@ -652,16 +823,14 @@ impl MapContext {
     /// # Panics
     ///
     /// This panics if the given range does not exactly match one previously
-    /// passed to [`add`].
-    ///
-    /// [`add]`: MapContext::add
+    /// passed to [`MapContext::validate_and_add`].
     fn remove(&mut self, offset: BufferAddress, size: BufferSize) {
         let end = offset + size.get();
 
         let index = self
             .sub_ranges
             .iter()
-            .position(|r| *r == (offset..end))
+            .position(|r| r.index == (offset..end))
             .expect("unable to remove range from map context");
         self.sub_ranges.swap_remove(index);
     }
@@ -716,13 +885,16 @@ static_assertions::assert_impl_all!(MapMode: Send, Sync);
 /// [map]: Buffer#mapping-buffers
 /// [`map_async`]: BufferSlice::map_async
 #[derive(Debug)]
-pub struct BufferView<'a> {
-    slice: BufferSlice<'a>,
+pub struct BufferView {
+    // `buffer, offset, size` are similar to `BufferSlice`, except that they own the buffer.
+    buffer: Buffer,
+    offset: BufferAddress,
+    size: BufferSize,
     inner: dispatch::DispatchBufferMappedRange,
 }
 
 #[cfg(webgpu)]
-impl BufferView<'_> {
+impl BufferView {
     /// Provides the same data as dereferencing the view, but as a `Uint8Array` in js.
     /// This can be MUCH faster than dereferencing the view which copies the data into
     /// the Rust / wasm heap.
@@ -731,7 +903,7 @@ impl BufferView<'_> {
     }
 }
 
-impl core::ops::Deref for BufferView<'_> {
+impl core::ops::Deref for BufferView {
     type Target = [u8];
 
     #[inline]
@@ -740,7 +912,7 @@ impl core::ops::Deref for BufferView<'_> {
     }
 }
 
-impl AsRef<[u8]> for BufferView<'_> {
+impl AsRef<[u8]> for BufferView {
     #[inline]
     fn as_ref(&self) -> &[u8] {
         self.inner.slice()
@@ -766,54 +938,50 @@ impl AsRef<[u8]> for BufferView<'_> {
 ///
 /// [map]: Buffer#mapping-buffers
 #[derive(Debug)]
-pub struct BufferViewMut<'a> {
-    slice: BufferSlice<'a>,
+pub struct BufferViewMut {
+    // `buffer, offset, size` are similar to `BufferSlice`, except that they own the buffer.
+    buffer: Buffer,
+    offset: BufferAddress,
+    size: BufferSize,
     inner: dispatch::DispatchBufferMappedRange,
-    readable: bool,
 }
 
-impl AsMut<[u8]> for BufferViewMut<'_> {
+impl AsMut<[u8]> for BufferViewMut {
     #[inline]
     fn as_mut(&mut self) -> &mut [u8] {
         self.inner.slice_mut()
     }
 }
 
-impl Deref for BufferViewMut<'_> {
+impl Deref for BufferViewMut {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
-        if !self.readable {
-            log::warn!("Reading from a BufferViewMut is slow and not recommended.");
-        }
-
         self.inner.slice()
     }
 }
 
-impl DerefMut for BufferViewMut<'_> {
+impl DerefMut for BufferViewMut {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.inner.slice_mut()
     }
 }
 
-impl Drop for BufferView<'_> {
+impl Drop for BufferView {
     fn drop(&mut self) {
-        self.slice
-            .buffer
+        self.buffer
             .map_context
             .lock()
-            .remove(self.slice.offset, self.slice.size);
+            .remove(self.offset, self.size);
     }
 }
 
-impl Drop for BufferViewMut<'_> {
+impl Drop for BufferViewMut {
     fn drop(&mut self) {
-        self.slice
-            .buffer
+        self.buffer
             .map_context
             .lock()
-            .remove(self.slice.offset, self.slice.size);
+            .remove(self.offset, self.size);
     }
 }
 
@@ -842,7 +1010,7 @@ fn check_buffer_bounds(
 }
 
 #[track_caller]
-fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
+pub(crate) fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
     bounds: S,
     whole_size: BufferAddress,
 ) -> (BufferAddress, BufferSize) {
@@ -863,7 +1031,9 @@ fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
 
 #[cfg(test)]
 mod tests {
-    use super::{check_buffer_bounds, range_to_offset_size, BufferAddress, BufferSize};
+    use super::{
+        check_buffer_bounds, range_overlaps, range_to_offset_size, BufferAddress, BufferSize,
+    };
 
     fn bs(value: BufferAddress) -> BufferSize {
         BufferSize::new(value).unwrap()
@@ -912,5 +1082,21 @@ mod tests {
     #[should_panic]
     fn check_buffer_bounds_panics_for_end_wraparound() {
         check_buffer_bounds(u64::MAX, 1, bs(u64::MAX));
+    }
+
+    #[test]
+    fn range_overlapping() {
+        // First range to the left
+        assert_eq!(range_overlaps(&(0..1), &(1..3)), false);
+        // First range overlaps left edge
+        assert_eq!(range_overlaps(&(0..2), &(1..3)), true);
+        // First range completely inside second
+        assert_eq!(range_overlaps(&(1..2), &(0..3)), true);
+        // First range completely surrounds second
+        assert_eq!(range_overlaps(&(0..3), &(1..2)), true);
+        // First range overlaps right edge
+        assert_eq!(range_overlaps(&(1..3), &(0..2)), true);
+        // First range entirely to the right
+        assert_eq!(range_overlaps(&(2..3), &(0..2)), false);
     }
 }

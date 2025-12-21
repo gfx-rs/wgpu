@@ -17,8 +17,8 @@ OpMemberDecorate %13 0 Offset 0
 OpDecorate %15 BuiltIn VertexIndex
 OpDecorate %18 BuiltIn InstanceIndex
 OpDecorate %20 Location 10
-OpDecorate %22 Invariant
 OpDecorate %22 BuiltIn Position
+OpDecorate %22 Invariant
 OpDecorate %24 Location 1
 OpDecorate %26 BuiltIn PointSize
 %2 = OpTypeVoid
@@ -42,7 +42,7 @@ OpDecorate %26 BuiltIn PointSize
 %25 = OpTypePointer Output %3
 %24 = OpVariable  %25  Output
 %26 = OpVariable  %25  Output
-%27 = OpConstant  %3  1.0
+%27 = OpConstant  %3  1
 %29 = OpTypeFunction %2
 %30 = OpConstantComposite  %4  %27 %27 %27 %27
 %28 = OpFunction  %2  None %29

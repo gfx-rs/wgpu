@@ -1,5 +1,9 @@
 use wgpu::InstanceFlags;
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(OCCLUSION_QUERY);
+}
 
 #[gpu_test]
 static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -52,7 +56,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
                     bias: wgpu::DepthBiasState::default(),
                 }),
                 multisample: wgpu::MultisampleState::default(),
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
 
@@ -80,6 +84,7 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: Some(&query_set),
+                multiview_mask: None,
             });
             render_pass.set_pipeline(&pipeline);
 
@@ -121,7 +126,9 @@ static OCCLUSION_QUERY: GpuTestConfiguration = GpuTestConfiguration::new()
         mapping_buffer
             .slice(..)
             .map_async(wgpu::MapMode::Read, |_| ());
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
         let query_buffer_view = mapping_buffer.slice(..).get_mapped_range();
         let query_data: &[u64; 3] = bytemuck::from_bytes(&query_buffer_view);
 

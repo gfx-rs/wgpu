@@ -39,6 +39,8 @@ struct RayIntersection {
     world_to_object: mat4x3<f32>,
 }
 */
+enable wgpu_ray_query;
+enable wgpu_ray_query_vertex_return;
 
 struct Uniforms {
     view_inv: mat4x4<f32>,

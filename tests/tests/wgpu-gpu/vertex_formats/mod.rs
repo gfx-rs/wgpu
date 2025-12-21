@@ -4,7 +4,11 @@ use std::num::NonZeroU64;
 
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
-use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+
+pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    vec.extend([VERTEX_FORMATS_ALL, VERTEX_FORMATS_10_10_10_2]);
+}
 
 #[derive(Debug, Copy, Clone)]
 enum TestCase {
@@ -250,7 +254,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bgl],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
     let dummy = ctx
@@ -310,7 +314,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         };
 
@@ -356,6 +360,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
 
         rpass.set_vertex_buffer(0, buffer_input.slice(..));
@@ -377,11 +382,15 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
         // See https://github.com/gfx-rs/wgpu/issues/4732 for why this is split between two submissions
         // with a hard wait in between.
         ctx.queue.submit([encoder1.finish()]);
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
         ctx.queue.submit([encoder2.finish()]);
         let slice = cpu_buffer.slice(..);
         slice.map_async(wgpu::MapMode::Read, |_| ());
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
         let data: Vec<f32> = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
 
         let case_name = format!("Case {:?}", test.case);
@@ -419,7 +428,6 @@ static VERTEX_FORMATS_ALL: GpuTestConfiguration = GpuTestConfiguration::new()
 static VERTEX_FORMATS_10_10_10_2: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .expect_fail(FailureCase::backend(wgpu::Backends::GL))
             .test_features_limits()
             .features(wgpu::Features::VERTEX_WRITABLE_STORAGE),
     )

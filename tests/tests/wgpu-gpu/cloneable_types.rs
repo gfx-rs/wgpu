@@ -1,8 +1,13 @@
-use wgpu_test::{gpu_test, TestingContext};
+use wgpu_test::{gpu_test, GpuTestInitializer, TestParameters, TestingContext};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(CLONEABLE_BUFFERS);
+}
 
 #[gpu_test]
-static CLONEABLE_BUFFERS: GpuTestConfiguration =
-    wgpu_test::GpuTestConfiguration::new().run_sync(cloneable_buffers);
+static CLONEABLE_BUFFERS: GpuTestConfiguration = wgpu_test::GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_sync(cloneable_buffers);
 
 // Test a basic case of cloneable types where you clone the buffer to be able
 // to access the buffer inside the callback as well as outside.
@@ -35,7 +40,9 @@ fn cloneable_buffers(ctx: TestingContext) {
         assert_eq!(&*data, &cloned_buffer_contents);
     });
 
-    ctx.device.poll(wgpu::PollType::Wait).unwrap();
+    ctx.device
+        .poll(wgpu::PollType::wait_indefinitely())
+        .unwrap();
 
     let data = buffer.slice(..).get_mapped_range();
 

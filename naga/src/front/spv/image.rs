@@ -48,6 +48,8 @@ pub struct SamplingOptions {
     pub project: bool,
     /// Depth comparison sampling with a reference value.
     pub compare: bool,
+    /// Gather sampling: Operates on four samples of one channel.
+    pub gather: bool,
 }
 
 enum ExtraCoordinate {
@@ -202,7 +204,7 @@ pub(super) fn patch_comparison_type(
         return false;
     }
 
-    log::debug!("Flipping comparison for {:?}", var);
+    log::debug!("Flipping comparison for {var:?}");
     let original_ty = &arena[var.ty];
     let original_ty_span = arena.get_span(var.ty);
     let ty_inner = match original_ty.inner {
@@ -279,7 +281,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
 
         if image_ops != 0 {
             let other = spirv::ImageOperands::from_bits_truncate(image_ops);
-            log::warn!("Unknown image write ops {:?}", other);
+            log::warn!("Unknown image write ops {other:?}");
             for _ in 1..words_left {
                 self.next()?;
             }
@@ -403,7 +405,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     words_left -= 1;
                 }
                 other => {
-                    log::warn!("Unknown image load op {:?}", other);
+                    log::warn!("Unknown image load op {other:?}");
                     for _ in 0..words_left {
                         self.next()?;
                     }
@@ -500,10 +502,10 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         let result_id = self.next()?;
         let sampled_image_id = self.next()?;
         let coordinate_id = self.next()?;
-        let dref_id = if options.compare {
-            Some(self.next()?)
-        } else {
-            None
+        let (component_id, dref_id) = match (options.gather, options.compare) {
+            (true, false) => (Some(self.next()?), None),
+            (_, true) => (None, Some(self.next()?)),
+            (_, _) => (None, None),
         };
         let span = self.span_from_with_op(start);
 
@@ -546,12 +548,11 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     };
 
                     level = if options.compare {
-                        log::debug!("Assuming {:?} is zero", lod_handle);
+                        log::debug!("Assuming {lod_handle:?} is zero");
                         crate::SampleLevel::Zero
                     } else if is_depth_image {
                         log::debug!(
-                            "Assuming level {:?} converts losslessly to an integer",
-                            lod_handle
+                            "Assuming level {lod_handle:?} converts losslessly to an integer"
                         );
                         let expr = crate::Expression::As {
                             expr: lod_handle,
@@ -588,9 +589,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     );
                     level = if options.compare {
                         log::debug!(
-                            "Assuming gradients {:?} and {:?} are not greater than 1",
-                            grad_x_handle,
-                            grad_y_handle
+                            "Assuming gradients {grad_x_handle:?} and {grad_y_handle:?} are not greater than 1"
                         );
                         crate::SampleLevel::Zero
                     } else {
@@ -616,7 +615,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     words_left -= 1;
                 }
                 other => {
-                    log::warn!("Unknown image sample operand {:?}", other);
+                    log::warn!("Unknown image sample operand {other:?}");
                     for _ in 0..words_left {
                         self.next()?;
                     }
@@ -631,6 +630,58 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         let coord_handle =
             self.get_expr_handle(coordinate_id, coord_lexp, ctx, emitter, block, body_idx);
         let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
+
+        let gather = match (options.gather, component_id) {
+            (true, Some(component_id)) => {
+                let component_lexp = self.lookup_expression.lookup(component_id)?;
+
+                let component_value = match ctx.expressions[component_lexp.handle] {
+                    // VUID-StandaloneSpirv-OpImageGather-04664:
+                    // The “Component” operand of OpImageGather, and OpImageSparseGather must be the
+                    // <id> of a constant instruction.
+                    crate::Expression::Constant(const_handle) => {
+                        let constant = &ctx.module.constants[const_handle];
+                        match ctx.module.global_expressions[constant.init] {
+                            // SPIR-V specification: "It must be a 32-bit integer type scalar."
+                            crate::Expression::Literal(crate::Literal::U32(value)) => value,
+                            crate::Expression::Literal(crate::Literal::I32(value)) => value as u32,
+                            _ => {
+                                log::error!(
+                                    "Image gather component constant must be a 32-bit integer literal"
+                                );
+                                return Err(Error::InvalidOperand);
+                            }
+                        }
+                    }
+                    _ => {
+                        log::error!("Image gather component must be a constant");
+                        return Err(Error::InvalidOperand);
+                    }
+                };
+
+                debug_assert_eq!(level, crate::SampleLevel::Auto);
+                level = crate::SampleLevel::Zero;
+
+                // SPIR-V specification: "Behavior is undefined if its value is not 0, 1, 2 or 3."
+                match component_value {
+                    0 => Some(crate::SwizzleComponent::X),
+                    1 => Some(crate::SwizzleComponent::Y),
+                    2 => Some(crate::SwizzleComponent::Z),
+                    3 => Some(crate::SwizzleComponent::W),
+                    other => {
+                        log::error!("Invalid gather component operand: {other}");
+                        return Err(Error::InvalidOperand);
+                    }
+                }
+            }
+            (true, None) => {
+                debug_assert_eq!(level, crate::SampleLevel::Auto);
+                level = crate::SampleLevel::Zero;
+
+                Some(crate::SwizzleComponent::X)
+            }
+            (_, _) => None,
+        };
 
         let sampling_bit = if options.compare {
             SamplingFlags::COMPARISON
@@ -748,7 +799,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
         let expr = crate::Expression::ImageSample {
             image: si_lexp.image,
             sampler: si_lexp.sampler,
-            gather: None, //TODO
+            gather,
             coordinate,
             array_index,
             offset,

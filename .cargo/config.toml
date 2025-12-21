@@ -1,2 +1,6 @@
 [alias]
 xtask = "run -p wgpu-xtask --"
+
+# Needed until https://github.com/rust-random/getrandom/issues/675 is resolved.
+[target.wasm32-unknown-unknown]
+rustflags = ["--cfg", "getrandom_backend=\"wasm_js\""]

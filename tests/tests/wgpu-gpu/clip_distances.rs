@@ -1,4 +1,10 @@
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.push(CLIP_DISTANCES);
+}
 
 #[gpu_test]
 static CLIP_DISTANCES: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -37,7 +43,7 @@ async fn clip_distances(ctx: TestingContext) {
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
             }),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -81,6 +87,7 @@ async fn clip_distances(ctx: TestingContext) {
             depth_stencil_attachment: None,
             timestamp_writes: None,
             occlusion_query_set: None,
+            multiview_mask: None,
         });
         rpass.set_pipeline(&pipeline);
         rpass.draw(0..3, 0..1);
@@ -117,7 +124,9 @@ async fn clip_distances(ctx: TestingContext) {
     ctx.queue.submit([encoder.finish()]);
     let slice = readback_buffer.slice(..);
     slice.map_async(wgpu::MapMode::Read, |_| ());
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
     let data: &[u8] = &slice.get_mapped_range();
 
     // We should have filled the upper sector of the texture. Verify that this is the case.

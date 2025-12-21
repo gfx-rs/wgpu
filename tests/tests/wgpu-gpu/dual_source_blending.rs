@@ -1,5 +1,14 @@
 use wgpu::*;
-use wgpu_test::{fail, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    fail, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        DUAL_SOURCE_BLENDING_FEATURE_DISABLED,
+        DUAL_SOURCE_BLENDING_FEATURE_ENABLED,
+    ]);
+}
 
 const VERTEX_SHADER: &str = r#"
 @vertex
@@ -46,7 +55,7 @@ fn blend_state_with_dual_source_blending() -> BlendState {
 
 #[gpu_test]
 static DUAL_SOURCE_BLENDING_FEATURE_DISABLED: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_async(dual_source_blending_disabled);
 
 async fn dual_source_blending_disabled(ctx: TestingContext) {
@@ -87,7 +96,7 @@ async fn dual_source_blending_disabled(ctx: TestingContext) {
                     primitive: wgpu::PrimitiveState::default(),
                     depth_stencil: None,
                     multisample: wgpu::MultisampleState::default(),
-                    multiview: None,
+                    multiview_mask: None,
                     cache: None,
                 });
         },
@@ -109,7 +118,11 @@ async fn dual_source_blending_disabled(ctx: TestingContext) {
 
 #[gpu_test]
 static DUAL_SOURCE_BLENDING_FEATURE_ENABLED: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::DUAL_SOURCE_BLENDING))
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::DUAL_SOURCE_BLENDING)
+            .enable_noop(),
+    )
     .run_async(dual_source_blending_enabled);
 
 async fn dual_source_blending_enabled(ctx: TestingContext) {
@@ -146,7 +159,7 @@ async fn dual_source_blending_enabled(ctx: TestingContext) {
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     };
 

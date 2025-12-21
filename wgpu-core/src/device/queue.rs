@@ -15,18 +15,19 @@ use wgt::{
 
 use super::{life::LifetimeTracker, Device};
 #[cfg(feature = "trace")]
-use crate::device::trace::Action;
+use crate::device::trace::{Action, IntoTrace};
 use crate::{
     api_log,
     command::{
-        extract_texture_selector, validate_linear_texture_data, validate_texture_copy_range,
-        ClearError, CommandAllocator, CommandBuffer, CommandEncoderError, CopySide,
-        TexelCopyTextureInfo, TransferError,
+        extract_texture_selector, validate_linear_texture_data, validate_texture_buffer_copy,
+        validate_texture_copy_dst_format, validate_texture_copy_range, ClearError,
+        CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopySide,
+        TransferError,
     },
-    conv,
     device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
     global::Global,
+    hal_label,
     id::{self, BlasId, QueueId},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
     lock::{rank, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
@@ -57,6 +58,7 @@ impl Queue {
     pub(crate) fn new(
         device: Arc<Device>,
         raw: Box<dyn hal::DynQueue>,
+        instance_flags: wgt::InstanceFlags,
     ) -> Result<Self, DeviceError> {
         let pending_encoder = device
             .command_allocator
@@ -70,7 +72,7 @@ impl Queue {
             }
         };
 
-        let mut pending_writes = PendingWrites::new(pending_encoder);
+        let mut pending_writes = PendingWrites::new(pending_encoder, instance_flags);
 
         let zero_buffer = device.zero_buffer.as_ref();
         pending_writes.activate();
@@ -181,9 +183,9 @@ impl Drop for Queue {
                     fence.as_ref(),
                     last_successful_submission_index,
                     #[cfg(not(target_arch = "wasm32"))]
-                    timeout_ms,
+                    Some(core::time::Duration::from_millis(timeout_ms)),
                     #[cfg(target_arch = "wasm32")]
-                    0, // WebKit and Chromium don't support a non-0 timeout
+                    Some(core::time::Duration::ZERO), // WebKit and Chromium don't support a non-0 timeout
                 )
             };
             // Note: If we don't panic below we are in UB land (destroying resources while they are still in use by the GPU).
@@ -278,7 +280,7 @@ pub enum TempResource {
 /// [`CommandBuffer`]: hal::Api::CommandBuffer
 /// [`wgpu_hal::CommandEncoder`]: hal::CommandEncoder
 pub(crate) struct EncoderInFlight {
-    inner: crate::command::CommandEncoder,
+    inner: crate::command::InnerCommandEncoder,
     pub(crate) trackers: Tracker,
     pub(crate) temp_resources: Vec<TempResource>,
     /// We only need to keep these resources alive.
@@ -328,10 +330,14 @@ pub(crate) struct PendingWrites {
     dst_buffers: FastHashMap<TrackerIndex, Arc<Buffer>>,
     dst_textures: FastHashMap<TrackerIndex, Arc<Texture>>,
     copied_blas_s: FastHashMap<TrackerIndex, Arc<Blas>>,
+    instance_flags: wgt::InstanceFlags,
 }
 
 impl PendingWrites {
-    pub fn new(command_encoder: Box<dyn hal::DynCommandEncoder>) -> Self {
+    pub fn new(
+        command_encoder: Box<dyn hal::DynCommandEncoder>,
+        instance_flags: wgt::InstanceFlags,
+    ) -> Self {
         Self {
             command_encoder,
             is_recording: false,
@@ -339,6 +345,7 @@ impl PendingWrites {
             dst_buffers: FastHashMap::default(),
             dst_textures: FastHashMap::default(),
             copied_blas_s: FastHashMap::default(),
+            instance_flags,
         }
     }
 
@@ -394,12 +401,13 @@ impl PendingWrites {
                 .map_err(|e| device.handle_hal_error(e))?;
 
             let encoder = EncoderInFlight {
-                inner: crate::command::CommandEncoder {
+                inner: crate::command::InnerCommandEncoder {
                     raw: ManuallyDrop::new(mem::replace(&mut self.command_encoder, new_encoder)),
                     list: vec![cmd_buf],
                     device: device.clone(),
                     is_open: false,
-                    hal_label: None,
+                    api: crate::command::EncodingApi::InternalUse,
+                    label: "(wgpu internal) PendingWrites command encoder".into(),
                 },
                 trackers: Tracker::new(),
                 temp_resources: mem::take(&mut self.temp_resources),
@@ -423,7 +431,10 @@ impl PendingWrites {
         if !self.is_recording {
             unsafe {
                 self.command_encoder
-                    .begin_encoding(Some("(wgpu internal) PendingWrites"))
+                    .begin_encoding(hal_label(
+                        Some("(wgpu internal) PendingWrites"),
+                        self.instance_flags,
+                    ))
                     .unwrap();
             }
             self.is_recording = true;
@@ -510,7 +521,7 @@ impl WebGpuError for QueueSubmitError {
 impl Queue {
     pub fn write_buffer(
         &self,
-        buffer: Fallible<Buffer>,
+        buffer: Arc<Buffer>,
         buffer_offset: wgt::BufferAddress,
         data: &[u8],
     ) -> Result<(), QueueWriteError> {
@@ -519,8 +530,6 @@ impl Queue {
 
         self.device.check_is_valid()?;
 
-        let buffer = buffer.get()?;
-
         let data_size = data.len() as wgt::BufferAddress;
 
         self.same_device_as(buffer.as_ref())?;
@@ -528,23 +537,25 @@ impl Queue {
         let data_size = if let Some(data_size) = wgt::BufferSize::new(data_size) {
             data_size
         } else {
+            // This must happen after parameter validation (so that errors are reported
+            // as required by the spec), but before any side effects.
             log::trace!("Ignoring write_buffer of size 0");
             return Ok(());
         };
-
-        let snatch_guard = self.device.snatchable_lock.read();
 
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
         let mut staging_buffer = StagingBuffer::new(&self.device, data_size)?;
-        let mut pending_writes = self.pending_writes.lock();
 
         let staging_buffer = {
             profiling::scope!("copy");
             staging_buffer.write(data);
             staging_buffer.flush()
         };
+
+        let snatch_guard = self.device.snatchable_lock.read();
+        let mut pending_writes = self.pending_writes.lock();
 
         let result = self.write_staging_buffer_impl(
             &snatch_guard,
@@ -554,7 +565,12 @@ impl Queue {
             buffer_offset,
         );
 
+        drop(snatch_guard);
+
         pending_writes.consume(staging_buffer);
+
+        drop(pending_writes);
+
         result
     }
 
@@ -585,14 +601,14 @@ impl Queue {
 
         let buffer = buffer.get()?;
 
-        let snatch_guard = self.device.snatchable_lock.read();
-        let mut pending_writes = self.pending_writes.lock();
-
         // At this point, we have taken ownership of the staging_buffer from the
         // user. Platform validation requires that the staging buffer always
         // be freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
         let staging_buffer = staging_buffer.flush();
+
+        let snatch_guard = self.device.snatchable_lock.read();
+        let mut pending_writes = self.pending_writes.lock();
 
         let result = self.write_staging_buffer_impl(
             &snatch_guard,
@@ -602,7 +618,12 @@ impl Queue {
             buffer_offset,
         );
 
+        drop(snatch_guard);
+
         pending_writes.consume(staging_buffer);
+
+        drop(pending_writes);
+
         result
     }
 
@@ -629,6 +650,9 @@ impl Queue {
         buffer_offset: u64,
         buffer_size: wgt::BufferSize,
     ) -> Result<(), TransferError> {
+        if !matches!(&*buffer.map_state.lock(), BufferMapState::Idle) {
+            return Err(TransferError::BufferNotAvailable);
+        }
         buffer.check_usage(wgt::BufferUsages::COPY_DST)?;
         if buffer_size.get() % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(TransferError::UnalignedCopySize(buffer_size.get()));
@@ -707,7 +731,7 @@ impl Queue {
 
     pub fn write_texture(
         &self,
-        destination: wgt::TexelCopyTextureInfo<Fallible<Texture>>,
+        destination: wgt::TexelCopyTextureInfo<Arc<Texture>>,
         data: &[u8],
         data_layout: &wgt::TexelCopyBufferLayout,
         size: &wgt::Extent3d,
@@ -717,12 +741,7 @@ impl Queue {
 
         self.device.check_is_valid()?;
 
-        if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
-            log::trace!("Ignoring write_texture of size 0");
-            return Ok(());
-        }
-
-        let dst = destination.texture.get()?;
+        let dst = destination.texture;
         let destination = wgt::TexelCopyTextureInfo {
             texture: (),
             mip_level: destination.mip_level,
@@ -742,29 +761,27 @@ impl Queue {
 
         let (selector, dst_base) = extract_texture_selector(&destination, size, &dst)?;
 
-        if !dst_base.aspect.is_one() {
-            return Err(TransferError::CopyAspectNotOne.into());
-        }
+        validate_texture_copy_dst_format(dst.desc.format, destination.aspect)?;
 
-        if !conv::is_valid_copy_dst_texture_format(dst.desc.format, destination.aspect) {
-            return Err(TransferError::CopyToForbiddenTextureFormat {
-                format: dst.desc.format,
-                aspect: destination.aspect,
-            }
-            .into());
-        }
+        validate_texture_buffer_copy(
+            &destination,
+            dst_base.aspect,
+            &dst.desc,
+            data_layout,
+            false, // alignment not required for buffer offset or bytes per row
+        )?;
 
         // Note: `_source_bytes_per_array_layer` is ignored since we
         // have a staging copy, and it can have a different value.
-        let (required_bytes_in_copy, _source_bytes_per_array_layer) = validate_linear_texture_data(
-            data_layout,
-            dst.desc.format,
-            destination.aspect,
-            data.len() as wgt::BufferAddress,
-            CopySide::Source,
-            size,
-            false,
-        )?;
+        let (required_bytes_in_copy, _source_bytes_per_array_layer, _) =
+            validate_linear_texture_data(
+                data_layout,
+                dst.desc.format,
+                destination.aspect,
+                data.len() as wgt::BufferAddress,
+                CopySide::Source,
+                size,
+            )?;
 
         if dst.desc.format.is_depth_stencil_format() {
             self.device
@@ -773,6 +790,15 @@ impl Queue {
         }
 
         let snatch_guard = self.device.snatchable_lock.read();
+
+        let dst_raw = dst.try_raw(&snatch_guard)?;
+
+        // This must happen after parameter validation (so that errors are reported
+        // as required by the spec), but before any side effects.
+        if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
+            log::trace!("Ignoring write_texture of size 0");
+            return Ok(());
+        }
 
         let mut pending_writes = self.pending_writes.lock();
         let encoder = pending_writes.activate();
@@ -810,6 +836,7 @@ impl Queue {
                         &self.device.alignments,
                         self.device.zero_buffer.as_ref(),
                         &snatch_guard,
+                        self.device.instance_flags,
                     )
                     .map_err(QueueWriteError::from)?;
                 }
@@ -818,8 +845,6 @@ impl Queue {
                     .drain(init_layer_range);
             }
         }
-
-        let dst_raw = dst.try_raw(&snatch_guard)?;
 
         let (block_width, block_height) = dst.desc.format.block_dimensions();
         let width_in_blocks = size.width / block_width;
@@ -860,7 +885,6 @@ impl Queue {
                 wgt::BufferSize::new(stage_bytes_per_row as u64 * block_rows_in_copy as u64)
                     .unwrap();
             let mut staging_buffer = StagingBuffer::new(&self.device, stage_size)?;
-            let copy_bytes_per_row = stage_bytes_per_row.min(bytes_per_row) as usize;
             for layer in 0..size.depth_or_array_layers {
                 let rows_offset = layer * rows_per_image;
                 for row in rows_offset..rows_offset + height_in_blocks {
@@ -871,7 +895,7 @@ impl Queue {
                             data,
                             src_offset as isize,
                             dst_offset as isize,
-                            copy_bytes_per_row,
+                            bytes_in_last_row as usize,
                         )
                     }
                 }
@@ -937,14 +961,11 @@ impl Queue {
         destination: wgt::CopyExternalImageDestInfo<Fallible<Texture>>,
         size: wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
+        use crate::conv;
+
         profiling::scope!("Queue::copy_external_image_to_texture");
 
         self.device.check_is_valid()?;
-
-        if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
-            log::trace!("Ignoring write_texture of size 0");
-            return Ok(());
-        }
 
         let mut needs_flag = false;
         needs_flag |= matches!(source.source, wgt::ExternalImageSource::OffscreenCanvas(_));
@@ -1029,6 +1050,13 @@ impl Queue {
 
         let (selector, dst_base) = extract_texture_selector(&destination, &size, &dst)?;
 
+        // This must happen after parameter validation (so that errors are reported
+        // as required by the spec), but before any side effects.
+        if size.width == 0 || size.height == 0 || size.depth_or_array_layers == 0 {
+            log::trace!("Ignoring copy_external_image_to_texture of size 0");
+            return Ok(());
+        }
+
         let mut pending_writes = self.pending_writes.lock();
         let encoder = pending_writes.activate();
 
@@ -1065,6 +1093,7 @@ impl Queue {
                         &self.device.alignments,
                         self.device.zero_buffer.as_ref(),
                         &self.device.snatchable_lock.read(),
+                        self.device.instance_flags,
                     )
                     .map_err(QueueWriteError::from)?;
                 }
@@ -1185,7 +1214,7 @@ impl Queue {
                             if let Ok(ref mut cmd_buf_data) = cmd_buf_data {
                                 trace.add(Action::Submit(
                                     submit_index,
-                                    cmd_buf_data.commands.take().unwrap(),
+                                    cmd_buf_data.trace_commands.take().unwrap(),
                                 ));
                             }
                         }
@@ -1218,7 +1247,10 @@ impl Queue {
                         };
 
                         // execute resource transitions
-                        if let Err(e) = baked.encoder.open_pass(Some("(wgpu internal) Transit")) {
+                        if let Err(e) = baked.encoder.open_pass(hal_label(
+                            Some("(wgpu internal) Transit"),
+                            self.device.instance_flags,
+                        )) {
                             break 'error Err(e.into());
                         }
 
@@ -1238,7 +1270,7 @@ impl Queue {
 
                         //Note: stateless trackers are not merged:
                         // device already knows these resources exist.
-                        CommandBuffer::insert_barriers_from_device_tracker(
+                        CommandEncoder::insert_barriers_from_device_tracker(
                             baked.encoder.raw.as_mut(),
                             &mut trackers,
                             &baked.trackers,
@@ -1253,8 +1285,10 @@ impl Queue {
                         // Note: we could technically do it after all of the command buffers,
                         // but here we have a command encoder by hand, so it's easier to use it.
                         if !used_surface_textures.is_empty() {
-                            if let Err(e) = baked.encoder.open_pass(Some("(wgpu internal) Present"))
-                            {
+                            if let Err(e) = baked.encoder.open_pass(hal_label(
+                                Some("(wgpu internal) Present"),
+                                self.device.instance_flags,
+                            )) {
                                 break 'error Err(e.into());
                             }
                             let texture_barriers = trackers
@@ -1445,6 +1479,8 @@ impl Queue {
         profiling::scope!("Queue::compact_blas");
         api_log!("Queue::compact_blas");
 
+        let new_label = blas.label.clone() + " (compacted)";
+
         self.device.check_is_valid()?;
         self.same_device_as(blas.as_ref())?;
 
@@ -1466,7 +1502,7 @@ impl Queue {
             device
                 .raw()
                 .create_acceleration_structure(&hal::AccelerationStructureDescriptor {
-                    label: None,
+                    label: hal_label(Some(&new_label), device.instance_flags),
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::BottomLevel,
                     allow_compaction: false,
@@ -1508,7 +1544,7 @@ impl Queue {
             // Bypass the submit checks which update this because we don't submit this normally.
             built_index: RwLock::new(rank::BLAS_BUILT_INDEX, Some(built_index)),
             handle,
-            label: blas.label.clone() + " compacted",
+            label: new_label,
             tracking_data: TrackingData::new(blas.device.tracker_indices.blas_s.clone()),
             compaction_buffer: None,
             compacted_state: Mutex::new(rank::BLAS_COMPACTION_STATE, BlasCompactState::Compacted),
@@ -1530,19 +1566,19 @@ impl Global {
         data: &[u8],
     ) -> Result<(), QueueWriteError> {
         let queue = self.hub.queues.get(queue_id);
+        let buffer = self.hub.buffers.get(buffer_id).get()?;
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *queue.device.trace.lock() {
             let data_path = trace.make_binary("bin", data);
             trace.add(Action::WriteBuffer {
-                id: buffer_id,
+                id: buffer.to_trace(),
                 data: data_path,
                 range: buffer_offset..buffer_offset + data.len() as u64,
                 queued: true,
             });
         }
 
-        let buffer = self.hub.buffers.get(buffer_id);
         queue.write_buffer(buffer, buffer_offset, data)
     }
 
@@ -1589,30 +1625,31 @@ impl Global {
     pub fn queue_write_texture(
         &self,
         queue_id: QueueId,
-        destination: &TexelCopyTextureInfo,
+        destination: &wgt::TexelCopyTextureInfo<id::TextureId>,
         data: &[u8],
         data_layout: &wgt::TexelCopyBufferLayout,
         size: &wgt::Extent3d,
     ) -> Result<(), QueueWriteError> {
         let queue = self.hub.queues.get(queue_id);
+        let texture = self.hub.textures.get(destination.texture).get()?;
+        let destination = wgt::TexelCopyTextureInfo {
+            texture,
+            mip_level: destination.mip_level,
+            origin: destination.origin,
+            aspect: destination.aspect,
+        };
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *queue.device.trace.lock() {
             let data_path = trace.make_binary("bin", data);
             trace.add(Action::WriteTexture {
-                to: *destination,
+                to: destination.to_trace(),
                 data: data_path,
                 layout: *data_layout,
                 size: *size,
             });
         }
 
-        let destination = wgt::TexelCopyTextureInfo {
-            texture: self.hub.textures.get(destination.texture),
-            mip_level: destination.mip_level,
-            origin: destination.origin,
-            aspect: destination.aspect,
-        };
         queue.write_texture(destination, data, data_layout, size)
     }
 
@@ -1691,9 +1728,7 @@ impl Global {
         // TODO: Tracing
 
         let error = 'error: {
-            match device.require_features(
-                wgpu_types::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE,
-            ) {
+            match device.require_features(wgpu_types::Features::EXPERIMENTAL_RAY_QUERY) {
                 Ok(_) => {}
                 Err(err) => break 'error err.into(),
             }
@@ -1770,6 +1805,16 @@ fn validate_command_buffer(
                             .unwrap();
                     };
                 }
+            }
+        }
+        // WebGPU requires that we check every bind group referenced during
+        // encoding, even ones that may have been replaced before being used.
+        // TODO(<https://github.com/gfx-rs/wgpu/issues/8510>): Optimize this.
+        {
+            profiling::scope!("bind groups");
+            for bind_group in &cmd_buf_data.trackers.bind_groups {
+                // This checks the bind group and all resources it references.
+                bind_group.try_raw(snatch_guard)?;
             }
         }
 

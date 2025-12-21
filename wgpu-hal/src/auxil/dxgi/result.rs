@@ -8,7 +8,7 @@ impl<T> HResult<T> for windows::core::Result<T> {
         #![allow(unreachable_code)]
 
         self.map_err(|err| {
-            log::error!("{} failed: {}", description, err);
+            log::error!("{description} failed: {err}");
 
             match err.code() {
                 Foundation::E_OUTOFMEMORY => crate::DeviceError::OutOfMemory,

@@ -1,6 +1,6 @@
 fn main() {
     cfg_aliases::cfg_aliases! {
-        windows_linux_android: { any(windows, target_os = "linux", target_os = "android") },
+        windows_linux_android: { any(windows, target_os = "linux", target_os = "android", target_os = "freebsd") },
         send_sync: { all(
             feature = "std",
             any(

@@ -157,11 +157,25 @@ impl Queries {
         );
     }
 
-    fn wait_for_results(&self, device: &wgpu::Device) -> Vec<u64> {
+    fn wait_for_results(&self, device: &wgpu::Device, is_test_on_metal: bool) -> Vec<u64> {
         self.destination_buffer
             .slice(..)
             .map_async(wgpu::MapMode::Read, |_| ());
-        device.poll(wgpu::PollType::wait()).unwrap();
+        let poll_type = if is_test_on_metal {
+            // Use a short timeout because the `timestamps_encoder` test (which
+            // is also marked as flaky) has been observed to hang on Metal.
+            //
+            // Note that a timeout here is *not* considered an error. In this
+            // particular case that is what we want, but in general, waits in
+            // tests should probably treat a timeout as an error.
+            wgpu::PollType::Wait {
+                submission_index: None,
+                timeout: Some(std::time::Duration::from_secs(5)),
+            }
+        } else {
+            wgpu::PollType::wait_indefinitely()
+        };
+        device.poll(poll_type).unwrap();
 
         let timestamps = {
             let timestamp_view = self
@@ -210,6 +224,7 @@ async fn run() {
             label: None,
             required_features: features,
             required_limits: wgpu::Limits::downlevel_defaults(),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Off,
         })
@@ -217,7 +232,7 @@ async fn run() {
         .unwrap();
 
     let queries = submit_render_and_compute_pass_with_queries(&device, &queue);
-    let raw_results = queries.wait_for_results(&device);
+    let raw_results = queries.wait_for_results(&device, false);
     println!("Raw timestamp buffer contents: {raw_results:?}");
     QueryResults::from_raw_results(raw_results, timestamps_inside_passes).print(&queue);
 }
@@ -336,7 +351,7 @@ fn render_pass(
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
-        push_constant_ranges: &[],
+        immediate_size: 0,
     });
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -357,7 +372,7 @@ fn render_pass(
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     });
     let render_target = device.create_texture(&wgpu::TextureDescriptor {
@@ -394,6 +409,7 @@ fn render_pass(
             end_of_pass_write_index: Some(*next_unused_query + 1),
         }),
         occlusion_query_set: None,
+        multiview_mask: None,
     });
     *next_unused_query += 2;
 
@@ -426,13 +442,13 @@ pub fn main() {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use wgpu_test::{gpu_test, FailureCase, GpuTestConfiguration};
 
     use super::{submit_render_and_compute_pass_with_queries, QueryResults};
 
     #[gpu_test]
-    static TIMESTAMPS_PASS_BOUNDARIES: GpuTestConfiguration = GpuTestConfiguration::new()
+    pub static TIMESTAMPS_PASS_BOUNDARIES: GpuTestConfiguration = GpuTestConfiguration::new()
         .parameters(
             wgpu_test::TestParameters::default()
                 .limits(wgpu::Limits::downlevel_defaults())
@@ -441,7 +457,7 @@ mod tests {
         .run_sync(|ctx| test_timestamps(ctx, false, false));
 
     #[gpu_test]
-    static TIMESTAMPS_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new()
+    pub static TIMESTAMPS_ENCODER: GpuTestConfiguration = GpuTestConfiguration::new()
         .parameters(
             wgpu_test::TestParameters::default()
                 .limits(wgpu::Limits::downlevel_defaults())
@@ -450,12 +466,14 @@ mod tests {
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_ENCODERS,
                 )
                 // see https://github.com/gfx-rs/wgpu/issues/2521
+                // If marking this test non-flaky, also consider removing the silent
+                // timeout in `wait_for_results`.
                 .expect_fail(FailureCase::always().panic("unexpected timestamp").flaky()),
         )
         .run_sync(|ctx| test_timestamps(ctx, true, false));
 
     #[gpu_test]
-    static TIMESTAMPS_PASSES: GpuTestConfiguration = GpuTestConfiguration::new()
+    pub static TIMESTAMPS_PASSES: GpuTestConfiguration = GpuTestConfiguration::new()
         .parameters(
             wgpu_test::TestParameters::default()
                 .limits(wgpu::Limits::downlevel_defaults())
@@ -465,6 +483,8 @@ mod tests {
                         | wgpu::Features::TIMESTAMP_QUERY_INSIDE_PASSES,
                 )
                 // see https://github.com/gfx-rs/wgpu/issues/2521
+                // If marking this test non-flaky, also consider removing the silent
+                // timeout in `wait_for_results`.
                 .expect_fail(FailureCase::always().panic("unexpected timestamp").flaky()),
         )
         .run_sync(|ctx| test_timestamps(ctx, true, true));
@@ -474,8 +494,9 @@ mod tests {
         timestamps_on_encoder: bool,
         timestamps_inside_passes: bool,
     ) {
+        let is_metal = ctx.adapter.get_info().backend == wgpu::Backend::Metal;
         let queries = submit_render_and_compute_pass_with_queries(&ctx.device, &ctx.queue);
-        let raw_results = queries.wait_for_results(&ctx.device);
+        let raw_results = queries.wait_for_results(&ctx.device, is_metal);
         let QueryResults {
             encoder_timestamps,
             render_start_end_timestamps,

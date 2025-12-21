@@ -372,6 +372,22 @@ impl FunctionInfo {
         info.uniformity.non_uniform_result
     }
 
+    /// Note an entry point's use of `global` not recorded by [`ModuleInfo::process_function`].
+    ///
+    /// Most global variable usage should be recorded via [`add_ref_impl`] in the process
+    /// of expression behavior analysis by [`ModuleInfo::process_function`]. But that code
+    /// has no access to entrypoint-specific information, so interface analysis uses this
+    /// function to record global uses there (like task shader payloads).
+    ///
+    /// [`add_ref_impl`]: Self::add_ref_impl
+    pub(super) fn insert_global_use(
+        &mut self,
+        global_use: GlobalUse,
+        global: Handle<crate::GlobalVariable>,
+    ) {
+        self.global_uses[global.index()] |= global_use;
+    }
+
     /// Record a use of `expr` for its value.
     ///
     /// This is used for almost all expression references. Anything
@@ -535,30 +551,34 @@ impl FunctionInfo {
                         base: array_element_ty_handle,
                         ..
                     } => {
-                        // these are nasty aliases, but these idents are too long and break rustfmt
-                        let sto = super::Capabilities::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING;
-                        let uni = super::Capabilities::UNIFORM_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
-                        let st_sb = super::Capabilities::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING;
-                        let sampler = super::Capabilities::SAMPLER_NON_UNIFORM_INDEXING;
-
                         // We're a binding array, so lets use the type of _what_ we are array of to determine if we can non-uniformly index it.
                         let array_element_ty =
                             &resolve_context.types[array_element_ty_handle].inner;
 
                         needed_caps |= match *array_element_ty {
-                            // If we're an image, use the appropriate limit.
+                            // If we're an image, use the appropriate capability.
                             crate::TypeInner::Image { class, .. } => match class {
-                                crate::ImageClass::Storage { .. } => sto,
-                                _ => st_sb,
+                                crate::ImageClass::Storage { .. } => {
+                                    super::Capabilities::STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING
+                                }
+                                _ => {
+                                    super::Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+                                }
                             },
-                            crate::TypeInner::Sampler { .. } => sampler,
-                            // If we're anything but an image, assume we're a buffer and use the address space.
+                            crate::TypeInner::Sampler { .. } => {
+                                super::Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+                            }
+                            // If we're anything but an image or sampler, assume we're a buffer and use the address space.
                             _ => {
                                 if let E::GlobalVariable(global_handle) = expression_arena[base] {
                                     let global = &resolve_context.global_vars[global_handle];
                                     match global.space {
-                                        crate::AddressSpace::Uniform => uni,
-                                        crate::AddressSpace::Storage { .. } => st_sb,
+                                        crate::AddressSpace::Uniform => {
+                                            super::Capabilities::BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+                                        }
+                                        crate::AddressSpace::Storage { .. } => {
+                                            super::Capabilities::STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+                                        }
                                         _ => unreachable!(),
                                     }
                                 } else {
@@ -635,9 +655,10 @@ impl FunctionInfo {
                     // local data is non-uniform
                     As::Function | As::Private => false,
                     // workgroup memory is exclusively accessed by the group
-                    As::WorkGroup => true,
+                    // task payload memory is very similar to workgroup memory
+                    As::WorkGroup | As::TaskPayload => true,
                     // uniform data
-                    As::Uniform | As::PushConstant => true,
+                    As::Uniform | As::Immediate => true,
                     // storage data is only uniform when read-only
                     As::Storage { access } => !access.contains(crate::StorageAccess::STORE),
                     As::Handle => false,

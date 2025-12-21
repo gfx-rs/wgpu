@@ -203,7 +203,7 @@ impl Writer {
         ));
 
         let clamp_id = self.id_gen.next();
-        body.push(Instruction::ext_inst(
+        body.push(Instruction::ext_inst_gl_op(
             self.gl450_ext_inst_id,
             spirv::GLOp::FClamp,
             float_type_id,
@@ -221,8 +221,13 @@ impl Writer {
         ir_result: &crate::FunctionResult,
         result_members: &[ResultMember],
         body: &mut Vec<Instruction>,
-    ) -> Result<(), Error> {
+        task_payload: Option<Word>,
+    ) -> Result<Instruction, Error> {
         for (index, res_member) in result_members.iter().enumerate() {
+            // This isn't a real builtin, and is handled elsewhere
+            if res_member.built_in == Some(crate::BuiltIn::MeshTaskSize) {
+                continue;
+            }
             let member_value_id = match ir_result.binding {
                 Some(_) => value_id,
                 None => {
@@ -237,7 +242,7 @@ impl Writer {
                 }
             };
 
-            body.push(Instruction::store(res_member.id, member_value_id, None));
+            self.store_io_with_f16_polyfill(body, res_member.id, member_value_id);
 
             match res_member.built_in {
                 Some(crate::BuiltIn::Position { .. })
@@ -253,7 +258,13 @@ impl Writer {
                 _ => {}
             }
         }
-        Ok(())
+        self.try_write_entry_point_task_return(
+            value_id,
+            ir_result,
+            result_members,
+            body,
+            task_payload,
+        )
     }
 }
 
@@ -675,7 +686,7 @@ impl BlockContext<'_> {
                         load_id
                     }
                     ref other => {
-                        log::error!("Unable to access index of {:?}", other);
+                        log::error!("Unable to access index of {other:?}");
                         return Err(Error::FeatureNotImplemented("access index for type"));
                     }
                 }
@@ -1026,7 +1037,7 @@ impl BlockContext<'_> {
                             };
 
                             let max_id = self.gen_id();
-                            block.body.push(Instruction::ext_inst(
+                            block.body.push(Instruction::ext_inst_gl_op(
                                 self.writer.gl450_ext_inst_id,
                                 max_op,
                                 result_type_id,
@@ -1034,7 +1045,7 @@ impl BlockContext<'_> {
                                 &[arg0_id, arg1_id],
                             ));
 
-                            MathOp::Custom(Instruction::ext_inst(
+                            MathOp::Custom(Instruction::ext_inst_gl_op(
                                 self.writer.gl450_ext_inst_id,
                                 min_op,
                                 result_type_id,
@@ -1068,7 +1079,7 @@ impl BlockContext<'_> {
                             arg2_id = self.writer.get_constant_composite(ty, &self.temp_list);
                         }
 
-                        MathOp::Custom(Instruction::ext_inst(
+                        MathOp::Custom(Instruction::ext_inst_gl_op(
                             self.writer.gl450_ext_inst_id,
                             spirv::GLOp::FClamp,
                             result_type_id,
@@ -1282,7 +1293,7 @@ impl BlockContext<'_> {
                                     &self.temp_list,
                                 ));
 
-                                MathOp::Custom(Instruction::ext_inst(
+                                MathOp::Custom(Instruction::ext_inst_gl_op(
                                     self.writer.gl450_ext_inst_id,
                                     spirv::GLOp::FMix,
                                     result_type_id,
@@ -1339,7 +1350,7 @@ impl BlockContext<'_> {
                         };
 
                         let lsb_id = self.gen_id();
-                        block.body.push(Instruction::ext_inst(
+                        block.body.push(Instruction::ext_inst_gl_op(
                             self.writer.gl450_ext_inst_id,
                             spirv::GLOp::FindILsb,
                             result_type_id,
@@ -1347,7 +1358,7 @@ impl BlockContext<'_> {
                             &[arg0_id],
                         ));
 
-                        MathOp::Custom(Instruction::ext_inst(
+                        MathOp::Custom(Instruction::ext_inst_gl_op(
                             self.writer.gl450_ext_inst_id,
                             spirv::GLOp::UMin,
                             result_type_id,
@@ -1388,7 +1399,7 @@ impl BlockContext<'_> {
                         };
 
                         let msb_id = self.gen_id();
-                        block.body.push(Instruction::ext_inst(
+                        block.body.push(Instruction::ext_inst_gl_op(
                             self.writer.gl450_ext_inst_id,
                             if width != 4 {
                                 spirv::GLOp::FindILsb
@@ -1445,7 +1456,7 @@ impl BlockContext<'_> {
 
                         // o = min(offset, w)
                         let offset_id = self.gen_id();
-                        block.body.push(Instruction::ext_inst(
+                        block.body.push(Instruction::ext_inst_gl_op(
                             self.writer.gl450_ext_inst_id,
                             spirv::GLOp::UMin,
                             u32_type,
@@ -1465,7 +1476,7 @@ impl BlockContext<'_> {
 
                         // c = min(count, tmp)
                         let count_id = self.gen_id();
-                        block.body.push(Instruction::ext_inst(
+                        block.body.push(Instruction::ext_inst_gl_op(
                             self.writer.gl450_ext_inst_id,
                             spirv::GLOp::UMin,
                             u32_type,
@@ -1495,7 +1506,7 @@ impl BlockContext<'_> {
 
                         // o = min(offset, w)
                         let offset_id = self.gen_id();
-                        block.body.push(Instruction::ext_inst(
+                        block.body.push(Instruction::ext_inst_gl_op(
                             self.writer.gl450_ext_inst_id,
                             spirv::GLOp::UMin,
                             u32_type,
@@ -1515,7 +1526,7 @@ impl BlockContext<'_> {
 
                         // c = min(count, tmp)
                         let count_id = self.gen_id();
-                        block.body.push(Instruction::ext_inst(
+                        block.body.push(Instruction::ext_inst_gl_op(
                             self.writer.gl450_ext_inst_id,
                             spirv::GLOp::UMin,
                             u32_type,
@@ -1610,7 +1621,7 @@ impl BlockContext<'_> {
                 };
 
                 block.body.push(match math_op {
-                    MathOp::Ext(op) => Instruction::ext_inst(
+                    MathOp::Ext(op) => Instruction::ext_inst_gl_op(
                         self.writer.gl450_ext_inst_id,
                         op,
                         result_type_id,
@@ -1621,7 +1632,27 @@ impl BlockContext<'_> {
                 });
                 id
             }
-            crate::Expression::LocalVariable(variable) => self.function.variables[&variable].id,
+            crate::Expression::LocalVariable(variable) => {
+                if let Some(rq_tracker) = self
+                    .function
+                    .ray_query_initialization_tracker_variables
+                    .get(&variable)
+                {
+                    self.ray_query_tracker_expr.insert(
+                        expr_handle,
+                        super::RayQueryTrackers {
+                            initialized_tracker: rq_tracker.id,
+                            t_max_tracker: self
+                                .function
+                                .ray_query_t_max_tracker_variables
+                                .get(&variable)
+                                .expect("Both trackers are set at the same time.")
+                                .id,
+                        },
+                    );
+                }
+                self.function.variables[&variable].id
+            }
             crate::Expression::Load { pointer } => {
                 self.write_checked_load(pointer, block, AccessTypeAdjustment::None, result_type_id)?
             }
@@ -1772,6 +1803,10 @@ impl BlockContext<'_> {
             crate::Expression::ArrayLength(expr) => self.write_runtime_array_length(expr, block)?,
             crate::Expression::RayQueryGetIntersection { query, committed } => {
                 let query_id = self.cached[query];
+                let init_tracker_id = *self
+                    .ray_query_tracker_expr
+                    .get(&query)
+                    .expect("not a cached ray query");
                 let func_id = self
                     .writer
                     .write_ray_query_get_intersection_function(committed, self.ir_module);
@@ -1782,7 +1817,7 @@ impl BlockContext<'_> {
                     intersection_type_id,
                     id,
                     func_id,
-                    &[query_id],
+                    &[query_id, init_tracker_id.initialized_tracker],
                 ));
                 id
             }
@@ -1893,7 +1928,7 @@ impl BlockContext<'_> {
             crate::TypeInner::Scalar(scalar) => (scalar, None),
             crate::TypeInner::Vector { scalar, size } => (scalar, Some(size)),
             ref other => {
-                log::error!("As source {:?}", other);
+                log::error!("As source {other:?}");
                 return Err(Error::Validation("Unexpected Expression::As source"));
             }
         };
@@ -2008,7 +2043,7 @@ impl BlockContext<'_> {
                 let max_const_id = maybe_splat_const(self.writer, max_const_id);
 
                 let clamp_id = self.gen_id();
-                block.body.push(Instruction::ext_inst(
+                block.body.push(Instruction::ext_inst_gl_op(
                     self.writer.gl450_ext_inst_id,
                     spirv::GLOp::FClamp,
                     expr_type_id,
@@ -2671,7 +2706,7 @@ impl BlockContext<'_> {
             });
 
             let clamp_id = self.gen_id();
-            block.body.push(Instruction::ext_inst(
+            block.body.push(Instruction::ext_inst_gl_op(
                 self.writer.gl450_ext_inst_id,
                 clamp_op,
                 wide_vector_type_id,
@@ -2765,7 +2800,7 @@ impl BlockContext<'_> {
                 let [min, max] = [min, max].map(|lit| self.writer.get_constant_scalar(lit));
 
                 let clamp_id = self.gen_id();
-                block.body.push(Instruction::ext_inst(
+                block.body.push(Instruction::ext_inst_gl_op(
                     self.writer.gl450_ext_inst_id,
                     clamp_op,
                     result_type_id,
@@ -2979,62 +3014,69 @@ impl BlockContext<'_> {
                     ref accept,
                     ref reject,
                 } => {
-                    let condition_id = self.cached[condition];
+                    // In spirv 1.6, in a conditional branch the two block ids
+                    // of the branches can't have the same label. If `accept`
+                    // and `reject` are both empty (e.g. in `if (condition) {}`)
+                    // merge id will be both labels. Because both branches are
+                    // empty, we can skip the if statement.
+                    if !(accept.is_empty() && reject.is_empty()) {
+                        let condition_id = self.cached[condition];
 
-                    let merge_id = self.gen_id();
-                    block.body.push(Instruction::selection_merge(
-                        merge_id,
-                        spirv::SelectionControl::NONE,
-                    ));
+                        let merge_id = self.gen_id();
+                        block.body.push(Instruction::selection_merge(
+                            merge_id,
+                            spirv::SelectionControl::NONE,
+                        ));
 
-                    let accept_id = if accept.is_empty() {
-                        None
-                    } else {
-                        Some(self.gen_id())
-                    };
-                    let reject_id = if reject.is_empty() {
-                        None
-                    } else {
-                        Some(self.gen_id())
-                    };
+                        let accept_id = if accept.is_empty() {
+                            None
+                        } else {
+                            Some(self.gen_id())
+                        };
+                        let reject_id = if reject.is_empty() {
+                            None
+                        } else {
+                            Some(self.gen_id())
+                        };
 
-                    self.function.consume(
-                        block,
-                        Instruction::branch_conditional(
-                            condition_id,
-                            accept_id.unwrap_or(merge_id),
-                            reject_id.unwrap_or(merge_id),
-                        ),
-                    );
+                        self.function.consume(
+                            block,
+                            Instruction::branch_conditional(
+                                condition_id,
+                                accept_id.unwrap_or(merge_id),
+                                reject_id.unwrap_or(merge_id),
+                            ),
+                        );
 
-                    if let Some(block_id) = accept_id {
-                        // We can ignore the `BlockExitDisposition` returned here because,
-                        // even if `merge_id` is not actually reachable, it is always
-                        // referred to by the `OpSelectionMerge` instruction we emitted
-                        // earlier.
-                        let _ = self.write_block(
-                            block_id,
-                            accept,
-                            BlockExit::Branch { target: merge_id },
-                            loop_context,
-                            debug_info,
-                        )?;
+                        if let Some(block_id) = accept_id {
+                            // We can ignore the `BlockExitDisposition` returned here because,
+                            // even if `merge_id` is not actually reachable, it is always
+                            // referred to by the `OpSelectionMerge` instruction we emitted
+                            // earlier.
+                            let _ = self.write_block(
+                                block_id,
+                                accept,
+                                BlockExit::Branch { target: merge_id },
+                                loop_context,
+                                debug_info,
+                            )?;
+                        }
+                        if let Some(block_id) = reject_id {
+                            // We can ignore the `BlockExitDisposition` returned here because,
+                            // even if `merge_id` is not actually reachable, it is always
+                            // referred to by the `OpSelectionMerge` instruction we emitted
+                            // earlier.
+                            let _ = self.write_block(
+                                block_id,
+                                reject,
+                                BlockExit::Branch { target: merge_id },
+                                loop_context,
+                                debug_info,
+                            )?;
+                        }
+
+                        block = Block::new(merge_id);
                     }
-                    if let Some(block_id) = reject_id {
-                        // We can ignore the `BlockExitDisposition` returned here because,
-                        // even if `merge_id` is not actually reachable, it is always
-                        // referred to by the `OpSelectionMerge` instruction we emitted
-                        // earlier.
-                        let _ = self.write_block(
-                            block_id,
-                            reject,
-                            BlockExit::Branch { target: merge_id },
-                            loop_context,
-                            debug_info,
-                        )?;
-                    }
-
-                    block = Block::new(merge_id);
                 }
                 Statement::Switch {
                     selector,
@@ -3220,22 +3262,31 @@ impl BlockContext<'_> {
                     let instruction = match self.function.entry_point_context {
                         // If this is an entry point, and we need to return anything,
                         // let's instead store the output variables and return `void`.
-                        Some(ref context) => {
-                            self.writer.write_entry_point_return(
-                                value_id,
-                                self.ir_function.result.as_ref().unwrap(),
-                                &context.results,
-                                &mut block.body,
-                            )?;
-                            Instruction::return_void()
-                        }
+                        Some(ref context) => self.writer.write_entry_point_return(
+                            value_id,
+                            self.ir_function.result.as_ref().unwrap(),
+                            &context.results,
+                            &mut block.body,
+                            context.task_payload_variable_id,
+                        )?,
                         None => Instruction::return_value(value_id),
                     };
                     self.function.consume(block, instruction);
                     return Ok(BlockExitDisposition::Discarded);
                 }
                 Statement::Return { value: None } => {
-                    self.function.consume(block, Instruction::return_void());
+                    if let Some(super::EntryPointContext {
+                        mesh_state: Some(ref mesh_state),
+                        ..
+                    }) = self.function.entry_point_context
+                    {
+                        self.function.consume(
+                            block,
+                            Instruction::branch(mesh_state.entry_point_epilogue_id),
+                        );
+                    } else {
+                        self.function.consume(block, Instruction::return_void());
+                    }
                     return Ok(BlockExitDisposition::Discarded);
                 }
                 Statement::Kill => {
@@ -3243,7 +3294,7 @@ impl BlockContext<'_> {
                     return Ok(BlockExitDisposition::Discarded);
                 }
                 Statement::ControlBarrier(flags) => {
-                    self.writer.write_control_barrier(flags, &mut block);
+                    self.writer.write_control_barrier(flags, &mut block.body);
                 }
                 Statement::MemoryBarrier(flags) => {
                     self.writer.write_memory_barrier(flags, &mut block);
@@ -3536,6 +3587,7 @@ impl BlockContext<'_> {
                                 }
                                 _ => unimplemented!(),
                             };
+
                             let mut cas_instr = Instruction::new(spirv::Op::AtomicCompareExchange);
                             cas_instr.set_type(scalar_type_id);
                             cas_instr.set_result(cas_result_id);
@@ -3581,7 +3633,7 @@ impl BlockContext<'_> {
                 }
                 Statement::WorkGroupUniformLoad { pointer, result } => {
                     self.writer
-                        .write_control_barrier(crate::Barrier::WORK_GROUP, &mut block);
+                        .write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body);
                     let result_type_id = self.get_expression_type_id(&self.fun_info[result].ty);
                     // Embed the body of
                     match self.write_access_chain(
@@ -3621,7 +3673,7 @@ impl BlockContext<'_> {
                         }
                     }
                     self.writer
-                        .write_control_barrier(crate::Barrier::WORK_GROUP, &mut block);
+                        .write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body);
                 }
                 Statement::RayQuery { query, ref fun } => {
                     self.write_ray_query_function(query, fun, &mut block);
@@ -3694,6 +3746,16 @@ impl BlockContext<'_> {
             LoopContext::default(),
             debug_info,
         )?;
+        if let Some(super::EntryPointContext {
+            mesh_state: Some(ref mesh_state),
+            ..
+        }) = self.function.entry_point_context
+        {
+            let mut block = Block::new(mesh_state.entry_point_epilogue_id);
+            self.writer
+                .write_mesh_shader_return(mesh_state, &mut block)?;
+            self.function.consume(block, Instruction::return_void());
+        }
 
         Ok(())
     }

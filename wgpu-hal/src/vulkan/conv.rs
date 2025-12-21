@@ -78,6 +78,7 @@ impl super::PrivateCapabilities {
             }
             Tf::Depth16Unorm => F::D16_UNORM,
             Tf::NV12 => F::G8_B8R8_2PLANE_420_UNORM,
+            Tf::P010 => F::G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16,
             Tf::Rgb9e5Ufloat => F::E5B9G9R9_UFLOAT_PACK32,
             Tf::Bc1RgbaUnorm => F::BC1_RGBA_UNORM_BLOCK,
             Tf::Bc1RgbaUnormSrgb => F::BC1_RGBA_SRGB_BLOCK,
@@ -160,7 +161,8 @@ impl super::PrivateCapabilities {
 pub fn map_vk_surface_formats(sf: vk::SurfaceFormatKHR) -> Option<wgt::TextureFormat> {
     use ash::vk::Format as F;
     use wgt::TextureFormat as Tf;
-    // List we care about pulled from https://vulkan.gpuinfo.org/listsurfaceformats.php
+    // List we care about pulled from https://vulkan.gpuinfo.org/listsurfaceformats.php.
+    // Device::create_swapchain() hardcodes linear scRGB for fp16, non-linear sRGB otherwise.
     Some(match sf.color_space {
         vk::ColorSpaceKHR::SRGB_NONLINEAR => match sf.format {
             F::B8G8R8A8_UNORM => Tf::Bgra8Unorm,
@@ -168,13 +170,13 @@ pub fn map_vk_surface_formats(sf: vk::SurfaceFormatKHR) -> Option<wgt::TextureFo
             F::R8G8B8A8_SNORM => Tf::Rgba8Snorm,
             F::R8G8B8A8_UNORM => Tf::Rgba8Unorm,
             F::R8G8B8A8_SRGB => Tf::Rgba8UnormSrgb,
+            F::R16G16B16A16_SNORM => Tf::Rgba16Snorm,
+            F::R16G16B16A16_UNORM => Tf::Rgba16Unorm,
+            F::A2B10G10R10_UNORM_PACK32 => Tf::Rgb10a2Unorm,
             _ => return None,
         },
         vk::ColorSpaceKHR::EXTENDED_SRGB_LINEAR_EXT => match sf.format {
             F::R16G16B16A16_SFLOAT => Tf::Rgba16Float,
-            F::R16G16B16A16_SNORM => Tf::Rgba16Snorm,
-            F::R16G16B16A16_UNORM => Tf::Rgba16Unorm,
-            F::A2B10G10R10_UNORM_PACK32 => Tf::Rgb10a2Unorm,
             _ => return None,
         },
         _ => return None,
@@ -257,6 +259,9 @@ pub fn map_texture_usage(usage: wgt::TextureUses) -> vk::ImageUsageFlags {
             | wgt::TextureUses::STORAGE_ATOMIC,
     ) {
         flags |= vk::ImageUsageFlags::STORAGE;
+    }
+    if usage.contains(wgt::TextureUses::TRANSIENT) {
+        flags |= vk::ImageUsageFlags::TRANSIENT_ATTACHMENT;
     }
     flags
 }
@@ -346,6 +351,9 @@ pub fn map_vk_image_usage(usage: vk::ImageUsageFlags) -> wgt::TextureUses {
             | wgt::TextureUses::STORAGE_WRITE_ONLY
             | wgt::TextureUses::STORAGE_READ_WRITE
             | wgt::TextureUses::STORAGE_ATOMIC;
+    }
+    if usage.contains(vk::ImageUsageFlags::TRANSIENT_ATTACHMENT) {
+        bits |= wgt::TextureUses::TRANSIENT;
     }
     bits
 }
@@ -444,13 +452,19 @@ pub fn map_attachment_ops(
 ) -> (vk::AttachmentLoadOp, vk::AttachmentStoreOp) {
     let load_op = if op.contains(crate::AttachmentOps::LOAD) {
         vk::AttachmentLoadOp::LOAD
-    } else {
+    } else if op.contains(crate::AttachmentOps::LOAD_DONT_CARE) {
+        vk::AttachmentLoadOp::DONT_CARE
+    } else if op.contains(crate::AttachmentOps::LOAD_CLEAR) {
         vk::AttachmentLoadOp::CLEAR
+    } else {
+        unreachable!()
     };
     let store_op = if op.contains(crate::AttachmentOps::STORE) {
         vk::AttachmentStoreOp::STORE
-    } else {
+    } else if op.contains(crate::AttachmentOps::STORE_DISCARD) {
         vk::AttachmentStoreOp::DONT_CARE
+    } else {
+        unreachable!()
     };
     (load_op, store_op)
 }
@@ -484,7 +498,7 @@ pub fn map_vk_present_mode(mode: vk::PresentModeKHR) -> Option<wgt::PresentMode>
         FIFO_LATEST_READY => None,
 
         _ => {
-            log::debug!("Unrecognized present mode {:?}", mode);
+            log::debug!("Unrecognized present mode {mode:?}");
             None
         }
     }
@@ -695,10 +709,10 @@ pub fn map_filter_mode(mode: wgt::FilterMode) -> vk::Filter {
     }
 }
 
-pub fn map_mip_filter_mode(mode: wgt::FilterMode) -> vk::SamplerMipmapMode {
+pub fn map_mip_filter_mode(mode: wgt::MipmapFilterMode) -> vk::SamplerMipmapMode {
     match mode {
-        wgt::FilterMode::Nearest => vk::SamplerMipmapMode::NEAREST,
-        wgt::FilterMode::Linear => vk::SamplerMipmapMode::LINEAR,
+        wgt::MipmapFilterMode::Nearest => vk::SamplerMipmapMode::NEAREST,
+        wgt::MipmapFilterMode::Linear => vk::SamplerMipmapMode::LINEAR,
     }
 }
 
@@ -746,6 +760,12 @@ pub fn map_shader_stage(stage: wgt::ShaderStages) -> vk::ShaderStageFlags {
     }
     if stage.contains(wgt::ShaderStages::COMPUTE) {
         flags |= vk::ShaderStageFlags::COMPUTE;
+    }
+    if stage.contains(wgt::ShaderStages::TASK) {
+        flags |= vk::ShaderStageFlags::TASK_EXT;
+    }
+    if stage.contains(wgt::ShaderStages::MESH) {
+        flags |= vk::ShaderStageFlags::MESH_EXT;
     }
     flags
 }

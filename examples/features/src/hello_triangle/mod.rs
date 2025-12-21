@@ -31,6 +31,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             // Make sure we use the texture resolution limits from the adapter, so we can support images the size of the swapchain.
             required_limits: wgpu::Limits::downlevel_webgl2_defaults()
                 .using_resolution(adapter.limits()),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Off,
         })
@@ -46,7 +47,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
-        push_constant_ranges: &[],
+        immediate_size: 0,
     });
 
     let swapchain_capabilities = surface.get_capabilities(&adapter);
@@ -70,7 +71,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         primitive: wgpu::PrimitiveState::default(),
         depth_stencil: None,
         multisample: wgpu::MultisampleState::default(),
-        multiview: None,
+        multiview_mask: None,
         cache: None,
     });
 
@@ -128,6 +129,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                                     depth_stencil_attachment: None,
                                     timestamp_writes: None,
                                     occlusion_query_set: None,
+                                    multiview_mask: None,
                                 });
                             rpass.set_pipeline(&render_pipeline);
                             rpass.draw(0..3, 0..1);

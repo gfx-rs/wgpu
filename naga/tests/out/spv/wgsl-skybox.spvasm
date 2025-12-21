@@ -65,9 +65,9 @@ OpDecorate %105 Location 0
 %48 = OpTypePointer Uniform %8
 %49 = OpConstant  %9  0
 %51 = OpConstant  %10  2
-%52 = OpConstant  %4  4.0
-%53 = OpConstant  %4  1.0
-%54 = OpConstant  %4  0.0
+%52 = OpConstant  %4  4
+%53 = OpConstant  %4  1
+%54 = OpConstant  %4  0
 %56 = OpTypePointer Function %10
 %57 = OpConstantNull  %10
 %59 = OpConstantNull  %10

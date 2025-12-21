@@ -2,7 +2,17 @@
 
 use wgpu::BufferAddress;
 use wgpu::{BufferUsages as Bu, MapMode as Ma};
-use wgpu_test::{fail_if, gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    fail_if, gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        BUFFER_USAGE,
+        BUFFER_USAGE_MAPPABLE_PRIMARY_BUFFERS,
+        BUFFER_MAP_ASYNC_MAP_STATE,
+    ]);
+}
 
 const BUFFER_SIZE: BufferAddress = 1234;
 
@@ -49,20 +59,26 @@ fn try_create(ctx: TestingContext, usages: &[(bool, &[wgpu::BufferUsages])]) {
 }
 
 #[gpu_test]
-static BUFFER_USAGE: GpuTestConfiguration = GpuTestConfiguration::new().run_sync(|ctx| {
-    try_create(
-        ctx,
-        &[
-            (false, ALWAYS_VALID),
-            (true, NEEDS_MAPPABLE_PRIMARY_BUFFERS),
-            (true, ALWAYS_FAIL),
-        ],
-    );
-});
+static BUFFER_USAGE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(TestParameters::default().enable_noop())
+    .run_sync(|ctx| {
+        try_create(
+            ctx,
+            &[
+                (false, ALWAYS_VALID),
+                (true, NEEDS_MAPPABLE_PRIMARY_BUFFERS),
+                (true, ALWAYS_FAIL),
+            ],
+        );
+    });
 
 #[gpu_test]
 static BUFFER_USAGE_MAPPABLE_PRIMARY_BUFFERS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::MAPPABLE_PRIMARY_BUFFERS))
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::MAPPABLE_PRIMARY_BUFFERS)
+            .enable_noop(),
+    )
     .run_sync(|ctx| {
         try_create(
             ctx,
@@ -83,7 +99,7 @@ async fn map_test(
     after_unmap: bool,
     after_destroy: bool,
 ) {
-    log::info!("map_test usage_type:{usage_type} map_mode_type:{:?} before_unmap:{before_unmap} before_destroy:{before_destroy} after_unmap:{after_unmap} after_destroy:{after_destroy}", map_mode_type);
+    log::info!("map_test usage_type:{usage_type} map_mode_type:{map_mode_type:?} before_unmap:{before_unmap} before_destroy:{before_destroy} after_unmap:{after_unmap} after_destroy:{after_destroy}");
 
     let size = 8;
     let usage = match usage_type {
@@ -139,7 +155,9 @@ async fn map_test(
         buffer.destroy();
     }
 
-    ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+    ctx.async_poll(wgpu::PollType::wait_indefinitely())
+        .await
+        .unwrap();
 
     if !before_unmap && !before_destroy {
         {
@@ -159,7 +177,11 @@ async fn map_test(
 
 #[gpu_test]
 static BUFFER_MAP_ASYNC_MAP_STATE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(wgpu::Features::MAPPABLE_PRIMARY_BUFFERS))
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::MAPPABLE_PRIMARY_BUFFERS)
+            .enable_noop(),
+    )
     .run_async(move |ctx| async move {
         for usage_type in ["invalid", "read", "write"] {
             for map_mode_type in [Ma::Read, Ma::Write] {

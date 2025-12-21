@@ -10,19 +10,19 @@ OpEntryPoint GLCompute %28 "main"
 OpExecutionMode %28 LocalSize 1 1 1
 %2 = OpTypeVoid
 %3 = OpTypeFloat 64
-%4 = OpConstant  %3  1.0
-%5 = OpConstant  %3  2.0
+%4 = OpConstant  %3  1
+%5 = OpConstant  %3  2
 %7 = OpTypePointer Private %3
 %6 = OpVariable  %7  Private %4
 %11 = OpTypeFunction %3 %3
-%12 = OpConstant  %3  30.0
-%13 = OpConstant  %3  400.0
-%14 = OpConstant  %3  5.0
-%15 = OpConstant  %3  -1.0
+%12 = OpConstant  %3  30
+%13 = OpConstant  %3  400
+%14 = OpConstant  %3  5
+%15 = OpConstant  %3  -1
 %17 = OpTypePointer Function %3
 %18 = OpConstantNull  %3
 %29 = OpTypeFunction %2
-%30 = OpConstant  %3  6.0
+%30 = OpConstant  %3  6
 %10 = OpFunction  %3  None %11
 %9 = OpFunctionParameter  %3
 %8 = OpLabel

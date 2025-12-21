@@ -1,6 +1,5 @@
+use crate::proc::{CaseInsensitiveKeywordSet, KeywordSet};
 use crate::racy_lock::RacyLock;
-
-use hashbrown::HashSet;
 
 // When compiling with FXC without strict mode, these keywords are actually case insensitive.
 // If you compile with strict mode and specify a different casing like "Pass" instead in an identifier, FXC will give this error:
@@ -826,6 +825,7 @@ pub const RESERVED: &[&str] = &[
     super::writer::INSERT_BITS_FUNCTION,
     super::writer::SAMPLER_HEAP_VAR,
     super::writer::COMPARISON_SAMPLER_HEAP_VAR,
+    super::writer::SAMPLE_EXTERNAL_TEXTURE_FUNCTION,
     super::writer::ABS_FUNCTION,
     super::writer::DIV_FUNCTION,
     super::writer::MOD_FUNCTION,
@@ -834,6 +834,7 @@ pub const RESERVED: &[&str] = &[
     super::writer::F2U32_FUNCTION,
     super::writer::F2I64_FUNCTION,
     super::writer::F2U64_FUNCTION,
+    super::writer::IMAGE_LOAD_EXTERNAL_FUNCTION,
     super::writer::IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION,
 ];
 
@@ -925,17 +926,11 @@ pub const TYPES: &[&str] = &{
 /// significant time during [`Namer::reset`](crate::proc::Namer::reset).
 ///
 /// See <https://github.com/gfx-rs/wgpu/pull/7338> for benchmarks.
-pub static RESERVED_SET: RacyLock<HashSet<&'static str>> = RacyLock::new(|| {
-    let mut set = HashSet::default();
-    set.reserve(RESERVED.len() + TYPES.len());
-    for &word in RESERVED {
-        set.insert(word);
-    }
-    for &word in TYPES {
-        set.insert(word);
-    }
-    set
-});
+pub static RESERVED_SET: RacyLock<KeywordSet> =
+    RacyLock::new(|| KeywordSet::from_iter(RESERVED.iter().chain(TYPES)));
+
+pub static RESERVED_CASE_INSENSITIVE_SET: RacyLock<CaseInsensitiveKeywordSet> =
+    RacyLock::new(|| CaseInsensitiveKeywordSet::from_iter(RESERVED_CASE_INSENSITIVE));
 
 pub const RESERVED_PREFIXES: &[&str] = &[
     "__dynamic_buffer_offsets",

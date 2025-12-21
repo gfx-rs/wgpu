@@ -26,17 +26,25 @@ Otherwise, we manage a pool of `VkFence` objects behind each `hal::Fence`.
 
 mod adapter;
 mod command;
-mod conv;
+pub mod conv;
 mod device;
 mod drm;
 mod instance;
 mod sampler;
 mod semaphore_list;
+mod swapchain;
 
 pub use adapter::PhysicalDeviceFeatures;
 
 use alloc::{boxed::Box, ffi::CString, sync::Arc, vec::Vec};
-use core::{borrow::Borrow, ffi::CStr, fmt, marker::PhantomData, mem, num::NonZeroU32};
+use core::{
+    borrow::Borrow,
+    ffi::CStr,
+    fmt,
+    marker::PhantomData,
+    mem::{self, ManuallyDrop},
+    num::NonZeroU32,
+};
 
 use arrayvec::ArrayVec;
 use ash::{ext, khr, vk};
@@ -49,13 +57,16 @@ use wgt::InternalCounter;
 
 use semaphore_list::SemaphoreList;
 
-const MILLIS_TO_NANOS: u64 = 1_000_000;
+use crate::vulkan::semaphore_list::{SemaphoreListMode, SemaphoreType};
+
 const MAX_TOTAL_ATTACHMENTS: usize = crate::MAX_COLOR_ATTACHMENTS * 2 + 1;
 
 #[derive(Clone, Debug)]
 pub struct Api;
 
 impl crate::Api for Api {
+    const VARIANT: wgt::Backend = wgt::Backend::Vulkan;
+
     type Instance = Instance;
     type Surface = Surface;
     type Adapter = Adapter;
@@ -155,7 +166,6 @@ pub struct DebugUtilsMessengerUserData {
 pub struct InstanceShared {
     raw: ash::Instance,
     extensions: Vec<&'static CStr>,
-    drop_guard: Option<crate::DropGuard>,
     flags: wgt::InstanceFlags,
     memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     debug_utils: Option<DebugUtils>,
@@ -170,229 +180,46 @@ pub struct InstanceShared {
     /// It is associated with a `VkInstance` and its children,
     /// except for a `VkPhysicalDevice` and its children.
     instance_api_version: u32,
+
+    // The `drop_guard` field must be the last field of this struct so it is dropped last.
+    // Do not add new fields after it.
+    drop_guard: Option<crate::DropGuard>,
 }
 
 pub struct Instance {
     shared: Arc<InstanceShared>,
 }
 
-/// The semaphores needed to use one image in a swapchain.
-#[derive(Debug)]
-struct SwapchainImageSemaphores {
-    /// A semaphore that is signaled when this image is safe for us to modify.
-    ///
-    /// When [`vkAcquireNextImageKHR`] returns the index of the next swapchain
-    /// image that we should use, that image may actually still be in use by the
-    /// presentation engine, and is not yet safe to modify. However, that
-    /// function does accept a semaphore that it will signal when the image is
-    /// indeed safe to begin messing with.
-    ///
-    /// This semaphore is:
-    ///
-    /// - waited for by the first queue submission to operate on this image
-    ///   since it was acquired, and
-    ///
-    /// - signaled by [`vkAcquireNextImageKHR`] when the acquired image is ready
-    ///   for us to use.
-    ///
-    /// [`vkAcquireNextImageKHR`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#vkAcquireNextImageKHR
-    acquire: vk::Semaphore,
-
-    /// True if the next command submission operating on this image should wait
-    /// for [`acquire`].
-    ///
-    /// We must wait for `acquire` before drawing to this swapchain image, but
-    /// because `wgpu-hal` queue submissions are always strongly ordered, only
-    /// the first submission that works with a swapchain image actually needs to
-    /// wait. We set this flag when this image is acquired, and clear it the
-    /// first time it's passed to [`Queue::submit`] as a surface texture.
-    ///
-    /// [`acquire`]: SwapchainImageSemaphores::acquire
-    /// [`Queue::submit`]: crate::Queue::submit
-    should_wait_for_acquire: bool,
-
-    /// A pool of semaphores for ordering presentation after drawing.
-    ///
-    /// The first [`present_index`] semaphores in this vector are:
-    ///
-    /// - all waited on by the call to [`vkQueuePresentKHR`] that presents this
-    ///   image, and
-    ///
-    /// - each signaled by some [`vkQueueSubmit`] queue submission that draws to
-    ///   this image, when the submission finishes execution.
-    ///
-    /// This vector accumulates one semaphore per submission that writes to this
-    /// image. This is awkward, but hard to avoid: [`vkQueuePresentKHR`]
-    /// requires a semaphore to order it with respect to drawing commands, and
-    /// we can't attach new completion semaphores to a command submission after
-    /// it's been submitted. This means that, at submission time, we must create
-    /// the semaphore we might need if the caller's next action is to enqueue a
-    /// presentation of this image.
-    ///
-    /// An alternative strategy would be for presentation to enqueue an empty
-    /// submit, ordered relative to other submits in the usual way, and
-    /// signaling a single presentation semaphore. But we suspect that submits
-    /// are usually expensive enough, and semaphores usually cheap enough, that
-    /// performance-sensitive users will avoid making many submits, so that the
-    /// cost of accumulated semaphores will usually be less than the cost of an
-    /// additional submit.
-    ///
-    /// Only the first [`present_index`] semaphores in the vector are actually
-    /// going to be signalled by submitted commands, and need to be waited for
-    /// by the next present call. Any semaphores beyond that index were created
-    /// for prior presents and are simply being retained for recycling.
-    ///
-    /// [`present_index`]: SwapchainImageSemaphores::present_index
-    /// [`vkQueuePresentKHR`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#vkQueuePresentKHR
-    /// [`vkQueueSubmit`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#vkQueueSubmit
-    present: Vec<vk::Semaphore>,
-
-    /// The number of semaphores in [`present`] to be signalled for this submission.
-    ///
-    /// [`present`]: SwapchainImageSemaphores::present
-    present_index: usize,
-
-    /// The fence value of the last command submission that wrote to this image.
-    ///
-    /// The next time we try to acquire this image, we'll block until
-    /// this submission finishes, proving that [`acquire`] is ready to
-    /// pass to `vkAcquireNextImageKHR` again.
-    ///
-    /// [`acquire`]: SwapchainImageSemaphores::acquire
-    previously_used_submission_index: crate::FenceValue,
-}
-
-impl SwapchainImageSemaphores {
-    fn new(device: &DeviceShared) -> Result<Self, crate::DeviceError> {
-        Ok(Self {
-            acquire: device.new_binary_semaphore()?,
-            should_wait_for_acquire: true,
-            present: Vec::new(),
-            present_index: 0,
-            previously_used_submission_index: 0,
-        })
-    }
-
-    fn set_used_fence_value(&mut self, value: crate::FenceValue) {
-        self.previously_used_submission_index = value;
-    }
-
-    /// Return the semaphore that commands drawing to this image should wait for, if any.
-    ///
-    /// This only returns `Some` once per acquisition; see
-    /// [`SwapchainImageSemaphores::should_wait_for_acquire`] for details.
-    fn get_acquire_wait_semaphore(&mut self) -> Option<vk::Semaphore> {
-        if self.should_wait_for_acquire {
-            self.should_wait_for_acquire = false;
-            Some(self.acquire)
-        } else {
-            None
-        }
-    }
-
-    /// Return a semaphore that a submission that writes to this image should
-    /// signal when it's done.
-    ///
-    /// See [`SwapchainImageSemaphores::present`] for details.
-    fn get_submit_signal_semaphore(
-        &mut self,
-        device: &DeviceShared,
-    ) -> Result<vk::Semaphore, crate::DeviceError> {
-        // Try to recycle a semaphore we created for a previous presentation.
-        let sem = match self.present.get(self.present_index) {
-            Some(sem) => *sem,
-            None => {
-                let sem = device.new_binary_semaphore()?;
-                self.present.push(sem);
-                sem
-            }
-        };
-
-        self.present_index += 1;
-
-        Ok(sem)
-    }
-
-    /// Return the semaphores that a presentation of this image should wait on.
-    ///
-    /// Return a slice of semaphores that the call to [`vkQueueSubmit`] that
-    /// ends this image's acquisition should wait for. See
-    /// [`SwapchainImageSemaphores::present`] for details.
-    ///
-    /// Reset `self` to be ready for the next acquisition cycle.
-    ///
-    /// [`vkQueueSubmit`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#vkQueueSubmit
-    fn get_present_wait_semaphores(&mut self) -> &[vk::Semaphore] {
-        let old_index = self.present_index;
-
-        // Since this marks the end of this acquire/draw/present cycle, take the
-        // opportunity to reset `self` in preparation for the next acquisition.
-        self.present_index = 0;
-        self.should_wait_for_acquire = true;
-
-        &self.present[0..old_index]
-    }
-
-    unsafe fn destroy(&self, device: &ash::Device) {
-        unsafe {
-            device.destroy_semaphore(self.acquire, None);
-            for sem in &self.present {
-                device.destroy_semaphore(*sem, None);
-            }
-        }
-    }
-}
-
-struct Swapchain {
-    raw: vk::SwapchainKHR,
-    functor: khr::swapchain::Device,
-    device: Arc<DeviceShared>,
-    images: Vec<vk::Image>,
-    config: crate::SurfaceConfiguration,
-    /// One wait semaphore per swapchain image. This will be associated with the
-    /// surface texture, and later collected during submission.
-    ///
-    /// We need this to be `Arc<Mutex<>>` because we need to be able to pass this
-    /// data into the surface texture, so submit/present can use it.
-    surface_semaphores: Vec<Arc<Mutex<SwapchainImageSemaphores>>>,
-    /// The index of the next semaphore to use. Ideally we would use the same
-    /// index as the image index, but we need to specify the semaphore as an argument
-    /// to the acquire_next_image function which is what tells us which image to use.
-    next_semaphore_index: usize,
-    /// The present timing information which will be set in the next call to [`present()`](crate::Queue::present()).
-    ///
-    /// # Safety
-    ///
-    /// This must only be set if [`wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING`] is enabled, and
-    /// so the VK_GOOGLE_display_timing extension is present.
-    next_present_time: Option<vk::PresentTimeGOOGLE>,
-}
-
-impl Swapchain {
-    fn advance_surface_semaphores(&mut self) {
-        let semaphore_count = self.surface_semaphores.len();
-        self.next_semaphore_index = (self.next_semaphore_index + 1) % semaphore_count;
-    }
-
-    fn get_surface_semaphores(&self) -> Arc<Mutex<SwapchainImageSemaphores>> {
-        self.surface_semaphores[self.next_semaphore_index].clone()
-    }
-}
-
 pub struct Surface {
-    raw: vk::SurfaceKHR,
-    functor: khr::surface::Instance,
-    instance: Arc<InstanceShared>,
-    swapchain: RwLock<Option<Swapchain>>,
+    inner: ManuallyDrop<Box<dyn swapchain::Surface>>,
+    swapchain: RwLock<Option<Box<dyn swapchain::Swapchain>>>,
 }
 
 impl Surface {
+    /// Returns the raw Vulkan surface handle.
+    ///
+    /// Returns `None` if the surface is a DXGI surface.
+    pub unsafe fn raw_native_handle(&self) -> Option<vk::SurfaceKHR> {
+        Some(
+            self.inner
+                .as_any()
+                .downcast_ref::<swapchain::NativeSurface>()?
+                .as_raw(),
+        )
+    }
+
     /// Get the raw Vulkan swapchain associated with this surface.
     ///
-    /// Returns [`None`] if the surface is not configured.
-    pub fn raw_swapchain(&self) -> Option<vk::SwapchainKHR> {
+    /// Returns [`None`] if the surface is not configured or if the swapchain
+    /// is a DXGI swapchain.
+    pub fn raw_native_swapchain(&self) -> Option<vk::SwapchainKHR> {
         let read = self.swapchain.read();
-        read.as_ref().map(|it| it.raw)
+        Some(
+            read.as_ref()?
+                .as_any()
+                .downcast_ref::<swapchain::NativeSwapchain>()?
+                .as_raw(),
+        )
     }
 
     /// Set the present timing information which will be used for the next [presentation](crate::Queue::present()) of this surface,
@@ -408,28 +235,20 @@ impl Surface {
     /// # Panics
     ///
     /// - If the surface hasn't been configured.
+    /// - If the surface has been configured for a DXGI swapchain.
     /// - If the device doesn't [support present timing](wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING).
     ///
     /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
     #[track_caller]
     pub fn set_next_present_time(&self, present_timing: vk::PresentTimeGOOGLE) {
         let mut swapchain = self.swapchain.write();
-        let swapchain = swapchain
+        swapchain
             .as_mut()
-            .expect("Surface should have been configured");
-        let features = wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING;
-        if swapchain.device.features.contains(features) {
-            swapchain.next_present_time = Some(present_timing);
-        } else {
-            // Ideally we'd use something like `device.required_features` here, but that's in `wgpu-core`, which we are a dependency of
-            panic!(
-                concat!(
-                    "Tried to set display timing properties ",
-                    "without the corresponding feature ({:?}) enabled."
-                ),
-                features
-            );
-        }
+            .expect("Surface should have been configured")
+            .as_any_mut()
+            .downcast_mut::<swapchain::NativeSwapchain>()
+            .expect("Surface should have a native Vulkan swapchain")
+            .set_next_present_time(present_timing);
     }
 }
 
@@ -437,7 +256,7 @@ impl Surface {
 pub struct SurfaceTexture {
     index: u32,
     texture: Texture,
-    surface_semaphores: Arc<Mutex<SwapchainImageSemaphores>>,
+    metadata: Box<dyn swapchain::SurfaceTextureMetadata>,
 }
 
 impl crate::DynSurfaceTexture for SurfaceTexture {}
@@ -499,6 +318,8 @@ struct PrivateCapabilities {
     /// Ability to present contents to any screen. Only needed to work around broken platform configurations.
     can_present: bool,
     non_coherent_map_mask: wgt::BufferAddress,
+    multi_draw_indirect: bool,
+    max_draw_indirect_count: u32,
 
     /// True if this adapter advertises the [`robustBufferAccess`][vrba] feature.
     ///
@@ -556,6 +377,23 @@ struct PrivateCapabilities {
     /// [`VK_KHR_shader_float16_int8`]: https://registry.khronos.org/vulkan/specs/latest/man/html/VK_KHR_shader_float16_int8.html
     /// [see spec]: https://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDeviceShaderFloat16Int8Features.html#extension-features-shaderInt8
     shader_int8: bool,
+
+    /// This is done to panic before undefined behavior, and is imperfect.
+    /// Basically, to allow implementations to emulate mv using instancing, if you
+    /// want to draw `n` instances to VR, you must draw `2n` instances, but you
+    /// can never draw more than `u32::MAX` instances. Therefore, when drawing
+    /// multiview on some vulkan implementations, it might restrict the instance
+    /// count, which isn't usually a thing in webgpu. We don't expose this limit
+    /// because its strange, i.e. only occurs on certain vulkan implementations
+    /// if you are drawing more than 128 million instances. We still want to avoid
+    /// undefined behavior in this situation, so we panic if the limit is violated.
+    multiview_instance_index_limit: u32,
+
+    /// BufferUsages::ACCELERATION_STRUCTURE_SCRATCH allows usage as a scratch buffer.
+    /// Vulkan has no way to specify this as a usage, and it maps to other usages, but
+    /// these usages do not have as high of an alignment requirement using the buffer as
+    ///  a scratch buffer when building acceleration structures.
+    scratch_buffer_alignment: u32,
 }
 
 bitflags::bitflags!(
@@ -627,7 +465,7 @@ struct RenderPassKey {
     colors: ArrayVec<Option<ColorAttachmentKey>, { crate::MAX_COLOR_ATTACHMENTS }>,
     depth_stencil: Option<DepthStencilAttachmentKey>,
     sample_count: u32,
-    multiview: Option<NonZeroU32>,
+    multiview_mask: Option<NonZeroU32>,
 }
 
 struct DeviceShared {
@@ -635,7 +473,6 @@ struct DeviceShared {
     family_index: u32,
     queue_index: u32,
     raw_queue: vk::Queue,
-    drop_guard: Option<crate::DropGuard>,
     instance: Arc<InstanceShared>,
     physical_device: vk::PhysicalDevice,
     enabled_extensions: Vec<&'static CStr>,
@@ -649,6 +486,18 @@ struct DeviceShared {
     render_passes: Mutex<FastHashMap<RenderPassKey, vk::RenderPass>>,
     sampler_cache: Mutex<sampler::SamplerCache>,
     memory_allocations_counter: InternalCounter,
+
+    /// Because we have cached framebuffers which are not deleted from until
+    /// the device is destroyed, if the implementation of vulkan re-uses handles
+    /// we need some way to differentiate between the old handle and the new handle.
+    /// This factory allows us to have a dedicated identity value for each texture.
+    texture_identity_factory: ResourceIdentityFactory<vk::Image>,
+    /// As above, for texture views.
+    texture_view_identity_factory: ResourceIdentityFactory<vk::ImageView>,
+
+    // The `drop_guard` field must be the last field of this struct so it is dropped last.
+    // Do not add new fields after it.
+    drop_guard: Option<crate::DropGuard>,
 }
 
 impl Drop for DeviceShared {
@@ -663,8 +512,7 @@ impl Drop for DeviceShared {
 }
 
 pub struct Device {
-    shared: Arc<DeviceShared>,
-    mem_allocator: Mutex<gpu_alloc::GpuAllocator<vk::DeviceMemory>>,
+    mem_allocator: Mutex<gpu_allocator::vulkan::Allocator>,
     desc_allocator:
         Mutex<gpu_descriptor::DescriptorAllocator<vk::DescriptorPool, vk::DescriptorSet>>,
     valid_ash_memory_types: u32,
@@ -672,11 +520,13 @@ pub struct Device {
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
     counters: Arc<wgt::HalCounters>,
+    // Struct members are dropped from first to last, put the Device last to ensure that
+    // all resources that depends on it are destroyed before it like the mem_allocator
+    shared: Arc<DeviceShared>,
 }
 
 impl Drop for Device {
     fn drop(&mut self) {
-        unsafe { self.mem_allocator.lock().cleanup(&*self.shared) };
         unsafe { self.desc_allocator.lock().cleanup(&*self.shared) };
     }
 }
@@ -719,7 +569,7 @@ impl RelaySemaphores {
     fn new(device: &DeviceShared) -> Result<Self, crate::DeviceError> {
         Ok(Self {
             wait: None,
-            signal: device.new_binary_semaphore()?,
+            signal: device.new_binary_semaphore("RelaySemaphores: 1")?,
         })
     }
 
@@ -734,7 +584,7 @@ impl RelaySemaphores {
                 // The second submission should wait on `old.signal`, and then
                 // signal a new semaphore which we'll create now.
                 self.wait = Some(old.signal);
-                self.signal = device.new_binary_semaphore()?;
+                self.signal = device.new_binary_semaphore("RelaySemaphores: 2")?;
             }
             Some(ref mut wait) => {
                 // What this submission signals, the next should wait.
@@ -758,7 +608,6 @@ impl RelaySemaphores {
 
 pub struct Queue {
     raw: vk::Queue,
-    swapchain_fn: khr::swapchain::Device,
     device: Arc<DeviceShared>,
     family_index: u32,
     relay_semaphores: Mutex<RelaySemaphores>,
@@ -778,7 +627,7 @@ impl Drop for Queue {
 }
 #[derive(Debug)]
 enum BufferMemoryBacking {
-    Managed(gpu_alloc::MemoryBlock<vk::DeviceMemory>),
+    Managed(gpu_allocator::vulkan::Allocation),
     VulkanMemory {
         memory: vk::DeviceMemory,
         offset: u64,
@@ -786,10 +635,10 @@ enum BufferMemoryBacking {
     },
 }
 impl BufferMemoryBacking {
-    fn memory(&self) -> &vk::DeviceMemory {
+    fn memory(&self) -> vk::DeviceMemory {
         match self {
-            Self::Managed(m) => m.memory(),
-            Self::VulkanMemory { memory, .. } => memory,
+            Self::Managed(m) => unsafe { m.memory() },
+            Self::VulkanMemory { memory, .. } => *memory,
         }
     }
     fn offset(&self) -> u64 {
@@ -808,7 +657,7 @@ impl BufferMemoryBacking {
 #[derive(Debug)]
 pub struct Buffer {
     raw: vk::Buffer,
-    block: Option<Mutex<BufferMemoryBacking>>,
+    allocation: Option<Mutex<BufferMemoryBacking>>,
 }
 impl Buffer {
     /// # Safety
@@ -818,7 +667,7 @@ impl Buffer {
     pub unsafe fn from_raw(vk_buffer: vk::Buffer) -> Self {
         Self {
             raw: vk_buffer,
-            block: None,
+            allocation: None,
         }
     }
     /// # Safety
@@ -833,7 +682,7 @@ impl Buffer {
     ) -> Self {
         Self {
             raw: vk_buffer,
-            block: Some(Mutex::new(BufferMemoryBacking::VulkanMemory {
+            allocation: Some(Mutex::new(BufferMemoryBacking::VulkanMemory {
                 memory,
                 offset,
                 size,
@@ -848,20 +697,35 @@ impl crate::DynBuffer for Buffer {}
 pub struct AccelerationStructure {
     raw: vk::AccelerationStructureKHR,
     buffer: vk::Buffer,
-    block: Mutex<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
+    allocation: gpu_allocator::vulkan::Allocation,
     compacted_size_query: Option<vk::QueryPool>,
 }
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
 
 #[derive(Debug)]
+pub enum TextureMemory {
+    // shared memory in GPU allocator (owned by wgpu-hal)
+    Allocation(gpu_allocator::vulkan::Allocation),
+
+    // dedicated memory (owned by wgpu-hal)
+    Dedicated(vk::DeviceMemory),
+
+    // memory not owned by wgpu
+    External,
+}
+
+#[derive(Debug)]
 pub struct Texture {
     raw: vk::Image,
-    drop_guard: Option<crate::DropGuard>,
-    external_memory: Option<vk::DeviceMemory>,
-    block: Option<gpu_alloc::MemoryBlock<vk::DeviceMemory>>,
+    memory: TextureMemory,
     format: wgt::TextureFormat,
     copy_size: crate::CopyExtent,
+    identity: ResourceIdentity<vk::Image>,
+
+    // The `drop_guard` field must be the last field of this struct so it is dropped last.
+    // Do not add new fields after it.
+    drop_guard: Option<crate::DropGuard>,
 }
 
 impl crate::DynTexture for Texture {}
@@ -873,17 +737,27 @@ impl Texture {
     pub unsafe fn raw_handle(&self) -> vk::Image {
         self.raw
     }
+
+    /// # Safety
+    ///
+    /// - The caller must not free the `vk::DeviceMemory` or
+    ///   `gpu_alloc::MemoryBlock` in the returned `TextureMemory`.
+    pub unsafe fn memory(&self) -> &TextureMemory {
+        &self.memory
+    }
 }
 
 #[derive(Debug)]
 pub struct TextureView {
     raw_texture: vk::Image,
     raw: vk::ImageView,
-    layers: NonZeroU32,
+    _layers: NonZeroU32,
     format: wgt::TextureFormat,
     raw_format: vk::Format,
     base_mip_level: u32,
     dimension: wgt::TextureViewDimension,
+    texture_identity: ResourceIdentity<vk::Image>,
+    view_identity: ResourceIdentity<vk::ImageView>,
 }
 
 impl crate::DynTextureView for TextureView {}
@@ -895,6 +769,14 @@ impl TextureView {
     pub unsafe fn raw_handle(&self) -> vk::ImageView {
         self.raw
     }
+
+    /// Returns the raw texture view, along with its identity.
+    fn identified_raw_view(&self) -> IdentifiedTextureView {
+        IdentifiedTextureView {
+            raw: self.raw,
+            identity: self.view_identity,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -905,13 +787,25 @@ pub struct Sampler {
 
 impl crate::DynSampler for Sampler {}
 
+/// Information about a binding within a specific BindGroupLayout / BindGroup.
+/// This will be used to construct a [`naga::back::spv::BindingInfo`], where
+/// the descriptor set value will be taken from the index of the group.
+#[derive(Copy, Clone, Debug)]
+struct BindingInfo {
+    binding: u32,
+    binding_array_size: Option<NonZeroU32>,
+}
+
 #[derive(Debug)]
 pub struct BindGroupLayout {
     raw: vk::DescriptorSetLayout,
     desc_count: gpu_descriptor::DescriptorTotalCount,
-    types: Box<[(vk::DescriptorType, u32)]>,
-    /// Map of binding index to size,
-    binding_arrays: Vec<(u32, NonZeroU32)>,
+    /// Sorted list of entries.
+    entries: Box<[wgt::BindGroupLayoutEntry]>,
+    /// Map of original binding index to remapped binding index and optional
+    /// array size.
+    binding_map: Vec<(u32, BindingInfo)>,
+    contains_binding_arrays: bool,
 }
 
 impl crate::DynBindGroupLayout for BindGroupLayout {}
@@ -919,7 +813,7 @@ impl crate::DynBindGroupLayout for BindGroupLayout {}
 #[derive(Debug)]
 pub struct PipelineLayout {
     raw: vk::PipelineLayout,
-    binding_arrays: naga::back::spv::BindingMap,
+    binding_map: naga::back::spv::BindingMap,
 }
 
 impl crate::DynPipelineLayout for PipelineLayout {}
@@ -954,16 +848,97 @@ impl Temp {
     }
 }
 
+/// Generates unique IDs for each resource of type `T`.
+///
+/// Because vk handles are not permanently unique, this
+/// provides a way to generate unique IDs for each resource.
+struct ResourceIdentityFactory<T> {
+    #[cfg(not(target_has_atomic = "64"))]
+    next_id: Mutex<u64>,
+    #[cfg(target_has_atomic = "64")]
+    next_id: core::sync::atomic::AtomicU64,
+    _phantom: PhantomData<T>,
+}
+
+impl<T> ResourceIdentityFactory<T> {
+    fn new() -> Self {
+        Self {
+            #[cfg(not(target_has_atomic = "64"))]
+            next_id: Mutex::new(0),
+            #[cfg(target_has_atomic = "64")]
+            next_id: core::sync::atomic::AtomicU64::new(0),
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Returns a new unique ID for a resource of type `T`.
+    fn next(&self) -> ResourceIdentity<T> {
+        #[cfg(not(target_has_atomic = "64"))]
+        {
+            let mut next_id = self.next_id.lock();
+            let id = *next_id;
+            *next_id += 1;
+            ResourceIdentity {
+                id,
+                _phantom: PhantomData,
+            }
+        }
+
+        #[cfg(target_has_atomic = "64")]
+        ResourceIdentity {
+            id: self
+                .next_id
+                .fetch_add(1, core::sync::atomic::Ordering::Relaxed),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+/// A unique identifier for a resource of type `T`.
+///
+/// This is used as a hashable key for resources, which
+/// is permanently unique through the lifetime of the program.
+#[derive(Debug, Copy, Clone, Eq, Hash, PartialEq)]
+struct ResourceIdentity<T> {
+    id: u64,
+    _phantom: PhantomData<T>,
+}
+
 #[derive(Clone, Eq, Hash, PartialEq)]
 struct FramebufferKey {
     raw_pass: vk::RenderPass,
-    attachments: ArrayVec<vk::ImageView, { MAX_TOTAL_ATTACHMENTS }>,
+    /// Because this is used as a key in a hash map, we need to include the identity
+    /// so that this hashes differently, even if the ImageView handles are the same
+    /// between different views.
+    attachment_identities: ArrayVec<ResourceIdentity<vk::ImageView>, { MAX_TOTAL_ATTACHMENTS }>,
+    /// While this is redundant for calculating the hash, we need access to an array
+    /// of all the raw ImageViews when we are creating the actual framebuffer,
+    /// so we store this here.
+    attachment_views: ArrayVec<vk::ImageView, { MAX_TOTAL_ATTACHMENTS }>,
     extent: wgt::Extent3d,
+}
+
+impl FramebufferKey {
+    fn push_view(&mut self, view: IdentifiedTextureView) {
+        self.attachment_identities.push(view.identity);
+        self.attachment_views.push(view.raw);
+    }
+}
+
+/// A texture view paired with its identity.
+#[derive(Copy, Clone)]
+struct IdentifiedTextureView {
+    raw: vk::ImageView,
+    identity: ResourceIdentity<vk::ImageView>,
 }
 
 #[derive(Clone, Eq, Hash, PartialEq)]
 struct TempTextureViewKey {
     texture: vk::Image,
+    /// As this is used in a hashmap, we need to
+    /// include the identity so that this hashes differently,
+    /// even if the Image handles are the same between different images.
+    texture_identity: ResourceIdentity<vk::Image>,
     format: vk::Format,
     mip_level: u32,
     depth_slice: u32,
@@ -1006,9 +981,11 @@ pub struct CommandEncoder {
     end_of_pass_timer_query: Option<(vk::QueryPool, u32)>,
 
     framebuffers: FastHashMap<FramebufferKey, vk::Framebuffer>,
-    temp_texture_views: FastHashMap<TempTextureViewKey, vk::ImageView>,
+    temp_texture_views: FastHashMap<TempTextureViewKey, IdentifiedTextureView>,
 
     counters: Arc<wgt::HalCounters>,
+
+    current_pipeline_is_multiview: bool,
 }
 
 impl Drop for CommandEncoder {
@@ -1035,7 +1012,7 @@ impl Drop for CommandEncoder {
         }
 
         for (_, view) in self.temp_texture_views.drain() {
-            unsafe { self.device.raw.destroy_image_view(view, None) };
+            unsafe { self.device.raw.destroy_image_view(view.raw, None) };
         }
 
         self.counters.command_encoders.sub(1);
@@ -1081,6 +1058,7 @@ impl crate::DynShaderModule for ShaderModule {}
 #[derive(Debug)]
 pub struct RenderPipeline {
     raw: vk::Pipeline,
+    is_multiview: bool,
 }
 
 impl crate::DynRenderPipeline for RenderPipeline {}
@@ -1262,18 +1240,18 @@ impl crate::Queue for Queue {
     ) -> Result<(), crate::DeviceError> {
         let mut fence_raw = vk::Fence::null();
 
-        let mut wait_stage_masks = Vec::new();
-        let mut wait_semaphores = Vec::new();
-        let mut signal_semaphores = SemaphoreList::default();
+        let mut wait_semaphores = SemaphoreList::new(SemaphoreListMode::Wait);
+        let mut signal_semaphores = SemaphoreList::new(SemaphoreListMode::Signal);
 
         // Double check that the same swapchain image isn't being given to us multiple times,
         // as that will deadlock when we try to lock them all.
         debug_assert!(
             {
                 let mut check = HashSet::with_capacity(surface_textures.len());
-                // We compare the Arcs by pointer, as Eq isn't well defined for SurfaceSemaphores.
+                // We compare the Box by pointer, as Eq isn't well defined for SurfaceSemaphores.
                 for st in surface_textures {
-                    check.insert(Arc::as_ptr(&st.surface_semaphores));
+                    let ptr: *const () = <*const _>::cast(&*st.metadata);
+                    check.insert(ptr as usize);
                 }
                 check.len() == surface_textures.len()
             },
@@ -1282,28 +1260,23 @@ impl crate::Queue for Queue {
 
         let locked_swapchain_semaphores = surface_textures
             .iter()
-            .map(|st| {
-                st.surface_semaphores
-                    .try_lock()
-                    .expect("Failed to lock surface semaphore.")
-            })
+            .map(|st| st.metadata.get_semaphore_guard())
             .collect::<Vec<_>>();
 
-        for mut swapchain_semaphore in locked_swapchain_semaphores {
-            swapchain_semaphore.set_used_fence_value(signal_value);
+        for mut semaphores in locked_swapchain_semaphores {
+            semaphores.set_used_fence_value(signal_value);
 
             // If we're the first submission to operate on this image, wait on
             // its acquire semaphore, to make sure the presentation engine is
             // done with it.
-            if let Some(sem) = swapchain_semaphore.get_acquire_wait_semaphore() {
-                wait_stage_masks.push(vk::PipelineStageFlags::TOP_OF_PIPE);
-                wait_semaphores.push(sem);
+            if let Some(sem) = semaphores.get_acquire_wait_semaphore() {
+                wait_semaphores.push_wait(sem, vk::PipelineStageFlags::TOP_OF_PIPE);
             }
 
             // Get a semaphore to signal when we're done writing to this surface
             // image. Presentation of this image will wait for this.
-            let signal_semaphore = swapchain_semaphore.get_submit_signal_semaphore(&self.device)?;
-            signal_semaphores.push_binary(signal_semaphore);
+            let signal_semaphore = semaphores.get_submit_signal_semaphore(&self.device)?;
+            signal_semaphores.push_signal(signal_semaphore);
         }
 
         let mut guard = self.signal_semaphores.lock();
@@ -1316,17 +1289,19 @@ impl crate::Queue for Queue {
         let semaphore_state = self.relay_semaphores.lock().advance(&self.device)?;
 
         if let Some(sem) = semaphore_state.wait {
-            wait_stage_masks.push(vk::PipelineStageFlags::TOP_OF_PIPE);
-            wait_semaphores.push(sem);
+            wait_semaphores.push_wait(
+                SemaphoreType::Binary(sem),
+                vk::PipelineStageFlags::TOP_OF_PIPE,
+            );
         }
 
-        signal_semaphores.push_binary(semaphore_state.signal);
+        signal_semaphores.push_signal(SemaphoreType::Binary(semaphore_state.signal));
 
         // We need to signal our wgpu::Fence if we have one, this adds it to the signal list.
         signal_fence.maintain(&self.device.raw)?;
         match *signal_fence {
             Fence::TimelineSemaphore(raw) => {
-                signal_semaphores.push_timeline(raw, signal_value);
+                signal_semaphores.push_signal(SemaphoreType::Timeline(raw, signal_value));
             }
             Fence::FencePool {
                 ref mut active,
@@ -1352,13 +1327,13 @@ impl crate::Queue for Queue {
             .collect::<Vec<_>>();
 
         let mut vk_info = vk::SubmitInfo::default().command_buffers(&vk_cmd_buffers);
-
-        vk_info = vk_info
-            .wait_semaphores(&wait_semaphores)
-            .wait_dst_stage_mask(&wait_stage_masks);
-
         let mut vk_timeline_info = mem::MaybeUninit::uninit();
-        vk_info = signal_semaphores.add_to_submit(vk_info, &mut vk_timeline_info);
+        vk_info = SemaphoreList::add_to_submit(
+            &mut wait_semaphores,
+            &mut signal_semaphores,
+            vk_info,
+            &mut vk_timeline_info,
+        );
 
         profiling::scope!("vkQueueSubmit");
         unsafe {
@@ -1376,54 +1351,8 @@ impl crate::Queue for Queue {
         texture: SurfaceTexture,
     ) -> Result<(), crate::SurfaceError> {
         let mut swapchain = surface.swapchain.write();
-        let ssc = swapchain.as_mut().unwrap();
-        let mut swapchain_semaphores = texture.surface_semaphores.lock();
 
-        let swapchains = [ssc.raw];
-        let image_indices = [texture.index];
-        let vk_info = vk::PresentInfoKHR::default()
-            .swapchains(&swapchains)
-            .image_indices(&image_indices)
-            .wait_semaphores(swapchain_semaphores.get_present_wait_semaphores());
-
-        let mut display_timing;
-        let present_times;
-        let vk_info = if let Some(present_time) = ssc.next_present_time.take() {
-            debug_assert!(
-                ssc.device
-                    .features
-                    .contains(wgt::Features::VULKAN_GOOGLE_DISPLAY_TIMING),
-                "`next_present_time` should only be set if `VULKAN_GOOGLE_DISPLAY_TIMING` is enabled"
-            );
-            present_times = [present_time];
-            display_timing = vk::PresentTimesInfoGOOGLE::default().times(&present_times);
-            // SAFETY: We know that VK_GOOGLE_display_timing is present because of the safety contract on `next_present_time`.
-            vk_info.push_next(&mut display_timing)
-        } else {
-            vk_info
-        };
-
-        let suboptimal = {
-            profiling::scope!("vkQueuePresentKHR");
-            unsafe { self.swapchain_fn.queue_present(self.raw, &vk_info) }.map_err(|error| {
-                match error {
-                    vk::Result::ERROR_OUT_OF_DATE_KHR => crate::SurfaceError::Outdated,
-                    vk::Result::ERROR_SURFACE_LOST_KHR => crate::SurfaceError::Lost,
-                    // We don't use VK_EXT_full_screen_exclusive
-                    // VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT
-                    _ => map_host_device_oom_and_lost_err(error).into(),
-                }
-            })?
-        };
-        if suboptimal {
-            // We treat `VK_SUBOPTIMAL_KHR` as `VK_SUCCESS` on Android.
-            // On Android 10+, libvulkan's `vkQueuePresentKHR` implementation returns `VK_SUBOPTIMAL_KHR` if not doing pre-rotation
-            // (i.e `VkSwapchainCreateInfoKHR::preTransform` not being equal to the current device orientation).
-            // This is always the case when the device orientation is anything other than the identity one, as we unconditionally use `VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR`.
-            #[cfg(not(target_os = "android"))]
-            log::warn!("Suboptimal present of frame {}", texture.index);
-        }
-        Ok(())
+        unsafe { swapchain.as_mut().unwrap().present(self, texture) }
     }
 
     unsafe fn get_timestamp_period(&self) -> f32 {
@@ -1439,9 +1368,9 @@ impl Queue {
     pub fn add_signal_semaphore(&self, semaphore: vk::Semaphore, semaphore_value: Option<u64>) {
         let mut guard = self.signal_semaphores.lock();
         if let Some(value) = semaphore_value {
-            guard.push_timeline(semaphore, value);
+            guard.push_signal(SemaphoreType::Timeline(semaphore, value));
         } else {
-            guard.push_binary(semaphore);
+            guard.push_signal(SemaphoreType::Binary(semaphore));
         }
     }
 }

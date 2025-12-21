@@ -76,7 +76,7 @@ OpDecorate %77 BuiltIn Position
 %29 = OpTypePointer Output %6
 %28 = OpVariable  %29  Output
 %31 = OpTypeFunction %2
-%32 = OpConstant  %3  0.0
+%32 = OpConstant  %3  0
 %33 = OpConstantComposite  %6  %32 %32 %32 %32
 %37 = OpVariable  %23  Input
 %39 = OpVariable  %26  Input

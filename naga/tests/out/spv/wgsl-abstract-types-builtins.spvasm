@@ -12,7 +12,7 @@ OpExecutionMode %6 LocalSize 1 1 1
 %4 = OpTypeFloat 32
 %7 = OpTypeFunction %2
 %8 = OpConstant  %3  1
-%9 = OpConstant  %4  1.0
+%9 = OpConstant  %4  1
 %11 = OpTypePointer Function %3
 %13 = OpTypePointer Function %4
 %6 = OpFunction  %2  None %7

@@ -138,10 +138,6 @@ class Navigator {
   constructor() {
     webidl.illegalConstructor();
   }
-
-  [Symbol.for("Deno.customInspect")](inspect) {
-    return `${this.constructor.name} ${inspect({})}`;
-  }
 }
 const NavigatorPrototype = Navigator.prototype;
 
@@ -220,11 +216,32 @@ const windowOrWorkerGlobalScope = {
   GPURenderBundle: util.nonEnumerable(webgpu.GPURenderBundle),
   GPUQuerySet: util.nonEnumerable(webgpu.GPUQuerySet),
   GPUError: util.nonEnumerable(webgpu.GPUError),
+  GPUInternalError: util.nonEnumerable(webgpu.GPUInternalError),
   GPUValidationError: util.nonEnumerable(webgpu.GPUValidationError),
   GPUOutOfMemoryError: util.nonEnumerable(webgpu.GPUOutOfMemoryError),
+  GPUUncapturedErrorEvent: util.nonEnumerable(webgpu.GPUUncapturedErrorEvent),
 };
 
 windowOrWorkerGlobalScope.console.enumerable = false;
+
+// Print uncaptured WebGPU errors to stderr. This is useful when running
+// standalone JavaScript test snippets. It isn't needed for the CTS, because the
+// CTS uses error scopes. (The CTS also installs its own error handler with
+// `addEventListener`, so having this here may result in printing duplicate
+// errors from the CTS in some cases.) Printing uncaptured errors to stderr
+// isn't desired as built-in behavior in Deno, because the console is reserved
+// for the application.
+//
+// Note that catching an error here _does not_ result in a non-zero exit status.
+const requestDevice = webgpu.GPUAdapter.prototype.requestDevice;
+webgpu.GPUAdapter.prototype.requestDevice = function(desc) {
+    return requestDevice.call(this, desc).then((device) => {
+        device.onuncapturederror = (event) => {
+            core.print("cts_runner caught WebGPU error:" + event.error.message, true);
+        };
+        return device;
+    })
+};
 
 const mainRuntimeGlobalProperties = {
   Window: globalInterfaces.windowConstructorDescriptor,

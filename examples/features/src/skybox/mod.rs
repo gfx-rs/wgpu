@@ -80,7 +80,7 @@ impl Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TRANSIENT,
             label: None,
             view_formats: &[],
         });
@@ -187,7 +187,7 @@ impl crate::framework::Example for Example {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         // Create the render pipelines
@@ -218,7 +218,7 @@ impl crate::framework::Example for Example {
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
         let entity_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -252,7 +252,7 @@ impl crate::framework::Example for Example {
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -263,7 +263,7 @@ impl crate::framework::Example for Example {
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
-            mipmap_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
             ..Default::default()
         });
 
@@ -299,11 +299,7 @@ impl crate::framework::Example for Example {
         let max_mips = layer_size.max_mips(wgpu::TextureDimension::D2);
 
         log::debug!(
-            "Copying {:?} skybox images of size {}, {}, 6 with {} mips to gpu",
-            skybox_format,
-            IMAGE_SIZE,
-            IMAGE_SIZE,
-            max_mips,
+            "Copying {skybox_format:?} skybox images of size {IMAGE_SIZE}, {IMAGE_SIZE}, 6 with {max_mips} mips to gpu",
         );
 
         let bytes = match skybox_format {
@@ -376,7 +372,7 @@ impl crate::framework::Example for Example {
             uniform_buf,
             entities,
             depth_view,
-            staging_belt: wgpu::util::StagingBelt::new(0x100),
+            staging_belt: wgpu::util::StagingBelt::new(device.clone(), 0x100),
         }
     }
 
@@ -415,7 +411,6 @@ impl crate::framework::Example for Example {
                 &self.uniform_buf,
                 0,
                 wgpu::BufferSize::new((raw_uniforms.len() * 4) as wgpu::BufferAddress).unwrap(),
-                device,
             )
             .copy_from_slice(bytemuck::cast_slice(&raw_uniforms));
 
@@ -448,6 +443,7 @@ impl crate::framework::Example for Example {
                 }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
 
             rpass.set_bind_group(0, &self.bind_group, &[]);
@@ -474,7 +470,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox",
     image_path: "/examples/features/src/skybox/screenshot.png",
     width: 1024,
@@ -489,7 +485,7 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST_BCN: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST_BCN: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox-bc7",
     image_path: "/examples/features/src/skybox/screenshot_bc7.png",
     width: 1024,
@@ -502,26 +498,26 @@ static TEST_BCN: crate::framework::ExampleTestParams = crate::framework::Example
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST_ETC2: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST_ETC2: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox-etc2",
     image_path: "/examples/features/src/skybox/screenshot_etc2.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::TEXTURE_COMPRESSION_ETC2,
     base_test_parameters: wgpu_test::TestParameters::default(),
-    comparisons: &[wgpu_test::ComparisonType::Mean(0.015)],
+    comparisons: &[wgpu_test::ComparisonType::Mean(0.016)], // Bounded by Apple A9
     _phantom: std::marker::PhantomData::<Example>,
 };
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST_ASTC: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST_ASTC: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "skybox-astc",
     image_path: "/examples/features/src/skybox/screenshot_astc.png",
     width: 1024,
     height: 768,
     optional_features: wgpu::Features::TEXTURE_COMPRESSION_ASTC,
     base_test_parameters: wgpu_test::TestParameters::default(),
-    comparisons: &[wgpu_test::ComparisonType::Mean(0.016)],
+    comparisons: &[wgpu_test::ComparisonType::Mean(0.017)], // Bounded by Apple A9
     _phantom: std::marker::PhantomData::<Example>,
 };

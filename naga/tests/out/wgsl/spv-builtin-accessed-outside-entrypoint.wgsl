@@ -8,7 +8,7 @@ struct gl_PerVertex {
 var<private> unnamed: gl_PerVertex = gl_PerVertex(vec4<f32>(0f, 0f, 0f, 1f), 1f, array<f32, 1>(), array<f32, 1>());
 var<private> gl_VertexIndex_1: i32;
 
-fn builtin_usage() {
+fn builtin_usage_u0028_() {
     let _e9 = gl_VertexIndex_1;
     let _e12 = gl_VertexIndex_1;
     unnamed.gl_Position = vec4<f32>(select(1f, -4f, (_e9 == 0i)), select(-1f, 4f, (_e12 == 2i)), 0f, 1f);
@@ -16,7 +16,7 @@ fn builtin_usage() {
 }
 
 fn main_1() {
-    builtin_usage();
+    builtin_usage_u0028_();
     return;
 }
 

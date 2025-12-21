@@ -158,7 +158,7 @@ impl crate::framework::Example for Example {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         // Create the texture
@@ -256,7 +256,7 @@ impl crate::framework::Example for Example {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -298,7 +298,7 @@ impl crate::framework::Example for Example {
                 },
                 depth_stencil: None,
                 multisample: wgpu::MultisampleState::default(),
-                multiview: None,
+                multiview_mask: None,
                 cache: None,
             });
             Some(pipeline_wire)
@@ -356,6 +356,7 @@ impl crate::framework::Example for Example {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             rpass.push_debug_group("Prepare data for draw.");
             rpass.set_pipeline(&self.pipeline);
@@ -381,7 +382,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "cube",
     // Generated on 1080ti on Vk/Windows
     image_path: "/examples/features/src/cube/screenshot.png",
@@ -390,14 +391,14 @@ static TEST: crate::framework::ExampleTestParams = crate::framework::ExampleTest
     optional_features: wgpu::Features::default(),
     base_test_parameters: wgpu_test::TestParameters::default(),
     comparisons: &[
-        wgpu_test::ComparisonType::Mean(0.04), // Bounded by Intel 630 on Vk/Windows
+        wgpu_test::ComparisonType::Mean(0.041), // Bounded by Apple A9
     ],
     _phantom: std::marker::PhantomData::<Example>,
 };
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST_LINES: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST_LINES: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "cube-lines",
     // Generated on 1080ti on Vk/Windows
     image_path: "/examples/features/src/cube/screenshot-lines.png",

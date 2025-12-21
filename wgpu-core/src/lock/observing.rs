@@ -71,7 +71,7 @@ impl<T> Mutex<T> {
     }
 
     #[track_caller]
-    pub fn lock(&self) -> MutexGuard<T> {
+    pub fn lock(&self) -> MutexGuard<'_, T> {
         let saved = acquire(self.rank, Location::caller());
         MutexGuard {
             inner: self.inner.lock(),
@@ -146,7 +146,7 @@ impl<T> RwLock<T> {
     }
 
     #[track_caller]
-    pub fn read(&self) -> RwLockReadGuard<T> {
+    pub fn read(&self) -> RwLockReadGuard<'_, T> {
         let saved = acquire(self.rank, Location::caller());
         RwLockReadGuard {
             inner: self.inner.read(),
@@ -155,7 +155,7 @@ impl<T> RwLock<T> {
     }
 
     #[track_caller]
-    pub fn write(&self) -> RwLockWriteGuard<T> {
+    pub fn write(&self) -> RwLockWriteGuard<'_, T> {
         let saved = acquire(self.rank, Location::caller());
         RwLockWriteGuard {
             inner: self.inner.write(),
@@ -294,13 +294,10 @@ fn acquire(new_rank: LockRank, location: &'static Location<'static>) -> Option<H
                 log.write_acquisition(held_lock, new_rank, location);
             }
 
-            core::mem::replace(
-                held_lock,
-                Some(HeldLock {
-                    rank: new_rank,
-                    location,
-                }),
-            )
+            held_lock.replace(HeldLock {
+                rank: new_rank,
+                location,
+            })
         }
     })
 }

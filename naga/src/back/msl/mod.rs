@@ -43,6 +43,29 @@ additional effort and the difference is unlikely to matter.)
 
 [`BoundsCheckPolicy`]: crate::proc::BoundsCheckPolicy
 
+## External textures
+
+Support for [`crate::ImageClass::External`] textures is implemented by lowering
+each external texture global variable to 3 `texture2d<float, sample>`s, and a
+constant buffer of type `NagaExternalTextureParams`. This provides up to 3
+planes of texture data (for example single planar RGBA, or separate Y, Cb, and
+Cr planes), and the parameters buffer containing information describing how to
+handle these correctly. The bind target to use for each of these globals is
+specified via the [`BindTarget::external_texture`] field of the relevant
+entries in [`EntryPointResources::resources`].
+
+External textures are supported by WGSL's `textureDimensions()`,
+`textureLoad()`, and `textureSampleBaseClampToEdge()` built-in functions. These
+are implemented using helper functions. See the following functions for how
+these are generated:
+ * `Writer::write_wrapped_image_query`
+ * `Writer::write_wrapped_image_load`
+ * `Writer::write_wrapped_image_sample`
+
+The lowered global variables for each external texture global are passed to the
+entry point as separate arguments (see "Entry points" above). However, they are
+then wrapped in a struct to allow them to be conveniently passed to user
+defined and helper functions. See `writer::EXTERNAL_TEXTURE_WRAPPER_STRUCT`.
 */
 
 use alloc::{
@@ -71,6 +94,19 @@ pub enum BindSamplerTarget {
     Inline(InlineSamplerIndex),
 }
 
+/// Binding information for a Naga [`External`] image global variable.
+///
+/// See the module documentation's section on external textures for details.
+///
+/// [`External`]: crate::ir::ImageClass::External
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct BindExternalTextureTarget {
+    pub planes: [Slot; 3],
+    pub params: Slot,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
@@ -79,12 +115,12 @@ pub struct BindTarget {
     pub buffer: Option<Slot>,
     pub texture: Option<Slot>,
     pub sampler: Option<BindSamplerTarget>,
+    pub external_texture: Option<BindExternalTextureTarget>,
     pub mutable: bool,
 }
 
-#[cfg(any(feature = "serialize", feature = "deserialize"))]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg(feature = "deserialize")]
+#[derive(serde::Deserialize)]
 struct BindingMapSerialization {
     resource_binding: crate::ResourceBinding,
     bind_target: BindTarget,
@@ -119,7 +155,7 @@ pub struct EntryPointResources {
     )]
     pub resources: BindingMap,
 
-    pub push_constant_buffer: Option<Slot>,
+    pub immediates_buffer: Option<Slot>,
 
     /// The slot of a buffer that contains an array of `u32`,
     /// one for the size of each bound buffer that contains a runtime array,
@@ -211,8 +247,8 @@ pub enum EntryPointError {
     MissingBinding(String),
     #[error("mapping of {0:?} is missing")]
     MissingBindTarget(crate::ResourceBinding),
-    #[error("mapping for push constants is missing")]
-    MissingPushConstants,
+    #[error("mapping for immediates is missing")]
+    MissingImmediateData,
     #[error("mapping for sizes buffer is missing")]
     MissingSizesBuffer,
 }
@@ -381,6 +417,17 @@ pub enum VertexFormat {
     Unorm8x4Bgra = 44,
 }
 
+/// Defines how to advance the data in vertex buffers.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub enum VertexBufferStepMode {
+    Constant,
+    #[default]
+    ByVertex,
+    ByInstance,
+}
+
 /// A mapping of vertex buffers and their attributes to shader
 /// locations.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -409,9 +456,8 @@ pub struct VertexBufferMapping {
     pub id: u32,
     /// Size of the structure in bytes
     pub stride: u32,
-    /// True if the buffer is indexed by vertex, false if indexed
-    /// by instance.
-    pub indexed_by_vertex: bool,
+    /// Vertex buffer step mode
+    pub step_mode: VertexBufferStepMode,
     /// Vec of the attributes within the structure
     pub attributes: Vec<AttributeMapping>,
 }
@@ -480,9 +526,20 @@ impl Options {
                         return Err(Error::UnsupportedAttribute("instance_id".to_string()));
                     }
                     // macOS: Since Metal 2.2
-                    // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/naga/issues/2164)
-                    crate::BuiltIn::PrimitiveIndex if self.lang_version < (2, 2) => {
+                    // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/wgpu/issues/4414)
+                    crate::BuiltIn::PrimitiveIndex if self.lang_version < (2, 3) => {
                         return Err(Error::UnsupportedAttribute("primitive_id".to_string()));
+                    }
+                    // macOS: since Metal 2.3
+                    // iOS: Since Metal 2.2
+                    // https://developer.apple.com/metal/Metal-Shading-Language-Specification.pdf#page=114
+                    crate::BuiltIn::ViewIndex if self.lang_version < (2, 2) => {
+                        return Err(Error::UnsupportedAttribute("amplification_id".to_string()));
+                    }
+                    // macOS: Since Metal 2.2
+                    // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/wgpu/issues/4414)
+                    crate::BuiltIn::Barycentric if self.lang_version < (2, 3) => {
+                        return Err(Error::UnsupportedAttribute("barycentric_coord".to_string()));
                     }
                     _ => {}
                 }
@@ -494,6 +551,7 @@ impl Options {
                 interpolation,
                 sampling,
                 blend_src,
+                per_primitive: _,
             } => match mode {
                 LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(location)),
                 LocationMode::FragmentOutput => {
@@ -560,13 +618,13 @@ impl Options {
         }
     }
 
-    fn resolve_push_constants(
+    fn resolve_immediates(
         &self,
         ep: &crate::EntryPoint,
     ) -> Result<ResolvedBinding, EntryPointError> {
         let slot = self
             .get_entry_point_resources(ep)
-            .and_then(|res| res.push_constant_buffer);
+            .and_then(|res| res.immediates_buffer);
         match slot {
             Some(slot) => Ok(ResolvedBinding::Resource(BindTarget {
                 buffer: Some(slot),
@@ -577,7 +635,7 @@ impl Options {
                 index: 0,
                 interpolation: None,
             }),
-            None => Err(EntryPointError::MissingPushConstants),
+            None => Err(EntryPointError::MissingImmediateData),
         }
     }
 
@@ -622,6 +680,7 @@ impl ResolvedBinding {
                 let name = match built_in {
                     Bi::Position { invariant: false } => "position",
                     Bi::Position { invariant: true } => "position, invariant",
+                    Bi::ViewIndex => "amplification_id",
                     // vertex
                     Bi::BaseInstance => "base_instance",
                     Bi::BaseVertex => "base_vertex",
@@ -634,6 +693,7 @@ impl ResolvedBinding {
                     Bi::PointCoord => "point_coord",
                     Bi::FrontFacing => "front_facing",
                     Bi::PrimitiveIndex => "primitive_id",
+                    Bi::Barycentric => "barycentric_coord",
                     Bi::SampleIndex => "sample_id",
                     Bi::SampleMask => "sample_mask",
                     // compute
@@ -648,9 +708,17 @@ impl ResolvedBinding {
                     Bi::SubgroupId => "simdgroup_index_in_threadgroup",
                     Bi::SubgroupSize => "threads_per_simdgroup",
                     Bi::SubgroupInvocationId => "thread_index_in_simdgroup",
-                    Bi::CullDistance | Bi::ViewIndex | Bi::DrawID => {
+                    Bi::CullDistance | Bi::DrawID => {
                         return Err(Error::UnsupportedBuiltIn(built_in))
                     }
+                    Bi::CullPrimitive => "primitive_culled",
+                    // TODO: figure out how to make this written as a function call
+                    Bi::PointIndex | Bi::LineIndices | Bi::TriangleIndices => unimplemented!(),
+                    Bi::MeshTaskSize
+                    | Bi::VertexCount
+                    | Bi::PrimitiveCount
+                    | Bi::Vertices
+                    | Bi::Primitives => unreachable!(),
                 };
                 write!(out, "{name}")?;
             }

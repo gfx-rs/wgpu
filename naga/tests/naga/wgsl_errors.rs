@@ -1,9 +1,20 @@
-/*!
-Tests for the WGSL front end.
-*/
-#![cfg(feature = "wgsl-in")]
+//! Tests for the WGSL front end.
+//!
+//! This file also contains some tests of the module validator. In some cases,
+//! the validator and the frontend both raise an error, and it is easier to
+//! have both tests in one place. In other cases, it might be more appropriate
+//! for the validator tests to be in the `validation` test suite.
 
-use naga::{compact::KeepUnused, valid::Capabilities};
+#![cfg(feature = "wgsl-in")]
+#![allow(
+    // We need to investigate these.
+    clippy::result_large_err
+)]
+
+use naga::{
+    compact::KeepUnused,
+    valid::{self, Capabilities},
+};
 
 #[track_caller]
 fn check(input: &str, snapshot: &str) {
@@ -943,50 +954,6 @@ fn matrix_constructor_inferred() {
     );
 }
 
-#[test]
-fn float16_requires_enable() {
-    check(
-        r#"
-            const a: f16 = 1.0;
-        "#,
-        r#"error: the `f16` enable extension is not enabled
-  ┌─ wgsl:2:22
-  │
-2 │             const a: f16 = 1.0;
-  │                      ^^^ the `f16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
-  │
-  = note: You can enable this extension by adding `enable f16;` at the top of the shader, before any other items.
-
-"#,
-    );
-
-    check(
-        r#"
-            const a = 1.0h;
-        "#,
-        r#"error: the `f16` enable extension is not enabled
-  ┌─ wgsl:2:23
-  │
-2 │             const a = 1.0h;
-  │                       ^^^^ the `f16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
-  │
-  = note: You can enable this extension by adding `enable f16;` at the top of the shader, before any other items.
-
-"#,
-    );
-}
-
-#[test]
-fn multiple_enables_valid() {
-    check_success(
-        r#"
-            enable f16;
-            enable f16;
-            const a: f16 = 1.0h;
-        "#,
-    );
-}
-
 /// Check the result of validating a WGSL program against a pattern.
 ///
 /// Unless you are generating code programmatically, the
@@ -1035,6 +1002,125 @@ macro_rules! check_one_validation {
     }
 }
 
+/// Test validation of required extensions and capabilities.
+///
+/// This tests that the shader is rejected either if the required extension is
+/// not declared in an `enable` directive, or if the validator is configured
+/// without the required capability.
+///
+/// For the first case, we use the supplied test case source verbatim (which
+/// should not include the `enable` directive), and check for a parse error
+/// matching the expected error message text. For the second case, we add the
+/// `enable` directive to the supplied test case, and check for a validation
+/// error matching the expected pattern.
+///
+/// The WGSL frontend is not the only way of producing Naga IR, and the
+/// validator must reject an invalid module however produced. So it is important
+/// that the validator check for missing capabilities. Checking missing
+/// extensions in the frontend as well can produce better error messages or
+/// simplify implementation of the frontend by eliminating some cases of invalid
+/// programs earlier.
+///
+/// Multiple capabilities can be specified in the macro argument in the case
+/// where any one of them grants access to a feature (e.g. `SUBGROUP` and
+/// `SUBGROUP_BARRIER` for `subgroupBarrier`). When passing multiple capabilities,
+/// all of the passed capabilities must be covered by the same enable-extension.
+///
+/// NOTE: The only reason we don't use a function for this is because we need to syntactically
+/// re-use `$val_err_pat`.
+macro_rules! check_extension_validation {
+    ( $caps:expr, $source:expr, $parse_err:expr, $val_err_pat:pat ) => {
+        let caps = $caps;
+        let source = $source;
+        let mut ext = None;
+        for cap in caps.iter() {
+            match cap.extension() {
+                Some(this_ext) if ext.is_none() => ext = Some(this_ext),
+                Some(this_ext) if ext.is_some_and(|ext| ext != this_ext) => {
+                    panic!(
+                        concat!(
+                            "the capabilities {:?} in `check_extension_validation` ",
+                            "are not all covered by the same extension ",
+                            "(found both {:?} and {:?})",
+                        ),
+                        caps, ext, this_ext,
+                    );
+                }
+                _ => {}
+            }
+        }
+        let Some(ext) = ext else {
+            panic!(
+                concat!(
+                    "None of the capabilities {:?} in `check_extension_validation` ",
+                    "are associated with an extension. ",
+                    "Use `check_validation!` to check validator behavior ",
+                    "when there isn't a corresponding parse error.",
+                ),
+                caps
+            );
+        };
+        let directive = format!(
+            "enable {};",
+            naga::front::wgsl::EnableExtension::Implemented(ext).to_ident()
+        );
+        assert!(
+            !source.contains(&directive),
+            "test case for `check_extension_validation!` should not contain the enable directive",
+        );
+
+        // First check, for the expected WGSL parse error when extension is not enabled
+        check(&source, $parse_err);
+        let source_with_enable = format!("{directive}\n{source}");
+        let module = match naga::front::wgsl::parse_str(&source_with_enable) {
+            Ok(module) => module,
+            Err(err) => {
+                eprintln!("WGSL parse failed:");
+                panic!("{}", err.emit_to_string(source));
+            }
+        };
+
+        // Second check, for the expected validation error when the capability is not present
+        let error = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), !caps)
+            .validate(&module)
+            .map_err(|e| e.into_inner()); // TODO(https://github.com/gfx-rs/wgpu/issues/8153): Add tests for spans
+        #[allow(clippy::redundant_pattern_matching)]
+        if !matches!(&error, $val_err_pat) {
+            eprintln!(
+                concat!(
+                    "validation error without {:?} does not match pattern:\n",
+                    "source code: {}\n",
+                    "\n",
+                    "actual result:\n",
+                    "{:#?}\n",
+                    "\n",
+                    "expected match for pattern:\n",
+                    "{}",
+                ),
+                caps,
+                &source,
+                error,
+                stringify!($val_err_pat)
+            );
+            panic!("validation error does not match pattern");
+        }
+
+        // Also check that when multiple capabililiites can enable a feature,
+        // any one of them is sufficient.
+        if !caps.bits().is_power_of_two() {
+            for cap in caps.iter() {
+                let res = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), cap)
+                    .validate(&module);
+
+                match res {
+                    Ok(_) => {}
+                    Err(err) => panic!("Module did not validate with only {cap:?}: {err:?}"),
+                }
+            }
+        }
+    };
+}
+
 macro_rules! check_validation {
     // We want to support an optional guard expression after the pattern, so
     // that we can check values we can't match against, like strings.
@@ -1077,7 +1163,17 @@ fn validation_error(
     };
     naga::valid::Validator::new(naga::valid::ValidationFlags::all(), caps)
         .validate(&module)
-        .map_err(|e| e.into_inner()) // TODO: Add tests for spans, too?
+        .map_err(|e| e.into_inner()) // TODO(https://github.com/gfx-rs/wgpu/issues/8153): Add tests for spans
+}
+
+/// Check that a shader validates successfully.
+///
+/// In a few tests it is useful to check conditions where a validation error
+/// should be absent alongside conditions where it should be present. This
+/// wrapper is less confusing than `validation_error().unwrap()`.
+#[track_caller]
+fn no_validation_error(source: &str, caps: naga::valid::Capabilities) {
+    validation_error(source, caps).unwrap();
 }
 
 #[test]
@@ -1093,34 +1189,158 @@ fn int64_capability() {
 }
 
 #[test]
-fn float16_capability() {
-    check_validation! {
-        "enable f16; var input: f16;",
-        "enable f16; var input: vec2<f16>;":
+fn multiple_enables_valid() {
+    check_success(
+        r#"
+            enable f16;
+            enable f16;
+            const a: f16 = 1.0h;
+        "#,
+    );
+}
+
+#[test]
+fn float16_capability_and_enable() {
+    // A zero value expression
+    check_extension_validation! {
+        Capabilities::SHADER_FLOAT16,
+        r#"fn foo() {
+            let a = f16();
+        }
+        "#,
+        r#"error: the `f16` enable extension is not enabled
+  ┌─ wgsl:2:21
+  │
+2 │             let a = f16();
+  │                     ^^^ the `f16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable f16;` at the top of the shader, before any other items.
+
+"#,
         Err(naga::valid::ValidationError::Type {
-            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability {flag: "FLOAT16",..}),
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability { flag: "FLOAT16", .. }),
+            ..
+        })
+    }
+
+    // Literals
+    check_extension_validation! {
+        Capabilities::SHADER_FLOAT16,
+        r#"fn foo() {
+            let a = f16(1);
+        }
+        "#,
+        r#"error: the `f16` enable extension is not enabled
+  ┌─ wgsl:2:21
+  │
+2 │             let a = f16(1);
+  │                     ^^^ the `f16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable f16;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::Expression {
+                source: naga::valid::ExpressionError::Literal(
+                    naga::valid::LiteralError::Width(
+                        naga::valid::WidthError::MissingCapability { flag: "FLOAT16", .. }
+                    )
+                ),
+                ..
+            },
+            ..
+        })
+    }
+    check_extension_validation! {
+        Capabilities::SHADER_FLOAT16,
+        r#"
+            const a = 1.0h;
+        "#,
+        r#"error: the `f16` enable extension is not enabled
+  ┌─ wgsl:2:23
+  │
+2 │             const a = 1.0h;
+  │                       ^^^^ the `f16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable f16;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability { flag: "FLOAT16", .. }),
+            ..
+        })
+    }
+
+    // `f16`-typed declarations
+    check_extension_validation! {
+        Capabilities::SHADER_FLOAT16,
+        r#"
+            const a: f16 = 1.0;
+        "#,
+        r#"error: the `f16` enable extension is not enabled
+  ┌─ wgsl:2:22
+  │
+2 │             const a: f16 = 1.0;
+  │                      ^^^ the `f16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable f16;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability { flag: "FLOAT16", .. }),
+            ..
+        })
+    }
+    check_extension_validation! {
+        Capabilities::SHADER_FLOAT16,
+        "var input: f16;",
+        r#"error: the `f16` enable extension is not enabled
+  ┌─ wgsl:1:12
+  │
+1 │ var input: f16;
+  │            ^^^ the `f16` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable f16;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::WidthError(naga::valid::WidthError::MissingCapability { flag: "FLOAT16", .. }),
+            ..
+        })
+    }
+
+    // Functions that operate on `f16`-precision values stored in `f32`s.
+    check_validation! {
+        "fn foo() -> f32 { return quantizeToF16(1.0f); }",
+        "fn foo() -> u32 { return pack2x16float(vec2(1.0f, 2.0f)); }",
+        "fn foo() -> vec2<f32> { return unpack2x16float(0x7c007c00); }":
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::Expression {
+                source: naga::valid::ExpressionError::MissingCapabilities(Capabilities::SHADER_FLOAT16_IN_FLOAT32),
+                ..
+            },
             ..
         })
     }
 }
 
 #[test]
-fn float16_in_push_constant() {
+fn float16_in_immediate() {
     check_validation! {
-        "enable f16; var<push_constant> input: f16;",
-        "enable f16; var<push_constant> input: vec2<f16>;",
-        "enable f16; var<push_constant> input: mat4x4<f16>;",
-        "enable f16; struct S { a: f16 }; var<push_constant> input: S;",
-        "enable f16; struct S1 { a: f16 }; struct S2 { a : S1 } var<push_constant> input: S2;":
+        "enable f16; var<immediate> input: f16;",
+        "enable f16; var<immediate> input: vec2<f16>;",
+        "enable f16; var<immediate> input: mat4x4<f16>;",
+        "enable f16; struct S { a: f16 }; var<immediate> input: S;",
+        "enable f16; struct S1 { a: f16 }; struct S2 { a : S1 } var<immediate> input: S2;":
         Err(naga::valid::ValidationError::GlobalVariable {
-            source: naga::valid::GlobalVariableError::InvalidPushConstantType(
-                naga::valid::PushConstantError::InvalidScalar(
+            source: naga::valid::GlobalVariableError::InvalidImmediateType(
+                naga::valid::ImmediateError::InvalidScalar(
                     naga::Scalar::F16
                 )
             ),
             ..
         }),
-        naga::valid::Capabilities::SHADER_FLOAT16 | naga::valid::Capabilities::PUSH_CONSTANT
+        naga::valid::Capabilities::SHADER_FLOAT16 | naga::valid::Capabilities::IMMEDIATES
     }
 }
 
@@ -1662,37 +1882,16 @@ fn missing_bindings2() {
 
 #[test]
 fn invalid_blend_src() {
-    // Missing capability.
-    check_validation! {
+    // Missing capability or enable directive
+    check_extension_validation! {
+        Capabilities::DUAL_SOURCE_BLENDING,
         "
-        enable dual_source_blending;
         struct FragmentOutput {
             @location(0) @blend_src(0) output0: vec4<f32>,
             @location(0) @blend_src(1) output1: vec4<f32>,
         }
         @fragment
         fn main() -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(1.0)); }
-        ":
-        Err(
-            naga::valid::ValidationError::EntryPoint {
-                stage: naga::ShaderStage::Fragment,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::UnsupportedCapability(Capabilities::DUAL_SOURCE_BLENDING),
-                ),
-                ..
-            },
-        )
-    }
-
-    // Missing enable directive.
-    // Note that this is a parsing error, not a validation error.
-    check("
-        struct FragmentOutput {
-            @location(0) @blend_src(0) output0: vec4<f32>,
-            @location(0) @blend_src(1) output1: vec4<f32>,
-        }
-        @fragment
-        fn main(@builtin(position) position: vec4<f32>) -> FragmentOutput { return FragmentOutput(vec4(0.0), vec4(0.0)); }
         ",
         r###"error: the `dual_source_blending` enable extension is not enabled
   ┌─ wgsl:3:27
@@ -1703,7 +1902,16 @@ fn invalid_blend_src() {
   = note: You can enable this extension by adding `enable dual_source_blending;` at the top of the shader, before any other items.
 
 "###,
-    );
+        Err(
+            naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Fragment,
+                source: naga::valid::EntryPointError::Result(
+                    naga::valid::VaryingError::UnsupportedCapability(Capabilities::DUAL_SOURCE_BLENDING),
+                ),
+                ..
+            },
+        )
+    }
 
     // Using blend_src on an input.
     check_validation! {
@@ -2105,7 +2313,7 @@ error: type mismatch for reject and accept values in `select` call
   │
 5 │             _ = select(true, 1, false);
   │                        ^^^^  ^ accept value of type `{AbstractInt}`
-  │                        │      
+  │                        │\x20\x20\x20\x20\x20\x20
   │                        reject value of type `bool`
 
 ",
@@ -2885,6 +3093,19 @@ fn binding_array_non_struct() {
             ..
         })
     }
+
+    check_validation! {
+        r#"
+            enable wgpu_ray_query;
+            @group(0) @binding(0)
+            var<storage> ray_query_array: binding_array<ray_query, 10>;
+        "#:
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::BindingArrayBaseTypeNotStruct(_),
+            ..
+        }),
+        Capabilities::RAY_QUERY
+    }
 }
 
 #[test]
@@ -3387,6 +3608,7 @@ fn issue7165() {
         fn invalid_return_type(a: Struct) -> i32 { return a; }
     ";
 
+    // We need the span for the error, so have to invoke manually.
     let module = naga::front::wgsl::parse_str(shader).unwrap();
     let err = naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
@@ -3481,19 +3703,19 @@ fn inconsistent_type() {
         "fn foo() -> f32 {
             return dot(vec4<f32>(), vec3<f32>());
         }",
-        r#"error: inconsistent type passed as argument #2 to `dot`
+        "error: inconsistent type passed as argument #2 to `dot`
   ┌─ wgsl:2:20
   │
 2 │             return dot(vec4<f32>(), vec3<f32>());
   │                    ^^^ ^^^^^^^^^^   ^^^^^^^^^^ argument #2 has type vec3<f32>
-  │                        │             
+  │                        │\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20
   │                        this argument has type vec4<f32>, which constrains subsequent arguments
   │
   = note: Because argument #1 has type vec4<f32>, only the following types
   = note: (or types that automatically convert to them) are accepted for argument #2:
   = note: allowed type: vec4<f32>
 
-"#,
+",
     );
 }
 
@@ -3637,6 +3859,171 @@ fn const_eval_value_errors() {
 }
 
 #[test]
+fn subgroup_capability() {
+    // Some of these tests should be `check_extension_validation` tests that
+    // also check handling of the enable directive, but that handling is not
+    // currently correct. https://github.com/gfx-rs/wgpu/issues/8202
+
+    // Non-barrier subgroup operations...
+
+    // ...in fragment and compute shaders require [`Capabilities::SUBGROUP`]`.
+    for stage in [naga::ShaderStage::Fragment, naga::ShaderStage::Compute] {
+        let stage_attr = match stage {
+            naga::ShaderStage::Fragment => "@fragment",
+            naga::ShaderStage::Compute => "@compute @workgroup_size(1)",
+            _ => unreachable!(),
+        };
+        check_one_validation! {
+            &format!("
+                {stage_attr}
+                fn main() {{
+                    subgroupBallot();
+                }}
+            "),
+            Err(naga::valid::ValidationError::EntryPoint {
+                stage: err_stage,
+                source: naga::valid::EntryPointError::Function(
+                    naga::valid::FunctionError::MissingCapability(Capabilities::SUBGROUP)
+                ),
+                ..
+            }) if *err_stage == stage
+        }
+    }
+
+    // ...in fragment and compute shaders require *only* [`Capabilities::SUBGROUP`]`.
+    for stage in [naga::ShaderStage::Fragment, naga::ShaderStage::Compute] {
+        let stage_attr = match stage {
+            naga::ShaderStage::Fragment => "@fragment",
+            naga::ShaderStage::Compute => "@compute @workgroup_size(1)",
+            _ => unreachable!(),
+        };
+        no_validation_error(
+            &format!(
+                "
+                {stage_attr}
+                fn main() {{
+                    subgroupBallot();
+                }}
+            "
+            ),
+            Capabilities::SUBGROUP,
+        );
+    }
+
+    // ...in vertex shaders require both [`Capabilities::SUBGROUP`] and
+    // [`Capabilities::SUBGROUP_VERTEX_STAGE`]`. (But note that
+    // `create_validator` automatically sets `Capabilities::SUBGROUP` whenever
+    // `Features::SUBGROUP_VERTEX` is available.)
+    for cap in [Capabilities::SUBGROUP, Capabilities::SUBGROUP_VERTEX_STAGE] {
+        check_validation! {
+            "
+                @vertex
+                fn main() -> @builtin(position) vec4<f32> {{
+                    subgroupBallot();
+                    return vec4();
+                }}
+            ":
+            Err(_),
+            cap
+        }
+    }
+    no_validation_error(
+        "
+            @vertex
+            fn main() -> @builtin(position) vec4<f32> {{
+                subgroupBallot();
+                return vec4();
+            }}
+        ",
+        Capabilities::SUBGROUP | Capabilities::SUBGROUP_VERTEX_STAGE,
+    );
+
+    // Subgroup barriers...
+
+    // ...require both SUBGROUP and SUBGROUP_BARRIER.
+    for cap in [Capabilities::SUBGROUP, Capabilities::SUBGROUP_BARRIER] {
+        check_validation! {
+            r#"
+                @compute @workgroup_size(1)
+                fn main() {
+                    subgroupBarrier();
+                }
+            "#:
+            Err(naga::valid::ValidationError::EntryPoint {
+                stage: naga::ShaderStage::Compute,
+                source: naga::valid::EntryPointError::Function(
+                    naga::valid::FunctionError::MissingCapability(required_caps)
+                ),
+                ..
+            }) if *required_caps == Capabilities::SUBGROUP | Capabilities::SUBGROUP_BARRIER,
+            cap
+        }
+    }
+
+    // ...are never supported in vertex shaders.
+    check_validation! {
+        r#"
+            @vertex
+            fn main() -> @builtin(position) vec4<f32> {
+                subgroupBarrier();
+                return vec4();
+            }
+        "#:
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Vertex,
+            source: naga::valid::EntryPointError::ForbiddenStageOperations,
+            ..
+        }),
+        Capabilities::SUBGROUP | Capabilities::SUBGROUP_BARRIER | Capabilities::SUBGROUP_VERTEX_STAGE
+    }
+
+    // ...are never supported in fragment shaders.
+    check_validation! {
+        r#"
+            @fragment
+            fn main() {
+                subgroupBarrier();
+            }
+        "#:
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Fragment,
+            source: naga::valid::EntryPointError::ForbiddenStageOperations,
+            ..
+        }),
+        Capabilities::SUBGROUP | Capabilities::SUBGROUP_BARRIER
+    }
+
+    // The `subgroup_id` built-in...
+
+    // ...in compute shaders requires [`Capabilities::SUBGROUP`]`.
+    check_one_validation! {
+        "
+            @compute @workgroup_size(1)
+            fn main(@builtin(subgroup_id) subgroup_id: u32) {{
+            }}
+        ",
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Compute,
+            source: naga::valid::EntryPointError::Argument(
+                _,
+                naga::valid::VaryingError::UnsupportedCapability(Capabilities::SUBGROUP)
+            ),
+            ..
+        })
+    }
+
+    // ...in compute shaders requires *only* [`Capabilities::SUBGROUP`]`.
+    no_validation_error(
+        "
+        @compute @workgroup_size(1)
+        fn main(@builtin(subgroup_id) subgroup_id: u32) {{
+        }}
+        ",
+        Capabilities::SUBGROUP,
+    );
+}
+
+#[test]
 fn subgroup_invalid_broadcast() {
     check_validation! {
         r#"
@@ -3670,35 +4057,9 @@ fn subgroup_invalid_broadcast() {
 
 #[test]
 fn invalid_clip_distances() {
-    // Missing capability.
-    check_validation! {
-        r#"
-            enable clip_distances;
-            struct VertexOutput {
-                @builtin(position) pos: vec4f,
-                @builtin(clip_distances) clip_distances: array<f32, 8>,
-            }
-
-            @vertex
-            fn vs_main() -> VertexOutput {
-                var out: VertexOutput;
-                return out;
-            }
-        "#:
-        Err(
-            naga::valid::ValidationError::EntryPoint {
-                stage: naga::ShaderStage::Vertex,
-                source: naga::valid::EntryPointError::Result(
-                    naga::valid::VaryingError::UnsupportedCapability(Capabilities::CLIP_DISTANCE),
-                ),
-                ..
-            },
-        )
-    }
-
-    // Missing enable directive.
-    // Note that this is a parsing error, not a validation error.
-    check(
+    // Missing capability or enable directive
+    check_extension_validation! {
+        Capabilities::CLIP_DISTANCE,
         r#"
             @vertex
             fn vs_main() -> @builtin(clip_distances) array<f32, 8> {
@@ -3715,7 +4076,14 @@ fn invalid_clip_distances() {
   = note: You can enable this extension by adding `enable clip_distances;` at the top of the shader, before any other items.
 
 "###,
-    );
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Vertex,
+            source: naga::valid::EntryPointError::Result(
+                naga::valid::VaryingError::UnsupportedCapability(Capabilities::CLIP_DISTANCE)
+            ),
+            ..
+        })
+    }
 
     // Maximum clip distances exceeded
     check_validation! {
@@ -3735,10 +4103,389 @@ fn invalid_clip_distances() {
         Err(naga::valid::ValidationError::EntryPoint {
             stage: naga::ShaderStage::Vertex,
             source: naga::valid::EntryPointError::Result(
-                naga::valid::VaryingError::InvalidBuiltInType(naga::ir::BuiltIn::ClipDistance)
+                naga::valid::VaryingError::InvalidBuiltInType(naga::ir::BuiltIn::ClipDistance, _)
             ),
             ..
         }),
         naga::valid::Capabilities::CLIP_DISTANCE
+    }
+}
+
+#[test]
+fn recognized_but_unimplemented_enable_extension() {
+    for extension in [
+        naga::front::wgsl::UnimplementedEnableExtension::Subgroups,
+        naga::front::wgsl::UnimplementedEnableExtension::PrimitiveIndex,
+    ] {
+        // NOTE: We match exhaustively here to help maintainers add or remove variants to the above
+        // array.
+        let snapshot = match extension {
+            naga::front::wgsl::UnimplementedEnableExtension::Subgroups => "\
+error: the `subgroups` enable-extension is not yet supported
+  ┌─ wgsl:1:8
+  │
+1 │ enable subgroups;
+  │        ^^^^^^^^^ this enable-extension specifies standard functionality which is not yet implemented in Naga
+  │
+  = note: Let Naga maintainers know that you ran into this at <https://github.com/gfx-rs/wgpu/issues/5555>, so they can prioritize it!
+
+",
+            naga::front::wgsl::UnimplementedEnableExtension::PrimitiveIndex => "\
+error: the `primitive_index` enable-extension is not yet supported
+  ┌─ wgsl:1:8
+  │
+1 │ enable primitive_index;
+  │        ^^^^^^^^^^^^^^^ this enable-extension specifies standard functionality which is not yet implemented in Naga
+  │
+  = note: Let Naga maintainers know that you ran into this at <https://github.com/gfx-rs/wgpu/issues/8236>, so they can prioritize it!
+
+",
+        };
+
+        let shader = {
+            let extension = naga::front::wgsl::EnableExtension::Unimplemented(extension);
+            format!("enable {};", extension.to_ident())
+        };
+
+        check(&shader, snapshot);
+    }
+}
+
+#[test]
+fn max_type_size_large_array() {
+    // The total size of an array is not resolved until validation. Type aliases
+    // don't get spans so the error isn't very helpful.
+    check_validation! {
+        "alias LargeArray = array<u32, (1 << 28) + 1>;":
+        Err(naga::valid::ValidationError::Layouter(
+                naga::proc::LayoutError {
+                    inner: naga::proc::LayoutErrorInner::TooLarge,
+                    ..
+                }
+        ))
+    }
+}
+
+#[test]
+fn max_type_size_array_of_arrays() {
+    // If the size of the base type of an array is oversize, the error is raised
+    // during lowering. Anonymous types don't get spans so this error isn't very
+    // helpful.
+    check(
+        "alias ArrayOfArrays = array<array<u32, (1 << 28) + 1>, 22>;",
+        r#"error: type is too large
+ = note: the maximum size is 1073741824 bytes
+
+"#,
+    );
+}
+
+#[test]
+fn max_type_size_override_array() {
+    // The validation that occurs after override processing should reject any
+    // arrays that were overridden to be larger than the maximum size. Type
+    // aliases don't get spans so the error isn't very helpful.
+    let source = r#"
+            override SIZE: u32 = 1;
+            alias ArrayOfOverrideArrays = array<u32, SIZE>;
+
+            var<workgroup> global: ArrayOfOverrideArrays;
+
+            @compute @workgroup_size(64)
+            fn main() {
+                let used = &global;
+            }
+        "#;
+    let module = naga::front::wgsl::parse_str(source).expect("module should parse");
+    let info = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .expect("module should validate");
+
+    let overrides = hashbrown::HashMap::from([(String::from("SIZE"), f64::from((1 << 28) + 1))]);
+    let err = naga::back::pipeline_constants::process_overrides(&module, &info, None, &overrides)
+        .unwrap_err();
+    let naga::back::pipeline_constants::PipelineConstantError::ValidationError(err) = err else {
+        panic!("expected a validation error, got {err:?}");
+    };
+    assert!(matches!(
+        err.into_inner(),
+        naga::valid::ValidationError::Layouter(naga::proc::LayoutError {
+            inner: naga::proc::LayoutErrorInner::TooLarge,
+            ..
+        }),
+    ));
+}
+
+#[test]
+fn max_type_size_array_in_struct() {
+    // If a struct member is oversize, the error is raised during lowering.
+    // For struct members we can associate the error with the member.
+    check(
+        r#"
+            struct ContainsLargeArray {
+                arr: array<u32, (1 << 28) + 1>,
+            }
+        "#,
+        r#"error: struct member is too large
+  ┌─ wgsl:3:17
+  │
+3 │                 arr: array<u32, (1 << 28) + 1>,
+  │                 ^^^ this member exceeds the maximum size
+  │
+  = note: the maximum size is 1073741824 bytes
+
+"#,
+    );
+}
+
+#[test]
+fn max_type_size_two_arrays_in_struct() {
+    // The total size of a struct is checked during lowering. For a struct,
+    // we can associate the error with the struct itself.
+    check(
+        r#"
+            struct TwoArrays {
+                arr1: array<u32, 1 << 27>,
+                arr2: array<u32, (1 << 27) + 1>,
+            }
+        "#,
+        "error: type is too large
+  ┌─ wgsl:2:13
+  │\x20\x20
+2 │ ╭             struct TwoArrays {
+3 │ │                 arr1: array<u32, 1 << 27>,
+4 │ │                 arr2: array<u32, (1 << 27) + 1>,
+  │ ╰───────────────────────────────────────────────^ this type exceeds the maximum size
+  │\x20\x20
+  = note: the maximum size is 1073741824 bytes
+
+",
+    );
+}
+
+#[test]
+fn max_type_size_array_of_structs() {
+    // The total size of an array is not resolved until validation. Type aliases
+    // don't get spans so the error isn't very helpful.
+    check_validation! {
+        r#"
+            struct NotVeryBigStruct {
+                data: u32,
+            }
+            alias BigArrayOfStructs = array<NotVeryBigStruct, (1 << 28) + 1>;
+        "#:
+        Err(naga::valid::ValidationError::Layouter(
+                naga::proc::LayoutError {
+                    inner: naga::proc::LayoutErrorInner::TooLarge,
+                    ..
+                }
+        ))
+    }
+}
+
+#[test]
+fn source_with_control_char() {
+    check(
+        "\x07",
+        "error: expected global item (`struct`, `const`, `var`, `alias`, `fn`, `diagnostic`, `enable`, `requires`, `;`) or the end of the file, found \"\\u{7}\"
+  ┌─ wgsl:1:1
+  │
+1 │ �
+  │ ^ expected global item (`struct`, `const`, `var`, `alias`, `fn`, `diagnostic`, `enable`, `requires`, `;`) or the end of the file
+
+",
+    );
+}
+
+#[test]
+fn ray_query_enable_extension() {
+    check_extension_validation!(
+        Capabilities::RAY_QUERY,
+        r#"fn foo() {
+            var a: ray_query;
+        }
+        "#,
+        r#"error: the `wgpu_ray_query` enable extension is not enabled
+  ┌─ wgsl:2:20
+  │
+2 │             var a: ray_query;
+  │                    ^^^^^^^^^ the `wgpu_ray_query` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_query;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::MissingCapability(Capabilities::RAY_QUERY),
+            ..
+        })
+    );
+
+    check_extension_validation!(
+        Capabilities::RAY_QUERY,
+        r#"@group(0) @binding(0)
+        var acc_struct: acceleration_structure;
+        "#,
+        r#"error: the `wgpu_ray_query` enable extension is not enabled
+  ┌─ wgsl:2:25
+  │
+2 │         var acc_struct: acceleration_structure;
+  │                         ^^^^^^^^^^^^^^^^^^^^^^ the `wgpu_ray_query` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_query;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::MissingCapability(Capabilities::RAY_QUERY),
+            ..
+        })
+    );
+}
+
+#[test]
+fn ray_query_vertex_return_enable_extension() {
+    check_extension_validation!(
+        Capabilities::RAY_HIT_VERTEX_POSITION,
+        r#"enable wgpu_ray_query;
+
+        fn foo() {
+            var a: ray_query<vertex_return>;
+        }
+        "#,
+        r#"error: the `wgpu_ray_query_vertex_return` enable extension is not enabled
+  ┌─ wgsl:4:20
+  │
+4 │             var a: ray_query<vertex_return>;
+  │                    ^^^^^^^^^ the `wgpu_ray_query_vertex_return` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_query_vertex_return;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::MissingCapability(
+                Capabilities::RAY_HIT_VERTEX_POSITION
+            ),
+            ..
+        })
+    );
+
+    check_extension_validation!(
+        Capabilities::RAY_HIT_VERTEX_POSITION,
+        r#"enable wgpu_ray_query;
+
+        @group(0) @binding(0)
+        var acc_struct: acceleration_structure<vertex_return>;
+        "#,
+        r#"error: the `wgpu_ray_query_vertex_return` enable extension is not enabled
+  ┌─ wgsl:4:25
+  │
+4 │         var acc_struct: acceleration_structure<vertex_return>;
+  │                         ^^^^^^^^^^^^^^^^^^^^^^ the `wgpu_ray_query_vertex_return` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_query_vertex_return;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::MissingCapability(
+                Capabilities::RAY_HIT_VERTEX_POSITION
+            ),
+            ..
+        })
+    );
+}
+
+#[test]
+fn binding_array_requires_capability() {
+    check_validation! {
+        r#"
+            struct Buffer { data: u32 }
+            @group(0) @binding(0)
+            var<storage> storage_array: binding_array<Buffer, 10>;
+        "#:
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::STORAGE_BUFFER_BINDING_ARRAY
+            ),
+            ..
+        })
+    }
+
+    check_validation! {
+        r#"
+            struct Buffer { data: u32 }
+            @group(0) @binding(0)
+            var<uniform> uniform_array: binding_array<Buffer, 10>;
+        "#:
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::BUFFER_BINDING_ARRAY
+            ),
+            ..
+        })
+    }
+
+    check_validation! {
+        r#"
+            @group(0) @binding(0)
+            var storage_texture_array: binding_array<texture_storage_2d<rgba8unorm, write>, 10>;
+        "#:
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::STORAGE_TEXTURE_BINDING_ARRAY
+            ),
+            ..
+        })
+    }
+
+    check_validation! {
+        r#"
+            @group(0) @binding(0)
+            var sampled_texture_array: binding_array<texture_2d<f32>, 10>;
+        "#:
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+            ),
+            ..
+        })
+    }
+
+    check_validation! {
+        r#"
+            @group(0) @binding(0)
+            var sampler_array: binding_array<sampler, 10>;
+        "#:
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::TEXTURE_AND_SAMPLER_BINDING_ARRAY
+            ),
+            ..
+        })
+    }
+
+    // Binding arrays of external textures are not yet supported.
+    check_validation! {
+        r#"
+            @group(0) @binding(0)
+            var external_texture_array: binding_array<texture_external, 10>;
+        "#:
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::BindingArrayBaseExternalTextures,
+            ..
+        }),
+        Capabilities::TEXTURE_EXTERNAL
+    }
+
+    // Acceleration structures are not allowed in binding arrays
+    check_validation! {
+        r#"
+            enable wgpu_ray_query;
+            @group(0) @binding(0)
+            var acc_struct_array: binding_array<acceleration_structure, 10>;
+        "#:
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::InvalidBindingArray(_),
+            ..
+        }),
+        Capabilities::all()
     }
 }

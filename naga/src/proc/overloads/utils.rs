@@ -9,17 +9,6 @@ use crate::proc::TypeResolution;
 
 use alloc::vec::Vec;
 
-/// Produce all vector sizes.
-pub fn vector_sizes() -> impl Iterator<Item = ir::VectorSize> + Clone {
-    static SIZES: [ir::VectorSize; 3] = [
-        ir::VectorSize::Bi,
-        ir::VectorSize::Tri,
-        ir::VectorSize::Quad,
-    ];
-
-    SIZES.iter().cloned()
-}
-
 /// Produce all the floating-point [`ir::Scalar`]s.
 ///
 /// Note that `F32` must appear before other sizes; this is how we
@@ -38,20 +27,6 @@ pub fn float_scalars() -> impl Iterator<Item = ir::Scalar> + Clone {
 /// abstract types, for #7405.
 pub fn float_scalars_unimplemented_abstract() -> impl Iterator<Item = ir::Scalar> + Clone {
     [ir::Scalar::F32, ir::Scalar::F16, ir::Scalar::F64].into_iter()
-}
-
-/// Produce all concrete integer [`ir::Scalar`]s.
-///
-/// Note that `I32` and `U32` must come first; this is how we
-/// represent conversion rank.
-pub fn concrete_int_scalars() -> impl Iterator<Item = ir::Scalar> {
-    [
-        ir::Scalar::I32,
-        ir::Scalar::U32,
-        ir::Scalar::I64,
-        ir::Scalar::U64,
-    ]
-    .into_iter()
 }
 
 /// Produce the scalar and vector [`ir::TypeInner`]s that have `s` as

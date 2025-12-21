@@ -2,14 +2,22 @@ use std::num::NonZeroU32;
 
 use wgpu::*;
 use wgpu_test::{
-    gpu_test, image::ReadbackBuffers, FailureCase, GpuTestConfiguration, TestParameters,
+    gpu_test, image::ReadbackBuffers, GpuTestConfiguration, GpuTestInitializer, TestParameters,
     TestingContext,
 };
+
+pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
+    tests.extend([
+        BINDING_ARRAY_STORAGE_TEXTURES,
+        PARTIAL_BINDING_ARRAY_STORAGE_TEXTURES,
+    ]);
+}
 
 #[gpu_test]
 static BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
+            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
             .features(
                 Features::TEXTURE_BINDING_ARRAY
                     | Features::STORAGE_RESOURCE_BINDING_ARRAY
@@ -19,8 +27,7 @@ static BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestConfigurati
             .limits(Limits {
                 max_binding_array_elements_per_shader_stage: 17,
                 ..Limits::default()
-            })
-            .expect_fail(FailureCase::backend(Backends::METAL)),
+            }),
     )
     .run_async(|ctx| async move { binding_array_storage_textures(ctx, false).await });
 
@@ -28,6 +35,7 @@ static BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestConfigurati
 static PARTIAL_BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
+            .instance_flags(wgpu::InstanceFlags::GPU_BASED_VALIDATION)
             .features(
                 Features::TEXTURE_BINDING_ARRAY
                     | Features::PARTIALLY_BOUND_BINDING_ARRAY
@@ -38,8 +46,7 @@ static PARTIAL_BINDING_ARRAY_STORAGE_TEXTURES: GpuTestConfiguration = GpuTestCon
             .limits(Limits {
                 max_binding_array_elements_per_shader_stage: 33,
                 ..Limits::default()
-            })
-            .expect_fail(FailureCase::backend(Backends::METAL)),
+            }),
     )
     .run_async(|ctx| async move { binding_array_storage_textures(ctx, true).await });
 
@@ -167,7 +174,7 @@ async fn binding_array_storage_textures(ctx: TestingContext, partially_bound: bo
         .create_pipeline_layout(&PipelineLayoutDescriptor {
             label: Some("Pipeline Layout"),
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
     let pipeline = ctx

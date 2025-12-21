@@ -14,7 +14,9 @@ use winit::{
 
 use std::{
     borrow::{Borrow, Cow},
-    iter, ptr,
+    iter,
+    num::NonZeroU64,
+    ptr,
     time::Instant,
 };
 
@@ -52,7 +54,7 @@ struct ExecutionContext<A: hal::Api> {
 
 impl<A: hal::Api> ExecutionContext<A> {
     unsafe fn wait_and_clear(&mut self, device: &A::Device) {
-        device.wait(&self.fence, self.fence_value, !0).unwrap();
+        device.wait(&self.fence, self.fence_value, None).unwrap();
         self.encoder.reset_all(self.used_cmd_bufs.drain(..));
         for view in self.used_views.drain(..) {
             device.destroy_texture_view(view);
@@ -97,6 +99,7 @@ impl<A: hal::Api> Example<A> {
             memory_budget_thresholds: wgpu_types::MemoryBudgetThresholds::default(),
             // Can't rely on having DXC available, so use FXC instead
             backend_options: wgpu_types::BackendOptions::default(),
+            telemetry: None,
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let surface = {
@@ -121,7 +124,7 @@ impl<A: hal::Api> Example<A> {
 
         let surface_caps = unsafe { adapter.surface_capabilities(&surface) }
             .ok_or("failed to get surface capabilities")?;
-        log::info!("Surface caps: {:#?}", surface_caps);
+        log::info!("Surface caps: {surface_caps:#?}");
 
         let hal::OpenDevice { device, queue } = unsafe {
             adapter
@@ -240,7 +243,7 @@ impl<A: hal::Api> Example<A> {
             label: None,
             flags: hal::PipelineLayoutFlags::empty(),
             bind_group_layouts: &[&global_group_layout, &local_group_layout],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         };
         let pipeline_layout = unsafe {
             device
@@ -252,13 +255,15 @@ impl<A: hal::Api> Example<A> {
         let pipeline_desc = hal::RenderPipelineDescriptor {
             label: None,
             layout: &pipeline_layout,
-            vertex_stage: hal::ProgrammableStage {
-                module: &shader,
-                entry_point: "vs_main",
-                constants: &constants,
-                zero_initialize_workgroup_memory: true,
+            vertex_processor: hal::VertexProcessor::Standard {
+                vertex_stage: hal::ProgrammableStage {
+                    module: &shader,
+                    entry_point: "vs_main",
+                    constants: &constants,
+                    zero_initialize_workgroup_memory: true,
+                },
+                vertex_buffers: &[],
             },
-            vertex_buffers: &[],
             fragment_stage: Some(hal::ProgrammableStage {
                 module: &shader,
                 entry_point: "fs_main",
@@ -276,7 +281,7 @@ impl<A: hal::Api> Example<A> {
                 blend: Some(wgpu_types::BlendState::ALPHA_BLENDING),
                 write_mask: wgpu_types::ColorWrites::default(),
             })],
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         };
         let pipeline = unsafe { device.create_render_pipeline(&pipeline_desc).unwrap() };
@@ -381,7 +386,7 @@ impl<A: hal::Api> Example<A> {
             address_modes: [wgpu_types::AddressMode::ClampToEdge; 3],
             mag_filter: wgpu_types::FilterMode::Linear,
             min_filter: wgpu_types::FilterMode::Nearest,
-            mipmap_filter: wgpu_types::FilterMode::Nearest,
+            mipmap_filter: wgpu_types::MipmapFilterMode::Nearest,
             lod_clamp: 0.0..32.0,
             compare: None,
             anisotropy_clamp: 1,
@@ -445,11 +450,12 @@ impl<A: hal::Api> Example<A> {
         let texture_view = unsafe { device.create_texture_view(&texture, &view_desc).unwrap() };
 
         let global_group = {
-            let global_buffer_binding = hal::BufferBinding {
-                buffer: &global_buffer,
-                offset: 0,
-                size: None,
-            };
+            // SAFETY: This is the same size that was specified for buffer creation.
+            let global_buffer_binding = hal::BufferBinding::new_unchecked(
+                &global_buffer,
+                0,
+                NonZeroU64::new(global_buffer_desc.size),
+            );
             let texture_binding = hal::TextureBinding {
                 view: &texture_view,
                 usage: wgpu_types::TextureUses::RESOURCE,
@@ -461,6 +467,7 @@ impl<A: hal::Api> Example<A> {
                 samplers: &[&sampler],
                 textures: &[texture_binding],
                 acceleration_structures: &[],
+                external_textures: &[],
                 entries: &[
                     hal::BindGroupEntry {
                         binding: 0,
@@ -483,11 +490,12 @@ impl<A: hal::Api> Example<A> {
         };
 
         let local_group = {
-            let local_buffer_binding = hal::BufferBinding {
-                buffer: &local_buffer,
-                offset: 0,
-                size: wgpu_types::BufferSize::new(size_of::<Locals>() as _),
-            };
+            // SAFETY: The size must fit within the buffer.
+            let local_buffer_binding = hal::BufferBinding::new_unchecked(
+                &local_buffer,
+                0,
+                wgpu_types::BufferSize::new(size_of::<Locals>() as _),
+            );
             let local_group_desc = hal::BindGroupDescriptor {
                 label: Some("local"),
                 layout: &local_group_layout,
@@ -495,6 +503,7 @@ impl<A: hal::Api> Example<A> {
                 samplers: &[],
                 textures: &[],
                 acceleration_structures: &[],
+                external_textures: &[],
                 entries: &[hal::BindGroupEntry {
                     binding: 0,
                     resource_index: 0,
@@ -511,7 +520,7 @@ impl<A: hal::Api> Example<A> {
             queue
                 .submit(&[&init_cmd], &[], (&mut fence, init_fence_value))
                 .unwrap();
-            device.wait(&fence, init_fence_value, !0).unwrap();
+            device.wait(&fence, init_fence_value, None).unwrap();
             device.destroy_buffer(staging_buffer);
             cmd_encoder.reset_all(iter::once(init_cmd));
             fence
@@ -710,7 +719,7 @@ impl<A: hal::Api> Example<A> {
                 },
                 depth_slice: None,
                 resolve_target: None,
-                ops: hal::AttachmentOps::STORE,
+                ops: hal::AttachmentOps::STORE | hal::AttachmentOps::LOAD_CLEAR,
                 clear_value: wgpu_types::Color {
                     r: 0.1,
                     g: 0.2,
@@ -719,7 +728,7 @@ impl<A: hal::Api> Example<A> {
                 },
             })],
             depth_stencil_attachment: None,
-            multiview: None,
+            multiview_mask: None,
             timestamp_writes: None,
             occlusion_query_set: None,
         };

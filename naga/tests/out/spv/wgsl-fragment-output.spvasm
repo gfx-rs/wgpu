@@ -61,7 +61,7 @@ OpDecorate %80 Location 5
 %29 = OpTypePointer Output %11
 %28 = OpVariable  %29  Output
 %31 = OpTypeFunction %2
-%32 = OpConstant  %3  0.0
+%32 = OpConstant  %3  0
 %33 = OpConstantComposite  %4  %32 %32 %32 %32
 %34 = OpConstant  %5  0
 %35 = OpConstantComposite  %6  %34 %34 %34 %34

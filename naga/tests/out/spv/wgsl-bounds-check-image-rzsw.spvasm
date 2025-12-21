@@ -226,7 +226,7 @@ OpDecorate %187 Location 0
 %201 = OpConstantNull  %9
 %202 = OpConstant  %11  0
 %203 = OpConstantNull  %13
-%204 = OpConstant  %5  0.0
+%204 = OpConstant  %5  0
 %205 = OpConstantComposite  %7  %204 %204 %204 %204
 %40 = OpFunction  %7  None %41
 %38 = OpFunctionParameter  %6

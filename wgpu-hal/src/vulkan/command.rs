@@ -61,7 +61,8 @@ impl super::CommandEncoder {
             Entry::Vacant(e) => {
                 let super::FramebufferKey {
                     raw_pass,
-                    ref attachments,
+                    ref attachment_views,
+                    attachment_identities: _,
                     extent,
                 } = *e.key();
 
@@ -70,7 +71,7 @@ impl super::CommandEncoder {
                     .width(extent.width)
                     .height(extent.height)
                     .layers(extent.depth_or_array_layers)
-                    .attachments(attachments);
+                    .attachments(attachment_views);
 
                 let raw = unsafe { self.device.raw.create_framebuffer(&vk_info, None).unwrap() };
                 *e.insert(raw)
@@ -81,12 +82,13 @@ impl super::CommandEncoder {
     fn make_temp_texture_view(
         &mut self,
         key: super::TempTextureViewKey,
-    ) -> Result<vk::ImageView, crate::DeviceError> {
+    ) -> Result<super::IdentifiedTextureView, crate::DeviceError> {
         Ok(match self.temp_texture_views.entry(key) {
             Entry::Occupied(e) => *e.get(),
             Entry::Vacant(e) => {
                 let super::TempTextureViewKey {
                     texture,
+                    texture_identity: _,
                     format,
                     mip_level,
                     depth_slice,
@@ -105,7 +107,10 @@ impl super::CommandEncoder {
                     });
                 let raw = unsafe { self.device.raw.create_image_view(&vk_info, None) }
                     .map_err(super::map_host_device_oom_and_ioca_err)?;
-                *e.insert(raw)
+
+                let identity = self.device.texture_view_identity_factory.next();
+
+                *e.insert(super::IdentifiedTextureView { raw, identity })
             }
         })
     }
@@ -175,6 +180,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         self.free
             .extend(cmd_bufs.into_iter().map(|cmd_buf| cmd_buf.raw));
         self.free.append(&mut self.discarded);
+        // Delete framebuffers from the framebuffer cache
+        for (_, framebuffer) in self.framebuffers.drain() {
+            unsafe { self.device.raw.destroy_framebuffer(framebuffer, None) };
+        }
         let _ = unsafe {
             self.device
                 .raw
@@ -621,7 +630,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                                 .first_vertex(triangles.first_vertex);
                         } else {
                             range = range
-                                .primitive_count(triangles.vertex_count)
+                                .primitive_count(triangles.vertex_count / 3)
                                 .first_vertex(triangles.first_vertex);
                         }
 
@@ -775,11 +784,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
             colors: ArrayVec::default(),
             depth_stencil: None,
             sample_count: desc.sample_count,
-            multiview: desc.multiview,
+            multiview_mask: desc.multiview_mask,
         };
         let mut fb_key = super::FramebufferKey {
             raw_pass: vk::RenderPass::null(),
-            attachments: ArrayVec::default(),
+            attachment_views: ArrayVec::default(),
+            attachment_identities: ArrayVec::default(),
             extent: desc.extent,
         };
 
@@ -788,13 +798,14 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 let color_view = if cat.target.view.dimension == wgt::TextureViewDimension::D3 {
                     let key = super::TempTextureViewKey {
                         texture: cat.target.view.raw_texture,
+                        texture_identity: cat.target.view.texture_identity,
                         format: cat.target.view.raw_format,
                         mip_level: cat.target.view.base_mip_level,
                         depth_slice: cat.depth_slice.unwrap(),
                     };
                     self.make_temp_texture_view(key)?
                 } else {
-                    cat.target.view.raw
+                    cat.target.view.identified_raw_view()
                 };
 
                 vk_clear_values.push(vk::ClearValue {
@@ -802,26 +813,18 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 });
                 let color = super::ColorAttachmentKey {
                     base: cat.target.make_attachment_key(cat.ops),
-                    resolve: cat
-                        .resolve_target
-                        .as_ref()
-                        .map(|target| target.make_attachment_key(crate::AttachmentOps::STORE)),
+                    resolve: cat.resolve_target.as_ref().map(|target| {
+                        target.make_attachment_key(
+                            crate::AttachmentOps::LOAD_CLEAR | crate::AttachmentOps::STORE,
+                        )
+                    }),
                 };
 
                 rp_key.colors.push(Some(color));
-                fb_key.attachments.push(color_view);
+                fb_key.push_view(color_view);
                 if let Some(ref at) = cat.resolve_target {
                     vk_clear_values.push(unsafe { mem::zeroed() });
-                    fb_key.attachments.push(at.view.raw);
-                }
-
-                // Assert this attachment is valid for the detected multiview, as a sanity check
-                // The driver crash for this is really bad on AMD, so the check is worth it
-                if let Some(multiview) = desc.multiview {
-                    assert_eq!(cat.target.view.layers, multiview);
-                    if let Some(ref resolve_target) = cat.resolve_target {
-                        assert_eq!(resolve_target.view.layers, multiview);
-                    }
+                    fb_key.push_view(at.view.identified_raw_view());
                 }
             } else {
                 rp_key.colors.push(None);
@@ -838,13 +841,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 base: ds.target.make_attachment_key(ds.depth_ops),
                 stencil_ops: ds.stencil_ops,
             });
-            fb_key.attachments.push(ds.target.view.raw);
-
-            // Assert this attachment is valid for the detected multiview, as a sanity check
-            // The driver crash for this is really bad on AMD, so the check is worth it
-            if let Some(multiview) = desc.multiview {
-                assert_eq!(ds.target.view.layers, multiview);
-            }
+            fb_key.push_view(ds.target.view.identified_raw_view());
         }
 
         let render_area = vk::Rect2D {
@@ -943,10 +940,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
             )
         };
     }
-    unsafe fn set_push_constants(
+    unsafe fn set_immediates(
         &mut self,
         layout: &super::PipelineLayout,
-        stages: wgt::ShaderStages,
         offset_bytes: u32,
         data: &[u32],
     ) {
@@ -954,7 +950,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             self.device.raw.cmd_push_constants(
                 self.active,
                 layout.raw,
-                conv::map_shader_stage(stages),
+                vk::ShaderStageFlags::ALL,
                 offset_bytes,
                 bytemuck::cast_slice(data),
             )
@@ -983,6 +979,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn set_render_pipeline(&mut self, pipeline: &super::RenderPipeline) {
         unsafe {
+            self.current_pipeline_is_multiview = pipeline.is_multiview;
             self.device.raw.cmd_bind_pipeline(
                 self.active,
                 vk::PipelineBindPoint::GRAPHICS,
@@ -1070,6 +1067,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         first_instance: u32,
         instance_count: u32,
     ) {
+        if self.current_pipeline_is_multiview
+            && (first_instance as u64 + instance_count as u64 - 1)
+                > self.device.private_caps.multiview_instance_index_limit as u64
+        {
+            panic!("This vulkan device is affected by [#8333](https://github.com/gfx-rs/wgpu/issues/8333)");
+        }
         unsafe {
             self.device.raw.cmd_draw(
                 self.active,
@@ -1088,6 +1091,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         first_instance: u32,
         instance_count: u32,
     ) {
+        if self.current_pipeline_is_multiview
+            && (first_instance as u64 + instance_count as u64 - 1)
+                > self.device.private_caps.multiview_instance_index_limit as u64
+        {
+            panic!("This vulkan device is affected by [#8333](https://github.com/gfx-rs/wgpu/issues/8333)");
+        }
         unsafe {
             self.device.raw.cmd_draw_indexed(
                 self.active,
@@ -1119,15 +1128,35 @@ impl crate::CommandEncoder for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        unsafe {
-            self.device.raw.cmd_draw_indirect(
-                self.active,
-                buffer.raw,
-                offset,
-                draw_count,
-                size_of::<wgt::DrawIndirectArgs>() as u32,
-            )
-        };
+        if draw_count >= 1
+            && self.device.private_caps.multi_draw_indirect
+            && draw_count <= self.device.private_caps.max_draw_indirect_count
+        {
+            unsafe {
+                self.device.raw.cmd_draw_indirect(
+                    self.active,
+                    buffer.raw,
+                    offset,
+                    draw_count,
+                    size_of::<wgt::DrawIndirectArgs>() as u32,
+                )
+            };
+        } else {
+            for i in 0..draw_count {
+                let indirect_offset = offset
+                    + i as wgt::BufferAddress
+                        * size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
+                unsafe {
+                    self.device.raw.cmd_draw_indirect(
+                        self.active,
+                        buffer.raw,
+                        indirect_offset,
+                        1,
+                        size_of::<wgt::DrawIndirectArgs>() as u32,
+                    )
+                };
+            }
+        }
     }
     unsafe fn draw_indexed_indirect(
         &mut self,
@@ -1135,15 +1164,35 @@ impl crate::CommandEncoder for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        unsafe {
-            self.device.raw.cmd_draw_indexed_indirect(
-                self.active,
-                buffer.raw,
-                offset,
-                draw_count,
-                size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
-            )
-        };
+        if draw_count >= 1
+            && self.device.private_caps.multi_draw_indirect
+            && draw_count <= self.device.private_caps.max_draw_indirect_count
+        {
+            unsafe {
+                self.device.raw.cmd_draw_indexed_indirect(
+                    self.active,
+                    buffer.raw,
+                    offset,
+                    draw_count,
+                    size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
+                )
+            };
+        } else {
+            for i in 0..draw_count {
+                let indirect_offset = offset
+                    + i as wgt::BufferAddress
+                        * size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
+                unsafe {
+                    self.device.raw.cmd_draw_indexed_indirect(
+                        self.active,
+                        buffer.raw,
+                        indirect_offset,
+                        1,
+                        size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
+                    )
+                };
+            }
+        }
     }
     unsafe fn draw_mesh_tasks_indirect(
         &mut self,

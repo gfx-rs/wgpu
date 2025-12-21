@@ -1,3 +1,12 @@
+//! Tests of the module validator.
+//!
+//! There are also some validation tests in [`wgsl_errors`](super::wgsl_errors).
+
+#![allow(
+    // We need to investigate these.
+    clippy::result_large_err
+)]
+
 use naga::{
     ir,
     valid::{self, ModuleInfo},
@@ -29,7 +38,7 @@ fn populate_atomic_result() {
     // the differences between the test cases.
     fn try_variant(
         variant: Variant,
-    ) -> Result<naga::valid::ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    ) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_u32 = module.types.insert(
@@ -130,7 +139,7 @@ fn populate_call_result() {
     // the differences between the test cases.
     fn try_variant(
         variant: Variant,
-    ) -> Result<naga::valid::ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    ) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_u32 = module.types.insert(
@@ -206,9 +215,7 @@ fn emit_workgroup_uniform_load_result() {
     //
     // Looking at uses of the `wg_load` makes it easy to identify the
     // differences between the two variants.
-    fn variant(
-        wg_load: bool,
-    ) -> Result<naga::valid::ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    fn variant(wg_load: bool) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_u32 = module.types.insert(
@@ -279,7 +286,7 @@ fn builtin_cross_product_args() {
     fn variant(
         size: VectorSize,
         arity: usize,
-    ) -> Result<naga::valid::ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
+    ) -> Result<ModuleInfo, naga::WithSpan<naga::valid::ValidationError>> {
         let span = naga::Span::default();
         let mut module = Module::default();
         let ty_vec3f = module.types.insert(
@@ -354,7 +361,6 @@ fn builtin_cross_product_args() {
     assert!(variant(VectorSize::Quad, 2).is_err());
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn incompatible_interpolation_and_sampling_types() {
     use dummy_interpolation_shader::DummyInterpolationShader;
@@ -436,7 +442,6 @@ fn incompatible_interpolation_and_sampling_types() {
     }
 }
 
-#[cfg(all(feature = "wgsl-in", feature = "glsl-out"))]
 #[test]
 fn no_flat_first_in_glsl() {
     use dummy_interpolation_shader::DummyInterpolationShader;
@@ -477,13 +482,11 @@ fn no_flat_first_in_glsl() {
     ));
 }
 
-#[cfg(all(test, feature = "wgsl-in"))]
 mod dummy_interpolation_shader {
     pub struct DummyInterpolationShader {
         pub source: String,
         pub module: naga::Module,
         pub interpolate_attr: String,
-        #[cfg_attr(not(feature = "glsl-out"), expect(dead_code))]
         pub entry_point: &'static str,
     }
 
@@ -541,7 +544,7 @@ fn main(input: VertexOutput) {{
 
 #[allow(dead_code)]
 struct BindingArrayFixture {
-    module: naga::Module,
+    module: Module,
     span: naga::Span,
     ty_u32: naga::Handle<naga::Type>,
     ty_array: naga::Handle<naga::Type>,
@@ -551,7 +554,7 @@ struct BindingArrayFixture {
 
 impl BindingArrayFixture {
     fn new() -> Self {
-        let mut module = naga::Module::default();
+        let mut module = Module::default();
         let span = naga::Span::default();
         let ty_u32 = module.types.insert(
             naga::Type {
@@ -649,7 +652,6 @@ fn binding_arrays_cannot_hold_scalars() {
     assert!(t.validator.validate(&t.module).is_err());
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn validation_error_messages() {
     let cases = [(
@@ -686,10 +688,9 @@ error: Function [1] 'main' is invalid
     }
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn bad_texture_dimensions_level() {
-    fn validate(level: &str) -> Result<naga::valid::ModuleInfo, naga::valid::ValidationError> {
+    fn validate(level: &str) -> Result<ModuleInfo, naga::valid::ValidationError> {
         let source = format!(
             r#"
             @group(0) @binding(0)
@@ -705,9 +706,7 @@ fn bad_texture_dimensions_level() {
             .map_err(|err| err.into_inner()) // discard spans
     }
 
-    fn is_bad_level_error(
-        result: Result<naga::valid::ModuleInfo, naga::valid::ValidationError>,
-    ) -> bool {
+    fn is_bad_level_error(result: Result<ModuleInfo, naga::valid::ValidationError>) -> bool {
         matches!(
             result,
             Err(naga::valid::ValidationError::Function {
@@ -734,7 +733,7 @@ fn arity_check() {
     use naga::Span;
     let _ = env_logger::builder().is_test(true).try_init();
 
-    type Result = core::result::Result<naga::valid::ModuleInfo, naga::valid::ValidationError>;
+    type Result = core::result::Result<ModuleInfo, naga::valid::ValidationError>;
 
     fn validate(fun: ir::MathFunction, args: &[usize]) -> Result {
         let nowhere = Span::default();
@@ -785,7 +784,6 @@ fn arity_check() {
     assert!(validate(Mf::Pow, &[3]).is_err());
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn global_use_scalar() {
     let source = "
@@ -810,7 +808,6 @@ fn main() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn global_use_array() {
     let source = "
@@ -835,7 +832,6 @@ fn main() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn global_use_array_index() {
     let source = "
@@ -860,7 +856,6 @@ fn main() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn global_use_phony() {
     let source = "
@@ -885,7 +880,6 @@ fn main() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn global_use_unreachable() {
     // We should allow statements after `return`, and such statements should
@@ -997,7 +991,6 @@ fn unused() {
     .unwrap();
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn override_in_workgroup_size() {
     override_test(
@@ -1010,7 +1003,6 @@ fn used() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn override_in_workgroup_size_nested() {
     // Initializer for override used in workgroup size refers to another
@@ -1027,7 +1019,6 @@ fn used() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn override_in_function() {
     override_test(
@@ -1045,7 +1036,6 @@ fn used() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn override_in_entrypoint() {
     override_test(
@@ -1063,7 +1053,6 @@ fn used() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn override_in_array_size() {
     override_test(
@@ -1079,7 +1068,6 @@ fn used() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn override_in_global_init() {
     override_test(
@@ -1095,7 +1083,6 @@ fn used() {
     );
 }
 
-#[cfg(feature = "wgsl-in")]
 #[test]
 fn override_with_multiple_globals() {
     // Test that when compaction of the `unused` entrypoint removes `arr1`, the
@@ -1111,5 +1098,57 @@ fn used() {
 }
 ",
         Some("_ = arr2[3];"),
+    );
+}
+
+/// Expects parsing `input` to succeed and its validation to fail with error equal to `snapshot`.
+#[track_caller]
+fn check_wgsl_validation_error_message(input: &str, snapshot: &str) {
+    let module = naga::front::wgsl::parse_str(input).unwrap();
+    let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .expect_err("module should be invalid")
+        .emit_to_string(input);
+    if err != snapshot {
+        for diff in diff::lines(snapshot, &err) {
+            match diff {
+                diff::Result::Left(l) => println!("-{l}"),
+                diff::Result::Both(l, _) => println!(" {l}"),
+                diff::Result::Right(r) => println!("+{r}"),
+            }
+        }
+        panic!("Error does not match the expected snapshot");
+    }
+}
+
+#[test]
+fn image_store_type_mismatch() {
+    check_wgsl_validation_error_message(
+        r#"
+@group(0) @binding(0)
+var input_texture: texture_depth_2d;
+@group(0) @binding(1)
+var input_sampler: sampler;
+@group(0) @binding(2)
+var output_texture: texture_storage_2d<r32float,write>;
+
+@compute @workgroup_size(1, 1)
+fn main() {
+    let d: vec4<f32> = textureGather(input_texture, input_sampler, vec2f(0.0));
+    let min_d = min(min(d[0], d[1]), min(d[2], d[3]));
+    textureStore(output_texture, vec2u(1), min_d);
+}
+"#,
+        r#"error: Entry point main at Compute is invalid
+   ┌─ wgsl:12:17
+   │
+12 │     let min_d = min(min(d[0], d[1]), min(d[2], d[3]));
+   │                 ^^^ this value is of type Scalar(Scalar { kind: Float, width: 4 })
+13 │     textureStore(output_texture, vec2u(1), min_d);
+   │     ^^^^^^^^^^^^ expects a value argument of type Vector { size: Quad, scalar: Scalar { kind: Float, width: 4 } }
+   │
+   = Image store value parameter type mismatch
+
+"#,
     );
 }

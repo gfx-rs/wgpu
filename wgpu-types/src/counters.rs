@@ -96,8 +96,8 @@ impl Default for InternalCounter {
     }
 }
 
-impl core::fmt::Debug for InternalCounter {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+impl fmt::Debug for InternalCounter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.read().fmt(f)
     }
 }
@@ -181,6 +181,7 @@ pub struct AllocatorReport {
     /// Sum of the memory used by all allocations, in bytes.
     pub total_allocated_bytes: u64,
     /// Sum of the memory reserved by all memory blocks including unallocated regions, in bytes.
+    // XXX: Rename to total_capacity_bytes following the rename at https://github.com/Traverse-Research/gpu-allocator/pull/266?
     pub total_reserved_bytes: u64,
 }
 

@@ -1,0 +1,7 @@
+capabilities = """
+  TEXTURE_AND_SAMPLER_BINDING_ARRAY
+  | TEXTURE_AND_SAMPLER_BINDING_ARRAY_NON_UNIFORM_INDEXING
+"""
+
+[spv-in]
+adjust_coordinate_space = true

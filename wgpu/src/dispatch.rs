@@ -5,8 +5,11 @@
 //!
 //! The interface traits are all object safe and listed in the `InterfaceTypes` trait.
 //!
-//! The method for dispatching should optimize well if only one backend is compiled in,
-//! as-if there was no dispatching at all.
+//! The method for dispatching should optimize well if only one backend is
+//! compiled in, as-if there was no dispatching at all. See the comments on
+//! [`dispatch_types`] for details.
+//!
+//! [`dispatch_types`]: macro.dispatch_types.html
 
 #![allow(drop_bounds)] // This exists to remind implementors to impl drop.
 #![allow(clippy::too_many_arguments)] // It's fine.
@@ -39,6 +42,7 @@ trait_alias!(RequestAdapterFuture: Future<Output = Result<DispatchAdapter, wgt::
 trait_alias!(RequestDeviceFuture: Future<Output = Result<(DispatchDevice, DispatchQueue), crate::RequestDeviceError>> + WasmNotSend + 'static);
 trait_alias!(PopErrorScopeFuture: Future<Output = Option<crate::Error>> + WasmNotSend + 'static);
 trait_alias!(ShaderCompilationInfoFuture: Future<Output = crate::CompilationInfo> + WasmNotSend + 'static);
+trait_alias!(EnumerateAdapterFuture: Future<Output = Vec<DispatchAdapter>> + WasmNotSend + 'static);
 
 // We can't use trait aliases here, as you can't convert from a dyn Trait to dyn Supertrait _yet_.
 #[cfg(send_sync)]
@@ -93,6 +97,9 @@ pub trait InstanceInterface: CommonTraits {
 
     #[cfg(feature = "wgsl")]
     fn wgsl_language_features(&self) -> crate::WgslLanguageFeatures;
+
+    fn enumerate_adapters(&self, backends: crate::Backends)
+        -> Pin<Box<dyn EnumerateAdapterFuture>>;
 }
 
 pub trait AdapterInterface: CommonTraits {
@@ -147,6 +154,10 @@ pub trait DeviceInterface: CommonTraits {
         &self,
         desc: &crate::RenderPipelineDescriptor<'_>,
     ) -> DispatchRenderPipeline;
+    fn create_mesh_pipeline(
+        &self,
+        desc: &crate::MeshPipelineDescriptor<'_>,
+    ) -> DispatchRenderPipeline;
     fn create_compute_pipeline(
         &self,
         desc: &crate::ComputePipelineDescriptor<'_>,
@@ -157,6 +168,11 @@ pub trait DeviceInterface: CommonTraits {
     ) -> DispatchPipelineCache;
     fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> DispatchBuffer;
     fn create_texture(&self, desc: &crate::TextureDescriptor<'_>) -> DispatchTexture;
+    fn create_external_texture(
+        &self,
+        desc: &crate::ExternalTextureDescriptor<'_>,
+        planes: &[&crate::TextureView],
+    ) -> DispatchExternalTexture;
     fn create_blas(
         &self,
         desc: &crate::CreateBlasDescriptor<'_>,
@@ -176,9 +192,10 @@ pub trait DeviceInterface: CommonTraits {
 
     fn set_device_lost_callback(&self, device_lost_callback: BoxDeviceLostCallback);
 
-    fn on_uncaptured_error(&self, handler: Box<dyn crate::UncapturedErrorHandler>);
-    fn push_error_scope(&self, filter: crate::ErrorFilter);
-    fn pop_error_scope(&self) -> Pin<Box<dyn PopErrorScopeFuture>>;
+    fn on_uncaptured_error(&self, handler: Arc<dyn crate::UncapturedErrorHandler>);
+    // Returns index on the stack of the pushed error scope.
+    fn push_error_scope(&self, filter: crate::ErrorFilter) -> u32;
+    fn pop_error_scope(&self, index: u32) -> Pin<Box<dyn PopErrorScopeFuture>>;
 
     unsafe fn start_graphics_debugger_capture(&self);
     unsafe fn stop_graphics_debugger_capture(&self);
@@ -223,6 +240,7 @@ pub trait QueueInterface: CommonTraits {
         size: crate::Extent3d,
     );
 
+    /// Submit must always drain the iterator, even in the case of error.
     fn submit(&self, command_buffers: &mut dyn Iterator<Item = DispatchCommandBuffer>) -> u64;
 
     fn get_timestamp_period(&self) -> f32;
@@ -255,6 +273,9 @@ pub trait BufferInterface: CommonTraits {
 pub trait TextureInterface: CommonTraits {
     fn create_view(&self, desc: &crate::TextureViewDescriptor<'_>) -> DispatchTextureView;
 
+    fn destroy(&self);
+}
+pub trait ExternalTextureInterface: CommonTraits {
     fn destroy(&self);
 }
 pub trait BlasInterface: CommonTraits {
@@ -356,7 +377,7 @@ pub trait ComputePassInterface: CommonTraits {
         bind_group: Option<&DispatchBindGroup>,
         offsets: &[crate::DynamicOffset],
     );
-    fn set_push_constants(&mut self, offset: u32, data: &[u8]);
+    fn set_immediates(&mut self, offset: u32, data: &[u8]);
 
     fn insert_debug_marker(&mut self, label: &str);
     fn push_debug_group(&mut self, group_label: &str);
@@ -396,7 +417,7 @@ pub trait RenderPassInterface: CommonTraits {
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     );
-    fn set_push_constants(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]);
+    fn set_immediates(&mut self, offset: u32, data: &[u8]);
     fn set_blend_constant(&mut self, color: crate::Color);
     fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32);
     fn set_viewport(
@@ -412,12 +433,18 @@ pub trait RenderPassInterface: CommonTraits {
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>);
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>);
+    fn draw_mesh_tasks(&mut self, group_count_x: u32, group_count_y: u32, group_count_z: u32);
     fn draw_indirect(
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
     );
     fn draw_indexed_indirect(
+        &mut self,
+        indirect_buffer: &DispatchBuffer,
+        indirect_offset: crate::BufferAddress,
+    );
+    fn draw_mesh_tasks_indirect(
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
@@ -443,7 +470,21 @@ pub trait RenderPassInterface: CommonTraits {
         count_buffer_offset: crate::BufferAddress,
         max_count: u32,
     );
+    fn multi_draw_mesh_tasks_indirect(
+        &mut self,
+        indirect_buffer: &DispatchBuffer,
+        indirect_offset: crate::BufferAddress,
+        count: u32,
+    );
     fn multi_draw_indexed_indirect_count(
+        &mut self,
+        indirect_buffer: &DispatchBuffer,
+        indirect_offset: crate::BufferAddress,
+        count_buffer: &DispatchBuffer,
+        count_buffer_offset: crate::BufferAddress,
+        max_count: u32,
+    );
+    fn multi_draw_mesh_tasks_indirect_count(
         &mut self,
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
@@ -489,7 +530,7 @@ pub trait RenderBundleEncoderInterface: CommonTraits {
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     );
-    fn set_push_constants(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]);
+    fn set_immediates(&mut self, offset: u32, data: &[u8]);
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>);
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>);
@@ -544,16 +585,77 @@ pub trait BufferMappedRangeInterface: CommonTraits {
     fn as_uint8array(&self) -> &js_sys::Uint8Array;
 }
 
-/// Generates Dispatch types for each of the interfaces. Each type is a wrapper around the
-/// wgpu_core and webgpu types, and derefs to the appropriate interface trait-object.
+/// Generates a dispatch type for some `wgpu` API type.
 ///
-/// When there is only one backend, devirtualization fires and all dispatches should turn into
-/// direct calls. If there are multiple, some dispatching will occur.
+/// Invocations of this macro take one of the following forms:
 ///
-/// This also provides `as_*` methods so that the backend implementations can dereference other
-/// arguments. These are similarly free when there is only one backend.
+/// ```ignore
+/// dispatch_types! {mut type D: I = Core, Web, Dyn }
+/// dispatch_types! {ref type D: I = Core, Web, Dyn }
+/// ```
 ///
-/// In the future, we may want a truly generic backend, which could be extended from this enum.
+/// This defines `D` as a type that dereferences to a `dyn I` trait object. Most uses of
+/// `D` in the rest of this crate just call the methods from the `dyn I` object, not from
+/// `D` itself.
+///
+/// Internally, `D` is an enum with up to three variants holding values of type `Core`,
+/// `Web`, and `Dyn`, all of which must implement `I`. `Core`, `Web` and `Dyn` are the
+/// types from the `wgpu_core`, `webgpu`, and `custom` submodules of `wgpu::backend` that
+/// correspond to `D`. The macro generates `Deref` and `DerefMut` implementations that
+/// match on this enum and produce a `dyn I` reference for each variant.
+///
+/// The macro's `mut type` form defines `D` as the unique owner of the backend type, with
+/// a `DerefMut` implementation, and `as_*_mut` methods that return `&mut` references.
+/// This `D` does not implement `Clone`.
+///
+/// The macro's `ref type` form defines `D` to hold an `Arc` pointing to the backend type,
+/// permitting `Clone` and `Deref`, but losing exclusive, mutable access.
+///
+/// For example:
+///
+/// ```ignore
+/// dispatch_types! {ref type DispatchBuffer: BufferInterface =
+///                  CoreBuffer, WebBuffer, DynBuffer}
+/// ```
+///
+/// This defines `DispatchBuffer` as a type that dereferences to `&dyn BufferInterface`,
+/// which has methods like `map_async` and `destroy`. The enum would be:
+///
+/// ```ignore
+/// pub enum DispatchBuffer {
+///     #[cfg(wgpu_core)]
+///     Core(Arc<CoreBuffer>),
+///     #[cfg(webgpu)]
+///     WebGPU(WebBuffer),
+///     #[cfg(custom)]
+///     Custom(DynBuffer),
+/// }
+/// ```
+///
+/// This macro also defines `as_*` methods so that the backend implementations can
+/// dereference other arguments.
+///
+/// ## Devirtualization
+///
+/// The dispatch types generated by this macro are carefully designed to allow the
+/// compiler to completely devirtualize calls in most circumstances.
+///
+/// Note that every variant of the enum generated by this macro is under a `#[cfg]`.
+/// Naturally, the `match` expressions in the `Deref` and `DerefMut` implementations have
+/// matching `#[cfg]` attributes on each match arm.
+///
+/// In practice, when `wgpu`'s `"custom"` feature is not enabled, there is usually only
+/// one variant in the `enum`, making it effectively a newtype around the sole variant's
+/// data: it has no discriminant to branch on, and the `match` expressions are removed
+/// entirely by the compiler.
+///
+/// In this case, when we invoke a method from the interface trait `I` on a dispatch type,
+/// the `Deref` and `DerefMut` implementations' `match` statements build a `&dyn I` for
+/// the data, on which we immediately invoke a method. The vtable is a constant, allowing
+/// the Rust compiler to turn the `dyn` method call into an ordinary method call. This
+/// creates opportunities for inlining.
+///
+/// Similarly, the `as_*` methods are free when there is only one backend.
 macro_rules! dispatch_types {
     (
         ref type $name:ident: $interface:ident = $core_type:ident,$webgpu_type:ident,$custom_type:ident
@@ -563,7 +665,7 @@ macro_rules! dispatch_types {
             #[cfg(wgpu_core)]
             Core(Arc<$core_type>),
             #[cfg(webgpu)]
-            WebGPU(Arc<$webgpu_type>),
+            WebGPU($webgpu_type),
             #[allow(clippy::allow_attributes, private_interfaces)]
             #[cfg(custom)]
             Custom($custom_type),
@@ -639,7 +741,7 @@ macro_rules! dispatch_types {
         impl From<$webgpu_type> for $name {
             #[inline]
             fn from(value: $webgpu_type) -> Self {
-                Self::WebGPU(Arc::new(value))
+                Self::WebGPU(value)
             }
         }
 
@@ -652,7 +754,7 @@ macro_rules! dispatch_types {
                     #[cfg(wgpu_core)]
                     Self::Core(value) => value.as_ref(),
                     #[cfg(webgpu)]
-                    Self::WebGPU(value) => value.as_ref(),
+                    Self::WebGPU(value) => value,
                     #[cfg(custom)]
                     Self::Custom(value) => value.deref(),
                     #[cfg(not(any(wgpu_core, webgpu)))]
@@ -840,6 +942,7 @@ dispatch_types! {ref type DispatchTextureView: TextureViewInterface = CoreTextur
 dispatch_types! {ref type DispatchSampler: SamplerInterface = CoreSampler, WebSampler, DynSampler}
 dispatch_types! {ref type DispatchBuffer: BufferInterface = CoreBuffer, WebBuffer, DynBuffer}
 dispatch_types! {ref type DispatchTexture: TextureInterface = CoreTexture, WebTexture, DynTexture}
+dispatch_types! {ref type DispatchExternalTexture: ExternalTextureInterface = CoreExternalTexture, WebExternalTexture, DynExternalTexture}
 dispatch_types! {ref type DispatchBlas: BlasInterface = CoreBlas, WebBlas, DynBlas}
 dispatch_types! {ref type DispatchTlas: TlasInterface = CoreTlas, WebTlas, DynTlas}
 dispatch_types! {ref type DispatchQuerySet: QuerySetInterface = CoreQuerySet, WebQuerySet, DynQuerySet}
@@ -850,7 +953,7 @@ dispatch_types! {ref type DispatchPipelineCache: PipelineCacheInterface = CorePi
 dispatch_types! {mut type DispatchCommandEncoder: CommandEncoderInterface = CoreCommandEncoder, WebCommandEncoder, DynCommandEncoder}
 dispatch_types! {mut type DispatchComputePass: ComputePassInterface = CoreComputePass, WebComputePassEncoder, DynComputePass}
 dispatch_types! {mut type DispatchRenderPass: RenderPassInterface = CoreRenderPass, WebRenderPassEncoder, DynRenderPass}
-dispatch_types! {ref type DispatchCommandBuffer: CommandBufferInterface = CoreCommandBuffer, WebCommandBuffer, DynCommandBuffer}
+dispatch_types! {mut type DispatchCommandBuffer: CommandBufferInterface = CoreCommandBuffer, WebCommandBuffer, DynCommandBuffer}
 dispatch_types! {mut type DispatchRenderBundleEncoder: RenderBundleEncoderInterface = CoreRenderBundleEncoder, WebRenderBundleEncoder, DynRenderBundleEncoder}
 dispatch_types! {ref type DispatchRenderBundle: RenderBundleInterface = CoreRenderBundle, WebRenderBundle, DynRenderBundle}
 dispatch_types! {ref type DispatchSurface: SurfaceInterface = CoreSurface, WebSurface, DynSurface}

@@ -20,6 +20,9 @@ extend-exclude = [
 lod = "lod"
 metalness = "metalness"
 
+# A DXC command line argument
+Fo = "Fo"
+
 # Usernames
 Healthire = "Healthire"
 REASY = "REASY"

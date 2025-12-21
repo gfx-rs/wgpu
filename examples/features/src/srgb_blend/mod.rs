@@ -92,7 +92,7 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            immediate_size: 0,
         });
 
         // Create bind group
@@ -146,7 +146,7 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
             },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
-            multiview: None,
+            multiview_mask: None,
             cache: None,
         });
 
@@ -173,7 +173,6 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        device.push_error_scope(wgpu::ErrorFilter::Validation);
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
@@ -196,6 +195,7 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
+                multiview_mask: None,
             });
             rpass.push_debug_group("Prepare data for draw.");
             rpass.set_pipeline(&self.pipeline);
@@ -223,7 +223,7 @@ pub fn main() {
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST_SRGB: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST_SRGB: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "srgb-blend-srg",
     // Generated on WARP/Windows
     image_path: "/examples/features/src/srgb_blend/screenshot-srgb.png",
@@ -237,7 +237,7 @@ static TEST_SRGB: crate::framework::ExampleTestParams = crate::framework::Exampl
 
 #[cfg(test)]
 #[wgpu_test::gpu_test]
-static TEST_LINEAR: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
+pub static TEST_LINEAR: crate::framework::ExampleTestParams = crate::framework::ExampleTestParams {
     name: "srgb-blend-linear",
     // Generated on WARP/Windows
     image_path: "/examples/features/src/srgb_blend/screenshot-linear.png",

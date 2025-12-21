@@ -178,6 +178,7 @@ struct BindingParser<'a> {
     sampling: ParsedAttribute<crate::Sampling>,
     invariant: ParsedAttribute<bool>,
     blend_src: ParsedAttribute<Handle<ast::Expression<'a>>>,
+    per_primitive: ParsedAttribute<()>,
 }
 
 impl<'a> BindingParser<'a> {
@@ -235,7 +236,20 @@ impl<'a> BindingParser<'a> {
                 lexer.expect(Token::Paren('('))?;
                 self.blend_src
                     .set(parser.general_expression(lexer, ctx)?, name_span)?;
+                lexer.skip(Token::Separator(','));
                 lexer.expect(Token::Paren(')'))?;
+            }
+            "per_primitive" => {
+                if !lexer
+                    .enable_extensions
+                    .contains(ImplementedEnableExtension::WgpuMeshShader)
+                {
+                    return Err(Box::new(Error::EnableExtensionNotEnabled {
+                        span: name_span,
+                        kind: ImplementedEnableExtension::WgpuMeshShader.into(),
+                    }));
+                }
+                self.per_primitive.set((), name_span)?;
             }
             _ => return Err(Box::new(Error::UnknownAttribute(name_span))),
         }
@@ -250,9 +264,10 @@ impl<'a> BindingParser<'a> {
             self.sampling.value,
             self.invariant.value.unwrap_or_default(),
             self.blend_src.value,
+            self.per_primitive.value,
         ) {
-            (None, None, None, None, false, None) => Ok(None),
-            (Some(location), None, interpolation, sampling, false, blend_src) => {
+            (None, None, None, None, false, None, None) => Ok(None),
+            (Some(location), None, interpolation, sampling, false, blend_src, per_primitive) => {
                 // Before handing over the completed `Module`, we call
                 // `apply_default_interpolation` to ensure that the interpolation and
                 // sampling have been explicitly specified on all vertex shader output and fragment
@@ -262,17 +277,18 @@ impl<'a> BindingParser<'a> {
                     interpolation,
                     sampling,
                     blend_src,
+                    per_primitive: per_primitive.is_some(),
                 }))
             }
-            (None, Some(crate::BuiltIn::Position { .. }), None, None, invariant, None) => {
+            (None, Some(crate::BuiltIn::Position { .. }), None, None, invariant, None, None) => {
                 Ok(Some(ast::Binding::BuiltIn(crate::BuiltIn::Position {
                     invariant,
                 })))
             }
-            (None, Some(built_in), None, None, false, None) => {
+            (None, Some(built_in), None, None, false, None, None) => {
                 Ok(Some(ast::Binding::BuiltIn(built_in)))
             }
-            (_, _, _, _, _, _) => Err(Box::new(Error::InconsistentBinding(span))),
+            (_, _, _, _, _, _, _) => Err(Box::new(Error::InconsistentBinding(span))),
         }
     }
 }
@@ -676,6 +692,7 @@ impl Parser {
             | "texture_depth_cube"
             | "texture_depth_cube_array"
             | "texture_depth_multisampled_2d"
+            | "texture_external"
             | "texture_storage_1d"
             | "texture_storage_1d_array"
             | "texture_storage_2d"
@@ -1316,7 +1333,7 @@ impl Parser {
                     };
                     crate::AddressSpace::Storage { access }
                 }
-                _ => conv::map_address_space(class_str, span)?,
+                _ => conv::map_address_space(class_str, span, &lexer.enable_extensions)?,
             };
             lexer.expect(Token::Paren('>'))?;
         }
@@ -1689,7 +1706,7 @@ impl Parser {
             "ptr" => {
                 lexer.expect_generic_paren('<')?;
                 let (ident, span) = lexer.next_ident_with_span()?;
-                let mut space = conv::map_address_space(ident, span)?;
+                let mut space = conv::map_address_space(ident, span, &lexer.enable_extensions)?;
                 lexer.expect(Token::Separator(','))?;
                 let base = self.type_decl(lexer, ctx)?;
                 if let crate::AddressSpace::Storage { ref mut access } = space {
@@ -1867,6 +1884,11 @@ impl Parser {
                 arrayed: false,
                 class: crate::ImageClass::Depth { multi: true },
             },
+            "texture_external" => ast::Type::Image {
+                dim: crate::ImageDimension::D2,
+                arrayed: false,
+                class: crate::ImageClass::External,
+            },
             "texture_storage_1d" => {
                 let (format, access) = lexer.next_format_generic()?;
                 ast::Type::Image {
@@ -1908,15 +1930,87 @@ impl Parser {
                 }
             }
             "acceleration_structure" => {
+                if !lexer
+                    .enable_extensions
+                    .contains(ImplementedEnableExtension::WgpuRayQuery)
+                {
+                    return Err(Box::new(Error::EnableExtensionNotEnabled {
+                        kind: EnableExtension::Implemented(
+                            ImplementedEnableExtension::WgpuRayQuery,
+                        ),
+                        span,
+                    }));
+                }
                 let vertex_return = lexer.next_acceleration_structure_flags()?;
+                if !lexer
+                    .enable_extensions
+                    .contains(ImplementedEnableExtension::WgpuRayQueryVertexReturn)
+                    && vertex_return
+                {
+                    return Err(Box::new(Error::EnableExtensionNotEnabled {
+                        kind: EnableExtension::Implemented(
+                            ImplementedEnableExtension::WgpuRayQueryVertexReturn,
+                        ),
+                        span,
+                    }));
+                }
                 ast::Type::AccelerationStructure { vertex_return }
             }
             "ray_query" => {
+                if !lexer
+                    .enable_extensions
+                    .contains(ImplementedEnableExtension::WgpuRayQuery)
+                {
+                    return Err(Box::new(Error::EnableExtensionNotEnabled {
+                        kind: EnableExtension::Implemented(
+                            ImplementedEnableExtension::WgpuRayQuery,
+                        ),
+                        span,
+                    }));
+                }
                 let vertex_return = lexer.next_acceleration_structure_flags()?;
+                if !lexer
+                    .enable_extensions
+                    .contains(ImplementedEnableExtension::WgpuRayQueryVertexReturn)
+                    && vertex_return
+                {
+                    return Err(Box::new(Error::EnableExtensionNotEnabled {
+                        kind: EnableExtension::Implemented(
+                            ImplementedEnableExtension::WgpuRayQueryVertexReturn,
+                        ),
+                        span,
+                    }));
+                }
                 ast::Type::RayQuery { vertex_return }
             }
-            "RayDesc" => ast::Type::RayDesc,
-            "RayIntersection" => ast::Type::RayIntersection,
+            "RayDesc" => {
+                if !lexer
+                    .enable_extensions
+                    .contains(ImplementedEnableExtension::WgpuRayQuery)
+                {
+                    return Err(Box::new(Error::EnableExtensionNotEnabled {
+                        kind: EnableExtension::Implemented(
+                            ImplementedEnableExtension::WgpuRayQuery,
+                        ),
+                        span,
+                    }));
+                }
+                ast::Type::RayDesc
+            }
+            "RayIntersection" => {
+                if !lexer
+                    .enable_extensions
+                    .contains(ImplementedEnableExtension::WgpuRayQuery)
+                {
+                    return Err(Box::new(Error::EnableExtensionNotEnabled {
+                        kind: EnableExtension::Implemented(
+                            ImplementedEnableExtension::WgpuRayQuery,
+                        ),
+                        span,
+                    }));
+                }
+                ast::Type::RayIntersection
+            }
             _ => return Ok(None),
         }))
     }
@@ -2114,7 +2208,7 @@ impl Parser {
                     let _ = lexer.next();
                     this.pop_rule_span(lexer);
                 }
-                (Token::Paren('{') | Token::Attribute, _) => {
+                (token, _) if is_start_of_compound_statement(token) => {
                     let (inner, span) = this.block(lexer, ctx, brace_nesting_level)?;
                     block.stmts.push(ast::Statement {
                         kind: ast::StatementKind::Block(inner),
@@ -2178,6 +2272,16 @@ impl Parser {
                         }
                         "var" => {
                             let _ = lexer.next();
+
+                            if lexer.skip(Token::Paren('<')) {
+                                let (class_str, span) = lexer.next_ident_with_span()?;
+                                if class_str != "function" {
+                                    return Err(Box::new(Error::InvalidLocalVariableAddressSpace(
+                                        span,
+                                    )));
+                                }
+                                lexer.expect(Token::Paren('>'))?;
+                            }
 
                             let name = lexer.next_ident()?;
                             let ty = if lexer.skip(Token::Separator(':')) {
@@ -2280,11 +2384,14 @@ impl Parser {
                                         let value = loop {
                                             let value = this.switch_value(lexer, ctx)?;
                                             if lexer.skip(Token::Separator(',')) {
-                                                if lexer.skip(Token::Separator(':')) {
+                                                // list of values ends with ':' or a compound statement
+                                                let next_token = lexer.peek().0;
+                                                if next_token == Token::Separator(':')
+                                                    || is_start_of_compound_statement(next_token)
+                                                {
                                                     break value;
                                                 }
                                             } else {
-                                                lexer.skip(Token::Separator(':'));
                                                 break value;
                                             }
                                             cases.push(ast::SwitchCase {
@@ -2293,6 +2400,8 @@ impl Parser {
                                                 fall_through: true,
                                             });
                                         };
+
+                                        lexer.skip(Token::Separator(':'));
 
                                         let body = this.block(lexer, ctx, brace_nesting_level)?.0;
 
@@ -2778,12 +2887,14 @@ impl Parser {
         // read attributes
         let mut binding = None;
         let mut stage = ParsedAttribute::default();
-        let mut compute_span = Span::new(0, 0);
+        let mut compute_like_span = Span::new(0, 0);
         let mut workgroup_size = ParsedAttribute::default();
         let mut early_depth_test = ParsedAttribute::default();
         let (mut bind_index, mut bind_group) =
             (ParsedAttribute::default(), ParsedAttribute::default());
         let mut id = ParsedAttribute::default();
+        let mut payload = ParsedAttribute::default();
+        let mut mesh_output = ParsedAttribute::default();
 
         let mut must_use: ParsedAttribute<Span> = ParsedAttribute::default();
 
@@ -2842,7 +2953,51 @@ impl Parser {
                 }
                 "compute" => {
                     stage.set(ShaderStage::Compute, name_span)?;
-                    compute_span = name_span;
+                    compute_like_span = name_span;
+                }
+                "task" => {
+                    if !lexer
+                        .enable_extensions
+                        .contains(ImplementedEnableExtension::WgpuMeshShader)
+                    {
+                        return Err(Box::new(Error::EnableExtensionNotEnabled {
+                            span: name_span,
+                            kind: ImplementedEnableExtension::WgpuMeshShader.into(),
+                        }));
+                    }
+                    stage.set(ShaderStage::Task, name_span)?;
+                    compute_like_span = name_span;
+                }
+                "mesh" => {
+                    if !lexer
+                        .enable_extensions
+                        .contains(ImplementedEnableExtension::WgpuMeshShader)
+                    {
+                        return Err(Box::new(Error::EnableExtensionNotEnabled {
+                            span: name_span,
+                            kind: ImplementedEnableExtension::WgpuMeshShader.into(),
+                        }));
+                    }
+                    stage.set(ShaderStage::Mesh, name_span)?;
+                    compute_like_span = name_span;
+
+                    lexer.expect(Token::Paren('('))?;
+                    mesh_output.set(lexer.next_ident_with_span()?, name_span)?;
+                    lexer.expect(Token::Paren(')'))?;
+                }
+                "payload" => {
+                    if !lexer
+                        .enable_extensions
+                        .contains(ImplementedEnableExtension::WgpuMeshShader)
+                    {
+                        return Err(Box::new(Error::EnableExtensionNotEnabled {
+                            span: name_span,
+                            kind: ImplementedEnableExtension::WgpuMeshShader.into(),
+                        }));
+                    }
+                    lexer.expect(Token::Paren('('))?;
+                    payload.set(lexer.next_ident_with_span()?, name_span)?;
+                    lexer.expect(Token::Paren(')'))?;
                 }
                 "workgroup_size" => {
                     lexer.expect(Token::Paren('('))?;
@@ -3008,13 +3163,16 @@ impl Parser {
                 )?;
                 Some(ast::GlobalDeclKind::Fn(ast::Function {
                     entry_point: if let Some(stage) = stage.value {
-                        if stage == ShaderStage::Compute && workgroup_size.value.is_none() {
-                            return Err(Box::new(Error::MissingWorkgroupSize(compute_span)));
+                        if stage.compute_like() && workgroup_size.value.is_none() {
+                            return Err(Box::new(Error::MissingWorkgroupSize(compute_like_span)));
                         }
+
                         Some(ast::EntryPoint {
                             stage,
                             early_depth_test: early_depth_test.value,
                             workgroup_size: workgroup_size.value,
+                            mesh_output_variable: mesh_output.value,
+                            task_payload: payload.value,
                         })
                     } else {
                         None
@@ -3236,4 +3394,8 @@ impl Parser {
                 ))
             })
     }
+}
+
+const fn is_start_of_compound_statement<'a>(token: Token<'a>) -> bool {
+    matches!(token, Token::Attribute | Token::Paren('{'))
 }

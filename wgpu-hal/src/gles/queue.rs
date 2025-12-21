@@ -13,6 +13,18 @@ fn extract_marker<'a>(data: &'a [u8], range: &core::ops::Range<u32>) -> &'a str 
     core::str::from_utf8(&data[range.start as usize..range.end as usize]).unwrap()
 }
 
+fn to_debug_str(s: &str) -> &str {
+    // The spec mentions that if the length given to debug functions is negative,
+    // the implementation will access the ptr and look for a null that terminates
+    // the string but some implementations will try to access the ptr even if the
+    // length is 0.
+    if s.is_empty() {
+        "<empty>"
+    } else {
+        s
+    }
+}
+
 fn get_2d_target(target: u32, array_layer: u32) -> u32 {
     const CUBEMAP_FACES: [u32; 6] = [
         glow::TEXTURE_CUBE_MAP_POSITIVE_X,
@@ -1245,6 +1257,10 @@ impl super::Queue {
                 }
                 unsafe { gl.memory_barrier(flags) };
             }
+            // because `STORAGE_WRITE_ONLY` and `STORAGE_READ_WRITE` are only states
+            // we can transit from due OpenGL memory barriers are used to make _subsequent_
+            // operations see changes from the _shader_ side. We filter out usage changes that are
+            // does not comes from the shader side in `transition_textures`
             C::TextureBarrier(usage) => {
                 let mut flags = 0;
                 if usage.contains(wgt::TextureUses::RESOURCE) {
@@ -1256,6 +1272,9 @@ impl super::Queue {
                         | wgt::TextureUses::STORAGE_READ_WRITE,
                 ) {
                     flags |= glow::SHADER_IMAGE_ACCESS_BARRIER_BIT;
+                }
+                if usage.intersects(wgt::TextureUses::COPY_SRC) {
+                    flags |= glow::PIXEL_BUFFER_BARRIER_BIT;
                 }
                 if usage.contains(wgt::TextureUses::COPY_DST) {
                     flags |= glow::TEXTURE_UPDATE_BARRIER_BIT;
@@ -1586,7 +1605,7 @@ impl super::Queue {
                             glow::DEBUG_TYPE_MARKER,
                             DEBUG_ID,
                             glow::DEBUG_SEVERITY_NOTIFICATION,
-                            marker,
+                            to_debug_str(marker),
                         )
                     }
                 };
@@ -1599,7 +1618,11 @@ impl super::Queue {
                         .private_caps
                         .contains(PrivateCapabilities::DEBUG_FNS)
                     {
-                        gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, marker)
+                        gl.push_debug_group(
+                            glow::DEBUG_SOURCE_APPLICATION,
+                            DEBUG_ID,
+                            to_debug_str(marker),
+                        )
                     }
                 };
             }
@@ -1614,7 +1637,7 @@ impl super::Queue {
                     }
                 };
             }
-            C::SetPushConstants {
+            C::SetImmediates {
                 ref uniform,
                 offset,
             } => {
@@ -1865,7 +1888,13 @@ impl crate::Queue for super::Queue {
                     .private_caps
                     .contains(PrivateCapabilities::DEBUG_FNS)
                 {
-                    unsafe { gl.push_debug_group(glow::DEBUG_SOURCE_APPLICATION, DEBUG_ID, label) };
+                    unsafe {
+                        gl.push_debug_group(
+                            glow::DEBUG_SOURCE_APPLICATION,
+                            DEBUG_ID,
+                            to_debug_str(label),
+                        )
+                    };
                 }
             }
 

@@ -1,16 +1,27 @@
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{
+    gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters, TestingContext,
+};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([
+        NUM_WORKGROUPS_BUILTIN,
+        DISCARD_DISPATCH,
+        RESET_BIND_GROUPS,
+        ZERO_SIZED_BUFFER,
+    ]);
+}
 
 /// Make sure that the num_workgroups builtin works properly (it requires a workaround on D3D12).
 #[gpu_test]
 static NUM_WORKGROUPS_BUILTIN: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgpu::Features::PUSH_CONSTANTS)
+            .features(wgpu::Features::IMMEDIATES)
             .downlevel_flags(
                 wgpu::DownlevelFlags::COMPUTE_SHADERS | wgpu::DownlevelFlags::INDIRECT_EXECUTION,
             )
             .limits(wgpu::Limits {
-                max_push_constant_size: 4,
+                max_immediate_size: 4,
                 ..wgpu::Limits::downlevel_defaults()
             }),
     )
@@ -25,13 +36,13 @@ static NUM_WORKGROUPS_BUILTIN: GpuTestConfiguration = GpuTestConfiguration::new(
 static DISCARD_DISPATCH: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgpu::Features::PUSH_CONSTANTS)
+            .features(wgpu::Features::IMMEDIATES)
             .downlevel_flags(
                 wgpu::DownlevelFlags::COMPUTE_SHADERS | wgpu::DownlevelFlags::INDIRECT_EXECUTION,
             )
             .limits(wgpu::Limits {
                 max_compute_workgroups_per_dimension: 10,
-                max_push_constant_size: 4,
+                max_immediate_size: 4,
                 ..wgpu::Limits::downlevel_defaults()
             }),
     )
@@ -56,17 +67,17 @@ static DISCARD_DISPATCH: GpuTestConfiguration = GpuTestConfiguration::new()
 static RESET_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgpu::Features::PUSH_CONSTANTS)
+            .features(wgpu::Features::IMMEDIATES)
             .downlevel_flags(
                 wgpu::DownlevelFlags::COMPUTE_SHADERS | wgpu::DownlevelFlags::INDIRECT_EXECUTION,
             )
             .limits(wgpu::Limits {
-                max_push_constant_size: 4,
+                max_immediate_size: 4,
                 ..wgpu::Limits::downlevel_defaults()
-            }),
+            }).enable_noop(),
     )
     .run_async(|ctx| async move {
-        ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
+        let scope = ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
 
         let test_resources = TestResources::new(&ctx);
 
@@ -81,13 +92,13 @@ static RESET_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
         {
             let mut compute_pass = encoder.begin_compute_pass(&Default::default());
             compute_pass.set_pipeline(&test_resources.pipeline);
-            compute_pass.set_push_constants(0, &[0, 0, 0, 0]);
+            compute_pass.set_immediates(0, &[0, 0, 0, 0]);
             // compute_pass.set_bind_group(0, &test_resources.bind_group, &[]);
             compute_pass.dispatch_workgroups_indirect(&indirect_buffer, 0);
         }
         ctx.queue.submit(Some(encoder.finish()));
 
-        let error = pollster::block_on(ctx.device.pop_error_scope());
+        let error = pollster::block_on(scope.pop());
         assert!(error.is_some_and(|error| {
             format!("{error}").contains("The current set ComputePipeline with '' label expects a BindGroup to be set at index 0")
         }));
@@ -98,17 +109,18 @@ static RESET_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
 static ZERO_SIZED_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(wgpu::Features::PUSH_CONSTANTS)
+            .features(wgpu::Features::IMMEDIATES)
             .downlevel_flags(
                 wgpu::DownlevelFlags::COMPUTE_SHADERS | wgpu::DownlevelFlags::INDIRECT_EXECUTION,
             )
             .limits(wgpu::Limits {
-                max_push_constant_size: 4,
+                max_immediate_size: 4,
                 ..wgpu::Limits::downlevel_defaults()
-            }),
+            })
+            .enable_noop(),
     )
     .run_async(|ctx| async move {
-        ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
+        let scope = ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
 
         let test_resources = TestResources::new(&ctx);
 
@@ -123,13 +135,13 @@ static ZERO_SIZED_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
         {
             let mut compute_pass = encoder.begin_compute_pass(&Default::default());
             compute_pass.set_pipeline(&test_resources.pipeline);
-            compute_pass.set_push_constants(0, &[0, 0, 0, 0]);
+            compute_pass.set_immediates(0, &[0, 0, 0, 0]);
             compute_pass.set_bind_group(0, &test_resources.bind_group, &[]);
             compute_pass.dispatch_workgroups_indirect(&indirect_buffer, 0);
         }
         ctx.queue.submit(Some(encoder.finish()));
 
-        let error = pollster::block_on(ctx.device.pop_error_scope());
+        let error = pollster::block_on(scope.pop());
         assert!(error.is_some_and(|error| {
             format!("{error}").contains(
                 "Indirect buffer uses bytes 0..12 which overruns indirect buffer of size 0",
@@ -151,8 +163,8 @@ impl TestResources {
                 inner: u32,
             }
 
-            // `test_offset.inner` should always be 0; we test that resetting the push constant set by the validation code works properly.
-            var<push_constant> test_offset: TestOffsetPc;
+            // `test_offset.inner` should always be 0; we test that resetting the immediate data set by the validation code works properly.
+            var<immediate> test_offset: TestOffsetPc;
 
             @group(0) @binding(0)
             var<storage, read_write> out: array<u32, 3>;
@@ -195,10 +207,7 @@ impl TestResources {
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
                 bind_group_layouts: &[&bgl],
-                push_constant_ranges: &[wgpu::PushConstantRange {
-                    stages: wgpu::ShaderStages::COMPUTE,
-                    range: 0..4,
-                }],
+                immediate_size: 4,
             });
 
         let pipeline = ctx
@@ -280,7 +289,7 @@ async fn run_test(ctx: &TestingContext, num_workgroups: &[u32; 3]) -> [u32; 3] {
         {
             let mut compute_pass = encoder.begin_compute_pass(&Default::default());
             compute_pass.set_pipeline(&test_resources.pipeline);
-            compute_pass.set_push_constants(0, &[0, 0, 0, 0]);
+            compute_pass.set_immediates(0, &[0, 0, 0, 0]);
             compute_pass.set_bind_group(0, &test_resources.bind_group, &[]);
             compute_pass.dispatch_workgroups_indirect(&indirect_buffer, indirect_offset);
         }
@@ -300,7 +309,9 @@ async fn run_test(ctx: &TestingContext, num_workgroups: &[u32; 3]) -> [u32; 3] {
             .slice(..)
             .map_async(wgpu::MapMode::Read, |_| {});
 
-        ctx.async_poll(wgpu::PollType::wait()).await.unwrap();
+        ctx.async_poll(wgpu::PollType::wait_indefinitely())
+            .await
+            .unwrap();
 
         let view = test_resources.readback_buffer.slice(..).get_mapped_range();
 

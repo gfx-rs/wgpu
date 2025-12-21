@@ -44,7 +44,7 @@ OpDecorate %27 Location 0
 %12 = OpTypePointer UniformConstant %6
 %11 = OpVariable  %12  UniformConstant
 %19 = OpTypeFunction %7 %10 %12
-%20 = OpConstant  %5  0.0
+%20 = OpConstant  %5  0
 %21 = OpConstantComposite  %8  %20 %20
 %23 = OpTypeSampledImage %4
 %28 = OpTypePointer Output %7

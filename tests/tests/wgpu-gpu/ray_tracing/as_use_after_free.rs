@@ -11,11 +11,14 @@ use wgpu::{
     PollType, TlasInstance, VertexFormat,
 };
 use wgpu_macros::gpu_test;
-use wgpu_test::{FailureCase, GpuTestConfiguration, TestParameters, TestingContext};
+use wgpu_test::{GpuTestConfiguration, TestParameters, TestingContext};
+
+pub fn all_tests(tests: &mut Vec<wgpu_test::GpuTestInitializer>) {
+    tests.push(ACCELERATION_STRUCTURE_USE_AFTER_FREE);
+}
 
 fn required_features() -> wgpu::Features {
     wgpu::Features::EXPERIMENTAL_RAY_QUERY
-        | wgpu::Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE
 }
 
 /// This test creates a blas, puts a reference to it in a tlas instance inside a tlas package,
@@ -88,7 +91,7 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
 
     // Drop the blas and ensure that if it was going to die, it is dead.
     drop(blas);
-    ctx.device.poll(PollType::Wait).unwrap();
+    ctx.device.poll(PollType::wait_indefinitely()).unwrap();
 
     // build the tlas package to ensure the blas is dropped
     let mut encoder = ctx
@@ -123,7 +126,7 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
 
     // Drop the TLAS package and ensure that if it was going to die, it is dead.
     drop(tlas);
-    ctx.device.poll(PollType::Wait).unwrap();
+    ctx.device.poll(PollType::wait_indefinitely()).unwrap();
 
     // Run the pass with the bind group that references the TLAS package.
     let mut encoder = ctx
@@ -147,8 +150,6 @@ static ACCELERATION_STRUCTURE_USE_AFTER_FREE: GpuTestConfiguration = GpuTestConf
         TestParameters::default()
             .test_features_limits()
             .limits(acceleration_structure_limits())
-            .features(required_features())
-            // https://github.com/gfx-rs/wgpu/issues/6727
-            .skip(FailureCase::backend_adapter(wgpu::Backends::VULKAN, "AMD")),
+            .features(required_features()),
     )
     .run_sync(acceleration_structure_use_after_free);

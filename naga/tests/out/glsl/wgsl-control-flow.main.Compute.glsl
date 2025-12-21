@@ -58,17 +58,42 @@ void control_flow() {
         }
         case 2: {
             pos = 1;
-            return;
+            break;
         }
         case 3: {
             pos = 2;
-            return;
+            break;
         }
         case 4: {
-            return;
+            break;
         }
         default: {
             pos = 3;
+            break;
+        }
+    }
+    int _e15 = pos;
+    switch(_e15) {
+        case 1: {
+            pos = 0;
+            return;
+        }
+        case 2: {
+            pos = 1;
+            return;
+        }
+        case 3:
+        case 4: {
+            pos = 2;
+            return;
+        }
+        case 5:
+        case 6: {
+            pos = 3;
+            return;
+        }
+        default: {
+            pos = 4;
             return;
         }
     }

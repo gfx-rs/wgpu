@@ -3,27 +3,29 @@ name: Shaders
 on:
   push:
     branches-ignore: [
-        # We don't need to run on renovate PRs.
+        # Renovate branches are always PRs, so they will be covered
+        # by the pull_request event.
         "renovate/**",
-        # This is the branch the merge queue creates.
+        # Branches with the `gh-readonly-queue` prefix are used by the
+        # merge queue, so they are already covered by the `merge_group` event.
         "gh-readonly-queue/**",
       ]
-    tags: [v0.*]
   pull_request:
   merge_group:
 
-env:
-  # Sourced from https://vulkan.lunarg.com/sdk/home#linux
-  #
-  # We don't include the 4th version number, as it's not used in any URL.
-  VULKAN_SDK_VERSION: "1.4.313"
+# Every time a PR is pushed to, cancel any previous jobs. This
+# makes us behave nicer to github and get faster turnaround times
+# on PRs that are pushed to multiple times in rapid succession.
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+  cancel-in-progress: ${{github.event_name == 'pull_request'}}
 
 jobs:
   naga-validate-windows:
     name: "Validate: HLSL"
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Debug symbols to `line-tables-only`
         shell: bash
@@ -65,9 +67,9 @@ jobs:
 
   naga-validate-macos:
     name: "Validate: MSL"
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Debug symbols to line-tables-only
         shell: bash
@@ -89,21 +91,10 @@ jobs:
     name: "Validate: SPIR-V/GLSL/DOT/WGSL"
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Vulkan SDK
-        shell: bash
-        run: |
-          set -e
-
-          sudo apt-get update -y -qq
-
-          # vulkan sdk
-          wget -qO - https://packages.lunarg.com/lunarg-signing-key-pub.asc | sudo apt-key add -
-          sudo wget -qO /etc/apt/sources.list.d/lunarg-vulkan-$VULKAN_SDK_VERSION-noble.list https://packages.lunarg.com/vulkan/$VULKAN_SDK_VERSION/lunarg-vulkan-$VULKAN_SDK_VERSION-noble.list
-
-          sudo apt-get update
-          sudo apt install -y vulkan-sdk
+        uses: ./.github/actions/install-vulkan-sdk
 
       - name: Install Graphviz
         run: sudo apt-get install graphviz

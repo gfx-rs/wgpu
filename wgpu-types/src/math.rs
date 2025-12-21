@@ -1,4 +1,4 @@
-//! Utilitary math functions.
+//! Utility math functions.
 
 use core::ops::{Add, Rem, Sub};
 

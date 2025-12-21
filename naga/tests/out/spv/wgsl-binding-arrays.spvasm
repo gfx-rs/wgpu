@@ -130,7 +130,7 @@ OpDecorate %395 NonUniform
 %54 = OpTypePointer Uniform %4
 %55 = OpConstant  %3  0
 %57 = OpConstantComposite  %23  %55 %55
-%58 = OpConstant  %6  0.0
+%58 = OpConstant  %6  0
 %59 = OpConstantComposite  %22  %58 %58 %58 %58
 %60 = OpTypeVector %6 2
 %61 = OpConstantComposite  %60  %58 %58

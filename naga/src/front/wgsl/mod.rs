@@ -11,6 +11,10 @@ mod parse;
 #[cfg(test)]
 mod tests;
 
+pub use parse::directive::enable_extension::{
+    EnableExtension, ImplementedEnableExtension, UnimplementedEnableExtension,
+};
+
 pub use crate::front::wgsl::error::ParseError;
 pub use crate::front::wgsl::parse::directive::language_extension::{
     ImplementedLanguageExtension, LanguageExtension, UnimplementedLanguageExtension,
@@ -47,6 +51,9 @@ impl Frontend {
             parser: Parser::new(),
             options,
         }
+    }
+    pub fn set_options(&mut self, options: Options) {
+        self.options = options;
     }
 
     pub fn parse(&mut self, source: &str) -> core::result::Result<crate::Module, ParseError> {

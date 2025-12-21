@@ -1,10 +1,14 @@
 use wgpu::include_wgsl;
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters};
+use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+
+pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
+    vec.extend([SHADER_COMPILE_SUCCESS, SHADER_COMPILE_ERROR]);
+}
 
 #[gpu_test]
 static SHADER_COMPILE_SUCCESS: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
         let sm = ctx
             .device
@@ -18,13 +22,13 @@ static SHADER_COMPILE_SUCCESS: GpuTestConfiguration = GpuTestConfiguration::new(
 
 #[gpu_test]
 static SHADER_COMPILE_ERROR: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default())
+    .parameters(TestParameters::default().enable_noop())
     .run_async(|ctx| async move {
-        ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
+        let scope = ctx.device.push_error_scope(wgpu::ErrorFilter::Validation);
         let sm = ctx
             .device
             .create_shader_module(include_wgsl!("error_shader.wgsl"));
-        assert!(pollster::block_on(ctx.device.pop_error_scope()).is_some());
+        assert!(pollster::block_on(scope.pop()).is_some());
 
         let compilation_info = sm.get_compilation_info().await;
         let error_message = compilation_info

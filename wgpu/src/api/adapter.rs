@@ -66,14 +66,14 @@ impl Adapter {
         }
     }
 
-    /// Create a wgpu [`Device`] and [`Queue`] from a wgpu-hal `OpenDevice`
+    /// Create a wgpu [`Device`] and [`Queue`] from a wgpu-hal [`hal::OpenDevice`].
     ///
     /// # Safety
     ///
     /// - `hal_device` must be created from this adapter internal handle.
-    /// - `desc.features` must be a subset of `hal_device` features.
+    /// - `desc.features` must be a subset of `hal_device`'s supported features.
     #[cfg(wgpu_core)]
-    pub unsafe fn create_device_from_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn create_device_from_hal<A: hal::Api>(
         &self,
         hal_device: hal::OpenDevice<A>,
         desc: &DeviceDescriptor<'_>,
@@ -103,6 +103,15 @@ impl Adapter {
     /// Returns a guard that dereferences to the type of the hal backend
     /// which implements [`A::Adapter`].
     ///
+    /// # Types
+    ///
+    /// The returned type depends on the backend:
+    ///
+    #[doc = crate::hal_type_vulkan!("Adapter")]
+    #[doc = crate::hal_type_metal!("Adapter")]
+    #[doc = crate::hal_type_dx12!("Adapter")]
+    #[doc = crate::hal_type_gles!("Adapter")]
+    ///
     /// # Errors
     ///
     /// This method will return None if:
@@ -118,7 +127,7 @@ impl Adapter {
     ///
     /// [`A::Adapter`]: hal::Api::Adapter
     #[cfg(wgpu_core)]
-    pub unsafe fn as_hal<A: wgc::hal_api::HalApi>(
+    pub unsafe fn as_hal<A: hal::Api>(
         &self,
     ) -> Option<impl Deref<Target = A::Adapter> + WasmNotSendSync> {
         let adapter = self.inner.as_core_opt()?;

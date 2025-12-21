@@ -3,6 +3,4 @@
 disallowed-types = [
     { path = "std::collections::HashMap", reason = "use hashbrown::HashMap instead" },
     { path = "std::collections::HashSet", reason = "use hashbrown::HashSet instead" },
-    { path = "rustc_hash::FxHashMap", reason = "use hashbrown::HashMap instead" },
-    { path = "rustc_hash::FxHashSet", reason = "use hashbrown::HashSet instead" },
 ]

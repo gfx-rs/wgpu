@@ -320,13 +320,21 @@ pub enum ConservativeDepth {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-#[allow(missing_docs)] // The names are self evident
 pub enum ShaderStage {
+    /// A vertex shader, in a render pipeline.
     Vertex,
-    Fragment,
-    Compute,
+
+    /// A task shader, in a mesh render pipeline.
     Task,
+
+    /// A mesh shader, in a mesh render pipeline.
     Mesh,
+
+    /// A fragment shader, in a render pipeline.
+    Fragment,
+
+    /// Compute pipeline shader.
+    Compute,
 }
 
 /// Addressing space of variables.
@@ -347,8 +355,24 @@ pub enum AddressSpace {
     Storage { access: StorageAccess },
     /// Opaque handles, such as samplers and images.
     Handle,
-    /// Push constants.
-    PushConstant,
+
+    /// Immediate data.
+    ///
+    /// A [`Module`] may contain at most one [`GlobalVariable`] in
+    /// this address space. Its contents are provided not by a buffer
+    /// but by `SetImmediates` pass commands, allowing the CPU to
+    /// establish different values for each draw/dispatch.
+    ///
+    /// `Immediate` variables may not contain `f16` values, even if
+    /// the [`SHADER_FLOAT16`] capability is enabled.
+    ///
+    /// Backends generally place tight limits on the size of
+    /// `Immediate` variables.
+    ///
+    /// [`SHADER_FLOAT16`]: crate::valid::Capabilities::SHADER_FLOAT16
+    Immediate,
+    /// Task shader to mesh shader payload
+    TaskPayload,
 }
 
 /// Built-in inputs and outputs.
@@ -357,36 +381,84 @@ pub enum AddressSpace {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
 pub enum BuiltIn {
+    /// Written in vertex/mesh shaders, read in fragment shaders
     Position { invariant: bool },
+    /// Read in task, mesh, vertex, and fragment shaders
     ViewIndex,
-    // vertex
+
+    /// Read in vertex shaders
     BaseInstance,
+    /// Read in vertex shaders
     BaseVertex,
+    /// Written in vertex & mesh shaders
     ClipDistance,
+    /// Written in vertex & mesh shaders
     CullDistance,
+    /// Read in vertex shaders
     InstanceIndex,
+    /// Written in vertex & mesh shaders
     PointSize,
+    /// Read in vertex shaders
     VertexIndex,
+    /// Read in vertex & task shaders, or mesh shaders in pipelines without task shaders
     DrawID,
-    // fragment
+
+    /// Written in fragment shaders
     FragDepth,
+    /// Read in fragment shaders
     PointCoord,
+    /// Read in fragment shaders
     FrontFacing,
+    /// Read in fragment shaders, written in mesh shaders
     PrimitiveIndex,
+    /// Read in fragment shaders
+    Barycentric,
+    /// Read in fragment shaders
     SampleIndex,
+    /// Read or written in fragment shaders
     SampleMask,
-    // compute
+
+    /// Read in compute, task, and mesh shaders
     GlobalInvocationId,
+    /// Read in compute, task, and mesh shaders
     LocalInvocationId,
+    /// Read in compute, task, and mesh shaders
     LocalInvocationIndex,
+    /// Read in compute, task, and mesh shaders
     WorkGroupId,
+    /// Read in compute, task, and mesh shaders
     WorkGroupSize,
+    /// Read in compute, task, and mesh shaders
     NumWorkGroups,
-    // subgroup
+
+    /// Read in compute, task, and mesh shaders
     NumSubgroups,
+    /// Read in compute, task, and mesh shaders
     SubgroupId,
+    /// Read in compute, fragment, task, and mesh shaders
     SubgroupSize,
+    /// Read in compute, fragment, task, and mesh shaders
     SubgroupInvocationId,
+
+    /// Written in task shaders
+    MeshTaskSize,
+    /// Written in mesh shaders
+    CullPrimitive,
+    /// Written in mesh shaders
+    PointIndex,
+    /// Written in mesh shaders
+    LineIndices,
+    /// Written in mesh shaders
+    TriangleIndices,
+
+    /// Written to a workgroup variable in mesh shaders
+    VertexCount,
+    /// Written to a workgroup variable in mesh shaders
+    Vertices,
+    /// Written to a workgroup variable in mesh shaders
+    PrimitiveCount,
+    /// Written to a workgroup variable in mesh shaders
+    Primitives,
 }
 
 /// Number of bytes per scalar.
@@ -409,6 +481,18 @@ pub enum VectorSize {
 
 impl VectorSize {
     pub const MAX: usize = Self::Quad as usize;
+}
+
+impl From<VectorSize> for u8 {
+    fn from(size: VectorSize) -> u8 {
+        size as u8
+    }
+}
+
+impl From<VectorSize> for u32 {
+    fn from(size: VectorSize) -> u32 {
+        size as u32
+    }
 }
 
 /// Primitive type for a scalar.
@@ -640,6 +724,8 @@ pub enum ImageClass {
         /// Multi-sampled depth image.
         multi: bool,
     },
+    /// External texture.
+    External,
     /// Storage image.
     Storage {
         format: StorageFormat,
@@ -917,6 +1003,9 @@ pub enum Binding {
 
     /// Indexed location.
     ///
+    /// This is a value passed to a [`Fragment`] shader from a [`Vertex`] or
+    /// [`Mesh`] shader.
+    ///
     /// Values passed from the [`Vertex`] stage to the [`Fragment`] stage must
     /// have their `interpolation` defaulted (i.e. not `None`) by the front end
     /// as appropriate for that language.
@@ -930,14 +1019,30 @@ pub enum Binding {
     /// interpolation must be `Flat`.
     ///
     /// [`Vertex`]: crate::ShaderStage::Vertex
+    /// [`Mesh`]: crate::ShaderStage::Mesh
     /// [`Fragment`]: crate::ShaderStage::Fragment
     Location {
         location: u32,
         interpolation: Option<Interpolation>,
         sampling: Option<Sampling>,
+
         /// Optional `blend_src` index used for dual source blending.
         /// See <https://www.w3.org/TR/WGSL/#attribute-blend_src>
         blend_src: Option<u32>,
+
+        /// Whether the binding is a per-primitive binding for use with mesh shaders.
+        ///
+        /// This must be `true` if this binding is a mesh shader primitive output, or such
+        /// an output's corresponding fragment shader input. It must be `false` otherwise.
+        ///
+        /// A stage's outputs must all have unique `location` numbers, regardless of
+        /// whether they are per-primitive; a mesh shader's per-vertex and per-primitive
+        /// outputs share the same location numbering space.
+        ///
+        /// Per-primitive values are not interpolated at all and are not dependent on the
+        /// vertices or pixel location. For example, it may be used to store a
+        /// non-interpolated normal vector.
+        per_primitive: bool,
     },
 }
 
@@ -1696,10 +1801,12 @@ pub enum Expression {
         query: Handle<Expression>,
         committed: bool,
     },
+
     /// Result of a [`SubgroupBallot`] statement.
     ///
     /// [`SubgroupBallot`]: Statement::SubgroupBallot
     SubgroupBallotResult,
+
     /// Result of a [`SubgroupCollectiveOperation`] or [`SubgroupGather`] statement.
     ///
     /// [`SubgroupCollectiveOperation`]: Statement::SubgroupCollectiveOperation
@@ -2286,6 +2393,12 @@ pub struct EntryPoint {
     pub workgroup_size_overrides: Option<[Option<Handle<Expression>>; 3]>,
     /// The entrance function.
     pub function: Function,
+    /// Information for [`Mesh`] shaders.
+    ///
+    /// [`Mesh`]: ShaderStage::Mesh
+    pub mesh_info: Option<MeshStageInfo>,
+    /// The unique global variable used as a task payload from task shader to mesh shader
+    pub task_payload: Option<Handle<GlobalVariable>>,
 }
 
 /// Return types predeclared for the frexp, modf, and atomicCompareExchangeWeak built-in functions.
@@ -2331,6 +2444,51 @@ pub struct SpecialTypes {
     ///
     /// Call [`Module::generate_vertex_return_type`]
     pub ray_vertex_return: Option<Handle<Type>>,
+
+    /// Struct containing parameters required by some backends to emit code for
+    /// [`ImageClass::External`] textures.
+    ///
+    /// See `wgpu_core::device::resource::ExternalTextureParams` for the
+    /// documentation of each field.
+    ///
+    /// In WGSL, this type would be:
+    ///
+    /// ```ignore
+    /// struct NagaExternalTextureParams {         // align size offset
+    ///     yuv_conversion_matrix: mat4x4<f32>,    //    16   64      0
+    ///     gamut_conversion_matrix: mat3x3<f32>,  //    16   48     64
+    ///     src_tf: NagaExternalTextureTransferFn, //     4   16    112
+    ///     dst_tf: NagaExternalTextureTransferFn, //     4   16    128
+    ///     sample_transform: mat3x2<f32>,         //     8   24    144
+    ///     load_transform: mat3x2<f32>,           //     8   24    168
+    ///     size: vec2<u32>,                       //     8    8    192
+    ///     num_planes: u32,                       //     4    4    200
+    /// }                            // whole struct:    16  208
+    /// ```
+    ///
+    /// Call [`Module::generate_external_texture_types`] to populate this if
+    /// needed.
+    pub external_texture_params: Option<Handle<Type>>,
+
+    /// Struct describing a gamma encoding transfer function. Member of
+    /// `NagaExternalTextureParams`, describing how the backend should perform
+    /// color space conversion when sampling from [`ImageClass::External`]
+    /// textures.
+    ///
+    /// In WGSL, this type would be:
+    ///
+    /// ```ignore
+    /// struct NagaExternalTextureTransferFn { // align size offset
+    ///     a: f32,                            //     4    4      0
+    ///     b: f32,                            //     4    4      4
+    ///     g: f32,                            //     4    4      8
+    ///     k: f32,                            //     4    4     12
+    /// }                         // whole struct:    4   16
+    /// ```
+    ///
+    /// Call [`Module::generate_external_texture_types`] to populate this if
+    /// needed.
+    pub external_texture_transfer_function: Option<Handle<Type>>,
 
     /// Types for predeclared wgsl types instantiated on demand.
     ///
@@ -2415,6 +2573,45 @@ pub struct DocComments {
     pub global_variables: FastIndexMap<Handle<GlobalVariable>, Vec<String>>,
     // Top level comments, appearing before any space.
     pub module: Vec<String>,
+}
+
+/// The output topology for a mesh shader. Note that mesh shaders don't allow things like triangle-strips.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum MeshOutputTopology {
+    /// Outputs individual vertices to be rendered as points.
+    Points,
+    /// Outputs groups of 2 vertices to be renderedas lines .
+    Lines,
+    /// Outputs groups of 3 vertices to be rendered as triangles.
+    Triangles,
+}
+
+/// Information specific to mesh shader entry points.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+#[allow(dead_code)]
+pub struct MeshStageInfo {
+    /// The type of primitive outputted.
+    pub topology: MeshOutputTopology,
+    /// The maximum number of vertices a mesh shader may output.
+    pub max_vertices: u32,
+    /// If pipeline constants are used, the expressions that override `max_vertices`
+    pub max_vertices_override: Option<Handle<Expression>>,
+    /// The maximum number of primitives a mesh shader may output.
+    pub max_primitives: u32,
+    /// If pipeline constants are used, the expressions that override `max_primitives`
+    pub max_primitives_override: Option<Handle<Expression>>,
+    /// The type used by vertex outputs, i.e. what is passed to `setVertex`.
+    pub vertex_output_type: Handle<Type>,
+    /// The type used by primitive outputs, i.e. what is passed to `setPrimitive`.
+    pub primitive_output_type: Handle<Type>,
+    /// The global variable holding the outputted vertices, primitives, and counts
+    pub output_variable: Handle<GlobalVariable>,
 }
 
 /// Shader module.

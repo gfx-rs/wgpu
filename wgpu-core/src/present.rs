@@ -13,7 +13,7 @@ use alloc::{sync::Arc, vec::Vec};
 use core::mem::ManuallyDrop;
 
 #[cfg(feature = "trace")]
-use crate::device::trace::Action;
+use crate::device::trace::{Action, IntoTrace};
 use crate::{
     conv,
     device::{Device, DeviceError, MissingDownlevelFlags, WaitIdleError},
@@ -177,7 +177,10 @@ impl Surface {
                 drop(fence);
 
                 let texture_desc = wgt::TextureDescriptor {
-                    label: Some(alloc::borrow::Cow::Borrowed("<Surface Texture>")),
+                    label: hal_label(
+                        Some(alloc::borrow::Cow::Borrowed("<Surface Texture>")),
+                        device.instance_flags,
+                    ),
                     size: wgt::Extent3d {
                         width: config.width,
                         height: config.height,
@@ -261,7 +264,7 @@ impl Surface {
                     }
                     hal::SurfaceError::Outdated => Status::Outdated,
                     hal::SurfaceError::Other(msg) => {
-                        log::error!("acquire error: {}", msg);
+                        log::error!("acquire error: {msg}");
                         Status::Lost
                     }
                 },
@@ -290,7 +293,11 @@ impl Surface {
             .take()
             .ok_or(SurfaceError::AlreadyAcquired)?;
 
-        let result = match texture.inner.snatch(&mut device.snatchable_lock.write()) {
+        let mut exclusive_snatch_guard = device.snatchable_lock.write();
+        let inner = texture.inner.snatch(&mut exclusive_snatch_guard);
+        drop(exclusive_snatch_guard);
+
+        let result = match inner {
             None => return Err(SurfaceError::TextureDestroyed),
             Some(resource::TextureInner::Surface { raw }) => {
                 let raw_surface = self.raw(device.backend()).unwrap();
@@ -309,7 +316,7 @@ impl Surface {
                 }
                 hal::SurfaceError::Outdated => Ok(Status::Outdated),
                 hal::SurfaceError::Other(msg) => {
-                    log::error!("acquire error: {}", msg);
+                    log::error!("acquire error: {msg}");
                     Err(SurfaceError::Invalid)
                 }
             },
@@ -334,7 +341,11 @@ impl Surface {
             .take()
             .ok_or(SurfaceError::AlreadyAcquired)?;
 
-        match texture.inner.snatch(&mut device.snatchable_lock.write()) {
+        let mut exclusive_snatch_guard = device.snatchable_lock.write();
+        let inner = texture.inner.snatch(&mut exclusive_snatch_guard);
+        drop(exclusive_snatch_guard);
+
+        match inner {
             None => return Err(SurfaceError::TextureDestroyed),
             Some(resource::TextureInner::Surface { raw }) => {
                 let raw_surface = self.raw(device.backend()).unwrap();
@@ -360,10 +371,12 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Some(present) = surface.presentation.lock().as_ref() {
             if let Some(ref mut trace) = *present.device.trace.lock() {
-                trace.add(Action::GetSurfaceTexture {
-                    id: fid.id(),
-                    parent_id: surface_id,
-                });
+                if let Some(texture) = present.acquired_texture.as_ref() {
+                    trace.add(Action::GetSurfaceTexture {
+                        id: texture.to_trace(),
+                        parent: surface.to_trace(),
+                    });
+                }
             }
         }
 
@@ -386,7 +399,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Some(present) = surface.presentation.lock().as_ref() {
             if let Some(ref mut trace) = *present.device.trace.lock() {
-                trace.add(Action::Present(surface_id));
+                trace.add(Action::Present(surface.to_trace()));
             }
         }
 
@@ -399,7 +412,7 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Some(present) = surface.presentation.lock().as_ref() {
             if let Some(ref mut trace) = *present.device.trace.lock() {
-                trace.add(Action::DiscardSurfaceTexture(surface_id));
+                trace.add(Action::DiscardSurfaceTexture(surface.to_trace()));
             }
         }
 

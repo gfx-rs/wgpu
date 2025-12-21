@@ -8,7 +8,7 @@ struct ShaderData {
 @group(0) @binding(0)
 var<uniform> data1: ShaderData;
 
-var<push_constant> data2: ShaderData;
+var<immediate> data2: ShaderData;
 
 struct FsIn {
     @builtin(position) position: vec4f,
@@ -27,7 +27,7 @@ fn fs_main(fs_in: FsIn) -> @location(0) vec4f {
         case 0u: {
             return fs_in.data1;
         }
-        // (1, 0) - push constant from the vertex shader
+        // (1, 0) - immediate data from the vertex shader
         case 1u: {
             return fs_in.data2;
         }
@@ -35,7 +35,7 @@ fn fs_main(fs_in: FsIn) -> @location(0) vec4f {
         case 2u: {
             return vec4f(data1.a, data1.b, data1.c, data1.d);
         }
-        // (1, 1) - push constant from the fragment shader
+        // (1, 1) - immediate data from the fragment shader
         case 3u: {
             return vec4f(data2.a, data2.b, data2.c, data2.d);
         }

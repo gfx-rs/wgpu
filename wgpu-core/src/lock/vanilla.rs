@@ -31,7 +31,7 @@ impl<T> Mutex<T> {
         Mutex(parking_lot::Mutex::new(value))
     }
 
-    pub fn lock(&self) -> MutexGuard<T> {
+    pub fn lock(&self) -> MutexGuard<'_, T> {
         MutexGuard(self.0.lock())
     }
 
@@ -87,11 +87,11 @@ impl<T> RwLock<T> {
         RwLock(parking_lot::RwLock::new(value))
     }
 
-    pub fn read(&self) -> RwLockReadGuard<T> {
+    pub fn read(&self) -> RwLockReadGuard<'_, T> {
         RwLockReadGuard(self.0.read())
     }
 
-    pub fn write(&self) -> RwLockWriteGuard<T> {
+    pub fn write(&self) -> RwLockWriteGuard<'_, T> {
         RwLockWriteGuard(self.0.write())
     }
 

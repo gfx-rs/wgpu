@@ -71,7 +71,7 @@ OpDecorate %11 Binding 0
 %12 = OpTypePointer StorageBuffer %9
 %11 = OpVariable  %12  StorageBuffer
 %15 = OpTypeFunction %2
-%16 = OpConstant  %6  10.0
+%16 = OpConstant  %6  10
 %17 = OpConstantComposite  %5  %16 %16
 %19 = OpTypePointer Function %4
 %20 = OpConstantNull  %4

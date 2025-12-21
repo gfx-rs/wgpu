@@ -4,7 +4,7 @@
 //!
 //! Storage textures work like normal textures but they operate similar to storage buffers
 //! in that they can be written to. The issue is that as it stands, write-only is the
-//! only valid access mode for storage textures in WGSL and although there is a WGPU feature
+//! only valid access mode for storage textures in WGSL and although there is a wgpu feature
 //! to allow for read-write access, this is unfortunately a native-only feature and thus
 //! we won't be using it here. If we needed a reference texture, we would need to add a
 //! second texture to act as a reference and attach that as well. Luckily, we don't need
@@ -34,6 +34,7 @@ async fn run(_path: Option<String>) {
             label: None,
             required_features: wgpu::Features::empty(),
             required_limits: wgpu::Limits::downlevel_defaults(),
+            experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Off,
         })
@@ -89,7 +90,7 @@ async fn run(_path: Option<String>) {
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[&bind_group_layout],
-        push_constant_ranges: &[],
+        immediate_size: 0,
     });
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: None,
@@ -141,7 +142,7 @@ async fn run(_path: Option<String>) {
     let buffer_slice = output_staging_buffer.slice(..);
     let (sender, receiver) = flume::bounded(1);
     buffer_slice.map_async(wgpu::MapMode::Read, move |r| sender.send(r).unwrap());
-    device.poll(wgpu::PollType::wait()).unwrap();
+    device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
     receiver.recv_async().await.unwrap().unwrap();
     log::info!("Output buffer mapped");
     {

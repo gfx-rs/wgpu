@@ -3,7 +3,7 @@
 🧪Experimental🧪
 
 `wgpu` supports an experimental version of ray tracing which is subject to change. The extensions allow for acceleration structures to be created and built (with
-`Features::EXPERIMENTAL_RAY_TRACING_ACCELERATION_STRUCTURE` enabled) and interacted with in shaders. Currently `naga` only supports ray queries
+`Features::EXPERIMENTAL_RAY_QUERY` enabled) and interacted with in shaders. Currently `naga` only supports ray queries
 (accessible with `Features::EXPERIMENTAL_RAY_QUERY` enabled in wgpu).
 
 **Note**: The features documented here may have major bugs in them and are expected to be subject
@@ -18,11 +18,14 @@ an [introduction](https://developer.nvidia.com/blog/introduction-nvidia-rtx-dire
 The documentation and specific details of the functions and structures provided
 can be found with their definitions.
 
+Acceleration structures do not have a separate feature, instead they are enabled by `Features::EXPERIMENTAL_RAY_QUERY`, unlike vulkan.
+When ray tracing pipelines are added, that feature will also enable acceleration structures.
+
 A [`Blas`] can be created with [`Device::create_blas`].
 A [`Tlas`] can be created with [`Device::create_tlas`].
 
 The [`Tlas`] reference can be placed in a bind group to be used in a shader. A reference to a [`Blas`] can
-be used to create [`TlasInstance`] alongside a transformation matrix, a custom index
+be used to create [`TlasInstance`] alongside a transformation matrix, custom data
 (this can be any data that should be given to the shader on a hit) which only the first 24
 bits may be set, and a mask to filter hits in the shader.
 
@@ -72,7 +75,7 @@ fn render(/*whatever args you need to render*/) {
   }
   let mut encoder =
     device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-  /* do other preparations on th TlasInstance.*/
+  /* do other preparations on the TlasInstance.*/
   encoder.build_acceleration_structures(iter::empty(), iter::once(&tlas_package));
   /* more render code */
   queue.submit(Some(encoder.finish()));
@@ -90,11 +93,13 @@ fn render(/*whatever args you need to render*/) {
 
 ## `naga`'s raytracing API:
 
-`naga` supports ray queries (also known as inline raytracing) only. Ray tracing pipelines are currently unsupported.
-Naming is mostly taken from vulkan.
+`naga` supports ray queries (also known as inline raytracing) only. To enable basic ray query functions you must add
+`enable wgpu_ray_query` to the shader, ray queries and acceleration structures also support tags which require extra
+`enable` extensions (see Acceleration structure tags for more info). Ray tracing pipelines
+are currently unsupported. Naming is mostly taken from vulkan.
 
 ```wgsl
-// - Initializes the `ray_query` to check where (if anywhere) the ray defined by `ray_desc` hits in `acceleration_structure
+// - Initializes the `ray_query` to check where (if anywhere) the ray defined by `ray_desc` hits in `acceleration_structure`
 rayQueryInitialize(rq: ptr<function, ray_query>, acceleration_structure: acceleration_structure, ray_desc: RayDesc)
 // Overload.
 rayQueryInitialize(rq: ptr<function, ray_query<vertex_return>>, acceleration_structure: acceleration_structure<vertex_return>, ray_desc: RayDesc)
@@ -120,8 +125,9 @@ rayQueryGenerateIntersection(hit_t: f32)
 // - Commits a hit from triangular non-opaque geometry.
 rayQueryConfirmIntersection()
 
-// - Aborts the query.
-rayQueryTerminate()
+// Aborts the query which is in progress, that is, the next `rayQueryProceed` is guaranteed to return `false`
+// and any call to `rayQueryGetCommittedIntersection` will return the closest committed result so far.
+rayQueryTerminate(rq: ptr<function, ray_query>)
 
 // - Returns intersection details about a hit considered `Committed`.
 rayQueryGetCommittedIntersection(rq: ptr<function, ray_query>) -> RayIntersection
@@ -265,3 +271,14 @@ const RAY_QUERY_INTERSECTION_GENERATED = 2;
 // if the ray intersects the bounding box for a custom object.
 const RAY_QUERY_INTERSECTION_AABB = 3;
 ```
+
+### Acceleration structure tags
+
+These are tags that can be added to a acceleration structure (`acceleration_structure` ->
+`acceleration_structure<... insert tags here! ...>`) and to a ray query (`ray_query` ->
+`ray_query<... insert tags here! ...>`). These require more features.
+
+
+| Tag | Requirements | Description |
+| --- | ------------ | -- |
+| `vertex_return`| `enable wgpu_ray_query_vertex_return` | Allows getting the vertices of the hit triangle when using ray queries |
