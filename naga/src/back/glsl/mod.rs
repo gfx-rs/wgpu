@@ -975,6 +975,36 @@ impl<'a, W: Write> Writer<'a, W> {
                 }
                 // glsl has no concept of samplers so we just ignore it
                 TypeInner::Sampler { .. } => continue,
+                // Fix for Intel Arc GPUs (and potentially others) where wgpu's DX12 backend
+                // might fallback or translate to GLSL that involves BindingArrays (e.g. texture arrays).
+                // Previously, this would hit the catch-all `_` case and panic because `BindingArray`
+                // wasn't explicitly handled, and `write_global` would panic on `AddressSpace::Handle`.
+                // This block properly generates the GLSL uniform declaration for texture arrays.
+                TypeInner::BindingArray { base, size } => {
+                    match self.module.types[base].inner {
+                        TypeInner::Image {
+                            dim,
+                            arrayed,
+                            class,
+                        } => {
+                            write!(self.out, "uniform ")?;
+                            self.write_image_type(dim, arrayed, class)?;
+                            let global_name = self.get_global_name(handle, global);
+                            write!(self.out, " {global_name}")?;
+                            self.write_array_size(base, size)?;
+                            writeln!(self.out, ";")?;
+                            writeln!(self.out)?;
+
+                            self.reflection_names_globals.insert(handle, global_name);
+                        }
+                        TypeInner::Sampler { .. } => continue,
+                        _ => {
+                            self.write_global(handle, global)?;
+                            // Add a newline (only for readability)
+                            writeln!(self.out)?;
+                        }
+                    }
+                }
                 // All other globals are written by `write_global`
                 _ => {
                     self.write_global(handle, global)?;
