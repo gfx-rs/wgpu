@@ -123,7 +123,7 @@ macro_rules! link_to_wgpu_docs {
 macro_rules! link_to_wgpu_item {
     ($kind:ident $name:ident) => {
         $crate::link_to_wgpu_docs!(
-            [concat!("`", stringify!($name), "`")]: concat!("$kind.", stringify!($name), ".html")
+            [concat!("`", stringify!($name), "`")]: concat!(stringify!($kind), ".", stringify!($name), ".html")
         )
     };
 }
