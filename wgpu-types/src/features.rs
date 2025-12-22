@@ -635,9 +635,9 @@ bitflags_array! {
         ///
         /// This is a native only feature with a [proposal](https://github.com/gpuweb/gpuweb/blob/0008bd30da2366af88180b511a5d0d0c1dffbc36/proposals/pipeline-statistics-query.md) for the web.
         ///
-        /// [`RenderPass::begin_pipeline_statistics_query`]: https://docs.rs/wgpu/latest/wgpu/struct.RenderPass.html#method.begin_pipeline_statistics_query
-        /// [`RenderPass::end_pipeline_statistics_query`]: https://docs.rs/wgpu/latest/wgpu/struct.RenderPass.html#method.end_pipeline_statistics_query
-        /// [`CommandEncoder::resolve_query_set`]: https://docs.rs/wgpu/latest/wgpu/struct.CommandEncoder.html#method.resolve_query_set
+        #[doc = link_to_wgpu_docs!(["`RenderPass::begin_pipeline_statistics_query`"]: "struct.RenderPass.html#method.begin_pipeline_statistics_query")]
+        #[doc = link_to_wgpu_docs!(["`RenderPass::end_pipeline_statistics_query`"]: "struct.RenderPass.html#method.end_pipeline_statistics_query")]
+        #[doc = link_to_wgpu_docs!(["`CommandEncoder::resolve_query_set`"]: "struct.CommandEncoder.html#method.resolve_query_set")]
         /// [`PipelineStatisticsTypes`]: super::PipelineStatisticsTypes
         const PIPELINE_STATISTICS_QUERY = 1 << 4;
         /// Allows for timestamp queries directly on command encoders.
@@ -654,7 +654,7 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         ///
-        /// [`CommandEncoder::write_timestamp`]: https://docs.rs/wgpu/latest/wgpu/struct.CommandEncoder.html#method.write_timestamp
+        #[doc = link_to_wgpu_docs!(["`CommandEncoder::write_timestamp`"]: "struct.CommandEncoder.html#method.write_timestamp")]
         const TIMESTAMP_QUERY_INSIDE_ENCODERS = 1 << 5;
         /// Allows for timestamp queries directly on command encoders.
         ///
@@ -673,8 +673,8 @@ bitflags_array! {
         ///
         /// This is a native only feature with a [proposal](https://github.com/gpuweb/gpuweb/blob/0008bd30da2366af88180b511a5d0d0c1dffbc36/proposals/timestamp-query-inside-passes.md) for the web.
         ///
-        /// [`RenderPass::write_timestamp`]: https://docs.rs/wgpu/latest/wgpu/struct.RenderPass.html#method.write_timestamp
-        /// [`ComputePass::write_timestamp`]: https://docs.rs/wgpu/latest/wgpu/struct.ComputePass.html#method.write_timestamp
+        #[doc = link_to_wgpu_docs!(["`RenderPass::write_timestamp`"]: "struct.RenderPass.html#method.write_timestamp")]
+        #[doc = link_to_wgpu_docs!(["`ComputePass::write_timestamp`"]: "struct.ComputePass.html#method.write_timestamp")]
         const TIMESTAMP_QUERY_INSIDE_PASSES = 1 << 6;
         /// Webgpu only allows the MAP_READ and MAP_WRITE buffer usage to be matched with
         /// COPY_DST and COPY_SRC respectively. This removes this requirement.
@@ -1103,7 +1103,7 @@ bitflags_array! {
         /// This is a native only feature.
         ///
         /// [VK_GOOGLE_display_timing]: https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_GOOGLE_display_timing.html
-        /// [`Surface::as_hal()`]: https://docs.rs/wgpu/latest/wgpu/struct.Surface.html#method.as_hal
+        #[doc = link_to_wgpu_docs!(["`Surface::as_hal()`"]: "struct.Surface.html#method.as_hal")]
         const VULKAN_GOOGLE_DISPLAY_TIMING = 1 << 44;
 
         /// Allows using the [VK_KHR_external_memory_win32] Vulkan extension.
@@ -1213,7 +1213,7 @@ bitflags_array! {
         /// Ideally, in the future, all platforms will be supported. For more info, see
         /// [this comment](https://github.com/gfx-rs/wgpu/issues/3103#issuecomment-2833058367).
         ///
-        /// [`Device::create_shader_module_passthrough`]: https://docs.rs/wgpu/latest/wgpu/struct.Device.html#method.create_shader_module_passthrough
+        #[doc = link_to_wgpu_docs!(["`Device::create_shader_module_passthrough`"]: "struct.Device.html#method.create_shader_module_passthrough")]
         const EXPERIMENTAL_PASSTHROUGH_SHADERS = 1 << 52;
 
         /// Enables shader barycentric coordinates.
@@ -1425,10 +1425,10 @@ bitflags_array! {
         ///
         /// This is a web and native feature.
         ///
-        /// [`RenderPassDescriptor::timestamp_writes`]: https://docs.rs/wgpu/latest/wgpu/struct.RenderPassDescriptor.html#structfield.timestamp_writes
-        /// [`ComputePassDescriptor::timestamp_writes`]: https://docs.rs/wgpu/latest/wgpu/struct.ComputePassDescriptor.html#structfield.timestamp_writes
-        /// [`CommandEncoder::resolve_query_set`]: https://docs.rs/wgpu/latest/wgpu/struct.CommandEncoder.html#method.resolve_query_set
-        /// [`Queue::get_timestamp_period`]: https://docs.rs/wgpu/latest/wgpu/struct.Queue.html#method.get_timestamp_period
+        #[doc = link_to_wgpu_docs!(["`RenderPassDescriptor::timestamp_writes`"]: "struct.RenderPassDescriptor.html#structfield.timestamp_writes")]
+        #[doc = link_to_wgpu_docs!(["`ComputePassDescriptor::timestamp_writes`"]: "struct.ComputePassDescriptor.html#structfield.timestamp_writes")]
+        #[doc = link_to_wgpu_docs!(["`CommandEncoder::resolve_query_set`"]: "struct.CommandEncoder.html#method.resolve_query_set")]
+        #[doc = link_to_wgpu_docs!(["`Queue::get_timestamp_period`"]: "struct.Queue.html#method.get_timestamp_period")]
         const TIMESTAMP_QUERY = WEBGPU_FEATURE_TIMESTAMP_QUERY;
 
         /// Allows non-zero value for the `first_instance` member in indirect draw calls.
