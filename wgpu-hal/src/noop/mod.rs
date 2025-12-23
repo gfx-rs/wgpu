@@ -227,6 +227,7 @@ pub const CAPABILITIES: crate::Capabilities = {
             limits: wgt::DownlevelLimits {},
             shader_model: wgt::ShaderModel::Sm5,
         },
+        cooperative_matrix_properties: Vec::new(),
     }
 };
 

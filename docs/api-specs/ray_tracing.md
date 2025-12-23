@@ -78,7 +78,7 @@ fn render(/*whatever args you need to render*/) {
   /* do other preparations on the TlasInstance.*/
   encoder.build_acceleration_structures(iter::empty(), iter::once(&tlas_package));
   /* more render code */
-  queue.submit(Some(encoder.finish()));
+  queue.submit([encoder.finish()]);
 }
 ```
 

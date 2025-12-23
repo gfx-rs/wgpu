@@ -152,6 +152,11 @@ impl FunctionTracer<'_> {
                         self.expressions_used.insert(argument);
                         self.expressions_used.insert(result);
                     }
+                    St::CooperativeStore { target, ref data } => {
+                        self.expressions_used.insert(target);
+                        self.expressions_used.insert(data.pointer);
+                        self.expressions_used.insert(data.stride);
+                    }
                     St::RayPipelineFunction(func) => match func {
                         crate::RayPipelineFunction::TraceRay {
                             acceleration_structure,
@@ -381,6 +386,14 @@ impl FunctionMap {
                         }
                         adjust(argument);
                         adjust(result);
+                    }
+                    St::CooperativeStore {
+                        ref mut target,
+                        ref mut data,
+                    } => {
+                        adjust(target);
+                        adjust(&mut data.pointer);
+                        adjust(&mut data.stride);
                     }
                     St::RayPipelineFunction(ref mut func) => match *func {
                         crate::RayPipelineFunction::TraceRay {

@@ -567,7 +567,7 @@ impl Device {
                     buffer: params_buffer,
                     usage: hal::StateTransition {
                         from: wgt::BufferUses::MAP_WRITE,
-                        to: wgt::BufferUses::COPY_SRC,
+                        to: wgt::BufferUses::COPY_DST,
                     },
                 }]);
             pending_writes.command_encoder.copy_buffer_to_buffer(
@@ -4141,6 +4141,14 @@ impl Device {
         if let Some(ds) = depth_stencil_state {
             target_specified = true;
             let error = 'error: {
+                if !ds.format.is_depth_stencil_format() {
+                    // This error case is not redundant with the aspect check below when
+                    // neither depth nor stencil is enabled at all.
+                    break 'error Some(pipeline::DepthStencilStateError::FormatNotDepthOrStencil(
+                        ds.format,
+                    ));
+                }
+
                 let format_features = self.describe_format_features(ds.format)?;
                 if !format_features
                     .allowed_usages

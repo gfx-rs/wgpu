@@ -114,13 +114,21 @@ pub fn op_create_gpu(
   scope: &mut v8::HandleScope,
   webidl_brand: v8::Local<v8::Value>,
   set_event_target_data: v8::Local<v8::Value>,
-  error_event_class: v8::Local<v8::Value>,
+  uncaptured_error_event_class: v8::Local<v8::Value>,
+  pipeline_error_class: v8::Local<v8::Value>,
 ) -> GPU {
   state.put(EventTargetSetup {
     brand: v8::Global::new(scope, webidl_brand),
     set_event_target_data: v8::Global::new(scope, set_event_target_data),
   });
-  state.put(ErrorEventClass(v8::Global::new(scope, error_event_class)));
+  state.put(ErrorEventClass(v8::Global::new(
+    scope,
+    uncaptured_error_event_class,
+  )));
+  state.put(PipelineErrorClass(v8::Global::new(
+    scope,
+    pipeline_error_class,
+  )));
   GPU
 }
 
@@ -129,6 +137,7 @@ struct EventTargetSetup {
   set_event_target_data: v8::Global<v8::Value>,
 }
 struct ErrorEventClass(v8::Global<v8::Value>);
+struct PipelineErrorClass(v8::Global<v8::Value>);
 
 pub struct GPU;
 

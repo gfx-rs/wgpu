@@ -673,6 +673,14 @@ impl Parser {
                     ty_span: Span::UNDEFINED,
                 }))
             }
+            "coop_mat8x8" => ast::ConstructorType::PartialCooperativeMatrix {
+                columns: crate::CooperativeSize::Eight,
+                rows: crate::CooperativeSize::Eight,
+            },
+            "coop_mat16x16" => ast::ConstructorType::PartialCooperativeMatrix {
+                columns: crate::CooperativeSize::Sixteen,
+                rows: crate::CooperativeSize::Sixteen,
+            },
             "array" => ast::ConstructorType::PartialArray,
             "atomic"
             | "binding_array"
@@ -714,6 +722,19 @@ impl Parser {
                     rows,
                     ty,
                     ty_span,
+                }))
+            }
+            (
+                Token::Paren('<'),
+                ast::ConstructorType::PartialCooperativeMatrix { columns, rows },
+            ) => {
+                let (ty, ty_span, role) = self.cooperative_scalar_and_role(lexer, ctx)?;
+                Ok(Some(ast::ConstructorType::CooperativeMatrix {
+                    columns,
+                    rows,
+                    ty,
+                    ty_span,
+                    role,
                 }))
             }
             (Token::Paren('<'), ast::ConstructorType::PartialArray) => {
@@ -798,6 +819,11 @@ impl Parser {
             }
             // everything else must be handled later, since they can be hidden by user-defined functions.
             _ => {
+                let result_ty = if lexer.peek().0 == Token::Paren('<') {
+                    Some(self.singular_generic(lexer, ctx)?)
+                } else {
+                    None
+                };
                 let arguments = self.arguments(lexer, ctx)?;
                 ctx.unresolved.insert(ast::Dependency {
                     ident: name,
@@ -809,6 +835,7 @@ impl Parser {
                         span: name_span,
                     },
                     arguments,
+                    result_ty,
                 }
             }
         };
@@ -957,7 +984,7 @@ impl Parser {
                 } else if let Token::Paren('(') = lexer.peek().0 {
                     self.pop_rule_span(lexer);
                     return self.function_call(lexer, word, span, ctx);
-                } else if word == "bitcast" {
+                } else if ["bitcast", "coopLoad"].contains(&word) {
                     self.pop_rule_span(lexer);
                     return self.function_call(lexer, word, span, ctx);
                 } else {
@@ -1452,6 +1479,22 @@ impl Parser {
         Ok((ty, span))
     }
 
+    /// Parses `<T,R>`, returning (T, span of T, R)
+    fn cooperative_scalar_and_role<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        ctx: &mut ExpressionContext<'a, '_, '_>,
+    ) -> Result<'a, (Handle<ast::Type<'a>>, Span, crate::CooperativeRole)> {
+        lexer.expect_generic_paren('<')?;
+        let start = lexer.start_byte_offset();
+        let ty = self.type_decl(lexer, ctx)?;
+        let ty_span = lexer.span_from(start);
+        lexer.expect(Token::Separator(','))?;
+        let role = lexer.next_cooperative_role()?;
+        lexer.expect_generic_paren('>')?;
+        Ok((ty, ty_span, role))
+    }
+
     fn matrix_with_type<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -1465,6 +1508,23 @@ impl Parser {
             rows,
             ty,
             ty_span,
+        })
+    }
+
+    fn cooperative_matrix_with_type<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        ctx: &mut ExpressionContext<'a, '_, '_>,
+        columns: crate::CooperativeSize,
+        rows: crate::CooperativeSize,
+    ) -> Result<'a, ast::Type<'a>> {
+        let (ty, ty_span, role) = self.cooperative_scalar_and_role(lexer, ctx)?;
+        Ok(ast::Type::CooperativeMatrix {
+            columns,
+            rows,
+            ty,
+            ty_span,
+            role,
         })
     }
 
@@ -1699,6 +1759,18 @@ impl Parser {
                 ty: ctx.new_scalar(Scalar::F16),
                 ty_span: Span::UNDEFINED,
             },
+            "coop_mat8x8" => self.cooperative_matrix_with_type(
+                lexer,
+                ctx,
+                crate::CooperativeSize::Eight,
+                crate::CooperativeSize::Eight,
+            )?,
+            "coop_mat16x16" => self.cooperative_matrix_with_type(
+                lexer,
+                ctx,
+                crate::CooperativeSize::Sixteen,
+                crate::CooperativeSize::Sixteen,
+            )?,
             "atomic" => {
                 let scalar = lexer.next_scalar_generic()?;
                 ast::Type::Atomic(scalar)

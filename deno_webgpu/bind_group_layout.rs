@@ -6,6 +6,7 @@ use deno_core::WebIDL;
 
 use crate::error::GPUGenericError;
 use crate::texture::GPUTextureViewDimension;
+use crate::webidl::GPUShaderStageFlags;
 use crate::Instance;
 
 pub struct GPUBindGroupLayout {
@@ -63,8 +64,7 @@ pub(crate) struct GPUBindGroupLayoutDescriptor {
 pub(crate) struct GPUBindGroupLayoutEntry {
   #[options(enforce_range = true)]
   pub binding: u32,
-  #[options(enforce_range = true)]
-  pub visibility: u32,
+  pub visibility: GPUShaderStageFlags,
   pub buffer: Option<GPUBufferBindingLayout>,
   pub sampler: Option<GPUSamplerBindingLayout>,
   pub texture: Option<GPUTextureBindingLayout>,

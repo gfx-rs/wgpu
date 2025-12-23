@@ -684,6 +684,10 @@ impl Adapter {
         unsafe { self.raw.adapter.get_presentation_timestamp() }
     }
 
+    pub fn cooperative_matrix_properties(&self) -> Vec<wgt::CooperativeMatrixProperties> {
+        self.raw.capabilities.cooperative_matrix_properties.clone()
+    }
+
     pub fn get_texture_format_features(
         &self,
         format: wgt::TextureFormat,
@@ -1112,6 +1116,14 @@ impl Global {
     ) -> wgt::PresentationTimestamp {
         let adapter = self.hub.adapters.get(adapter_id);
         adapter.get_presentation_timestamp()
+    }
+
+    pub fn adapter_cooperative_matrix_properties(
+        &self,
+        adapter_id: AdapterId,
+    ) -> Vec<wgt::CooperativeMatrixProperties> {
+        let adapter = self.hub.adapters.get(adapter_id);
+        adapter.cooperative_matrix_properties()
     }
 
     pub fn adapter_drop(&self, adapter_id: AdapterId) {

@@ -37,6 +37,7 @@ encase = { workspace = true }
 flume.workspace = true
 getrandom = { workspace = true, features = ["wasm_js"] }
 glam = { workspace = true, features = ["bytemuck", "encase"] }
+half = { workspace = true, features = ["bytemuck"] }
 ktx2.workspace = true
 log.workspace = true
 nanorand = { workspace = true, features = ["getrandom"] }
