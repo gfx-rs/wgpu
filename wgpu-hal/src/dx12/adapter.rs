@@ -905,6 +905,7 @@ impl super::Adapter {
                         Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT,
                 },
                 downlevel,
+                cooperative_matrix_properties: Vec::new(),
             },
         })
     }

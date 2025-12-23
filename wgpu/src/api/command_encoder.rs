@@ -217,12 +217,19 @@ impl CommandEncoder {
         self.inner.pop_debug_group();
     }
 
-    /// Resolves a query set, writing the results into the supplied destination buffer.
+    /// Copies query results stored in `query_set` into `destination` so that they can be read
+    /// by compute shaders or buffer operations.
     ///
-    /// Occlusion and timestamp queries are 8 bytes each (see [`crate::QUERY_SIZE`]). For pipeline statistics queries,
-    /// see [`PipelineStatisticsTypes`] for more information.
+    /// * `query_range` is the range of query result indices to copy from `query_set`.
+    ///   Occlusion and timestamp queries occupy 1 result index each;
+    ///   for pipeline statistics queries, see [`PipelineStatisticsTypes`].
+    /// * `destination_offset` is the offset within `destination` to start writing at.
+    ///   It must be a multiple of [`QUERY_RESOLVE_BUFFER_ALIGNMENT`].
     ///
-    /// `destination_offset` must be aligned to [`QUERY_RESOLVE_BUFFER_ALIGNMENT`].
+    /// The length of the data written to `destination` will be 8 bytes ([`QUERY_SIZE`])
+    /// times the number of elements in `query_range`.
+    ///
+    /// For further information about using queries, see [`QuerySet`].
     pub fn resolve_query_set(
         &mut self,
         query_set: &QuerySet,

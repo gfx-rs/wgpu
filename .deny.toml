@@ -56,6 +56,8 @@ allow-git = [
 
     # Pending a release for https://github.com/Xudong-Huang/generator-rs/pull/75
     "https://github.com/Xudong-Huang/generator-rs",
+    # Pending a release for https://github.com/gfx-rs/rspirv
+    "https://github.com/gfx-rs/rspirv",
 ]
 unknown-registry = "deny"
 unknown-git = "deny"

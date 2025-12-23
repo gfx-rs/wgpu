@@ -96,8 +96,10 @@ impl Device {
         self.inner.poll(poll_type.map_index(|s| s.index))
     }
 
-    /// The features which can be used on this device.
+    /// The [features][Features] which can be used on this device.
     ///
+    /// This will be equal to the [`required_features`][DeviceDescriptor::required_features]
+    /// specified when creating the device.
     /// No additional features can be used, even if the underlying adapter can support them.
     #[must_use]
     pub fn features(&self) -> Features {
@@ -106,6 +108,8 @@ impl Device {
 
     /// The limits which can be used on this device.
     ///
+    /// This will be equal to the [`required_limits`][DeviceDescriptor::required_limits]
+    /// specified when creating the device.
     /// No better limits can be used, even if the underlying adapter can support them.
     #[must_use]
     pub fn limits(&self) -> Limits {

@@ -123,7 +123,7 @@ macro_rules! link_to_wgpu_docs {
 macro_rules! link_to_wgpu_item {
     ($kind:ident $name:ident) => {
         $crate::link_to_wgpu_docs!(
-            [concat!("`", stringify!($name), "`")]: concat!("$kind.", stringify!($name), ".html")
+            [concat!("`", stringify!($name), "`")]: concat!(stringify!($kind), ".", stringify!($name), ".html")
         )
     };
 }
@@ -203,7 +203,7 @@ pub const IMMEDIATE_DATA_ALIGNMENT: u32 = 4;
 #[doc(hidden)]
 pub const STORAGE_BINDING_SIZE_ALIGNMENT: u32 = 4;
 
-/// Maximum queries in a [`QuerySetDescriptor`].
+/// Maximum number of query result slots that can be requested in a [`QuerySetDescriptor`].
 pub const QUERY_SET_MAX_QUERIES: u32 = 4096;
 
 /// Size in bytes of a single piece of [query] data.
@@ -467,7 +467,7 @@ pub struct QuerySetDescriptor<L> {
     pub label: L,
     /// Kind of query that this query set should contain.
     pub ty: QueryType,
-    /// Total count of queries the set contains. Must not be zero.
+    /// Total number of query result slots the set contains. Must not be zero.
     /// Must not be greater than [`QUERY_SET_MAX_QUERIES`].
     pub count: u32,
 }
@@ -484,7 +484,9 @@ impl<L> QuerySetDescriptor<L> {
     }
 }
 
-/// Type of query contained in a [`QuerySet`].
+/// Type of queries contained in a [`QuerySet`].
+///
+/// Each query set may contain any number of queries, but they must all be of the same type.
 ///
 /// Corresponds to [WebGPU `GPUQueryType`](
 /// https://gpuweb.github.io/gpuweb/#enumdef-gpuquerytype).
@@ -493,27 +495,66 @@ impl<L> QuerySetDescriptor<L> {
 #[derive(Copy, Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum QueryType {
-    /// Query returns a single 64-bit number, serving as an occlusion boolean.
+    /// An occlusion query reports whether any of the fragments drawn within the scope of the query
+    /// passed all per-fragment tests (i.e. were not occluded).
+    ///
+    /// Occlusion queries are performed by setting [`RenderPassDescriptor::occlusion_query_set`],
+    /// then calling [`RenderPass::begin_occlusion_query()`] and
+    /// [`RenderPass::end_occlusion_query()`].
+    /// The query writes to a single result slot in the query set, whose value will be either 0 or 1
+    /// as a boolean.
+    ///
+    #[doc = link_to_wgpu_docs!(["`RenderPassDescriptor::occlusion_query_set`"]: "struct.RenderPassDescriptor.html#structfield.occlusion_query_set")]
+    #[doc = link_to_wgpu_docs!(["`RenderPass::begin_occlusion_query()`"]: "struct.RenderPass.html#structfield.begin_occlusion_query")]
+    #[doc = link_to_wgpu_docs!(["`RenderPass::end_occlusion_query()`"]: "struct.RenderPass.html#structfield.end_occlusion_query")]
     Occlusion,
-    /// Query returns up to 5 64-bit numbers based on the given flags.
+
+    /// A timestamp query records a GPU-timestamp value
+    /// at which a certain command started or finished executing.
     ///
-    /// See [`PipelineStatisticsTypes`]'s documentation for more information
-    /// on how they get resolved.
+    /// Timestamp queries are performed by any one of:
+    /// * Setting [`ComputePassDescriptor::timestamp_writes`]
+    /// * Setting [`RenderPassDescriptor::timestamp_writes`]
+    /// * Calling [`CommandEncoder::write_timestamp()`]
+    /// * Calling [`RenderPass::write_timestamp()`]
+    /// * Calling [`ComputePass::write_timestamp()`]
     ///
-    /// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled to use this query type.
-    PipelineStatistics(PipelineStatisticsTypes),
-    /// Query returns a 64-bit number indicating the GPU-timestamp
-    /// where all previous commands have finished executing.
-    ///
-    /// Must be multiplied by [`Queue::get_timestamp_period`][Qgtp] to get
-    /// the value in nanoseconds. Absolute values have no meaning,
-    /// but timestamps can be subtracted to get the time it takes
+    /// Each timestamp query writes to a single result slot in the query set.
+    /// The timestamp value must be multiplied by [`Queue::get_timestamp_period()`][Qgtp] to get
+    /// the time in nanoseconds.
+    /// Absolute values have no meaning, but timestamps can be subtracted to get the time it takes
     /// for a string of operations to complete.
+    /// Timestamps may overflow and wrap to 0, resulting in occasional spurious negative deltas.
+    ///
+    /// Additionally, passes may be executed in parallel or out of the order they were submitted;
+    /// this does not affect their results but is observable via these timestamps.
     ///
     /// [`Features::TIMESTAMP_QUERY`] must be enabled to use this query type.
     ///
+    #[doc = link_to_wgpu_docs!(["`CommandEncoder::write_timestamp()`"]: "struct.CommandEncoder.html#method.write_timestamp")]
+    #[doc = link_to_wgpu_docs!(["`ComputePass::write_timestamp()`"]: "struct.ComputePass.html#method.write_timestamp")]
+    #[doc = link_to_wgpu_docs!(["`RenderPass::write_timestamp()`"]: "struct.RenderPass.html#method.write_timestamp")]
+    #[doc = link_to_wgpu_docs!(["`ComputePassDescriptor::timestamp_writes`"]: "struct.ComputePassDescriptor.html#structfield.timestamp_writes")]
+    #[doc = link_to_wgpu_docs!(["`RenderPassDescriptor::timestamp_writes`"]: "struct.RenderPassDescriptor.html#structfield.timestamp_writes")]
     #[doc = link_to_wgpu_docs!(["Qgtp"]: "struct.Queue.html#method.get_timestamp_period")]
     Timestamp,
+
+    /// A pipeline statistics query records information about the execution of pipelines;
+    /// see [`PipelineStatisticsTypes`]'s documentation for details.
+    ///
+    /// Pipeline statistics queries are performed by:
+    ///
+    /// * [`ComputePass::begin_pipeline_statistics_query()`]
+    /// * [`RenderPass::begin_pipeline_statistics_query()`]
+    ///
+    /// A single query may occupy up to 5 result slots in the query set, based on the flags given
+    /// here.
+    ///
+    /// [`Features::PIPELINE_STATISTICS_QUERY`] must be enabled to use this query type.
+    ///
+    #[doc = link_to_wgpu_docs!(["`ComputePass::begin_pipeline_statistics_query()`"]: "struct.ComputePass.html#method.begin_pipeline_statistics_query")]
+    #[doc = link_to_wgpu_docs!(["`RenderPass::begin_pipeline_statistics_query()`"]: "struct.RenderPass.html#method.begin_pipeline_statistics_query")]
+    PipelineStatistics(PipelineStatisticsTypes),
 }
 
 bitflags::bitflags! {

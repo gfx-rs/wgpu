@@ -4141,6 +4141,14 @@ impl Device {
         if let Some(ds) = depth_stencil_state {
             target_specified = true;
             let error = 'error: {
+                if !ds.format.is_depth_stencil_format() {
+                    // This error case is not redundant with the aspect check below when
+                    // neither depth nor stencil is enabled at all.
+                    break 'error Some(pipeline::DepthStencilStateError::FormatNotDepthOrStencil(
+                        ds.format,
+                    ));
+                }
+
                 let format_features = self.describe_format_features(ds.format)?;
                 if !format_features
                     .allowed_usages

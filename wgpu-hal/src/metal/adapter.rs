@@ -6,7 +6,7 @@ use objc::{class, msg_send, sel, sel_impl};
 use parking_lot::Mutex;
 use wgt::{AstcBlock, AstcChannel};
 
-use alloc::sync::Arc;
+use alloc::{sync::Arc, vec::Vec};
 
 use super::TimestampQuerySupport;
 
@@ -996,6 +996,9 @@ impl super::PrivateCapabilities {
             mesh_shaders,
             max_mesh_task_workgroup_count: if mesh_shaders { 1024 } else { 0 },
             max_task_payload_size: if mesh_shaders { 16384 - 32 } else { 0 },
+            supports_cooperative_matrix: family_check
+                && (device.supports_family(MTLGPUFamily::Apple7)
+                    || device.supports_family(MTLGPUFamily::Mac2)),
         }
     }
 
@@ -1114,6 +1117,12 @@ impl super::PrivateCapabilities {
         }
 
         features.set(F::EXPERIMENTAL_MESH_SHADER, self.mesh_shaders);
+
+        // Cooperative matrix (simdgroup matrix) requires MSL 2.3+
+        features.set(
+            F::EXPERIMENTAL_COOPERATIVE_MATRIX,
+            self.supports_cooperative_matrix && self.msl_version >= MTLLanguageVersion::V2_3,
+        );
 
         if self.supported_vertex_amplification_factor > 1 {
             features.insert(F::MULTIVIEW);
@@ -1253,7 +1262,47 @@ impl super::PrivateCapabilities {
                 ray_tracing_scratch_buffer_alignment: 0,
             },
             downlevel,
+            cooperative_matrix_properties: self.cooperative_matrix_properties(),
         }
+    }
+
+    /// Returns the supported cooperative matrix configurations for Metal.
+    ///
+    /// Metal's simdgroup_matrix supports 8x8 tiles with f16 and f32 element types.
+    fn cooperative_matrix_properties(&self) -> Vec<wgt::CooperativeMatrixProperties> {
+        if !self.supports_cooperative_matrix || self.msl_version < MTLLanguageVersion::V2_3 {
+            return Vec::new();
+        }
+
+        vec![
+            // 8x8 f32 configuration
+            wgt::CooperativeMatrixProperties {
+                m_size: 8,
+                n_size: 8,
+                k_size: 8,
+                ab_type: wgt::CooperativeScalarType::F32,
+                cr_type: wgt::CooperativeScalarType::F32,
+                saturating_accumulation: false,
+            },
+            // 8x8 f16 configuration
+            wgt::CooperativeMatrixProperties {
+                m_size: 8,
+                n_size: 8,
+                k_size: 8,
+                ab_type: wgt::CooperativeScalarType::F16,
+                cr_type: wgt::CooperativeScalarType::F16,
+                saturating_accumulation: false,
+            },
+            // Mixed precision: f16 inputs, f32 accumulator
+            wgt::CooperativeMatrixProperties {
+                m_size: 8,
+                n_size: 8,
+                k_size: 8,
+                ab_type: wgt::CooperativeScalarType::F16,
+                cr_type: wgt::CooperativeScalarType::F32,
+                saturating_accumulation: false,
+            },
+        ]
     }
 
     pub fn map_format(&self, format: wgt::TextureFormat) -> MTLPixelFormat {

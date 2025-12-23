@@ -1002,6 +1002,12 @@ impl dispatch::AdapterInterface for CoreAdapter {
     fn get_presentation_timestamp(&self) -> crate::PresentationTimestamp {
         self.context.0.adapter_get_presentation_timestamp(self.id)
     }
+
+    fn cooperative_matrix_properties(&self) -> Vec<crate::wgt::CooperativeMatrixProperties> {
+        self.context
+            .0
+            .adapter_cooperative_matrix_properties(self.id)
+    }
 }
 
 impl Drop for CoreAdapter {

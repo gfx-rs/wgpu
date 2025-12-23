@@ -1069,6 +1069,16 @@ impl<W: Write> Writer<W> {
                 }
                 writeln!(self.out, ");")?;
             }
+            Statement::CooperativeStore { target, ref data } => {
+                let suffix = if data.row_major { "T" } else { "" };
+                write!(self.out, "{level}coopStore{suffix}(")?;
+                self.write_expr(module, target, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, data.pointer, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, data.stride, func_ctx)?;
+                writeln!(self.out, ");")?
+            }
         }
 
         Ok(())
@@ -1186,6 +1196,13 @@ impl<W: Write> Writer<W> {
         // If the plain form of the expression is not what we need, emit the
         // operator necessary to correct that.
         let plain = self.plain_form_indirection(expr, module, func_ctx);
+        log::trace!(
+            "expression {:?}={:?} is {:?}, expected {:?}",
+            expr,
+            func_ctx.expressions[expr],
+            plain,
+            requested,
+        );
         match (requested, plain) {
             (Indirection::Ordinary, Indirection::Reference) => {
                 write!(self.out, "(&")?;
@@ -1785,6 +1802,43 @@ impl<W: Write> Writer<W> {
             | Expression::SubgroupBallotResult
             | Expression::SubgroupOperationResult { .. }
             | Expression::WorkGroupUniformLoadResult { .. } => {}
+            Expression::CooperativeLoad {
+                columns,
+                rows,
+                role,
+                ref data,
+            } => {
+                let suffix = if data.row_major { "T" } else { "" };
+                let scalar = func_ctx.info[data.pointer]
+                    .ty
+                    .inner_with(&module.types)
+                    .pointer_base_type()
+                    .unwrap()
+                    .inner_with(&module.types)
+                    .scalar()
+                    .unwrap();
+                write!(
+                    self.out,
+                    "coopLoad{suffix}<coop_mat{}x{}<{},{:?}>>(",
+                    columns as u32,
+                    rows as u32,
+                    scalar.try_to_wgsl().unwrap(),
+                    role,
+                )?;
+                self.write_expr(module, data.pointer, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, data.stride, func_ctx)?;
+                write!(self.out, ")")?;
+            }
+            Expression::CooperativeMultiplyAdd { a, b, c } => {
+                write!(self.out, "coopMultiplyAdd(")?;
+                self.write_expr(module, a, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, b, func_ctx)?;
+                write!(self.out, ", ")?;
+                self.write_expr(module, c, func_ctx)?;
+                write!(self.out, ")")?;
+            }
         }
 
         Ok(())

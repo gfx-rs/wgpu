@@ -584,6 +584,18 @@ impl<'a> Lexer<'a> {
         })
     }
 
+    pub(in crate::front::wgsl) fn next_cooperative_role(
+        &mut self,
+    ) -> Result<'a, crate::CooperativeRole> {
+        let (ident, span) = self.next_ident_with_span()?;
+        match ident {
+            "A" => Ok(crate::CooperativeRole::A),
+            "B" => Ok(crate::CooperativeRole::B),
+            "C" => Ok(crate::CooperativeRole::C),
+            _ => Err(Box::new(Error::UnknownAccess(span))),
+        }
+    }
+
     pub(in crate::front::wgsl) fn open_arguments(&mut self) -> Result<'a, ()> {
         self.expect(Token::Paren('('))
     }
