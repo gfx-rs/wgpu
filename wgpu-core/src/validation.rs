@@ -1213,6 +1213,8 @@ impl Interface {
             })
     }
 
+    /// Among other things, this implements some validation logic defined by the WebGPU spec. at
+    /// <https://www.w3.org/TR/webgpu/#abstract-opdef-validating-inter-stage-interfaces>.
     pub fn check_stage(
         &self,
         layouts: &mut BindingLayoutSource<'_>,
