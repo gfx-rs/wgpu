@@ -780,7 +780,7 @@ crate::cmp::impl_eq_ord_hash_proxy!(CoreQueueWriteBuffer => .mapping.ptr);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreBufferMappedRange => .ptr);
 
 impl dispatch::InstanceInterface for ContextWgpuCore {
-    fn new(desc: &wgt::InstanceDescriptor) -> Self
+    fn new(desc: wgt::InstanceDescriptor) -> Self
     where
         Self: Sized,
     {

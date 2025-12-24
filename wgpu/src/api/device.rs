@@ -60,7 +60,7 @@ impl Device {
         use core::task;
         let ctx = &mut task::Context::from_waker(task::Waker::noop());
 
-        let instance = Instance::new(&InstanceDescriptor {
+        let instance = Instance::new(InstanceDescriptor {
             backends: Backends::NOOP,
             backend_options: BackendOptions {
                 noop: NoopBackendOptions { enable: true },

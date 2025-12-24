@@ -51,7 +51,13 @@ Bottom level categories:
 
 #### General
 
+- BREAKING: Migrated from the `maxInterStageShaderComponents` limit to `maxInterStageShaderVariables`, which changes validation in a way that should not affect most programs. This follows the latest changes of the WebGPU spec. By @ErichDonGubler in [#8652](https://github.com/gfx-rs/wgpu/pull/8652).
 - Fixed validation of the texture format in GPUDepthStencilState when neither depth nor stencil is actually enabled. By @andyleiserson in [#8766](https://github.com/gfx-rs/wgpu/pull/8766).
+
+#### GLES
+
+- `DisplayHandle` should now be passed to `InstanceDescriptor` for correct EGL initialization on Wayland. By @MarijnS95 in [#8012](https://github.com/gfx-rs/wgpu/pull/8012)
+  Note that the existing workaround to create surfaces before the adapter is no longer valid.
 
 ### Documentation
 

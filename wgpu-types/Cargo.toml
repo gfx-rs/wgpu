@@ -52,6 +52,7 @@ web = ["dep:js-sys", "dep:web-sys"]
 bitflags.workspace = true
 bytemuck = { workspace = true, features = ["derive"] }
 log.workspace = true
+raw-window-handle.workspace = true
 serde = { workspace = true, default-features = false, features = [
     "alloc",
     "derive",

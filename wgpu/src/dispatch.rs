@@ -79,7 +79,7 @@ impl<T: 'static> AsAny for T {
 trait_alias!(CommonTraits: AsAny + Any + Debug + WasmNotSendSync);
 
 pub trait InstanceInterface: CommonTraits {
-    fn new(desc: &crate::InstanceDescriptor) -> Self
+    fn new(desc: crate::InstanceDescriptor) -> Self
     where
         Self: Sized;
 

@@ -808,6 +808,7 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_buffer_size: limits.max_buffer_size() as u64,
         max_vertex_attributes: limits.max_vertex_attributes(),
         max_vertex_buffer_array_stride: limits.max_vertex_buffer_array_stride(),
+        max_inter_stage_shader_variables: limits.max_inter_stage_shader_variables(),
         min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment(),
         min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment(),
         max_color_attachments: limits.max_color_attachments(),
@@ -820,7 +821,6 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_compute_workgroups_per_dimension: limits.max_compute_workgroups_per_dimension(),
         max_immediate_size: wgt::Limits::default().max_immediate_size,
         max_non_sampler_bindings: wgt::Limits::default().max_non_sampler_bindings,
-        max_inter_stage_shader_components: wgt::Limits::default().max_inter_stage_shader_components,
 
         max_task_mesh_workgroup_total_count: wgt::Limits::default()
             .max_task_mesh_workgroup_total_count,
@@ -895,7 +895,7 @@ fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
         (maxBufferSize, max_buffer_size),
         (maxVertexAttributes, max_vertex_attributes),
         (maxVertexBufferArrayStride, max_vertex_buffer_array_stride),
-        // TODO: (maxInterStageShaderVariables, max_inter_stage_shader_variables),
+        (maxInterStageShaderVariables, max_inter_stage_shader_variables),
         (maxColorAttachments, max_color_attachments),
         (maxColorAttachmentBytesPerSample, max_color_attachment_bytes_per_sample),
         (maxComputeWorkgroupStorageSize, max_compute_workgroup_storage_size),
@@ -1475,7 +1475,7 @@ crate::cmp::impl_eq_ord_hash_proxy!(WebQueueWriteBuffer => .ident);
 crate::cmp::impl_eq_ord_hash_proxy!(WebBufferMappedRange => .ident);
 
 impl dispatch::InstanceInterface for ContextWebGpu {
-    fn new(desc: &crate::InstanceDescriptor) -> Self
+    fn new(desc: crate::InstanceDescriptor) -> Self
     where
         Self: Sized,
     {

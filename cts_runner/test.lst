@@ -33,6 +33,31 @@ webgpu:api,operation,vertex_state,correctness:setVertexBuffer_offset_and_attribu
 webgpu:api,validation,buffer,create:*
 webgpu:api,validation,buffer,destroy:*
 fails-if(dx12) webgpu:api,validation,capability_checks,limits,maxBindGroups:setBindGroup,*
+// NOTE: Only test some of these `maxInterStageShaderVariables` cases, because of a CTS bug (see
+// below). CTS (incorrectly) only deducts once for any set of them being enabled, but it should
+// deduct for _each_ built-in.
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=false;pointList=false;frontFacing=false;sampleIndex=false;sampleMaskIn=false;sampleMaskOut=false
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=false;pointList=false;frontFacing=true;sampleIndex=false;sampleMaskIn=false;sampleMaskOut=false
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=false;pointList=false;frontFacing=false;sampleIndex=true;sampleMaskIn=false;sampleMaskOut=false
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=false;pointList=false;frontFacing=false;sampleIndex=false;sampleMaskIn=true;sampleMaskOut=false
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=false;pointList=false;frontFacing=false;sampleIndex=false;sampleMaskIn=false;sampleMaskOut=true
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=false;pointList=true;frontFacing=false;sampleIndex=false;sampleMaskIn=false;sampleMaskOut=false
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=false;pointList=true;frontFacing=true;sampleIndex=false;sampleMaskIn=false;sampleMaskOut=false
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=false;pointList=true;frontFacing=false;sampleIndex=true;sampleMaskIn=false;sampleMaskOut=false
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=false;pointList=true;frontFacing=false;sampleIndex=false;sampleMaskIn=true;sampleMaskOut=false
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=false;pointList=true;frontFacing=false;sampleIndex=false;sampleMaskIn=false;sampleMaskOut=true
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=true;pointList=false;frontFacing=false;sampleIndex=false;sampleMaskIn=false;sampleMaskOut=false
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=true;pointList=false;frontFacing=true;sampleIndex=false;sampleMaskIn=false;sampleMaskOut=false
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=true;pointList=false;frontFacing=false;sampleIndex=true;sampleMaskIn=false;sampleMaskOut=false
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=true;pointList=false;frontFacing=false;sampleIndex=false;sampleMaskIn=true;sampleMaskOut=false
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=true;pointList=false;frontFacing=false;sampleIndex=false;sampleMaskIn=false;sampleMaskOut=true
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=true;pointList=true;frontFacing=false;sampleIndex=false;sampleMaskIn=false;sampleMaskOut=false
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=true;pointList=true;frontFacing=true;sampleIndex=false;sampleMaskIn=false;sampleMaskOut=false
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=true;pointList=true;frontFacing=false;sampleIndex=true;sampleMaskIn=false;sampleMaskOut=false
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=true;pointList=true;frontFacing=false;sampleIndex=false;sampleMaskIn=true;sampleMaskOut=false
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";testValueName="atLimit";async=true;pointList=true;frontFacing=false;sampleIndex=false;sampleMaskIn=false;sampleMaskOut=true
+//FAIL: webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:*
+// https://github.com/gpuweb/cts/issues/4538
 webgpu:api,validation,createBindGroup:buffer_offset_and_size_for_bind_groups_match:*
 webgpu:api,validation,createBindGroup:buffer,effective_buffer_binding_size:*
 webgpu:api,validation,createBindGroup:buffer,resource_binding_size:*
@@ -137,6 +162,9 @@ webgpu:api,validation,render_pass,render_pass_descriptor:resolveTarget,*
 webgpu:api,validation,render_pass,resolve:resolve_attachment:*
 webgpu:api,validation,render_pipeline,depth_stencil_state:format:*
 webgpu:api,validation,render_pipeline,depth_stencil_state:stencil_write:*
+webgpu:api,validation,render_pipeline,inter_stage:max_shader_variable_location:isAsync=false;*
+//FAIL: webgpu:api,validation,render_pipeline,inter_stage:max_shader_variable_location:isAsync=true;*
+// https://github.com/gfx-rs/wgpu/pull/8712
 webgpu:api,validation,resource_usages,buffer,in_pass_encoder:*
 // FAIL: 2 other cases in resource_usages,texture,in_pass_encoder. https://github.com/gfx-rs/wgpu/issues/3126
 webgpu:api,validation,resource_usages,texture,in_pass_encoder:scope,*

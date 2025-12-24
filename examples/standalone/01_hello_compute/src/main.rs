@@ -38,7 +38,7 @@ fn main() {
     // We first initialize an wgpu `Instance`, which contains any "global" state wgpu needs.
     //
     // This is what loads the vulkan/dx12/metal/opengl libraries.
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::default());
 
     // We then create an `Adapter` which represents a physical gpu in the system. It allows
     // us to query information about it and create a `Device` from it.
