@@ -70,7 +70,7 @@ impl MaxFragmentShaderInputDeduction {
             BuiltIn::ViewIndex => InterStageBuiltIn::ViewIndex,
             BuiltIn::BaseInstance
             | BuiltIn::BaseVertex
-            | BuiltIn::ClipDistance
+            | BuiltIn::ClipDistances
             | BuiltIn::CullDistance
             | BuiltIn::InstanceIndex
             | BuiltIn::PointSize

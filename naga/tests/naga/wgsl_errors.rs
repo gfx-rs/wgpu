@@ -4310,7 +4310,7 @@ fn subgroup_invalid_broadcast() {
 fn invalid_clip_distances() {
     // Missing capability or enable directive
     check_extension_validation! {
-        Capabilities::CLIP_DISTANCE,
+        Capabilities::CLIP_DISTANCES,
         r#"
             @vertex
             fn vs_main() -> @builtin(clip_distances) array<f32, 8> {
@@ -4330,7 +4330,7 @@ fn invalid_clip_distances() {
         Err(naga::valid::ValidationError::EntryPoint {
             stage: naga::ShaderStage::Vertex,
             source: naga::valid::EntryPointError::Result(
-                naga::valid::VaryingError::UnsupportedCapability(Capabilities::CLIP_DISTANCE)
+                naga::valid::VaryingError::UnsupportedCapability(Capabilities::CLIP_DISTANCES)
             ),
             ..
         })
@@ -4354,11 +4354,11 @@ fn invalid_clip_distances() {
         Err(naga::valid::ValidationError::EntryPoint {
             stage: naga::ShaderStage::Vertex,
             source: naga::valid::EntryPointError::Result(
-                naga::valid::VaryingError::InvalidBuiltInType(naga::ir::BuiltIn::ClipDistance, _)
+                naga::valid::VaryingError::InvalidBuiltInType(naga::ir::BuiltIn::ClipDistances, _)
             ),
             ..
         }),
-        naga::valid::Capabilities::CLIP_DISTANCE
+        naga::valid::Capabilities::CLIP_DISTANCES
     }
 }
 

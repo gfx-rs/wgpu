@@ -258,7 +258,7 @@ impl VaryingContext<'_> {
                 self.built_ins.insert(canonical);
 
                 let required = match built_in {
-                    Bi::ClipDistance => Capabilities::CLIP_DISTANCE,
+                    Bi::ClipDistances => Capabilities::CLIP_DISTANCES,
                     Bi::CullDistance => Capabilities::CULL_DISTANCE,
                     // Primitive index is allowed w/o any other extensions in any- and closest-hit shaders
                     Bi::PrimitiveIndex if !matches!(ep.stage, St::AnyHit | St::ClosestHit) => {
@@ -304,7 +304,7 @@ impl VaryingContext<'_> {
                             && !self.output,
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
-                    Bi::ClipDistance | Bi::CullDistance => (
+                    Bi::ClipDistances | Bi::CullDistance => (
                         (self.stage == St::Vertex || self.stage == St::Mesh) && self.output,
                         match *ty_inner {
                             Ti::Array { base, size, .. } => {

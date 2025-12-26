@@ -1,4 +1,4 @@
-capabilities = "CLIP_DISTANCE"
+capabilities = "CLIP_DISTANCES"
 targets = "SPIRV | GLSL | WGSL"
 
 [glsl]

@@ -1084,7 +1084,7 @@ impl<'a, W: Write> Writer<'a, W> {
                             }
                         }
                     }
-                    crate::BuiltIn::ClipDistance => {
+                    crate::BuiltIn::ClipDistances => {
                         // Re-declare `gl_ClipDistance` with number of clip planes.
                         let TypeInner::Array { size, .. } = self.module.types[ty].inner else {
                             unreachable!();

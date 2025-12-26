@@ -309,7 +309,7 @@ impl<W: Write> Writer<W> {
             } => {
                 needed.dual_source_blending = true;
             }
-            crate::Binding::BuiltIn(crate::BuiltIn::ClipDistance) => {
+            crate::Binding::BuiltIn(crate::BuiltIn::ClipDistances) => {
                 needed.clip_distances = true;
             }
             crate::Binding::BuiltIn(crate::BuiltIn::PrimitiveIndex) => {

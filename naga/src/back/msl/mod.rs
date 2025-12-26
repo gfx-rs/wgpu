@@ -686,7 +686,7 @@ impl ResolvedBinding {
                     // vertex
                     Bi::BaseInstance => "base_instance",
                     Bi::BaseVertex => "base_vertex",
-                    Bi::ClipDistance => "clip_distance",
+                    Bi::ClipDistances => "clip_distance",
                     Bi::InstanceIndex => "instance_id",
                     Bi::PointSize => "point_size",
                     Bi::VertexIndex => "vertex_id",
@@ -841,7 +841,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         // No BUFFER_BINDING_ARRAY
         | Caps::STORAGE_TEXTURE_BINDING_ARRAY
         | Caps::STORAGE_BUFFER_BINDING_ARRAY
-        | Caps::CLIP_DISTANCE // CLIP_DISTANCE isn't supported by metal backend? But is supported by MSL writer
+        | Caps::CLIP_DISTANCES // CLIP_DISTANCES isn't supported by metal backend? But is supported by MSL writer
         // No CULL_DISTANCE
         | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
         | Caps::MULTIVIEW

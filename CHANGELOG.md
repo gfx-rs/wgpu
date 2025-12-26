@@ -42,6 +42,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Changes
+
+#### General
+
+- `Features::CLIP_DISTANCE`, `naga::Capabilities::CLIP_DISTANCE`, and `naga::BuiltIn::ClipDistance` have been renamed to `CLIP_DISTANCES` and `ClipDistances` (viz., pluralized) as appropriate, to match the WebGPU spec. By @ErichDonGubler in [#9267](https://github.com/gfx-rs/wgpu/pull/9267).
+
 ### Bug Fixes
 
 #### General
