@@ -841,7 +841,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         // No BUFFER_BINDING_ARRAY
         | Caps::STORAGE_TEXTURE_BINDING_ARRAY
         | Caps::STORAGE_BUFFER_BINDING_ARRAY
-        | Caps::CLIP_DISTANCES // CLIP_DISTANCES isn't supported by metal backend? But is supported by MSL writer
+        | Caps::CLIP_DISTANCES
         // No CULL_DISTANCE
         | Caps::STORAGE_TEXTURE_16BIT_NORM_FORMATS
         | Caps::MULTIVIEW
