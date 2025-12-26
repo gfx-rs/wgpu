@@ -4,6 +4,7 @@ fn main_1() {
     var c: f32 = 1.5f;
     var i: i32 = 20i;
 
+    i = 0i;
     let _e8 = c;
     c = (_e8 - 1f);
     loop {
@@ -16,8 +17,10 @@ fn main_1() {
             a = (_e18 - 0.02f);
         }
         continuing {
-            let _e15 = b;
-            b = (_e15 + 0.01f);
+            let _e15 = i;
+            i = (_e15 + 1i);
+            let _e16 = b;
+            b = (_e16 + 0.01f);
         }
     }
     return;
