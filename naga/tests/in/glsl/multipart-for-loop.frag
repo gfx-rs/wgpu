@@ -1,4 +1,4 @@
-// issue #6258 https://github.com/gfx-rs/wgpu/issues/6208
+// issue #6208 https://github.com/gfx-rs/wgpu/issues/6208
 # version 460
 
 void main() {
