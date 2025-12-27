@@ -5,22 +5,22 @@ fn main_1() {
     var i: i32 = 20i;
 
     i = 0i;
-    let _e8 = c;
-    c = (_e8 - 1f);
+    let _e9 = c;
+    c = (_e9 - 1f);
     loop {
-        let _e11 = i;
-        if !((_e11 < 25i)) {
+        let _e12 = i;
+        if !((_e12 < 25i)) {
             break;
         }
         {
-            let _e18 = a;
-            a = (_e18 - 0.02f);
+            let _e22 = a;
+            a = (_e22 - 0.02f);
         }
         continuing {
-            let _e15 = i;
-            i = (_e15 + 1i);
-            let _e16 = b;
-            b = (_e16 + 0.01f);
+            let _e16 = i;
+            i = (_e16 + 1i);
+            let _e19 = b;
+            b = (_e19 + 0.01f);
         }
     }
     return;

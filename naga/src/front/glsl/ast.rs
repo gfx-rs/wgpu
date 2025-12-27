@@ -116,6 +116,10 @@ pub struct HirExpr {
 
 #[derive(Debug, Clone)]
 pub enum HirExprKind {
+    /// helper to represent a sequence of expressions where side effects matter, the last one is return to the caller
+    Sequence{
+        exprs: Vec<Handle<HirExpr>>,
+    },
     Access {
         base: Handle<HirExpr>,
         index: Handle<HirExpr>,
