@@ -49,7 +49,7 @@ impl MaxFragmentShaderInputDeduction {
                 | InterStageBuiltIn::ViewIndex
                 | InterStageBuiltIn::PointCoord => 1,
                 InterStageBuiltIn::Barycentric => 3,
-                InterStageBuiltIn::Position => 4,
+                InterStageBuiltIn::Position => 0,
             },
         }
     }
@@ -58,6 +58,7 @@ impl MaxFragmentShaderInputDeduction {
         use naga::BuiltIn;
 
         Some(Self::InterStageBuiltIn(match builtin {
+            BuiltIn::Position { .. } => InterStageBuiltIn::Position,
             BuiltIn::FrontFacing => InterStageBuiltIn::FrontFacing,
             BuiltIn::SampleIndex => InterStageBuiltIn::SampleIndex,
             BuiltIn::SampleMask => InterStageBuiltIn::SampleMask,
@@ -67,7 +68,6 @@ impl MaxFragmentShaderInputDeduction {
 
             BuiltIn::PointCoord => InterStageBuiltIn::PointCoord,
             BuiltIn::Barycentric => InterStageBuiltIn::Barycentric,
-            BuiltIn::Position { .. } => InterStageBuiltIn::Position,
             BuiltIn::ViewIndex => InterStageBuiltIn::ViewIndex,
 
             BuiltIn::BaseInstance
@@ -107,6 +107,7 @@ impl MaxFragmentShaderInputDeduction {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InterStageBuiltIn {
     // Standard for WebGPU
+    Position,
     FrontFacing,
     SampleIndex,
     SampleMask,
@@ -117,7 +118,6 @@ pub enum InterStageBuiltIn {
     // Non-standard
     PointCoord,
     Barycentric,
-    Position,
     ViewIndex,
 }
 
