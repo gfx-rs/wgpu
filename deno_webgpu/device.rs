@@ -29,7 +29,7 @@ use crate::adapter::GPUAdapterInfo;
 use crate::adapter::GPUSupportedFeatures;
 use crate::adapter::GPUSupportedLimits;
 use crate::command_encoder::GPUCommandEncoder;
-use crate::error::make_pipeline_error;
+use crate::error::{fmt_err, make_pipeline_error};
 use crate::error::{GPUError, GPUGenericError, GPUPipelineErrorReason};
 use crate::query_set::GPUQuerySet;
 use crate::render_bundle::GPURenderBundleEncoder;
@@ -532,7 +532,7 @@ impl GPUDevice {
       let err = make_pipeline_error(
         scope,
         GPUPipelineErrorReason::Validation,
-        &err.to_string(),
+        &fmt_err(&err),
       );
       resolver.reject(scope, err.into());
     } else {
@@ -559,7 +559,7 @@ impl GPUDevice {
       let err = make_pipeline_error(
         scope,
         GPUPipelineErrorReason::Validation,
-        &err.to_string(),
+        &fmt_err(&err),
       );
       resolver.reject(scope, err.into());
     } else {
