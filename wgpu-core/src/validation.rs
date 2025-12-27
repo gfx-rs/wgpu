@@ -1597,7 +1597,7 @@ impl Interface {
                 for output in entry_point.inputs.iter() {
                     match *output {
                         Varying::Local { ref iv, location } => {
-                            if location >= max_fragment_shader_input_variables {
+                            if location >= self.limits.max_inter_stage_shader_variables {
                                 return Err(StageError::FragmentInputLocationTooLarge {
                                     location,
                                     var: iv.clone(),
