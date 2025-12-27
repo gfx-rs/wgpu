@@ -545,8 +545,8 @@ impl ParsingContext<'_> {
                 },
                 Default::default(),
             );
-        
-        Ok(expr)
+
+            Ok(expr)
         }
     }
 }

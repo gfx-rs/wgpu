@@ -1333,7 +1333,7 @@ impl<'a> Context<'a> {
                             }
                         }
                     }
-                
+
                     _ => {
                         return Err(Error {
                             kind: ErrorKind::SemanticError(
@@ -1355,9 +1355,7 @@ impl<'a> Context<'a> {
                     Some(handle) => handle,
                     None => {
                         return Err(Error {
-                            kind: ErrorKind::SemanticError(
-                                "Empty expression sequence".into(),
-                            ),
+                            kind: ErrorKind::SemanticError("Empty expression sequence".into()),
                             meta,
                         })
                     }

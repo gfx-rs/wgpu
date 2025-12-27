@@ -436,7 +436,8 @@ impl ParsingContext<'_> {
             // shader grammar :-
             // iteration_statement : (third option only)
             // FOR LEFT_PAREN for_init_statement for_rest_statement RIGHT_PAREN statement_no_new_scope
-            TokenValue::For => { //FOR
+            TokenValue::For => {
+                //FOR
                 let mut meta = self.bump(frontend)?.meta;
                 ctx.symbol_table.push_scope();
                 self.expect(frontend, TokenValue::LeftParen)?; // LEFT_PAREN
@@ -447,9 +448,9 @@ impl ParsingContext<'_> {
                 // declariation_statement
                 if self.bump_if(frontend, TokenValue::Semicolon).is_none() {
                     if self.peek_type_name(frontend) || self.peek_type_qualifier(frontend) {
-                        self.parse_declaration(frontend, ctx, false, is_inside_loop)?; // declariation_statement (besically the same as `declaration`)
+                        self.parse_declaration(frontend, ctx, false, is_inside_loop)?;
+                    // declariation_statement (besically the same as `declaration`)
                     } else {
-
                         // shader grammar :-
                         // expression_statement :
                         // SEMICOLON
@@ -523,7 +524,6 @@ impl ParsingContext<'_> {
                     }
                     Ok(())
                 })?;
-
 
                 // shader grammar just has a single expression here, which can be multiple expressions separated by commas...
                 let continuing = ctx.new_body(|ctx| {
