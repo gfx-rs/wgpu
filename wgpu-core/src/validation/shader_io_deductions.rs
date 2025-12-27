@@ -147,9 +147,18 @@ where
             .filter(|(_, effective_deduction)| *effective_deduction > 0);
         if relevant_deductions.clone().next().is_some() {
             writeln!(f, "; note that some deductions apply during validation:")?;
+            let mut wrote_something = false;
             for deduction in deductions {
-                writeln!(f, "\n- {deduction:?}: {}", accessor(deduction))?;
+                let deducted_amount = accessor(deduction);
+                if deducted_amount > 0 {
+                    writeln!(f, "\n- {deduction:?}: {}", accessor(deduction))?;
+                    wrote_something = true;
+                }
             }
+            debug_assert!(
+                wrote_something,
+                "no substantial deductions found in error display"
+            );
         }
         Ok(())
     })
