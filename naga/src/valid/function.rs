@@ -1483,10 +1483,7 @@ impl super::Validator {
                         Ti::Pointer {
                             base: pointer_base,
                             space: AddressSpace::WorkGroup,
-                        } => match (
-                            &context.types[pointer_base].inner,
-                            &context.types[ty].inner,
-                        ) {
+                        } => match (&context.types[pointer_base].inner, &context.types[ty].inner) {
                             (&Ti::Atomic(pointer_scalar), &Ti::Scalar(result_scalar)) => {
                                 pointer_scalar == result_scalar
                             }
