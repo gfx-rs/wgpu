@@ -3041,7 +3041,32 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 ir::TypeInner::Pointer {
                                     base,
                                     space: ir::AddressSpace::WorkGroup,
-                                } => base,
+                                } => match ctx.module.types[base].inner {
+                                    // Match `Expression::Load` semantics:
+                                    // loading through a pointer to `atomic<T>` produces a `T`.
+                                    ir::TypeInner::Atomic(scalar) => ctx.module.types.insert(
+                                        ir::Type {
+                                            name: None,
+                                            inner: ir::TypeInner::Scalar(scalar),
+                                        },
+                                        span,
+                                    ),
+                                    _ => base,
+                                },
+                                ir::TypeInner::ValuePointer {
+                                    size,
+                                    scalar,
+                                    space: ir::AddressSpace::WorkGroup,
+                                } => ctx.module.types.insert(
+                                    ir::Type {
+                                        name: None,
+                                        inner: match size {
+                                            Some(size) => ir::TypeInner::Vector { size, scalar },
+                                            None => ir::TypeInner::Scalar(scalar),
+                                        },
+                                    },
+                                    span,
+                                ),
                                 ref other => {
                                     log::error!("Type {other:?} passed to workgroupUniformLoad");
                                     let span = ctx.ast_expressions.get_span(expr);
