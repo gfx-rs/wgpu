@@ -7,10 +7,11 @@ use spirv::Word;
 use super::{
     block::DebugInfoInner,
     helpers::{contains_builtin, global_needs_wrapper, map_storage_class},
-    Block, BlockContext, CachedConstant, CachedExpressions, DebugInfo, EntryPointContext, Error,
-    Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction, LocalImageType,
-    LocalType, LocalVariable, LogicalLayout, LookupFunctionType, LookupType, NumericType, Options,
-    PhysicalLayout, PipelineOptions, ResultMember, Writer, WriterFlags, BITS_PER_BYTE,
+    Block, BlockContext, CachedConstant, CachedExpressions, CooperativeType, DebugInfo,
+    EntryPointContext, Error, Function, FunctionArgument, GlobalVariable, IdGenerator, Instruction,
+    LocalImageType, LocalType, LocalVariable, LogicalLayout, LookupFunctionType, LookupType,
+    NumericType, Options, PhysicalLayout, PipelineOptions, ResultMember, Writer, WriterFlags,
+    BITS_PER_BYTE,
 };
 use crate::{
     arena::{Handle, HandleVec, UniqueArena},
@@ -448,6 +449,9 @@ impl Writer {
                 // We expect `NumericType::from_inner` to handle all
                 // these cases, so unwrap.
                 LocalType::Numeric(NumericType::from_inner(inner).unwrap())
+            }
+            crate::TypeInner::CooperativeMatrix { .. } => {
+                LocalType::Cooperative(CooperativeType::from_inner(inner).unwrap())
             }
             crate::TypeInner::Pointer { base, space } => {
                 let base_type_id = self.get_handle_type_id(base);
@@ -1028,14 +1032,13 @@ impl Writer {
                 }
             }
 
-            // Handle globals are pre-emitted and should be loaded automatically.
-            //
-            // Any that are binding arrays we skip as we cannot load the array, we must load the result after indexing.
             match ir_module.types[var.ty].inner {
+                // Any that are binding arrays we skip as we cannot load the array, we must load the result after indexing.
                 crate::TypeInner::BindingArray { .. } => {
                     gv.access_id = gv.var_id;
                 }
                 _ => {
+                    // Handle globals are pre-emitted and should be loaded automatically.
                     if var.space == crate::AddressSpace::Handle {
                         let var_type_id = self.get_handle_type_id(var.ty);
                         let id = self.id_gen.next();
@@ -1122,6 +1125,7 @@ impl Writer {
                     }
                 }),
             );
+
             context
                 .function
                 .variables
@@ -1515,6 +1519,16 @@ impl Writer {
                 self.require_any("16 bit floating-point", &[spirv::Capability::Float16])?;
                 self.use_extension("SPV_KHR_16bit_storage");
             }
+            // Cooperative types and ops
+            crate::TypeInner::CooperativeMatrix { .. } => {
+                self.require_any(
+                    "cooperative matrix",
+                    &[spirv::Capability::CooperativeMatrixKHR],
+                )?;
+                self.require_any("memory model", &[spirv::Capability::VulkanMemoryModel])?;
+                self.use_extension("SPV_KHR_cooperative_matrix");
+                self.use_extension("SPV_KHR_vulkan_memory_model");
+            }
             _ => {}
         }
         Ok(())
@@ -1541,10 +1555,36 @@ impl Writer {
         instruction.to_words(&mut self.logical_layout.declarations);
     }
 
+    fn write_cooperative_type_declaration_local(&mut self, id: Word, coop: CooperativeType) {
+        let instruction = match coop {
+            CooperativeType::Matrix {
+                columns,
+                rows,
+                scalar,
+                role,
+            } => {
+                let scalar_id =
+                    self.get_localtype_id(LocalType::Numeric(NumericType::Scalar(scalar)));
+                let scope_id = self.get_index_constant(spirv::Scope::Subgroup as u32);
+                let columns_id = self.get_index_constant(columns as u32);
+                let rows_id = self.get_index_constant(rows as u32);
+                let role_id =
+                    self.get_index_constant(spirv::CooperativeMatrixUse::from(role) as u32);
+                Instruction::type_coop_matrix(id, scalar_id, scope_id, rows_id, columns_id, role_id)
+            }
+        };
+
+        instruction.to_words(&mut self.logical_layout.declarations);
+    }
+
     fn write_type_declaration_local(&mut self, id: Word, local_ty: LocalType) {
         let instruction = match local_ty {
             LocalType::Numeric(numeric) => {
                 self.write_numeric_type_declaration_local(id, numeric);
+                return;
+            }
+            LocalType::Cooperative(coop) => {
+                self.write_cooperative_type_declaration_local(id, coop);
                 return;
             }
             LocalType::Pointer { base, class } => Instruction::type_pointer(id, class, base),
@@ -1663,6 +1703,7 @@ impl Writer {
                 | crate::TypeInner::Atomic(_)
                 | crate::TypeInner::Vector { .. }
                 | crate::TypeInner::Matrix { .. }
+                | crate::TypeInner::CooperativeMatrix { .. }
                 | crate::TypeInner::Pointer { .. }
                 | crate::TypeInner::ValuePointer { .. }
                 | crate::TypeInner::Image { .. }
@@ -2947,7 +2988,14 @@ impl Writer {
         }
 
         let addressing_model = spirv::AddressingModel::Logical;
-        let memory_model = spirv::MemoryModel::GLSL450;
+        let memory_model = if self
+            .capabilities_used
+            .contains(&spirv::Capability::VulkanMemoryModel)
+        {
+            spirv::MemoryModel::Vulkan
+        } else {
+            spirv::MemoryModel::GLSL450
+        };
         //self.check(addressing_model.required_capabilities())?;
         //self.check(memory_model.required_capabilities())?;
 

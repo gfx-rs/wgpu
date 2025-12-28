@@ -243,3 +243,42 @@ impl fmt::Display for RequestAdapterError {
         Ok(())
     }
 }
+
+/// The underlying scalar type of the cooperative matrix component.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum CooperativeScalarType {
+    /// 32-bit floating point.
+    F32,
+    /// 16-bit floating point.
+    F16,
+    /// 32-bit signed integer.
+    I32,
+    /// 32-bit unsigned integer.
+    U32,
+}
+
+/// Describes a supported cooperative matrix configuration.
+///
+/// Cooperative matrices perform the operation `C = A * B + C` where:
+/// - `A` is an M×K matrix
+/// - `B` is a K×N matrix
+/// - `C` is an M×N matrix (both input accumulator and output)
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+pub struct CooperativeMatrixProperties {
+    /// Number of rows in matrices A and C (M dimension)
+    pub m_size: u32,
+    /// Number of columns in matrices B and C (N dimension)
+    pub n_size: u32,
+    /// Number of columns in A / rows in B (K dimension)
+    pub k_size: u32,
+    /// Element type for input matrices A and B
+    pub ab_type: CooperativeScalarType,
+    /// Element type for accumulator matrix C and the result
+    pub cr_type: CooperativeScalarType,
+    /// Whether saturating accumulation is supported.
+    ///
+    /// When true, the multiply-add operation clamps the result to prevent overflow.
+    pub saturating_accumulation: bool,
+}

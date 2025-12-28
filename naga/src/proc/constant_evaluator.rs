@@ -970,6 +970,8 @@ pub enum ConstantEvaluatorError {
         "Expected reject and accept args. to be scalars of vectors of the same type, got something else",
     )]
     SelectAcceptRejectTypeMismatch,
+    #[error("Cooperative operations can't be constant")]
+    CooperativeOperation,
 }
 
 impl<'a> ConstantEvaluator<'a> {
@@ -1361,6 +1363,9 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::SubgroupBallotResult => Err(ConstantEvaluatorError::SubgroupExpression),
             Expression::SubgroupOperationResult { .. } => {
                 Err(ConstantEvaluatorError::SubgroupExpression)
+            }
+            Expression::CooperativeLoad { .. } | Expression::CooperativeMultiplyAdd { .. } => {
+                Err(ConstantEvaluatorError::CooperativeOperation)
             }
         }
     }

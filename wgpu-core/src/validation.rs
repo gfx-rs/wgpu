@@ -7,13 +7,19 @@ use core::fmt;
 
 use arrayvec::ArrayVec;
 use hashbrown::hash_map::Entry;
+use shader_io_deductions::{display_deductions_as_optional_list, MaxVertexShaderOutputDeduction};
 use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
     BindGroupLayoutEntry, BindingType,
 };
 
-use crate::{device::bgl, resource::InvalidResourceError, FastHashMap, FastHashSet};
+use crate::{
+    device::bgl, resource::InvalidResourceError,
+    validation::shader_io_deductions::MaxFragmentShaderInputDeduction, FastHashMap, FastHashSet,
+};
+
+pub mod shader_io_deductions;
 
 #[derive(Debug)]
 enum ResourceType {
@@ -92,16 +98,6 @@ impl fmt::Display for NumericDimension {
             Self::Scalar => write!(f, ""),
             Self::Vector(size) => write!(f, "x{}", size as u8),
             Self::Matrix(columns, rows) => write!(f, "x{}{}", columns as u8, rows as u8),
-        }
-    }
-}
-
-impl NumericDimension {
-    fn num_components(&self) -> u32 {
-        match *self {
-            Self::Scalar => 1,
-            Self::Vector(size) => size as u32,
-            Self::Matrix(w, h) => w as u32 * h as u32,
         }
     }
 }
@@ -296,8 +292,6 @@ pub enum StageError {
         per_dimension_limit: &'static str,
         total_limit: &'static str,
     },
-    #[error("Shader uses {used} inter-stage components above the limit of {limit}")]
-    TooManyVaryings { used: u32, limit: u32 },
     #[error("Unable to find entry point '{0}'")]
     MissingEntryPoint(String),
     #[error("Shader global {0:?} is not available in the pipeline layout")]
@@ -328,6 +322,55 @@ pub enum StageError {
     MultipleEntryPointsFound,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+    #[error(
+        "vertex shader output location Location[{location}] ({var}) exceeds the \
+        `max_inter_stage_shader_variables` limit ({}, 0-based){}",
+        // NOTE: Remember: the limit is 0-based for indices.
+        limit - 1,
+        display_deductions_as_optional_list(deductions, |d| d.for_location())
+    )]
+    VertexOutputLocationTooLarge {
+        location: u32,
+        var: InterfaceVar,
+        limit: u32,
+        deductions: Vec<MaxVertexShaderOutputDeduction>,
+    },
+    #[error(
+        "found {num_found} user-defined vertex shader output variables, which exceeds the \
+        `max_inter_stage_shader_variables` limit ({limit}){}",
+        display_deductions_as_optional_list(deductions, |d| d.for_variables())
+    )]
+    TooManyUserDefinedVertexOutputs {
+        num_found: u32,
+        limit: u32,
+        deductions: Vec<MaxVertexShaderOutputDeduction>,
+    },
+    #[error(
+        "fragment shader input location Location[{location}] ({var}) exceeds the \
+        `max_inter_stage_shader_variables` limit ({}, 0-based){}",
+        // NOTE: Remember: the limit is 0-based for indices.
+        limit - 1,
+        // NOTE: WebGPU spec. validation for fragment inputs is expressed in terms of variables
+        // (unlike vertex outputs), so we use `MaxFragmentShaderInputDeduction::for_variables` here
+        // (and not a non-existent `for_locations`).
+        display_deductions_as_optional_list(deductions, |d| d.for_variables())
+    )]
+    FragmentInputLocationTooLarge {
+        location: u32,
+        var: InterfaceVar,
+        limit: u32,
+        deductions: Vec<MaxFragmentShaderInputDeduction>,
+    },
+    #[error(
+        "found {num_found} user-defined fragment shader input variables, which exceeds the \
+        `max_inter_stage_shader_variables` limit ({limit}){}",
+        display_deductions_as_optional_list(deductions, |d| d.for_variables())
+    )]
+    TooManyUserDefinedFragmentInputs {
+        num_found: u32,
+        limit: u32,
+        deductions: Vec<MaxFragmentShaderInputDeduction>,
+    },
     #[error(
         "Location[{location}] {var}'s index exceeds the `max_color_attachments` limit ({limit})"
     )]
@@ -371,10 +414,13 @@ impl WebGpuError for StageError {
                 error,
             } => error,
             Self::InvalidWorkgroupSize { .. }
-            | Self::TooManyVaryings { .. }
             | Self::MissingEntryPoint(..)
             | Self::NoEntryPointFound
             | Self::MultipleEntryPointsFound
+            | Self::VertexOutputLocationTooLarge { .. }
+            | Self::TooManyUserDefinedVertexOutputs { .. }
+            | Self::FragmentInputLocationTooLarge { .. }
+            | Self::TooManyUserDefinedFragmentInputs { .. }
             | Self::ColorAttachmentLocationTooLarge { .. }
             | Self::TooManyMeshVertices { .. }
             | Self::TooManyMeshPrimitives { .. }
@@ -1148,10 +1194,9 @@ impl Interface {
 
     pub fn finalize_entry_point_name(
         &self,
-        stage_bit: wgt::ShaderStages,
+        stage: naga::ShaderStage,
         entry_point_name: Option<&str>,
     ) -> Result<String, StageError> {
-        let stage = Self::shader_stage_from_stage_bit(stage_bit);
         entry_point_name
             .map(|ep| ep.to_string())
             .map(Ok)
@@ -1168,35 +1213,26 @@ impl Interface {
             })
     }
 
-    pub(crate) fn shader_stage_from_stage_bit(stage_bit: wgt::ShaderStages) -> naga::ShaderStage {
-        match stage_bit {
-            wgt::ShaderStages::VERTEX => naga::ShaderStage::Vertex,
-            wgt::ShaderStages::FRAGMENT => naga::ShaderStage::Fragment,
-            wgt::ShaderStages::COMPUTE => naga::ShaderStage::Compute,
-            wgt::ShaderStages::MESH => naga::ShaderStage::Mesh,
-            wgt::ShaderStages::TASK => naga::ShaderStage::Task,
-            _ => unreachable!(),
-        }
-    }
-
+    /// Among other things, this implements some validation logic defined by the WebGPU spec. at
+    /// <https://www.w3.org/TR/webgpu/#abstract-opdef-validating-inter-stage-interfaces>.
     pub fn check_stage(
         &self,
         layouts: &mut BindingLayoutSource<'_>,
         shader_binding_sizes: &mut FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
         entry_point_name: &str,
-        stage_bit: wgt::ShaderStages,
+        shader_stage: ShaderStageForValidation,
         inputs: StageIo,
-        compare_function: Option<wgt::CompareFunction>,
     ) -> Result<StageIo, StageError> {
         // Since a shader module can have multiple entry points with the same name,
         // we need to look for one with the right execution model.
-        let shader_stage = Self::shader_stage_from_stage_bit(stage_bit);
-        let pair = (shader_stage, entry_point_name.to_string());
+        let pair = (shader_stage.to_naga(), entry_point_name.to_string());
         let entry_point = match self.entry_points.get(&pair) {
             Some(some) => some,
             None => return Err(StageError::MissingEntryPoint(pair.1)),
         };
         let (_, entry_point_name) = pair;
+
+        let stage_bit = shader_stage.to_wgt_bit();
 
         // check resources visibility
         for &handle in entry_point.resources.iter() {
@@ -1319,13 +1355,13 @@ impl Interface {
         }
 
         // check workgroup size limits
-        if shader_stage.compute_like() {
+        if shader_stage.to_naga().compute_like() {
             let (
                 max_workgroup_size_limits,
                 max_workgroup_size_total,
                 per_dimension_limit,
                 total_limit,
-            ) = match shader_stage {
+            ) = match shader_stage.to_naga() {
                 naga::ShaderStage::Compute => (
                     [
                         self.limits.max_compute_workgroup_size_x,
@@ -1377,7 +1413,6 @@ impl Interface {
             }
         }
 
-        let mut inter_stage_components = 0;
         let mut this_stage_primitive_index = false;
         let mut has_draw_id = false;
 
@@ -1390,38 +1425,36 @@ impl Interface {
                         .get(&location)
                         .ok_or(InputError::Missing)
                         .and_then(|provided| {
-                            let (compatible, num_components, per_primitive_correct) =
-                                match shader_stage {
-                                    // For vertex attributes, there are defaults filled out
-                                    // by the driver if data is not provided.
-                                    naga::ShaderStage::Vertex => {
-                                        let is_compatible =
-                                            iv.ty.scalar.kind == provided.ty.scalar.kind;
-                                        // vertex inputs don't count towards inter-stage
-                                        (is_compatible, 0, !iv.per_primitive)
+                            let (compatible, per_primitive_correct) = match shader_stage.to_naga() {
+                                // For vertex attributes, there are defaults filled out
+                                // by the driver if data is not provided.
+                                naga::ShaderStage::Vertex => {
+                                    let is_compatible =
+                                        iv.ty.scalar.kind == provided.ty.scalar.kind;
+                                    // vertex inputs don't count towards inter-stage
+                                    (is_compatible, !iv.per_primitive)
+                                }
+                                naga::ShaderStage::Fragment => {
+                                    if iv.interpolation != provided.interpolation {
+                                        return Err(InputError::InterpolationMismatch(
+                                            provided.interpolation,
+                                        ));
                                     }
-                                    naga::ShaderStage::Fragment => {
-                                        if iv.interpolation != provided.interpolation {
-                                            return Err(InputError::InterpolationMismatch(
-                                                provided.interpolation,
-                                            ));
-                                        }
-                                        if iv.sampling != provided.sampling {
-                                            return Err(InputError::SamplingMismatch(
-                                                provided.sampling,
-                                            ));
-                                        }
-                                        (
-                                            iv.ty.is_subtype_of(&provided.ty),
-                                            iv.ty.dim.num_components(),
-                                            iv.per_primitive == provided.per_primitive,
-                                        )
+                                    if iv.sampling != provided.sampling {
+                                        return Err(InputError::SamplingMismatch(
+                                            provided.sampling,
+                                        ));
                                     }
-                                    // These can't have varying inputs
-                                    naga::ShaderStage::Compute
-                                    | naga::ShaderStage::Task
-                                    | naga::ShaderStage::Mesh => (false, 0, false),
-                                };
+                                    (
+                                        iv.ty.is_subtype_of(&provided.ty),
+                                        iv.per_primitive == provided.per_primitive,
+                                    )
+                                }
+                                // These can't have varying inputs
+                                naga::ShaderStage::Compute
+                                | naga::ShaderStage::Task
+                                | naga::ShaderStage::Mesh => (false, false),
+                            };
                             if !compatible {
                                 return Err(InputError::WrongType(provided.ty));
                             } else if !per_primitive_correct {
@@ -1430,19 +1463,15 @@ impl Interface {
                                     shader: iv.per_primitive,
                                 });
                             }
-                            Ok(num_components)
+                            Ok(())
                         });
-                    match result {
-                        Ok(num_components) => {
-                            inter_stage_components += num_components;
-                        }
-                        Err(error) => {
-                            return Err(StageError::Input {
-                                location,
-                                var: iv.clone(),
-                                error,
-                            })
-                        }
+
+                    if let Err(error) = result {
+                        return Err(StageError::Input {
+                            location,
+                            var: iv.clone(),
+                            error,
+                        });
                     }
                 }
                 Varying::BuiltIn(naga::BuiltIn::PrimitiveIndex) => {
@@ -1456,12 +1485,49 @@ impl Interface {
         }
 
         match shader_stage {
-            naga::ShaderStage::Vertex => {
+            ShaderStageForValidation::Vertex {
+                topology,
+                compare_function,
+            } => {
+                let mut max_vertex_shader_output_variables =
+                    self.limits.max_inter_stage_shader_variables;
+                let mut max_vertex_shader_output_location = max_vertex_shader_output_variables - 1;
+
+                let point_list_deduction = if topology == wgt::PrimitiveTopology::PointList {
+                    Some(MaxVertexShaderOutputDeduction::PointListPrimitiveTopology)
+                } else {
+                    None
+                };
+
+                let deductions = point_list_deduction.into_iter();
+
+                for deduction in deductions.clone() {
+                    // NOTE: Deductions, in the current version of the spec. we implement, do not
+                    // ever exceed the minimum variables available.
+                    max_vertex_shader_output_variables = max_vertex_shader_output_variables
+                        .checked_sub(deduction.for_variables())
+                        .unwrap();
+                    max_vertex_shader_output_location = max_vertex_shader_output_location
+                        .checked_sub(deduction.for_location())
+                        .unwrap();
+                }
+
+                let mut num_user_defined_outputs = 0;
+
                 for output in entry_point.outputs.iter() {
-                    //TODO: count builtins towards the limit?
-                    inter_stage_components += match *output {
-                        Varying::Local { ref iv, .. } => iv.ty.dim.num_components(),
-                        Varying::BuiltIn(_) => 0,
+                    match *output {
+                        Varying::Local { ref iv, location } => {
+                            if location > max_vertex_shader_output_location {
+                                return Err(StageError::VertexOutputLocationTooLarge {
+                                    location,
+                                    var: iv.clone(),
+                                    limit: self.limits.max_inter_stage_shader_variables,
+                                    deductions: deductions.collect(),
+                                });
+                            }
+                            num_user_defined_outputs += 1;
+                        }
+                        Varying::BuiltIn(_) => {}
                     };
 
                     if let Some(
@@ -1488,8 +1554,71 @@ impl Interface {
                         }
                     }
                 }
+
+                if num_user_defined_outputs > max_vertex_shader_output_variables {
+                    return Err(StageError::TooManyUserDefinedVertexOutputs {
+                        num_found: num_user_defined_outputs,
+                        limit: self.limits.max_inter_stage_shader_variables,
+                        deductions: deductions.collect(),
+                    });
+                }
             }
-            naga::ShaderStage::Fragment => {
+            ShaderStageForValidation::Fragment => {
+                let mut max_fragment_shader_input_variables =
+                    self.limits.max_inter_stage_shader_variables;
+
+                let deductions = entry_point.inputs.iter().filter_map(|output| match output {
+                    Varying::Local { .. } => None,
+                    Varying::BuiltIn(builtin) => {
+                        MaxFragmentShaderInputDeduction::from_inter_stage_builtin(*builtin).or_else(
+                            || {
+                                unreachable!(
+                                    concat!(
+                                        "unexpected built-in provided; ",
+                                        "{:?} is not used for fragment stage input",
+                                    ),
+                                    builtin
+                                )
+                            },
+                        )
+                    }
+                });
+
+                for deduction in deductions.clone() {
+                    // NOTE: Deductions, in the current version of the spec. we implement, do not
+                    // ever exceed the minimum variables available.
+                    max_fragment_shader_input_variables = max_fragment_shader_input_variables
+                        .checked_sub(deduction.for_variables())
+                        .unwrap();
+                }
+
+                let mut num_user_defined_inputs = 0;
+
+                for output in entry_point.inputs.iter() {
+                    match *output {
+                        Varying::Local { ref iv, location } => {
+                            if location >= max_fragment_shader_input_variables {
+                                return Err(StageError::FragmentInputLocationTooLarge {
+                                    location,
+                                    var: iv.clone(),
+                                    limit: self.limits.max_inter_stage_shader_variables,
+                                    deductions: deductions.collect(),
+                                });
+                            }
+                            num_user_defined_inputs += 1;
+                        }
+                        Varying::BuiltIn(_) => {}
+                    };
+                }
+
+                if num_user_defined_inputs > max_fragment_shader_input_variables {
+                    return Err(StageError::TooManyUserDefinedFragmentInputs {
+                        num_found: num_user_defined_inputs,
+                        limit: self.limits.max_inter_stage_shader_variables,
+                        deductions: deductions.collect(),
+                    });
+                }
+
                 for output in &entry_point.outputs {
                     let &Varying::Local { location, ref iv } = output else {
                         continue;
@@ -1504,13 +1633,6 @@ impl Interface {
                 }
             }
             _ => (),
-        }
-
-        if inter_stage_components > self.limits.max_inter_stage_shader_components {
-            return Err(StageError::TooManyVaryings {
-                used: inter_stage_components,
-                limit: self.limits.max_inter_stage_shader_components,
-            });
         }
 
         if let Some(ref mesh_info) = entry_point.mesh_info {
@@ -1535,7 +1657,7 @@ impl Interface {
                 });
             }
         }
-        if shader_stage == naga::ShaderStage::Mesh
+        if shader_stage.to_naga() == naga::ShaderStage::Mesh
             && entry_point.task_payload_size != inputs.task_payload_size
         {
             return Err(StageError::TaskPayloadMustMatch {
@@ -1545,18 +1667,18 @@ impl Interface {
         }
 
         // Fragment shader primitive index is treated like a varying
-        if shader_stage == naga::ShaderStage::Fragment
+        if shader_stage.to_naga() == naga::ShaderStage::Fragment
             && this_stage_primitive_index
             && inputs.primitive_index == Some(false)
         {
             return Err(StageError::InvalidPrimitiveIndex);
-        } else if shader_stage == naga::ShaderStage::Fragment
+        } else if shader_stage.to_naga() == naga::ShaderStage::Fragment
             && !this_stage_primitive_index
             && inputs.primitive_index == Some(true)
         {
             return Err(StageError::MissingPrimitiveIndex);
         }
-        if shader_stage == naga::ShaderStage::Mesh
+        if shader_stage.to_naga() == naga::ShaderStage::Mesh
             && inputs.task_payload_size.is_some()
             && has_draw_id
         {
@@ -1575,7 +1697,7 @@ impl Interface {
         Ok(StageIo {
             task_payload_size: entry_point.task_payload_size,
             varyings: outputs,
-            primitive_index: if shader_stage == naga::ShaderStage::Mesh {
+            primitive_index: if shader_stage.to_naga() == naga::ShaderStage::Mesh {
                 Some(this_stage_primitive_index)
             } else {
                 None
@@ -1623,4 +1745,37 @@ pub fn validate_color_attachment_bytes_per_sample(
     }
 
     Ok(())
+}
+
+pub enum ShaderStageForValidation {
+    Vertex {
+        topology: wgt::PrimitiveTopology,
+        compare_function: Option<wgt::CompareFunction>,
+    },
+    Mesh,
+    Fragment,
+    Compute,
+    Task,
+}
+
+impl ShaderStageForValidation {
+    pub fn to_naga(&self) -> naga::ShaderStage {
+        match self {
+            Self::Vertex { .. } => naga::ShaderStage::Vertex,
+            Self::Mesh => naga::ShaderStage::Mesh,
+            Self::Fragment => naga::ShaderStage::Fragment,
+            Self::Compute => naga::ShaderStage::Compute,
+            Self::Task => naga::ShaderStage::Task,
+        }
+    }
+
+    pub fn to_wgt_bit(&self) -> wgt::ShaderStages {
+        match self {
+            Self::Vertex { .. } => wgt::ShaderStages::VERTEX,
+            Self::Mesh { .. } => wgt::ShaderStages::MESH,
+            Self::Fragment { .. } => wgt::ShaderStages::FRAGMENT,
+            Self::Compute => wgt::ShaderStages::COMPUTE,
+            Self::Task => wgt::ShaderStages::TASK,
+        }
+    }
 }

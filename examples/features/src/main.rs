@@ -33,6 +33,12 @@ const EXAMPLES: &[ExampleDesc] = &[
         webgpu: false, // No conservative raster
     },
     ExampleDesc {
+        name: "cooperative_matrix",
+        function: wgpu_examples::cooperative_matrix::main,
+        webgl: false,  // No cooperative matrix support
+        webgpu: false, // No cooperative matrix support
+    },
+    ExampleDesc {
         name: "cube",
         function: wgpu_examples::cube::main,
         webgl: true,

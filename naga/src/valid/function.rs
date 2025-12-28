@@ -1,6 +1,5 @@
 use alloc::{format, string::String};
 
-use super::validate_atomic_compare_exchange_struct;
 use super::{
     analyzer::{UniformityDisruptor, UniformityRequirements},
     ExpressionError, FunctionInfo, ModuleInfo,
@@ -213,6 +212,10 @@ pub enum FunctionError {
     WorkgroupUniformLoadInvalidPointer(Handle<crate::Expression>),
     #[error("Subgroup operation is invalid")]
     InvalidSubgroup(#[from] SubgroupError),
+    #[error("Invalid target type for a cooperative store")]
+    InvalidCooperativeStoreTarget(Handle<crate::Expression>),
+    #[error("Cooperative load/store data pointer has invalid type")]
+    InvalidCooperativeDataPointer(Handle<crate::Expression>),
     #[error("Emit statement should not cover \"result\" expressions like {0:?}")]
     EmitResult(Handle<crate::Expression>),
     #[error("Expression not visited by the appropriate statement")]
@@ -584,7 +587,7 @@ impl super::Validator {
                             .with_span_handle(result, context.expressions)
                             .into_other());
                     };
-                    if !validate_atomic_compare_exchange_struct(
+                    if !super::validate_atomic_compare_exchange_struct(
                         context.types,
                         members,
                         |ty: &crate::TypeInner| *ty == crate::TypeInner::Scalar(pointer_scalar),
@@ -804,7 +807,9 @@ impl super::Validator {
                             | Ex::As { .. }
                             | Ex::ArrayLength(_)
                             | Ex::RayQueryGetIntersection { .. }
-                            | Ex::RayQueryVertexPositions { .. } => {
+                            | Ex::RayQueryVertexPositions { .. }
+                            | Ex::CooperativeLoad { .. }
+                            | Ex::CooperativeMultiplyAdd { .. } => {
                                 self.emit_expression(handle, context)?
                             }
                             Ex::CallResult(_)
@@ -1625,6 +1630,37 @@ impl super::Validator {
                         .with_span_static(span, "support for this operation is not present"));
                     }
                     self.validate_subgroup_gather(mode, argument, result, context)?;
+                }
+                S::CooperativeStore { target, ref data } => {
+                    stages &= super::ShaderStages::COMPUTE;
+
+                    let target_scalar =
+                        match *context.resolve_type_inner(target, &self.valid_expression_set)? {
+                            Ti::CooperativeMatrix { scalar, .. } => scalar,
+                            ref other => {
+                                log::error!("Target operand type: {other:?}");
+                                return Err(FunctionError::InvalidCooperativeStoreTarget(target)
+                                    .with_span_handle(target, context.expressions));
+                            }
+                        };
+
+                    let ptr_ty = context.resolve_pointer_type(data.pointer);
+                    let ptr_scalar = ptr_ty
+                        .pointer_base_type()
+                        .and_then(|tr| tr.inner_with(context.types).scalar());
+                    if ptr_scalar != Some(target_scalar) {
+                        return Err(FunctionError::InvalidCooperativeDataPointer(data.pointer)
+                            .with_span_handle(data.pointer, context.expressions));
+                    }
+
+                    let ptr_space = ptr_ty.pointer_space().unwrap_or(AddressSpace::Handle);
+                    if !ptr_space.access().contains(crate::StorageAccess::STORE) {
+                        return Err(FunctionError::InvalidStorePointer(data.pointer)
+                            .with_span_static(
+                                context.expressions.get_span(data.pointer),
+                                "writing to this location is not permitted",
+                            ));
+                    }
                 }
             }
         }

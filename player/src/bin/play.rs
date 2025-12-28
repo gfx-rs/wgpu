@@ -63,14 +63,20 @@ fn main() {
         EventLoop::new().unwrap()
     };
     #[cfg(feature = "winit")]
-    let window = WindowBuilder::new()
-        .with_title("wgpu player")
-        .with_resizable(true)
-        .build(&event_loop)
-        .unwrap();
+    let window = Arc::new(
+        WindowBuilder::new()
+            .with_title("wgpu player")
+            .with_resizable(true)
+            .build(&event_loop)
+            .unwrap(),
+    );
 
     let instance_desc = wgt::InstanceDescriptor::from_env_or_default();
-    let instance = wgc::instance::Instance::new("player", &instance_desc, None);
+    #[cfg(feature = "winit")]
+    // TODO: Use event_loop.owned_display_handle() with winit 0.30
+    let instance_desc = instance_desc.with_display_handle(Box::new(window.clone()));
+    let instance_flags = instance_desc.flags;
+    let instance = wgc::instance::Instance::new("player", instance_desc, None);
 
     #[cfg(feature = "winit")]
     let surface = unsafe {
@@ -110,7 +116,7 @@ fn main() {
     log::info!("Using '{}'", info.name);
 
     let (device, queue) = adapter
-        .create_device_and_queue(&device_desc, instance_desc.flags)
+        .create_device_and_queue(&device_desc, instance_flags)
         .unwrap();
 
     let mut player = Player::default();

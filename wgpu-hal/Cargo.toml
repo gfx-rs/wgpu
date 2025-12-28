@@ -114,6 +114,7 @@ gles = [
     "dep:hashbrown",
     "dep:js-sys",
     "dep:khronos-egl",
+    "dep:wayland-sys",
     "dep:libloading",
     "dep:log",
     "dep:ndk-sys",
@@ -242,6 +243,12 @@ renderdoc-sys = { workspace = true, optional = true }
 [target.'cfg(unix)'.dependencies]
 # Backend: Vulkan
 libc = { workspace = true, optional = true }
+# backend: GLES
+wayland-sys = { version = "0.31.3", features = [
+    "client",
+    "dlopen",
+    "egl",
+], optional = true }
 
 #########################
 ### Platform: Windows ###

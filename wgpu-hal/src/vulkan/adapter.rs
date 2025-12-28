@@ -135,6 +135,12 @@ pub struct PhysicalDeviceFeatures {
     ///
     /// Strictly speaking this tells us what features we *don't* have compared to core.
     portability_subset: Option<vk::PhysicalDevicePortabilitySubsetFeaturesKHR<'static>>,
+
+    /// Features provided by `VK_KHR_cooperative_matrix`
+    cooperative_matrix: Option<vk::PhysicalDeviceCooperativeMatrixFeaturesKHR<'static>>,
+
+    /// Features provided by `VK_KHR_vulkan_memory_model`, promoted to Vulkan 1.2
+    vulkan_memory_model: Option<vk::PhysicalDeviceVulkanMemoryModelFeaturesKHR<'static>>,
 }
 
 impl PhysicalDeviceFeatures {
@@ -212,6 +218,12 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.portability_subset {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.cooperative_matrix {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.vulkan_memory_model {
             info = info.push_next(feature);
         }
         info
@@ -566,6 +578,28 @@ impl PhysicalDeviceFeatures {
                 Some(
                     vk::PhysicalDevicePortabilitySubsetFeaturesKHR::default()
                         .multisample_array_image(multisample_array_needed),
+                )
+            } else {
+                None
+            },
+            cooperative_matrix: if enabled_extensions.contains(&khr::cooperative_matrix::NAME) {
+                let needed =
+                    requested_features.contains(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX);
+                Some(
+                    vk::PhysicalDeviceCooperativeMatrixFeaturesKHR::default()
+                        .cooperative_matrix(needed),
+                )
+            } else {
+                None
+            },
+            vulkan_memory_model: if device_api_version >= vk::API_VERSION_1_2
+                || enabled_extensions.contains(&khr::vulkan_memory_model::NAME)
+            {
+                let needed =
+                    requested_features.contains(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX);
+                Some(
+                    vk::PhysicalDeviceVulkanMemoryModelFeaturesKHR::default()
+                        .vulkan_memory_model(needed),
                 )
             } else {
                 None
@@ -959,6 +993,11 @@ impl PhysicalDeviceFeatures {
                 .map(|p| p.multisample_array_image == vk::TRUE)
                 .unwrap_or(true),
         );
+        // Enable cooperative matrix if any configuration is supported
+        features.set(
+            F::EXPERIMENTAL_COOPERATIVE_MATRIX,
+            !caps.cooperative_matrix_properties.is_empty(),
+        );
 
         (features, dl_flags)
     }
@@ -1038,6 +1077,11 @@ pub struct PhysicalDeviceProperties {
     ///
     /// It is associated with a `VkPhysicalDevice` and its children.
     device_api_version: u32,
+
+    /// Supported cooperative matrix configurations.
+    ///
+    /// This is determined by querying `vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR`.
+    cooperative_matrix_properties: Vec<wgt::CooperativeMatrixProperties>,
 }
 
 impl PhysicalDeviceProperties {
@@ -1253,6 +1297,11 @@ impl PhysicalDeviceProperties {
             extensions.push(khr::fragment_shader_barycentric::NAME);
         }
 
+        // Require `VK_KHR_cooperative_matrix` if the associated feature was requested
+        if requested_features.contains(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX) {
+            extensions.push(khr::cooperative_matrix::NAME);
+        }
+
         extensions
     }
 
@@ -1382,11 +1431,12 @@ impl PhysicalDeviceProperties {
             max_vertex_attributes: limits.max_vertex_input_attributes,
             max_vertex_buffer_array_stride: limits.max_vertex_input_binding_stride,
             max_immediate_size: limits.max_push_constants_size,
+            max_inter_stage_shader_variables: limits
+                .max_vertex_output_components
+                .min(limits.max_fragment_input_components)
+                / 4,
             min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as u32,
             min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as u32,
-            max_inter_stage_shader_components: limits
-                .max_vertex_output_components
-                .min(limits.max_fragment_input_components),
             max_color_attachments: limits.max_color_attachments,
             max_color_attachment_bytes_per_sample,
             max_compute_workgroup_storage_size: limits.max_compute_shared_memory_size,
@@ -1576,6 +1626,14 @@ impl super::InstanceShared {
                     get_device_properties.get_physical_device_properties2(phd, &mut properties2)
                 };
 
+                // Query cooperative matrix properties
+                if capabilities.supports_extension(khr::cooperative_matrix::NAME) {
+                    let coop_matrix =
+                        khr::cooperative_matrix::Instance::new(&self.entry, &self.raw);
+                    capabilities.cooperative_matrix_properties =
+                        query_cooperative_matrix_properties(&coop_matrix, phd);
+                }
+
                 if is_intel_igpu_outdated_for_robustness2(
                     capabilities.properties,
                     capabilities.driver,
@@ -1751,6 +1809,13 @@ impl super::InstanceShared {
                 let next = features
                     .portability_subset
                     .insert(vk::PhysicalDevicePortabilitySubsetFeaturesKHR::default());
+                features2 = features2.push_next(next);
+            }
+
+            if capabilities.supports_extension(khr::cooperative_matrix::NAME) {
+                let next = features
+                    .cooperative_matrix
+                    .insert(vk::PhysicalDeviceCooperativeMatrixFeaturesKHR::default());
                 features2 = features2.push_next(next);
             }
 
@@ -2007,6 +2072,7 @@ impl super::Instance {
                 limits: wgt::DownlevelLimits {},
                 shader_model: wgt::ShaderModel::Sm5, //TODO?
             },
+            cooperative_matrix_properties: phd_capabilities.cooperative_matrix_properties.clone(),
         };
 
         let adapter = super::Adapter {
@@ -2309,6 +2375,11 @@ impl super::Adapter {
             }
             if features.contains(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
                 capabilities.push(spv::Capability::MeshShadingEXT);
+            }
+            if features.contains(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX) {
+                capabilities.push(spv::Capability::CooperativeMatrixKHR);
+                // TODO: expose this more generally
+                capabilities.push(spv::Capability::VulkanMemoryModel);
             }
             if self.private_caps.shader_integer_dot_product {
                 // See <https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_shader_integer_dot_product.html#_new_spir_v_capabilities>.
@@ -2880,4 +2951,128 @@ fn is_intel_igpu_outdated_for_robustness2(
         );
     }
     is_outdated
+}
+
+/// Convert Vulkan component type to wgt::CooperativeScalarType.
+fn map_vk_component_type(ty: vk::ComponentTypeKHR) -> Option<wgt::CooperativeScalarType> {
+    match ty {
+        vk::ComponentTypeKHR::FLOAT16 => Some(wgt::CooperativeScalarType::F16),
+        vk::ComponentTypeKHR::FLOAT32 => Some(wgt::CooperativeScalarType::F32),
+        vk::ComponentTypeKHR::SINT32 => Some(wgt::CooperativeScalarType::I32),
+        vk::ComponentTypeKHR::UINT32 => Some(wgt::CooperativeScalarType::U32),
+        _ => None,
+    }
+}
+
+/// Convert Vulkan matrix size.
+fn map_vk_cooperative_size(size: u32) -> Option<u32> {
+    match size {
+        8 | 16 => Some(size),
+        _ => None,
+    }
+}
+
+/// Query all supported cooperative matrix configurations from Vulkan.
+fn query_cooperative_matrix_properties(
+    coop_matrix: &khr::cooperative_matrix::Instance,
+    phd: vk::PhysicalDevice,
+) -> Vec<wgt::CooperativeMatrixProperties> {
+    let vk_properties =
+        match unsafe { coop_matrix.get_physical_device_cooperative_matrix_properties(phd) } {
+            Ok(props) => props,
+            Err(e) => {
+                log::warn!("Failed to query cooperative matrix properties: {e:?}");
+                return Vec::new();
+            }
+        };
+
+    log::debug!(
+        "Vulkan reports {} cooperative matrix configurations",
+        vk_properties.len()
+    );
+
+    let mut result = Vec::new();
+    for prop in &vk_properties {
+        log::debug!(
+            "  Vulkan coop matrix: M={} N={} K={} A={:?} B={:?} C={:?} Result={:?} scope={:?} saturating={}",
+            prop.m_size,
+            prop.n_size,
+            prop.k_size,
+            prop.a_type,
+            prop.b_type,
+            prop.c_type,
+            prop.result_type,
+            prop.scope,
+            prop.saturating_accumulation
+        );
+
+        // Only include subgroup-scoped operations (the only scope we support)
+        if prop.scope != vk::ScopeKHR::SUBGROUP {
+            log::debug!("    Skipped: scope is not SUBGROUP");
+            continue;
+        }
+
+        // Map sizes - skip configurations with sizes we don't support
+        let m_size = match map_vk_cooperative_size(prop.m_size) {
+            Some(s) => s,
+            None => {
+                log::debug!("    Skipped: M size {} not supported", prop.m_size);
+                continue;
+            }
+        };
+        let n_size = match map_vk_cooperative_size(prop.n_size) {
+            Some(s) => s,
+            None => {
+                log::debug!("    Skipped: N size {} not supported", prop.n_size);
+                continue;
+            }
+        };
+        let k_size = match map_vk_cooperative_size(prop.k_size) {
+            Some(s) => s,
+            None => {
+                log::debug!("    Skipped: K size {} not supported", prop.k_size);
+                continue;
+            }
+        };
+
+        // Map the component types - A and B must match, C and Result must match
+        let ab_type = match map_vk_component_type(prop.a_type) {
+            Some(t) if Some(t) == map_vk_component_type(prop.b_type) => t,
+            _ => {
+                log::debug!(
+                    "    Skipped: A/B types {:?}/{:?} not supported or don't match",
+                    prop.a_type,
+                    prop.b_type
+                );
+                continue;
+            }
+        };
+        let cr_type = match map_vk_component_type(prop.c_type) {
+            Some(t) if Some(t) == map_vk_component_type(prop.result_type) => t,
+            _ => {
+                log::debug!(
+                    "    Skipped: C/Result types {:?}/{:?} not supported or don't match",
+                    prop.c_type,
+                    prop.result_type
+                );
+                continue;
+            }
+        };
+
+        log::debug!("    Accepted!");
+        result.push(wgt::CooperativeMatrixProperties {
+            m_size,
+            n_size,
+            k_size,
+            ab_type,
+            cr_type,
+            saturating_accumulation: prop.saturating_accumulation != 0,
+        });
+    }
+
+    log::info!(
+        "Found {} cooperative matrix configurations supported by wgpu",
+        result.len()
+    );
+    result
 }

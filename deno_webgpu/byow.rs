@@ -121,7 +121,7 @@ impl UnsafeWindowSurface {
     // - handles can only be created by the FFI interface which
     // enforces --allow-ffi.
     //
-    // - `*const c_void` deserizalizes null and v8::External.
+    // - `*const c_void` deserializes null and v8::External.
     //
     // - Only FFI can export v8::External to user code.
     if options.window_handle.is_null() {

@@ -1040,6 +1040,13 @@ impl<T> Typed<T> {
             Self::Plain(expr) => Typed::Plain(f(expr)?),
         })
     }
+
+    fn ref_or<E>(self, error: E) -> core::result::Result<T, E> {
+        match self {
+            Self::Reference(v) => Ok(v),
+            Self::Plain(_) => Err(error),
+        }
+    }
 }
 
 /// A single vector component or swizzle.
@@ -2021,6 +2028,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     stmt.span,
                     function,
                     arguments,
+                    None,
                     &mut ctx.as_expression(block, &mut emitter),
                     true,
                 )?;
@@ -2106,12 +2114,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let value_span = ctx.ast_expressions.get_span(value);
                 let target = self
                     .expression_for_reference(value, &mut ctx.as_expression(block, &mut emitter))?;
-                let target_handle = match target {
-                    Typed::Reference(handle) => handle,
-                    Typed::Plain(_) => {
-                        return Err(Box::new(Error::BadIncrDecrReferenceType(value_span)))
-                    }
-                };
+                let target_handle = target.ref_or(Error::BadIncrDecrReferenceType(value_span))?;
 
                 let mut ectx = ctx.as_expression(block, &mut emitter);
                 let scalar = match *resolve_inner!(ectx, target_handle) {
@@ -2267,7 +2270,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let expr = match *global {
                     LoweredGlobalDecl::Var(handle) => {
                         let expr = ir::Expression::GlobalVariable(handle);
-                        match ctx.module.global_variables[handle].space {
+                        let v = &ctx.module.global_variables[handle];
+                        match v.space {
                             ir::AddressSpace::Handle => Typed::Plain(expr),
                             _ => Typed::Reference(expr),
                         }
@@ -2347,9 +2351,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             ast::Expression::Call {
                 ref function,
                 ref arguments,
+                result_ty,
             } => {
                 let handle = self
-                    .call(span, function, arguments, ctx, false)?
+                    .call(span, function, arguments, result_ty, ctx, false)?
                     .ok_or(Error::FunctionReturnsVoid(function.span))?;
                 return Ok(Typed::Plain(handle));
             }
@@ -2690,6 +2695,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         span: Span,
         function: &ast::Ident<'source>,
         arguments: &[Handle<ast::Expression<'source>>],
+        result_ty: Option<(Handle<ast::Type<'source>>, Span)>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
         is_statement: bool,
     ) -> Result<'source, Option<Handle<ir::Expression>>> {
@@ -3361,7 +3367,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             );
                             return Ok(Some(result));
                         }
-
                         "quadSwapY" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
 
@@ -3385,7 +3390,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                             );
                             return Ok(Some(result));
                         }
-
                         "quadSwapDiagonal" => {
                             let mut args = ctx.prepare_args(arguments, 1, span);
 
@@ -3408,6 +3412,101 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 span,
                             );
                             return Ok(Some(result));
+                        }
+                        "coopLoad" | "coopLoadT" => {
+                            let row_major = function.name.ends_with("T");
+                            let mut args = ctx.prepare_args(arguments, 1, span);
+                            let pointer = self.expression(args.next()?, ctx)?;
+                            let (matrix_ty, matrix_span) = result_ty.expect("generic argument");
+                            let (columns, rows, role) = match ctx.types[matrix_ty] {
+                                ast::Type::CooperativeMatrix {
+                                    columns,
+                                    rows,
+                                    role,
+                                    ..
+                                } => (columns, rows, role),
+                                _ => {
+                                    return Err(Box::new(Error::InvalidCooperativeLoadType(
+                                        matrix_span,
+                                    )))
+                                }
+                            };
+                            let stride = if args.total_args > 1 {
+                                self.expression(args.next()?, ctx)?
+                            } else {
+                                // Infer the stride from the matrix type
+                                let stride = if row_major {
+                                    columns as u32
+                                } else {
+                                    rows as u32
+                                };
+                                ctx.append_expression(
+                                    ir::Expression::Literal(ir::Literal::U32(stride)),
+                                    Span::UNDEFINED,
+                                )?
+                            };
+                            args.finish()?;
+
+                            crate::Expression::CooperativeLoad {
+                                columns,
+                                rows,
+                                role,
+                                data: crate::CooperativeData {
+                                    pointer,
+                                    stride,
+                                    row_major,
+                                },
+                            }
+                        }
+                        "coopStore" | "coopStoreT" => {
+                            let row_major = function.name.ends_with("T");
+
+                            let mut args = ctx.prepare_args(arguments, 2, span);
+                            let target = self.expression(args.next()?, ctx)?;
+                            let pointer = self.expression(args.next()?, ctx)?;
+                            let stride = if args.total_args > 2 {
+                                self.expression(args.next()?, ctx)?
+                            } else {
+                                // Infer the stride from the matrix type
+                                let stride = match *resolve_inner!(ctx, target) {
+                                    ir::TypeInner::CooperativeMatrix { columns, rows, .. } => {
+                                        if row_major {
+                                            columns as u32
+                                        } else {
+                                            rows as u32
+                                        }
+                                    }
+                                    _ => 0,
+                                };
+                                ctx.append_expression(
+                                    ir::Expression::Literal(ir::Literal::U32(stride)),
+                                    Span::UNDEFINED,
+                                )?
+                            };
+                            args.finish()?;
+
+                            let rctx = ctx.runtime_expression_ctx(span)?;
+                            rctx.block.push(
+                                crate::Statement::CooperativeStore {
+                                    target,
+                                    data: crate::CooperativeData {
+                                        pointer,
+                                        stride,
+                                        row_major,
+                                    },
+                                },
+                                span,
+                            );
+                            return Ok(None);
+                        }
+                        "coopMultiplyAdd" => {
+                            let mut args = ctx.prepare_args(arguments, 3, span);
+                            let a = self.expression(args.next()?, ctx)?;
+                            let b = self.expression(args.next()?, ctx)?;
+                            let c = self.expression(args.next()?, ctx)?;
+                            args.finish()?;
+
+                            ir::Expression::CooperativeMultiplyAdd { a, b, c }
                         }
                         _ => {
                             return Err(Box::new(Error::UnknownIdent(function.span, function.name)))
@@ -4232,6 +4331,25 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         scalar,
                     },
                     _ => return Err(Box::new(Error::BadMatrixScalarKind(ty_span, scalar))),
+                }
+            }
+            ast::Type::CooperativeMatrix {
+                columns,
+                rows,
+                ty,
+                ty_span,
+                role,
+            } => {
+                let ty = self.resolve_ast_type(ty, ctx)?;
+                let scalar = match ctx.module.types[ty].inner {
+                    ir::TypeInner::Scalar(s) => s,
+                    _ => return Err(Box::new(Error::UnsupportedCooperativeScalar(ty_span))),
+                };
+                ir::TypeInner::CooperativeMatrix {
+                    columns,
+                    rows,
+                    scalar,
+                    role,
                 }
             }
             ast::Type::Atomic(scalar) => scalar.to_inner_atomic(),

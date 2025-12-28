@@ -19,6 +19,7 @@ fn get_dimension(type_inner: &crate::TypeInner) -> Dimension {
         crate::TypeInner::Scalar(_) => Dimension::Scalar,
         crate::TypeInner::Vector { .. } => Dimension::Vector,
         crate::TypeInner::Matrix { .. } => Dimension::Matrix,
+        crate::TypeInner::CooperativeMatrix { .. } => Dimension::CooperativeMatrix,
         _ => unreachable!(),
     }
 }
@@ -777,6 +778,7 @@ impl BlockContext<'_> {
                                 rows,
                                 scalar,
                             } => {
+                                //TODO: why not just rely on `Fadd` for matrices?
                                 self.write_matrix_matrix_column_op(
                                     block,
                                     id,
@@ -792,6 +794,7 @@ impl BlockContext<'_> {
                                 self.cached[expr_handle] = id;
                                 return Ok(());
                             }
+                            crate::TypeInner::CooperativeMatrix { .. } => spirv::Op::FAdd,
                             _ => unimplemented!(),
                         },
                         crate::BinaryOperator::Subtract => match *left_ty_inner {
@@ -820,6 +823,7 @@ impl BlockContext<'_> {
                                 self.cached[expr_handle] = id;
                                 return Ok(());
                             }
+                            crate::TypeInner::CooperativeMatrix { .. } => spirv::Op::FSub,
                             _ => unimplemented!(),
                         },
                         crate::BinaryOperator::Multiply => {
@@ -853,10 +857,12 @@ impl BlockContext<'_> {
                                 (Dimension::Vector, Dimension::Matrix) => {
                                     spirv::Op::VectorTimesMatrix
                                 }
-                                (Dimension::Matrix, Dimension::Scalar) => {
+                                (Dimension::Matrix, Dimension::Scalar)
+                                | (Dimension::CooperativeMatrix, Dimension::Scalar) => {
                                     spirv::Op::MatrixTimesScalar
                                 }
-                                (Dimension::Scalar, Dimension::Matrix) => {
+                                (Dimension::Scalar, Dimension::Matrix)
+                                | (Dimension::Scalar, Dimension::CooperativeMatrix) => {
                                     reverse_operands = true;
                                     spirv::Op::MatrixTimesScalar
                                 }
@@ -875,6 +881,12 @@ impl BlockContext<'_> {
                                 }
                                 (Dimension::Vector, Dimension::Vector)
                                 | (Dimension::Scalar, Dimension::Scalar) => spirv::Op::IMul,
+                                (Dimension::CooperativeMatrix, Dimension::CooperativeMatrix)
+                                //Note: technically can do `FMul` but IR doesn't have matrix per-component multiplication
+                                | (Dimension::CooperativeMatrix, _)
+                                | (_, Dimension::CooperativeMatrix) => {
+                                    unimplemented!()
+                                }
                             }
                         }
                         crate::BinaryOperator::Divide => match left_ty_inner.scalar_kind() {
@@ -1827,6 +1839,69 @@ impl BlockContext<'_> {
                     &[spirv::Capability::RayQueryPositionFetchKHR],
                 )?;
                 self.write_ray_query_return_vertex_position(query, block, committed)
+            }
+            crate::Expression::CooperativeLoad { ref data, .. } => {
+                self.writer.require_any(
+                    "CooperativeMatrix",
+                    &[spirv::Capability::CooperativeMatrixKHR],
+                )?;
+                let layout = if data.row_major {
+                    spirv::CooperativeMatrixLayout::RowMajorKHR
+                } else {
+                    spirv::CooperativeMatrixLayout::ColumnMajorKHR
+                };
+                let layout_id = self.get_index_constant(layout as u32);
+                let stride_id = self.cached[data.stride];
+                match self.write_access_chain(data.pointer, block, AccessTypeAdjustment::None)? {
+                    ExpressionPointer::Ready { pointer_id } => {
+                        let id = self.gen_id();
+                        block.body.push(Instruction::coop_load(
+                            result_type_id,
+                            id,
+                            pointer_id,
+                            layout_id,
+                            stride_id,
+                        ));
+                        id
+                    }
+                    ExpressionPointer::Conditional { condition, access } => self
+                        .write_conditional_indexed_load(
+                            result_type_id,
+                            condition,
+                            block,
+                            |id_gen, block| {
+                                let pointer_id = access.result_id.unwrap();
+                                block.body.push(access);
+                                let id = id_gen.next();
+                                block.body.push(Instruction::coop_load(
+                                    result_type_id,
+                                    id,
+                                    pointer_id,
+                                    layout_id,
+                                    stride_id,
+                                ));
+                                id
+                            },
+                        ),
+                }
+            }
+            crate::Expression::CooperativeMultiplyAdd { a, b, c } => {
+                self.writer.require_any(
+                    "CooperativeMatrix",
+                    &[spirv::Capability::CooperativeMatrixKHR],
+                )?;
+                let a_id = self.cached[a];
+                let b_id = self.cached[b];
+                let c_id = self.cached[c];
+                let id = self.gen_id();
+                block.body.push(Instruction::coop_mul_add(
+                    result_type_id,
+                    id,
+                    a_id,
+                    b_id,
+                    c_id,
+                ));
+                id
             }
         };
 
@@ -3698,6 +3773,42 @@ impl BlockContext<'_> {
                     result,
                 } => {
                     self.write_subgroup_gather(mode, argument, result, &mut block)?;
+                }
+                Statement::CooperativeStore { target, ref data } => {
+                    let target_id = self.cached[target];
+                    let layout = if data.row_major {
+                        spirv::CooperativeMatrixLayout::RowMajorKHR
+                    } else {
+                        spirv::CooperativeMatrixLayout::ColumnMajorKHR
+                    };
+                    let layout_id = self.get_index_constant(layout as u32);
+                    let stride_id = self.cached[data.stride];
+                    match self.write_access_chain(
+                        data.pointer,
+                        &mut block,
+                        AccessTypeAdjustment::None,
+                    )? {
+                        ExpressionPointer::Ready { pointer_id } => {
+                            block.body.push(Instruction::coop_store(
+                                target_id, pointer_id, layout_id, stride_id,
+                            ));
+                        }
+                        ExpressionPointer::Conditional { condition, access } => {
+                            let mut selection = Selection::start(&mut block, ());
+                            selection.if_true(self, condition, ());
+
+                            // The in-bounds path. Perform the access and the store.
+                            let pointer_id = access.result_id.unwrap();
+                            selection.block().body.push(access);
+                            selection.block().body.push(Instruction::coop_store(
+                                target_id, pointer_id, layout_id, stride_id,
+                            ));
+
+                            // Finish the in-bounds block and start the merge block. This
+                            // is the block we'll leave current on return.
+                            selection.finish(self, ());
+                        }
+                    };
                 }
             }
         }

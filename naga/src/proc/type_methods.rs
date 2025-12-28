@@ -141,6 +141,7 @@ impl crate::TypeInner {
         match *self {
             Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => Some(scalar),
             Ti::Matrix { scalar, .. } => Some(scalar),
+            Ti::CooperativeMatrix { scalar, .. } => Some(scalar),
             _ => None,
         }
     }
@@ -208,8 +209,8 @@ impl crate::TypeInner {
 
     pub fn is_atomic_pointer(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
         match *self {
-            crate::TypeInner::Pointer { base, .. } => match types[base].inner {
-                crate::TypeInner::Atomic { .. } => true,
+            Self::Pointer { base, .. } => match types[base].inner {
+                Self::Atomic { .. } => true,
                 _ => false,
             },
             _ => false,
@@ -228,6 +229,12 @@ impl crate::TypeInner {
                 rows,
                 scalar,
             } => Some(super::Alignment::from(rows) * scalar.width as u32 * columns as u32),
+            Self::CooperativeMatrix {
+                columns,
+                rows,
+                scalar,
+                role: _,
+            } => Some(columns as u32 * rows as u32 * scalar.width as u32),
             Self::Pointer { .. } | Self::ValuePointer { .. } => Some(POINTER_SPAN),
             Self::Array {
                 base: _,
@@ -387,6 +394,7 @@ impl crate::TypeInner {
             crate::TypeInner::Scalar(scalar) => Some((None, scalar)),
             crate::TypeInner::Vector { size, scalar } => Some((Some(size), scalar)),
             crate::TypeInner::Matrix { .. }
+            | crate::TypeInner::CooperativeMatrix { .. }
             | crate::TypeInner::Atomic(_)
             | crate::TypeInner::Pointer { .. }
             | crate::TypeInner::ValuePointer { .. }
@@ -411,7 +419,8 @@ impl crate::TypeInner {
             | crate::TypeInner::Matrix { scalar, .. }
             | crate::TypeInner::Atomic(scalar) => scalar.is_abstract(),
             crate::TypeInner::Array { base, .. } => types[base].inner.is_abstract(types),
-            crate::TypeInner::ValuePointer { .. }
+            crate::TypeInner::CooperativeMatrix { .. }
+            | crate::TypeInner::ValuePointer { .. }
             | crate::TypeInner::Pointer { .. }
             | crate::TypeInner::Struct { .. }
             | crate::TypeInner::Image { .. }

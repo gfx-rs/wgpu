@@ -77,7 +77,7 @@ impl Test<'_> {
     fn run(
         self,
         dir: &Path,
-        instance_desc: &wgt::InstanceDescriptor,
+        instance_flags: wgt::InstanceFlags,
         adapter: Arc<wgc::instance::Adapter>,
     ) {
         let (device, queue) = adapter
@@ -90,7 +90,7 @@ impl Test<'_> {
                     memory_hints: wgt::MemoryHints::default(),
                     trace: wgt::Trace::Off,
                 },
-                instance_desc.flags,
+                instance_flags,
             )
             .unwrap();
 
@@ -182,7 +182,8 @@ impl Corpus {
                 println!("\t\tTest '{test_path:?}'");
 
                 let instance_desc = wgt::InstanceDescriptor::from_env_or_default();
-                let instance = wgc::instance::Instance::new("test", &instance_desc, None);
+                let instance_flags = instance_desc.flags;
+                let instance = wgc::instance::Instance::new("test", instance_desc, None);
                 let adapter = match instance.request_adapter(
                     &wgt::RequestAdapterOptions {
                         power_preference: wgt::PowerPreference::None,
@@ -214,7 +215,7 @@ impl Corpus {
                     println!("\t\tSkipped due to missing compute shader capability");
                     continue;
                 }
-                test.run(dir, &instance_desc, adapter);
+                test.run(dir, instance_flags, adapter);
             }
         }
     }
