@@ -445,11 +445,11 @@ impl ParsingContext<'_> {
                 // shader grammar :-
                 // for_init_statement :
                 // expression_statement
-                // declariation_statement
+                // declaration_statement
                 if self.bump_if(frontend, TokenValue::Semicolon).is_none() {
                     if self.peek_type_name(frontend) || self.peek_type_qualifier(frontend) {
                         self.parse_declaration(frontend, ctx, false, is_inside_loop)?;
-                    // declariation_statement (besically the same as `declaration`)
+                    // declaration_statement (basically the same as `declaration`)
                     } else {
                         // shader grammar :-
                         // expression_statement :
