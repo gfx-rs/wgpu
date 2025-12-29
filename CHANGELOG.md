@@ -43,6 +43,9 @@ Bottom level categories:
 
 ## v28.0.1 (2025-03-01)
 
+### Vulkan
+- Fixed crash on some Mali drivers on Android. By @beicause in [#8769](https://github.com/gfx-rs/wgpu/pull/8769).
+
 ### Metal
 - Re-added support for TRANSIENT textures on Apple A7 chips. By @Opstic in [#8725](https://github.com/gfx-rs/wgpu/pull/8725).
 
