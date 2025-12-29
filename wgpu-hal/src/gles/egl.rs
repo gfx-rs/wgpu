@@ -88,82 +88,217 @@ enum SrgbFrameBufferKind {
     Khr,
 }
 
+struct EglConfig {
+    red_size: khronos_egl::Int,
+    green_size: khronos_egl::Int,
+    blue_size: khronos_egl::Int,
+    alpha_size: khronos_egl::Int,
+    depth_size: khronos_egl::Int,
+    buffer_size: khronos_egl::Int,
+    stencil_size: khronos_egl::Int,
+    multi_sample_buffers: khronos_egl::Int,
+    multi_sample_samples: khronos_egl::Int,
+    floating_point: bool,
+    offscreen: bool,
+    profile: khronos_egl::Int,
+    surface_type: khronos_egl::Int,
+    native_renderable: bool,
+}
+
+impl Default for EglConfig {
+    fn default() -> Self {
+        Self {
+            red_size: 8,
+            green_size: 8,
+            blue_size: 8,
+            alpha_size: 8,
+            depth_size: 16,
+            buffer_size: 0,
+            stencil_size: 0,
+            multi_sample_buffers: 0,
+            multi_sample_samples: 0,
+            floating_point: false,
+            offscreen: false,
+            profile: khronos_egl::OPENGL_BIT,
+            surface_type: 0,
+            native_renderable: false,
+        }
+    }
+}
+
 /// Choose GLES framebuffer configuration.
-fn choose_config(
+fn choose_config_inner(
     egl: &EglInstance,
     display: khronos_egl::Display,
-    srgb_kind: SrgbFrameBufferKind,
+    egl_config: &EglConfig,
+    set_config_caveat_none: bool,
 ) -> Result<(khronos_egl::Config, bool), crate::InstanceError> {
-    //TODO: EGL_SLOW_CONFIG
-    let tiers = [
-        (
-            "off-screen",
-            &[
-                khronos_egl::SURFACE_TYPE,
-                khronos_egl::PBUFFER_BIT,
-                khronos_egl::RENDERABLE_TYPE,
-                khronos_egl::OPENGL_ES2_BIT,
-            ][..],
-        ),
-        (
-            "presentation",
-            &[khronos_egl::SURFACE_TYPE, khronos_egl::WINDOW_BIT][..],
-        ),
-        #[cfg(not(target_os = "android"))]
-        (
-            "native-render",
-            &[khronos_egl::NATIVE_RENDERABLE, khronos_egl::TRUE as _][..],
-        ),
-    ];
+    let mut attributes = Vec::with_capacity(32);
 
-    let mut attributes = Vec::with_capacity(9);
-    for tier_max in (0..tiers.len()).rev() {
-        let name = tiers[tier_max].0;
-        log::debug!("\tTrying {name}");
+    attributes.push(khronos_egl::RED_SIZE);
+    attributes.push(egl_config.red_size);
+    attributes.push(khronos_egl::GREEN_SIZE);
+    attributes.push(egl_config.green_size);
+    attributes.push(khronos_egl::BLUE_SIZE);
+    attributes.push(egl_config.blue_size);
 
-        attributes.clear();
-        for &(_, tier_attr) in tiers[..=tier_max].iter() {
-            attributes.extend_from_slice(tier_attr);
-        }
-        // make sure the Alpha is enough to support sRGB
-        match srgb_kind {
-            SrgbFrameBufferKind::None => {}
-            _ => {
-                attributes.push(khronos_egl::ALPHA_SIZE);
-                attributes.push(8);
-            }
-        }
+    if set_config_caveat_none {
+        attributes.push(khronos_egl::CONFIG_CAVEAT);
         attributes.push(khronos_egl::NONE);
+    }
 
-        match egl.choose_first_config(display, &attributes) {
-            Ok(Some(config)) => {
-                if tier_max == 1 {
-                    //Note: this has been confirmed to malfunction on Intel+NV laptops,
-                    // but also on Angle.
-                    log::info!("EGL says it can present to the window but not natively",);
-                }
-                // Android emulator can't natively present either.
-                let tier_threshold =
-                    if cfg!(target_os = "android") || cfg!(windows) || cfg!(target_env = "ohos") {
-                        1
-                    } else {
-                        2
-                    };
-                return Ok((config, tier_max >= tier_threshold));
+    if egl_config.alpha_size > 0 {
+        attributes.push(khronos_egl::ALPHA_SIZE);
+        attributes.push(egl_config.alpha_size);
+    }
+
+    if egl_config.depth_size > 0 {
+        attributes.push(khronos_egl::DEPTH_SIZE);
+        attributes.push(egl_config.depth_size);
+    }
+
+    if egl_config.stencil_size > 0 {
+        attributes.push(khronos_egl::STENCIL_SIZE);
+        attributes.push(egl_config.stencil_size);
+    }
+
+    if egl_config.buffer_size > 0 {
+        attributes.push(khronos_egl::BUFFER_SIZE);
+        attributes.push(egl_config.buffer_size);
+    }
+
+    if egl_config.multi_sample_buffers > 0 {
+        attributes.push(khronos_egl::SAMPLE_BUFFERS);
+        attributes.push(egl_config.multi_sample_buffers);
+    }
+
+    if egl_config.multi_sample_samples > 0 {
+        attributes.push(khronos_egl::SAMPLES);
+        attributes.push(egl_config.multi_sample_samples);
+    }
+
+    if egl_config.floating_point {
+        // TODO: EGL_EXT_pixel_format_float Support?
+        // attributes.push(khronos_egl::COLOR_COMPNENT_TYPE_EXT);
+        // attributes.push(khronos_egl::COLOR_COMPONENT_TYPE_FLOAT_EXT);
+    }
+
+    if egl_config.offscreen {
+        attributes.push(khronos_egl::SURFACE_TYPE);
+        attributes.push(khronos_egl::PBUFFER_BIT);
+    }
+
+    attributes.push(khronos_egl::RENDERABLE_TYPE);
+    attributes.push(egl_config.profile);
+
+    if egl_config.surface_type != 0 {
+        attributes.push(khronos_egl::SURFACE_TYPE);
+        attributes.push(egl_config.surface_type);
+    }
+
+    if egl_config.native_renderable {
+        attributes.push(khronos_egl::NATIVE_RENDERABLE);
+        attributes.push(khronos_egl::TRUE as _);
+    }
+
+    attributes.push(khronos_egl::NONE);
+
+    let mut configs = Vec::with_capacity(128);
+    egl.choose_config(display, &attributes, &mut configs)
+        .map_err(|e| {
+            crate::InstanceError::with_source(String::from("error in eglChooseConfig"), e)
+        })?;
+
+    if configs.is_empty() {
+        return Err(crate::InstanceError::new(String::from(
+            "no matching EGL framebuffer configuration found",
+        )));
+    }
+
+    // eglChooseConfig returns a number of configurations that match or exceed the requested attribs.
+    // From those, we select the one that matches our requirements more closely via a makeshift algorithm
+    let mut best_bitdiff = None;
+    let mut best_config = None;
+    for config in configs.iter() {
+        let mut bitdiff = 0;
+
+        let red_size = egl
+            .get_config_attrib(display, *config, khronos_egl::RED_SIZE)
+            .unwrap_or(0);
+        let green_size = egl
+            .get_config_attrib(display, *config, khronos_egl::GREEN_SIZE)
+            .unwrap_or(0);
+        let blue_size = egl
+            .get_config_attrib(display, *config, khronos_egl::BLUE_SIZE)
+            .unwrap_or(0);
+        let alpha_size = egl
+            .get_config_attrib(display, *config, khronos_egl::ALPHA_SIZE)
+            .unwrap_or(0);
+
+        bitdiff += (red_size - egl_config.red_size).abs();
+        bitdiff += (green_size - egl_config.green_size).abs();
+        bitdiff += (blue_size - egl_config.blue_size).abs();
+        bitdiff += (alpha_size - egl_config.alpha_size).abs();
+
+        if let Some(diff) = best_bitdiff {
+            if bitdiff < diff {
+                best_bitdiff = Some(bitdiff);
+                best_config = Some(*config);
             }
-            Ok(None) => {
-                log::debug!("No config found!");
-            }
-            Err(e) => {
-                log::error!("error in choose_first_config: {e:?}");
-            }
+        } else {
+            best_bitdiff = Some(bitdiff);
+            best_config = Some(*config);
         }
     }
 
-    // TODO: include diagnostic details that are currently logged
-    Err(crate::InstanceError::new(String::from(
-        "unable to find an acceptable EGL framebuffer configuration",
-    )))
+    if let Some(config) = best_config {
+        let surface_type = egl
+            .get_config_attrib(display, config, khronos_egl::SURFACE_TYPE)
+            .unwrap_or(0);
+
+        let support_window_bit = (surface_type & khronos_egl::WINDOW_BIT) != 0;
+
+        let supports_native_window =
+            if cfg!(target_os = "android") || cfg!(windows) || cfg!(target_env = "ohos") {
+                support_window_bit
+            } else {
+                let native_renderable = egl
+                    .get_config_attrib(display, config, khronos_egl::NATIVE_RENDERABLE)
+                    .unwrap_or(0);
+                let supports_native_renderable = native_renderable == khronos_egl::TRUE as i32;
+                support_window_bit && supports_native_renderable
+            };
+
+        Ok((config, supports_native_window))
+    } else {
+        Err(crate::InstanceError::new(String::from(
+            "no matching EGL framebuffer configuration found",
+        )))
+    }
+}
+
+fn choose_config(
+    egl: &EglInstance,
+    display: khronos_egl::Display,
+    egl_config: &EglConfig,
+) -> Result<(khronos_egl::Config, bool), crate::InstanceError> {
+    // Try with EGL_CONFIG_CAVEAT set to EGL_NONE, to avoid any EGL_SLOW_CONFIG or EGL_NON_CONFORMANT_CONFIG
+    match choose_config_inner(egl, display, egl_config, true) {
+        Ok(result) => return Ok(result),
+        Err(e) => {
+            log::info!(
+                "Failed to choose EGL config with CONFIG_CAVEAT=NONE, retrying without it: {e}"
+            );
+        }
+    }
+
+    match choose_config_inner(egl, display, egl_config, false) {
+        Ok(result) => Ok(result),
+        Err(e) => {
+            log::info!("Failed to choose EGL config without CONFIG_CAVEAT=NONE: {e}");
+            Err(e)
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -441,8 +576,6 @@ impl Inner {
             }
         }
 
-        let (config, supports_native_window) = choose_config(&egl, display, srgb_kind)?;
-
         let supports_opengl = if version >= (1, 4) {
             let client_apis = egl
                 .query_string(Some(display), khronos_egl::CLIENT_APIS)
@@ -454,6 +587,27 @@ impl Inner {
         } else {
             false
         };
+
+        let profile = if supports_opengl {
+            khronos_egl::OPENGL_BIT
+        } else {
+            // TODO: Add OpenGL ES 3.x bit when supported
+            // if display_extensions.contains("EGL_KHR_create_context") {
+            //  khronos_egl::OPENGL_ES3_BIT
+            // }
+            khronos_egl::OPENGL_ES2_BIT
+        };
+
+        let egl_config = EglConfig {
+            profile,
+            alpha_size: match srgb_kind {
+                SrgbFrameBufferKind::None => 0,
+                _ => 8,
+            },
+            ..Default::default()
+        };
+        let (config, supports_native_window) = choose_config(&egl, display, &egl_config)?;
+
         egl.bind_api(if supports_opengl {
             khronos_egl::OPENGL_API
         } else {
@@ -680,6 +834,8 @@ pub struct Instance {
     flags: wgt::InstanceFlags,
     options: wgt::GlBackendOptions,
     inner: Mutex<Inner>,
+    #[cfg(not(Emscripten))]
+    gl_library: Option<Arc<libloading::Library>>,
 }
 
 impl Instance {
@@ -885,6 +1041,15 @@ impl crate::Instance for Instance {
             flags: desc.flags,
             options: desc.backend_options.gl.clone(),
             inner: Mutex::new(inner),
+            #[cfg(not(Emscripten))]
+            gl_library: desc
+                .backend_options
+                .gl
+                .gl_library
+                .as_ref()
+                .map_or(None, |path| {
+                    unsafe { libloading::Library::new(path) }.map(Arc::new).ok()
+                }),
         })
     }
 
@@ -964,14 +1129,43 @@ impl crate::Instance for Instance {
         let inner = self.inner.lock();
         inner.egl.make_current();
 
-        let mut gl = unsafe {
-            glow::Context::from_loader_function(|name| {
+        let mut gl = {
+            let egl_load_func = |name: &str| {
                 inner
                     .egl
                     .instance
                     .get_proc_address(name)
                     .map_or(ptr::null(), |p| p as *const _)
-            })
+            };
+
+            #[cfg(not(Emscripten))]
+            {
+                if let Some(ref library) = self.gl_library {
+                    unsafe {
+                        glow::Context::from_loader_function(|name| {
+                            let symbol_name = std::ffi::CString::new(name).unwrap();
+                            let ptr = match library
+                                .get::<*const ffi::c_void>(symbol_name.as_bytes_with_nul())
+                            {
+                                Ok(symbol) => *symbol,
+                                Err(_) => ptr::null(),
+                            };
+                            if ptr.is_null() {
+                                egl_load_func(name)
+                            } else {
+                                ptr
+                            }
+                        })
+                    }
+                } else {
+                    unsafe { glow::Context::from_loader_function(egl_load_func) }
+                }
+            }
+
+            #[cfg(Emscripten)]
+            {
+                unsafe { glow::Context::from_loader_function(egl_load_func) }
+            }
         };
 
         // In contrast to OpenGL ES, OpenGL requires explicitly enabling sRGB conversions,

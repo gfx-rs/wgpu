@@ -252,6 +252,8 @@ pub struct GlBackendOptions {
     pub gles_minor_version: Gles3MinorVersion,
     /// Behavior of OpenGL fences. Affects how `on_completed_work_done` and `device.poll` behave.
     pub fence_behavior: GlFenceBehavior,
+    /// The GL library path to load, if any.
+    pub gl_library: Option<String>,
 }
 
 impl GlBackendOptions {
@@ -264,6 +266,7 @@ impl GlBackendOptions {
         Self {
             gles_minor_version,
             fence_behavior: GlFenceBehavior::Normal,
+            gl_library: None,
         }
     }
 
@@ -277,6 +280,7 @@ impl GlBackendOptions {
         Self {
             gles_minor_version,
             fence_behavior: short_circuit_fences,
+            gl_library: None,
         }
     }
 }
