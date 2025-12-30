@@ -3068,7 +3068,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                     span,
                                 ),
                                 ref other => {
-                                    log::error!("Type {other:?} passed to workgroupUniformLoad");
                                     let span = ctx.ast_expressions.get_span(expr);
                                     return Err(Box::new(Error::InvalidWorkGroupUniformLoad(span)));
                                 }
