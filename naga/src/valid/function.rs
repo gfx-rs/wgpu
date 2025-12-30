@@ -1479,6 +1479,8 @@ impl super::Validator {
                         base: ty,
                         space: AddressSpace::WorkGroup,
                     };
+                    // workgroupUniformLoad on atomic<T> returns T, not atomic<T>.
+                    // Verify the pointer's atomic scalar matches the result scalar.
                     let atomic_specialization_ok = match *pointer_inner {
                         Ti::Pointer {
                             base: pointer_base,

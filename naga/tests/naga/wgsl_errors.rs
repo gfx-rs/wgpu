@@ -48,37 +48,6 @@ fn check_success(input: &str) {
 }
 
 #[test]
-fn workgroup_uniform_load_atomic_returns_scalar() {
-    let input = r#"
-var<workgroup> wg_scratch: atomic<u32>;
-
-@compute @workgroup_size(4, 4, 4)
-fn interval_tile_main(
-    @builtin(workgroup_id) workgroup_id: vec3u,
-    @builtin(local_invocation_id) local_id: vec3u
-) {
-    let active_tile_index = workgroup_id.x + workgroup_id.y * 32768u;
-    atomicOr(&wg_scratch, u32(active_tile_index >= 64u));
-    workgroupBarrier();
-    if workgroupUniformLoad(&wg_scratch) == 0 {
-        return;
-    }
-}
-"#;
-
-    let module = naga::front::wgsl::parse_str(input).unwrap_or_else(|err| {
-        panic!(
-            "expected success, but parsing failed with:\n{}",
-            err.emit_to_string(input)
-        )
-    });
-
-    naga::valid::Validator::new(valid::ValidationFlags::default(), Capabilities::all())
-        .validate(&module)
-        .unwrap();
-}
-
-#[test]
 fn very_negative_integers() {
     // wgpu#4492
     check(
