@@ -468,9 +468,10 @@ impl Swapchain for NativeSwapchain {
         // latency, depending on how the platform implements waiting within
         // acquire.
         unsafe {
+            // The `wait_all` argument must be `true` to avoid crash on some Android devices. See https://github.com/gfx-rs/wgpu/pull/8769
             self.device
                 .raw
-                .wait_for_fences(&[self.fence], false, timeout_ns)
+                .wait_for_fences(&[self.fence], true, timeout_ns)
                 .map_err(map_host_device_oom_and_lost_err)?;
 
             self.device

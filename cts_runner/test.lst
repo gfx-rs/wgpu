@@ -165,6 +165,7 @@ webgpu:api,validation,render_pipeline,depth_stencil_state:stencil_write:*
 webgpu:api,validation,render_pipeline,inter_stage:max_shader_variable_location:isAsync=false;*
 //FAIL: webgpu:api,validation,render_pipeline,inter_stage:max_shader_variable_location:isAsync=true;*
 // https://github.com/gfx-rs/wgpu/pull/8712
+webgpu:api,validation,render_pipeline,inter_stage:max_variables_count,output:*
 webgpu:api,validation,resource_usages,buffer,in_pass_encoder:*
 // FAIL: 2 other cases in resource_usages,texture,in_pass_encoder. https://github.com/gfx-rs/wgpu/issues/3126
 webgpu:api,validation,resource_usages,texture,in_pass_encoder:scope,*

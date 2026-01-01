@@ -201,7 +201,7 @@ impl GPUError {
   }
 }
 
-fn fmt_err(err: &(dyn std::error::Error + 'static)) -> String {
+pub(crate) fn fmt_err(err: &(dyn std::error::Error + 'static)) -> String {
   let mut output = err.to_string();
 
   let mut e = err.source();
