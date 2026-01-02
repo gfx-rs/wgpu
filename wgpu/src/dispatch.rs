@@ -125,7 +125,6 @@ pub trait AdapterInterface: CommonTraits {
 
     fn get_presentation_timestamp(&self) -> crate::PresentationTimestamp;
 
-    #[cfg(wgpu_core)]
     fn cooperative_matrix_properties(&self) -> Vec<crate::wgt::CooperativeMatrixProperties>;
 }
 
