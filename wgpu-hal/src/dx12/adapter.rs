@@ -124,7 +124,7 @@ impl super::Adapter {
             Direct3D::D3D_FEATURE_LEVEL_12_0 => FeatureLevel::_12_0,
             Direct3D::D3D_FEATURE_LEVEL_12_1 => FeatureLevel::_12_1,
             Direct3D::D3D_FEATURE_LEVEL_12_2 => FeatureLevel::_12_2,
-            Default::default() => return None,
+            Direct3D::D3D_FEATURE_LEVEL(0) => return None,
             _ => unreachable!(),
         };
 
