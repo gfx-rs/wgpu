@@ -1838,9 +1838,8 @@ pub enum CreateTextureViewError {
     #[error("Array layer count is 0")]
     ZeroArrayLayerCount,
     #[error(
-        "`TextureView` spans mip levels [{base_mip_level}, {end_mip_level}) \
-        (`mipLevelCount` {mip_level_count}) but the texture view only has {total} total mip levels",
-        end_mip_level = base_mip_level + mip_level_count
+        "`TextureView` starts at mip level {base_mip_level} and spans {mip_level_count} mip \
+        levels, but the texture view only has {total} total mip levels"
     )]
     TooManyMipLevels {
         base_mip_level: u32,
@@ -1848,9 +1847,8 @@ pub enum CreateTextureViewError {
         total: u32,
     },
     #[error(
-        "`TextureView` spans array layers [{base_array_layer}, {end_array_layer}) \
-         (`arrayLayerCount` {array_layer_count}) but the texture view only has {total} total layers",
-        end_array_layer = base_array_layer + array_layer_count
+        "`TextureView` starts at array layer {base_array_layer} and spans {array_layer_count}) \
+        array layers, but the texture view only has {total} total layers"
     )]
     TooManyArrayLayers {
         base_array_layer: u32,
