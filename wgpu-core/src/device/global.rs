@@ -87,6 +87,11 @@ impl Global {
         device.limits.clone()
     }
 
+    pub fn device_adapter_info(&self, device_id: DeviceId) -> wgt::AdapterInfo {
+        let device = self.hub.devices.get(device_id);
+        device.adapter.get_info()
+    }
+
     pub fn device_downlevel_properties(&self, device_id: DeviceId) -> wgt::DownlevelCapabilities {
         let device = self.hub.devices.get(device_id);
         device.downlevel.clone()

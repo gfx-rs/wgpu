@@ -1025,6 +1025,10 @@ impl dispatch::DeviceInterface for CoreDevice {
         self.context.0.device_limits(self.id)
     }
 
+    fn adapter_info(&self) -> crate::AdapterInfo {
+        self.context.0.device_adapter_info(self.id)
+    }
+
     // If we have no way to create a shader module, we can't return one, and so most of the function is unreachable.
     #[cfg_attr(
         not(any(

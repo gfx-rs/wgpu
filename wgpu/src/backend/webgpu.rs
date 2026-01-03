@@ -850,6 +850,23 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
     }
 }
 
+fn map_adapter_info(adapter_info: &webgpu_sys::GpuAdapterInfo) -> wgt::AdapterInfo {
+    // TODO: populate more fields if/when possible
+    wgt::AdapterInfo {
+        name: adapter_info.description().to_string(),
+        vendor: 0,
+        device: 0,
+        device_type: wgt::DeviceType::Other,
+        device_pci_bus_id: String::new(),
+        driver: String::new(),
+        driver_info: String::new(),
+        backend: wgt::Backend::BrowserWebGpu,
+        subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
+        subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
+        transient_saves_memory: false,
+    }
+}
+
 fn map_js_sys_limits(limits: &wgt::Limits) -> js_sys::Object {
     let object = js_sys::Object::new();
 
@@ -1762,6 +1779,10 @@ impl dispatch::DeviceInterface for WebDevice {
         map_wgt_limits(self.inner.limits())
     }
 
+    fn adapter_info(&self) -> crate::AdapterInfo {
+        map_adapter_info(&self.inner.adapter_info())
+    }
+
     fn create_shader_module(
         &self,
         desc: crate::ShaderModuleDescriptor<'_>,
@@ -2560,6 +2581,7 @@ impl dispatch::DeviceInterface for WebDevice {
         self.inner.destroy();
     }
 }
+
 impl Drop for WebDevice {
     fn drop(&mut self) {
         // no-op
