@@ -81,6 +81,10 @@ Bottom level categories:
 
 - Added guards to avoid calling some feature detection methods that are not implemented on `CaptureMTLDevice`. By @andyleiserson in [#9284](https://github.com/gfx-rs/wgpu/pull/9284).
 
+#### Validation
+
+- Don't crash in the `Display` implementation of `CreateTextureViewError::TooMany{MipLevels,ArrayLayers}` when their base and offset overflow. By @ErichDonGubler in [#8808](https://github.com/gfx-rs/wgpu/pull/8808).
+
 ## v29.0.0 (2026-03-18)
 
 ### Major Changes
