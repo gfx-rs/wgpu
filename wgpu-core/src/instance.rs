@@ -96,6 +96,13 @@ pub struct Instance {
     /// When used with `winit`, callers are expected to pass its `OwnedDisplayHandle` (created from
     /// the `EventLoop`) here.
     display: Option<Box<dyn wgt::WgpuHasDisplayHandle>>,
+
+    /// Non-lifetimed [`raw_window_handle::WindowHandle`], for keepalive and validation purposes in
+    /// [`Self::create_surface()`].
+    ///
+    /// When used with `winit`, callers are expected to pass its `OwnedDisplayHandle` (created from
+    /// the `EventLoop`) here.
+    window: Option<Box<dyn wgt::WgpuHasWindowHandle>>,
 }
 
 impl Instance {
@@ -114,6 +121,7 @@ impl Instance {
             // try_add_hal(). Remove it from the mutable descriptor instead, while try_add_hal()
             // borrows the handle from `this.display` instead.
             display: instance_desc.display.take(),
+            window: instance_desc.window.take(),
         };
 
         #[cfg(vulkan)]
@@ -161,6 +169,10 @@ impl Instance {
                 hdh.display_handle()
                     .expect("Implementation did not provide a DisplayHandle")
             }),
+            window: self.window.as_ref().map(|hdw| {
+                hdw.window_handle()
+                    .expect("Implementation did not provide a WindowHandle")
+            }),
         };
 
         use hal::Instance as _;
@@ -192,6 +204,7 @@ impl Instance {
             supported_backends: A::VARIANT.into(),
             flags: wgt::InstanceFlags::default(),
             display: None, // TODO: Extract display from HAL instance if available?
+            window: None,  // TODO: Extract window from HAL instance if available?
         }
     }
 

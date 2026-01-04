@@ -80,14 +80,12 @@ we don't bother with that combination.
 */
 
 ///cbindgen:ignore
-#[cfg(not(any(windows, webgl)))]
-mod egl;
 #[cfg(Emscripten)]
 mod emscripten;
+#[cfg(not(webgl))]
+mod glutin;
 #[cfg(webgl)]
 mod web;
-#[cfg(windows)]
-mod wgl;
 
 mod adapter;
 mod command;
@@ -98,20 +96,15 @@ mod queue;
 
 pub use fence::Fence;
 
-#[cfg(not(any(windows, webgl)))]
-pub use self::egl::{AdapterContext, AdapterContextLock};
-#[cfg(not(any(windows, webgl)))]
-pub use self::egl::{Instance, Surface};
+#[cfg(not(webgl))]
+use self::glutin::AdapterContext;
+#[cfg(not(webgl))]
+pub use self::glutin::{Instance, Surface};
 
 #[cfg(webgl)]
 pub use self::web::AdapterContext;
 #[cfg(webgl)]
 pub use self::web::{Instance, Surface};
-
-#[cfg(windows)]
-use self::wgl::AdapterContext;
-#[cfg(windows)]
-pub use self::wgl::{Instance, Surface};
 
 use alloc::{boxed::Box, string::String, string::ToString as _, sync::Arc, vec::Vec};
 use core::{

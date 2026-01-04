@@ -17,6 +17,18 @@ impl<T: raw_window_handle::HasDisplayHandle + core::fmt::Debug + Send + Sync + '
 {
 }
 
+/// A [`raw_window_handle::HasWindowHandle`] that can be shared across threads and has no borrows.
+///
+/// This blanket trait is automatically implemented for all objects that qualify.
+pub trait WgpuHasWindowHandle:
+    raw_window_handle::HasWindowHandle + core::fmt::Debug + Send + Sync + 'static
+{
+}
+impl<T: raw_window_handle::HasWindowHandle + core::fmt::Debug + Send + Sync + 'static>
+    WgpuHasWindowHandle for T
+{
+}
+
 /// Options for creating an instance.
 ///
 /// If you want to allow control of instance settings via environment variables, call either
@@ -62,6 +74,14 @@ pub struct InstanceDescriptor {
     // least `trait WindowHandle: HasWindowHandle + HasDisplayHandle` should really be removed as
     // it's impractical and not implementable everywhere.
     pub display: Option<alloc::boxed::Box<dyn WgpuHasDisplayHandle>>,
+
+    /// System platform or compositor connection to connect this `Instance` to.
+    ///
+    /// If not [`None`], it is invalid to pass a different [`raw_window_handle::HasWindowHandle`] to `create_surface()`.
+    ///
+    /// - On GLES, this is required when intending to present on the windows.
+    /// - On Vulkan, Metal and Dx12, this is currently unused.
+    pub window: Option<alloc::boxed::Box<dyn WgpuHasWindowHandle>>,
 }
 
 impl InstanceDescriptor {
@@ -87,6 +107,7 @@ impl InstanceDescriptor {
             memory_budget_thresholds: MemoryBudgetThresholds::default(),
             backend_options,
             display: None,
+            window: None,
         }
     }
 

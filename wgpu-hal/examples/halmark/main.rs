@@ -95,6 +95,7 @@ impl<A: hal::Api> Example<A> {
     fn init(window: &winit::window::Window) -> Result<Self, Box<dyn std::error::Error>> {
         // The Instance can be initialized with the DisplayHandle from the EventLoop as well
         let raw_display_handle = window.display_handle()?;
+        let raw_window_handle = window.window_handle()?;
 
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
@@ -104,6 +105,7 @@ impl<A: hal::Api> Example<A> {
             backend_options: wgpu_types::BackendOptions::default(),
             telemetry: None,
             display: Some(raw_display_handle),
+            window: Some(raw_window_handle),
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let surface = {

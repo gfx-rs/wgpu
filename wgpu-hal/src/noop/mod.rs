@@ -100,6 +100,7 @@ impl crate::Instance for Context {
             memory_budget_thresholds: _,
             telemetry: _,
             display: _,
+            window: _,
         } = *desc;
         if enable {
             Ok(Context)

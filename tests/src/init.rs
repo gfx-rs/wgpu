@@ -77,6 +77,7 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
             },
         },
         display: None,
+        window: None,
     })
 }
 

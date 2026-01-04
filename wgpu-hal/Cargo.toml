@@ -60,7 +60,7 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 # exclude the Vulkan backend on MacOS unless a separate feature `vulkan-portability` is enabled. In response
 # to these features, it enables features of platform specific crates. For example, the `vulkan` feature in wgpu-core
 # enables the `vulkan` feature in `wgpu-core-deps-windows-linux-android` which in turn enables the
-# `vulkan` feature in `wgpu-hal` _only_ on those platforms. If you enable the `vulkan-portability` feature, it 
+# `vulkan` feature in `wgpu-hal` _only_ on those platforms. If you enable the `vulkan-portability` feature, it
 # will enable the `vulkan` feature in `wgpu-core-deps-apple`. The only way to do this is unfortunately to have
 # a separate crate for each platform category that participates in the feature unification.
 #
@@ -110,7 +110,6 @@ gles = [
     "dep:arrayvec",
     "dep:bytemuck",
     "dep:glow",
-    "dep:glutin_wgl_sys",
     "dep:hashbrown",
     "dep:js-sys",
     "dep:khronos-egl",
@@ -232,6 +231,7 @@ ash = { workspace = true, optional = true }
 gpu-descriptor = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true, features = ["union"] }
 # Backend: GLES
+glutin = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
 khronos-egl = { workspace = true, features = ["dynamic"], optional = true }
 libloading = { workspace = true, optional = true }
 renderdoc-sys = { workspace = true, optional = true }
@@ -262,8 +262,6 @@ windows-core = { workspace = true, optional = true }
 bit-set = { workspace = true, optional = true }
 range-alloc = { workspace = true, optional = true }
 once_cell = { workspace = true, optional = true }
-# backend: GLES
-glutin_wgl_sys = { workspace = true, optional = true }
 
 ### Platform: x86/x86_64 Windows ###
 # This doesn't support aarch64. See https://github.com/gfx-rs/wgpu/issues/6860.
@@ -342,7 +340,5 @@ winit.workspace = true                                           # for "halmark"
 ### Platform: Windows + MacOS + Linux for "raw-gles" example ###
 [target.'cfg(not(any(target_arch = "wasm32", target_os = "ios", target_os = "visionos")))'.dev-dependencies]
 glutin-winit = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
-glutin = { workspace = true, features = ["egl", "wgl", "wayland", "x11"] }
 # temporary compatibility for glutin-winit
-rwh_05.workspace = true
 winit = { workspace = true, features = ["rwh_05"] }

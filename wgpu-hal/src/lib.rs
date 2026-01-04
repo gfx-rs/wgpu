@@ -305,7 +305,7 @@ use core::{
 };
 
 use bitflags::bitflags;
-use raw_window_handle::DisplayHandle;
+use raw_window_handle::{DisplayHandle, WindowHandle};
 use thiserror::Error;
 use wgt::WasmNotSendSync;
 
@@ -1881,6 +1881,9 @@ pub struct InstanceDescriptor<'a> {
     /// This is a borrow because the surrounding `core::Instance` keeps the the owned display handle
     /// alive already.
     pub display: Option<DisplayHandle<'a>>,
+    /// This is a borrow because the surrounding `core::Instance` keeps the owned native window handle
+    /// alive already.
+    pub window: Option<WindowHandle<'a>>,
 }
 
 #[derive(Clone, Debug)]
