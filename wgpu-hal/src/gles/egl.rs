@@ -970,6 +970,14 @@ impl crate::Instance for Instance {
                 .map_err(instance_err("failed to get Angle display"))?;
                 (display, WindowKind::AngleX11)
             }
+            (Some(Rdh::Gbm(display)), _) => {
+                log::debug!("Using GBM platform");
+                let display = unsafe { egl.get_display(display.gbm_device.as_ptr() as *mut _) }
+                    .ok_or_else(|| {
+                        crate::InstanceError::new("Failed to get default display".into())
+                    })?;
+                (display, WindowKind::Unknown)
+            }
             (Some(Rdh::Xcb(_xcb_display_handle)), Some(_egl)) => todo!("xcb"),
             x if client_ext_str.contains("EGL_MESA_platform_surfaceless") => {
                 log::debug!(
@@ -1102,6 +1110,7 @@ impl crate::Instance for Instance {
             (Rwh::Wayland(_), _) => {}
             #[cfg(Emscripten)]
             (Rwh::Web(_), _) => {}
+            (Rwh::Gbm(_), _) => {}
             other => {
                 return Err(crate::InstanceError::new(format!(
                     "unsupported window: {other:?}"
@@ -1454,6 +1463,9 @@ impl crate::Surface for Surface {
                             layer.cast::<ffi::c_void>()
                         };
                         window_ptr
+                    }
+                    (WindowKind::Unknown, Rwh::Gbm(handle)) => {
+                        handle.gbm_surface.as_ptr() as *mut ffi::c_void
                     }
                     _ => {
                         log::warn!(
