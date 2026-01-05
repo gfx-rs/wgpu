@@ -204,6 +204,21 @@ webgpu:shader,execution,expression,call,builtin,atan2:f16:*
 webgpu:shader,execution,expression,call,builtin,atan2:f32:*
 webgpu:shader,execution,expression,call,builtin,textureSample:sampled_1d_coords:*
 webgpu:shader,execution,expression,call,builtin,textureSampleBaseClampToEdge:2d_coords:stage="c";textureType="texture_2d<f32>";*
+// NOTE: This is supposed to be an exhaustive listing underneath
+// `webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:*`, so exceptions can be
+// worked around.
+webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="bool";*
+webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="u32";*
+webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="vec4u";*
+webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="mat3x2f";*
+webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="array%3Cu32,%204%3E";*
+webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="SimpleStruct";*
+//FAIL: https://github.com/gfx-rs/wgpu/issues/8812
+// webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="ComplexStruct";*
+//FAIL: https://github.com/gfx-rs/wgpu/pull/8791
+// webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="atomic%3Cu32%3E";*
+// webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="atomic%3Ci32%3E";*
+// webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="AtomicInStruct";*
 webgpu:shader,execution,flow_control,return:*
 // Many other vertex_buffer_access subtests also passing, but there are too many to enumerate.
 // Fails on Metal in CI only, not when running locally.
@@ -214,6 +229,15 @@ webgpu:shader,validation,expression,binary,short_circuiting_and_or:invalid_types
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:scalar_vector:op="%26%26";lhs="bool";rhs="bool"
 webgpu:shader,validation,expression,call,builtin,all:arguments:test="ptr_deref"
 webgpu:shader,validation,expression,call,builtin,max:values:*
+// NOTE: This is supposed to be an exhaustive listing underneath
+// `webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:*`, so exceptions can be
+// worked around.
+webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:only_in_compute:*
+webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:no_atomics:*
+webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:param_constructible_only:*
+webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:must_use:use=true
+//FAIL: https://github.com/gfx-rs/wgpu/pull/8713
+// webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:must_use:use=false
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="break"
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="break_if"
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="continue"
