@@ -425,7 +425,7 @@ impl crate::Module {
 }
 
 #[derive(Debug)]
-pub(super) enum U32EvalError {
+pub(super) enum ConstValueError {
     NonConst,
     Negative,
 }
@@ -455,7 +455,7 @@ impl GlobalCtx<'_> {
     pub(super) fn eval_expr_to_u32(
         &self,
         handle: crate::Handle<crate::Expression>,
-    ) -> Result<u32, U32EvalError> {
+    ) -> Result<u32, ConstValueError> {
         self.eval_expr_to_u32_from(handle, self.global_expressions)
     }
 
@@ -464,13 +464,13 @@ impl GlobalCtx<'_> {
         &self,
         handle: crate::Handle<crate::Expression>,
         arena: &crate::Arena<crate::Expression>,
-    ) -> Result<u32, U32EvalError> {
+    ) -> Result<u32, ConstValueError> {
         match self.eval_expr_to_literal_from(handle, arena) {
             Some(crate::Literal::U32(value)) => Ok(value),
             Some(crate::Literal::I32(value)) => {
-                value.try_into().map_err(|_| U32EvalError::Negative)
+                value.try_into().map_err(|_| ConstValueError::Negative)
             }
-            _ => Err(U32EvalError::NonConst),
+            _ => Err(ConstValueError::NonConst),
         }
     }
 
@@ -562,8 +562,8 @@ impl crate::ArraySize {
                     return Err(ResolveArraySizeError::NonConstArrayLength);
                 };
                 let length = gctx.eval_expr_to_u32(expr).map_err(|err| match err {
-                    U32EvalError::NonConst => ResolveArraySizeError::NonConstArrayLength,
-                    U32EvalError::Negative => ResolveArraySizeError::ExpectedPositiveArrayLength,
+                    ConstValueError::NonConst => ResolveArraySizeError::NonConstArrayLength,
+                    ConstValueError::Negative => ResolveArraySizeError::ExpectedPositiveArrayLength,
                 })?;
 
                 if length == 0 {

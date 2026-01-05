@@ -303,10 +303,10 @@ impl super::Validator {
                             }
                         }
                     }
-                    Err(crate::proc::U32EvalError::Negative) => {
+                    Err(crate::proc::ConstValueError::Negative) => {
                         return Err(ExpressionError::NegativeIndex(base))
                     }
-                    Err(crate::proc::U32EvalError::NonConst) => {}
+                    Err(crate::proc::ConstValueError::NonConst) => {}
                 }
 
                 ShaderStages::all()

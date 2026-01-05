@@ -538,11 +538,11 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     fn const_eval_expr_to_u32(
         &self,
         handle: Handle<ir::Expression>,
-    ) -> core::result::Result<u32, proc::U32EvalError> {
+    ) -> core::result::Result<u32, proc::ConstValueError> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref ctx) => {
                 if !ctx.local_expression_kind_tracker.is_const(handle) {
-                    return Err(proc::U32EvalError::NonConst);
+                    return Err(proc::ConstValueError::NonConst);
                 }
 
                 self.module
@@ -556,7 +556,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                     .eval_expr_to_u32_from(handle, &ctx.function.expressions)
             }
             ExpressionContextType::Constant(None) => self.module.to_ctx().eval_expr_to_u32(handle),
-            ExpressionContextType::Override => Err(proc::U32EvalError::NonConst),
+            ExpressionContextType::Override => Err(proc::ConstValueError::NonConst),
         }
     }
 
@@ -718,10 +718,12 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                     .to_ctx()
                     .eval_expr_to_u32_from(expr, &rctx.function.expressions)
                     .map_err(|err| match err {
-                        proc::U32EvalError::NonConst => {
+                        proc::ConstValueError::NonConst => {
                             Error::ExpectedConstExprConcreteIntegerScalar(component_span)
                         }
-                        proc::U32EvalError::Negative => Error::ExpectedNonNegative(component_span),
+                        proc::ConstValueError::Negative => {
+                            Error::ExpectedNonNegative(component_span)
+                        }
                     })?;
                 ir::SwizzleComponent::XYZW
                     .get(index as usize)
@@ -4203,8 +4205,8 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             .to_ctx()
             .eval_expr_to_u32(expr)
             .map_err(|err| match err {
-                proc::U32EvalError::NonConst => Error::ExpectedConstExprConcreteIntegerScalar(span),
-                proc::U32EvalError::Negative => Error::ExpectedNonNegative(span),
+                proc::ConstValueError::NonConst => Error::ExpectedConstExprConcreteIntegerScalar(span),
+                proc::ConstValueError::Negative => Error::ExpectedNonNegative(span),
             })?;
         Ok((value, span))
     }
@@ -4222,10 +4224,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     Ok(value) => {
                         let len = ctx.const_eval_expr_to_u32(value).map_err(|err| {
                             Box::new(match err {
-                                proc::U32EvalError::NonConst => {
+                                proc::ConstValueError::NonConst => {
                                     Error::ExpectedConstExprConcreteIntegerScalar(span)
                                 }
-                                proc::U32EvalError::Negative => {
+                                proc::ConstValueError::Negative => {
                                     Error::ExpectedPositiveArrayLength(span)
                                 }
                             })

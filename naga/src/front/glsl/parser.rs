@@ -14,7 +14,7 @@ use super::{
     variables::{GlobalOrConstant, VarDeclaration},
     Frontend, Result,
 };
-use crate::{arena::Handle, proc::U32EvalError, Expression, Module, Span, Type};
+use crate::{arena::Handle, proc::ConstValueError, Expression, Module, Span, Type};
 
 mod declarations;
 mod expressions;
@@ -215,11 +215,11 @@ impl<'source> ParsingContext<'source> {
 
         let int = match res {
             Ok(value) => Ok(value),
-            Err(U32EvalError::Negative) => Err(Error {
+            Err(ConstValueError::Negative) => Err(Error {
                 kind: ErrorKind::SemanticError("int constant overflows".into()),
                 meta,
             }),
-            Err(U32EvalError::NonConst) => Err(Error {
+            Err(ConstValueError::NonConst) => Err(Error {
                 kind: ErrorKind::SemanticError("Expected a uint constant".into()),
                 meta,
             }),
