@@ -561,7 +561,7 @@ impl<'a> Context<'a> {
                     _ => self
                         .module
                         .to_ctx()
-                        .eval_expr_to_u32_from(index, &self.expressions)
+                        .get_const_val_from(index, &self.expressions)
                         .ok(),
                 };
 
