@@ -128,6 +128,7 @@ fn get_entry_points(
 /// [`EntryPoint`]: crate::EntryPoint
 /// [`Module`]: crate::Module
 /// [`Module::entry_points`]: crate::Module::entry_points
+#[derive(Clone, Copy, Debug)]
 pub enum FunctionType {
     /// A regular function.
     Function(crate::Handle<crate::Function>),
