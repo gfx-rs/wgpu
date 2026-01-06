@@ -54,7 +54,7 @@ the limit is merely 2048 unique samplers in existence, which is much more reason
 
 ## Resource binding
 
-See ['Device::create_pipeline_layout`] documentation for the structure
+See [`crate::Device::create_pipeline_layout`] documentation for the structure
 of the root signature corresponding to WebGPU pipeline layout.
 
 Binding groups is mostly straightforward, with one big caveat:

@@ -1,5 +1,13 @@
 (
-    types: [],
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Bool,
+                width: 1,
+            )),
+        ),
+    ],
     special_types: (
         ray_desc: None,
         ray_intersection: None,
@@ -8,10 +16,18 @@
         external_texture_transfer_function: None,
         predeclared_types: {},
     ),
-    constants: [],
+    constants: [
+        (
+            name: Some("g_false"),
+            ty: 0,
+            init: 0,
+        ),
+    ],
     overrides: [],
     global_variables: [],
-    global_expressions: [],
+    global_expressions: [
+        Literal(Bool(false)),
+    ],
     functions: [],
     entry_points: [
         (
@@ -28,6 +44,14 @@
                 expressions: [],
                 named_expressions: {},
                 body: [
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
                     Return(
                         value: None,
                     ),

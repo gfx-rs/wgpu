@@ -260,8 +260,12 @@ impl ExampleContext {
     async fn init_async<E: Example>(surface: &mut SurfaceWrapper, window: Arc<Window>) -> Self {
         log::info!("Initializing wgpu...");
 
-        let instance_descriptor = wgpu::InstanceDescriptor::from_env_or_default();
-        let instance = wgpu::Instance::new(&instance_descriptor);
+        let instance_descriptor = wgpu::InstanceDescriptor::from_env_or_default()
+            .with_display_handle(Box::new(
+                // TODO: Use event_loop.owned_display_handle() with winit 0.30
+                window.clone(),
+            ));
+        let instance = wgpu::Instance::new(instance_descriptor);
         surface.pre_adapter(&instance, window);
         let adapter = get_adapter_with_capabilities_or_from_env(
             &instance,

@@ -2,6 +2,12 @@ const v_f32_one: vec4<f32> = vec4<f32>(1f, 1f, 1f, 1f);
 const v_f32_zero: vec4<f32> = vec4<f32>(0f, 0f, 0f, 0f);
 const v_f32_half: vec4<f32> = vec4<f32>(0.5f, 0.5f, 0.5f, 0.5f);
 const v_i32_one: vec4<i32> = vec4<i32>(1i, 1i, 1i, 1i);
+const b_false: bool = false;
+const b_true: bool = true;
+const short_circuit_1_invalid_rhs: bool = false;
+const short_circuit_2_invalid_rhs: bool = false;
+const short_circuit_3_: bool = true;
+const short_circuit_4_: bool = true;
 
 fn builtins() -> vec4<f32> {
     let s1_ = select(0i, 1i, true);
@@ -61,6 +67,8 @@ fn logical() {
     var local_2: bool;
     var local_3: bool;
     var local_4: bool;
+    var local_5: bool;
+    var local_6: bool;
 
     let neg0_ = !(true);
     let neg1_ = !(vec2(true));
@@ -80,28 +88,42 @@ fn logical() {
     let bitwise_or1_ = (vec3(true) | vec3(false));
     let bitwise_and0_ = (true & false);
     let bitwise_and1_ = (vec4(true) & vec4(false));
-    let _e22 = p();
-    if !(_e22) {
-        let _e26 = q();
-        local_2 = _e26;
+    if !(false) {
+        local_2 = false;
     } else {
         local_2 = true;
     }
-    let _e28 = local_2;
-    if _e28 {
-        let _e31 = r();
-        if !(_e31) {
-            let _e35 = s();
-            local_4 = _e35;
-        } else {
-            local_4 = true;
-        }
-        let _e37 = local_4;
-        local_3 = _e37;
+    let _e27 = local_2;
+    let short_circuit_5_ = !(_e27);
+    let _e29 = p();
+    if !(_e29) {
+        let _e33 = q();
+        local_3 = _e33;
     } else {
-        local_3 = false;
+        local_3 = true;
     }
-    let short_circuit = local_3;
+    let _e35 = local_3;
+    if _e35 {
+        let _e38 = r();
+        if !(_e38) {
+            let _e42 = s();
+            local_5 = _e42;
+        } else {
+            local_5 = true;
+        }
+        let _e44 = local_5;
+        local_4 = _e44;
+    } else {
+        local_4 = false;
+    }
+    let short_circuit_6_ = local_4;
+    if false {
+        let _e50 = q();
+        local_6 = _e50;
+    } else {
+        local_6 = true;
+    }
+    let short_circuit_7_ = local_6;
     return;
 }
 

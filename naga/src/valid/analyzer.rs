@@ -29,6 +29,7 @@ bitflags::bitflags! {
         const WORK_GROUP_BARRIER = 0x1;
         const DERIVATIVE = if DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE { 0 } else { 0x2 };
         const IMPLICIT_LEVEL = if DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE { 0 } else { 0x4 };
+        const COOP_OPS = 0x8;
     }
 }
 
@@ -843,6 +844,14 @@ impl FunctionInfo {
                 non_uniform_result: self.add_ref(query),
                 requirements: UniformityRequirements::empty(),
             },
+            E::CooperativeLoad { ref data, .. } => Uniformity {
+                non_uniform_result: self.add_ref(data.pointer).or(self.add_ref(data.stride)),
+                requirements: UniformityRequirements::COOP_OPS,
+            },
+            E::CooperativeMultiplyAdd { a, b, c } => Uniformity {
+                non_uniform_result: self.add_ref(a).or(self.add_ref(b).or(self.add_ref(c))),
+                requirements: UniformityRequirements::COOP_OPS,
+            },
         };
 
         let ty = resolve_context.resolve(expression, |h| Ok(&self[h].ty))?;
@@ -1172,6 +1181,16 @@ impl FunctionInfo {
                     }
                     FunctionUniformity::new()
                 }
+                S::CooperativeStore { target, ref data } => FunctionUniformity {
+                    result: Uniformity {
+                        non_uniform_result: self
+                            .add_ref(target)
+                            .or(self.add_ref_impl(data.pointer, GlobalUse::WRITE))
+                            .or(self.add_ref(data.stride)),
+                        requirements: UniformityRequirements::COOP_OPS,
+                    },
+                    exit: ExitFlags::empty(),
+                },
             };
 
             disruptor = disruptor.or(uniformity.exit_disruptor());

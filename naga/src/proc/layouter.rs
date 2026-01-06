@@ -86,6 +86,12 @@ impl From<crate::VectorSize> for Alignment {
     }
 }
 
+impl From<crate::CooperativeSize> for Alignment {
+    fn from(size: crate::CooperativeSize) -> Self {
+        Self(unsafe { NonZeroU32::new_unchecked(size as u32) })
+    }
+}
+
 /// Size and alignment information for a type.
 #[derive(Clone, Copy, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
@@ -161,10 +167,11 @@ impl Layouter {
         self.layouts.clear();
     }
 
+    #[expect(rustdoc::private_intra_doc_links)]
     /// Extend this `Layouter` with layouts for any new entries in `gctx.types`.
     ///
     /// Ensure that every type in `gctx.types` has a corresponding [TypeLayout]
-    /// in [`self.layouts`].
+    /// in [`Self::layouts`].
     ///
     /// Some front ends need to be able to compute layouts for existing types
     /// while module construction is still in progress and new types are still
@@ -204,6 +211,19 @@ impl Layouter {
                     columns: _,
                     rows,
                     scalar,
+                } => {
+                    let alignment = Alignment::new(scalar.width as u32)
+                        .ok_or(LayoutErrorInner::NonPowerOfTwoWidth.with(ty_handle))?;
+                    TypeLayout {
+                        size,
+                        alignment: Alignment::from(rows) * alignment,
+                    }
+                }
+                Ti::CooperativeMatrix {
+                    columns: _,
+                    rows,
+                    scalar,
+                    role: _,
                 } => {
                     let alignment = Alignment::new(scalar.width as u32)
                         .ok_or(LayoutErrorInner::NonPowerOfTwoWidth.with(ty_handle))?;

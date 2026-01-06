@@ -495,6 +495,17 @@ impl From<VectorSize> for u32 {
     }
 }
 
+/// Number of components in a cooperative vector.
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum CooperativeSize {
+    Eight = 8,
+    Sixteen = 16,
+}
+
 /// Primitive type for a scalar.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -520,6 +531,18 @@ pub enum ScalarKind {
     ///
     /// These are forbidden by validation, and should never reach backends.
     AbstractFloat,
+}
+
+/// Role of a cooperative variable in the equation "A * B + C"
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum CooperativeRole {
+    A,
+    B,
+    C,
 }
 
 /// Characteristics of a scalar type.
@@ -769,6 +792,14 @@ pub enum TypeInner {
         columns: VectorSize,
         rows: VectorSize,
         scalar: Scalar,
+    },
+    /// Matrix that is cooperatively processed by all the threads
+    /// in an opaque mapping.
+    CooperativeMatrix {
+        columns: CooperativeSize,
+        rows: CooperativeSize,
+        scalar: Scalar,
+        role: CooperativeRole,
     },
     /// Atomic scalar.
     Atomic(Scalar),
@@ -1468,6 +1499,16 @@ bitflags::bitflags! {
     }
 }
 
+#[derive(Clone, Copy, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub struct CooperativeData {
+    pub pointer: Handle<Expression>,
+    pub stride: Handle<Expression>,
+    pub row_major: bool,
+}
+
 /// An expression that can be evaluated to obtain a value.
 ///
 /// This is a Single Static Assignment (SSA) scheme similar to SPIR-V.
@@ -1812,6 +1853,20 @@ pub enum Expression {
     /// [`SubgroupCollectiveOperation`]: Statement::SubgroupCollectiveOperation
     /// [`SubgroupGather`]: Statement::SubgroupGather
     SubgroupOperationResult { ty: Handle<Type> },
+
+    /// Load a cooperative primitive from memory.
+    CooperativeLoad {
+        columns: CooperativeSize,
+        rows: CooperativeSize,
+        role: CooperativeRole,
+        data: CooperativeData,
+    },
+    /// Compute `a * b + c`
+    CooperativeMultiplyAdd {
+        a: Handle<Expression>,
+        b: Handle<Expression>,
+        c: Handle<Expression>,
+    },
 }
 
 /// The value of the switch case.
@@ -2252,6 +2307,11 @@ pub enum Statement {
         ///
         /// [`SubgroupOperationResult`]: Expression::SubgroupOperationResult
         result: Handle<Expression>,
+    },
+    /// Store a cooperative primitive into memory.
+    CooperativeStore {
+        target: Handle<Expression>,
+        data: CooperativeData,
     },
 }
 

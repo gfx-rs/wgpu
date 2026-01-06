@@ -144,6 +144,8 @@ pub enum ExpressionError {
     Literal(#[from] LiteralError),
     #[error("{0:?} is not supported for Width {2} {1:?} arguments yet, see https://github.com/gfx-rs/wgpu/issues/5276")]
     UnsupportedWidth(crate::MathFunction, crate::ScalarKind, crate::Bytes),
+    #[error("Invalid operand for cooperative op")]
+    InvalidCooperativeOperand(Handle<crate::Expression>),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -795,7 +797,9 @@ impl super::Validator {
                             Sk::Uint | Sk::Sint | Sk::Float => left_inner == right_inner,
                             Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat => false,
                         },
-                        Ti::Matrix { .. } => left_inner == right_inner,
+                        Ti::Matrix { .. } | Ti::CooperativeMatrix { .. } => {
+                            left_inner == right_inner
+                        }
                         _ => false,
                     },
                     Bo::Divide | Bo::Modulo => match *left_inner {
@@ -825,7 +829,7 @@ impl super::Validator {
                                     scalar: scalar2, ..
                                 },
                             ) => scalar1 == scalar2,
-                            // Scalar/matrix.
+                            // Scalar * matrix.
                             (
                                 &Ti::Scalar(Sc {
                                     kind: Sk::Float, ..
@@ -838,7 +842,7 @@ impl super::Validator {
                                     kind: Sk::Float, ..
                                 }),
                             ) => true,
-                            // Vector/vector.
+                            // Vector * vector.
                             (
                                 &Ti::Vector {
                                     size: size1,
@@ -871,8 +875,14 @@ impl super::Validator {
                                 },
                                 &Ti::Matrix { rows, .. },
                             ) => size == rows,
+                            // Matrix * matrix.
                             (&Ti::Matrix { columns, .. }, &Ti::Matrix { rows, .. }) => {
                                 columns == rows
+                            }
+                            // Scalar * coop matrix.
+                            (&Ti::Scalar(s1), &Ti::CooperativeMatrix { scalar: s2, .. })
+                            | (&Ti::CooperativeMatrix { scalar: s1, .. }, &Ti::Scalar(s2)) => {
+                                s1 == s2
                             }
                             _ => false,
                         };
@@ -1172,7 +1182,7 @@ impl super::Validator {
                     // WorkGroupUniformLoad
                     .contains(TypeFlags::SIZED | TypeFlags::CONSTRUCTIBLE)
                 {
-                    ShaderStages::COMPUTE
+                    ShaderStages::COMPUTE_LIKE
                 } else {
                     return Err(ExpressionError::InvalidWorkGroupUniformLoadResultType(ty));
                 }
@@ -1237,6 +1247,33 @@ impl super::Validator {
                 }
             },
             E::SubgroupBallotResult | E::SubgroupOperationResult { .. } => self.subgroup_stages,
+            E::CooperativeLoad { ref data, .. } => {
+                if resolver[data.pointer]
+                    .pointer_base_type()
+                    .and_then(|tr| tr.inner_with(&module.types).scalar())
+                    .is_none()
+                {
+                    return Err(ExpressionError::InvalidPointerType(data.pointer));
+                }
+                ShaderStages::COMPUTE
+            }
+            E::CooperativeMultiplyAdd { a, b, c } => {
+                let roles = [
+                    crate::CooperativeRole::A,
+                    crate::CooperativeRole::B,
+                    crate::CooperativeRole::C,
+                ];
+                for (operand, expected_role) in [a, b, c].into_iter().zip(roles) {
+                    match resolver[operand] {
+                        Ti::CooperativeMatrix { role, .. } if role == expected_role => {}
+                        ref other => {
+                            log::error!("{expected_role:?} operand type: {other:?}");
+                            return Err(ExpressionError::InvalidCooperativeOperand(a));
+                        }
+                    }
+                }
+                ShaderStages::COMPUTE
+            }
         };
         Ok(stages)
     }

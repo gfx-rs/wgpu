@@ -17,7 +17,7 @@
 //!
 //! We have a [wiki](https://github.com/gfx-rs/wgpu/wiki) which has information on useful architecture patterns, debugging tips, and more getting started information.
 //!
-//! There are examples for this version [available on GitHub](https://github.com/gfx-rs/wgpu/tree/v27/examples#readme).
+//! There are examples for this version [available on GitHub](https://github.com/gfx-rs/wgpu/tree/v28/examples#readme).
 //!
 //! The API is refcounted, so all handles are cloneable, and if you create a resource which references another,
 //! it will automatically keep dependent resources alive.
@@ -28,12 +28,12 @@
 //! | --------------------- | ---------------------- |
 //! | ![render_coordinates] | ![texture_coordinates] |
 //!
-//! `wgpu`'s MSRV is **1.88**.
+//! `wgpu`'s MSRV is **1.92**.
 //!
 //! [Learn Wgpu]: https://sotrh.github.io/learn-wgpu/
 //! [WebGPU Fundamentals]: https://webgpufundamentals.org/
-//! [render_coordinates]: https://raw.githubusercontent.com/gfx-rs/wgpu/refs/heads/v27/docs/render_coordinates.png
-//! [texture_coordinates]: https://raw.githubusercontent.com/gfx-rs/wgpu/refs/heads/v27/docs/texture_coordinates.png
+//! [render_coordinates]: https://raw.githubusercontent.com/gfx-rs/wgpu/refs/heads/v28/docs/render_coordinates.png
+//! [texture_coordinates]: https://raw.githubusercontent.com/gfx-rs/wgpu/refs/heads/v28/docs/texture_coordinates.png
 //!
 //! ## Extension Specifications
 //!
@@ -42,8 +42,8 @@
 //!
 //! 🧪EXPERIMENTAL🧪 APIs are subject to change and may allow undefined behavior if used incorrectly.
 //!
-//! - 🧪EXPERIMENTAL🧪 [Ray Tracing](https://github.com/gfx-rs/wgpu/blob/v27/docs/api-specs/ray_tracing.md).
-//! - 🧪EXPERIMENTAL🧪 [Mesh Shading](https://github.com/gfx-rs/wgpu/blob/v27/docs/api-specs/mesh_shading.md).
+//! - 🧪EXPERIMENTAL🧪 [Ray Tracing](https://github.com/gfx-rs/wgpu/blob/v28/docs/api-specs/ray_tracing.md).
+//! - 🧪EXPERIMENTAL🧪 [Mesh Shading](https://github.com/gfx-rs/wgpu/blob/v28/docs/api-specs/mesh_shading.md).
 //!
 //! ## Shader Support
 //!
@@ -69,7 +69,7 @@
 //! complicated cases.
 //!
 //! - **`wgpu_core`** --- Enabled when there is any non-webgpu backend enabled on the platform.
-//! - **`naga`** --- Enabled when target `glsl` or `spirv`` input is enabled, or when `wgpu_core` is enabled.
+//! - **`naga`** --- Enabled when target `glsl` or `spirv` input is enabled, or when `wgpu_core` is enabled.
 //!
 
 #![no_std]
@@ -132,24 +132,25 @@ pub use wgt::{
     Backends, BindGroupLayoutEntry, BindingType, BlendComponent, BlendFactor, BlendOperation,
     BlendState, BufferAddress, BufferBindingType, BufferSize, BufferTextureCopyInfo,
     BufferTransition, BufferUsages, BufferUses, Color, ColorTargetState, ColorWrites,
-    CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, CopyExternalImageDestInfo,
-    CoreCounters, DepthBiasState, DepthStencilState, DeviceLostReason, DeviceType,
-    DownlevelCapabilities, DownlevelFlags, DownlevelLimits, Dx12BackendOptions, Dx12Compiler,
-    Dx12SwapchainKind, Dx12UseFrameLatencyWaitableObject, DxcShaderModel, DynamicOffset,
-    ExperimentalFeatures, Extent3d, ExternalTextureFormat, ExternalTextureTransferFunction, Face,
-    Features, FeaturesWGPU, FeaturesWebGPU, FilterMode, FrontFace, GlBackendOptions,
-    GlFenceBehavior, Gles3MinorVersion, HalCounters, ImageSubresourceRange, IndexFormat,
-    InstanceDescriptor, InstanceFlags, InternalCounters, Limits, LoadOpDontCare,
-    MemoryBudgetThresholds, MemoryHints, MipmapFilterMode, MultisampleState, NoopBackendOptions,
-    Origin2d, Origin3d, PipelineStatisticsTypes, PollError, PollStatus, PolygonMode,
-    PowerPreference, PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState,
-    PrimitiveTopology, QueryType, RenderBundleDepthStencil, RequestAdapterError,
-    SamplerBindingType, SamplerBorderColor, ShaderLocation, ShaderModel, ShaderRuntimeChecks,
-    ShaderStages, StencilFaceState, StencilOperation, StencilState, StorageTextureAccess,
-    SurfaceCapabilities, SurfaceStatus, TexelCopyBufferLayout, TextureAspect, TextureDimension,
-    TextureFormat, TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType,
-    TextureTransition, TextureUsages, TextureUses, TextureViewDimension, Trace, VertexAttribute,
-    VertexFormat, VertexStepMode, WasmNotSend, WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT,
+    CommandBufferDescriptor, CompareFunction, CompositeAlphaMode, CooperativeMatrixProperties,
+    CooperativeScalarType, CopyExternalImageDestInfo, CoreCounters, DepthBiasState,
+    DepthStencilState, DeviceLostReason, DeviceType, DownlevelCapabilities, DownlevelFlags,
+    DownlevelLimits, Dx12BackendOptions, Dx12Compiler, Dx12SwapchainKind,
+    Dx12UseFrameLatencyWaitableObject, DxcShaderModel, DynamicOffset, ExperimentalFeatures,
+    Extent3d, ExternalTextureFormat, ExternalTextureTransferFunction, Face, Features, FeaturesWGPU,
+    FeaturesWebGPU, FilterMode, FrontFace, GlBackendOptions, GlFenceBehavior, Gles3MinorVersion,
+    HalCounters, ImageSubresourceRange, IndexFormat, InstanceDescriptor, InstanceFlags,
+    InternalCounters, Limits, LoadOpDontCare, MemoryBudgetThresholds, MemoryHints,
+    MipmapFilterMode, MultisampleState, NoopBackendOptions, Origin2d, Origin3d,
+    PipelineStatisticsTypes, PollError, PollStatus, PolygonMode, PowerPreference,
+    PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology,
+    QueryType, RenderBundleDepthStencil, RequestAdapterError, SamplerBindingType,
+    SamplerBorderColor, ShaderLocation, ShaderModel, ShaderRuntimeChecks, ShaderStages,
+    StencilFaceState, StencilOperation, StencilState, StorageTextureAccess, SurfaceCapabilities,
+    SurfaceStatus, TexelCopyBufferLayout, TextureAspect, TextureDimension, TextureFormat,
+    TextureFormatFeatureFlags, TextureFormatFeatures, TextureSampleType, TextureTransition,
+    TextureUsages, TextureUses, TextureViewDimension, Trace, VertexAttribute, VertexFormat,
+    VertexStepMode, WasmNotSend, WasmNotSendSync, WasmNotSync, COPY_BUFFER_ALIGNMENT,
     COPY_BYTES_PER_ROW_ALIGNMENT, IMMEDIATE_DATA_ALIGNMENT, MAP_ALIGNMENT,
     MAXIMUM_SUBGROUP_MAX_SIZE, MINIMUM_SUBGROUP_MIN_SIZE, QUERY_RESOLVE_BUFFER_ALIGNMENT,
     QUERY_SET_MAX_QUERIES, QUERY_SIZE, VERTEX_ALIGNMENT,

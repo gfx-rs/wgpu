@@ -1,5 +1,5 @@
 capabilities = "MESH_SHADER | MESH_SHADER_POINT_TOPOLOGY"
-targets = "SPIRV"
+targets = "WGSL | SPIRV"
 
 [spv]
 version = [1, 4]

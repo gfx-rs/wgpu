@@ -1,5 +1,5 @@
 capabilities = "MESH_SHADER"
-targets = "SPIRV"
+targets = "WGSL | SPIRV"
 
 [spv]
 version = [1, 4]

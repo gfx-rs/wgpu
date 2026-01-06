@@ -780,7 +780,7 @@ crate::cmp::impl_eq_ord_hash_proxy!(CoreQueueWriteBuffer => .mapping.ptr);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreBufferMappedRange => .ptr);
 
 impl dispatch::InstanceInterface for ContextWgpuCore {
-    fn new(desc: &wgt::InstanceDescriptor) -> Self
+    fn new(desc: wgt::InstanceDescriptor) -> Self
     where
         Self: Sized,
     {
@@ -1001,6 +1001,12 @@ impl dispatch::AdapterInterface for CoreAdapter {
 
     fn get_presentation_timestamp(&self) -> crate::PresentationTimestamp {
         self.context.0.adapter_get_presentation_timestamp(self.id)
+    }
+
+    fn cooperative_matrix_properties(&self) -> Vec<crate::wgt::CooperativeMatrixProperties> {
+        self.context
+            .0
+            .adapter_cooperative_matrix_properties(self.id)
     }
 }
 

@@ -677,10 +677,10 @@ impl InnerCommandEncoder {
     /// In both cases, returns a reference to the raw encoder.
     fn open_if_closed(&mut self) -> Result<&mut dyn hal::DynCommandEncoder, DeviceError> {
         if !self.is_open {
-            self.is_open = true;
             let hal_label = hal_label(Some(self.label.as_str()), self.device.instance_flags);
             unsafe { self.raw.begin_encoding(hal_label) }
                 .map_err(|e| self.device.handle_hal_error(e))?;
+            self.is_open = true;
         }
 
         Ok(self.raw.as_mut())
@@ -691,10 +691,10 @@ impl InnerCommandEncoder {
     /// The underlying hal encoder is put in the "recording" state.
     pub(crate) fn open(&mut self) -> Result<&mut dyn hal::DynCommandEncoder, DeviceError> {
         if !self.is_open {
-            self.is_open = true;
             let hal_label = hal_label(Some(self.label.as_str()), self.device.instance_flags);
             unsafe { self.raw.begin_encoding(hal_label) }
                 .map_err(|e| self.device.handle_hal_error(e))?;
+            self.is_open = true;
         }
 
         Ok(self.raw.as_mut())
@@ -713,11 +713,11 @@ impl InnerCommandEncoder {
         label: Option<&str>,
     ) -> Result<&mut dyn hal::DynCommandEncoder, DeviceError> {
         assert!(!self.is_open);
-        self.is_open = true;
 
         let hal_label = hal_label(label, self.device.instance_flags);
         unsafe { self.raw.begin_encoding(hal_label) }
             .map_err(|e| self.device.handle_hal_error(e))?;
+        self.is_open = true;
 
         Ok(self.raw.as_mut())
     }

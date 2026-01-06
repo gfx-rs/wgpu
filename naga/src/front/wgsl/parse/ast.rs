@@ -238,6 +238,13 @@ pub enum Type<'a> {
         ty: Handle<Type<'a>>,
         ty_span: Span,
     },
+    CooperativeMatrix {
+        columns: crate::CooperativeSize,
+        rows: crate::CooperativeSize,
+        ty: Handle<Type<'a>>,
+        ty_span: Span,
+        role: crate::CooperativeRole,
+    },
     Atomic(Scalar),
     Pointer {
         base: Handle<Type<'a>>,
@@ -388,6 +395,21 @@ pub enum ConstructorType<'a> {
         ty_span: Span,
     },
 
+    /// A cooperative matrix construction base `coop_mat8x8(...)`.
+    PartialCooperativeMatrix {
+        columns: crate::CooperativeSize,
+        rows: crate::CooperativeSize,
+    },
+
+    /// A full cooperative matrix construction `coop_mat8x8<f32,A>(...)`.
+    CooperativeMatrix {
+        columns: crate::CooperativeSize,
+        rows: crate::CooperativeSize,
+        ty: Handle<Type<'a>>,
+        ty_span: Span,
+        role: crate::CooperativeRole,
+    },
+
     /// An array whose component type and size are inferred from the arguments:
     /// `array(3,4,5)`.
     PartialArray,
@@ -468,6 +490,7 @@ pub enum Expression<'a> {
     Call {
         function: Ident<'a>,
         arguments: Vec<Handle<Expression<'a>>>,
+        result_ty: Option<(Handle<Type<'a>>, Span)>,
     },
     Index {
         base: Handle<Expression<'a>>,

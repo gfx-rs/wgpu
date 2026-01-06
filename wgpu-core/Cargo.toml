@@ -84,12 +84,6 @@ trace = ["serde", "std", "dep:ron", "naga/serialize", "wgpu-types/trace"]
 ## Enable API replaying
 replay = ["serde", "naga/deserialize"]
 
-#! ### Surface Support
-# --------------------------------------------------------------------
-
-## Enable creating surfaces using raw-window-handle
-raw-window-handle = ["dep:raw-window-handle"]
-
 #! ### Shading Language Support
 # --------------------------------------------------------------------
 
@@ -189,7 +183,7 @@ macro_rules_attribute = { workspace = true, optional = true }
 once_cell = { workspace = true, features = ["std"] }
 parking_lot.workspace = true
 profiling = { workspace = true, default-features = false }
-raw-window-handle = { workspace = true, optional = true }
+raw-window-handle.workspace = true
 ron = { workspace = true, optional = true }
 rustc-hash.workspace = true
 serde = { workspace = true, features = ["default", "derive"], optional = true }
