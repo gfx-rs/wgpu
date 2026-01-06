@@ -108,7 +108,7 @@ impl super::Adapter {
         let mut device_levels = Direct3D12::D3D12_FEATURE_DATA_FEATURE_LEVELS {
             NumFeatureLevels: d3d_feature_level.len() as u32,
             pFeatureLevelsRequested: d3d_feature_level.as_ptr().cast(),
-            MaxSupportedFeatureLevel: Default::default(),
+            MaxSupportedFeatureLevel: Direct3D::D3D_FEATURE_LEVEL(0),
         };
         unsafe {
             device.CheckFeatureSupport(
@@ -124,6 +124,8 @@ impl super::Adapter {
             Direct3D::D3D_FEATURE_LEVEL_12_0 => FeatureLevel::_12_0,
             Direct3D::D3D_FEATURE_LEVEL_12_1 => FeatureLevel::_12_1,
             Direct3D::D3D_FEATURE_LEVEL_12_2 => FeatureLevel::_12_2,
+            // Some older windows versions will leave the max feature level unset
+            // without returning an error if the feature level isn't supported.
             Direct3D::D3D_FEATURE_LEVEL(0) => return None,
             _ => unreachable!(),
         };
