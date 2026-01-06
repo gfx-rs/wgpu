@@ -59,7 +59,7 @@ Bottom level categories:
 
 #### DX12
 
-- Unreachable code entered during adapter enumeration on older DX12 environments that didn't support a high enough D3D12FeatureLevel was fixed. By @inner-daemons in [#8806](https://github.com/gfx-rs/wgpu/pull/8806).
+- Don't panic in adapter enumeration on older DX12 environments that don't support a high enough `D3D12FeatureLevel`. By @inner-daemons in [#8806](https://github.com/gfx-rs/wgpu/pull/8806).
 
 ### Documentation
 
