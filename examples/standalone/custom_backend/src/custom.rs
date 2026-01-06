@@ -25,7 +25,7 @@ impl Counter {
 pub struct CustomInstance(pub Counter);
 
 impl InstanceInterface for CustomInstance {
-    fn new(__desc: &wgpu::InstanceDescriptor) -> Self
+    fn new(__desc: wgpu::InstanceDescriptor) -> Self
     where
         Self: Sized,
     {
@@ -78,6 +78,10 @@ impl AdapterInterface for CustomAdapter {
             DispatchQueue::custom(CustomQueue(self.0.clone())),
         ));
         Box::pin(std::future::ready(res))
+    }
+
+    fn cooperative_matrix_properties(&self) -> Vec<wgpu::CooperativeMatrixProperties> {
+        Vec::new()
     }
 
     fn is_surface_supported(&self, _surface: &DispatchSurface) -> bool {

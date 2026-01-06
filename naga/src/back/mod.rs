@@ -316,12 +316,10 @@ pub const fn binary_operation_str(op: crate::BinaryOperator) -> &'static str {
 }
 
 impl crate::TypeInner {
-    /// Returns true if this is a handle to a type rather than the type directly.
+    /// Returns true if a variable of this type is a handle.
     pub const fn is_handle(&self) -> bool {
         match *self {
-            crate::TypeInner::Image { .. }
-            | crate::TypeInner::Sampler { .. }
-            | crate::TypeInner::AccelerationStructure { .. } => true,
+            Self::Image { .. } | Self::Sampler { .. } | Self::AccelerationStructure { .. } => true,
             _ => false,
         }
     }

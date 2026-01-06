@@ -16,6 +16,7 @@ use wgpu_types::TextureFormat;
 use wgpu_types::TextureViewDimension;
 
 use crate::error::GPUGenericError;
+use crate::webidl::GPUTextureUsageFlags;
 use crate::Instance;
 
 #[derive(WebIDL)]
@@ -34,8 +35,7 @@ pub(crate) struct GPUTextureDescriptor {
   #[webidl(default = GPUTextureDimension::D2)]
   pub dimension: GPUTextureDimension,
   pub format: GPUTextureFormat,
-  #[options(enforce_range = true)]
-  pub usage: u32,
+  pub usage: GPUTextureUsageFlags,
   #[webidl(default = vec![])]
   pub view_formats: Vec<GPUTextureFormat>,
 }
@@ -54,7 +54,7 @@ pub struct GPUTexture {
   pub sample_count: u32,
   pub dimension: GPUTextureDimension,
   pub format: GPUTextureFormat,
-  pub usage: u32,
+  pub usage: GPUTextureUsageFlags,
 }
 
 impl GPUTexture {
@@ -151,7 +151,7 @@ impl GPUTexture {
   }
   #[getter]
   fn usage(&self) -> u32 {
-    self.usage
+    self.usage.bits()
   }
   #[fast]
   #[undefined]
@@ -168,10 +168,7 @@ impl GPUTexture {
       label: crate::transform_label(descriptor.label.clone()),
       format: descriptor.format.map(Into::into),
       dimension: descriptor.dimension.map(Into::into),
-      usage: Some(
-        wgpu_types::TextureUsages::from_bits(descriptor.usage)
-          .ok_or_else(|| JsErrorBox::type_error("usage is not valid"))?,
-      ),
+      usage: Some(descriptor.usage.into()),
       range: wgpu_types::ImageSubresourceRange {
         aspect: descriptor.aspect.into(),
         base_mip_level: descriptor.base_mip_level,
@@ -204,9 +201,8 @@ struct GPUTextureViewDescriptor {
 
   format: Option<GPUTextureFormat>,
   dimension: Option<GPUTextureViewDimension>,
-  #[webidl(default = 0)]
-  #[options(enforce_range = true)]
-  usage: u32,
+  #[webidl(default = GPUTextureUsageFlags(wgpu_types::TextureUsages::empty()))]
+  usage: GPUTextureUsageFlags,
   #[webidl(default = GPUTextureAspect::All)]
   aspect: GPUTextureAspect,
   #[webidl(default = 0)]

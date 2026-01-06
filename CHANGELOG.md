@@ -41,10 +41,30 @@ Bottom level categories:
 
 ## Unreleased
 
+### New Features
+
+- Added support for cooperative load/store operations in shaders. Currently only WGSL on the input and SPIR-V, METAL, and WGSL on the output are supported. By @kvark in [#8251](https://github.com/gfx-rs/wgpu/issues/8251).
+
 ### Bug Fixes
+
+#### General
+
+- BREAKING: Migrated from the `maxInterStageShaderComponents` limit to `maxInterStageShaderVariables`, which changes validation in a way that should not affect most programs. This follows the latest changes of the WebGPU spec. By @ErichDonGubler in [#8652](https://github.com/gfx-rs/wgpu/pull/8652), [#8792](https://github.com/gfx-rs/wgpu/pull/8792).
+- Fixed validation of the texture format in GPUDepthStencilState when neither depth nor stencil is actually enabled. By @andyleiserson in [#8766](https://github.com/gfx-rs/wgpu/pull/8766).
 
 #### Vulkan
 - Fixed a variety of mesh shader SPIR-V writer issues from the original implementation. By @inner-daemons in [#8756](https://github.com/gfx-rs/wgpu/pull/8756)
+
+#### GLES
+
+- `DisplayHandle` should now be passed to `InstanceDescriptor` for correct EGL initialization on Wayland. By @MarijnS95 in [#8012](https://github.com/gfx-rs/wgpu/pull/8012)
+  Note that the existing workaround to create surfaces before the adapter is no longer valid.
+
+### Documentation
+
+#### General
+
+- Expanded documentation of `QuerySet`, `QueryType`, and `resolve_query_set()` describing how to use queries. By @kpreid in [#8776](https://github.com/gfx-rs/wgpu/pull/8776).
 
 ## v28.0.0 (2025-12-17)
 

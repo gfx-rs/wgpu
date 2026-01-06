@@ -273,8 +273,7 @@ ObjectDefineProperty(GPUSupportedLimitsPrototype, privateCustomInspect, {
           "maxBufferSize",
           "maxVertexAttributes",
           "maxVertexBufferArrayStride",
-          // TODO(@crowlKats): support max_inter_stage_shader_variables
-          // "maxInterStageShaderVariables",
+          "maxInterStageShaderVariables",
           "maxColorAttachments",
           "maxColorAttachmentBytesPerSample",
           "maxComputeWorkgroupStorageSize",
@@ -841,6 +840,14 @@ ObjectDefineProperty(GPUQuerySetPrototype, privateCustomInspect, {
 
 // Converters
 
+webidl.converters["GPUPipelineErrorReason"] = webidl.createEnumConverter(
+  "GPUPipelineErrorReason",
+  [
+    "validation",
+    "internal",
+  ],
+);
+
 webidl.converters["GPUPipelineErrorInit"] = webidl.createDictionaryConverter(
   "GPUPipelineErrorInit",
   [
@@ -849,14 +856,6 @@ webidl.converters["GPUPipelineErrorInit"] = webidl.createDictionaryConverter(
       converter: webidl.converters.GPUPipelineErrorReason,
       required: true,
     },
-  ],
-);
-
-webidl.converters["GPUPipelineErrorReason"] = webidl.createEnumConverter(
-  "GPUPipelineErrorReason",
-  [
-    "validation",
-    "internal",
   ],
 );
 
@@ -892,6 +891,7 @@ function initGPU() {
       webidl.brand,
       setEventTargetData,
       GPUUncapturedErrorEvent,
+      GPUPipelineError,
     );
   }
 }

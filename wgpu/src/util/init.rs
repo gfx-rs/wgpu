@@ -102,7 +102,7 @@ pub async fn is_browser_webgpu_supported() -> bool {
 ///
 /// If the instance descriptor enables [`Backends::BROWSER_WEBGPU`],
 /// this checks via [`is_browser_webgpu_supported`] for WebGPU support before forwarding
-/// the descriptor with or without [`Backends::BROWSER_WEBGPU`] respecitively to [`Instance::new`].
+/// the descriptor with or without [`Backends::BROWSER_WEBGPU`] respectively to [`Instance::new`].
 ///
 /// You should prefer this method over [`Instance::new`] if you want to target WebGPU and automatically
 /// fall back to WebGL if WebGPU is not available.
@@ -114,9 +114,8 @@ pub async fn is_browser_webgpu_supported() -> bool {
 /// If no backend feature for the active target platform is enabled,
 /// this method will panic, see [`Instance::enabled_backend_features()`].
 pub async fn new_instance_with_webgpu_detection(
-    instance_desc: &wgt::InstanceDescriptor,
+    mut instance_desc: wgt::InstanceDescriptor,
 ) -> crate::Instance {
-    let mut instance_desc = instance_desc.clone();
     if instance_desc
         .backends
         .contains(wgt::Backends::BROWSER_WEBGPU)
@@ -125,5 +124,5 @@ pub async fn new_instance_with_webgpu_detection(
         instance_desc.backends.remove(wgt::Backends::BROWSER_WEBGPU);
     }
 
-    crate::Instance::new(&instance_desc)
+    crate::Instance::new(instance_desc)
 }

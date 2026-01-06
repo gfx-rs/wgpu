@@ -310,15 +310,23 @@ impl TryToWgsl for crate::Scalar {
     }
 }
 
+impl ToWgsl for crate::CooperativeRole {
+    fn to_wgsl(self) -> &'static str {
+        match self {
+            Self::A => "A",
+            Self::B => "B",
+            Self::C => "C",
+        }
+    }
+}
+
 impl ToWgsl for crate::ImageDimension {
     fn to_wgsl(self) -> &'static str {
-        use crate::ImageDimension as IDim;
-
         match self {
-            IDim::D1 => "1d",
-            IDim::D2 => "2d",
-            IDim::D3 => "3d",
-            IDim::Cube => "cube",
+            Self::D1 => "1d",
+            Self::D2 => "2d",
+            Self::D3 => "3d",
+            Self::Cube => "cube",
         }
     }
 }
