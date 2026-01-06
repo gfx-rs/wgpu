@@ -12,24 +12,84 @@ pub type TokenSpan<'a> = (Token<'a>, Span);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Token<'a> {
+    /// A separator character: `:;,`, and `.` when not part of a numeric
+    /// literal.
     Separator(char),
+
+    /// A parenthesis-like character: `()[]{}`, and also `<>`.
+    ///
+    /// Note that `<>` representing template argument brackets are distinguished
+    /// using WGSL's [template list discovery algorithm][tlda], and are returned
+    /// as [`Token::TemplateArgsStart`] and [`Token::TemplateArgsEnd`]. That is,
+    /// we use `Paren` for `<>` when they are *not* parens.
+    ///
+    /// [tlda]: https://gpuweb.github.io/gpuweb/wgsl/#template-list-discovery
     Paren(char),
+
+    /// The attribute introduction character `@`.
     Attribute,
+
+    /// A numeric literal, either integral or floating-point, including any
+    /// type suffix.
     Number(core::result::Result<Number, NumberError>),
+
+    /// An identifier, possibly a reserved word.
     Word(&'a str),
+
+    /// A miscellaneous single-character operator, like an arithmetic unary or
+    /// binary operator. This includes `=`, for assignment and initialization.
     Operation(char),
+
+    /// Certain multi-character logical operators: `!=`, `==`, `&&`,
+    /// `||`, `<=` and `>=`. The value gives the operator's first
+    /// character.
+    ///
+    /// For `<` and `>` operators, see [`Token::Paren`].
     LogicalOperation(char),
+
+    /// A shift operator: `>>` or `<<`.
     ShiftOperation(char),
+
+    /// A compound assignment operator like `+=`.
+    ///
+    /// When the given character is `<` or `>`, those represent the left shift
+    /// and right shift assignment operators, `<<=` and `>>=`.
     AssignmentOperation(char),
+
+    /// The `++` operator.
     IncrementOperation,
+
+    /// The `--` operator.
     DecrementOperation,
+
+    /// The `->` token.
     Arrow,
+
+    /// A `<` representing the start of a template argument list, according to
+    /// WGSL's [template list discovery algorithm][tlda].
+    ///
+    /// [tlda]: https://gpuweb.github.io/gpuweb/wgsl/#template-list-discovery
     TemplateArgsStart,
+
+    /// A `>` representing the end of a template argument list, according to
+    /// WGSL's [template list discovery algorithm][tlda].
+    ///
+    /// [tlda]: https://gpuweb.github.io/gpuweb/wgsl/#template-list-discovery
     TemplateArgsEnd,
+
+    /// A character that does not represent a legal WGSL token.
     Unknown(char),
+
+    /// Comment or whitespace.
     Trivia,
+
+    /// A doc comment, beginning with `///` or `/**`.
     DocComment(&'a str),
+
+    /// A module-level doc comment, beginning with `//!` or `/*!`.
     ModuleDocComment(&'a str),
+
+    /// The end of the input.
     End,
 }
 
@@ -43,21 +103,30 @@ struct UnclosedCandidate {
     depth: usize,
 }
 
-/// Implements the [Template list discovery algorithm] but does so lazily and
-/// after tokenization.
+/// Produce at least one token, distinguishing [template lists] from other uses
+/// of `<` and `>`.
 ///
-/// It starts tokenizing `input` in a loop and stops once the first potential
-/// template list encontered has been disambiguated; populating the `tokens`
-/// buffer in the process.
+/// Consume one or more tokens from `input` and store them in `tokens`, updating
+/// `input` to refer to the remaining text. Apply WGSL's [template list
+/// discovery algorithm] to decide what sort of tokens `<` and `>` characters in
+/// the input actually represent.
 ///
-/// Parameters
+/// Store the tokens in `tokens` in the *reverse* of the order they appear in
+/// the text, such that the caller can pop from the end of the vector to see the
+/// tokens in textual order.
 ///
-/// - `tokens` is expected to be an empty buffer of tokens that this function populates.
-/// - `source` is the whole original source code.
-/// - `input` is the remaining unconsumed source code.
-/// - `ignore_doc_comments` determines if doc comments are treated as [`Token::Trivia`].
+/// The `tokens` vector must be empty on entry. The idea is for the caller to
+/// use it as a buffer of unconsumed tokens, and call this function to refill it
+/// when it's empty.
 ///
-/// [Template list discovery algorithm]: https://www.w3.org/TR/WGSL/#template-list-discovery
+/// The `source` argument must be the whole original source code, used to
+/// compute spans.
+///
+/// If `ignore_doc_comments` is true, then doc comments are returned as
+/// [`Token::Trivia`], like ordinary comments.
+///
+/// [template lists]: https://gpuweb.github.io/gpuweb/wgsl/#template-lists-sec
+/// [template list discovery algorithm]: https://gpuweb.github.io/gpuweb/wgsl/#template-list-discovery
 fn discover_template_lists<'a>(
     tokens: &mut Vec<(TokenSpan<'a>, &'a str)>,
     source: &'a str,
@@ -68,6 +137,9 @@ fn discover_template_lists<'a>(
 
     let mut looking_for_template_start = false;
     let mut pending: Vec<UnclosedCandidate> = Vec::new();
+
+    // Current nesting depth of `()` and `[]` brackets. (`{}` brackets
+    // exit all template list processing.)
     let mut depth = 0;
 
     fn pop_until(pending: &mut Vec<UnclosedCandidate>, depth: usize) {
@@ -81,15 +153,31 @@ fn discover_template_lists<'a>(
     }
 
     loop {
+        // Decide whether `consume_token` should treat a `>` character as
+        // `TemplateArgsEnd`, without considering the characters that follow.
+        //
+        // This condition matches the one that determines whether the spec's
+        // template list discovery algorithm looks past a `>` character for a
+        // `=`. By passing this flag to `consume_token`, we ensure it follows
+        // that behavior.
         let waiting_for_template_end = pending
             .last()
             .is_some_and(|candidate| candidate.depth == depth);
 
+        // Ask `consume_token` for the next token and add it to `tokens`, along
+        // with its span.
+        //
+        // This means that `<` enters the buffer as `Token::Paren('<')`, the
+        // ordinary comparison operator. We'll change that to
+        // `Token::TemplateArgsStart` later if appropriate.
         let (token, rest) = consume_token(input, waiting_for_template_end, ignore_doc_comments);
         let span = Span::from(source.len() - input.len()..source.len() - rest.len());
         tokens.push(((token, span), rest));
         input = rest;
 
+        // Since `consume_token` treats `<<=`, `<<` and `<=` as operators, not
+        // `Token::Paren`, that takes care of the WGSL algorithm's post-'<' lookahead
+        // for us.
         match token {
             Token::Word(_) => {
                 looking_for_template_start = true;
@@ -107,6 +195,12 @@ fn discover_template_lists<'a>(
                 });
             }
             Token::TemplateArgsEnd => {
+                // The `consume_token` function only returns `TemplateArgsEnd`
+                // if `waiting_for_template_end` is true, so we know `pending`
+                // has a top entry at the appropriate depth.
+                //
+                // Find the matching `<` token and change its type to
+                // `TemplateArgsStart`.
                 let candidate = pending.pop().unwrap();
                 let &mut ((ref mut token, _), _) = tokens.get_mut(candidate.index).unwrap();
                 *token = Token::TemplateArgsStart;
@@ -131,6 +225,10 @@ fn discover_template_lists<'a>(
 
         looking_for_template_start = false;
 
+        // The WGSL spec's template list discovery algorithm processes the
+        // entire source at once, but Naga would rather limit its lookahead to
+        // the actual text that could possibly be a template parameter list.
+        // This is usually less than a line.
         if pending.is_empty() {
             break;
         }
@@ -141,10 +239,21 @@ fn discover_template_lists<'a>(
 
 /// Return the token at the start of `input`.
 ///
-/// If `waiting_for_template_end` is `true` and the current token is `>`, then
-/// [`Token::TemplateArgsEnd`] is returned instead of `>`, `>>`, `>=` or `>>=`.
+/// The `waiting_for_template_end` flag enables some special handling to help out
+/// `discover_template_lists`:
 ///
-/// If `ignore_doc_comments` is true, doc comments are treated as [`Token::Trivia`].
+/// - If `waiting_for_template_end` is `true`, then return text starting with
+///   '>` as [`Token::TemplateArgsEnd`] and consume only the `>` character,
+///   regardless of what characters follow it. This is required by the [template
+///   list discovery algorithm][tlda] when the `>` would end a template argument list.
+///
+/// - If `waiting_for_template_end` is false, recognize multi-character tokens
+///   beginning with `>` as usual.
+///
+/// If `ignore_doc_comments` is true, then doc comments are returned as
+/// [`Token::Trivia`], like ordinary comments.
+///
+/// [tlda]: https://gpuweb.github.io/gpuweb/wgsl/#template-list-discovery
 fn consume_token(
     input: &str,
     waiting_for_template_end: bool,
@@ -361,6 +470,17 @@ pub(in crate::front::wgsl) struct Lexer<'a> {
     /// statements.
     last_end_offset: usize,
 
+    /// A stack of unconsumed tokens to which template list discovery has been
+    /// applied.
+    ///
+    /// This is a stack: the next token is at the *end* of the vector, not the
+    /// start. So tokens appear here in the reverse of the order they appear in
+    /// the source.
+    ///
+    /// This doesn't contain the whole source, only those tokens produced by
+    /// [`discover_template_lists`]'s look-ahead, or that have been produced by
+    /// other look-ahead functions like `peek` and `next_if`. When this is empty,
+    /// we call [`discover_template_lists`] to get more.
     tokens: Vec<(TokenSpan<'a>, &'a str)>,
 
     /// Whether or not to ignore doc comments.
