@@ -245,6 +245,7 @@ webgpu:shader,validation,expression,call,builtin,trunc:*
 // FAIL: others in `value_constructor` due to https://github.com/gfx-rs/wgpu/issues/4720, possibly more
 webgpu:shader,validation,expression,call,builtin,value_constructor:array_value:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:matrix_zero_value:*
+webgpu:shader,validation,expression,call,builtin,value_constructor:must_use:ctor="mat4x4";use=true
 webgpu:shader,validation,expression,call,builtin,value_constructor:scalar_value:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:scalar_zero_value:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:struct_value:*

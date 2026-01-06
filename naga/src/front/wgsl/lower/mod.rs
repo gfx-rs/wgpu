@@ -1987,7 +1987,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     .collect::<Result<(Vec<_>, Vec<_>)>>()?;
 
                 let mut consensus =
-                    ectx.automatic_conversion_consensus(&exprs)
+                    ectx.automatic_conversion_consensus(None, &exprs)
                         .map_err(|span_idx| Error::SwitchCaseTypeMismatch {
                             span: spans[span_idx],
                         })?;
@@ -2928,7 +2928,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     ctx.grow_types(left)?;
                     ctx.grow_types(right)?;
                     if let Ok(consensus_scalar) =
-                        ctx.automatic_conversion_consensus([left, right].iter())
+                        ctx.automatic_conversion_consensus(None, [left, right].iter())
                     {
                         ctx.convert_to_leaf_scalar(&mut left, consensus_scalar)?;
                         ctx.convert_to_leaf_scalar(&mut right, consensus_scalar)?;
@@ -3123,7 +3123,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         }
                     }
                     let mut consensus_scalar = ctx
-                        .automatic_conversion_consensus(&values)
+                        .automatic_conversion_consensus(None, &values)
                         .map_err(|_idx| {
                             let [reject, accept] = values;
                             let [(reject_span, reject_type), (accept_span, accept_type)] =
