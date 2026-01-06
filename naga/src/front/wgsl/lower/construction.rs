@@ -7,7 +7,7 @@ use alloc::{
 };
 use core::num::NonZeroU32;
 
-use crate::common::wgsl::TypeContext;
+use crate::common::wgsl::{TryToWgsl, TypeContext};
 use crate::front::wgsl::lower::{ExpressionContext, Lowerer};
 use crate::front::wgsl::parse::ast;
 use crate::front::wgsl::{Error, Result};
@@ -315,14 +315,33 @@ impl<'source> Lowerer<'source, '_> {
             (
                 Components::One {
                     mut component,
-                    ty_inner: &crate::TypeInner::Scalar(_),
-                    ..
+                    ty_inner: &crate::TypeInner::Scalar(component_scalar),
+                    span,
                 },
-                Constructor::Type((_, &crate::TypeInner::Vector { size, scalar })),
+                Constructor::Type((
+                    type_handle,
+                    &crate::TypeInner::Vector {
+                        size,
+                        scalar: vec_scalar,
+                    },
+                )),
             ) => {
+                // Splat only allows automatic conversions of the component's scalar.
+                if !component_scalar.automatically_converts_to(vec_scalar) {
+                    let component_ty = &ctx.typifier()[component];
+                    let arg_ty = ctx.type_resolution_to_string(component_ty);
+                    return Err(Box::new(Error::WrongArgumentType {
+                        function: ctx.type_to_string(type_handle),
+                        call_span: ty_span,
+                        arg_span: span,
+                        arg_index: 0,
+                        arg_ty,
+                        allowed: vec![vec_scalar.to_wgsl_for_diagnostics()],
+                    }));
+                }
                 ctx.convert_slice_to_common_leaf_scalar(
                     core::slice::from_mut(&mut component),
-                    scalar,
+                    vec_scalar,
                 )?;
                 expr = crate::Expression::Splat {
                     size,
