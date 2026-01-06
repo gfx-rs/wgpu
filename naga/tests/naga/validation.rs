@@ -748,7 +748,7 @@ fn zero_value_dyn_array_error() {
                 naga::valid::FunctionError::Expression {
                     handle: _,
                     source: naga::valid::ExpressionError::ZeroValue(
-                        naga::valid::ZeroValueError::DynamicallySizedArray
+                        naga::valid::ZeroValueError::RuntimeSizedArray
                     )
                 }
             )

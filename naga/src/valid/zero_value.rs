@@ -3,8 +3,8 @@ use crate::arena::Handle;
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum ZeroValueError {
-    #[error("ZeroValue construction of dynamically-sized array is not allowed")]
-    DynamicallySizedArray,
+    #[error("ZeroValue construction of runtime-sized array is not allowed")]
+    RuntimeSizedArray,
 }
 
 pub fn validate_zero_value(
@@ -18,8 +18,8 @@ pub fn validate_zero_value(
             size: crate::ArraySize::Dynamic,
             stride: _,
         } => {
-            log::error!("Constructing zero value of dynamically-sized array");
-            Err(ZeroValueError::DynamicallySizedArray)
+            log::error!("Constructing zero value of runtime-sized array");
+            Err(ZeroValueError::RuntimeSizedArray)
         }
         _ => Ok(()),
     }
