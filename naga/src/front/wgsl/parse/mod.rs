@@ -517,7 +517,7 @@ impl Parser {
 
     fn component_or_swizzle_specifier<'a>(
         &mut self,
-        span_start: Span,
+        expr_start: Span,
         lexer: &mut Lexer<'a>,
         ctx: &mut ExpressionContext<'a, '_, '_>,
         expr: Handle<ast::Expression<'a>>,
@@ -542,7 +542,7 @@ impl Parser {
                 _ => break,
             };
 
-            let span = lexer.span_with_start(span_start);
+            let span = lexer.span_with_start(expr_start);
             expr = ctx.expressions.append(expression, span);
         }
 
