@@ -1,0 +1,2 @@
+capabilities = "SHADER_PER_VERTEX"
+targets = "WGSL | SPIRV"

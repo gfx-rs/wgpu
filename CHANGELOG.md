@@ -44,6 +44,7 @@ Bottom level categories:
 ### New Features
 
 - Added support for cooperative load/store operations in shaders. Currently only WGSL on the input and SPIR-V, METAL, and WGSL on the output are supported. By @kvark in [#8251](https://github.com/gfx-rs/wgpu/issues/8251).
+- Added support for per-vertex attributes in fragment shaders. Currently only WGSL on the input and SPIR-V, and WGSL on the output are supported. By @atlv in [#8821](https://github.com/gfx-rs/wgpu/issues/8821).
 
 ### Bug Fixes
 

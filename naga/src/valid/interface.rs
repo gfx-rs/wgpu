@@ -100,6 +100,8 @@ pub enum VaryingError {
     InvalidPerPrimitive,
     #[error("Non-builtin members of a mesh primitive output struct must be decorated with `@per_primitive`")]
     MissingPerPrimitive,
+    #[error("Per vertex fragment inputs must be an array of length 3.")]
+    PerVertexNotArrayOfThree,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -443,8 +445,18 @@ impl VaryingContext<'_> {
                         Capabilities::MESH_SHADER,
                     ));
                 }
+                if interpolation == Some(crate::Interpolation::PerVertex) {
+                    if !self.capabilities.contains(Capabilities::SHADER_PER_VERTEX)
+                        || self.stage != crate::ShaderStage::Fragment
+                    {
+                        return Err(VaryingError::UnsupportedCapability(
+                            Capabilities::SHADER_PER_VERTEX,
+                        ));
+                    }
+                }
                 // Only IO-shareable types may be stored in locations.
-                if !self.type_info[ty.index()]
+                // Per Vertex case is checked later.
+                else if !self.type_info[ty.index()]
                     .flags
                     .contains(super::TypeFlags::IO_SHAREABLE)
                 {
@@ -550,19 +562,32 @@ impl VaryingContext<'_> {
                     return Err(VaryingError::UnsupportedCapability(required));
                 }
 
-                match ty_inner.scalar_kind() {
-                    Some(crate::ScalarKind::Float) => {
-                        if needs_interpolation && interpolation.is_none() {
-                            return Err(VaryingError::MissingInterpolation);
+                if interpolation == Some(crate::Interpolation::PerVertex) {
+                    let three = crate::ArraySize::Constant(core::num::NonZeroU32::new(3).unwrap());
+                    match ty_inner {
+                        &Ti::Array { base, size, .. } if size == three => {
+                            if self.types[base].inner.scalar_kind().is_none() {
+                                return Err(VaryingError::InvalidType(base));
+                            }
                         }
+                        _ => return Err(VaryingError::PerVertexNotArrayOfThree),
                     }
-                    Some(_) => {
-                        if needs_interpolation && interpolation != Some(crate::Interpolation::Flat)
-                        {
-                            return Err(VaryingError::InvalidInterpolation);
+                } else {
+                    match ty_inner.scalar_kind() {
+                        Some(crate::ScalarKind::Float) => {
+                            if needs_interpolation && interpolation.is_none() {
+                                return Err(VaryingError::MissingInterpolation);
+                            }
                         }
+                        Some(_) => {
+                            if needs_interpolation
+                                && interpolation != Some(crate::Interpolation::Flat)
+                            {
+                                return Err(VaryingError::InvalidInterpolation);
+                            }
+                        }
+                        None => return Err(VaryingError::InvalidType(ty)),
                     }
-                    None => return Err(VaryingError::InvalidType(ty)),
                 }
             }
         }

@@ -778,6 +778,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             spirv::Decoration::Flat => {
                 dec.interpolation = Some(crate::Interpolation::Flat);
             }
+            spirv::Decoration::PerVertexKHR => {
+                dec.interpolation = Some(crate::Interpolation::PerVertex);
+            }
             spirv::Decoration::Centroid => {
                 dec.sampling = Some(crate::Sampling::Centroid);
             }

@@ -2987,6 +2987,14 @@ impl Writer {
                         Some(crate::Interpolation::Linear) => {
                             others.push(Decoration::NoPerspective);
                         }
+                        Some(crate::Interpolation::PerVertex) => {
+                            others.push(Decoration::PerVertexKHR);
+                            self.require_any(
+                                "`per_vertex` interpolation",
+                                &[spirv::Capability::FragmentBarycentricKHR],
+                            )?;
+                            self.use_extension("SPV_KHR_fragment_shader_barycentric");
+                        }
                     }
                     match sampling {
                         // Center sampling is the default in SPIR-V.

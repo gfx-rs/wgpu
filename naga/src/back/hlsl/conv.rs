@@ -205,6 +205,7 @@ impl crate::Interpolation {
             Self::Perspective => None,
             Self::Linear => Some("noperspective"),
             Self::Flat => Some("nointerpolation"),
+            Self::PerVertex => unreachable!(),
         }
     }
 }

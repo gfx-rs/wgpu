@@ -111,6 +111,7 @@ pub fn map_interpolation(word: &str, span: Span) -> Result<'_, crate::Interpolat
         "linear" => Ok(crate::Interpolation::Linear),
         "flat" => Ok(crate::Interpolation::Flat),
         "perspective" => Ok(crate::Interpolation::Perspective),
+        "per_vertex" => Ok(crate::Interpolation::PerVertex),
         _ => Err(Box::new(Error::UnknownAttribute(span))),
     }
 }
