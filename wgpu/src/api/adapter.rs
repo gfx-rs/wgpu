@@ -216,7 +216,6 @@ impl Adapter {
     /// Returns an empty vector if cooperative matrices are not supported.
     ///
     /// Requires [`Features::EXPERIMENTAL_COOPERATIVE_MATRIX`] to be meaningful.
-    #[cfg(wgpu_core)]
     pub fn cooperative_matrix_properties(&self) -> Vec<CooperativeMatrixProperties> {
         self.inner.cooperative_matrix_properties()
     }
