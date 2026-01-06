@@ -8,17 +8,17 @@ OpCapability Int64
 OpExtension "SPV_EXT_mesh_shader"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint TaskEXT %21 "ts_main" %16
-OpEntryPoint MeshEXT %44 "ms_main" %16 %30 %40 %43 %18 %47
-OpExecutionMode %21 LocalSize 1 1 1
-OpExecutionMode %44 LocalSize 1 1 1
-OpExecutionMode %44 OutputLinesEXT
-OpExecutionMode %44 OutputVertices 2
-OpExecutionMode %44 OutputPrimitivesEXT 1
-OpDecorate %30 BuiltIn LocalInvocationIndex
-OpMemberDecorate %37 0 BuiltIn Position
-OpDecorate %37 Block
-OpDecorate %43 BuiltIn PrimitiveLineIndicesEXT
+OpEntryPoint TaskEXT %36 "ts_main" %16 %26
+OpEntryPoint MeshEXT %82 "ms_main" %16 %64 %69 %72 %18 %76
+OpExecutionMode %36 LocalSize 64 1 1
+OpExecutionMode %82 LocalSize 64 1 1
+OpExecutionMode %82 OutputLinesEXT
+OpExecutionMode %82 OutputVertices 2
+OpExecutionMode %82 OutputPrimitivesEXT 1
+OpDecorate %64 BuiltIn LocalInvocationIndex
+OpMemberDecorate %66 0 BuiltIn Position
+OpDecorate %66 Block
+OpDecorate %72 BuiltIn PrimitiveLineIndicesEXT
 OpMemberDecorate %4 0 Offset 0
 OpMemberDecorate %7 0 Offset 0
 OpMemberDecorate %9 0 Offset 0
