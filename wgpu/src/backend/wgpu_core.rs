@@ -110,15 +110,6 @@ impl ContextWgpuCore {
         hal_device: hal::OpenDevice<A>,
         desc: &crate::DeviceDescriptor<'_>,
     ) -> Result<(CoreDevice, CoreQueue), crate::RequestDeviceError> {
-        if !matches!(desc.trace, wgt::Trace::Off) {
-            log::error!(
-                "
-                Feature 'trace' has been removed temporarily; \
-                see https://github.com/gfx-rs/wgpu/issues/5974. \
-                The `trace` parameter will have no effect."
-            );
-        }
-
         let (device_id, queue_id) = unsafe {
             self.0.create_device_from_hal(
                 adapter.id,
@@ -930,15 +921,6 @@ impl dispatch::AdapterInterface for CoreAdapter {
         &self,
         desc: &crate::DeviceDescriptor<'_>,
     ) -> Pin<Box<dyn dispatch::RequestDeviceFuture>> {
-        if !matches!(desc.trace, wgt::Trace::Off) {
-            log::error!(
-                "
-                Feature 'trace' has been removed temporarily; \
-                see https://github.com/gfx-rs/wgpu/issues/5974. \
-                The `trace` parameter will have no effect."
-            );
-        }
-
         let res = self.context.0.adapter_request_device(
             self.id,
             &desc.map_label(|l| l.map(Borrowed)),

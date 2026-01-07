@@ -428,6 +428,21 @@ impl Player {
         }
     }
 
+    // This one is a little strange because the surface is held by the
+    // `player` application but we want to insert the texture into our
+    // map so we can find it for rendering.
+    pub fn get_surface_texture(
+        &mut self,
+        id: wgc::id::PointerId<wgc::id::markers::Texture>,
+        surface: &wgc::instance::Surface,
+    ) {
+        let frame = surface
+            .get_current_texture()
+            .expect("get_current_texture error");
+        let texture = frame.texture.expect("did not obtain a surface texture");
+        self.textures.insert(id, texture);
+    }
+
     pub fn resolve_buffer_id(
         &self,
         id: wgc::id::PointerId<wgc::id::markers::Buffer>,

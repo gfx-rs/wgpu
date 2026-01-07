@@ -83,9 +83,6 @@ pub enum MemoryHints {
 }
 
 /// Controls API call tracing and specifies where the trace is written.
-///
-/// **Note:** Tracing is currently unavailable.
-/// See [issue 5974](https://github.com/gfx-rs/wgpu/issues/5974) for updates.
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 // This enum must be non-exhaustive so that enabling the "trace" feature is not a semver break.
