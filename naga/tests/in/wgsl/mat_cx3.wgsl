@@ -1,5 +1,5 @@
 // Test HLSL handling of N-by-3 matrices. These should not receive the special
-// treatment that N-by-2 matrices receive (which is tested in hlsl_mat_cx2).
+// treatment that N-by-2 matrices receive (which is tested in mat_cx2.wgsl).
 
 // Access type (3rd item in variable names)
 // S = Struct

@@ -15,6 +15,9 @@ skip = [
 
     # Winit uses an old version
     { name = "windows-sys", version = "0.52.0" },
+
+    # parking-lot uses an old version
+    { name = "redox_syscall", version = "0.5.18" },
 ]
 wildcards = "deny"
 allow-wildcard-paths = true

@@ -49,7 +49,7 @@ impl MaxFragmentShaderInputDeduction {
                 | InterStageBuiltIn::ViewIndex
                 | InterStageBuiltIn::PointCoord => 1,
                 InterStageBuiltIn::Barycentric => 3,
-                InterStageBuiltIn::Position => 4,
+                InterStageBuiltIn::Position => 0,
             },
         }
     }
@@ -58,6 +58,7 @@ impl MaxFragmentShaderInputDeduction {
         use naga::BuiltIn;
 
         Some(Self::InterStageBuiltIn(match builtin {
+            BuiltIn::Position { .. } => InterStageBuiltIn::Position,
             BuiltIn::FrontFacing => InterStageBuiltIn::FrontFacing,
             BuiltIn::SampleIndex => InterStageBuiltIn::SampleIndex,
             BuiltIn::SampleMask => InterStageBuiltIn::SampleMask,
@@ -66,7 +67,6 @@ impl MaxFragmentShaderInputDeduction {
             BuiltIn::SubgroupInvocationId => InterStageBuiltIn::SubgroupInvocationId,
             BuiltIn::PointCoord => InterStageBuiltIn::PointCoord,
             BuiltIn::Barycentric => InterStageBuiltIn::Barycentric,
-            BuiltIn::Position { .. } => InterStageBuiltIn::Position,
             BuiltIn::ViewIndex => InterStageBuiltIn::ViewIndex,
             BuiltIn::BaseInstance
             | BuiltIn::BaseVertex
@@ -118,6 +118,7 @@ impl MaxFragmentShaderInputDeduction {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InterStageBuiltIn {
     // Standard for WebGPU
+    Position,
     FrontFacing,
     SampleIndex,
     SampleMask,
@@ -128,7 +129,6 @@ pub enum InterStageBuiltIn {
     // Non-standard
     PointCoord,
     Barycentric,
-    Position,
     ViewIndex,
 }
 
@@ -158,9 +158,18 @@ where
             .filter(|(_, effective_deduction)| *effective_deduction > 0);
         if relevant_deductions.clone().next().is_some() {
             writeln!(f, "; note that some deductions apply during validation:")?;
+            let mut wrote_something = false;
             for deduction in deductions {
-                writeln!(f, "\n- {deduction:?}: {}", accessor(deduction))?;
+                let deducted_amount = accessor(deduction);
+                if deducted_amount > 0 {
+                    writeln!(f, "\n- {deduction:?}: {}", accessor(deduction))?;
+                    wrote_something = true;
+                }
             }
+            debug_assert!(
+                wrote_something,
+                "no substantial deductions found in error display"
+            );
         }
         Ok(())
     })
