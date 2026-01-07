@@ -59,7 +59,7 @@ Bottom level categories:
 
 #### naga
 
-- Fix crash when constructing the zero value of a runtime-sized array. By @mooori in [#8741](https://github.com/gfx-rs/wgpu/pull/8741).
+- Reject zero-value construction of a runtime-sized array with a validation error. Previously it would crash in the HLSL backend. By @mooori in [#8741](https://github.com/gfx-rs/wgpu/pull/8741).
 
 ### Documentation
 
