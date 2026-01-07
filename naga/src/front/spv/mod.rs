@@ -96,8 +96,8 @@ pub const SUPPORTED_EXTENSIONS: &[&str] = &[
     "SPV_EXT_descriptor_indexing",
     "SPV_EXT_shader_atomic_float_add",
     "SPV_KHR_16bit_storage",
+    "SPV_KHR_non_semantic_info",
 ];
-pub const SUPPORTED_EXT_SETS: &[&str] = &["GLSL.std.450"];
 
 #[derive(Copy, Clone)]
 pub struct Instruction {
@@ -588,6 +588,7 @@ pub struct Frontend<I> {
     layouter: Layouter,
     temp_bytes: Vec<u8>,
     ext_glsl_id: Option<spirv::Word>,
+    ext_non_semantic_id: Option<spirv::Word>,
     future_decor: FastHashMap<spirv::Word, Decoration>,
     future_member_decor: FastHashMap<(spirv::Word, MemberIndex), Decoration>,
     lookup_member: FastHashMap<(Handle<crate::Type>, MemberIndex), LookupMember>,
@@ -655,6 +656,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             layouter: Layouter::default(),
             temp_bytes: Vec::new(),
             ext_glsl_id: None,
+            ext_non_semantic_id: None,
             future_decor: FastHashMap::default(),
             future_member_decor: FastHashMap::default(),
             handle_sampling: FastHashMap::default(),
@@ -1741,6 +1743,19 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     inst.expect(5)?;
                     self.parse_function(&mut module)
                 }
+                Op::ExtInst => {
+                    let _ = self.next()?;
+                    let _ = self.next()?;
+                    let set_id = self.next()?;
+                    if Some(set_id) == self.ext_non_semantic_id {
+                        for _ in 0..inst.wc - 4 {
+                            self.next()?;
+                        }
+                        Ok(())
+                    } else {
+                        return Err(Error::UnsupportedInstruction(self.state, inst.op));
+                    }
+                }
                 _ => Err(Error::UnsupportedInstruction(self.state, inst.op)), //TODO
             }?;
         }
@@ -1844,10 +1859,13 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         if left != 0 {
             return Err(Error::InvalidOperand);
         }
-        if !SUPPORTED_EXT_SETS.contains(&name.as_str()) {
+        if &name == "GLSL.std.450" {
+            self.ext_glsl_id = Some(result_id);
+        } else if &name == "NonSemantic.Shader.DebugInfo.100" {
+            self.ext_non_semantic_id = Some(result_id);
+        } else {
             return Err(Error::UnsupportedExtSet(name));
         }
-        self.ext_glsl_id = Some(result_id);
         Ok(())
     }
 
