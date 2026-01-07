@@ -728,6 +728,35 @@ fn bad_texture_dimensions_level() {
 }
 
 #[test]
+fn zero_value_dyn_array_error() {
+    let source = r#"
+        @compute @workgroup_size(1)
+        fn main() {
+            let a = array<f32>();
+        }
+    "#;
+    let module = naga::front::wgsl::parse_str(source).expect("module should parse");
+    let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .map_err(|err| err.into_inner()); // discard spans
+    assert!(matches!(
+        err,
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: _,
+            name: _,
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::Expression {
+                    handle: _,
+                    source: naga::valid::ExpressionError::ZeroValue(
+                        naga::valid::ZeroValueError::RuntimeSizedArray
+                    )
+                }
+            )
+        })
+    ));
+}
+
+#[test]
 fn arity_check() {
     use ir::MathFunction as Mf;
     use naga::Span;

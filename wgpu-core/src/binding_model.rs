@@ -75,6 +75,12 @@ pub enum CreateBindGroupLayoutError {
     InvalidBindingIndex { binding: u32, maximum: u32 },
     #[error("Invalid visibility {0:?}")]
     InvalidVisibility(wgt::ShaderStages),
+    #[error("Binding index {binding}: {access:?} access to storage textures with format {format:?} is not supported")]
+    UnsupportedStorageTextureAccess {
+        binding: u32,
+        access: wgt::StorageTextureAccess,
+        format: wgt::TextureFormat,
+    },
 }
 
 impl WebGpuError for CreateBindGroupLayoutError {
@@ -88,7 +94,8 @@ impl WebGpuError for CreateBindGroupLayoutError {
             | Self::InvalidBindingIndex { .. }
             | Self::InvalidVisibility(_)
             | Self::ContainsBothBindingArrayAndDynamicOffsetArray
-            | Self::ContainsBothBindingArrayAndUniformBuffer => ErrorType::Validation,
+            | Self::ContainsBothBindingArrayAndUniformBuffer
+            | Self::UnsupportedStorageTextureAccess { .. } => ErrorType::Validation,
         }
     }
 }
@@ -242,14 +249,6 @@ pub enum CreateBindGroupError {
     MissingTLASVertexReturn { binding: u32 },
     #[error("Bound texture views can not have both depth and stencil aspects enabled")]
     DepthStencilAspect,
-    #[error("The adapter does not support read access for storage textures of format {0:?}")]
-    StorageReadNotSupported(wgt::TextureFormat),
-    #[error("The adapter does not support atomics for storage textures of format {0:?}")]
-    StorageAtomicNotSupported(wgt::TextureFormat),
-    #[error("The adapter does not support write access for storage textures of format {0:?}")]
-    StorageWriteNotSupported(wgt::TextureFormat),
-    #[error("The adapter does not support read-write access for storage textures of format {0:?}")]
-    StorageReadWriteNotSupported(wgt::TextureFormat),
     #[error(transparent)]
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error(transparent)]
@@ -287,10 +286,6 @@ impl WebGpuError for CreateBindGroupError {
             | Self::WrongSamplerComparison { .. }
             | Self::WrongSamplerFiltering { .. }
             | Self::DepthStencilAspect
-            | Self::StorageReadNotSupported(_)
-            | Self::StorageWriteNotSupported(_)
-            | Self::StorageReadWriteNotSupported(_)
-            | Self::StorageAtomicNotSupported(_)
             | Self::MissingTLASVertexReturn { .. }
             | Self::InvalidExternalTextureMipLevelCount { .. }
             | Self::InvalidExternalTextureFormat { .. } => return ErrorType::Validation,

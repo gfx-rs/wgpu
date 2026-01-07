@@ -61,6 +61,10 @@ Bottom level categories:
 
 - Don't panic in adapter enumeration on older DX12 environments that don't support a high enough `D3D12FeatureLevel`. By @inner-daemons in [#8806](https://github.com/gfx-rs/wgpu/pull/8806).
 
+#### naga
+
+- Reject zero-value construction of a runtime-sized array with a validation error. Previously it would crash in the HLSL backend. By @mooori in [#8741](https://github.com/gfx-rs/wgpu/pull/8741).
+
 ### Documentation
 
 #### General
