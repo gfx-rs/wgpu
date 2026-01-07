@@ -1744,10 +1744,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     self.parse_function(&mut module)
                 }
                 Op::ExtInst => {
+                    // Ignore the result type and result id
                     let _ = self.next()?;
                     let _ = self.next()?;
                     let set_id = self.next()?;
                     if Some(set_id) == self.ext_non_semantic_id {
+                        // We've already skipped the instruction byte, result type, result id, and instruction set id
                         for _ in 0..inst.wc - 4 {
                             self.next()?;
                         }
@@ -1862,6 +1864,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         if &name == "GLSL.std.450" {
             self.ext_glsl_id = Some(result_id);
         } else if &name == "NonSemantic.Shader.DebugInfo.100" {
+            // We completely ignore this extension. All related instructions are
+            // non-semantic and only for debug purposes, and the spec says they
+            // are ignorable. Many compilers (dxc, slang, etc) will emit these
+            // instructions depending on configuration.
             self.ext_non_semantic_id = Some(result_id);
         } else {
             return Err(Error::UnsupportedExtSet(name));
