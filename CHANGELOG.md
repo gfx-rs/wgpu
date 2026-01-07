@@ -45,6 +45,10 @@ Bottom level categories:
 
 - Added support for cooperative load/store operations in shaders. Currently only WGSL on the input and SPIR-V, METAL, and WGSL on the output are supported. By @kvark in [#8251](https://github.com/gfx-rs/wgpu/issues/8251).
 
+#### Naga
+
+- Allow parsing shaders which make use of `SPV_KHR_non_semantic_info` for debug info. By @inner-daemons in #8827.
+
 ### Bug Fixes
 
 #### General
