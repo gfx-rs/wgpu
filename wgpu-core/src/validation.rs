@@ -396,10 +396,8 @@ pub enum StageError {
     MissingPrimitiveIndex,
     #[error("DrawId cannot be used in the same pipeline as a task shader")]
     DrawIdError,
-    #[error("Pipeline expects the shader entry point to make use of dual-source blending.")]
-    PipelineExpectsShaderToUseDualSourceBlending,
-    #[error("Shader entry point expects the pipeline to make use of dual-source blending.")]
-    ShaderExpectsPipelineToUseDualSourceBlending,
+    #[error("Pipeline uses dual-source blending, but the shader does not support it")]
+    InvalidDualSourceBlending,
 }
 
 impl WebGpuError for StageError {
@@ -433,8 +431,7 @@ impl WebGpuError for StageError {
             | Self::InvalidPrimitiveIndex
             | Self::MissingPrimitiveIndex
             | Self::DrawIdError
-            | Self::PipelineExpectsShaderToUseDualSourceBlending
-            | Self::ShaderExpectsPipelineToUseDualSourceBlending => return ErrorType::Validation,
+            | Self::InvalidDualSourceBlending => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
@@ -1646,15 +1643,12 @@ impl Interface {
                     }
                 }
 
-                if !dual_source_blending && entry_point.dual_source_blending {
-                    return Err(
-                        StageError::ShaderExpectsPipelineToUseDualSourceBlending,
-                    );
-                }
+                // If the pipeline uses dual-source blending, then the shader
+                // must configure appropriate I/O, but it is not an error to
+                // use a shader that defines the I/O in a pipeline that only
+                // uses one blend source.
                 if dual_source_blending && !entry_point.dual_source_blending {
-                    return Err(
-                        StageError::PipelineExpectsShaderToUseDualSourceBlending,
-                    );
+                    return Err(StageError::InvalidDualSourceBlending);
                 }
             }
             _ => (),
