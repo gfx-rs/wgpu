@@ -292,7 +292,7 @@ impl super::Validator {
                 // If index is const we can do check for non-negative index
                 match module
                     .to_ctx()
-                    .eval_expr_to_u32_from(index, &function.expressions)
+                    .get_const_val_from(index, &function.expressions)
                 {
                     Ok(value) => {
                         let length = if self.overrides_resolved {
@@ -308,10 +308,13 @@ impl super::Validator {
                             }
                         }
                     }
-                    Err(crate::proc::U32EvalError::Negative) => {
+                    Err(crate::proc::ConstValueError::Negative) => {
                         return Err(ExpressionError::NegativeIndex(base))
                     }
-                    Err(crate::proc::U32EvalError::NonConst) => {}
+                    Err(crate::proc::ConstValueError::NonConst) => {}
+                    Err(crate::proc::ConstValueError::InvalidType) => {
+                        return Err(ExpressionError::InvalidIndexType(index))
+                    }
                 }
 
                 ShaderStages::all()
