@@ -127,7 +127,7 @@ fn staging_belt_works_with_exclusive_buffer_usages_with_mappable_primary_buffers
         // Check that the constructor doesn't panic without explicit `MAP_WRITE`
         let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(device.clone(), 512, usage);
 
-        // Check that the constructor doesn't panic with explicity `MAP_WRITE`
+        // Check that the constructor doesn't panic with explicitly `MAP_WRITE`
         let _belt = wgpu::util::StagingBelt::new_with_buffer_usages(
             device.clone(),
             512,
