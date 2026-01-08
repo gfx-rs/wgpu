@@ -59,7 +59,7 @@ impl StagingBelt {
     /// * bigger is better, within these bounds.
     ///
     /// The buffers returned by this [`StagingBelt`] will be have the buffer usages
-    /// [`COPY_SRC | MAP_WRITE`](wgpu::BufferUsages)
+    /// [`COPY_SRC | MAP_WRITE`](crate::BufferUsages)
     pub fn new(device: Device, chunk_size: BufferAddress) -> Self {
         Self::new_with_buffer_usages(device, chunk_size, BufferUsages::COPY_SRC)
     }
