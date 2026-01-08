@@ -64,11 +64,13 @@ fn create_stencil_desc(
 }
 
 fn create_depth_stencil_desc(
-    state: &wgt::DepthStencilState,
+    state: &wgt::DepthStencilStateIdl,
 ) -> Retained<MTLDepthStencilDescriptor> {
     let desc = MTLDepthStencilDescriptor::new();
-    desc.setDepthCompareFunction(conv::map_compare_function(state.depth_compare));
-    desc.setDepthWriteEnabled(state.depth_write_enabled);
+    desc.setDepthCompareFunction(conv::map_compare_function(
+        state.depth_compare.unwrap_or_default()
+    ));
+    desc.setDepthWriteEnabled(state.depth_write_enabled.unwrap_or_default());
     let s = &state.stencil;
     if s.is_enabled() {
         let front_desc = create_stencil_desc(&s.front, s.read_mask, s.write_mask);

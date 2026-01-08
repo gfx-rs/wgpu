@@ -241,13 +241,7 @@ webgpu:api,validation,render_pass,render_pass_descriptor:resolveTarget,*
 webgpu:api,validation,render_pass,render_pass_descriptor:timestampWrite,query_index:*
 webgpu:api,validation,render_pass,render_pass_descriptor:timestampWrites,query_set_type:*
 webgpu:api,validation,render_pass,resolve:resolve_attachment:*
-webgpu:api,validation,render_pipeline,depth_stencil_state:depth_bias:*
-webgpu:api,validation,render_pipeline,depth_stencil_state:depth_test:*
-webgpu:api,validation,render_pipeline,depth_stencil_state:depth_write,frag_depth:*
-webgpu:api,validation,render_pipeline,depth_stencil_state:depth_write:*
-webgpu:api,validation,render_pipeline,depth_stencil_state:format:*
-webgpu:api,validation,render_pipeline,depth_stencil_state:stencil_test:*
-webgpu:api,validation,render_pipeline,depth_stencil_state:stencil_write:*
+webgpu:api,validation,render_pipeline,depth_stencil_state:*
 webgpu:api,validation,render_pipeline,float32_blendable:*
 webgpu:api,validation,render_pipeline,fragment_state:color_target_exists:*
 webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,use_blend_src:*

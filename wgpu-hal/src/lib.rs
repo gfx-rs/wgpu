@@ -2472,7 +2472,7 @@ pub struct RenderPipelineDescriptor<
     /// The properties of the pipeline at the primitive assembly and rasterization level.
     pub primitive: wgt::PrimitiveState,
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
-    pub depth_stencil: Option<wgt::DepthStencilState>,
+    pub depth_stencil: Option<wgt::DepthStencilStateIdl>,
     /// The multi-sampling properties of the pipeline.
     pub multisample: wgt::MultisampleState,
     /// The fragment stage for this pipeline.

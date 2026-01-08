@@ -555,16 +555,14 @@ impl crate::framework::Example for Example {
             // will work. Since this is water, we need to read from the
             // depth buffer both as a texture in the shader, and as an
             // input attachment to do depth-testing. We don't write, so
-            // depth_write_enabled is set to false. This is called
-            // RODS or read-only depth stencil.
-            depth_stencil: Some(wgpu::DepthStencilState {
-                // We don't use stencil.
-                format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: false,
-                depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu::StencilState::default(),
-                bias: wgpu::DepthBiasState::default(),
-            }),
+            // depth_write_enabled is set to false. This is called RODS,
+            // or read-only depth stencil. Here, we don't use stencil.
+            depth_stencil: Some(wgpu::DepthStencilState::depth(
+                wgpu::TextureFormat::Depth32Float,
+                false,
+                wgpu::CompareFunction::Less,
+                wgpu::DepthBiasState::default(),
+            )),
             // No multisampling is used.
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
@@ -603,7 +601,7 @@ impl crate::framework::Example for Example {
                 depth_compare: wgpu::CompareFunction::Less,
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
-            }),
+            }.into()),
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
             cache: None

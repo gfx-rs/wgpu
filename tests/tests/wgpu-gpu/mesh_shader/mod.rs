@@ -238,7 +238,7 @@ fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
             cull_mode: Some(wgpu::Face::Back),
             ..Default::default()
         },
-        depth_stencil: Some(depth_state),
+        depth_stencil: Some(depth_state.into()),
         multisample: Default::default(),
         multiview: None,
         cache: None,
@@ -324,7 +324,7 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestIn
             cull_mode: Some(wgpu::Face::Back),
             ..Default::default()
         },
-        depth_stencil: Some(depth_state),
+        depth_stencil: Some(depth_state.into()),
         multisample: Default::default(),
         multiview: None,
         cache: None,

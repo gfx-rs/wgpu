@@ -506,17 +506,20 @@ impl crate::framework::Example for Example {
                         .contains(wgpu::Features::DEPTH_CLIP_CONTROL),
                     ..Default::default()
                 },
-                depth_stencil: Some(wgpu::DepthStencilState {
-                    format: Self::SHADOW_FORMAT,
-                    depth_write_enabled: true,
-                    depth_compare: wgpu::CompareFunction::LessEqual,
-                    stencil: wgpu::StencilState::default(),
-                    bias: wgpu::DepthBiasState {
-                        constant: 2, // corresponds to bilinear filtering
-                        slope_scale: 2.0,
-                        clamp: 0.0,
-                    },
-                }),
+                depth_stencil: Some(
+                    wgpu::DepthStencilState {
+                        format: Self::SHADOW_FORMAT,
+                        depth_write_enabled: true,
+                        depth_compare: wgpu::CompareFunction::LessEqual,
+                        stencil: wgpu::StencilState::default(),
+                        bias: wgpu::DepthBiasState {
+                            constant: 2, // corresponds to bilinear filtering
+                            slope_scale: 2.0,
+                            clamp: 0.0,
+                        },
+                    }
+                    .into(),
+                ),
                 multisample: wgpu::MultisampleState::default(),
                 multiview_mask: None,
                 cache: None,
@@ -645,13 +648,16 @@ impl crate::framework::Example for Example {
                     cull_mode: Some(wgpu::Face::Back),
                     ..Default::default()
                 },
-                depth_stencil: Some(wgpu::DepthStencilState {
-                    format: Self::DEPTH_FORMAT,
-                    depth_write_enabled: true,
-                    depth_compare: wgpu::CompareFunction::Less,
-                    stencil: wgpu::StencilState::default(),
-                    bias: wgpu::DepthBiasState::default(),
-                }),
+                depth_stencil: Some(
+                    wgpu::DepthStencilState {
+                        format: Self::DEPTH_FORMAT,
+                        depth_write_enabled: true,
+                        depth_compare: wgpu::CompareFunction::Less,
+                        stencil: wgpu::StencilState::default(),
+                        bias: wgpu::DepthBiasState::default(),
+                    }
+                    .into(),
+                ),
                 multisample: wgpu::MultisampleState::default(),
                 multiview_mask: None,
                 cache: None,

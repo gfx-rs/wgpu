@@ -48,6 +48,38 @@ Bottom level categories:
 
 By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
 
+#### Depth/stencil state changes
+
+BREAKING CHANGE: Pipeline descriptors now use `DepthStencilStateIdl` instead of `DepthStencilState`.
+The new struct makes the `depth_write_enabled` and `depth_compare` fields optional, to match WebGPU.
+
+The simplest way to adapt to this change is to use `.into()` to convert to the new struct:
+
+```diff
+-depth_stencil: Some(wgpu::DepthStencilState {
+-    format: wgpu::TextureFormat::Depth32Float,
+-    depth_write_enabled: true,
+-    depth_compare: wgpu::CompareFunction::Less,
+-    stencil: wgpu::StencilState::default(),
+-    bias: wgpu::DepthBiasState::default(),
+-}),
++depth_stencil: Some(wgpu::DepthStencilState {
++    format: wgpu::TextureFormat::Depth32Float,
++    depth_write_enabled: true,
++    depth_compare: wgpu::CompareFunction::Less,
++    stencil: wgpu::StencilState::default(),
++    bias: wgpu::DepthBiasState::default(),
++}.into()),
+```
+
+There are also new constructors which may be used instead of a struct literal:
+`DepthStencilState::new` (for simultaneous depth and stencil operations),
+`DepthStencilState::depth` (for depth operations), and `DepthStencilState::stencil` (for stencil operations).
+
+`DepthStencilState` may be updated to match `DepthStencilStateIdl` in the future.
+In anticipation of this, the constructors are associated methods on
+`DepthStencilState` even though they construct `DepthStencilStateIdl`.
+
 ### New Features
 
 #### General

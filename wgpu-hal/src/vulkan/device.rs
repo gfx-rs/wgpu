@@ -1916,8 +1916,8 @@ impl crate::Device for super::Device {
             if ds.is_depth_enabled() {
                 vk_depth_stencil = vk_depth_stencil
                     .depth_test_enable(true)
-                    .depth_write_enable(ds.depth_write_enabled)
-                    .depth_compare_op(conv::map_comparison(ds.depth_compare));
+                    .depth_write_enable(ds.depth_write_enabled.unwrap_or_default())
+                    .depth_compare_op(conv::map_comparison(ds.depth_compare.unwrap_or_default()));
             }
             if ds.stencil.is_enabled() {
                 let s = &ds.stencil;

@@ -476,7 +476,7 @@ pub struct RenderPipelineDescriptor<
     pub primitive: wgt::PrimitiveState,
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
     #[cfg_attr(feature = "serde", serde(default))]
-    pub depth_stencil: Option<wgt::DepthStencilState>,
+    pub depth_stencil: Option<wgt::DepthStencilStateIdl>,
     /// The multi-sampling properties of the pipeline.
     #[cfg_attr(feature = "serde", serde(default))]
     pub multisample: wgt::MultisampleState,
@@ -509,7 +509,7 @@ pub struct MeshPipelineDescriptor<
     pub primitive: wgt::PrimitiveState,
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
     #[cfg_attr(feature = "serde", serde(default))]
-    pub depth_stencil: Option<wgt::DepthStencilState>,
+    pub depth_stencil: Option<wgt::DepthStencilStateIdl>,
     /// The multi-sampling properties of the pipeline.
     #[cfg_attr(feature = "serde", serde(default))]
     pub multisample: wgt::MultisampleState,
@@ -548,7 +548,7 @@ pub struct GeneralRenderPipelineDescriptor<
     pub primitive: wgt::PrimitiveState,
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
     #[cfg_attr(feature = "serde", serde(default))]
-    pub depth_stencil: Option<wgt::DepthStencilState>,
+    pub depth_stencil: Option<wgt::DepthStencilStateIdl>,
     /// The multi-sampling properties of the pipeline.
     #[cfg_attr(feature = "serde", serde(default))]
     pub multisample: wgt::MultisampleState,
@@ -644,6 +644,10 @@ pub enum DepthStencilStateError {
     InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
     #[error("Depth bias is not compatible with non-triangle topology {0:?}")]
     DepthBiasWithIncompatibleTopology(wgt::PrimitiveTopology),
+    #[error("Depth compare function must be specified for depth format {0:?}")]
+    MissingDepthCompare(wgt::TextureFormat),
+    #[error("Depth write enabled must be specified for depth format {0:?}")]
+    MissingDepthWriteEnabled(wgt::TextureFormat),
 }
 
 #[derive(Clone, Debug, Error)]
