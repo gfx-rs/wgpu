@@ -6,24 +6,24 @@ pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
 }
 
 //
-// These tests render two triangles to a 2x2 render target. The first triangle
-// in the vertex buffer covers the bottom-left pixel, the second triangle
-// covers the top-right pixel.
-// XY layout of the render target, with two triangles:
+// These tests render a triangle strip to a 2x2 render target. The first triangle
+// in the vertex buffer covers the top-left pixel, the second triangle
+// covers the bottom two pixels, and the last triangle covers the top-right pixel.
+// XY layout of the render target, with the three triangles, pixel centers marked with '
 //
-//     (-1,1)   (0,1)   (1,1)
-//        +-------+-------+
-//        |       |o-----o|
-//        |       | \   / |
-//        |       |  \ /  |
-//        |       |   o   |
-// (-1,0) +-------+-------+ (1,0)
-//        |   o   |       |
-//        |  / \  |       |
-//        | /   \ |       |
-//        |o-----o|       |
-//        +-------+-------+
-//     (-1,-1)  (0,-1)  (1,-1)
+//      (-1,1)    (0,1)     (1,1)
+//        +---------+---------+
+//        | o-------o-------o |
+//        | |      /|\      | |
+//        | |  '  / | \  '  | |
+//        | |    /  |  \    | |
+// (-1,0) +-|---/---+---\---|-+ (1,0)
+//        | |  /    |    \  | |
+//        | | /     |     \ | |
+//        | |/ '    |    ' \| |
+//        | o---------------o |
+//        +---------+---------+
+//     (-1,-1)    (0,-1)    (1,-1)
 //
 // The fragment shader outputs color based on per-vertex position:
 //
@@ -44,21 +44,22 @@ async fn per_vertex(ctx: TestingContext) {
         .device
         .create_shader_module(wgpu::include_wgsl!("per_vertex.wgsl"));
 
-    let two_triangles_xyz: [f32; 18] = [
-        -1.0, -1.0, 0.0, 0.0, -1.0, 1.0, -0.5, 0.0,
-        1.0, // left triangle, negative x, negative y. cyan
-        0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 0.5, 1.0,
-        0.0, // right triangle, positive x, positive y. red
+    let trianglestrip_xyz: [f32; 15] = [
+        -0.9, 0.9, 0.0, // top left
+        -0.9, -0.9, 0.25, // bottom left
+        0.0, 0.9, 0.5, // top center
+        0.9, -0.9, 0.75, // bottom right
+        0.9, 0.9, 1.0, // top right
     ];
     let vertex_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: bytemuck::cast_slice(&two_triangles_xyz),
+            contents: bytemuck::cast_slice(&trianglestrip_xyz),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
-    let indices = [3u32, 4, 5, 0, 1, 2];
+    let indices = [0u32, 1, 2, 3, 4];
     let index_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -86,7 +87,11 @@ async fn per_vertex(ctx: TestingContext) {
                     }],
                 }],
             },
-            primitive: wgpu::PrimitiveState::default(),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleStrip,
+                strip_index_format: Some(wgpu::IndexFormat::Uint32),
+                ..wgpu::PrimitiveState::default()
+            },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
@@ -148,20 +153,25 @@ async fn per_vertex(ctx: TestingContext) {
         rpass.set_pipeline(&pipeline);
         rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        rpass.draw(0..6, 0..1);
+        rpass.draw(0..5, 0..1);
     }
     readback_buffer.copy_from(&ctx.device, &mut encoder, &color_texture);
     ctx.queue.submit(Some(encoder.finish()));
 
-    //
-    //   +-----+-----+
-    //   |white| red |
-    //   +-----+-----+
-    //   | cyan|white|
-    //   +-----+-----+
-    //
+    //   0    127   255
+    //   o-----o-----o
+    //   |    /|\    |
+    //   |  '/ | \'  |
+    //   +--/--+--\--+
+    //   | /   |   \ |
+    //   |/ '  |  ' \|
+    //   o-----+-----o
+    //  64          191
     let expected = [
-        255, 255, 255, 255, 255, 0, 0, 255, 0, 255, 255, 255, 255, 255, 255, 255,
+        0, 64, 127, 255, // top left
+        127, 191, 255, 255, // top right
+        64, 191, 127, 255, // bottom left
+        64, 191, 127, 255, // bottom right
     ];
     readback_buffer
         .assert_buffer_contents(&ctx, &expected)
