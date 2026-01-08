@@ -642,6 +642,8 @@ pub enum DepthStencilStateError {
     FormatNotStencil(wgt::TextureFormat),
     #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarantees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
     InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
+    #[error("Depth bias is not compatible with non-triangle topology {0:?}")]
+    DepthBiasWithIncompatibleTopology(wgt::PrimitiveTopology),
 }
 
 #[derive(Clone, Debug, Error)]

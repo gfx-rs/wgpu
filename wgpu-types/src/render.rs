@@ -298,6 +298,15 @@ impl PrimitiveTopology {
             Self::LineStrip | Self::TriangleStrip => true,
         }
     }
+
+    /// Returns true for triangle topologies.
+    #[must_use]
+    pub fn is_triangles(&self) -> bool {
+        match *self {
+            Self::TriangleList | Self::TriangleStrip => true,
+            Self::PointList | Self::LineList | Self::LineStrip => false,
+        }
+    }
 }
 
 /// Vertex winding order which classifies the "front" face of a triangle.

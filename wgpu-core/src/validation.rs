@@ -85,7 +85,7 @@ struct Resource {
     class: naga::AddressSpace,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum NumericDimension {
     Scalar,
     Vector(naga::VectorSize),
@@ -102,7 +102,7 @@ impl fmt::Display for NumericDimension {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct NumericType {
     dim: NumericDimension,
     scalar: naga::Scalar,
@@ -120,7 +120,7 @@ impl fmt::Display for NumericType {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InterfaceVar {
     pub ty: NumericType,
     interpolation: Option<naga::Interpolation>,
@@ -149,7 +149,7 @@ impl fmt::Display for InterfaceVar {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 enum Varying {
     Local { location: u32, iv: InterfaceVar },
     BuiltIn(naga::BuiltIn),
@@ -398,6 +398,8 @@ pub enum StageError {
     DrawIdError,
     #[error("Pipeline uses dual-source blending, but the shader does not support it")]
     InvalidDualSourceBlending,
+    #[error("Fragment shader writes depth, but pipeline does not have a depth attachment")]
+    MissingFragDepthAttachment,
 }
 
 impl WebGpuError for StageError {
@@ -431,7 +433,8 @@ impl WebGpuError for StageError {
             | Self::InvalidPrimitiveIndex
             | Self::MissingPrimitiveIndex
             | Self::DrawIdError
-            | Self::InvalidDualSourceBlending => return ErrorType::Validation,
+            | Self::InvalidDualSourceBlending
+            | Self::MissingFragDepthAttachment => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
@@ -1574,6 +1577,7 @@ impl Interface {
             }
             ShaderStageForValidation::Fragment {
                 dual_source_blending,
+                has_depth_attachment,
             } => {
                 let mut max_fragment_shader_input_variables =
                     self.limits.max_inter_stage_shader_variables;
@@ -1649,6 +1653,14 @@ impl Interface {
                 // uses one blend source.
                 if dual_source_blending && !entry_point.dual_source_blending {
                     return Err(StageError::InvalidDualSourceBlending);
+                }
+
+                if entry_point
+                    .outputs
+                    .contains(&Varying::BuiltIn(naga::BuiltIn::FragDepth))
+                    && !has_depth_attachment
+                {
+                    return Err(StageError::MissingFragDepthAttachment);
                 }
             }
             _ => (),
@@ -1774,6 +1786,7 @@ pub enum ShaderStageForValidation {
     Mesh,
     Fragment {
         dual_source_blending: bool,
+        has_depth_attachment: bool,
     },
     Compute,
     Task,

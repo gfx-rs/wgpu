@@ -30,6 +30,7 @@ Bottom level categories:
 
 - General
 - naga
+- Validation
 - DX12
 - Vulkan
 - Metal
@@ -80,7 +81,6 @@ Bottom level categories:
 #### General
 
 - BREAKING: Migrated from the `maxInterStageShaderComponents` limit to `maxInterStageShaderVariables`, which changes validation in a way that should not affect most programs. This follows the latest changes of the WebGPU spec. By @ErichDonGubler in [#8652](https://github.com/gfx-rs/wgpu/pull/8652), [#8792](https://github.com/gfx-rs/wgpu/pull/8792).
-- Fixed validation of the texture format in GPUDepthStencilState when neither depth nor stencil is actually enabled. By @andyleiserson in [#8766](https://github.com/gfx-rs/wgpu/pull/8766).
 - Tracing support has been restored. By @andyleiserson in [#8429](https://github.com/gfx-rs/wgpu/pull/8429).
 - Pipelines using passthrough shaders now correctly require explicit pipeline layout. By @inner-daemons in #8881.
 - Allow using a shader that defines I/O for dual-source blending in a pipeline that does not make use of it. By @andyleiserson in [#8856](https://github.com/gfx-rs/wgpu/pull/8856).
@@ -96,6 +96,12 @@ Bottom level categories:
 - Reject splat vector construction if the argument type does not match the type of the vector's scalar. Previously it would succeed. By @mooori in [#8829](https://github.com/gfx-rs/wgpu/pull/8829).
 - Fixed `workgroupUniformLoad` incorrectly returning an atomic when called on an atomic, it now returns the inner `T` as per the spec. By @cryvosh in [#8791](https://github.com/gfx-rs/wgpu/pull/8791).
 - Fixed constant evaluation for `sign()` builtin to return zero when the argument is zero. By @mandryskowski in [#8942](https://github.com/gfx-rs/wgpu/pull/8942).
+
+#### Validation
+
+- Fixed validation of the texture format in GPUDepthStencilState when neither depth nor stencil is actually enabled. By @andyleiserson in [#8766](https://github.com/gfx-rs/wgpu/pull/8766).
+- Check that depth bias is not used with non-triangle topologies. By @andyleiserson in [#8856](https://github.com/gfx-rs/wgpu/pull/8856).
+- Check that if the shader outputs `frag_depth`, then the pipeline must have a depth attachment. By @andyleiserson in [#8856](https://github.com/gfx-rs/wgpu/pull/8856).
 
 #### GLES
 
