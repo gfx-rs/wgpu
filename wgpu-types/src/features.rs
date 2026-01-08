@@ -1275,7 +1275,7 @@ bitflags_array! {
         /// This is a native only feature.
         const EXPERIMENTAL_COOPERATIVE_MATRIX = 1 << 57;
 
-        /// Enables shader barycentric coordinates.
+        /// Enables shader per-vertex attributes.
         ///
         /// Supported platforms:
         /// - Vulkan (with VK_KHR_fragment_shader_barycentric)

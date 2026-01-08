@@ -544,7 +544,7 @@ pub fn create_validator(
         features.intersects(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX),
     );
     caps.set(
-        Caps::SHADER_PER_VERTEX,
+        Caps::PER_VERTEX,
         features.intersects(wgt::Features::SHADER_PER_VERTEX),
     );
 

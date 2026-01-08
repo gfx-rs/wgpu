@@ -58,6 +58,8 @@ pub enum VaryingError {
     NotIOShareableType(Handle<crate::Type>),
     #[error("Interpolation is not valid")]
     InvalidInterpolation,
+    #[error("Interpolation {0:?} is only valid for stage {1:?}")]
+    InvalidInterpolationInStage(crate::Interpolation, crate::ShaderStage),
     #[error("Cannot combine {interpolation:?} interpolation with the {sampling:?} sample type")]
     InvalidInterpolationSamplingCombination {
         interpolation: crate::Interpolation,
@@ -446,11 +448,15 @@ impl VaryingContext<'_> {
                     ));
                 }
                 if interpolation == Some(crate::Interpolation::PerVertex) {
-                    if !self.capabilities.contains(Capabilities::SHADER_PER_VERTEX)
-                        || self.stage != crate::ShaderStage::Fragment
-                    {
+                    if self.stage != crate::ShaderStage::Fragment {
+                        return Err(VaryingError::InvalidInterpolationInStage(
+                            crate::Interpolation::PerVertex,
+                            crate::ShaderStage::Fragment,
+                        ));
+                    }
+                    if !self.capabilities.contains(Capabilities::PER_VERTEX) {
                         return Err(VaryingError::UnsupportedCapability(
-                            Capabilities::SHADER_PER_VERTEX,
+                            Capabilities::PER_VERTEX,
                         ));
                     }
                 }

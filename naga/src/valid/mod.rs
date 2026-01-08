@@ -203,7 +203,7 @@ bitflags::bitflags! {
         /// Support for cooperative matrix types and operations
         const COOPERATIVE_MATRIX = 1 << 36;
         /// Support for per-vertex fragment input.
-        const SHADER_PER_VERTEX = 1 << 37;
+        const PER_VERTEX = 1 << 37;
     }
 }
 
