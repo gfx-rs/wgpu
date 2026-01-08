@@ -396,6 +396,10 @@ pub enum StageError {
     MissingPrimitiveIndex,
     #[error("DrawId cannot be used in the same pipeline as a task shader")]
     DrawIdError,
+    #[error("Pipeline expects the shader entry point to make use of dual-source blending.")]
+    PipelineExpectsShaderToUseDualSourceBlending,
+    #[error("Shader entry point expects the pipeline to make use of dual-source blending.")]
+    ShaderExpectsPipelineToUseDualSourceBlending,
 }
 
 impl WebGpuError for StageError {
@@ -428,7 +432,9 @@ impl WebGpuError for StageError {
             | Self::TaskPayloadMustMatch { .. }
             | Self::InvalidPrimitiveIndex
             | Self::MissingPrimitiveIndex
-            | Self::DrawIdError => return ErrorType::Validation,
+            | Self::DrawIdError
+            | Self::PipelineExpectsShaderToUseDualSourceBlending
+            | Self::ShaderExpectsPipelineToUseDualSourceBlending => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
@@ -1569,7 +1575,9 @@ impl Interface {
                     });
                 }
             }
-            ShaderStageForValidation::Fragment => {
+            ShaderStageForValidation::Fragment {
+                dual_source_blending,
+            } => {
                 let mut max_fragment_shader_input_variables =
                     self.limits.max_inter_stage_shader_variables;
 
@@ -1636,6 +1644,17 @@ impl Interface {
                             limit: self.limits.max_color_attachments,
                         });
                     }
+                }
+
+                if !dual_source_blending && entry_point.dual_source_blending {
+                    return Err(
+                        StageError::ShaderExpectsPipelineToUseDualSourceBlending,
+                    );
+                }
+                if dual_source_blending && !entry_point.dual_source_blending {
+                    return Err(
+                        StageError::PipelineExpectsShaderToUseDualSourceBlending,
+                    );
                 }
             }
             _ => (),
@@ -1759,7 +1778,9 @@ pub enum ShaderStageForValidation {
         compare_function: Option<wgt::CompareFunction>,
     },
     Mesh,
-    Fragment,
+    Fragment {
+        dual_source_blending: bool,
+    },
     Compute,
     Task,
 }
@@ -1769,7 +1790,7 @@ impl ShaderStageForValidation {
         match self {
             Self::Vertex { .. } => naga::ShaderStage::Vertex,
             Self::Mesh => naga::ShaderStage::Mesh,
-            Self::Fragment => naga::ShaderStage::Fragment,
+            Self::Fragment { .. } => naga::ShaderStage::Fragment,
             Self::Compute => naga::ShaderStage::Compute,
             Self::Task => naga::ShaderStage::Task,
         }
@@ -1778,7 +1799,7 @@ impl ShaderStageForValidation {
     pub fn to_wgt_bit(&self) -> wgt::ShaderStages {
         match self {
             Self::Vertex { .. } => wgt::ShaderStages::VERTEX,
-            Self::Mesh { .. } => wgt::ShaderStages::MESH,
+            Self::Mesh => wgt::ShaderStages::MESH,
             Self::Fragment { .. } => wgt::ShaderStages::FRAGMENT,
             Self::Compute => wgt::ShaderStages::COMPUTE,
             Self::Task => wgt::ShaderStages::TASK,

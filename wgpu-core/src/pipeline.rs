@@ -719,10 +719,6 @@ pub enum CreateRenderPipelineError {
         factor: wgt::BlendFactor,
         target: u32,
     },
-    #[error("Pipeline expects the shader entry point to make use of dual-source blending.")]
-    PipelineExpectsShaderToUseDualSourceBlending,
-    #[error("Shader entry point expects the pipeline to make use of dual-source blending.")]
-    ShaderExpectsPipelineToUseDualSourceBlending,
     #[error("{}", concat!(
         "At least one color attachment or depth-stencil attachment was expected, ",
         "but no render target for the pipeline was specified."
@@ -759,8 +755,6 @@ impl WebGpuError for CreateRenderPipelineError {
             | Self::Stage { .. }
             | Self::UnalignedShader { .. }
             | Self::BlendFactorOnUnsupportedTarget { .. }
-            | Self::PipelineExpectsShaderToUseDualSourceBlending
-            | Self::ShaderExpectsPipelineToUseDualSourceBlending
             | Self::NoTargetSpecified
             | Self::PipelineConstants { .. }
             | Self::VertexAttributeStrideTooLarge { .. } => return ErrorType::Validation,

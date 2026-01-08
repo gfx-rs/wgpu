@@ -3899,14 +3899,11 @@ impl Device {
         let mut vertex_steps;
         let mut vertex_buffers;
         let mut total_attributes;
-        let mut shader_expects_dual_source_blending = false;
-        let mut pipeline_expects_dual_source_blending = false;
+        let mut dual_source_blending = false;
         if let pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) = desc.vertex {
             vertex_steps = Vec::with_capacity(vertex.buffers.len());
             vertex_buffers = Vec::with_capacity(vertex.buffers.len());
             total_attributes = 0;
-            shader_expects_dual_source_blending = false;
-            pipeline_expects_dual_source_blending = false;
             for (i, vb_state) in vertex.buffers.iter().enumerate() {
                 // https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-gpuvertexbufferlayout
 
@@ -4126,7 +4123,7 @@ impl Device {
                             if factor.ref_second_blend_source() {
                                 self.require_features(wgt::Features::DUAL_SOURCE_BLENDING)?;
                                 if i == 0 {
-                                    pipeline_expects_dual_source_blending = true;
+                                    dual_source_blending = true;
                                     break;
                                 } else {
                                     return Err(pipeline::CreateRenderPipelineError
@@ -4381,7 +4378,9 @@ impl Device {
         let fragment_entry_point_name;
         let fragment_stage = match desc.fragment {
             Some(ref fragment_state) => {
-                let stage = validation::ShaderStageForValidation::Fragment;
+                let stage = validation::ShaderStageForValidation::Fragment {
+                    dual_source_blending,
+                };
                 let stage_bit = stage.to_wgt_bit();
 
                 let shader_module = &fragment_state.stage.module;
@@ -4416,15 +4415,6 @@ impl Device {
                     validated_stages |= stage_bit;
                 }
 
-                if let Some(ref interface) = shader_module.interface {
-                    shader_expects_dual_source_blending = interface
-                        .fragment_uses_dual_source_blending(&fragment_entry_point_name)
-                        .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
-                            stage: stage_bit,
-                            error,
-                        })?;
-                }
-
                 Some(hal::ProgrammableStage {
                     module: shader_module.raw(),
                     entry_point: &fragment_entry_point_name,
@@ -4436,17 +4426,6 @@ impl Device {
             }
             None => None,
         };
-
-        if !pipeline_expects_dual_source_blending && shader_expects_dual_source_blending {
-            return Err(
-                pipeline::CreateRenderPipelineError::ShaderExpectsPipelineToUseDualSourceBlending,
-            );
-        }
-        if pipeline_expects_dual_source_blending && !shader_expects_dual_source_blending {
-            return Err(
-                pipeline::CreateRenderPipelineError::PipelineExpectsShaderToUseDualSourceBlending,
-            );
-        }
 
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
             for (i, output) in io.varyings.iter() {
