@@ -247,12 +247,13 @@ webgpu:shader,validation,expression,binary,short_circuiting_and_or:invalid_types
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:scalar_vector:op="%26%26";lhs="bool";rhs="bool"
 webgpu:shader,validation,expression,call,builtin,all:arguments:test="ptr_deref"
 webgpu:shader,validation,expression,call,builtin,max:values:*
-// FAIL: others in `value_constructor` due to #8815, #8442, #4720, possibly more
+// FAIL: others in `value_constructor` due to https://github.com/gfx-rs/wgpu/issues/4720, possibly more
 webgpu:shader,validation,expression,call,builtin,value_constructor:array_value:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:matrix_zero_value:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:scalar_zero_value:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:scalar_value:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:struct_value:*
+webgpu:shader,validation,expression,call,builtin,value_constructor:vector_splat:*
 webgpu:shader,validation,expression,call,builtin,value_constructor:vector_zero_value:*
 // NOTE: This is supposed to be an exhaustive listing underneath
 // `webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:*`, so exceptions can be
