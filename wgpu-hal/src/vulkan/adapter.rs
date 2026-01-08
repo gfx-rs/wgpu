@@ -1295,7 +1295,7 @@ impl PhysicalDeviceProperties {
         }
 
         // Require `VK_KHR_fragment_shader_barycentric` if an associated feature was requested
-        // Vulkan bundles both barycentrics nad per-vertex attributes under the same feature.
+        // Vulkan bundles both barycentrics and per-vertex attributes under the same feature.
         if requested_features
             .intersects(wgt::Features::SHADER_BARYCENTRICS | wgt::Features::SHADER_PER_VERTEX)
         {
@@ -2346,7 +2346,7 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::ClipDistance);
             }
 
-            // Vulkan bundles both barycentrics nad per-vertex attributes under the same feature.
+            // Vulkan bundles both barycentrics and per-vertex attributes under the same feature.
             if features
                 .intersects(wgt::Features::SHADER_BARYCENTRICS | wgt::Features::SHADER_PER_VERTEX)
             {
