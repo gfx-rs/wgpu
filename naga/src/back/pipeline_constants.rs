@@ -280,7 +280,7 @@ fn process_workgroup_size_override(
                         Some(h) => {
                             ep.workgroup_size[i] = module
                                 .to_ctx()
-                                .eval_expr_to_u32(adjusted_global_expressions[h])
+                                .get_const_val(adjusted_global_expressions[h])
                                 .map(|n| {
                                     if n == 0 {
                                         Err(PipelineConstantError::NegativeWorkgroupSize)
@@ -309,13 +309,13 @@ fn process_mesh_shader_overrides(
         if let Some(r#override) = mesh_info.max_vertices_override {
             mesh_info.max_vertices = module
                 .to_ctx()
-                .eval_expr_to_u32(adjusted_global_expressions[r#override])
+                .get_const_val(adjusted_global_expressions[r#override])
                 .map_err(|_| PipelineConstantError::NegativeMeshOutputMax)?;
         }
         if let Some(r#override) = mesh_info.max_primitives_override {
             mesh_info.max_primitives = module
                 .to_ctx()
-                .eval_expr_to_u32(adjusted_global_expressions[r#override])
+                .get_const_val(adjusted_global_expressions[r#override])
                 .map_err(|_| PipelineConstantError::NegativeMeshOutputMax)?;
         }
     }

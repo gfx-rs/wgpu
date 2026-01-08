@@ -237,11 +237,23 @@ webgpu:shader,execution,flow_control,return:*
 // Fails on Metal in CI only, not when running locally.
 fails-if(metal) webgpu:shader,execution,robust_access_vertex:vertex_buffer_access:indexed=true;indirect=false;drawCallTestParameter="baseVertex";type="float32x4";additionalBuffers=4;partialLastNumber=false;offsetVertexBuffer=true
 webgpu:shader,validation,const_assert,const_assert:*
+webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_zero_unsigned"
+webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_zero_signed"
+webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_neg"
+webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_one"
+webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_in_bounds"
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:array_override:op="%26%26";a_val=1;b_val=1
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:invalid_types:*
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:scalar_vector:op="%26%26";lhs="bool";rhs="bool"
 webgpu:shader,validation,expression,call,builtin,all:arguments:test="ptr_deref"
 webgpu:shader,validation,expression,call,builtin,max:values:*
+// FAIL: others in `value_constructor` due to #8815, #8442, #4720, possibly more
+webgpu:shader,validation,expression,call,builtin,value_constructor:array_value:*
+webgpu:shader,validation,expression,call,builtin,value_constructor:matrix_zero_value:*
+webgpu:shader,validation,expression,call,builtin,value_constructor:scalar_zero_value:*
+webgpu:shader,validation,expression,call,builtin,value_constructor:scalar_value:*
+webgpu:shader,validation,expression,call,builtin,value_constructor:struct_value:*
+webgpu:shader,validation,expression,call,builtin,value_constructor:vector_zero_value:*
 // NOTE: This is supposed to be an exhaustive listing underneath
 // `webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:*`, so exceptions can be
 // worked around.
