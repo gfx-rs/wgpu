@@ -136,6 +136,7 @@ pub(crate) fn apply_hal_limits(mut limits: wgt::Limits) -> wgt::Limits {
     // it may duplicate some of these limits.
     limits.max_bind_groups = limits.max_bind_groups.min(crate::MAX_BIND_GROUPS as u32);
     limits.max_storage_buffer_binding_size &= !(wgt::STORAGE_BINDING_SIZE_ALIGNMENT - 1);
+    limits.max_vertex_buffer_array_stride &= !(wgt::VERTEX_ALIGNMENT as u32 - 1);
     limits.max_vertex_buffers = limits
         .max_vertex_buffers
         .min(crate::MAX_VERTEX_BUFFERS as u32);
