@@ -277,7 +277,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         let index_maybe = match *index_expr_data {
                             crate::Expression::Constant(const_handle) => Some(
                                 ctx.gctx()
-                                    .eval_expr_to_u32(ctx.module.constants[const_handle].init)
+                                    .get_const_val(ctx.module.constants[const_handle].init)
                                     .map_err(|_| {
                                         Error::InvalidAccess(crate::Expression::Constant(
                                             const_handle,

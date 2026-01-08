@@ -55,11 +55,16 @@ Bottom level categories:
 #### naga
 
 - The validator checks that override-sized arrays have a positive size, if overrides have been resolved. By @andyleiserson in [#8822](https://github.com/gfx-rs/wgpu/pull/8822).
+- Fix some cases where f16 constants were not working. By @andyleiserson in [#8816](https://github.com/gfx-rs/wgpu/pull/8816).
 
 #### GLES
 
 - `DisplayHandle` should now be passed to `InstanceDescriptor` for correct EGL initialization on Wayland. By @MarijnS95 in [#8012](https://github.com/gfx-rs/wgpu/pull/8012)
   Note that the existing workaround to create surfaces before the adapter is no longer valid.
+
+#### naga
+
+- Reject zero-value construction of a runtime-sized array with a validation error. Previously it would crash in the HLSL backend. By @mooori in [#8741](https://github.com/gfx-rs/wgpu/pull/8741).
 
 ### Documentation
 
