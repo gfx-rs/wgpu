@@ -64,7 +64,7 @@ pub use self::{
         ResolvedRenderPassDepthStencilAttachment, StoreOp,
     },
     render_command::ArcRenderCommand,
-    transfer::TransferError,
+    transfer::{CopySide, TransferError},
     transition_resources::TransitionResourcesError,
 };
 pub(crate) use self::{
@@ -74,7 +74,7 @@ pub(crate) use self::{
     render::{get_stride_of_indirect_args, VertexLimits},
     transfer::{
         extract_texture_selector, validate_linear_texture_data, validate_texture_buffer_copy,
-        validate_texture_copy_dst_format, validate_texture_copy_range, CopySide,
+        validate_texture_copy_dst_format, validate_texture_copy_range,
     },
 };
 
