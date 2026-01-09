@@ -83,8 +83,7 @@ fn consume_tokens<'a>(
     loop {
         let waiting_for_template_end = pending
             .last()
-            .map(|candidate| candidate.depth == depth)
-            .unwrap_or(false);
+            .is_some_and(|candidate| candidate.depth == depth);
 
         let (token, rest) = consume_token(input, waiting_for_template_end, ignore_doc_comments);
         let span = Span::from(source.len() - input.len()..source.len() - rest.len());
