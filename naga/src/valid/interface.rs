@@ -232,7 +232,9 @@ impl VaryingContext<'_> {
                     Bi::ClipDistance => Capabilities::CLIP_DISTANCE,
                     Bi::CullDistance => Capabilities::CULL_DISTANCE,
                     Bi::PrimitiveIndex => Capabilities::PRIMITIVE_INDEX,
-                    Bi::Barycentric => Capabilities::SHADER_BARYCENTRICS,
+                    Bi::Barycentric | Bi::BarycentricNoPerspective => {
+                        Capabilities::SHADER_BARYCENTRICS
+                    }
                     Bi::ViewIndex => Capabilities::MULTIVIEW,
                     Bi::SampleIndex => Capabilities::MULTISAMPLED_SHADING,
                     Bi::NumSubgroups
@@ -325,7 +327,7 @@ impl VaryingContext<'_> {
                                 && self.mesh_output_type == MeshOutputType::PrimitiveOutput),
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
-                    Bi::Barycentric => (
+                    Bi::Barycentric | Bi::BarycentricNoPerspective => (
                         self.stage == St::Fragment && !self.output,
                         *ty_inner
                             == Ti::Vector {

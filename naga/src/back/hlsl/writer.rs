@@ -537,6 +537,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             crate::Binding::BuiltIn(crate::BuiltIn::Position { invariant: true }) => {
                 write!(self.out, "precise ")?;
             }
+            crate::Binding::BuiltIn(crate::BuiltIn::BarycentricNoPerspective) => {
+                write!(self.out, "noperspective ")?;
+            }
             crate::Binding::Location {
                 interpolation,
                 sampling,

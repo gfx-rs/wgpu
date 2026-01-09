@@ -36,9 +36,18 @@ static BARYCENTRIC: GpuTestConfiguration = GpuTestConfiguration::new()
             .test_features_limits()
             .features(wgpu::Features::SHADER_BARYCENTRICS),
     )
-    .run_async(barycentric);
+    .run_async(barycentric::<false>);
 
-async fn barycentric(ctx: TestingContext) {
+#[gpu_test]
+static BARYCENTRIC_NO_PERSPECTIVE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .test_features_limits()
+            .features(wgpu::Features::SHADER_BARYCENTRICS),
+    )
+    .run_async(barycentric::<true>);
+
+async fn barycentric<const NO_PERSPECTIVE: bool>(ctx: TestingContext) {
     let shader = ctx
         .device
         .create_shader_module(wgpu::include_wgsl!("barycentric.wgsl"));
@@ -87,7 +96,11 @@ async fn barycentric(ctx: TestingContext) {
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: Some("fs_main"),
+                entry_point: if NO_PERSPECTIVE {
+                    Some("fs_main_no_perspective")
+                } else {
+                    Some("fs_main")
+                },
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,

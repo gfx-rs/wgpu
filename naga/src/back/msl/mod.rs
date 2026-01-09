@@ -540,7 +540,9 @@ impl Options {
                     }
                     // macOS: Since Metal 2.2
                     // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/wgpu/issues/4414)
-                    crate::BuiltIn::Barycentric if self.lang_version < (2, 3) => {
+                    crate::BuiltIn::Barycentric | crate::BuiltIn::BarycentricNoPerspective
+                        if self.lang_version < (2, 3) =>
+                    {
                         return Err(Error::UnsupportedAttribute("barycentric_coord".to_string()));
                     }
                     _ => {}
@@ -696,6 +698,7 @@ impl ResolvedBinding {
                     Bi::FrontFacing => "front_facing",
                     Bi::PrimitiveIndex => "primitive_id",
                     Bi::Barycentric => "barycentric_coord",
+                    Bi::BarycentricNoPerspective => "barycentric_coord, center_no_perspective",
                     Bi::SampleIndex => "sample_id",
                     Bi::SampleMask => "sample_mask",
                     // compute

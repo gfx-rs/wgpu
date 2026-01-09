@@ -3080,7 +3080,7 @@ impl Writer {
                         }
                         BuiltIn::PrimitiveId
                     }
-                    Bi::Barycentric => {
+                    Bi::Barycentric | Bi::BarycentricNoPerspective => {
                         self.require_any(
                             "`barycentric` built-in",
                             &[spirv::Capability::FragmentBarycentricKHR],

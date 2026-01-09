@@ -170,6 +170,7 @@ impl TryToWgsl for crate::BuiltIn {
             Bi::FrontFacing => "front_facing",
             Bi::PrimitiveIndex => "primitive_index",
             Bi::Barycentric => "barycentric",
+            Bi::BarycentricNoPerspective => "barycentric_no_perspective",
             Bi::SampleIndex => "sample_index",
             Bi::SampleMask => "sample_mask",
             Bi::GlobalInvocationId => "global_invocation_id",

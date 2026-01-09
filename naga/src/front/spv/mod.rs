@@ -2972,10 +2972,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                             size: crate::VectorSize::Tri,
                             scalar: crate::Scalar::U32,
                         }),
-                        crate::BuiltIn::Barycentric => Some(crate::TypeInner::Vector {
-                            size: crate::VectorSize::Tri,
-                            scalar: crate::Scalar::F32,
-                        }),
+                        crate::BuiltIn::Barycentric | crate::BuiltIn::BarycentricNoPerspective => {
+                            Some(crate::TypeInner::Vector {
+                                size: crate::VectorSize::Tri,
+                                scalar: crate::Scalar::F32,
+                            })
+                        }
                         _ => None,
                     };
                     if let (Some(inner), Some(crate::ScalarKind::Sint)) =
