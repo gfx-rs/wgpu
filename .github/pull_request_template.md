@@ -21,7 +21,7 @@ latter case, please ensure that each commit passes all CI tests, so
 that we can continue to bisect along `trunk` to isolate bugs._
 
 <!--
-Thanks for filing! The codeowners file will automatically request reviews from the appropriate teams.
+Thanks for filing! Reviewers are assigned for non-draft PRs in the weekly wgpu maintainers meetings.
 
 After you get a review and have addressed any comments, please explicitly re-request a review from the
 person(s) who reviewed your changes. This will make sure it gets re-added to their review queue - you're not bothering us!
