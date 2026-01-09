@@ -58,7 +58,7 @@ struct UnclosedCandidate {
 /// - `ignore_doc_comments` determines if doc comments are treated as [`Token::Trivia`].
 ///
 /// [Template list discovery algorithm]: https://www.w3.org/TR/WGSL/#template-list-discovery
-fn consume_tokens<'a>(
+fn discover_template_lists<'a>(
     tokens: &mut Vec<(TokenSpan<'a>, &'a str)>,
     source: &'a str,
     mut input: &'a str,
@@ -495,7 +495,7 @@ impl<'a> Lexer<'a> {
     fn next_impl(&mut self, ignore_doc_comments: bool) -> TokenSpan<'a> {
         loop {
             if self.tokens.is_empty() {
-                consume_tokens(
+                discover_template_lists(
                     &mut self.tokens,
                     self.source,
                     self.input,
