@@ -45,10 +45,6 @@ Bottom level categories:
 
 - Added support for cooperative load/store operations in shaders. Currently only WGSL on the input and SPIR-V, METAL, and WGSL on the output are supported. By @kvark in [#8251](https://github.com/gfx-rs/wgpu/issues/8251).
 
-### Changes
-
-- Wildcard exports in `wgpu_core::command` have been removed. Types intended to be public should still be exported, but it is possible something was missed. By @andyleiserson in [#8836](https://github.com/gfx-rs/wgpu/pull/8836).
-
 ### Bug Fixes
 
 #### General
