@@ -3068,8 +3068,10 @@ impl dispatch::ComputePassInterface for CoreComputePass {
             );
         }
     }
+}
 
-    fn end(&mut self) {
+impl Drop for CoreComputePass {
+    fn drop(&mut self) {
         if let Err(cause) = self.context.0.compute_pass_end(&mut self.pass) {
             self.context.handle_error(
                 &self.error_sink,
@@ -3078,12 +3080,6 @@ impl dispatch::ComputePassInterface for CoreComputePass {
                 "ComputePass::end",
             );
         }
-    }
-}
-
-impl Drop for CoreComputePass {
-    fn drop(&mut self) {
-        dispatch::ComputePassInterface::end(self);
     }
 }
 
@@ -3683,8 +3679,10 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
             );
         }
     }
+}
 
-    fn end(&mut self) {
+impl Drop for CoreRenderPass {
+    fn drop(&mut self) {
         if let Err(cause) = self.context.0.render_pass_end(&mut self.pass) {
             self.context.handle_error(
                 &self.error_sink,
@@ -3693,12 +3691,6 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
                 "RenderPass::end",
             );
         }
-    }
-}
-
-impl Drop for CoreRenderPass {
-    fn drop(&mut self) {
-        dispatch::RenderPassInterface::end(self);
     }
 }
 
