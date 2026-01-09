@@ -851,7 +851,7 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
 }
 
 fn map_adapter_info(adapter_info: &webgpu_sys::GpuAdapterInfo) -> wgt::AdapterInfo {
-    // TODO: populate more fields if/when possible
+    // TODO(https://github.com/gfx-rs/wgpu/issues/8819): populate more fields if/when possible
     wgt::AdapterInfo {
         name: adapter_info.description().to_string(),
         vendor: 0,
@@ -1733,7 +1733,7 @@ impl dispatch::AdapterInterface for WebAdapter {
     }
 
     fn get_info(&self) -> crate::AdapterInfo {
-        // TODO: web-sys has no way of getting information on adapters
+        // TODO(https://github.com/gfx-rs/wgpu/issues/8818): web-sys has no way of getting information on adapters
         wgt::AdapterInfo {
             name: String::new(),
             vendor: 0,
