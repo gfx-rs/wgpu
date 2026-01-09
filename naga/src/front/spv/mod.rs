@@ -96,6 +96,7 @@ pub const SUPPORTED_EXTENSIONS: &[&str] = &[
     "SPV_EXT_descriptor_indexing",
     "SPV_EXT_shader_atomic_float_add",
     "SPV_KHR_16bit_storage",
+    "SPV_KHR_fragment_shader_barycentric",
 ];
 pub const SUPPORTED_EXT_SETS: &[&str] = &["GLSL.std.450"];
 
