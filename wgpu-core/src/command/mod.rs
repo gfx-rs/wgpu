@@ -39,8 +39,8 @@ pub(crate) use self::encoder_command::serde_object_reference_struct;
 #[doc(hidden)]
 pub use self::encoder_command::PointerReferences;
 // This module previously did `pub use *` for some of the submodules. When that
-// was removed, types were listed here if it seemed like they could possibly
-// have a legitimate external use. Some types may be exported unnecessarily.
+// was removed, every type that was previously public via `use *` was listed
+// here. Some types (in particular `CopySide`) may be exported unnecessarily.
 pub use self::{
     bundle::{
         bundle_ffi, CreateRenderBundleError, ExecutionError, RenderBundle, RenderBundleDescriptor,
