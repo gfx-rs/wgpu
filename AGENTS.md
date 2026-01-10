@@ -16,7 +16,7 @@ We maintain a changelog in CHANGELOG.md. Changes should be noted in the
 changelog if they are user-visible (changes to documented public APIs,
 significant bug fixes, or new functionality). Changelog descriptions should be
 concise. If you are not sure whether something should be in the CHANGELOG or
-are not sure how to describe the change, ask the user for guidance.
+you are not sure how to describe the change, ask the user for guidance.
 
 ## More information about tests
 

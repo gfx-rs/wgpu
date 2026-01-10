@@ -36,7 +36,7 @@ This gives you the pass rate and number of failures. Document this as your basel
 Review the output from the running the CTS (with or without `--list`) to
 identify any subcategories that may exist within the suite being analyzed.
 Subcategories typically have an additional `:`- or `,`-delimited word in the
-test name. Running subcategories may be more manageable than running
+test name. Running tests by subcategory may be more manageable than running
 with the entire suite at once or running individual tests.
 
 ## Step 3: Run Each Subcategory
@@ -196,7 +196,7 @@ The validation is triggering incorrectly. When `depthCompare` is undefined/missi
 ### 2. title
 [repeat as needed for additional issues]
 
-### Step 11: Update test.lst
+## Step 11: Update test.lst
 
 For fixed tests that are now passing, add them to `cts_runner/test.lst`:
 
@@ -211,7 +211,7 @@ For fixed tests that are now passing, add them to `cts_runner/test.lst`:
 
 3. **Maintain alphabetical order** roughly in the file
 
-### Step 12: Verify and Build
+## Step 12: Verify and Build
 
 Before finishing:
 
