@@ -1353,12 +1353,7 @@ impl<'a> Context<'a> {
                 }
                 match last_handle {
                     Some(handle) => handle,
-                    None => {
-                        return Err(Error {
-                            kind: ErrorKind::SemanticError("Empty expression sequence".into()),
-                            meta,
-                        })
-                    }
+                    None => unreachable!(),
                 }
             }
             _ => {
