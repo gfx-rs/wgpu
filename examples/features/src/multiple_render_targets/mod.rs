@@ -112,7 +112,7 @@ impl MultiTargetRenderer {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&texture_bind_group_layout],
-            immediates_ranges: &[],
+            immediate_size: 0,
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -232,7 +232,7 @@ impl TargetRenderer {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&texture_bind_group_layout],
-            immediates_ranges: &[],
+            immediate_size: 0,
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {

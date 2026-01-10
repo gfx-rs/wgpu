@@ -18,7 +18,8 @@ use crate::{
     Span, Statement, TypeInner, WithSpan,
 };
 
-#[cfg(no_std)]
+// Possibly unused if not compiled with no_std
+#[allow(unused_imports)]
 use num_traits::float::FloatCore as _;
 
 #[derive(Error, Debug, Clone)]
@@ -279,7 +280,7 @@ fn process_workgroup_size_override(
                         Some(h) => {
                             ep.workgroup_size[i] = module
                                 .to_ctx()
-                                .eval_expr_to_u32(adjusted_global_expressions[h])
+                                .get_const_val(adjusted_global_expressions[h])
                                 .map(|n| {
                                     if n == 0 {
                                         Err(PipelineConstantError::NegativeWorkgroupSize)
@@ -308,13 +309,13 @@ fn process_mesh_shader_overrides(
         if let Some(r#override) = mesh_info.max_vertices_override {
             mesh_info.max_vertices = module
                 .to_ctx()
-                .eval_expr_to_u32(adjusted_global_expressions[r#override])
+                .get_const_val(adjusted_global_expressions[r#override])
                 .map_err(|_| PipelineConstantError::NegativeMeshOutputMax)?;
         }
         if let Some(r#override) = mesh_info.max_primitives_override {
             mesh_info.max_primitives = module
                 .to_ctx()
-                .eval_expr_to_u32(adjusted_global_expressions[r#override])
+                .get_const_val(adjusted_global_expressions[r#override])
                 .map_err(|_| PipelineConstantError::NegativeMeshOutputMax)?;
         }
     }
@@ -658,6 +659,19 @@ fn adjust_expr(new_pos: &HandleVec<Expression, Handle<Expression>>, expr: &mut E
         } => {
             adjust(query);
         }
+        Expression::CooperativeLoad { ref mut data, .. } => {
+            adjust(&mut data.pointer);
+            adjust(&mut data.stride);
+        }
+        Expression::CooperativeMultiplyAdd {
+            ref mut a,
+            ref mut b,
+            ref mut c,
+        } => {
+            adjust(a);
+            adjust(b);
+            adjust(c);
+        }
     }
 }
 
@@ -859,6 +873,14 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
                 crate::RayQueryFunction::ConfirmIntersection => {}
                 crate::RayQueryFunction::Terminate => {}
             }
+        }
+        Statement::CooperativeStore {
+            ref mut target,
+            ref mut data,
+        } => {
+            adjust(target);
+            adjust(&mut data.pointer);
+            adjust(&mut data.stride);
         }
         Statement::Break
         | Statement::Continue

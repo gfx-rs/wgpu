@@ -46,7 +46,6 @@ macro_rules! with_limits {
         $macro_name!(max_vertex_buffer_array_stride, Ordering::Less);
         $macro_name!(min_uniform_buffer_offset_alignment, Ordering::Greater);
         $macro_name!(min_storage_buffer_offset_alignment, Ordering::Greater);
-        $macro_name!(max_inter_stage_shader_components, Ordering::Less);
         $macro_name!(max_color_attachments, Ordering::Less);
         $macro_name!(max_color_attachment_bytes_per_sample, Ordering::Less);
         $macro_name!(max_compute_workgroup_storage_size, Ordering::Less);
@@ -59,10 +58,18 @@ macro_rules! with_limits {
         $macro_name!(max_immediate_size, Ordering::Less);
         $macro_name!(max_non_sampler_bindings, Ordering::Less);
 
-        $macro_name!(max_task_workgroup_total_count, Ordering::Less);
-        $macro_name!(max_task_workgroups_per_dimension, Ordering::Less);
-        $macro_name!(max_mesh_multiview_view_count, Ordering::Less);
+        $macro_name!(max_task_mesh_workgroup_total_count, Ordering::Less);
+        $macro_name!(max_task_mesh_workgroups_per_dimension, Ordering::Less);
+        $macro_name!(max_task_invocations_per_workgroup, Ordering::Less);
+        $macro_name!(max_task_invocations_per_dimension, Ordering::Less);
+        $macro_name!(max_mesh_invocations_per_workgroup, Ordering::Less);
+        $macro_name!(max_mesh_invocations_per_dimension, Ordering::Less);
+
+        $macro_name!(max_task_payload_size, Ordering::Less);
+        $macro_name!(max_mesh_output_vertices, Ordering::Less);
+        $macro_name!(max_mesh_output_primitives, Ordering::Less);
         $macro_name!(max_mesh_output_layers, Ordering::Less);
+        $macro_name!(max_mesh_multiview_view_count, Ordering::Less);
 
         $macro_name!(max_blas_primitive_count, Ordering::Less);
         $macro_name!(max_blas_geometry_count, Ordering::Less);
@@ -172,6 +179,11 @@ pub struct Limits {
     /// Maximum value for `VertexBufferLayout::array_stride` when creating a `RenderPipeline`.
     /// Defaults to 2048. Higher is "better".
     pub max_vertex_buffer_array_stride: u32,
+    /// Maximum value for the number of input or output variables for inter-stage communication
+    /// (like vertex outputs or fragment inputs) `@location(…)`s (in WGSL parlance)
+    /// when creating a `RenderPipeline`.
+    /// Defaults to 16. Higher is "better".
+    pub max_inter_stage_shader_variables: u32,
     /// Required `BufferBindingType::Uniform` alignment for `BufferBinding::offset`
     /// when creating a `BindGroup`, or for `set_bind_group` `dynamicOffsets`.
     /// Defaults to 256. Lower is "better".
@@ -180,10 +192,6 @@ pub struct Limits {
     /// when creating a `BindGroup`, or for `set_bind_group` `dynamicOffsets`.
     /// Defaults to 256. Lower is "better".
     pub min_storage_buffer_offset_alignment: u32,
-    /// Maximum allowed number of components (scalars) of input or output locations for
-    /// inter-stage communication (vertex outputs to fragment inputs). Defaults to 60.
-    /// Higher is "better".
-    pub max_inter_stage_shader_components: u32,
     /// The maximum allowed number of color attachments.
     pub max_color_attachments: u32,
     /// The maximum number of bytes necessary to hold one sample (pixel or subpixel) of render
@@ -232,14 +240,33 @@ pub struct Limits {
     /// to create many bind groups at the cost of a large up-front allocation at device creation.
     pub max_non_sampler_bindings: u32,
 
-    /// The maximum total value of x*y*z for a given `draw_mesh_tasks` command
-    pub max_task_workgroup_total_count: u32,
+    /// The maximum total value for a `RenderPass::draw_mesh_tasks(x, y, z)` operation or the
+    /// `@builtin(mesh_task_size)` returned from a task shader.  Higher is "better".
+    pub max_task_mesh_workgroup_total_count: u32,
     /// The maximum value for each dimension of a `RenderPass::draw_mesh_tasks(x, y, z)` operation.
-    /// Defaults to 65535. Higher is "better".
-    pub max_task_workgroups_per_dimension: u32,
-    /// The maximum number of layers that can be output from a mesh shader
+    /// Also for task shader outputs. Higher is "better".
+    pub max_task_mesh_workgroups_per_dimension: u32,
+    // These are fundamentally different. It is very common for limits on mesh shaders to be much lower.
+    /// Maximum total number of invocations, or threads, per task shader workgroup. Higher is "better".
+    pub max_task_invocations_per_workgroup: u32,
+    /// The maximum value for each dimension of a task shader's workgroup size. Higher is "better".
+    pub max_task_invocations_per_dimension: u32,
+    /// Maximum total number of invocations, or threads, per mesh shader workgroup. Higher is "better".
+    pub max_mesh_invocations_per_workgroup: u32,
+    /// The maximum value for each dimension of a mesh shader's workgroup size. Higher is "better".
+    pub max_mesh_invocations_per_dimension: u32,
+
+    /// The maximum size of the payload passed from task to mesh shader. Higher is "better".
+    pub max_task_payload_size: u32,
+    /// The maximum number of vertices that a mesh shader may output. Higher is "better".
+    pub max_mesh_output_vertices: u32,
+    /// The maximum number of primitives that a mesh shader may output. Higher is "better".
+    pub max_mesh_output_primitives: u32,
+    /// The maximum number of layers that can be output from a mesh shader. Higher is "better".
+    /// See [#8509](https://github.com/gfx-rs/wgpu/issues/8509).
     pub max_mesh_output_layers: u32,
-    /// The maximum number of views that can be used by a mesh shader in multiview rendering
+    /// The maximum number of views that can be used by a mesh shader in multiview rendering.
+    /// Higher is "better".
     pub max_mesh_multiview_view_count: u32,
 
     /// The maximum number of primitive (ex: triangles, aabbs) a BLAS is allowed to have. Requesting
@@ -298,9 +325,9 @@ impl Limits {
     ///     max_buffer_size: 256 << 20, // (256 MiB)
     ///     max_vertex_attributes: 16,
     ///     max_vertex_buffer_array_stride: 2048,
+    ///     max_inter_stage_shader_variables: 16,
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
-    ///     max_inter_stage_shader_components: 60,
     ///     max_color_attachments: 8,
     ///     max_color_attachment_bytes_per_sample: 32,
     ///     max_compute_workgroup_storage_size: 16384,
@@ -311,10 +338,17 @@ impl Limits {
     ///     max_compute_workgroups_per_dimension: 65535,
     ///     max_immediate_size: 0,
     ///     max_non_sampler_bindings: 1_000_000,
-    ///     max_task_workgroup_total_count: 0,
-    ///     max_task_workgroups_per_dimension: 0,
-    ///     max_mesh_multiview_view_count: 0,
+    ///     max_task_mesh_workgroup_total_count: 0,
+    ///     max_task_mesh_workgroups_per_dimension: 0,
+    ///     max_task_invocations_per_workgroup: 0,
+    ///     max_task_invocations_per_dimension: 0,
+    ///     max_mesh_invocations_per_workgroup: 0,
+    ///     max_mesh_invocations_per_dimension: 0,
+    ///     max_task_payload_size: 0,
+    ///     max_mesh_output_vertices: 0,
+    ///     max_mesh_output_primitives: 0,
     ///     max_mesh_output_layers: 0,
+    ///     max_mesh_multiview_view_count: 0,
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
     ///     max_tlas_instance_count: 0,
@@ -349,9 +383,9 @@ impl Limits {
             max_buffer_size: 256 << 20, // (256 MiB)
             max_vertex_attributes: 16,
             max_vertex_buffer_array_stride: 2048,
+            max_inter_stage_shader_variables: 16,
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
-            max_inter_stage_shader_components: 60,
             max_color_attachments: 8,
             max_color_attachment_bytes_per_sample: 32,
             max_compute_workgroup_storage_size: 16384,
@@ -363,10 +397,17 @@ impl Limits {
             max_immediate_size: 0,
             max_non_sampler_bindings: 1_000_000,
 
-            max_task_workgroup_total_count: 0,
-            max_task_workgroups_per_dimension: 0,
-            max_mesh_multiview_view_count: 0,
+            max_task_mesh_workgroup_total_count: 0,
+            max_task_mesh_workgroups_per_dimension: 0,
+            max_task_invocations_per_workgroup: 0,
+            max_task_invocations_per_dimension: 0,
+            max_mesh_invocations_per_workgroup: 0,
+            max_mesh_invocations_per_dimension: 0,
+            max_task_payload_size: 0,
+            max_mesh_output_vertices: 0,
+            max_mesh_output_primitives: 0,
             max_mesh_output_layers: 0,
+            max_mesh_multiview_view_count: 0,
 
             max_blas_primitive_count: 0,
             max_blas_geometry_count: 0,
@@ -406,7 +447,7 @@ impl Limits {
     ///     max_immediate_size: 0,
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
-    ///     max_inter_stage_shader_components: 60,
+    ///     max_inter_stage_shader_variables: 15,
     ///     max_color_attachments: 4,
     ///     max_color_attachment_bytes_per_sample: 32,
     ///     max_compute_workgroup_storage_size: 16352, // *
@@ -418,10 +459,17 @@ impl Limits {
     ///     max_buffer_size: 256 << 20, // (256 MiB)
     ///     max_non_sampler_bindings: 1_000_000,
     ///
-    ///     max_task_workgroup_total_count: 0,
-    ///     max_task_workgroups_per_dimension: 0,
-    ///     max_mesh_multiview_view_count: 0,
+    ///     max_task_mesh_workgroup_total_count: 0,
+    ///     max_task_mesh_workgroups_per_dimension: 0,
+    ///     max_task_invocations_per_workgroup: 0,
+    ///     max_task_invocations_per_dimension: 0,
+    ///     max_mesh_invocations_per_workgroup: 0,
+    ///     max_mesh_invocations_per_dimension: 0,
+    ///     max_task_payload_size: 0,
+    ///     max_mesh_output_vertices: 0,
+    ///     max_mesh_output_primitives: 0,
     ///     max_mesh_output_layers: 0,
+    ///     max_mesh_multiview_view_count: 0,
     ///
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
@@ -439,14 +487,10 @@ impl Limits {
             max_texture_dimension_3d: 256,
             max_storage_buffers_per_shader_stage: 4,
             max_uniform_buffer_binding_size: 16 << 10, // (16 KiB)
+            max_inter_stage_shader_variables: 15,
             max_color_attachments: 4,
             // see: https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=7
             max_compute_workgroup_storage_size: 16352,
-
-            max_task_workgroups_per_dimension: 0,
-            max_task_workgroup_total_count: 0,
-            max_mesh_multiview_view_count: 0,
-            max_mesh_output_layers: 0,
             ..Self::defaults()
         }
     }
@@ -481,7 +525,7 @@ impl Limits {
     ///     max_immediate_size: 0,
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
-    ///     max_inter_stage_shader_components: 31,
+    ///     max_inter_stage_shader_variables: 15,
     ///     max_color_attachments: 4,
     ///     max_color_attachment_bytes_per_sample: 32,
     ///     max_compute_workgroup_storage_size: 0, // +
@@ -493,10 +537,17 @@ impl Limits {
     ///     max_buffer_size: 256 << 20, // (256 MiB),
     ///     max_non_sampler_bindings: 1_000_000,
     ///
-    ///     max_task_workgroup_total_count: 0,
-    ///     max_task_workgroups_per_dimension: 0,
-    ///     max_mesh_multiview_view_count: 0,
+    ///     max_task_mesh_workgroup_total_count: 0,
+    ///     max_task_mesh_workgroups_per_dimension: 0,
+    ///     max_task_invocations_per_workgroup: 0,
+    ///     max_task_invocations_per_dimension: 0,
+    ///     max_mesh_invocations_per_workgroup: 0,
+    ///     max_mesh_invocations_per_dimension: 0,
+    ///     max_task_payload_size: 0,
+    ///     max_mesh_output_vertices: 0,
+    ///     max_mesh_output_primitives: 0,
     ///     max_mesh_output_layers: 0,
+    ///     max_mesh_multiview_view_count: 0,
     ///
     ///     max_blas_primitive_count: 0,
     ///     max_blas_geometry_count: 0,
@@ -523,7 +574,7 @@ impl Limits {
             max_compute_workgroups_per_dimension: 0,
 
             // Value supported by Intel Celeron B830 on Windows (OpenGL 3.1)
-            max_inter_stage_shader_components: 31,
+            max_inter_stage_shader_variables: 15,
 
             // Most of the values should be the same as the downlevel defaults
             ..Self::downlevel_defaults()
@@ -590,13 +641,28 @@ impl Limits {
     #[must_use]
     pub const fn using_recommended_minimum_mesh_shader_values(self) -> Self {
         Self {
-            // This is a common limit for apple devices. It's not immediately clear why.
-            max_task_workgroup_total_count: 1024,
-            max_task_workgroups_per_dimension: 1024,
+            // This limitation comes from metal
+            max_task_mesh_workgroup_total_count: 1024,
+            // This is a DirectX limitation
+            max_task_mesh_workgroups_per_dimension: 256,
+            // Nvidia limit on vulkan
+            max_task_invocations_per_workgroup: 128,
+            max_task_invocations_per_dimension: 64,
+
+            // DX12 limitation, revisit for vulkan
+            max_mesh_invocations_per_workgroup: 128,
+            max_mesh_invocations_per_dimension: 128,
+
+            // Metal specifies this as its max
+            max_task_payload_size: 16384 - 32,
+            // DX12 limitation, revisit for vulkan
+            max_mesh_output_vertices: 256,
+            max_mesh_output_primitives: 256,
+            // llvmpipe once again requires this to be 8. An RTX 3060 supports well over 1024.
+            // Also DX12 vaguely suggests going over this is illegal in some cases.
+            max_mesh_output_layers: 8,
             // llvmpipe reports 0 multiview count, which just means no multiview is allowed
             max_mesh_multiview_view_count: 0,
-            // llvmpipe once again requires this to be <=8. An RTX 3060 supports well over 1024.
-            max_mesh_output_layers: 8,
             ..self
         }
     }

@@ -2,14 +2,12 @@ use core::{iter::zip, ops::Range};
 
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
-use arrayvec::ArrayVec;
 use thiserror::Error;
 
 use crate::{
     binding_model::{BindGroup, LateMinBufferBindingSizeMismatch, PipelineLayout},
-    device::SHADER_STAGE_COUNT,
     pipeline::LateSizedBufferGroup,
-    resource::{Labeled, ResourceErrorIdent},
+    resource::{Labeled, ParentDevice, ResourceErrorIdent},
 };
 
 mod compat {
@@ -338,12 +336,20 @@ impl Binder {
         }
     }
 
+    /// Returns `true` if the pipeline layout has been changed, i.e. if the
+    /// new PL was not the same as the old PL.
     pub(super) fn change_pipeline_layout<'a>(
         &'a mut self,
         new: &Arc<PipelineLayout>,
         late_sized_buffer_groups: &[LateSizedBufferGroup],
-    ) {
-        let old_id_opt = self.pipeline_layout.replace(new.clone());
+    ) -> bool {
+        if let Some(old) = self.pipeline_layout.as_ref() {
+            if old.is_equal(new) {
+                return false;
+            }
+        }
+
+        let old = self.pipeline_layout.replace(new.clone());
 
         self.manager.update_expectations(&new.bind_group_layouts);
 
@@ -374,12 +380,14 @@ impl Binder {
             }
         }
 
-        if let Some(old) = old_id_opt {
+        if let Some(old) = old {
             // root constants are the base compatibility property
-            if old.immediates_ranges != new.immediates_ranges {
+            if old.immediate_size != new.immediate_size {
                 self.manager.update_start_index(0);
             }
         }
+
+        true
     }
 
     pub(super) fn assign_group<'a>(
@@ -497,55 +505,4 @@ impl Binder {
         }
         Ok(())
     }
-}
-
-struct ImmediateChange {
-    stages: wgt::ShaderStages,
-    offset: u32,
-    enable: bool,
-}
-
-/// Break up possibly overlapping immediate data ranges into a set of
-/// non-overlapping ranges which contain all the stage flags of the
-/// original ranges. This allows us to zero out (or write any value)
-/// to every possible value.
-pub fn compute_nonoverlapping_ranges(
-    ranges: &[wgt::ImmediateRange],
-) -> ArrayVec<wgt::ImmediateRange, { SHADER_STAGE_COUNT * 2 }> {
-    if ranges.is_empty() {
-        return ArrayVec::new();
-    }
-    debug_assert!(ranges.len() <= SHADER_STAGE_COUNT);
-
-    let mut breaks: ArrayVec<ImmediateChange, { SHADER_STAGE_COUNT * 2 }> = ArrayVec::new();
-    for range in ranges {
-        breaks.push(ImmediateChange {
-            stages: range.stages,
-            offset: range.range.start,
-            enable: true,
-        });
-        breaks.push(ImmediateChange {
-            stages: range.stages,
-            offset: range.range.end,
-            enable: false,
-        });
-    }
-    breaks.sort_unstable_by_key(|change| change.offset);
-
-    let mut output_ranges = ArrayVec::new();
-    let mut position = 0_u32;
-    let mut stages = wgt::ShaderStages::NONE;
-
-    for bk in breaks {
-        if bk.offset - position > 0 && !stages.is_empty() {
-            output_ranges.push(wgt::ImmediateRange {
-                stages,
-                range: position..bk.offset,
-            })
-        }
-        position = bk.offset;
-        stages.set(bk.stages, bk.enable);
-    }
-
-    output_ranges
 }

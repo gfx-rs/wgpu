@@ -198,35 +198,15 @@ impl<'a> RenderBundleEncoder<'a> {
 
 /// [`Features::IMMEDIATES`] must be enabled on the device in order to call these functions.
 impl RenderBundleEncoder<'_> {
-    /// Set immediate data data.
+    /// Set immediate data for subsequent draw calls within the render bundle.
     ///
-    /// Offset is measured in bytes, but must be a multiple of [`IMMEDIATES_ALIGNMENT`].
+    /// Write the bytes in `data` at offset `offset` within immediate data
+    /// storage. Both `offset` and the length of `data` must be
+    /// multiples of [`crate::IMMEDIATE_DATA_ALIGNMENT`], which is always 4.
     ///
-    /// Data size must be a multiple of 4 and must have an alignment of 4.
-    /// For example, with an offset of 4 and an array of `[u8; 8]`, that will write to the range
-    /// of 4..12.
-    ///
-    /// For each byte in the range of immediate data data written, the union of the stages of all immediate data
-    /// ranges that covers that byte must be exactly `stages`. There's no good way of explaining this simply,
-    /// so here are some examples:
-    ///
-    /// ```text
-    /// For the given ranges:
-    /// - 0..4 Vertex
-    /// - 4..8 Fragment
-    /// ```
-    ///
-    /// You would need to upload this in two set_immediates calls. First for the `Vertex` range, second for the `Fragment` range.
-    ///
-    /// ```text
-    /// For the given ranges:
-    /// - 0..8  Vertex
-    /// - 4..12 Fragment
-    /// ```
-    ///
-    /// You would need to upload this in three set_immediates calls. First for the `Vertex` only range 0..4, second
-    /// for the `Vertex | Fragment` range 4..8, third for the `Fragment` range 8..12.
-    pub fn set_immediates(&mut self, stages: ShaderStages, offset: u32, data: &[u8]) {
-        self.inner.set_immediates(stages, offset, data);
+    /// For example, if `offset` is `4` and `data` is eight bytes long, this
+    /// call will write `data` to bytes `4..12` of immediate data storage.
+    pub fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        self.inner.set_immediates(offset, data);
     }
 }

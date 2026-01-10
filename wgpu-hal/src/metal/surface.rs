@@ -28,7 +28,6 @@ impl super::Surface {
             render_layer: Mutex::new(layer),
             swapchain_format: RwLock::new(None),
             extent: RwLock::new(wgt::Extent3d::default()),
-            present_with_transaction: false,
         }
     }
 
@@ -48,6 +47,10 @@ impl super::Surface {
         let proper_kind: BOOL = msg_send![layer, isKindOfClass: class];
         assert_eq!(proper_kind, YES);
         Self::new(layer.to_owned())
+    }
+
+    pub fn render_layer(&self) -> &Mutex<metal::MetalLayer> {
+        &self.render_layer
     }
 
     /// Get or create a new `CAMetalLayer` associated with the given `NSView`
@@ -160,11 +163,10 @@ impl crate::Surface for super::Surface {
             _ => (),
         }
 
-        let device_raw = device.shared.device.lock();
-        render_layer.set_device(&device_raw);
+        let device_raw = &device.shared.device;
+        render_layer.set_device(device_raw);
         render_layer.set_pixel_format(caps.map_format(config.format));
         render_layer.set_framebuffer_only(framebuffer_only);
-        render_layer.set_presents_with_transaction(self.present_with_transaction);
         // opt-in to Metal EDR
         // EDR potentially more power used in display and more bandwidth, memory footprint.
         let wants_edr = config.format == wgt::TextureFormat::Rgba16Float;
@@ -220,7 +222,7 @@ impl crate::Surface for super::Surface {
                 },
             },
             drawable,
-            present_with_transaction: self.present_with_transaction,
+            present_with_transaction: render_layer.presents_with_transaction(),
         };
 
         Ok(Some(crate::AcquiredSurfaceTexture {

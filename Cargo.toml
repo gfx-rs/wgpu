@@ -56,18 +56,18 @@ ref_as_ptr = "warn"
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.88"
+rust-version = "1.92"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
 repository = "https://github.com/gfx-rs/wgpu"
-version = "27.0.0"
+version = "28.0.0"
 authors = ["gfx-rs developers"]
 
 [workspace.dependencies]
-naga = { version = "27.0.0", path = "./naga" }
+naga = { version = "28.0.0", path = "./naga" }
 naga-test = { path = "./naga-test" }
-wgpu = { version = "27.0.0", path = "./wgpu", default-features = false, features = [
+wgpu = { version = "28.0.0", path = "./wgpu", default-features = false, features = [
     "std",
     "serde",
     "wgsl",
@@ -75,24 +75,26 @@ wgpu = { version = "27.0.0", path = "./wgpu", default-features = false, features
     "gles",
     "dx12",
     "metal",
+    "vulkan-portability",
+    "angle",
     "static-dxc",
-    "noop",       # This should be removed if we ever have non-test crates that depend on wgpu
+    "noop",               # This should be removed if we ever have non-test crates that depend on wgpu
 ] }
-wgpu-core = { version = "27.0.0", path = "./wgpu-core" }
-wgpu-hal = { version = "27.0.0", path = "./wgpu-hal" }
-wgpu-macros = { version = "27.0.0", path = "./wgpu-macros" }
-wgpu-test = { version = "27.0.0", path = "./tests" }
-wgpu-types = { version = "27.0.0", path = "./wgpu-types", default-features = false }
+wgpu-core = { version = "28.0.0", path = "./wgpu-core" }
+wgpu-hal = { version = "28.0.0", path = "./wgpu-hal" }
+wgpu-macros = { version = "28.0.0", path = "./wgpu-macros" }
+wgpu-test = { version = "28.0.0", path = "./tests" }
+wgpu-types = { version = "28.0.0", path = "./wgpu-types", default-features = false }
 
 # These _cannot_ have a version specified. If it does, crates.io will look
 # for a version of the package on crates when we publish naga. Path dependencies
 # are allowed through though.
 hlsl-snapshots = { path = "naga/hlsl-snapshots" }
 
-wgpu-core-deps-windows-linux-android = { version = "27.0.0", path = "./wgpu-core/platform-deps/windows-linux-android" }
-wgpu-core-deps-apple = { version = "27.0.0", path = "./wgpu-core/platform-deps/apple" }
-wgpu-core-deps-wasm = { version = "27.0.0", path = "./wgpu-core/platform-deps/wasm" }
-wgpu-core-deps-emscripten = { version = "27.0.0", path = "./wgpu-core/platform-deps/emscripten" }
+wgpu-core-deps-windows-linux-android = { version = "28.0.0", path = "./wgpu-core/platform-deps/windows-linux-android" }
+wgpu-core-deps-apple = { version = "28.0.0", path = "./wgpu-core/platform-deps/apple" }
+wgpu-core-deps-wasm = { version = "28.0.0", path = "./wgpu-core/platform-deps/wasm" }
+wgpu-core-deps-emscripten = { version = "28.0.0", path = "./wgpu-core/platform-deps/emscripten" }
 
 anyhow = { version = "1.0.87", default-features = false }
 approx = "0.5"
@@ -117,7 +119,7 @@ document-features = "0.2.10"
 encase = "0.12"
 env_logger = { version = "0.11", default-features = false }
 fern = "0.7"
-flume = "0.11"
+flume = "0.12"
 futures-lite = "2"
 getrandom = "0.3"
 glam = "0.30.7"
@@ -174,7 +176,7 @@ rwh_05 = { version = "0.5.2", package = "raw-window-handle" } # temporary compat
 rayon = "1.3"
 regex-lite = "0.1"
 renderdoc-sys = "1"
-rspirv = "0.12"
+rspirv = { version = "0.12", git = "https://github.com/gfx-rs/rspirv", rev = "89ce4d0e64c91b0635f617409dc57cb031749a39" }
 ron = "0.12"
 # NOTE: rustc-hash v2 is a completely different hasher with different performance characteristics
 # see discussion here (including with some other alternatives): https://github.com/gfx-rs/wgpu/issues/6999
@@ -184,7 +186,7 @@ serde_json = "1.0.143"
 serde = { version = "1.0.219", default-features = false }
 shell-words = "1"
 smallvec = "1.14"
-spirv = "0.3"
+spirv = { version = "0.3", git = "https://github.com/gfx-rs/rspirv", rev = "89ce4d0e64c91b0635f617409dc57cb031749a39" }
 static_assertions = "1.1"
 strum = { version = "0.27.1", default-features = false, features = ["derive"] }
 syn = "2.0.98"
@@ -200,7 +202,7 @@ which = "8"
 xshell = "0.2.2"
 
 # Metal dependencies
-metal = "0.32"
+metal = "0.33"
 block = "0.1.6"
 core-graphics-types = "0.2"
 objc = "0.2.5"
@@ -208,16 +210,17 @@ objc = "0.2.5"
 # Vulkan dependencies
 android_system_properties = "0.1.1"
 ash = "0.38"
-gpu-alloc = "0.6"
 gpu-descriptor = "0.3.2"
 
 # DX12 dependencies
-gpu-allocator = { version = "0.28", default-features = false, features = [
-    "hashbrown",
-] }
 range-alloc = "0.1"
 mach-dxcompiler-rs = { version = "0.1.4", default-features = false } # remember to increase max_shader_model if applicable
 windows-core = { version = "0.62", default-features = false }
+
+# DX12 and Vulkan dependencies
+gpu-allocator = { version = "0.28", default-features = false, features = [
+    "hashbrown",
+] }
 
 # Gles dependencies
 khronos-egl = "6"

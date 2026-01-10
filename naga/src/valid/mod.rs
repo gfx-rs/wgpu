@@ -27,6 +27,7 @@ use crate::{
 use crate::span::{AddSpan as _, WithSpan};
 pub use analyzer::{ExpressionInfo, FunctionInfo, GlobalUse, Uniformity, UniformityRequirements};
 pub use compose::ComposeError;
+pub use expression::builtin::ZeroValueError;
 pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
 pub use function::{CallError, FunctionError, LocalVariableError, SubgroupError};
@@ -200,6 +201,8 @@ bitflags::bitflags! {
         const STORAGE_TEXTURE_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 34;
         /// Support for non-uniform indexing of binding arrays of storage buffers.
         const STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 35;
+        /// Support for cooperative matrix types and operations
+        const COOPERATIVE_MATRIX = 1 << 36;
     }
 }
 
@@ -216,6 +219,7 @@ impl Capabilities {
             // NOTE: `SHADER_FLOAT16_IN_FLOAT32` _does not_ require the `f16` extension
             Self::SHADER_FLOAT16 => Some(Ext::F16),
             Self::CLIP_DISTANCE => Some(Ext::ClipDistances),
+            Self::MESH_SHADER => Some(Ext::WgpuMeshShader),
             Self::RAY_QUERY => Some(Ext::WgpuRayQuery),
             Self::RAY_HIT_VERTEX_POSITION => Some(Ext::WgpuRayQueryVertexReturn),
             _ => None,
@@ -296,6 +300,7 @@ bitflags::bitflags! {
         const COMPUTE = 0x4;
         const MESH = 0x8;
         const TASK = 0x10;
+        const COMPUTE_LIKE = Self::COMPUTE.bits() | Self::TASK.bits() | Self::MESH.bits();
     }
 }
 
@@ -469,6 +474,7 @@ impl crate::TypeInner {
             Self::Scalar { .. }
             | Self::Vector { .. }
             | Self::Matrix { .. }
+            | Self::CooperativeMatrix { .. }
             | Self::Array {
                 size: crate::ArraySize::Constant(_),
                 ..
@@ -547,7 +553,7 @@ impl Validator {
                 stages |= ShaderStages::VERTEX;
             }
             if capabilities.contains(Capabilities::SUBGROUP) {
-                stages |= ShaderStages::FRAGMENT | ShaderStages::COMPUTE;
+                stages |= ShaderStages::FRAGMENT | ShaderStages::COMPUTE_LIKE;
             }
             stages
         };

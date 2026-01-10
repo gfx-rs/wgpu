@@ -19,7 +19,7 @@ env:
   #
 
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.88"
+  REPO_MSRV: "1.92"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
   # to ensure that they can be used with firefox.
   CORE_MSRV: "1.82.0"
@@ -599,7 +599,7 @@ jobs:
         # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
         run: git add . && git diff --exit-code HEAD naga/tests/out
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         name: Upload comparison images
         if: always() # We want artifacts even if the tests fail.
         with:
@@ -691,7 +691,7 @@ jobs:
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.40.0
+        uses: crate-ci/typos@v1.41.0
 
   check-cts-runner:
     # runtime is normally 2 minutes

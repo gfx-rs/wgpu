@@ -235,6 +235,9 @@ impl<A: hal::Api> Example<A> {
             log::info!("using index buffer")
         }
 
+        // The Instance can be initialized with the DisplayHandle from the EventLoop as well
+        let raw_display_handle = window.display_handle()?;
+
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
             flags: wgpu_types::InstanceFlags::default(),
@@ -246,15 +249,16 @@ impl<A: hal::Api> Example<A> {
                 },
                 ..Default::default()
             },
+            telemetry: None,
+            display: Some(raw_display_handle),
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let surface = {
             let raw_window_handle = window.window_handle()?.as_raw();
-            let raw_display_handle = window.display_handle()?.as_raw();
 
             unsafe {
                 instance
-                    .create_surface(raw_display_handle, raw_window_handle)
+                    .create_surface(raw_display_handle.as_raw(), raw_window_handle)
                     .unwrap()
             }
         };
@@ -387,7 +391,7 @@ impl<A: hal::Api> Example<A> {
             label: None,
             flags: hal::PipelineLayoutFlags::empty(),
             bind_group_layouts: &[&bgl],
-            immediates_ranges: &[],
+            immediate_size: 0,
         };
         let pipeline_layout = unsafe {
             device

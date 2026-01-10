@@ -1,4 +1,5 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, sync::Arc};
+use tempfile::tempdir;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::EventLoop,
@@ -6,11 +7,16 @@ use winit::{
 };
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
+    let window = Arc::new(window);
     let mut size = window.inner_size();
     size.width = size.width.max(1);
     size.height = size.height.max(1);
 
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::from_env_or_default());
+    let instance = wgpu::Instance::new(
+        wgpu::InstanceDescriptor::from_env_or_default()
+            // TODO: Use event_loop.owned_display_handle() with winit 0.30
+            .with_display_handle(Box::new(window.clone())),
+    );
 
     let surface = instance.create_surface(&window).unwrap();
     let adapter = instance
@@ -23,6 +29,8 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         .await
         .expect("Failed to find an appropriate adapter");
 
+    let trace_dir = tempdir().expect("Failed to create temporary directory for trace");
+
     // Create the logical device and command queue
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
@@ -33,7 +41,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 .using_resolution(adapter.limits()),
             experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::MemoryUsage,
-            trace: wgpu::Trace::Off,
+            trace: wgpu::Trace::Directory(trace_dir.path().to_path_buf()),
         })
         .await
         .expect("Failed to create device");
@@ -47,7 +55,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
-        immediates_ranges: &[],
+        immediate_size: 0,
     });
 
     let swapchain_capabilities = surface.get_capabilities(&adapter);

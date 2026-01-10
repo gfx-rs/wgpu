@@ -9,39 +9,31 @@ use core::{convert::Infallible, fmt, str};
 
 use crate::{
     api_log,
-    binding_model::BindError,
-    command::pass::flush_bindings_helper,
-    resource::{RawResourceAccess, Trackable},
-};
-use crate::{
-    binding_model::{ImmediateUploadError, LateMinBufferBindingSizeMismatch},
+    binding_model::{BindError, ImmediateUploadError, LateMinBufferBindingSizeMismatch},
     command::{
         bind::{Binder, BinderError},
         compute_command::ArcComputeCommand,
-        end_pipeline_statistics_query,
+        encoder::EncodingState,
         memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
-        pass_base, pass_try, validate_and_begin_pipeline_statistics_query, ArcPassTimestampWrites,
-        BasePass, BindGroupStateChange, CommandEncoderError, MapPassErr, PassErrorScope,
-        PassTimestampWrites, QueryUseError, StateChange,
+        pass::{self, flush_bindings_helper},
+        pass_base, pass_try,
+        query::{end_pipeline_statistics_query, validate_and_begin_pipeline_statistics_query},
+        ArcCommand, ArcPassTimestampWrites, BasePass, BindGroupStateChange, CommandEncoder,
+        CommandEncoderError, DebugGroupError, EncoderStateError, InnerCommandEncoder, MapPassErr,
+        PassErrorScope, PassStateError, PassTimestampWrites, QueryUseError, StateChange,
+        TimestampWritesError,
     },
-    device::{DeviceError, MissingDownlevelFlags, MissingFeatures},
+    device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures},
     global::Global,
     hal_label, id,
     init_tracker::MemoryInitKind,
     pipeline::ComputePipeline,
     resource::{
-        self, Buffer, InvalidResourceError, Labeled, MissingBufferUsageError, ParentDevice,
+        self, Buffer, DestroyedResourceError, InvalidResourceError, Labeled,
+        MissingBufferUsageError, ParentDevice, RawResourceAccess, Trackable,
     },
     track::{ResourceUsageCompatibilityError, Tracker},
     Label,
-};
-use crate::{command::InnerCommandEncoder, resource::DestroyedResourceError};
-use crate::{
-    command::{
-        encoder::EncodingState, pass, ArcCommand, CommandEncoder, DebugGroupError,
-        EncoderStateError, PassStateError, TimestampWritesError,
-    },
-    device::Device,
 };
 
 pub type ComputeBasePass = BasePass<ArcComputeCommand, ComputePassError>;
@@ -668,13 +660,13 @@ pub(super) fn encode_compute_pass(
                 pass::set_immediates::<ComputePassErrorInner, _>(
                     &mut state.pass,
                     &base.immediates_data,
-                    wgt::ShaderStages::COMPUTE,
                     offset,
                     size_bytes,
                     Some(values_offset),
                     |data_slice| {
-                        let offset_in_elements = (offset / wgt::IMMEDIATES_ALIGNMENT) as usize;
-                        let size_in_elements = (size_bytes / wgt::IMMEDIATES_ALIGNMENT) as usize;
+                        let offset_in_elements = (offset / wgt::IMMEDIATE_DATA_ALIGNMENT) as usize;
+                        let size_in_elements =
+                            (size_bytes / wgt::IMMEDIATE_DATA_ALIGNMENT) as usize;
                         state.immediates[offset_in_elements..][..size_in_elements]
                             .copy_from_slice(data_slice);
                     },
@@ -828,15 +820,10 @@ fn set_pipeline(
             // validating indirect draws.
             state.immediates.clear();
             // Note that can only be one range for each stage. See the `MoreThanOneImmediateRangePerStage` error.
-            if let Some(immediates_range) =
-                pipeline.layout.immediates_ranges.iter().find_map(|pcr| {
-                    pcr.stages
-                        .contains(wgt::ShaderStages::COMPUTE)
-                        .then_some(pcr.range.clone())
-                })
-            {
+            if pipeline.layout.immediate_size != 0 {
                 // Note that non-0 range start doesn't work anyway https://github.com/gfx-rs/wgpu/issues/4502
-                let len = immediates_range.len() / wgt::IMMEDIATES_ALIGNMENT as usize;
+                let len = pipeline.layout.immediate_size as usize
+                    / wgt::IMMEDIATE_DATA_ALIGNMENT as usize;
                 state.immediates.extend(core::iter::repeat_n(0, len));
             }
         },
@@ -894,7 +881,6 @@ fn dispatch_indirect(
         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
 
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
-    buffer.check_destroyed(state.pass.base.snatch_guard)?;
 
     if offset % 4 != 0 {
         return Err(ComputePassErrorInner::UnalignedIndirectBufferOffset(offset));
@@ -908,6 +894,8 @@ fn dispatch_indirect(
             buffer_size: buffer.size,
         });
     }
+
+    buffer.check_destroyed(state.pass.base.snatch_guard)?;
 
     let stride = 3 * 4; // 3 integers, x/y/z group size
     state.pass.base.buffer_memory_init_actions.extend(
@@ -936,7 +924,6 @@ fn dispatch_indirect(
         unsafe {
             state.pass.base.raw_encoder.set_immediates(
                 params.pipeline_layout,
-                wgt::ShaderStages::COMPUTE,
                 0,
                 &[params.offset_remainder as u32 / 4],
             );
@@ -1014,7 +1001,6 @@ fn dispatch_indirect(
                 unsafe {
                     state.pass.base.raw_encoder.set_immediates(
                         pipeline.layout.raw(),
-                        wgt::ShaderStages::COMPUTE,
                         0,
                         &state.immediates,
                     );
@@ -1162,7 +1148,7 @@ impl Global {
         let scope = PassErrorScope::SetImmediate;
         let base = pass_base!(pass, scope);
 
-        if offset & (wgt::IMMEDIATES_ALIGNMENT - 1) != 0 {
+        if offset & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1) != 0 {
             pass_try!(
                 base,
                 scope,
@@ -1170,7 +1156,7 @@ impl Global {
             );
         }
 
-        if data.len() as u32 & (wgt::IMMEDIATES_ALIGNMENT - 1) != 0 {
+        if data.len() as u32 & (wgt::IMMEDIATE_DATA_ALIGNMENT - 1) != 0 {
             pass_try!(
                 base,
                 scope,
@@ -1187,7 +1173,7 @@ impl Global {
         );
 
         base.immediates_data.extend(
-            data.chunks_exact(wgt::IMMEDIATES_ALIGNMENT as usize)
+            data.chunks_exact(wgt::IMMEDIATE_DATA_ALIGNMENT as usize)
                 .map(|arr| u32::from_ne_bytes([arr[0], arr[1], arr[2], arr[3]])),
         );
 

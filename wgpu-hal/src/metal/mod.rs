@@ -113,7 +113,7 @@ impl Instance {
 impl crate::Instance for Instance {
     type A = Api;
 
-    unsafe fn init(_desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+    unsafe fn init(_desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init Metal Backend");
         // We do not enable metal validation based on the validation flags as it affects the entire
         // process. Instead, we enable the validation inside the test harness itself in tests/src/native.rs.
@@ -202,10 +202,11 @@ bitflags!(
     }
 );
 
+// TODO(https://github.com/gfx-rs/wgpu/issues/8715): Eliminate duplication with
+// `wgt::Limits`. Keeping multiple sets of limits creates a risk of confusion.
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 struct PrivateCapabilities {
-    family_check: bool,
     msl_version: MTLLanguageVersion,
     fragment_rw_storage: bool,
     read_write_texture_tier: MTLReadWriteTextureTier,
@@ -213,8 +214,7 @@ struct PrivateCapabilities {
     msaa_apple3: bool,
     msaa_apple7: bool,
     resource_heaps: bool,
-    argument_buffers: MTLArgumentBuffersTier,
-    shared_textures: bool,
+    argument_buffers: Option<MTLArgumentBuffersTier>,
     mutable_comparison_samplers: bool,
     sampler_clamp_to_border: bool,
     indirect_draw_dispatch: bool,
@@ -267,6 +267,7 @@ struct PrivateCapabilities {
     format_rgba32float_color_write: bool,
     format_rgba32float_all: bool,
     format_depth16unorm: bool,
+    format_depth16unorm_filter: bool,
     format_depth32float_filter: bool,
     format_depth32float_none: bool,
     format_bgr10a2_all: bool,
@@ -278,6 +279,11 @@ struct PrivateCapabilities {
     max_binding_array_elements: ResourceIndex,
     max_sampler_binding_array_elements: ResourceIndex,
     buffer_alignment: u64,
+
+    /// Platform-reported maximum buffer size
+    ///
+    /// This value is clamped to `u32::MAX` for `wgt::Limits`, so you probably
+    /// shouldn't be looking at this copy.
     max_buffer_size: u64,
     max_texture_size: u64,
     max_texture_3d_size: u64,
@@ -304,11 +310,15 @@ struct PrivateCapabilities {
     has_unified_memory: Option<bool>,
     timestamp_query_support: TimestampQuerySupport,
     supports_simd_scoped_operations: bool,
+    supports_cooperative_matrix: bool,
     int64: bool,
+    int64_atomics_min_max: bool,
     int64_atomics: bool,
     float_atomics: bool,
     supports_shared_event: bool,
     mesh_shaders: bool,
+    max_mesh_task_workgroup_count: u32,
+    max_task_payload_size: u32,
     supported_vertex_amplification_factor: u32,
     shader_barycentrics: bool,
     supports_memoryless_storage: bool,
@@ -337,7 +347,7 @@ impl Default for Settings {
 }
 
 struct AdapterShared {
-    device: Mutex<metal::Device>,
+    device: metal::Device,
     disabilities: PrivateDisabilities,
     private_caps: PrivateCapabilities,
     settings: Settings,
@@ -355,7 +365,7 @@ impl AdapterShared {
         Self {
             disabilities: PrivateDisabilities::new(&device),
             private_caps,
-            device: Mutex::new(device),
+            device,
             settings: Settings::default(),
             presentation_timer: time::PresentationTimer::new(),
         }
@@ -397,9 +407,6 @@ pub struct Surface {
     render_layer: Mutex<metal::MetalLayer>,
     swapchain_format: RwLock<Option<wgt::TextureFormat>>,
     extent: RwLock<wgt::Extent3d>,
-    // Useful for UI-intensive applications that are sensitive to
-    // window resizing.
-    pub present_with_transaction: bool,
 }
 
 unsafe impl Send for Surface {}
@@ -409,6 +416,8 @@ unsafe impl Sync for Surface {}
 pub struct SurfaceTexture {
     texture: Texture,
     drawable: metal::MetalDrawable,
+    // Useful for UI-intensive applications that are sensitive to
+    // window resizing.
     present_with_transaction: bool,
 }
 
@@ -999,7 +1008,7 @@ struct CommandState {
     ///   checks and the WGSL `arrayLength` function.
     ///
     /// For each stage `S` in `stage_infos`, we consult this to find the sizes
-    /// of the buffers listed in [`stage_infos.S.sized_bindings`], which we must
+    /// of the buffers listed in `stage_infos.S.sized_bindings`, which we must
     /// pass to the entry point.
     ///
     /// See `device::CompiledShader::sized_bindings` for more details.
@@ -1055,3 +1064,11 @@ impl crate::DynPipelineCache for PipelineCache {}
 pub struct AccelerationStructure;
 
 impl crate::DynAccelerationStructure for AccelerationStructure {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OsType {
+    Macos,
+    Ios,
+    Tvos,
+    VisionOs,
+}

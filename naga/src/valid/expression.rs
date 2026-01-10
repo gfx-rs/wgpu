@@ -1,10 +1,13 @@
 use super::{compose::validate_compose, FunctionInfo, ModuleInfo, ShaderStages, TypeFlags};
 use crate::arena::UniqueArena;
+use crate::valid::expression::builtin::validate_zero_value;
 use crate::{
     arena::Handle,
     proc::OverloadSet as _,
     proc::{IndexableLengthError, ResolveError},
 };
+
+pub mod builtin;
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -35,6 +38,8 @@ pub enum ExpressionError {
     InvalidSwizzleComponent(crate::SwizzleComponent, crate::VectorSize),
     #[error(transparent)]
     Compose(#[from] super::ComposeError),
+    #[error(transparent)]
+    ZeroValue(#[from] super::ZeroValueError),
     #[error(transparent)]
     IndexableLength(#[from] IndexableLengthError),
     #[error("Operation {0:?} can't work with {1:?}")]
@@ -141,6 +146,8 @@ pub enum ExpressionError {
     Literal(#[from] LiteralError),
     #[error("{0:?} is not supported for Width {2} {1:?} arguments yet, see https://github.com/gfx-rs/wgpu/issues/5276")]
     UnsupportedWidth(crate::MathFunction, crate::ScalarKind, crate::Bytes),
+    #[error("Invalid operand for cooperative op")]
+    InvalidCooperativeOperand(Handle<crate::Expression>),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -285,7 +292,7 @@ impl super::Validator {
                 // If index is const we can do check for non-negative index
                 match module
                     .to_ctx()
-                    .eval_expr_to_u32_from(index, &function.expressions)
+                    .get_const_val_from(index, &function.expressions)
                 {
                     Ok(value) => {
                         let length = if self.overrides_resolved {
@@ -301,10 +308,13 @@ impl super::Validator {
                             }
                         }
                     }
-                    Err(crate::proc::U32EvalError::Negative) => {
+                    Err(crate::proc::ConstValueError::Negative) => {
                         return Err(ExpressionError::NegativeIndex(base))
                     }
-                    Err(crate::proc::U32EvalError::NonConst) => {}
+                    Err(crate::proc::ConstValueError::NonConst) => {}
+                    Err(crate::proc::ConstValueError::InvalidType) => {
+                        return Err(ExpressionError::InvalidIndexType(index))
+                    }
                 }
 
                 ShaderStages::all()
@@ -375,7 +385,11 @@ impl super::Validator {
                 self.validate_literal(literal)?;
                 ShaderStages::all()
             }
-            E::Constant(_) | E::Override(_) | E::ZeroValue(_) => ShaderStages::all(),
+            E::Constant(_) | E::Override(_) => ShaderStages::all(),
+            E::ZeroValue(ty) => {
+                validate_zero_value(ty, module.to_ctx())?;
+                ShaderStages::all()
+            }
             E::Compose { ref components, ty } => {
                 validate_compose(
                     ty,
@@ -788,7 +802,9 @@ impl super::Validator {
                             Sk::Uint | Sk::Sint | Sk::Float => left_inner == right_inner,
                             Sk::Bool | Sk::AbstractInt | Sk::AbstractFloat => false,
                         },
-                        Ti::Matrix { .. } => left_inner == right_inner,
+                        Ti::Matrix { .. } | Ti::CooperativeMatrix { .. } => {
+                            left_inner == right_inner
+                        }
                         _ => false,
                     },
                     Bo::Divide | Bo::Modulo => match *left_inner {
@@ -818,7 +834,7 @@ impl super::Validator {
                                     scalar: scalar2, ..
                                 },
                             ) => scalar1 == scalar2,
-                            // Scalar/matrix.
+                            // Scalar * matrix.
                             (
                                 &Ti::Scalar(Sc {
                                     kind: Sk::Float, ..
@@ -831,7 +847,7 @@ impl super::Validator {
                                     kind: Sk::Float, ..
                                 }),
                             ) => true,
-                            // Vector/vector.
+                            // Vector * vector.
                             (
                                 &Ti::Vector {
                                     size: size1,
@@ -864,8 +880,14 @@ impl super::Validator {
                                 },
                                 &Ti::Matrix { rows, .. },
                             ) => size == rows,
+                            // Matrix * matrix.
                             (&Ti::Matrix { columns, .. }, &Ti::Matrix { rows, .. }) => {
                                 columns == rows
+                            }
+                            // Scalar * coop matrix.
+                            (&Ti::Scalar(s1), &Ti::CooperativeMatrix { scalar: s2, .. })
+                            | (&Ti::CooperativeMatrix { scalar: s1, .. }, &Ti::Scalar(s2)) => {
+                                s1 == s2
                             }
                             _ => false,
                         };
@@ -1165,7 +1187,7 @@ impl super::Validator {
                     // WorkGroupUniformLoad
                     .contains(TypeFlags::SIZED | TypeFlags::CONSTRUCTIBLE)
                 {
-                    ShaderStages::COMPUTE
+                    ShaderStages::COMPUTE_LIKE
                 } else {
                     return Err(ExpressionError::InvalidWorkGroupUniformLoadResultType(ty));
                 }
@@ -1230,6 +1252,33 @@ impl super::Validator {
                 }
             },
             E::SubgroupBallotResult | E::SubgroupOperationResult { .. } => self.subgroup_stages,
+            E::CooperativeLoad { ref data, .. } => {
+                if resolver[data.pointer]
+                    .pointer_base_type()
+                    .and_then(|tr| tr.inner_with(&module.types).scalar())
+                    .is_none()
+                {
+                    return Err(ExpressionError::InvalidPointerType(data.pointer));
+                }
+                ShaderStages::COMPUTE
+            }
+            E::CooperativeMultiplyAdd { a, b, c } => {
+                let roles = [
+                    crate::CooperativeRole::A,
+                    crate::CooperativeRole::B,
+                    crate::CooperativeRole::C,
+                ];
+                for (operand, expected_role) in [a, b, c].into_iter().zip(roles) {
+                    match resolver[operand] {
+                        Ti::CooperativeMatrix { role, .. } if role == expected_role => {}
+                        ref other => {
+                            log::error!("{expected_role:?} operand type: {other:?}");
+                            return Err(ExpressionError::InvalidCooperativeOperand(a));
+                        }
+                    }
+                }
+                ShaderStages::COMPUTE
+            }
         };
         Ok(stages)
     }

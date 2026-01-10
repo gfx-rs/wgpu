@@ -970,6 +970,8 @@ pub enum ConstantEvaluatorError {
         "Expected reject and accept args. to be scalars of vectors of the same type, got something else",
     )]
     SelectAcceptRejectTypeMismatch,
+    #[error("Cooperative operations can't be constant")]
+    CooperativeOperation,
 }
 
 impl<'a> ConstantEvaluator<'a> {
@@ -1189,8 +1191,13 @@ impl<'a> ConstantEvaluator<'a> {
                 Behavior::Wgsl(WgslRestrictions::Const(_)) => {
                     Err(ConstantEvaluatorError::OverrideExpr)
                 }
-                Behavior::Glsl(_) => {
-                    unreachable!()
+
+                // GLSL specialization constants (constant_id) become Override expressions
+                Behavior::Glsl(GlslRestrictions::Runtime(_)) => {
+                    Ok(self.append_expr(expr, span, ExpressionKind::Override))
+                }
+                Behavior::Glsl(GlslRestrictions::Const) => {
+                    Err(ConstantEvaluatorError::OverrideExpr)
                 }
             },
             ExpressionKind::Runtime => {
@@ -1261,7 +1268,11 @@ impl<'a> ConstantEvaluator<'a> {
                 let base = self.check_and_get(base)?;
                 let index = self.check_and_get(index)?;
 
-                self.access(base, self.constant_index(index)?, span)
+                let index_val: u32 = self
+                    .to_ctx()
+                    .get_const_val_from(index, self.expressions)
+                    .map_err(|_| ConstantEvaluatorError::InvalidAccessIndexTy)?;
+                self.access(base, index_val as usize, span)
             }
             Expression::Swizzle {
                 size,
@@ -1356,6 +1367,9 @@ impl<'a> ConstantEvaluator<'a> {
             Expression::SubgroupBallotResult => Err(ConstantEvaluatorError::SubgroupExpression),
             Expression::SubgroupOperationResult { .. } => {
                 Err(ConstantEvaluatorError::SubgroupExpression)
+            }
+            Expression::CooperativeLoad { .. } | Expression::CooperativeMultiplyAdd { .. } => {
+                Err(ConstantEvaluatorError::CooperativeOperation)
             }
         }
     }
@@ -2103,24 +2117,6 @@ impl<'a> ConstantEvaluator<'a> {
                     .ok_or(ConstantEvaluatorError::InvalidAccessIndex)
             }
             _ => Err(ConstantEvaluatorError::InvalidAccessBase),
-        }
-    }
-
-    fn constant_index(&self, expr: Handle<Expression>) -> Result<usize, ConstantEvaluatorError> {
-        match self.expressions[expr] {
-            Expression::ZeroValue(ty)
-                if matches!(
-                    self.types[ty].inner,
-                    TypeInner::Scalar(crate::Scalar {
-                        kind: ScalarKind::Uint,
-                        ..
-                    })
-                ) =>
-            {
-                Ok(0)
-            }
-            Expression::Literal(Literal::U32(index)) => Ok(index as usize),
-            _ => Err(ConstantEvaluatorError::InvalidAccessIndexTy),
         }
     }
 

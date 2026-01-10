@@ -60,7 +60,7 @@ impl Device {
         use core::task;
         let ctx = &mut task::Context::from_waker(task::Waker::noop());
 
-        let instance = Instance::new(&InstanceDescriptor {
+        let instance = Instance::new(InstanceDescriptor {
             backends: Backends::NOOP,
             backend_options: BackendOptions {
                 noop: NoopBackendOptions { enable: true },
@@ -96,8 +96,10 @@ impl Device {
         self.inner.poll(poll_type.map_index(|s| s.index))
     }
 
-    /// The features which can be used on this device.
+    /// The [features][Features] which can be used on this device.
     ///
+    /// This will be equal to the [`required_features`][DeviceDescriptor::required_features]
+    /// specified when creating the device.
     /// No additional features can be used, even if the underlying adapter can support them.
     #[must_use]
     pub fn features(&self) -> Features {
@@ -106,10 +108,17 @@ impl Device {
 
     /// The limits which can be used on this device.
     ///
+    /// This will be equal to the [`required_limits`][DeviceDescriptor::required_limits]
+    /// specified when creating the device.
     /// No better limits can be used, even if the underlying adapter can support them.
     #[must_use]
     pub fn limits(&self) -> Limits {
         self.inner.limits()
+    }
+
+    /// Get info about the adapter that this device was created from.
+    pub fn adapter_info(&self) -> AdapterInfo {
+        self.inner.adapter_info()
     }
 
     /// Creates a shader module.

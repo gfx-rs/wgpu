@@ -23,7 +23,7 @@ use crate::{
         self,
         dxgi::{factory::DxgiAdapter, result::HResult},
     },
-    dx12::{dcomp::DCompLib, shader_compilation, SurfaceTarget},
+    dx12::{dcomp::DCompLib, shader_compilation, FeatureLevel, ShaderModel, SurfaceTarget},
 };
 
 impl Drop for super::Adapter {
@@ -58,6 +58,7 @@ impl super::Adapter {
         &self.raw
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn expose(
         adapter: DxgiAdapter,
         library: &Arc<D3D12Lib>,
@@ -66,19 +67,43 @@ impl super::Adapter {
         memory_budget_thresholds: wgt::MemoryBudgetThresholds,
         compiler_container: Arc<shader_compilation::CompilerContainer>,
         backend_options: wgt::Dx12BackendOptions,
+        telemetry: Option<crate::Telemetry>,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
+        let desc = unsafe { adapter.GetDesc2() }.unwrap();
+        let driver_version = unsafe { adapter.CheckInterfaceSupport(&Dxgi::IDXGIDevice::IID) };
+        let driver_version = driver_version
+            .map(|driver_version| {
+                let driver_version = driver_version as u64;
+                [
+                    (driver_version >> 48) as u16,
+                    (driver_version >> 32) as u16,
+                    (driver_version >> 16) as u16,
+                    driver_version as u16,
+                ]
+            })
+            .map_err(|e| e.code());
+
         // Create the device so that we can get the capabilities.
-        let device = {
+        let res = {
             profiling::scope!("ID3D12Device::create_device");
-            library
-                .create_device(&adapter, Direct3D::D3D_FEATURE_LEVEL_11_0)
-                .ok()??
+            library.create_device(&adapter, Direct3D::D3D_FEATURE_LEVEL_11_0)
         };
+        if let Some(telemetry) = telemetry {
+            if let Err(err) = res {
+                (telemetry.d3d12_expose_adapter)(
+                    &desc,
+                    driver_version,
+                    crate::D3D12ExposeAdapterResult::CreateDeviceError(err),
+                );
+            }
+        }
+        let device = res.ok()?;
 
         profiling::scope!("feature queries");
 
         // Detect the highest supported feature level.
         let d3d_feature_level = [
+            Direct3D::D3D_FEATURE_LEVEL_12_2,
             Direct3D::D3D_FEATURE_LEVEL_12_1,
             Direct3D::D3D_FEATURE_LEVEL_12_0,
             Direct3D::D3D_FEATURE_LEVEL_11_1,
@@ -97,11 +122,23 @@ impl super::Adapter {
             )
         }
         .unwrap();
-        let max_feature_level = device_levels.MaxSupportedFeatureLevel;
-
-        // We have found a possible adapter.
-        // Acquire the device information.
-        let desc = unsafe { adapter.GetDesc2() }.unwrap();
+        let max_feature_level = match device_levels.MaxSupportedFeatureLevel {
+            Direct3D::D3D_FEATURE_LEVEL_11_0 => FeatureLevel::_11_0,
+            Direct3D::D3D_FEATURE_LEVEL_11_1 => FeatureLevel::_11_1,
+            Direct3D::D3D_FEATURE_LEVEL_12_0 => FeatureLevel::_12_0,
+            Direct3D::D3D_FEATURE_LEVEL_12_1 => FeatureLevel::_12_1,
+            Direct3D::D3D_FEATURE_LEVEL_12_2 => FeatureLevel::_12_2,
+            fl => {
+                if let Some(telemetry) = telemetry {
+                    (telemetry.d3d12_expose_adapter)(
+                        &desc,
+                        driver_version,
+                        crate::D3D12ExposeAdapterResult::UnknownFeatureLevel(fl.0),
+                    );
+                }
+                return None;
+            }
+        };
 
         let device_name = auxil::dxgi::conv::map_adapter_name(desc.Description);
 
@@ -125,14 +162,6 @@ impl super::Adapter {
             )
         };
 
-        let driver_version = unsafe { adapter.CheckInterfaceSupport(&Dxgi::IDXGIDevice::IID) }
-            .ok()
-            .map(|i| {
-                const MASK: i64 = 0xFFFF;
-                (i >> 48, (i >> 32) & MASK, (i >> 16) & MASK, i & MASK)
-            })
-            .unwrap_or((0, 0, 0, 0));
-
         let mut workarounds = super::Workarounds::default();
 
         let is_warp = device_name.contains("Microsoft Basic Render Driver");
@@ -141,9 +170,19 @@ impl super::Adapter {
         // use a version that starts with 10.x.x.x. Versions that ship from Nuget use 1.0.x.x.
         //
         // As far as we know, this is only an issue on the Nuget versions.
-        if is_warp && driver_version >= (1, 0, 13, 0) && driver_version.0 < 10 {
-            workarounds.avoid_shader_debug_info = true;
+        if let Ok(driver_version) = driver_version {
+            if is_warp && driver_version >= [1, 0, 13, 0] && driver_version[0] < 10 {
+                workarounds.avoid_shader_debug_info = true;
+            }
         }
+
+        let driver_version_string = {
+            let driver_version = driver_version.unwrap_or([0, 0, 0, 0]);
+            format!(
+                "{}.{}.{}.{}",
+                driver_version[0], driver_version[1], driver_version[2], driver_version[3]
+            )
+        };
 
         let info = wgt::AdapterInfo {
             backend: wgt::Backend::Dx12,
@@ -160,10 +199,7 @@ impl super::Adapter {
                 wgt::DeviceType::DiscreteGpu
             },
             device_pci_bus_id: get_adapter_pci_info(desc.VendorId, desc.DeviceId),
-            driver: format!(
-                "{}.{}.{}.{}",
-                driver_version.0, driver_version.1, driver_version.2, driver_version.3
-            ),
+            driver: driver_version_string,
             driver_info: String::new(),
             subgroup_min_size: features1.WaveLaneCountMin,
             subgroup_max_size: features1.WaveLaneCountMax,
@@ -181,6 +217,13 @@ impl super::Adapter {
         .unwrap();
 
         if options.ResourceBindingTier.0 < Direct3D12::D3D12_RESOURCE_BINDING_TIER_2.0 {
+            if let Some(telemetry) = telemetry {
+                (telemetry.d3d12_expose_adapter)(
+                    &desc,
+                    driver_version,
+                    crate::D3D12ExposeAdapterResult::ResourceBindingTier2Requirement,
+                );
+            }
             // We require Tier 2 or higher for the ability to make samplers bindless in all cases.
             return None;
         }
@@ -274,62 +317,86 @@ impl super::Adapter {
             }
         };
 
-        let shader_model = if let Some(max_shader_model) = compiler_container.max_shader_model() {
-            let max_shader_model = match max_shader_model {
-                wgt::DxcShaderModel::V6_0 => Direct3D12::D3D_SHADER_MODEL_6_0,
-                wgt::DxcShaderModel::V6_1 => Direct3D12::D3D_SHADER_MODEL_6_1,
-                wgt::DxcShaderModel::V6_2 => Direct3D12::D3D_SHADER_MODEL_6_2,
-                wgt::DxcShaderModel::V6_3 => Direct3D12::D3D_SHADER_MODEL_6_3,
-                wgt::DxcShaderModel::V6_4 => Direct3D12::D3D_SHADER_MODEL_6_4,
-                wgt::DxcShaderModel::V6_5 => Direct3D12::D3D_SHADER_MODEL_6_5,
-                wgt::DxcShaderModel::V6_6 => Direct3D12::D3D_SHADER_MODEL_6_6,
-                wgt::DxcShaderModel::V6_7 => Direct3D12::D3D_SHADER_MODEL_6_7,
-            };
-
-            let mut versions = [
-                Direct3D12::D3D_SHADER_MODEL_6_7,
-                Direct3D12::D3D_SHADER_MODEL_6_6,
-                Direct3D12::D3D_SHADER_MODEL_6_5,
-                Direct3D12::D3D_SHADER_MODEL_6_4,
-                Direct3D12::D3D_SHADER_MODEL_6_3,
-                Direct3D12::D3D_SHADER_MODEL_6_2,
-                Direct3D12::D3D_SHADER_MODEL_6_1,
-                Direct3D12::D3D_SHADER_MODEL_6_0,
-            ]
-            .iter()
-            .filter(|shader_model| shader_model.0 <= max_shader_model.0);
-
-            let highest_shader_model = loop {
-                if let Some(&sm) = versions.next() {
-                    let mut sm = Direct3D12::D3D12_FEATURE_DATA_SHADER_MODEL {
-                        HighestShaderModel: sm,
-                    };
-                    if unsafe {
-                        device.CheckFeatureSupport(
-                            Direct3D12::D3D12_FEATURE_SHADER_MODEL,
-                            <*mut _>::cast(&mut sm),
-                            size_of_val(&sm) as u32,
-                        )
-                    }
-                    .is_ok()
-                    {
-                        break sm.HighestShaderModel;
-                    }
-                } else {
-                    break Direct3D12::D3D_SHADER_MODEL_5_1;
+        let mut shader_models_after_5_1 = [
+            Direct3D12::D3D_SHADER_MODEL_6_9,
+            Direct3D12::D3D_SHADER_MODEL_6_8,
+            Direct3D12::D3D_SHADER_MODEL_6_7,
+            Direct3D12::D3D_SHADER_MODEL_6_6,
+            Direct3D12::D3D_SHADER_MODEL_6_5,
+            Direct3D12::D3D_SHADER_MODEL_6_4,
+            Direct3D12::D3D_SHADER_MODEL_6_3,
+            Direct3D12::D3D_SHADER_MODEL_6_2,
+            Direct3D12::D3D_SHADER_MODEL_6_1,
+            Direct3D12::D3D_SHADER_MODEL_6_0,
+        ]
+        .iter();
+        let max_device_shader_model = loop {
+            if let Some(&sm) = shader_models_after_5_1.next() {
+                let mut sm = Direct3D12::D3D12_FEATURE_DATA_SHADER_MODEL {
+                    HighestShaderModel: sm,
+                };
+                if unsafe {
+                    device.CheckFeatureSupport(
+                        Direct3D12::D3D12_FEATURE_SHADER_MODEL,
+                        <*mut _>::cast(&mut sm),
+                        size_of_val(&sm) as u32,
+                    )
                 }
+                .is_ok()
+                {
+                    break match sm.HighestShaderModel {
+                        Direct3D12::D3D_SHADER_MODEL_6_0 => ShaderModel::_6_0,
+                        Direct3D12::D3D_SHADER_MODEL_6_1 => ShaderModel::_6_1,
+                        Direct3D12::D3D_SHADER_MODEL_6_2 => ShaderModel::_6_2,
+                        Direct3D12::D3D_SHADER_MODEL_6_3 => ShaderModel::_6_3,
+                        Direct3D12::D3D_SHADER_MODEL_6_4 => ShaderModel::_6_4,
+                        Direct3D12::D3D_SHADER_MODEL_6_5 => ShaderModel::_6_5,
+                        Direct3D12::D3D_SHADER_MODEL_6_6 => ShaderModel::_6_6,
+                        Direct3D12::D3D_SHADER_MODEL_6_7 => ShaderModel::_6_7,
+                        Direct3D12::D3D_SHADER_MODEL_6_8 => ShaderModel::_6_8,
+                        Direct3D12::D3D_SHADER_MODEL_6_9 => ShaderModel::_6_9,
+                        _ => unreachable!(),
+                    };
+                }
+            } else {
+                break ShaderModel::_5_1;
+            }
+        };
+
+        let shader_model = if let Some(max_shader_model) = compiler_container.max_shader_model() {
+            let max_dxc_shader_model = match max_shader_model {
+                wgt::DxcShaderModel::V6_0 => ShaderModel::_6_0,
+                wgt::DxcShaderModel::V6_1 => ShaderModel::_6_1,
+                wgt::DxcShaderModel::V6_2 => ShaderModel::_6_2,
+                wgt::DxcShaderModel::V6_3 => ShaderModel::_6_3,
+                wgt::DxcShaderModel::V6_4 => ShaderModel::_6_4,
+                wgt::DxcShaderModel::V6_5 => ShaderModel::_6_5,
+                wgt::DxcShaderModel::V6_6 => ShaderModel::_6_6,
+                wgt::DxcShaderModel::V6_7 => ShaderModel::_6_7,
             };
 
-            match highest_shader_model {
-                Direct3D12::D3D_SHADER_MODEL_5_1 => return None, // don't expose this adapter if it doesn't support DXIL
-                Direct3D12::D3D_SHADER_MODEL_6_0 => naga::back::hlsl::ShaderModel::V6_0,
-                Direct3D12::D3D_SHADER_MODEL_6_1 => naga::back::hlsl::ShaderModel::V6_1,
-                Direct3D12::D3D_SHADER_MODEL_6_2 => naga::back::hlsl::ShaderModel::V6_2,
-                Direct3D12::D3D_SHADER_MODEL_6_3 => naga::back::hlsl::ShaderModel::V6_3,
-                Direct3D12::D3D_SHADER_MODEL_6_4 => naga::back::hlsl::ShaderModel::V6_4,
-                Direct3D12::D3D_SHADER_MODEL_6_5 => naga::back::hlsl::ShaderModel::V6_5,
-                Direct3D12::D3D_SHADER_MODEL_6_6 => naga::back::hlsl::ShaderModel::V6_6,
-                Direct3D12::D3D_SHADER_MODEL_6_7 => naga::back::hlsl::ShaderModel::V6_7,
+            let shader_model = max_device_shader_model.min(max_dxc_shader_model);
+
+            match shader_model {
+                ShaderModel::_5_1 => {
+                    if let Some(telemetry) = telemetry {
+                        (telemetry.d3d12_expose_adapter)(
+                            &desc,
+                            driver_version,
+                            crate::D3D12ExposeAdapterResult::ShaderModel6Requirement,
+                        );
+                    }
+                    // don't expose this adapter if it doesn't support DXIL
+                    return None;
+                }
+                ShaderModel::_6_0 => naga::back::hlsl::ShaderModel::V6_0,
+                ShaderModel::_6_1 => naga::back::hlsl::ShaderModel::V6_1,
+                ShaderModel::_6_2 => naga::back::hlsl::ShaderModel::V6_2,
+                ShaderModel::_6_3 => naga::back::hlsl::ShaderModel::V6_3,
+                ShaderModel::_6_4 => naga::back::hlsl::ShaderModel::V6_4,
+                ShaderModel::_6_5 => naga::back::hlsl::ShaderModel::V6_5,
+                ShaderModel::_6_6 => naga::back::hlsl::ShaderModel::V6_6,
+                ShaderModel::_6_7 => naga::back::hlsl::ShaderModel::V6_7,
                 _ => unreachable!(),
             }
         } else {
@@ -362,7 +429,7 @@ impl super::Adapter {
         let (full_heap_count, uav_count) = match options.ResourceBindingTier {
             Direct3D12::D3D12_RESOURCE_BINDING_TIER_1 => {
                 let uav_count = match max_feature_level {
-                    Direct3D::D3D_FEATURE_LEVEL_11_0 => 8,
+                    FeatureLevel::_11_0 => 8,
                     _ => 64,
                 };
 
@@ -422,7 +489,7 @@ impl super::Adapter {
         // write the results there, and issue a bunch of copy commands.
         //| wgt::Features::PIPELINE_STATISTICS_QUERY
 
-        if max_feature_level.0 >= Direct3D::D3D_FEATURE_LEVEL_11_1.0 {
+        if max_feature_level >= FeatureLevel::_11_1 {
             features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
         }
 
@@ -680,6 +747,17 @@ impl super::Adapter {
         // See https://microsoft.github.io/DirectX-Specs/d3d/ViewInstancing.html#maximum-viewinstancecount
         let max_multiview_view_count = if view_instancing { 4 } else { 0 };
 
+        if let Some(telemetry) = telemetry {
+            (telemetry.d3d12_expose_adapter)(
+                &desc,
+                driver_version,
+                crate::D3D12ExposeAdapterResult::Success(
+                    max_feature_level,
+                    max_device_shader_model,
+                ),
+            );
+        }
+
         Some(crate::ExposedAdapter {
             adapter: super::Adapter {
                 raw: adapter,
@@ -695,7 +773,7 @@ impl super::Adapter {
             info,
             features,
             capabilities: crate::Capabilities {
-                limits: wgt::Limits {
+                limits: auxil::apply_hal_limits(wgt::Limits {
                     max_texture_dimension_1d: Direct3D12::D3D12_REQ_TEXTURE1D_U_DIMENSION,
                     max_texture_dimension_2d: Direct3D12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION
                         .min(Direct3D12::D3D12_REQ_TEXTURECUBE_DIMENSION),
@@ -724,8 +802,7 @@ impl super::Adapter {
                     max_uniform_buffer_binding_size:
                         Direct3D12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16,
                     max_storage_buffer_binding_size: auxil::MAX_I32_BINDING_SIZE,
-                    max_vertex_buffers: Direct3D12::D3D12_VS_INPUT_REGISTER_COUNT
-                        .min(crate::MAX_VERTEX_BUFFERS as u32),
+                    max_vertex_buffers: Direct3D12::D3D12_VS_INPUT_REGISTER_COUNT,
                     max_vertex_attributes: Direct3D12::D3D12_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
                     max_vertex_buffer_array_stride: Direct3D12::D3D12_SO_BUFFER_MAX_STRIDE_IN_BYTES,
                     // The immediates are part of the root signature which
@@ -752,7 +829,7 @@ impl super::Adapter {
                     min_uniform_buffer_offset_alignment:
                         Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
                     min_storage_buffer_offset_alignment: 4,
-                    max_inter_stage_shader_components: base.max_inter_stage_shader_components,
+                    max_inter_stage_shader_variables: base.max_inter_stage_shader_variables,
                     max_color_attachments,
                     max_color_attachment_bytes_per_sample,
                     // From: https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.6%20Inter-Thread%20Data%20Sharing
@@ -771,18 +848,42 @@ impl super::Adapter {
                     max_non_sampler_bindings: 1_000_000,
 
                     // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#dispatchmesh-api
-                    max_task_workgroup_total_count: 2u32.pow(22),
+                    max_task_mesh_workgroup_total_count: if mesh_shader_supported {
+                        2u32.pow(22)
+                    } else {
+                        0
+                    },
                     // Technically it says "64k" but I highly doubt they want 65536 for compute and exactly 64,000 for task workgroups
-                    max_task_workgroups_per_dimension:
-                        Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION,
-                    // Multiview not supported by WGPU yet
+                    max_task_mesh_workgroups_per_dimension: if mesh_shader_supported {
+                        Direct3D12::D3D12_CS_DISPATCH_MAX_THREAD_GROUPS_PER_DIMENSION
+                    } else {
+                        0
+                    },
+                    // Assume this inherits from compute shaders
+                    max_task_invocations_per_workgroup: if mesh_shader_supported {
+                        Direct3D12::D3D12_CS_4_X_THREAD_GROUP_MAX_THREADS_PER_GROUP
+                    } else {
+                        0
+                    },
+                    max_task_invocations_per_dimension: if mesh_shader_supported {
+                        Direct3D12::D3D12_CS_THREAD_GROUP_MAX_Z
+                    } else {
+                        0
+                    },
+                    // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#amplification-shader-and-mesh-shader
+                    max_mesh_invocations_per_workgroup: if mesh_shader_supported { 128 } else { 0 },
+                    max_mesh_invocations_per_dimension: if mesh_shader_supported { 128 } else { 0 },
+
+                    max_task_payload_size: if mesh_shader_supported { 16384 } else { 0 },
+                    max_mesh_output_vertices: if mesh_shader_supported { 256 } else { 0 },
+                    max_mesh_output_primitives: if mesh_shader_supported { 256 } else { 0 },
+                    // Source: https://microsoft.github.io/DirectX-Specs/d3d/MeshShader.html#sv_rendertargetarrayindex-limitations-based-on-queryable-capability
+                    max_mesh_output_layers: if mesh_shader_supported { 8 } else { 0 },
                     max_mesh_multiview_view_count: if mesh_shader_supported {
                         max_multiview_view_count
                     } else {
                         0
                     },
-                    // This seems to be right, and I can't find anything to suggest it would be less than the 2048 provided here
-                    max_mesh_output_layers: Direct3D12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION,
 
                     max_blas_primitive_count: if supports_ray_tracing {
                         1 << 29 // 2^29
@@ -806,7 +907,7 @@ impl super::Adapter {
                     },
 
                     max_multiview_view_count,
-                },
+                }),
                 alignments: crate::Alignments {
                     buffer_copy_offset: wgt::BufferSize::new(
                         Direct3D12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64,
@@ -824,6 +925,7 @@ impl super::Adapter {
                         Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT,
                 },
                 downlevel,
+                cooperative_matrix_properties: Vec::new(),
             },
         })
     }

@@ -154,6 +154,8 @@ pub enum TypeError {
         "The base handle {0:?} has an override-expression that didn't get resolved to a constant"
     )]
     UnresolvedOverride(Handle<crate::Type>),
+    #[error("Override-sized array type {0:?} does not have a positive size")]
+    InvalidArraySize(Handle<crate::Type>),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -418,6 +420,30 @@ impl super::Validator {
                 type_info.immediates_compatibility = immediates_compatibility;
                 type_info
             }
+            Ti::CooperativeMatrix {
+                columns: _,
+                rows: _,
+                scalar,
+                role: _,
+            } => {
+                self.require_type_capability(Capabilities::COOPERATIVE_MATRIX)?;
+                // Allow f16 (width 2) and f32 (width 4) for cooperative matrices
+                if scalar.kind != crate::ScalarKind::Float
+                    || (scalar.width != 2 && scalar.width != 4)
+                {
+                    return Err(TypeError::MatrixElementNotFloat);
+                }
+                TypeInfo::new(
+                    TypeFlags::DATA
+                        | TypeFlags::SIZED
+                        | TypeFlags::COPY
+                        | TypeFlags::HOST_SHAREABLE
+                        | TypeFlags::ARGUMENT
+                        | TypeFlags::CONSTRUCTIBLE
+                        | TypeFlags::CREATION_RESOLVED,
+                    Alignment::from_width(scalar.width),
+                )
+            }
             Ti::Atomic(scalar) => {
                 match scalar {
                     crate::Scalar {
@@ -536,6 +562,15 @@ impl super::Validator {
                     .contains(TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::CREATION_RESOLVED)
                 {
                     return Err(TypeError::InvalidArrayBaseType(base));
+                }
+
+                if self.overrides_resolved {
+                    // This check only makes sense for override-sized arrays.
+                    // `ArraySize::Constant` holds a `NonZeroU32`.
+                    if let crate::ArraySize::Pending(_) = size {
+                        size.resolve(gctx)
+                            .map_err(|_| TypeError::InvalidArraySize(handle))?;
+                    }
                 }
 
                 let base_layout = self.layouter[base];

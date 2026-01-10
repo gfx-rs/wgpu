@@ -40,7 +40,7 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
         .with_env()
         .union(params.required_instance_flags);
 
-    Instance::new(&wgpu::InstanceDescriptor {
+    Instance::new(wgpu::InstanceDescriptor {
         backends,
         flags,
         memory_budget_thresholds: wgpu::MemoryBudgetThresholds {
@@ -76,6 +76,7 @@ pub fn initialize_instance(backends: wgpu::Backends, params: &TestParameters) ->
                 enable: !cfg!(target_arch = "wasm32"),
             },
         },
+        display: None,
     })
 }
 

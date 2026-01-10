@@ -89,11 +89,11 @@ impl ShaderModule {
 
     pub(crate) fn finalize_entry_point_name(
         &self,
-        stage_bit: wgt::ShaderStages,
+        stage: naga::ShaderStage,
         entry_point: Option<&str>,
     ) -> Result<String, validation::StageError> {
         match &self.interface {
-            Some(interface) => interface.finalize_entry_point_name(stage_bit, entry_point),
+            Some(interface) => interface.finalize_entry_point_name(stage, entry_point),
             None => entry_point
                 .map(|ep| ep.to_string())
                 .ok_or(validation::StageError::NoEntryPointFound),
@@ -617,6 +617,8 @@ pub enum ColorStateError {
 pub enum DepthStencilStateError {
     #[error("Format {0:?} is not renderable")]
     FormatNotRenderable(wgt::TextureFormat),
+    #[error("Format {0:?} is not a depth/stencil format")]
+    FormatNotDepthOrStencil(wgt::TextureFormat),
     #[error("Format {0:?} does not have a depth aspect, but depth test/write is enabled")]
     FormatNotDepth(wgt::TextureFormat),
     #[error("Format {0:?} does not have a stencil aspect, but stencil test/write is enabled")]

@@ -1,5 +1,6 @@
 use alloc::{vec, vec::Vec};
 
+use arrayvec::ArrayVec;
 use spirv::Word;
 
 use crate::{Handle, UniqueArena};
@@ -54,7 +55,7 @@ pub(super) const fn map_storage_class(space: crate::AddressSpace) -> spirv::Stor
         crate::AddressSpace::Uniform => spirv::StorageClass::Uniform,
         crate::AddressSpace::WorkGroup => spirv::StorageClass::Workgroup,
         crate::AddressSpace::Immediate => spirv::StorageClass::PushConstant,
-        crate::AddressSpace::TaskPayload => unreachable!(),
+        crate::AddressSpace::TaskPayload => spirv::StorageClass::TaskPayloadWorkgroupEXT,
     }
 }
 
@@ -122,6 +123,44 @@ pub fn global_needs_wrapper(ir_module: &crate::Module, var: &crate::GlobalVariab
     }
 }
 
+/// Returns true if `pointer` refers to two-row matrix which is a member of a
+/// struct in the [`crate::AddressSpace::Uniform`] address space.
+pub fn is_uniform_matcx2_struct_member_access(
+    ir_function: &crate::Function,
+    fun_info: &crate::valid::FunctionInfo,
+    ir_module: &crate::Module,
+    pointer: Handle<crate::Expression>,
+) -> bool {
+    if let crate::TypeInner::Pointer {
+        base: pointer_base_type,
+        space: crate::AddressSpace::Uniform,
+    } = *fun_info[pointer].ty.inner_with(&ir_module.types)
+    {
+        if let crate::TypeInner::Matrix {
+            rows: crate::VectorSize::Bi,
+            ..
+        } = ir_module.types[pointer_base_type].inner
+        {
+            if let crate::Expression::AccessIndex {
+                base: parent_pointer,
+                ..
+            } = ir_function.expressions[pointer]
+            {
+                if let crate::TypeInner::Pointer {
+                    base: parent_type, ..
+                } = *fun_info[parent_pointer].ty.inner_with(&ir_module.types)
+                {
+                    if let crate::TypeInner::Struct { .. } = ir_module.types[parent_type].inner {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+
+    false
+}
+
 ///HACK: this is taken from std unstable, remove it when std's floor_char_boundary is stable
 /// and available in our msrv.
 trait U8Internal {
@@ -153,4 +192,15 @@ impl StrUnstable for str {
             unsafe { lower_bound + new_index.unwrap_unchecked() }
         }
     }
+}
+
+pub enum BindingDecorations {
+    BuiltIn(spirv::BuiltIn, ArrayVec<spirv::Decoration, 2>),
+    Location {
+        location: u32,
+        others: ArrayVec<spirv::Decoration, 5>,
+        /// If this is `Some`, use Decoration::Index with blend_src as an operand
+        blend_src: Option<Word>,
+    },
+    None,
 }

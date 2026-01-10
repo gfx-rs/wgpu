@@ -41,7 +41,149 @@ Bottom level categories:
 
 ## Unreleased
 
+### New Features
+
+- Added support for cooperative load/store operations in shaders. Currently only WGSL on the input and SPIR-V, METAL, and WGSL on the output are supported. By @kvark in [#8251](https://github.com/gfx-rs/wgpu/issues/8251).
+- Added support for obtaining `AdapterInfo` from `Device`. By @sagudev in [#8807](https://github.com/gfx-rs/wgpu/pull/8807).
+
+### Bug Fixes
+
+#### General
+
+- BREAKING: Migrated from the `maxInterStageShaderComponents` limit to `maxInterStageShaderVariables`, which changes validation in a way that should not affect most programs. This follows the latest changes of the WebGPU spec. By @ErichDonGubler in [#8652](https://github.com/gfx-rs/wgpu/pull/8652), [#8792](https://github.com/gfx-rs/wgpu/pull/8792).
+- Fixed validation of the texture format in GPUDepthStencilState when neither depth nor stencil is actually enabled. By @andyleiserson in [#8766](https://github.com/gfx-rs/wgpu/pull/8766).
+- Tracing support has been restored. By @andyleiserson in [#8429](https://github.com/gfx-rs/wgpu/pull/8429).
+
+#### naga
+
+- The validator checks that override-sized arrays have a positive size, if overrides have been resolved. By @andyleiserson in [#8822](https://github.com/gfx-rs/wgpu/pull/8822).
+- Fix some cases where f16 constants were not working. By @andyleiserson in [#8816](https://github.com/gfx-rs/wgpu/pull/8816).
+
+#### GLES
+
+- `DisplayHandle` should now be passed to `InstanceDescriptor` for correct EGL initialization on Wayland. By @MarijnS95 in [#8012](https://github.com/gfx-rs/wgpu/pull/8012)
+  Note that the existing workaround to create surfaces before the adapter is no longer valid.
+
+#### naga
+
+- Reject zero-value construction of a runtime-sized array with a validation error. Previously it would crash in the HLSL backend. By @mooori in [#8741](https://github.com/gfx-rs/wgpu/pull/8741).
+- Reject splat vector construction if the argument type does not match the type of the vector's scalar. Previously it would succeed. By @mooori in [#8829](https://github.com/gfx-rs/wgpu/pull/8829).
+
+### Documentation
+
+#### General
+
+- Expanded documentation of `QuerySet`, `QueryType`, and `resolve_query_set()` describing how to use queries. By @kpreid in [#8776](https://github.com/gfx-rs/wgpu/pull/8776).
+
+## v28.0.0 (2025-12-17)
+
 ### Major Changes
+
+#### Mesh Shaders
+
+This has been a long time coming. See [the tracking issue](https://github.com/gfx-rs/wgpu/issues/7197) for more information.
+They are now fully supported on Vulkan, and supported on Metal and DX12 with passthrough shaders. WGSL parsing and rewriting
+is supported, meaning they can be used through WESL or naga_oil.
+
+Mesh shader pipelines replace the standard vertex shader pipelines and allow new ways to render meshes. 
+They are ideal for meshlet rendering, a form of rendering where small groups of triangles are handled together,
+for both culling and rendering.
+
+They are compute-like shaders, and generate primitives which are passed directly to the rasterizer, rather
+than having a list of vertices generated individually and then using a static index buffer. This means that certain computations
+on nearby groups of triangles can be done together, the relationship between vertices and primitives is more programmable, and
+you can even pass non-interpolated per-primitive data to the fragment shader, independent of vertices.
+
+Mesh shaders are very versatile, and are powerful enough to replace vertex shaders, tesselation shaders, and geometry shaders
+on their own or with task shaders.
+
+A full example of mesh shaders in use can be seen in the `mesh_shader` example. For the full specification of mesh shaders in wgpu, go to [docs/api-specs/mesh_shading.md](docs/api-specs/mesh_shading.md). Below is a small snippet of shader code demonstrating their usage:
+
+```wgsl
+@task
+@payload(taskPayload)
+@workgroup_size(1)
+fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
+    // Task shaders can use workgroup variables like compute shaders
+    workgroupData = 1.0;
+    // Pass some data to all mesh shaders dispatched by this workgroup
+    taskPayload.colorMask = vec4(1.0, 1.0, 0.0, 1.0);
+    taskPayload.visible = 1;
+    // Dispatch a mesh shader grid with one workgroup
+    return vec3(1, 1, 1);
+}
+
+@mesh(mesh_output)
+@payload(taskPayload)
+@workgroup_size(1)
+fn ms_main(@builtin(local_invocation_index) index: u32, @builtin(global_invocation_id) id: vec3<u32>) {
+    // Set how many outputs this workgroup will generate
+    mesh_output.vertex_count = 3;
+    mesh_output.primitive_count = 1;
+    // Can also use workgroup variables
+    workgroupData = 2.0;
+
+    // Set vertex outputs
+    mesh_output.vertices[0].position = positions[0];
+    mesh_output.vertices[0].color = colors[0] * taskPayload.colorMask;
+
+    mesh_output.vertices[1].position = positions[1];
+    mesh_output.vertices[1].color = colors[1] * taskPayload.colorMask;
+
+    mesh_output.vertices[2].position = positions[2];
+    mesh_output.vertices[2].color = colors[2] * taskPayload.colorMask;
+    
+    // Set the vertex indices for the only primitive
+    mesh_output.primitives[0].indices = vec3<u32>(0, 1, 2);
+    // Cull it if the data passed by the task shader says to
+    mesh_output.primitives[0].cull = taskPayload.visible == 1;
+    // Give a noninterpolated per-primitive vec4 to the fragment shader
+    mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
+}
+```
+
+##### Thanks
+
+This was a monumental effort from many different people, but it was championed by @inner-daemons, without whom it would not have happened.
+Thank you @cwfitzgerald for doing the bulk of the code review. Finally thank you @ColinTimBarndt for coordinating the testing effort.
+
+Reviewers:
+- @cwfitzgerald
+- @jimblandy
+- @ErichDonGubler
+
+`wgpu` Contributions:
+- Metal implementation in wgpu-hal. By @inner-daemons in [#8139](https://github.com/gfx-rs/wgpu/pull/8139).
+- DX12 implementation in wgpu-hal. By @inner-daemons in [#8110](https://github.com/gfx-rs/wgpu/pull/8110).
+- Vulkan implementation in wgpu-hal. By @inner-daemons in [#7089](https://github.com/gfx-rs/wgpu/pull/7089).
+- wgpu/wgpu-core implementation. By @inner-daemons in [#7345](https://github.com/gfx-rs/wgpu/pull/7345).
+- New mesh shader limits and validation. By @inner-daemons in [#8507](https://github.com/gfx-rs/wgpu/pull/8507).
+
+`naga` Contributions:
+- Naga IR implementation. By @inner-daemons in [#8104](https://github.com/gfx-rs/wgpu/pull/8104).
+- `wgsl-in` implementation in naga. By @inner-daemons in [#8370](https://github.com/gfx-rs/wgpu/pull/8370).
+- `spv-out` implementation in naga. By @inner-daemons in [#8456](https://github.com/gfx-rs/wgpu/pull/8456).
+- `wgsl-out` implementation in naga. By @Slightlyclueless in [#8481](https://github.com/gfx-rs/wgpu/pull/8481).
+- Allow barriers in mesh/task shaders. By @inner-daemons in [#8749](https://github.com/gfx-rs/wgpu/pull/8749)
+
+Testing Assistance:
+- @ColinTimBarndt
+- @AdamK2003
+- @Mhowser
+- @9291Sam
+- 3 more testers who wished to remain anonymous.
+
+Thank you to everyone to made this happen!
+
+#### Switch from `gpu-alloc` to `gpu-allocator` in the `vulkan` backend
+
+`gpu-allocator` is the allocator used in the `dx12` backend, allowing to configure
+the allocator the same way in those two backends converging their behavior.
+
+This also brings the `Device::generate_allocator_report` feature to
+the vulkan backend.
+
+By @DeltaEvo in [#8158](https://github.com/gfx-rs/wgpu/pull/8158).
 
 #### `wgpu::Instance::enumerate_adapters` is now `async` & available on WebGPU
 
@@ -52,14 +194,12 @@ BREAKING CHANGE: `enumerate_adapters` is now `async`:
 + pub fn enumerate_adapters(&self, backends: Backends) -> impl Future<Output = Vec<Adapter>> {
 ```
 
-This yields ([kek]) two benefits:
+This yields two benefits:
 
 - This method is now implemented on non-native using the standard `Adapter::request_adapter(…)`, making `enumerate_adapters` a portable surface. This was previously a nontrivial pain point when an application wanted to do some of its own filtering of adapters.
 - This method can now be implemented in custom backends.
 
 By @R-Cramer4 in [#8230](https://github.com/gfx-rs/wgpu/pull/8230)
-
-[kek]: https://web.archive.org/web/20250923122958/https://knowyourmeme.com/memes/kek
 
 #### New `LoadOp::DontCare`
 
@@ -91,17 +231,21 @@ SamplerDescriptor {
 }
 ```
 
+By @sagudev in [#8314](https://github.com/gfx-rs/wgpu/pull/8314).
+
 #### Multiview on all major platforms and support for multiview bitmasks
 
-Multiview is a feature that allows rendering the same content to multiple layers of a texture. This is useful primarily in VR where you wish to
-display almost identical content to 2 views, just with a different perspective. Instead of using 2 draw calls or 2 instances for each object, you
+Multiview is a feature that allows rendering the same content to multiple layers of a texture.
+This is useful primarily in VR where you wish to display almost identical content to 2 views,
+just with a different perspective. Instead of using 2 draw calls or 2 instances for each object, you
 can use this feature.
 
-Multiview is also called view instancing in DX12 land or vertex amplification in Metal land.
+Multiview is also called view instancing in DX12 or vertex amplification in Metal.
 
 Multiview has been reworked, adding support for Metal and DX12, and adding testing and validation to wgpu itself.
-This change also introduces a view bitmask, a new field in `RenderPassDescriptor` that allows a render pass to render to multiple non-adjacent layers
-when using the `SELECTIVE_MULTIVIEW` feature. Note that this also influences apps that don't use multiview, as they have to set this mask to `None`.
+This change also introduces a view bitmask, a new field in `RenderPassDescriptor` that allows a render pass to render
+to multiple non-adjacent layers when using the `SELECTIVE_MULTIVIEW` feature. If you don't use multi-view,
+you can set this field to none.
 
 ```diff
 - wgpu::RenderPassDescriptor {
@@ -123,7 +267,7 @@ when using the `SELECTIVE_MULTIVIEW` feature. Note that this also influences app
 
 One other breaking change worth noting is that in WGSL `@builtin(view_index)` now requires a type of `u32`, where previously it required `i32`.
 
-By @SupaMaggie70Incorporated in [#8206](https://github.com/gfx-rs/wgpu/pull/8206).
+By @inner-daemons in [#8206](https://github.com/gfx-rs/wgpu/pull/8206).
 
 #### Error scopes now use guards and are thread-local.
 
@@ -157,6 +301,49 @@ event happens. Our new log policy is as follows:
 
 By @cwfitzgerald in [#8579](https://github.com/gfx-rs/wgpu/pull/8579).
 
+#### Push constants renamed immediates, API brought in line with spec.
+
+As the "immediate data" api is getting close to stabilization in the WebGPU specification,
+we're bringing our implementation in line with what the spec dictates.
+
+First, in the `PipelineLayoutDescriptor`, you now pass a unified size for all stages:
+
+```diff
+- push_constant_ranges: &[wgpu::PushConstantRange {
+-     stages: wgpu::ShaderStages::VERTEX_FRAGMENT,
+-     range: 0..12,
+- }]
++ immediate_size: 12,
+```
+
+Second, on the command encoder you no longer specify a shader stage, uploads apply
+to all shader stages that use immediate data.
+
+```diff
+- rpass.set_push_constants(wgpu::ShaderStages::FRAGMENT, 0, bytes);
++ rpass.set_immediates(0, bytes);
+```
+
+Third, immediates are now declared with the `immediate` address space instead of
+the `push_constant` address space. Due to a [known issue on DX12](https://github.com/gfx-rs/wgpu/issues/5683)
+it is advised to always use a structure for your immediates until that issue
+is fixed.
+
+```diff
+- var<push_constant> my_pc: MyPushConstant;
++ var<immediate> my_imm: MyImmediate;
+```
+
+Finally, our implementation currently still zero-initializes the immediate data
+range you declared in the pipeline layout. This is not spec compliant and failing
+to populate immediate "slots" that are used in the shader will be a validation error
+in a future version. See [the proposal][immediate-data-spec] for details for determining
+which slots are populated in a given shader.
+
+By @cwfitzgerald in [#8724](https://github.com/gfx-rs/wgpu/pull/8724).
+
+[immediate-data-spec]: https://github.com/gpuweb/gpuweb/blob/main/proposals/immediate-data.md#immediate-slots
+
 #### `subgroup_{min,max}_size` renamed and moved from `Limits` -> `AdapterInfo`
 
 To bring our code in line with the WebGPU spec, we have moved information about subgroup size
@@ -181,6 +368,7 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 - Added support for binding arrays of storage textures on Metal. By @msvbg in [#8464](https://github.com/gfx-rs/wgpu/pull/8464)
 - Added support for multisampled texture arrays on Vulkan through adapter feature `MULTISAMPLE_ARRAY`. By @LaylBongers in [#8571](https://github.com/gfx-rs/wgpu/pull/8571).
 - Added `get_configuration` to `wgpu::Surface`, that returns the current configuration of `wgpu::Surface`. By @sagudev in [#8664](https://github.com/gfx-rs/wgpu/pull/8664).
+- Add `wgpu_core::Global::create_bind_group_layout_error`. By @ErichDonGubler in [#8650](https://github.com/gfx-rs/wgpu/pull/8650).
 
 ### Changes
 
@@ -195,21 +383,20 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 - Corrected documentation of the minimum alignment of the _end_ of a mapped range of a buffer (it is 4, not 8). By @kpreid in [#8450](https://github.com/gfx-rs/wgpu/pull/8450).
 - `util::StagingBelt` now takes a `Device` when it is created instead of when it is used. By @kpreid in [#8462](https://github.com/gfx-rs/wgpu/pull/8462).
 - `wgpu_hal::vulkan::Texture` API changes to handle externally-created textures and memory more flexibly. By @s-ol in [#8512](https://github.com/gfx-rs/wgpu/pull/8512), [#8521](https://github.com/gfx-rs/wgpu/pull/8521).
+- Render passes are now validated against the `maxColorAttachmentBytesPerSample` limit. By @andyleiserson in [#8697](https://github.com/gfx-rs/wgpu/pull/8697).
 
 #### Metal
 
-- Add support for mesh shaders. By @SupaMaggie70Incorporated in [#8139](https://github.com/gfx-rs/wgpu/pull/8139)
-
-#### Naga
-
-- Prevent UB with invalid ray query calls on spirv. By @Vecvec in [#8390](https://github.com/gfx-rs/wgpu/pull/8390).
-- Update the set of binding_array capabilities. In most cases, they are set automatically from `wgpu` features, and this change should not be user-visible. By @andyleiserson in [#8671](https://github.com/gfx-rs/wgpu/pull/8671).
-
-### Bug Fixes
+- Expose render layer. By @xiaopengli89 in [#8707](https://github.com/gfx-rs/wgpu/pull/8707)
+- `MTLDevice` is thread-safe. By @uael in [#8168](https://github.com/gfx-rs/wgpu/pull/8168)
 
 #### naga
 
-- Fix a bug that resulted in the Metal error `program scope variable must reside in constant address space` in some cases. By @teoxoy in [#8311](https://github.com/gfx-rs/wgpu/pull/8311).
+- Prevent UB with invalid ray query calls on spirv. By @Vecvec in [#8390](https://github.com/gfx-rs/wgpu/pull/8390).
+- Update the set of binding_array capabilities. In most cases, they are set automatically from `wgpu` features, and this change should not be user-visible. By @andyleiserson in [#8671](https://github.com/gfx-rs/wgpu/pull/8671).
+- Naga now accepts the `var<function>` syntax for declaring local variables. By @andyleiserson in [#8710](https://github.com/gfx-rs/wgpu/pull/8710).
+
+### Bug Fixes
 
 #### General
 
@@ -222,12 +409,13 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 - The texture subresources used by the color attachments of a render pass are no longer allowed to overlap when accessed via different texture views. By @andyleiserson in [#8402](https://github.com/gfx-rs/wgpu/pull/8402).
 - The `STORAGE_READ_ONLY` texture usage is now permitted to coexist with other read-only usages. By @andyleiserson in [#8490](https://github.com/gfx-rs/wgpu/pull/8490).
 - Validate that buffers are unmapped in `write_buffer` calls. By @ErichDonGubler in [#8454](https://github.com/gfx-rs/wgpu/pull/8454).
-- Add WGSL parsing for mesh shaders. By @inner-daemons in [#8370](https://github.com/gfx-rs/wgpu/pull/8370).
 - Shorten critical section inside present such that the snatch write lock is no longer held during present, preventing other work happening on other threads. By @cwfitzgerald in [#8608](https://github.com/gfx-rs/wgpu/pull/8608).
 
 #### naga
 
 - The `||` and `&&` operators now "short circuit", i.e., do not evaluate the RHS if the result can be determined from just the LHS. By @andyleiserson in [#7339](https://github.com/gfx-rs/wgpu/pull/7339).
+- Fix a bug that resulted in the Metal error `program scope variable must reside in constant address space` in some cases. By @teoxoy in [#8311](https://github.com/gfx-rs/wgpu/pull/8311).
+- Handle `rayQueryTerminate` in spv-out instead of ignoring it. By @Vecvec in [#8581](https://github.com/gfx-rs/wgpu/pull/8581).
 
 #### DX12
 
@@ -238,6 +426,9 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 
 - Fixed a validation error regarding atomic memory semantics. By @atlv24 in [#8391](https://github.com/gfx-rs/wgpu/pull/8391).
 
+#### Metal
+- Fixed a variety of feature detection related bugs. By @inner-daemons in [#8439](https://github.com/gfx-rs/wgpu/pull/8439).
+
 #### WebGPU
 
 - Fixed a bug where the texture aspect was not passed through when calling `copy_texture_to_buffer` in WebGPU, causing the copy to fail for depth/stencil textures. By @Tim-Evans-Seequent in [#8445](https://github.com/gfx-rs/wgpu/pull/8445).
@@ -247,6 +438,7 @@ By @cwfitzgerald in [#8609](https://github.com/gfx-rs/wgpu/pull/8609).
 - Fix race when downloading texture from compute shader pass. By @SpeedCrash100 in [#8527](https://github.com/gfx-rs/wgpu/pull/8527)
 - Fix double window class registration when dynamic libraries are used. By @Azorlogh in [#8548](https://github.com/gfx-rs/wgpu/pull/8548)
 - Fix context loss on device initialization on GL3.3-4.1 contexts. By @cwfitzgerald in [#8674](https://github.com/gfx-rs/wgpu/pull/8674).
+- `VertexFormat::Unorm10_10_10_2` can now be used on `gl` backends. By @mooori in [#8717](https://github.com/gfx-rs/wgpu/pull/8717).
 
 #### hal
 

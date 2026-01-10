@@ -193,7 +193,7 @@ impl Queries {
 
 async fn run() {
     // Instantiates instance of wgpu
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::from_env_or_default());
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::from_env_or_default());
 
     // `request_adapter` instantiates the general connection to the GPU
     let adapter = instance
@@ -351,7 +351,7 @@ fn render_pass(
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
-        immediates_ranges: &[],
+        immediate_size: 0,
     });
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

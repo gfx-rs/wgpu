@@ -1781,6 +1781,96 @@ impl Writer {
 
         func_id
     }
+
+    fn write_ray_query_terminate(&mut self) -> spirv::Word {
+        if let Some(&word) = self
+            .ray_query_functions
+            .get(&LookupRayQueryFunction::Terminate)
+        {
+            return word;
+        }
+
+        let ray_query_type_id = self.get_ray_query_pointer_id();
+
+        let u32_ty = self.get_u32_type_id();
+        let u32_ptr_ty = self.get_pointer_type_id(u32_ty, spirv::StorageClass::Function);
+
+        let bool_type_id = self.get_bool_type_id();
+
+        let (func_id, mut function, arg_ids) =
+            self.write_function_signature(&[ray_query_type_id, u32_ptr_ty], self.void_type);
+
+        let query_id = arg_ids[0];
+        let init_tracker_id = arg_ids[1];
+
+        let block_id = self.id_gen.next();
+        let mut block = Block::new(block_id);
+
+        let initialized_tracker_id = self.id_gen.next();
+        block.body.push(Instruction::load(
+            u32_ty,
+            initialized_tracker_id,
+            init_tracker_id,
+            None,
+        ));
+
+        let merge_id = self.id_gen.next();
+        let merge_block = Block::new(merge_id);
+
+        let valid_block_id = self.id_gen.next();
+        let mut valid_block = Block::new(valid_block_id);
+
+        let instruction = if self.ray_query_initialization_tracking {
+            let has_proceeded = write_ray_flags_contains_flags(
+                self,
+                &mut block,
+                initialized_tracker_id,
+                super::RayQueryPoint::PROCEED.bits(),
+            );
+
+            let finished_proceed_id = write_ray_flags_contains_flags(
+                self,
+                &mut block,
+                initialized_tracker_id,
+                super::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+            );
+
+            let not_finished_id = self.id_gen.next();
+            block.body.push(Instruction::unary(
+                spirv::Op::LogicalNot,
+                bool_type_id,
+                not_finished_id,
+                finished_proceed_id,
+            ));
+
+            let valid_call = self.write_logical_and(&mut block, not_finished_id, has_proceeded);
+
+            block.body.push(Instruction::selection_merge(
+                merge_id,
+                spirv::SelectionControl::NONE,
+            ));
+
+            Instruction::branch_conditional(valid_call, valid_block_id, merge_id)
+        } else {
+            Instruction::branch(valid_block_id)
+        };
+
+        function.consume(block, instruction);
+
+        valid_block
+            .body
+            .push(Instruction::ray_query_terminate(query_id));
+
+        function.consume(valid_block, Instruction::branch(merge_id));
+
+        function.consume(merge_block, Instruction::return_void());
+
+        function.to_words(&mut self.logical_layout.function_definitions);
+
+        self.ray_query_functions
+            .insert(LookupRayQueryFunction::Proceed, func_id);
+        func_id
+    }
 }
 
 impl BlockContext<'_> {
@@ -1863,7 +1953,17 @@ impl BlockContext<'_> {
                     &[query_id, tracker_ids.initialized_tracker],
                 ));
             }
-            crate::RayQueryFunction::Terminate => {}
+            crate::RayQueryFunction::Terminate => {
+                let id = self.gen_id();
+
+                let func_id = self.writer.write_ray_query_terminate();
+                block.body.push(Instruction::function_call(
+                    self.writer.void_type,
+                    id,
+                    func_id,
+                    &[query_id, tracker_ids.initialized_tracker],
+                ));
+            }
         }
     }
 

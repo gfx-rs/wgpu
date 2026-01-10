@@ -4,7 +4,7 @@ use core::{ffi::CStr, marker::PhantomData};
 use ash::{ext, google, khr, vk};
 use parking_lot::Mutex;
 
-use crate::vulkan::semaphore_list::SemaphoreList;
+use crate::{vulkan::semaphore_list::SemaphoreList, AllocationSizes};
 
 use super::semaphore_list::SemaphoreListMode;
 
@@ -135,6 +135,12 @@ pub struct PhysicalDeviceFeatures {
     ///
     /// Strictly speaking this tells us what features we *don't* have compared to core.
     portability_subset: Option<vk::PhysicalDevicePortabilitySubsetFeaturesKHR<'static>>,
+
+    /// Features provided by `VK_KHR_cooperative_matrix`
+    cooperative_matrix: Option<vk::PhysicalDeviceCooperativeMatrixFeaturesKHR<'static>>,
+
+    /// Features provided by `VK_KHR_vulkan_memory_model`, promoted to Vulkan 1.2
+    vulkan_memory_model: Option<vk::PhysicalDeviceVulkanMemoryModelFeaturesKHR<'static>>,
 }
 
 impl PhysicalDeviceFeatures {
@@ -212,6 +218,12 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.portability_subset {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.cooperative_matrix {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.vulkan_memory_model {
             info = info.push_next(feature);
         }
         info
@@ -570,6 +582,28 @@ impl PhysicalDeviceFeatures {
             } else {
                 None
             },
+            cooperative_matrix: if enabled_extensions.contains(&khr::cooperative_matrix::NAME) {
+                let needed =
+                    requested_features.contains(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX);
+                Some(
+                    vk::PhysicalDeviceCooperativeMatrixFeaturesKHR::default()
+                        .cooperative_matrix(needed),
+                )
+            } else {
+                None
+            },
+            vulkan_memory_model: if device_api_version >= vk::API_VERSION_1_2
+                || enabled_extensions.contains(&khr::vulkan_memory_model::NAME)
+            {
+                let needed =
+                    requested_features.contains(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX);
+                Some(
+                    vk::PhysicalDeviceVulkanMemoryModelFeaturesKHR::default()
+                        .vulkan_memory_model(needed),
+                )
+            } else {
+                None
+            },
         }
     }
 
@@ -586,6 +620,7 @@ impl PhysicalDeviceFeatures {
         instance: &ash::Instance,
         phd: vk::PhysicalDevice,
         caps: &PhysicalDeviceProperties,
+        queue_props: &vk::QueueFamilyProperties,
     ) -> (wgt::Features, wgt::DownlevelFlags) {
         use wgt::{DownlevelFlags as Df, Features as F};
         let mut features = F::empty()
@@ -593,9 +628,6 @@ impl PhysicalDeviceFeatures {
             | F::IMMEDIATES
             | F::ADDRESS_MODE_CLAMP_TO_BORDER
             | F::ADDRESS_MODE_CLAMP_TO_ZERO
-            | F::TIMESTAMP_QUERY
-            | F::TIMESTAMP_QUERY_INSIDE_ENCODERS
-            | F::TIMESTAMP_QUERY_INSIDE_PASSES
             | F::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
             | F::CLEAR_TEXTURE
             | F::PIPELINE_CACHE
@@ -637,6 +669,13 @@ impl PhysicalDeviceFeatures {
         );
         dl_flags.set(Df::DEPTH_BIAS_CLAMP, self.core.depth_bias_clamp != 0);
 
+        features.set(
+            F::TIMESTAMP_QUERY
+                | F::TIMESTAMP_QUERY_INSIDE_ENCODERS
+                | F::TIMESTAMP_QUERY_INSIDE_PASSES,
+            // Vulkan strictly defines this as either 36-64, or zero.
+            queue_props.timestamp_valid_bits >= 36,
+        );
         features.set(
             F::INDIRECT_FIRST_INSTANCE,
             self.core.draw_indirect_first_instance != 0,
@@ -954,6 +993,11 @@ impl PhysicalDeviceFeatures {
                 .map(|p| p.multisample_array_image == vk::TRUE)
                 .unwrap_or(true),
         );
+        // Enable cooperative matrix if any configuration is supported
+        features.set(
+            F::EXPERIMENTAL_COOPERATIVE_MATRIX,
+            !caps.cooperative_matrix_properties.is_empty(),
+        );
 
         (features, dl_flags)
     }
@@ -1033,6 +1077,11 @@ pub struct PhysicalDeviceProperties {
     ///
     /// It is associated with a `VkPhysicalDevice` and its children.
     device_api_version: u32,
+
+    /// Supported cooperative matrix configurations.
+    ///
+    /// This is determined by querying `vkGetPhysicalDeviceCooperativeMatrixPropertiesKHR`.
+    cooperative_matrix_properties: Vec<wgt::CooperativeMatrixProperties>,
 }
 
 impl PhysicalDeviceProperties {
@@ -1248,6 +1297,11 @@ impl PhysicalDeviceProperties {
             extensions.push(khr::fragment_shader_barycentric::NAME);
         }
 
+        // Require `VK_KHR_cooperative_matrix` if the associated feature was requested
+        if requested_features.contains(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX) {
+            extensions.push(khr::cooperative_matrix::NAME);
+        }
+
         extensions
     }
 
@@ -1259,19 +1313,40 @@ impl PhysicalDeviceProperties {
             .min(limits.max_compute_work_group_count[1])
             .min(limits.max_compute_work_group_count[2]);
         let (
-            max_task_workgroup_total_count,
-            max_task_workgroups_per_dimension,
-            max_mesh_multiview_view_count,
-            max_mesh_output_layers,
-        ) = match self.mesh_shader {
-            Some(m) => (
-                m.max_task_work_group_total_count,
-                m.max_task_work_group_count.into_iter().min().unwrap(),
-                m.max_mesh_multiview_view_count,
-                m.max_mesh_output_layers,
-            ),
-            None => (0, 0, 0, 0),
-        };
+            mut max_task_mesh_workgroup_total_count,
+            mut max_task_mesh_workgroups_per_dimension,
+            mut max_task_invocations_per_workgroup,
+            mut max_task_invocations_per_dimension,
+            mut max_mesh_invocations_per_workgroup,
+            mut max_mesh_invocations_per_dimension,
+            mut max_task_payload_size,
+            mut max_mesh_output_vertices,
+            mut max_mesh_output_primitives,
+            mut max_mesh_output_layers,
+            mut max_mesh_multiview_view_count,
+        ) = Default::default();
+        if let Some(m) = self.mesh_shader {
+            max_task_mesh_workgroup_total_count = m
+                .max_task_work_group_total_count
+                .min(m.max_mesh_work_group_total_count);
+            max_task_mesh_workgroups_per_dimension = m
+                .max_task_work_group_count
+                .into_iter()
+                .chain(m.max_mesh_work_group_count)
+                .min()
+                .unwrap();
+            max_task_invocations_per_workgroup = m.max_task_work_group_invocations;
+            max_task_invocations_per_dimension =
+                m.max_task_work_group_size.into_iter().min().unwrap();
+            max_mesh_invocations_per_workgroup = m.max_mesh_work_group_invocations;
+            max_mesh_invocations_per_dimension =
+                m.max_mesh_work_group_size.into_iter().min().unwrap();
+            max_task_payload_size = m.max_task_payload_size;
+            max_mesh_output_vertices = m.max_mesh_output_vertices;
+            max_mesh_output_primitives = m.max_mesh_output_primitives;
+            max_mesh_output_layers = m.max_mesh_output_layers;
+            max_mesh_multiview_view_count = m.max_mesh_multiview_view_count;
+        }
 
         // Prevent very large buffers on mesa and most android devices, and in all cases
         // don't risk confusing JS by exceeding the range of a double.
@@ -1328,14 +1403,12 @@ impl PhysicalDeviceProperties {
             .map(|a| a.max_multiview_view_count.min(32))
             .unwrap_or(0);
 
-        wgt::Limits {
+        crate::auxil::apply_hal_limits(wgt::Limits {
             max_texture_dimension_1d: limits.max_image_dimension1_d,
             max_texture_dimension_2d: limits.max_image_dimension2_d,
             max_texture_dimension_3d: limits.max_image_dimension3_d,
             max_texture_array_layers: limits.max_image_array_layers,
-            max_bind_groups: limits
-                .max_bound_descriptor_sets
-                .min(crate::MAX_BIND_GROUPS as u32),
+            max_bind_groups: limits.max_bound_descriptor_sets,
             max_bindings_per_bind_group: wgt::Limits::default().max_bindings_per_bind_group,
             max_dynamic_uniform_buffers_per_pipeline_layout: limits
                 .max_descriptor_set_uniform_buffers_dynamic,
@@ -1354,20 +1427,17 @@ impl PhysicalDeviceProperties {
             max_storage_buffer_binding_size: limits
                 .max_storage_buffer_range
                 .min(crate::auxil::MAX_I32_BINDING_SIZE),
-            max_vertex_buffers: limits
-                .max_vertex_input_bindings
-                .min(crate::MAX_VERTEX_BUFFERS as u32),
+            max_vertex_buffers: limits.max_vertex_input_bindings,
             max_vertex_attributes: limits.max_vertex_input_attributes,
             max_vertex_buffer_array_stride: limits.max_vertex_input_binding_stride,
             max_immediate_size: limits.max_push_constants_size,
+            max_inter_stage_shader_variables: limits
+                .max_vertex_output_components
+                .min(limits.max_fragment_input_components)
+                / 4,
             min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as u32,
             min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as u32,
-            max_inter_stage_shader_components: limits
-                .max_vertex_output_components
-                .min(limits.max_fragment_input_components),
-            max_color_attachments: limits
-                .max_color_attachments
-                .min(crate::MAX_COLOR_ATTACHMENTS as u32),
+            max_color_attachments: limits.max_color_attachments,
             max_color_attachment_bytes_per_sample,
             max_compute_workgroup_storage_size: limits.max_compute_shared_memory_size,
             max_compute_invocations_per_workgroup: limits.max_compute_work_group_invocations,
@@ -1378,10 +1448,19 @@ impl PhysicalDeviceProperties {
             max_buffer_size,
             max_non_sampler_bindings: u32::MAX,
 
-            max_task_workgroup_total_count,
-            max_task_workgroups_per_dimension,
-            max_mesh_multiview_view_count,
+            max_task_mesh_workgroup_total_count,
+            max_task_mesh_workgroups_per_dimension,
+            max_task_invocations_per_workgroup,
+            max_task_invocations_per_dimension,
+
+            max_mesh_invocations_per_workgroup,
+            max_mesh_invocations_per_dimension,
+
+            max_task_payload_size,
+            max_mesh_output_vertices,
+            max_mesh_output_primitives,
             max_mesh_output_layers,
+            max_mesh_multiview_view_count,
 
             max_blas_primitive_count,
             max_blas_geometry_count,
@@ -1389,7 +1468,7 @@ impl PhysicalDeviceProperties {
             max_acceleration_structures_per_shader_stage,
 
             max_multiview_view_count,
-        }
+        })
     }
 
     /// Return a `wgpu_hal::Alignments` structure describing this adapter.
@@ -1546,6 +1625,14 @@ impl super::InstanceShared {
                 unsafe {
                     get_device_properties.get_physical_device_properties2(phd, &mut properties2)
                 };
+
+                // Query cooperative matrix properties
+                if capabilities.supports_extension(khr::cooperative_matrix::NAME) {
+                    let coop_matrix =
+                        khr::cooperative_matrix::Instance::new(&self.entry, &self.raw);
+                    capabilities.cooperative_matrix_properties =
+                        query_cooperative_matrix_properties(&coop_matrix, phd);
+                }
 
                 if is_intel_igpu_outdated_for_robustness2(
                     capabilities.properties,
@@ -1725,6 +1812,13 @@ impl super::InstanceShared {
                 features2 = features2.push_next(next);
             }
 
+            if capabilities.supports_extension(khr::cooperative_matrix::NAME) {
+                let next = features
+                    .cooperative_matrix
+                    .insert(vk::PhysicalDeviceCooperativeMatrixFeaturesKHR::default());
+                features2 = features2.push_next(next);
+            }
+
             unsafe { get_device_properties.get_physical_device_features2(phd, &mut features2) };
             features2.features
         } else {
@@ -1813,8 +1907,6 @@ impl super::Instance {
                 .unwrap_or(wgt::MAXIMUM_SUBGROUP_MAX_SIZE),
             transient_saves_memory: supports_lazily_allocated,
         };
-        let (available_features, mut downlevel_flags) =
-            phd_features.to_wgpu(&self.shared.raw, phd, &phd_capabilities);
         let mut workarounds = super::Workarounds::empty();
         {
             // TODO: only enable for particular devices
@@ -1828,15 +1920,6 @@ impl super::Instance {
                 phd_capabilities.properties.vendor_id == db::nvidia::VENDOR,
             );
         };
-
-        if info.driver == "llvmpipe" {
-            // The `F16_IN_F32` instructions do not normally require native `F16` support, but on
-            // llvmpipe, they do.
-            downlevel_flags.set(
-                wgt::DownlevelFlags::SHADER_F16_IN_F32,
-                available_features.contains(wgt::Features::SHADER_F16),
-            );
-        }
 
         if let Some(driver) = phd_capabilities.driver {
             if driver.conformance_version.major == 0 {
@@ -1881,11 +1964,36 @@ impl super::Instance {
                 .raw
                 .get_physical_device_queue_family_properties(phd)
         };
-        let queue_flags = queue_families.first()?.queue_flags;
+        let queue_family_properties = queue_families.first()?;
+        let queue_flags = queue_family_properties.queue_flags;
         if !queue_flags.contains(vk::QueueFlags::GRAPHICS) {
             log::debug!("The first queue only exposes {queue_flags:?}");
             return None;
         }
+
+        let (available_features, mut downlevel_flags) = phd_features.to_wgpu(
+            &self.shared.raw,
+            phd,
+            &phd_capabilities,
+            queue_family_properties,
+        );
+
+        if info.driver == "llvmpipe" {
+            // The `F16_IN_F32` instructions do not normally require native `F16` support, but on
+            // llvmpipe, they do.
+            downlevel_flags.set(
+                wgt::DownlevelFlags::SHADER_F16_IN_F32,
+                available_features.contains(wgt::Features::SHADER_F16),
+            );
+        }
+
+        let has_robust_buffer_access2 = phd_features
+            .robustness2
+            .as_ref()
+            .map(|r| r.robust_buffer_access2 == 1)
+            .unwrap_or_default();
+
+        let alignments = phd_capabilities.to_hal_alignments(has_robust_buffer_access2);
 
         let private_caps = super::PrivateCapabilities {
             image_view_usage: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
@@ -1918,6 +2026,7 @@ impl super::Instance {
                 depth_stencil_required_flags(),
             ),
             multi_draw_indirect: phd_features.core.multi_draw_indirect != 0,
+            max_draw_indirect_count: phd_capabilities.properties.limits.max_draw_indirect_count,
             non_coherent_map_mask: phd_capabilities.properties.limits.non_coherent_atom_size - 1,
             can_present: true,
             //TODO: make configurable
@@ -1928,11 +2037,7 @@ impl super::Instance {
                     .image_robustness
                     .is_some_and(|ext| ext.robust_image_access != 0),
             },
-            robust_buffer_access2: phd_features
-                .robustness2
-                .as_ref()
-                .map(|r| r.robust_buffer_access2 == 1)
-                .unwrap_or_default(),
+            robust_buffer_access2: has_robust_buffer_access2,
             robust_image_access2: phd_features
                 .robustness2
                 .as_ref()
@@ -1957,15 +2062,17 @@ impl super::Instance {
                 .multiview
                 .map(|a| a.max_multiview_instance_index)
                 .unwrap_or(0),
+            scratch_buffer_alignment: alignments.ray_tracing_scratch_buffer_alignment,
         };
         let capabilities = crate::Capabilities {
             limits: phd_capabilities.to_wgpu_limits(),
-            alignments: phd_capabilities.to_hal_alignments(private_caps.robust_buffer_access2),
+            alignments,
             downlevel: wgt::DownlevelCapabilities {
                 flags: downlevel_flags,
                 limits: wgt::DownlevelLimits {},
                 shader_model: wgt::ShaderModel::Sm5, //TODO?
             },
+            cooperative_matrix_properties: phd_capabilities.cooperative_matrix_properties.clone(),
         };
 
         let adapter = super::Adapter {
@@ -2269,6 +2376,11 @@ impl super::Adapter {
             if features.contains(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
                 capabilities.push(spv::Capability::MeshShadingEXT);
             }
+            if features.contains(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX) {
+                capabilities.push(spv::Capability::CooperativeMatrixKHR);
+                // TODO: expose this more generally
+                capabilities.push(spv::Capability::VulkanMemoryModel);
+            }
             if self.private_caps.shader_integer_dot_product {
                 // See <https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_shader_integer_dot_product.html#_new_spir_v_capabilities>.
                 capabilities.extend(&[
@@ -2390,87 +2502,20 @@ impl super::Adapter {
             signal_semaphores: Mutex::new(SemaphoreList::new(SemaphoreListMode::Signal)),
         };
 
-        let mem_allocator = {
-            let limits = self.phd_capabilities.properties.limits;
+        let allocation_sizes = AllocationSizes::from_memory_hints(memory_hints).into();
 
-            // Note: the parameters here are not set in stone nor where they picked with
-            // strong confidence.
-            // `final_free_list_chunk` should be bigger than starting_free_list_chunk if
-            // we want the behavior of starting with smaller block sizes and using larger
-            // ones only after we observe that the small ones aren't enough, which I think
-            // is a good "I don't know what the workload is going to be like" approach.
-            //
-            // For reference, `VMA`, and `gpu_allocator` both start with 256 MB blocks
-            // (then VMA doubles the block size each time it needs a new block).
-            // At some point it would be good to experiment with real workloads
-            //
-            // TODO(#5925): The plan is to switch the Vulkan backend from `gpu_alloc` to
-            // `gpu_allocator` which has a different (simpler) set of configuration options.
-            //
-            // TODO: These parameters should take hardware capabilities into account.
-            let mb = 1024 * 1024;
-            let perf_cfg = gpu_alloc::Config {
-                starting_free_list_chunk: 128 * mb,
-                final_free_list_chunk: 512 * mb,
-                minimal_buddy_size: 1,
-                initial_buddy_dedicated_size: 8 * mb,
-                dedicated_threshold: 32 * mb,
-                preferred_dedicated_threshold: mb,
-                transient_dedicated_threshold: 128 * mb,
-            };
-            let mem_usage_cfg = gpu_alloc::Config {
-                starting_free_list_chunk: 8 * mb,
-                final_free_list_chunk: 64 * mb,
-                minimal_buddy_size: 1,
-                initial_buddy_dedicated_size: 8 * mb,
-                dedicated_threshold: 8 * mb,
-                preferred_dedicated_threshold: mb,
-                transient_dedicated_threshold: 16 * mb,
-            };
-            let config = match memory_hints {
-                wgt::MemoryHints::Performance => perf_cfg,
-                wgt::MemoryHints::MemoryUsage => mem_usage_cfg,
-                wgt::MemoryHints::Manual {
-                    suballocated_device_memory_block_size,
-                } => gpu_alloc::Config {
-                    starting_free_list_chunk: suballocated_device_memory_block_size.start,
-                    final_free_list_chunk: suballocated_device_memory_block_size.end,
-                    initial_buddy_dedicated_size: suballocated_device_memory_block_size.start,
-                    ..perf_cfg
-                },
-            };
+        let buffer_device_address = enabled_extensions.contains(&khr::buffer_device_address::NAME);
 
-            let max_memory_allocation_size =
-                if let Some(maintenance_3) = self.phd_capabilities.maintenance_3 {
-                    maintenance_3.max_memory_allocation_size
-                } else {
-                    u64::MAX
-                };
-            let properties = gpu_alloc::DeviceProperties {
-                max_memory_allocation_count: limits.max_memory_allocation_count,
-                max_memory_allocation_size,
-                non_coherent_atom_size: limits.non_coherent_atom_size,
-                memory_types: memory_types
-                    .iter()
-                    .map(|memory_type| gpu_alloc::MemoryType {
-                        props: gpu_alloc::MemoryPropertyFlags::from_bits_truncate(
-                            memory_type.property_flags.as_raw() as u8,
-                        ),
-                        heap: memory_type.heap_index,
-                    })
-                    .collect(),
-                memory_heaps: mem_properties
-                    .memory_heaps_as_slice()
-                    .iter()
-                    .map(|&memory_heap| gpu_alloc::MemoryHeap {
-                        size: memory_heap.size,
-                    })
-                    .collect(),
-                buffer_device_address: enabled_extensions
-                    .contains(&khr::buffer_device_address::NAME),
-            };
-            gpu_alloc::GpuAllocator::new(config, properties)
-        };
+        let mem_allocator =
+            gpu_allocator::vulkan::Allocator::new(&gpu_allocator::vulkan::AllocatorCreateDesc {
+                instance: self.instance.raw.clone(),
+                device: shared.raw.clone(),
+                physical_device: self.raw,
+                debug_settings: Default::default(),
+                buffer_device_address,
+                allocation_sizes,
+            })?;
+
         let desc_allocator = gpu_descriptor::DescriptorAllocator::new(
             if let Some(di) = self.phd_capabilities.descriptor_indexing {
                 di.max_update_after_bind_descriptors_in_all_pools
@@ -2906,4 +2951,128 @@ fn is_intel_igpu_outdated_for_robustness2(
         );
     }
     is_outdated
+}
+
+/// Convert Vulkan component type to wgt::CooperativeScalarType.
+fn map_vk_component_type(ty: vk::ComponentTypeKHR) -> Option<wgt::CooperativeScalarType> {
+    match ty {
+        vk::ComponentTypeKHR::FLOAT16 => Some(wgt::CooperativeScalarType::F16),
+        vk::ComponentTypeKHR::FLOAT32 => Some(wgt::CooperativeScalarType::F32),
+        vk::ComponentTypeKHR::SINT32 => Some(wgt::CooperativeScalarType::I32),
+        vk::ComponentTypeKHR::UINT32 => Some(wgt::CooperativeScalarType::U32),
+        _ => None,
+    }
+}
+
+/// Convert Vulkan matrix size.
+fn map_vk_cooperative_size(size: u32) -> Option<u32> {
+    match size {
+        8 | 16 => Some(size),
+        _ => None,
+    }
+}
+
+/// Query all supported cooperative matrix configurations from Vulkan.
+fn query_cooperative_matrix_properties(
+    coop_matrix: &khr::cooperative_matrix::Instance,
+    phd: vk::PhysicalDevice,
+) -> Vec<wgt::CooperativeMatrixProperties> {
+    let vk_properties =
+        match unsafe { coop_matrix.get_physical_device_cooperative_matrix_properties(phd) } {
+            Ok(props) => props,
+            Err(e) => {
+                log::warn!("Failed to query cooperative matrix properties: {e:?}");
+                return Vec::new();
+            }
+        };
+
+    log::debug!(
+        "Vulkan reports {} cooperative matrix configurations",
+        vk_properties.len()
+    );
+
+    let mut result = Vec::new();
+    for prop in &vk_properties {
+        log::debug!(
+            "  Vulkan coop matrix: M={} N={} K={} A={:?} B={:?} C={:?} Result={:?} scope={:?} saturating={}",
+            prop.m_size,
+            prop.n_size,
+            prop.k_size,
+            prop.a_type,
+            prop.b_type,
+            prop.c_type,
+            prop.result_type,
+            prop.scope,
+            prop.saturating_accumulation
+        );
+
+        // Only include subgroup-scoped operations (the only scope we support)
+        if prop.scope != vk::ScopeKHR::SUBGROUP {
+            log::debug!("    Skipped: scope is not SUBGROUP");
+            continue;
+        }
+
+        // Map sizes - skip configurations with sizes we don't support
+        let m_size = match map_vk_cooperative_size(prop.m_size) {
+            Some(s) => s,
+            None => {
+                log::debug!("    Skipped: M size {} not supported", prop.m_size);
+                continue;
+            }
+        };
+        let n_size = match map_vk_cooperative_size(prop.n_size) {
+            Some(s) => s,
+            None => {
+                log::debug!("    Skipped: N size {} not supported", prop.n_size);
+                continue;
+            }
+        };
+        let k_size = match map_vk_cooperative_size(prop.k_size) {
+            Some(s) => s,
+            None => {
+                log::debug!("    Skipped: K size {} not supported", prop.k_size);
+                continue;
+            }
+        };
+
+        // Map the component types - A and B must match, C and Result must match
+        let ab_type = match map_vk_component_type(prop.a_type) {
+            Some(t) if Some(t) == map_vk_component_type(prop.b_type) => t,
+            _ => {
+                log::debug!(
+                    "    Skipped: A/B types {:?}/{:?} not supported or don't match",
+                    prop.a_type,
+                    prop.b_type
+                );
+                continue;
+            }
+        };
+        let cr_type = match map_vk_component_type(prop.c_type) {
+            Some(t) if Some(t) == map_vk_component_type(prop.result_type) => t,
+            _ => {
+                log::debug!(
+                    "    Skipped: C/Result types {:?}/{:?} not supported or don't match",
+                    prop.c_type,
+                    prop.result_type
+                );
+                continue;
+            }
+        };
+
+        log::debug!("    Accepted!");
+        result.push(wgt::CooperativeMatrixProperties {
+            m_size,
+            n_size,
+            k_size,
+            ab_type,
+            cr_type,
+            saturating_accumulation: prop.saturating_accumulation != 0,
+        });
+    }
+
+    log::info!(
+        "Found {} cooperative matrix configurations supported by wgpu",
+        result.len()
+    );
+    result
 }

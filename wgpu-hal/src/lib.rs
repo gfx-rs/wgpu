@@ -305,6 +305,7 @@ use core::{
 };
 
 use bitflags::bitflags;
+use raw_window_handle::DisplayHandle;
 use thiserror::Error;
 use wgt::WasmNotSendSync;
 
@@ -379,6 +380,107 @@ pub enum DeviceError {
     Lost,
     #[error("Unexpected error variant (driver implementation is at fault)")]
     Unexpected,
+}
+
+#[cfg(any(dx12, vulkan))]
+impl From<gpu_allocator::AllocationError> for DeviceError {
+    fn from(result: gpu_allocator::AllocationError) -> Self {
+        match result {
+            gpu_allocator::AllocationError::OutOfMemory => Self::OutOfMemory,
+            gpu_allocator::AllocationError::FailedToMap(e) => {
+                log::error!("gpu-allocator: Failed to map: {e}");
+                Self::Lost
+            }
+            gpu_allocator::AllocationError::NoCompatibleMemoryTypeFound => {
+                log::error!("gpu-allocator: No Compatible Memory Type Found");
+                Self::Lost
+            }
+            gpu_allocator::AllocationError::InvalidAllocationCreateDesc => {
+                log::error!("gpu-allocator: Invalid Allocation Creation Description");
+                Self::Lost
+            }
+            gpu_allocator::AllocationError::InvalidAllocatorCreateDesc(e) => {
+                log::error!("gpu-allocator: Invalid Allocator Creation Description: {e}");
+                Self::Lost
+            }
+
+            gpu_allocator::AllocationError::Internal(e) => {
+                log::error!("gpu-allocator: Internal Error: {e}");
+                Self::Lost
+            }
+            gpu_allocator::AllocationError::BarrierLayoutNeedsDevice10
+            | gpu_allocator::AllocationError::CastableFormatsRequiresEnhancedBarriers
+            | gpu_allocator::AllocationError::CastableFormatsRequiresAtLeastDevice12 => {
+                unreachable!()
+            }
+        }
+    }
+}
+
+// A copy of gpu_allocator::AllocationSizes, allowing to read the configured value for
+// the dx12 backend, we should instead add getters to gpu_allocator::AllocationSizes
+// and remove this type.
+// https://github.com/Traverse-Research/gpu-allocator/issues/295
+#[cfg_attr(not(any(dx12, vulkan)), expect(dead_code))]
+pub(crate) struct AllocationSizes {
+    pub(crate) min_device_memblock_size: u64,
+    pub(crate) max_device_memblock_size: u64,
+    pub(crate) min_host_memblock_size: u64,
+    pub(crate) max_host_memblock_size: u64,
+}
+
+impl AllocationSizes {
+    #[allow(dead_code)] // may be unused on some platforms
+    pub(crate) fn from_memory_hints(memory_hints: &wgt::MemoryHints) -> Self {
+        // TODO: the allocator's configuration should take hardware capability into
+        // account.
+        const MB: u64 = 1024 * 1024;
+
+        match memory_hints {
+            wgt::MemoryHints::Performance => Self {
+                min_device_memblock_size: 128 * MB,
+                max_device_memblock_size: 256 * MB,
+                min_host_memblock_size: 64 * MB,
+                max_host_memblock_size: 128 * MB,
+            },
+            wgt::MemoryHints::MemoryUsage => Self {
+                min_device_memblock_size: 8 * MB,
+                max_device_memblock_size: 64 * MB,
+                min_host_memblock_size: 4 * MB,
+                max_host_memblock_size: 32 * MB,
+            },
+            wgt::MemoryHints::Manual {
+                suballocated_device_memory_block_size,
+            } => {
+                // TODO: https://github.com/gfx-rs/wgpu/issues/8625
+                // Would it be useful to expose the host size in memory hints
+                // instead of always using half of the device size?
+                let device_size = suballocated_device_memory_block_size;
+                let host_size = device_size.start / 2..device_size.end / 2;
+
+                // gpu_allocator clamps the sizes between 4MiB and 256MiB, but we clamp them ourselves since we use
+                // the sizes when detecting high memory pressure and there is no way to query the values otherwise.
+                Self {
+                    min_device_memblock_size: device_size.start.clamp(4 * MB, 256 * MB),
+                    max_device_memblock_size: device_size.end.clamp(4 * MB, 256 * MB),
+                    min_host_memblock_size: host_size.start.clamp(4 * MB, 256 * MB),
+                    max_host_memblock_size: host_size.end.clamp(4 * MB, 256 * MB),
+                }
+            }
+        }
+    }
+}
+
+#[cfg(any(dx12, vulkan))]
+impl From<AllocationSizes> for gpu_allocator::AllocationSizes {
+    fn from(value: AllocationSizes) -> gpu_allocator::AllocationSizes {
+        gpu_allocator::AllocationSizes::new(
+            value.min_device_memblock_size,
+            value.min_host_memblock_size,
+        )
+        .with_max_device_memblock_size(value.max_device_memblock_size)
+        .with_max_host_memblock_size(value.max_host_memblock_size)
+    }
 }
 
 #[allow(dead_code)] // may be unused on some platforms
@@ -542,7 +644,7 @@ pub trait Api: Clone + fmt::Debug + Sized + WasmNotSendSync + 'static {
 pub trait Instance: Sized + WasmNotSendSync {
     type A: Api;
 
-    unsafe fn init(desc: &InstanceDescriptor) -> Result<Self, InstanceError>;
+    unsafe fn init(desc: &InstanceDescriptor<'_>) -> Result<Self, InstanceError>;
     unsafe fn create_surface(
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
@@ -1366,7 +1468,7 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
         dynamic_offsets: &[wgt::DynamicOffset],
     );
 
-    /// Sets a range in immediate data data.
+    /// Sets a range in immediate data.
     ///
     /// IMPORTANT: while the data is passed as words, the offset is in bytes!
     ///
@@ -1377,7 +1479,6 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
     unsafe fn set_immediates(
         &mut self,
         layout: &<Self::A as Api>::PipelineLayout,
-        stages: wgt::ShaderStages,
         offset_bytes: u32,
         data: &[u32],
     );
@@ -1770,12 +1871,16 @@ bitflags!(
     }
 );
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct InstanceDescriptor<'a> {
     pub name: &'a str,
     pub flags: wgt::InstanceFlags,
     pub memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     pub backend_options: wgt::BackendOptions,
+    pub telemetry: Option<Telemetry>,
+    /// This is a borrow because the surrounding `core::Instance` keeps the the owned display handle
+    /// alive already.
+    pub display: Option<DisplayHandle<'a>>,
 }
 
 #[derive(Clone, Debug)]
@@ -1816,6 +1921,10 @@ pub struct Capabilities {
     pub limits: wgt::Limits,
     pub alignments: Alignments,
     pub downlevel: wgt::DownlevelCapabilities,
+    /// Supported cooperative matrix configurations.
+    ///
+    /// Empty if cooperative matrices are not supported.
+    pub cooperative_matrix_properties: Vec<wgt::CooperativeMatrixProperties>,
 }
 
 /// An adapter with all the information needed to reason about its capabilities.
@@ -1983,7 +2092,7 @@ pub struct PipelineLayoutDescriptor<'a, B: DynBindGroupLayout + ?Sized> {
     pub label: Label<'a>,
     pub flags: PipelineLayoutFlags,
     pub bind_group_layouts: &'a [&'a B],
-    pub immediates_ranges: &'a [wgt::ImmediateRange],
+    pub immediate_size: u32,
 }
 
 /// A region of a buffer made visible to shaders via a [`BindGroup`].
@@ -2700,4 +2809,24 @@ pub struct TlasInstance {
     pub custom_data: u32,
     pub mask: u8,
     pub blas_address: u64,
+}
+
+#[cfg(dx12)]
+pub enum D3D12ExposeAdapterResult {
+    CreateDeviceError(dx12::CreateDeviceError),
+    UnknownFeatureLevel(i32),
+    ResourceBindingTier2Requirement,
+    ShaderModel6Requirement,
+    Success(dx12::FeatureLevel, dx12::ShaderModel),
+}
+
+/// Pluggable telemetry, mainly to be used by Firefox.
+#[derive(Debug, Clone, Copy)]
+pub struct Telemetry {
+    #[cfg(dx12)]
+    pub d3d12_expose_adapter: fn(
+        desc: &windows::Win32::Graphics::Dxgi::DXGI_ADAPTER_DESC2,
+        driver_version: Result<[u16; 4], windows_core::HRESULT>,
+        result: D3D12ExposeAdapterResult,
+    ),
 }

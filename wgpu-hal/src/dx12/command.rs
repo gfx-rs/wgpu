@@ -1195,7 +1195,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_immediates(
         &mut self,
         layout: &super::PipelineLayout,
-        _stages: wgt::ShaderStages,
         offset_bytes: u32,
         data: &[u32],
     ) {

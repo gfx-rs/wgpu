@@ -110,15 +110,6 @@ impl ContextWgpuCore {
         hal_device: hal::OpenDevice<A>,
         desc: &crate::DeviceDescriptor<'_>,
     ) -> Result<(CoreDevice, CoreQueue), crate::RequestDeviceError> {
-        if !matches!(desc.trace, wgt::Trace::Off) {
-            log::error!(
-                "
-                Feature 'trace' has been removed temporarily; \
-                see https://github.com/gfx-rs/wgpu/issues/5974. \
-                The `trace` parameter will have no effect."
-            );
-        }
-
         let (device_id, queue_id) = unsafe {
             self.0.create_device_from_hal(
                 adapter.id,
@@ -780,11 +771,11 @@ crate::cmp::impl_eq_ord_hash_proxy!(CoreQueueWriteBuffer => .mapping.ptr);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreBufferMappedRange => .ptr);
 
 impl dispatch::InstanceInterface for ContextWgpuCore {
-    fn new(desc: &wgt::InstanceDescriptor) -> Self
+    fn new(desc: wgt::InstanceDescriptor) -> Self
     where
         Self: Sized,
     {
-        Self(Arc::new(wgc::global::Global::new("wgpu", desc)))
+        Self(Arc::new(wgc::global::Global::new("wgpu", desc, None)))
     }
 
     unsafe fn create_surface(
@@ -930,15 +921,6 @@ impl dispatch::AdapterInterface for CoreAdapter {
         &self,
         desc: &crate::DeviceDescriptor<'_>,
     ) -> Pin<Box<dyn dispatch::RequestDeviceFuture>> {
-        if !matches!(desc.trace, wgt::Trace::Off) {
-            log::error!(
-                "
-                Feature 'trace' has been removed temporarily; \
-                see https://github.com/gfx-rs/wgpu/issues/5974. \
-                The `trace` parameter will have no effect."
-            );
-        }
-
         let res = self.context.0.adapter_request_device(
             self.id,
             &desc.map_label(|l| l.map(Borrowed)),
@@ -1002,6 +984,12 @@ impl dispatch::AdapterInterface for CoreAdapter {
     fn get_presentation_timestamp(&self) -> crate::PresentationTimestamp {
         self.context.0.adapter_get_presentation_timestamp(self.id)
     }
+
+    fn cooperative_matrix_properties(&self) -> Vec<crate::wgt::CooperativeMatrixProperties> {
+        self.context
+            .0
+            .adapter_cooperative_matrix_properties(self.id)
+    }
 }
 
 impl Drop for CoreAdapter {
@@ -1017,6 +1005,10 @@ impl dispatch::DeviceInterface for CoreDevice {
 
     fn limits(&self) -> crate::Limits {
         self.context.0.device_limits(self.id)
+    }
+
+    fn adapter_info(&self) -> crate::AdapterInfo {
+        self.context.0.device_adapter_info(self.id)
     }
 
     // If we have no way to create a shader module, we can't return one, and so most of the function is unreachable.
@@ -1184,7 +1176,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     arrayed_buffer_bindings.extend(array.iter().map(|binding| bm::BufferBinding {
                         buffer: binding.buffer.inner.as_core().id,
                         offset: binding.offset,
-                        size: binding.size,
+                        size: binding.size.map(wgt::BufferSize::get),
                     }));
                 }
             }
@@ -1204,7 +1196,7 @@ impl dispatch::DeviceInterface for CoreDevice {
                     }) => bm::BindingResource::Buffer(bm::BufferBinding {
                         buffer: buffer.inner.as_core().id,
                         offset,
-                        size,
+                        size: size.map(wgt::BufferSize::get),
                     }),
                     BindingResource::BufferArray(array) => {
                         let slice = &remaining_arrayed_buffer_bindings[..array.len()];
@@ -1286,7 +1278,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         let descriptor = wgc::binding_model::PipelineLayoutDescriptor {
             label: desc.label.map(Borrowed),
             bind_group_layouts: Borrowed(&temp_layouts),
-            immediates_ranges: Borrowed(desc.immediates_ranges),
+            immediate_size: desc.immediate_size,
         };
 
         let (id, error) = self
@@ -3185,11 +3177,11 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
         }
     }
 
-    fn set_immediates(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]) {
-        if let Err(cause) =
-            self.context
-                .0
-                .render_pass_set_immediates(&mut self.pass, stages, offset, data)
+    fn set_immediates(&mut self, offset: u32, data: &[u8]) {
+        if let Err(cause) = self
+            .context
+            .0
+            .render_pass_set_immediates(&mut self.pass, offset, data)
         {
             self.context.handle_error(
                 &self.error_sink,
@@ -3761,11 +3753,10 @@ impl dispatch::RenderBundleEncoderInterface for CoreRenderBundleEncoder {
         wgpu_render_bundle_set_vertex_buffer(&mut self.encoder, slot, buffer.id, offset, size)
     }
 
-    fn set_immediates(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]) {
+    fn set_immediates(&mut self, offset: u32, data: &[u8]) {
         unsafe {
             wgpu_render_bundle_set_immediates(
                 &mut self.encoder,
-                stages,
                 offset,
                 data.len().try_into().unwrap(),
                 data.as_ptr(),

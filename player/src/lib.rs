@@ -6,14 +6,14 @@
 extern crate wgpu_core as wgc;
 extern crate wgpu_types as wgt;
 
-use std::{borrow::Cow, convert::Infallible, fs, path::Path, sync::Arc};
+use std::{borrow::Cow, convert::Infallible, sync::Arc};
 
 use hashbrown::HashMap;
 
 use wgc::{
     binding_model::BindingResource,
     command::{ArcCommand, ArcReferences, BasePass, Command, PointerReferences},
-    device::trace,
+    device::trace::{self, DataKind, DataLoader},
     id::PointerId,
 };
 
@@ -94,7 +94,7 @@ impl Player {
         device: &Arc<wgc::device::Device>,
         queue: &Arc<wgc::device::queue::Queue>,
         action: trace::Action<PointerReferences>,
-        dir: &Path,
+        loader: impl DataLoader,
     ) {
         use wgc::device::trace::Action;
         log::debug!("action {action:?}");
@@ -202,7 +202,7 @@ impl Player {
                 let resolved_desc = wgc::binding_model::ResolvedPipelineLayoutDescriptor {
                     label: desc.label.clone(),
                     bind_group_layouts: Cow::from(&bind_group_layouts),
-                    immediates_ranges: Cow::Borrowed(&*desc.immediates_ranges),
+                    immediate_size: desc.immediate_size,
                 };
 
                 let pipeline_layout = device
@@ -226,15 +226,17 @@ impl Player {
                 let _bind_group = self.bind_groups.remove(&id).expect("invalid bind group");
             }
             Action::CreateShaderModule { id, desc, data } => {
-                log::debug!("Creating shader from {data}");
-                let code = fs::read_to_string(dir.join(&data)).unwrap();
-                let source = if data.ends_with(".wgsl") {
-                    wgc::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(code.clone()))
-                } else if data.ends_with(".ron") {
+                let code = loader.load_utf8(&data);
+                let source = if data.kind() == DataKind::Wgsl {
+                    wgc::pipeline::ShaderModuleSource::Wgsl(code.clone())
+                } else if data.kind() == DataKind::Ron {
                     let module = ron::de::from_str(&code).unwrap();
                     wgc::pipeline::ShaderModuleSource::Naga(module)
                 } else {
-                    panic!("Unknown shader {data}");
+                    panic!(
+                        "Unknown data kind for CreateShaderModule: {:?}",
+                        data.kind()
+                    );
                 };
                 match device.create_shader_module(&desc, source) {
                     Ok(module) => self.shader_modules.insert(id, module),
@@ -250,8 +252,8 @@ impl Player {
                 runtime_checks,
             } => {
                 let spirv = data.iter().find_map(|a| {
-                    if a.ends_with(".spv") {
-                        let data = fs::read(dir.join(a)).unwrap();
+                    if a.kind() == DataKind::Spv {
+                        let data = loader.load(a);
                         assert!(data.len().is_multiple_of(4));
 
                         Some(Cow::Owned(bytemuck::pod_collect_to_vec(&data)))
@@ -259,46 +261,21 @@ impl Player {
                         None
                     }
                 });
-                let dxil = data.iter().find_map(|a| {
-                    if a.ends_with(".dxil") {
-                        let vec = std::fs::read(dir.join(a)).unwrap();
-                        Some(Cow::Owned(vec))
-                    } else {
-                        None
-                    }
-                });
-                let hlsl = data.iter().find_map(|a| {
-                    if a.ends_with(".hlsl") {
-                        let code = fs::read_to_string(dir.join(a)).unwrap();
-                        Some(Cow::Owned(code))
-                    } else {
-                        None
-                    }
-                });
-                let msl = data.iter().find_map(|a| {
-                    if a.ends_with(".msl") {
-                        let code = fs::read_to_string(dir.join(a)).unwrap();
-                        Some(Cow::Owned(code))
-                    } else {
-                        None
-                    }
-                });
-                let glsl = data.iter().find_map(|a| {
-                    if a.ends_with(".glsl") {
-                        let code = fs::read_to_string(dir.join(a)).unwrap();
-                        Some(Cow::Owned(code))
-                    } else {
-                        None
-                    }
-                });
-                let wgsl = data.iter().find_map(|a| {
-                    if a.ends_with(".wgsl") {
-                        let code = fs::read_to_string(dir.join(a)).unwrap();
-                        Some(Cow::Owned(code))
-                    } else {
-                        None
-                    }
-                });
+                let dxil = data
+                    .iter()
+                    .find_map(|a| (a.kind() == DataKind::Dxil).then(|| loader.load(a)));
+                let hlsl = data
+                    .iter()
+                    .find_map(|a| (a.kind() == DataKind::Hlsl).then(|| loader.load_utf8(a)));
+                let msl = data
+                    .iter()
+                    .find_map(|a| (a.kind() == DataKind::Msl).then(|| loader.load_utf8(a)));
+                let glsl = data
+                    .iter()
+                    .find_map(|a| (a.kind() == DataKind::Glsl).then(|| loader.load_utf8(a)));
+                let wgsl = data
+                    .iter()
+                    .find_map(|a| (a.kind() == DataKind::Wgsl).then(|| loader.load_utf8(a)));
                 let desc = wgt::CreateShaderModuleDescriptorPassthrough {
                     entry_point,
                     label,
@@ -382,7 +359,7 @@ impl Player {
                 queued,
             } => {
                 let buffer = self.resolve_buffer_id(id);
-                let bin = std::fs::read(dir.join(data)).unwrap();
+                let bin = loader.load(&data);
                 let size = (range.end - range.start) as usize;
                 if queued {
                     queue
@@ -401,7 +378,7 @@ impl Player {
                 size,
             } => {
                 let to = self.resolve_texel_copy_texture_info(to);
-                let bin = std::fs::read(dir.join(data)).unwrap();
+                let bin = loader.load(&data);
                 queue
                     .write_texture(to, &bin, &layout, &size)
                     .expect("Queue::write_texture error");
@@ -416,6 +393,23 @@ impl Player {
                     .collect();
                 let buffer = wgc::command::CommandBuffer::from_trace(device, resolved_commands);
                 queue.submit(&[buffer]).unwrap();
+            }
+            Action::FailedCommands {
+                commands,
+                failed_at_submit,
+                error,
+            } => {
+                let action = if failed_at_submit.is_some() {
+                    "submitting"
+                } else {
+                    "encoding"
+                };
+                if let Some(commands) = commands {
+                    log::trace!(
+                        "Trace recorded an error {action} the following commands: {commands:#?}"
+                    );
+                }
+                panic!("Error recorded in trace: {error}");
             }
             Action::CreateBlas { id, desc, sizes } => {
                 let blas = device.create_blas(&desc, sizes).expect("create_blas error");
@@ -432,6 +426,21 @@ impl Player {
                 self.tlas_s.remove(&id).expect("invalid tlas");
             }
         }
+    }
+
+    // This one is a little strange because the surface is held by the
+    // `player` application but we want to insert the texture into our
+    // map so we can find it for rendering.
+    pub fn get_surface_texture(
+        &mut self,
+        id: wgc::id::PointerId<wgc::id::markers::Texture>,
+        surface: &wgc::instance::Surface,
+    ) {
+        let frame = surface
+            .get_current_texture()
+            .expect("get_current_texture error");
+        let texture = frame.texture.expect("did not obtain a surface texture");
+        self.textures.insert(id, texture);
     }
 
     pub fn resolve_buffer_id(
@@ -1058,12 +1067,10 @@ impl Player {
             },
             C::SetScissor(rect) => C::SetScissor(rect),
             C::SetImmediate {
-                stages,
                 offset,
                 size_bytes,
                 values_offset,
             } => C::SetImmediate {
-                stages,
                 offset,
                 size_bytes,
                 values_offset,

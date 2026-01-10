@@ -113,11 +113,11 @@ impl ComputePass<'_> {
 
 /// [`Features::IMMEDIATES`] must be enabled on the device in order to call these functions.
 impl ComputePass<'_> {
-    /// Set immediate data data for subsequent dispatch calls.
+    /// Set immediate data for subsequent dispatch calls.
     ///
     /// Write the bytes in `data` at offset `offset` within immediate data
     /// storage.  Both `offset` and the length of `data` must be
-    /// multiples of [`IMMEDIATES_ALIGNMENT`], which is always 4.
+    /// multiples of [`crate::IMMEDIATE_DATA_ALIGNMENT`], which is always 4.
     ///
     /// For example, if `offset` is `4` and `data` is eight bytes long, this
     /// call will write `data` to bytes `4..12` of immediate data storage.
@@ -143,6 +143,11 @@ impl ComputePass<'_> {
 impl ComputePass<'_> {
     /// Start a pipeline statistics query on this compute pass. It can be ended with
     /// `end_pipeline_statistics_query`. Pipeline statistics queries may not be nested.
+    ///
+    /// The amount of information collected by this query, and the space occupied in the query set,
+    /// is determined by the [`PipelineStatisticsTypes`] the query set was created with.
+    /// `query_index` is the index of the first query result slot that will be written to, and
+    /// `query_set` must have sufficient size to hold all results written starting at that slot.
     pub fn begin_pipeline_statistics_query(&mut self, query_set: &QuerySet, query_index: u32) {
         self.inner
             .begin_pipeline_statistics_query(&query_set.inner, query_index);
