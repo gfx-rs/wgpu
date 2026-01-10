@@ -1,20 +1,15 @@
 ---
 name: webgpu-specs
 description: Download WebGPU and WGSL specifications for use as a reference
-allowed-tools: "Bash(curl -fsSL https://raw.githubusercontent.com/gpuweb/gpuweb/main/spec/index.bs -o .claude/skills/webgpu-specs/webgpu-spec.bs), Bash(curl -fsSL https://raw.githubusercontent.com/gpuweb/gpuweb/main/wgsl/index.bs -o .claude/skills/webgpu-specs/wgsl-spec.bs)"
+allowed-tools: "Bash(sh .claude/skills/webgpu-specs/download.sh)"
 ---
 
-Download the WebGPU specification by running:
-```
-curl -fsSL https://raw.githubusercontent.com/gpuweb/gpuweb/main/spec/index.bs -o .claude/skills/webgpu-specs/webgpu-spec.bs
-```
-Search in the webgpu-spec.bs file for relevant sections of the specification.
+Run `sh .claude/skills/webgpu-specs/download.sh` to download the
+WebGPU and WGSL specifications if they are not present or if they have
+been updated. You do not need to change directory before running the script.
 
-Download the WGSL specification by running:
-```
-curl -fsSL https://raw.githubusercontent.com/gpuweb/gpuweb/main/wgsl/index.bs -o .claude/skills/webgpu-specs/wgsl-spec.bs
-```
-Search in the wgsl-spec.bs file for relevant sections of the specification.
+After the specs are downloaded, you can search in `target/claude/webgpu-spec.bs`
+and `target/claude/wgsl-spec.bs` for relevant sections of the specification.
 
 When referencing the specifications, prefer to use named anchors rather than
 line numbers. For example, to reference the "Object Descriptors" section, which has the
