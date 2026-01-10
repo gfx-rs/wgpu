@@ -460,9 +460,20 @@ impl VaryingContext<'_> {
                         ));
                     }
                 }
+                let (ty, ty_inner) = if interpolation == Some(crate::Interpolation::PerVertex) {
+                    let three = crate::ArraySize::Constant(core::num::NonZeroU32::new(3).unwrap());
+                    match ty_inner {
+                        &Ti::Array { base, size, .. } if size == three => {
+                            (base, &self.types[base].inner)
+                        }
+                        _ => return Err(VaryingError::PerVertexNotArrayOfThree),
+                    }
+                } else {
+                    (ty, ty_inner)
+                };
+
                 // Only IO-shareable types may be stored in locations.
-                // Per Vertex case is checked later.
-                else if !self.type_info[ty.index()]
+                if !self.type_info[ty.index()]
                     .flags
                     .contains(super::TypeFlags::IO_SHAREABLE)
                 {
@@ -568,17 +579,7 @@ impl VaryingContext<'_> {
                     return Err(VaryingError::UnsupportedCapability(required));
                 }
 
-                if interpolation == Some(crate::Interpolation::PerVertex) {
-                    let three = crate::ArraySize::Constant(core::num::NonZeroU32::new(3).unwrap());
-                    match ty_inner {
-                        &Ti::Array { base, size, .. } if size == three => {
-                            if self.types[base].inner.scalar_kind().is_none() {
-                                return Err(VaryingError::InvalidType(base));
-                            }
-                        }
-                        _ => return Err(VaryingError::PerVertexNotArrayOfThree),
-                    }
-                } else {
+                if interpolation != Some(crate::Interpolation::PerVertex) {
                     match ty_inner.scalar_kind() {
                         Some(crate::ScalarKind::Float) => {
                             if needs_interpolation && interpolation.is_none() {
