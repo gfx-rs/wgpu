@@ -116,6 +116,11 @@ impl Device {
         self.inner.limits()
     }
 
+    /// Get info about the adapter that this device was created from.
+    pub fn adapter_info(&self) -> AdapterInfo {
+        self.inner.adapter_info()
+    }
+
     /// Creates a shader module.
     ///
     /// <div class="warning">

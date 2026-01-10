@@ -45,6 +45,7 @@ Bottom level categories:
 
 - Added support for cooperative load/store operations in shaders. Currently only WGSL on the input and SPIR-V, METAL, and WGSL on the output are supported. By @kvark in [#8251](https://github.com/gfx-rs/wgpu/issues/8251).
 - Added support for per-vertex attributes in fragment shaders. Currently only WGSL input is supported, and only SPIR-V or WGSL output is supported. By @atlv in [#8821](https://github.com/gfx-rs/wgpu/issues/8821).
+- Added support for obtaining `AdapterInfo` from `Device`. By @sagudev in [#8807](https://github.com/gfx-rs/wgpu/pull/8807).
 
 ### Bug Fixes
 
@@ -52,11 +53,22 @@ Bottom level categories:
 
 - BREAKING: Migrated from the `maxInterStageShaderComponents` limit to `maxInterStageShaderVariables`, which changes validation in a way that should not affect most programs. This follows the latest changes of the WebGPU spec. By @ErichDonGubler in [#8652](https://github.com/gfx-rs/wgpu/pull/8652), [#8792](https://github.com/gfx-rs/wgpu/pull/8792).
 - Fixed validation of the texture format in GPUDepthStencilState when neither depth nor stencil is actually enabled. By @andyleiserson in [#8766](https://github.com/gfx-rs/wgpu/pull/8766).
+- Tracing support has been restored. By @andyleiserson in [#8429](https://github.com/gfx-rs/wgpu/pull/8429).
+
+#### naga
+
+- The validator checks that override-sized arrays have a positive size, if overrides have been resolved. By @andyleiserson in [#8822](https://github.com/gfx-rs/wgpu/pull/8822).
+- Fix some cases where f16 constants were not working. By @andyleiserson in [#8816](https://github.com/gfx-rs/wgpu/pull/8816).
 
 #### GLES
 
 - `DisplayHandle` should now be passed to `InstanceDescriptor` for correct EGL initialization on Wayland. By @MarijnS95 in [#8012](https://github.com/gfx-rs/wgpu/pull/8012)
   Note that the existing workaround to create surfaces before the adapter is no longer valid.
+
+#### naga
+
+- Reject zero-value construction of a runtime-sized array with a validation error. Previously it would crash in the HLSL backend. By @mooori in [#8741](https://github.com/gfx-rs/wgpu/pull/8741).
+- Reject splat vector construction if the argument type does not match the type of the vector's scalar. Previously it would succeed. By @mooori in [#8829](https://github.com/gfx-rs/wgpu/pull/8829).
 
 ### Documentation
 

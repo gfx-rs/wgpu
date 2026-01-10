@@ -128,6 +128,10 @@ impl DeviceInterface for CustomDevice {
         unimplemented!()
     }
 
+    fn adapter_info(&self) -> wgpu::AdapterInfo {
+        unimplemented!()
+    }
+
     fn create_shader_module(
         &self,
         desc: wgpu::ShaderModuleDescriptor<'_>,

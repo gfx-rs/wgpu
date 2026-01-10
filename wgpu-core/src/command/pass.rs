@@ -1,10 +1,11 @@
 //! Generic pass functions that both compute and render passes need.
 
 use crate::binding_model::{BindError, BindGroup, ImmediateUploadError};
-use crate::command::bind::Binder;
 use crate::command::encoder::EncodingState;
-use crate::command::memory_init::SurfacesInDiscardState;
-use crate::command::{DebugGroupError, QueryResetMap, QueryUseError};
+use crate::command::{
+    bind::Binder, memory_init::SurfacesInDiscardState, query::QueryResetMap, DebugGroupError,
+    QueryUseError,
+};
 use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::pipeline::LateSizedBufferGroup;
 use crate::resource::{DestroyedResourceError, Labeled, ParentDevice, QuerySet};
