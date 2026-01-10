@@ -9,6 +9,7 @@
 - You can test that the code builds by running `cargo build`. Don't pass `--release` unless there's a specific need to test a release build, it's much slower.
 - After making code changes, ensure the code is formatted by using `cargo fmt`, linted by using `cargo clippy --tests`. If there are no errors, you can use `cargo xtask test` and `cargo xtask cts --backend <backend>` to run tests (to fully validate a change, run both). On MacOS, the backend is `metal`. On Windows, the backend is `dx12`. On Linux, the backend is `vulkan`.
 - Do not perform commits yourself, ever.
+- Use the WebGPU and WGSL specifications as a reference to determine the correct behavior. Do not assume that a behavior is correct just because the CTS expects it.
 
 ## Changelog
 
@@ -84,9 +85,42 @@ The TypeScript sources for the CTS are under cts/src. There is also generated Ja
 Do not assume that a behavior is correct just because a CTS test expects it. Verify the correct
 behavior in the WebGPU or WGSL specification.
 
-# Naga Code Structure
+# Overview of the Code
 
-## Constant Evaluator (`naga/src/proc/constant_evaluator.rs`)
+See `docs/big-picture.png` for an overview of the system.
+
+The major components are:
+
+* `wgpu-hal` implements a backend for each supported graphics API (Vulkan, DX12, Metal, GLES).
+
+* `wgpu-core` implements the WebGPU API, including resource management and validation.
+  It calls the platform graphics APIs via `wgpu-hal`, and uses `naga` for shader translation.
+
+* `wgpu` is the native Rust API. In addition to providing bindings to `wgpu-core`, the `wgpu`
+  crate can also be compiled to WASM and built against the "WebGPU" backend, where it uses
+  whatever WebGPU implementation is provided by the WASM environment. `wgpu` is not used
+  by Deno and Firefox.
+
+* `naga` is the shader translator. It reads shaders in WGSL, GLSL, or SPIR-V,
+  translates to Naga IR, and then writes shaders in GLSL, HLSL, MSL (Metal Shading Language), SPIR-V, or WGSL.
+  It is responsible for validating that WGSL shaders are valid according to the WGSL language specification.
+
+* `wgpu-types` contains some type definitions that are applicable both to `wgpu-core` and to
+  the `wgpu` "WebGPU" backend.
+
+* `deno_webgpu` contains WebGPU bindings for the Deno Javascript runtime.
+  We also use Deno as a test environment for running the WebGPU CTS.
+  Only make a change in the Deno bindings if you are sure that the issue
+  doesn't apply to other clients (Firefox or `wgpu` Rust API). If it does
+  apply to other clients, the issue should probably be fixed in `wgpu-core`.
+
+
+For a more detailed discussion of the `wgpu` architecture, refer to
+<https://github.com/gfx-rs/wgpu/wiki/Architecture>.
+
+## Naga
+
+### Constant Evaluator (`naga/src/proc/constant_evaluator.rs`)
 
 The constant evaluator is responsible for evaluating constant expressions at compile time in WGSL/GLSL shaders.
 
@@ -114,6 +148,10 @@ The constant evaluator is responsible for evaluating constant expressions at com
   - Getting source type's scalar
   - Updating the `kind` to target kind
   - Keeping the same `width` for bitcast (no conversion)
+
+# Other
+
+This is stuff that Claude wrote for itself. It can probably be improved.
 
 ## Naga Tests
 
