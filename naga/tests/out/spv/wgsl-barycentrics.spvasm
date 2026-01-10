@@ -15,10 +15,10 @@ OpExecutionMode %21 OriginUpperLeft
 OpExecutionMode %30 OriginUpperLeft
 OpDecorate %7 BuiltIn BaryCoordKHR
 OpDecorate %10 Location 0
-OpDecorate %18 BuiltIn BaryCoordKHR
+OpDecorate %18 BuiltIn BaryCoordNoPerspKHR
 OpDecorate %20 Location 0
 OpDecorate %25 BuiltIn BaryCoordKHR
-OpDecorate %27 BuiltIn BaryCoordKHR
+OpDecorate %27 BuiltIn BaryCoordNoPerspKHR
 OpDecorate %29 Location 0
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32

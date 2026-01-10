@@ -3080,13 +3080,21 @@ impl Writer {
                         }
                         BuiltIn::PrimitiveId
                     }
-                    Bi::Barycentric | Bi::BarycentricNoPerspective => {
+                    Bi::Barycentric => {
                         self.require_any(
                             "`barycentric` built-in",
                             &[spirv::Capability::FragmentBarycentricKHR],
                         )?;
                         self.use_extension("SPV_KHR_fragment_shader_barycentric");
                         BuiltIn::BaryCoordKHR
+                    }
+                    Bi::BarycentricNoPerspective => {
+                        self.require_any(
+                            "`barycentric` built-in",
+                            &[spirv::Capability::FragmentBarycentricKHR],
+                        )?;
+                        self.use_extension("SPV_KHR_fragment_shader_barycentric");
+                        BuiltIn::BaryCoordNoPerspKHR
                     }
                     Bi::SampleIndex => {
                         self.require_any(
