@@ -1268,7 +1268,11 @@ impl<'a> ConstantEvaluator<'a> {
                 let base = self.check_and_get(base)?;
                 let index = self.check_and_get(index)?;
 
-                self.access(base, self.constant_index(index)?, span)
+                let index_val: u32 = self
+                    .to_ctx()
+                    .get_const_val_from(index, self.expressions)
+                    .map_err(|_| ConstantEvaluatorError::InvalidAccessIndexTy)?;
+                self.access(base, index_val as usize, span)
             }
             Expression::Swizzle {
                 size,
@@ -2113,24 +2117,6 @@ impl<'a> ConstantEvaluator<'a> {
                     .ok_or(ConstantEvaluatorError::InvalidAccessIndex)
             }
             _ => Err(ConstantEvaluatorError::InvalidAccessBase),
-        }
-    }
-
-    fn constant_index(&self, expr: Handle<Expression>) -> Result<usize, ConstantEvaluatorError> {
-        match self.expressions[expr] {
-            Expression::ZeroValue(ty)
-                if matches!(
-                    self.types[ty].inner,
-                    TypeInner::Scalar(crate::Scalar {
-                        kind: ScalarKind::Uint,
-                        ..
-                    })
-                ) =>
-            {
-                Ok(0)
-            }
-            Expression::Literal(Literal::U32(index)) => Ok(index as usize),
-            _ => Err(ConstantEvaluatorError::InvalidAccessIndexTy),
         }
     }
 

@@ -815,9 +815,9 @@ impl Buffer {
             BufferMapState::Init { staging_buffer } => {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut trace) = *device.trace.lock() {
-                    use crate::device::trace::IntoTrace;
+                    use crate::device::trace::{DataKind, IntoTrace};
 
-                    let data = trace.make_binary("bin", staging_buffer.get_data());
+                    let data = trace.make_binary(DataKind::Bin, staging_buffer.get_data());
                     trace.add(trace::Action::WriteBuffer {
                         id: self.to_trace(),
                         data,
@@ -878,10 +878,10 @@ impl Buffer {
                 if host == HostMap::Write {
                     #[cfg(feature = "trace")]
                     if let Some(ref mut trace) = *device.trace.lock() {
-                        use crate::device::trace::IntoTrace;
+                        use crate::device::trace::{DataKind, IntoTrace};
 
                         let size = range.end - range.start;
-                        let data = trace.make_binary("bin", unsafe {
+                        let data = trace.make_binary(DataKind::Bin, unsafe {
                             core::slice::from_raw_parts(mapping.ptr.as_ptr(), size as usize)
                         });
                         trace.add(trace::Action::WriteBuffer {

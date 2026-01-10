@@ -1,10 +1,13 @@
 use super::{compose::validate_compose, FunctionInfo, ModuleInfo, ShaderStages, TypeFlags};
 use crate::arena::UniqueArena;
+use crate::valid::expression::builtin::validate_zero_value;
 use crate::{
     arena::Handle,
     proc::OverloadSet as _,
     proc::{IndexableLengthError, ResolveError},
 };
+
+pub mod builtin;
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -35,6 +38,8 @@ pub enum ExpressionError {
     InvalidSwizzleComponent(crate::SwizzleComponent, crate::VectorSize),
     #[error(transparent)]
     Compose(#[from] super::ComposeError),
+    #[error(transparent)]
+    ZeroValue(#[from] super::ZeroValueError),
     #[error(transparent)]
     IndexableLength(#[from] IndexableLengthError),
     #[error("Operation {0:?} can't work with {1:?}")]
@@ -287,7 +292,7 @@ impl super::Validator {
                 // If index is const we can do check for non-negative index
                 match module
                     .to_ctx()
-                    .eval_expr_to_u32_from(index, &function.expressions)
+                    .get_const_val_from(index, &function.expressions)
                 {
                     Ok(value) => {
                         let length = if self.overrides_resolved {
@@ -303,10 +308,13 @@ impl super::Validator {
                             }
                         }
                     }
-                    Err(crate::proc::U32EvalError::Negative) => {
+                    Err(crate::proc::ConstValueError::Negative) => {
                         return Err(ExpressionError::NegativeIndex(base))
                     }
-                    Err(crate::proc::U32EvalError::NonConst) => {}
+                    Err(crate::proc::ConstValueError::NonConst) => {}
+                    Err(crate::proc::ConstValueError::InvalidType) => {
+                        return Err(ExpressionError::InvalidIndexType(index))
+                    }
                 }
 
                 ShaderStages::all()
@@ -377,7 +385,11 @@ impl super::Validator {
                 self.validate_literal(literal)?;
                 ShaderStages::all()
             }
-            E::Constant(_) | E::Override(_) | E::ZeroValue(_) => ShaderStages::all(),
+            E::Constant(_) | E::Override(_) => ShaderStages::all(),
+            E::ZeroValue(ty) => {
+                validate_zero_value(ty, module.to_ctx())?;
+                ShaderStages::all()
+            }
             E::Compose { ref components, ty } => {
                 validate_compose(
                     ty,

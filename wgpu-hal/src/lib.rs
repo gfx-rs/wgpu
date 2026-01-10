@@ -2814,6 +2814,7 @@ pub struct TlasInstance {
 #[cfg(dx12)]
 pub enum D3D12ExposeAdapterResult {
     CreateDeviceError(dx12::CreateDeviceError),
+    UnknownFeatureLevel(i32),
     ResourceBindingTier2Requirement,
     ShaderModel6Requirement,
     Success(dx12::FeatureLevel, dx12::ShaderModel),
@@ -2825,7 +2826,7 @@ pub struct Telemetry {
     #[cfg(dx12)]
     pub d3d12_expose_adapter: fn(
         desc: &windows::Win32::Graphics::Dxgi::DXGI_ADAPTER_DESC2,
-        driver_version: [u16; 4],
+        driver_version: Result<[u16; 4], windows_core::HRESULT>,
         result: D3D12ExposeAdapterResult,
     ),
 }

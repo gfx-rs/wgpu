@@ -154,6 +154,8 @@ pub enum TypeError {
         "The base handle {0:?} has an override-expression that didn't get resolved to a constant"
     )]
     UnresolvedOverride(Handle<crate::Type>),
+    #[error("Override-sized array type {0:?} does not have a positive size")]
+    InvalidArraySize(Handle<crate::Type>),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -560,6 +562,15 @@ impl super::Validator {
                     .contains(TypeFlags::DATA | TypeFlags::SIZED | TypeFlags::CREATION_RESOLVED)
                 {
                     return Err(TypeError::InvalidArrayBaseType(base));
+                }
+
+                if self.overrides_resolved {
+                    // This check only makes sense for override-sized arrays.
+                    // `ArraySize::Constant` holds a `NonZeroU32`.
+                    if let crate::ArraySize::Pending(_) = size {
+                        size.resolve(gctx)
+                            .map_err(|_| TypeError::InvalidArraySize(handle))?;
+                    }
                 }
 
                 let base_layout = self.layouter[base];
