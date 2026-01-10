@@ -663,14 +663,26 @@ impl Parser {
                     ty_span: Span::UNDEFINED,
                 }))
             }
-            "coop_mat8x8" => ast::ConstructorType::PartialCooperativeMatrix {
-                columns: crate::CooperativeSize::Eight,
-                rows: crate::CooperativeSize::Eight,
-            },
-            "coop_mat16x16" => ast::ConstructorType::PartialCooperativeMatrix {
-                columns: crate::CooperativeSize::Sixteen,
-                rows: crate::CooperativeSize::Sixteen,
-            },
+            "coop_mat8x8" => {
+                lexer.require_enable_extension(
+                    ImplementedEnableExtension::WgpuCooperativeMatrix,
+                    span,
+                )?;
+                ast::ConstructorType::PartialCooperativeMatrix {
+                    columns: crate::CooperativeSize::Eight,
+                    rows: crate::CooperativeSize::Eight,
+                }
+            }
+            "coop_mat16x16" => {
+                lexer.require_enable_extension(
+                    ImplementedEnableExtension::WgpuCooperativeMatrix,
+                    span,
+                )?;
+                ast::ConstructorType::PartialCooperativeMatrix {
+                    columns: crate::CooperativeSize::Sixteen,
+                    rows: crate::CooperativeSize::Sixteen,
+                }
+            }
             "array" => ast::ConstructorType::PartialArray,
             "atomic"
             | "binding_array"
@@ -1744,18 +1756,30 @@ impl Parser {
                 ty: ctx.new_scalar(Scalar::F16),
                 ty_span: Span::UNDEFINED,
             },
-            "coop_mat8x8" => self.cooperative_matrix_with_type(
-                lexer,
-                ctx,
-                crate::CooperativeSize::Eight,
-                crate::CooperativeSize::Eight,
-            )?,
-            "coop_mat16x16" => self.cooperative_matrix_with_type(
-                lexer,
-                ctx,
-                crate::CooperativeSize::Sixteen,
-                crate::CooperativeSize::Sixteen,
-            )?,
+            "coop_mat8x8" => {
+                lexer.require_enable_extension(
+                    ImplementedEnableExtension::WgpuCooperativeMatrix,
+                    span,
+                )?;
+                self.cooperative_matrix_with_type(
+                    lexer,
+                    ctx,
+                    crate::CooperativeSize::Eight,
+                    crate::CooperativeSize::Eight,
+                )?
+            }
+            "coop_mat16x16" => {
+                lexer.require_enable_extension(
+                    ImplementedEnableExtension::WgpuCooperativeMatrix,
+                    span,
+                )?;
+                self.cooperative_matrix_with_type(
+                    lexer,
+                    ctx,
+                    crate::CooperativeSize::Sixteen,
+                    crate::CooperativeSize::Sixteen,
+                )?
+            }
             "atomic" => {
                 let scalar = lexer.next_scalar_generic()?;
                 ast::Type::Atomic(scalar)
