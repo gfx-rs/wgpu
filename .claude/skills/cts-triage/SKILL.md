@@ -156,7 +156,7 @@ Create or update a triage document (e.g., `category_triage.md`).
 
 Do not write information about changes you have made to the triage document. Only capture the state of the tests and any investigation into open issues.
 
-```markdown
+````markdown
 # Category CTS Tests - Triage Report
 
 **Overall Status:** XP/YF/ZS (%/%/%)
@@ -195,6 +195,7 @@ The validation is triggering incorrectly. When `depthCompare` is undefined/missi
 
 ### 2. title
 [repeat as needed for additional issues]
+````
 
 ## Step 11: Update test.lst
 
