@@ -4,7 +4,6 @@ use alloc::{
     vec::Vec,
 };
 use core::{fmt, mem};
-use hashbrown::{hash_map::Entry, HashMap};
 
 use super::{
     help,
@@ -538,7 +537,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             crate::Binding::BuiltIn(crate::BuiltIn::Position { invariant: true }) => {
                 write!(self.out, "precise ")?;
             }
-            crate::Binding::BuiltIn(crate::BuiltIn::BarycentricNoPerspective) => {
+            crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { perspective: false }) => {
                 write!(self.out, "noperspective ")?;
             }
             crate::Binding::Location {
@@ -570,7 +569,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         &mut self,
         binding: &Option<crate::Binding>,
         stage: Option<(ShaderStage, Io)>,
-        builtins_used: &mut HashMap<&str, usize>,
     ) -> BackendResult {
         match *binding {
             Some(crate::Binding::BuiltIn(builtin)) if !is_subgroup_builtin_binding(binding) => {
@@ -584,16 +582,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
                 let builtin_str = builtin.to_hlsl_str()?;
                 write!(self.out, " : {builtin_str}")?;
-                match builtins_used.entry(builtin_str) {
-                    Entry::Occupied(mut occupied_entry) => {
-                        let index = occupied_entry.get() + 1;
-                        *occupied_entry.get_mut() = index;
-                        write!(self.out, "{index}")?;
-                    }
-                    Entry::Vacant(vacant_entry) => {
-                        vacant_entry.insert(0);
-                    }
-                }
             }
             Some(crate::Binding::Location {
                 blend_src: Some(1), ..
@@ -627,7 +615,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
 
         write!(self.out, "struct {struct_name}")?;
         writeln!(self.out, " {{")?;
-        let mut builtins_used = HashMap::new();
         for m in members.iter() {
             // Sanity check that each IO member is a built-in or is assigned a
             // location. Also see note about nesting in `write_ep_input_struct`.
@@ -642,7 +629,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             }
             self.write_type(module, m.ty)?;
             write!(self.out, " {}", &m.name)?;
-            self.write_semantic(&m.binding, Some(shader_stage), &mut builtins_used)?;
+            self.write_semantic(&m.binding, Some(shader_stage))?;
             writeln!(self.out, ";")?;
         }
         if members.iter().any(|arg| {
@@ -1317,7 +1304,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         let struct_name = &self.names[&NameKey::Type(handle)];
         writeln!(self.out, "struct {struct_name} {{")?;
 
-        let mut builtins_used = HashMap::new();
         let mut last_offset = 0;
         for (index, member) in members.iter().enumerate() {
             if member.binding.is_none() && member.offset > last_offset {
@@ -1391,7 +1377,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 }
             }
 
-            self.write_semantic(&member.binding, shader_stage, &mut builtins_used)?;
+            self.write_semantic(&member.binding, shader_stage)?;
             writeln!(self.out, ";")?;
         }
 
@@ -1612,7 +1598,6 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                     write!(self.out, "{} {}", ep_input.ty_name, ep_input.arg_name)?;
                 } else {
                     let stage = module.entry_points[ep_index as usize].stage;
-                    let mut builtins_used = HashMap::new();
                     for (index, arg) in func.arguments.iter().enumerate() {
                         if index != 0 {
                             write!(self.out, ", ")?;
@@ -1627,11 +1612,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                             self.write_array_size(module, base, size)?;
                         }
 
-                        self.write_semantic(
-                            &arg.binding,
-                            Some((stage, Io::Input)),
-                            &mut builtins_used,
-                        )?;
+                        self.write_semantic(&arg.binding, Some((stage, Io::Input)))?;
                     }
                 }
                 if need_workgroup_variables_initialization {
@@ -1656,7 +1637,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         if let back::FunctionType::EntryPoint(index) = func_ctx.ty {
             let stage = module.entry_points[index as usize].stage;
             if let Some(crate::FunctionResult { ref binding, .. }) = func.result {
-                self.write_semantic(binding, Some((stage, Io::Output)), &mut HashMap::new())?;
+                self.write_semantic(binding, Some((stage, Io::Output)))?;
             }
         }
 

@@ -27,16 +27,3 @@ fragment fs_main_no_perspectiveOutput fs_main_no_perspective(
 ) {
     return fs_main_no_perspectiveOutput { metal::float4(bary_1, 1.0) };
 }
-
-
-struct fs_main_bothInput {
-};
-struct fs_main_bothOutput {
-    metal::float4 member_2 [[color(0)]];
-};
-fragment fs_main_bothOutput fs_main_both(
-  metal::float3 bary_2 [[barycentric_coord]]
-, metal::float3 bary_no_persp [[barycentric_coord, center_no_perspective]]
-) {
-    return fs_main_bothOutput { metal::float4(bary_2.xy, bary_no_persp.z, 1.0) };
-}

@@ -48,7 +48,7 @@ impl MaxFragmentShaderInputDeduction {
                 | InterStageBuiltIn::SubgroupSize
                 | InterStageBuiltIn::ViewIndex
                 | InterStageBuiltIn::PointCoord => 1,
-                InterStageBuiltIn::Barycentric | InterStageBuiltIn::BarycentricNoPerspective => 3,
+                InterStageBuiltIn::Barycentric => 3,
                 InterStageBuiltIn::Position => 0,
             },
         }
@@ -67,8 +67,7 @@ impl MaxFragmentShaderInputDeduction {
             BuiltIn::SubgroupInvocationId => InterStageBuiltIn::SubgroupInvocationId,
 
             BuiltIn::PointCoord => InterStageBuiltIn::PointCoord,
-            BuiltIn::Barycentric => InterStageBuiltIn::Barycentric,
-            BuiltIn::BarycentricNoPerspective => InterStageBuiltIn::BarycentricNoPerspective,
+            BuiltIn::Barycentric { .. } => InterStageBuiltIn::Barycentric,
             BuiltIn::ViewIndex => InterStageBuiltIn::ViewIndex,
 
             BuiltIn::BaseInstance
@@ -119,7 +118,6 @@ pub enum InterStageBuiltIn {
     // Non-standard
     PointCoord,
     Barycentric,
-    BarycentricNoPerspective,
     ViewIndex,
 }
 

@@ -217,10 +217,14 @@ impl VaryingContext<'_> {
             crate::Binding::BuiltIn(built_in) => {
                 // Ignore the `invariant` field for the sake of duplicate checks,
                 // but use the original in error messages.
-                let canonical = if let crate::BuiltIn::Position { .. } = built_in {
-                    crate::BuiltIn::Position { invariant: false }
-                } else {
-                    built_in
+                let canonical = match built_in {
+                    crate::BuiltIn::Position { .. } => {
+                        crate::BuiltIn::Position { invariant: false }
+                    }
+                    crate::BuiltIn::Barycentric { .. } => {
+                        crate::BuiltIn::Barycentric { perspective: false }
+                    }
+                    x => x,
                 };
 
                 if self.built_ins.contains(&canonical) {
@@ -232,9 +236,7 @@ impl VaryingContext<'_> {
                     Bi::ClipDistance => Capabilities::CLIP_DISTANCE,
                     Bi::CullDistance => Capabilities::CULL_DISTANCE,
                     Bi::PrimitiveIndex => Capabilities::PRIMITIVE_INDEX,
-                    Bi::Barycentric | Bi::BarycentricNoPerspective => {
-                        Capabilities::SHADER_BARYCENTRICS
-                    }
+                    Bi::Barycentric { .. } => Capabilities::SHADER_BARYCENTRICS,
                     Bi::ViewIndex => Capabilities::MULTIVIEW,
                     Bi::SampleIndex => Capabilities::MULTISAMPLED_SHADING,
                     Bi::NumSubgroups
@@ -327,7 +329,7 @@ impl VaryingContext<'_> {
                                 && self.mesh_output_type == MeshOutputType::PrimitiveOutput),
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
-                    Bi::Barycentric | Bi::BarycentricNoPerspective => (
+                    Bi::Barycentric { .. } => (
                         self.stage == St::Fragment && !self.output,
                         *ty_inner
                             == Ti::Vector {
