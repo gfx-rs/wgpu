@@ -10,10 +10,6 @@
             entry_point:"frag_main",
             target_profile:"ps_5_1",
         ),
-        (
-            entry_point:"frag_main_inline",
-            target_profile:"ps_5_1",
-        ),
     ],
     compute:[
     ],
