@@ -3,7 +3,7 @@ struct FragmentInput_fs_main {
 };
 
 struct FragmentInput_fs_main_no_perspective {
-    noperspective float3 bary_3 : SV_Barycentrics;
+    float3 bary_3 : SV_Barycentrics;
 };
 
 float4 fs_main(FragmentInput_fs_main fragmentinput_fs_main) : SV_Target0

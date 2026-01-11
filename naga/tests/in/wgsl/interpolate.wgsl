@@ -39,3 +39,19 @@ fn vert_main() -> FragmentInput {
 
 @fragment
 fn frag_main(val : FragmentInput) { }
+
+@fragment
+fn frag_main_inline(
+  @builtin(position) position: vec4<f32>,
+  @location(0) @interpolate(flat) _flat : u32,
+  @location(1) @interpolate(flat, first) flat_first : u32,
+  @location(2) @interpolate(flat, either) flat_either : u32,
+  @location(3) @interpolate(linear) _linear : f32,
+  @location(4) @interpolate(linear, centroid) linear_centroid : vec2<f32>,
+  @location(6) @interpolate(linear, sample) linear_sample : vec3<f32>,
+  @location(7) @interpolate(linear, center) linear_center : vec3<f32>,
+  @location(8) @interpolate(perspective) perspective : vec4<f32>,
+  @location(9) @interpolate(perspective, centroid) perspective_centroid : f32,
+  @location(10) @interpolate(perspective, sample) perspective_sample : f32,
+  @location(11) @interpolate(perspective, center) perspective_center : f32
+) { }

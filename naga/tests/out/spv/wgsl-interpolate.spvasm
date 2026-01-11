@@ -1,14 +1,16 @@
 ; SPIR-V
 ; Version: 1.0
 ; Generator: rspirv
-; Bound: 139
+; Bound: 166
 OpCapability Shader
 OpCapability SampleRateShading
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
 OpEntryPoint Vertex %30 "vert_main" %11 %13 %15 %16 %17 %19 %21 %23 %24 %25 %26 %27 %28
 OpEntryPoint Fragment %137 "frag_main" %108 %111 %114 %116 %118 %121 %124 %127 %129 %131 %133 %135
+OpEntryPoint Fragment %164 "frag_main_inline" %140 %142 %144 %146 %148 %150 %152 %154 %156 %158 %160 %162
 OpExecutionMode %137 OriginUpperLeft
+OpExecutionMode %164 OriginUpperLeft
 %3 = OpString "interpolate.wgsl"
 OpSource Unknown 0 %3 "//TODO: merge with \"interface\"?
 
@@ -51,6 +53,22 @@ fn vert_main() -> FragmentInput {
 
 @fragment
 fn frag_main(val : FragmentInput) { }
+
+@fragment
+fn frag_main_inline(
+  @builtin(position) position: vec4<f32>,
+  @location(0) @interpolate(flat) _flat : u32,
+  @location(1) @interpolate(flat, first) flat_first : u32,
+  @location(2) @interpolate(flat, either) flat_either : u32,
+  @location(3) @interpolate(linear) _linear : f32,
+  @location(4) @interpolate(linear, centroid) linear_centroid : vec2<f32>,
+  @location(6) @interpolate(linear, sample) linear_sample : vec3<f32>,
+  @location(7) @interpolate(linear, center) linear_center : vec3<f32>,
+  @location(8) @interpolate(perspective) perspective : vec4<f32>,
+  @location(9) @interpolate(perspective, centroid) perspective_centroid : f32,
+  @location(10) @interpolate(perspective, sample) perspective_sample : f32,
+  @location(11) @interpolate(perspective, center) perspective_center : f32
+) { }
 "
 OpMemberName %9 0 "position"
 OpMemberName %9 1 "_flat"
@@ -92,6 +110,19 @@ OpName %131 "perspective_centroid"
 OpName %133 "perspective_sample"
 OpName %135 "perspective_center"
 OpName %137 "frag_main"
+OpName %140 "position"
+OpName %142 "_flat"
+OpName %144 "flat_first"
+OpName %146 "flat_either"
+OpName %148 "_linear"
+OpName %150 "linear_centroid"
+OpName %152 "linear_sample"
+OpName %154 "linear_center"
+OpName %156 "perspective"
+OpName %158 "perspective_centroid"
+OpName %160 "perspective_sample"
+OpName %162 "perspective_center"
+OpName %164 "frag_main_inline"
 OpMemberDecorate %9 0 Offset 0
 OpMemberDecorate %9 1 Offset 16
 OpMemberDecorate %9 2 Offset 20
@@ -151,6 +182,29 @@ OpDecorate %131 Centroid
 OpDecorate %133 Location 10
 OpDecorate %133 Sample
 OpDecorate %135 Location 11
+OpDecorate %140 BuiltIn FragCoord
+OpDecorate %142 Location 0
+OpDecorate %142 Flat
+OpDecorate %144 Location 1
+OpDecorate %144 Flat
+OpDecorate %146 Location 2
+OpDecorate %146 Flat
+OpDecorate %148 Location 3
+OpDecorate %148 NoPerspective
+OpDecorate %150 Location 4
+OpDecorate %150 NoPerspective
+OpDecorate %150 Centroid
+OpDecorate %152 Location 6
+OpDecorate %152 NoPerspective
+OpDecorate %152 Sample
+OpDecorate %154 Location 7
+OpDecorate %154 NoPerspective
+OpDecorate %156 Location 8
+OpDecorate %158 Location 9
+OpDecorate %158 Centroid
+OpDecorate %160 Location 10
+OpDecorate %160 Sample
+OpDecorate %162 Location 11
 %2 = OpTypeVoid
 %4 = OpTypeFloat 32
 %5 = OpTypeVector %4 4
@@ -239,6 +293,18 @@ OpDecorate %135 Location 11
 %131 = OpVariable  %119  Input
 %133 = OpVariable  %119  Input
 %135 = OpVariable  %119  Input
+%140 = OpVariable  %109  Input
+%142 = OpVariable  %112  Input
+%144 = OpVariable  %112  Input
+%146 = OpVariable  %112  Input
+%148 = OpVariable  %119  Input
+%150 = OpVariable  %122  Input
+%152 = OpVariable  %125  Input
+%154 = OpVariable  %125  Input
+%156 = OpVariable  %109  Input
+%158 = OpVariable  %119  Input
+%160 = OpVariable  %119  Input
+%162 = OpVariable  %119  Input
 %30 = OpFunction  %2  None %31
 %10 = OpLabel
 %60 = OpVariable  %61  Function %62
@@ -347,5 +413,23 @@ OpFunctionEnd
 %107 = OpCompositeConstruct  %9  %110 %113 %115 %117 %120 %123 %126 %128 %130 %132 %134 %136
 OpBranch %138
 %138 = OpLabel
+OpReturn
+OpFunctionEnd
+%164 = OpFunction  %2  None %31
+%139 = OpLabel
+%141 = OpLoad  %5  %140
+%143 = OpLoad  %6  %142
+%145 = OpLoad  %6  %144
+%147 = OpLoad  %6  %146
+%149 = OpLoad  %4  %148
+%151 = OpLoad  %7  %150
+%153 = OpLoad  %8  %152
+%155 = OpLoad  %8  %154
+%157 = OpLoad  %5  %156
+%159 = OpLoad  %4  %158
+%161 = OpLoad  %4  %160
+%163 = OpLoad  %4  %162
+OpBranch %165
+%165 = OpLabel
 OpReturn
 OpFunctionEnd

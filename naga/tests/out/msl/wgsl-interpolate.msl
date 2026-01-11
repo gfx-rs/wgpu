@@ -71,8 +71,40 @@ struct frag_mainInput {
 };
 fragment void frag_main(
   frag_mainInput varyings_1 [[stage_in]]
+, metal::float4 position_1 [[position]]
+) {
+    const FragmentInput val = { position_1, varyings_1._flat, varyings_1.flat_first, varyings_1.flat_either, varyings_1._linear, varyings_1.linear_centroid, {}, varyings_1.linear_sample, varyings_1.linear_center, varyings_1.perspective, varyings_1.perspective_centroid, varyings_1.perspective_sample, varyings_1.perspective_center };
+    return;
+}
+
+
+struct frag_main_inlineInput {
+    uint _flat [[user(loc0), flat]];
+    uint flat_first [[user(loc1), flat]];
+    uint flat_either [[user(loc2), flat]];
+    float _linear [[user(loc3), center_no_perspective]];
+    metal::float2 linear_centroid [[user(loc4), centroid_no_perspective]];
+    metal::float3 linear_sample [[user(loc6), sample_no_perspective]];
+    metal::float3 linear_center [[user(loc7), center_no_perspective]];
+    metal::float4 perspective [[user(loc8), center_perspective]];
+    float perspective_centroid [[user(loc9), centroid_perspective]];
+    float perspective_sample [[user(loc10), sample_perspective]];
+    float perspective_center [[user(loc11), center_perspective]];
+};
+fragment void frag_main_inline(
+  frag_main_inlineInput varyings_2 [[stage_in]]
 , metal::float4 position [[position]]
 ) {
-    const FragmentInput val = { position, varyings_1._flat, varyings_1.flat_first, varyings_1.flat_either, varyings_1._linear, varyings_1.linear_centroid, {}, varyings_1.linear_sample, varyings_1.linear_center, varyings_1.perspective, varyings_1.perspective_centroid, varyings_1.perspective_sample, varyings_1.perspective_center };
+    const auto _flat = varyings_2._flat;
+    const auto flat_first = varyings_2.flat_first;
+    const auto flat_either = varyings_2.flat_either;
+    const auto _linear = varyings_2._linear;
+    const auto linear_centroid = varyings_2.linear_centroid;
+    const auto linear_sample = varyings_2.linear_sample;
+    const auto linear_center = varyings_2.linear_center;
+    const auto perspective = varyings_2.perspective;
+    const auto perspective_centroid = varyings_2.perspective_centroid;
+    const auto perspective_sample = varyings_2.perspective_sample;
+    const auto perspective_center = varyings_2.perspective_center;
     return;
 }
