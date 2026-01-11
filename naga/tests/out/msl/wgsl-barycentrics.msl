@@ -31,19 +31,3 @@ fragment fs_main_no_perspectiveOutput fs_main_no_perspective(
     const auto bary_1 = varyings_1.bary_1;
     return fs_main_no_perspectiveOutput { metal::float4(bary_1, 1.0) };
 }
-
-
-struct fs_main_bothInput {
-    metal::float3 bary_2 [[barycentric_coord]];
-    metal::float3 bary_no_persp [[barycentric_coord, center_no_perspective]];
-};
-struct fs_main_bothOutput {
-    metal::float4 member_2 [[color(0)]];
-};
-fragment fs_main_bothOutput fs_main_both(
-  fs_main_bothInput varyings_2 [[stage_in]]
-) {
-    const auto bary_2 = varyings_2.bary_2;
-    const auto bary_no_persp = varyings_2.bary_no_persp;
-    return fs_main_bothOutput { metal::float4(bary_2.xy, bary_no_persp.z, 1.0) };
-}

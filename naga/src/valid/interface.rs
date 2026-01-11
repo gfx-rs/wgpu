@@ -221,6 +221,9 @@ impl VaryingContext<'_> {
                     crate::BuiltIn::Position { .. } => {
                         crate::BuiltIn::Position { invariant: false }
                     }
+                    crate::BuiltIn::Barycentric { .. } => {
+                        crate::BuiltIn::Barycentric { perspective: false }
+                    }
                     x => x,
                 };
 
