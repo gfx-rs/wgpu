@@ -7039,10 +7039,10 @@ template <typename A>
                         first_time: false,
                     };
                     let resolved = options.resolve_local_binding(binding, in_mode)?;
-                    let location = match binding {
-                        &crate::Binding::Location { location, .. } => Some(location),
+                    let location = match *binding {
+                        crate::Binding::Location { location, .. } => Some(location),
                         crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. }) => None,
-                        _ => continue,
+                        crate::Binding::BuiltIn(_) => continue,
                     };
                     if do_vertex_pulling {
                         let Some(location) = location else {
@@ -7195,7 +7195,7 @@ template <typename A>
             // struct.
             for &(ref name_key, ty, binding) in flattened_arguments.iter() {
                 let binding = match binding {
-                    Some(crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. })) => continue,
+                    Some(&crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. })) => continue,
                     Some(binding @ &crate::Binding::BuiltIn { .. }) => binding,
                     _ => continue,
                 };
