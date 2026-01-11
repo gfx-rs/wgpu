@@ -367,6 +367,27 @@ fn vector_constructor_incorrect_component_count() {
 }
 
 #[test]
+fn vector_constructor_type_mismatch() {
+    check(
+        r#"
+            fn x(a: u32) -> vec2f {
+                return vec2f(a);
+            }
+        "#,
+        r#"error: wrong type passed as argument #1 to `vec2<f32>`
+  ┌─ wgsl:3:24
+  │
+3 │                 return vec2f(a);
+  │                        ^^^^^ ^ argument #1 has type `u32`
+  │
+  = note: `vec2<f32>` accepts the following types for argument #1:
+  = note: allowed type: f32
+
+"#,
+    );
+}
+
+#[test]
 fn bad_texture_sample_type() {
     check(
         r#"

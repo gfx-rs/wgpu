@@ -216,9 +216,8 @@ pub struct OffsetsBindTarget {
     pub size: u32,
 }
 
-#[cfg(any(feature = "serialize", feature = "deserialize"))]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg(feature = "deserialize")]
+#[derive(serde::Deserialize)]
 struct BindingMapSerialization {
     resource_binding: crate::ResourceBinding,
     bind_target: BindTarget,
@@ -338,9 +337,8 @@ impl Default for SamplerHeapBindTargets {
     }
 }
 
-#[cfg(any(feature = "serialize", feature = "deserialize"))]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg(feature = "deserialize")]
+#[derive(serde::Deserialize)]
 struct SamplerIndexBufferBindingSerialization {
     group: u32,
     bind_target: BindTarget,
@@ -370,9 +368,8 @@ where
 pub type SamplerIndexBufferBindingMap =
     alloc::collections::BTreeMap<SamplerIndexBufferKey, BindTarget>;
 
-#[cfg(any(feature = "serialize", feature = "deserialize"))]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg(feature = "deserialize")]
+#[derive(serde::Deserialize)]
 struct DynamicStorageBufferOffsetTargetSerialization {
     index: u32,
     bind_target: OffsetsBindTarget,
@@ -426,9 +423,8 @@ pub struct ExternalTextureBindTarget {
     pub params: BindTarget,
 }
 
-#[cfg(any(feature = "serialize", feature = "deserialize"))]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg(feature = "deserialize")]
+#[derive(serde::Deserialize)]
 struct ExternalTextureBindingMapSerialization {
     resource_binding: crate::ResourceBinding,
     bind_target: ExternalTextureBindTarget,

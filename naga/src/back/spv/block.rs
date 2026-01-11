@@ -4122,43 +4122,15 @@ impl BlockContext<'_> {
                     self.writer
                         .write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body);
                     let result_type_id = self.get_expression_type_id(&self.fun_info[result].ty);
-                    // Embed the body of
-                    match self.write_access_chain(
+                    // Match `Expression::Load` behavior, including `OpAtomicLoad` when
+                    // loading from a pointer to `atomic<T>`.
+                    let id = self.write_checked_load(
                         pointer,
                         &mut block,
                         AccessTypeAdjustment::None,
-                    )? {
-                        ExpressionPointer::Ready { pointer_id } => {
-                            let id = self.gen_id();
-                            block.body.push(Instruction::load(
-                                result_type_id,
-                                id,
-                                pointer_id,
-                                None,
-                            ));
-                            self.cached[result] = id;
-                        }
-                        ExpressionPointer::Conditional { condition, access } => {
-                            self.cached[result] = self.write_conditional_indexed_load(
-                                result_type_id,
-                                condition,
-                                &mut block,
-                                move |id_gen, block| {
-                                    // The in-bounds path. Perform the access and the load.
-                                    let pointer_id = access.result_id.unwrap();
-                                    let value_id = id_gen.next();
-                                    block.body.push(access);
-                                    block.body.push(Instruction::load(
-                                        result_type_id,
-                                        value_id,
-                                        pointer_id,
-                                        None,
-                                    ));
-                                    value_id
-                                },
-                            )
-                        }
-                    }
+                        result_type_id,
+                    )?;
+                    self.cached[result] = id;
                     self.writer
                         .write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body);
                 }

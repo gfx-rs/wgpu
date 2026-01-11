@@ -1,5 +1,7 @@
 #[cfg(feature = "trace")]
 mod record;
+#[cfg(feature = "replay")]
+mod replay;
 
 use core::{convert::Infallible, ops::Range};
 
@@ -14,10 +16,97 @@ use crate::{
 
 #[cfg(feature = "trace")]
 pub use record::*;
+#[cfg(feature = "replay")]
+pub use replay::*;
 
 type FileName = String;
 
 pub const FILE_NAME: &str = "trace.ron";
+
+#[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum Data {
+    File(FileName),
+    String(DataKind, String),
+    Binary(DataKind, Vec<u8>),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Serialize, serde::Deserialize),
+    serde(rename_all = "lowercase")
+)]
+pub enum DataKind {
+    Bin,
+    Wgsl,
+
+    /// IR of Naga module, serialized in RON format
+    Ron,
+    Spv,
+    Dxil,
+    Hlsl,
+    Msl,
+    Glsl,
+}
+
+impl core::fmt::Display for DataKind {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let s = match self {
+            DataKind::Bin => "bin",
+            DataKind::Wgsl => "wgsl",
+            DataKind::Ron => "ron",
+            DataKind::Spv => "spv",
+            DataKind::Dxil => "dxil",
+            DataKind::Hlsl => "hlsl",
+            DataKind::Msl => "msl",
+            DataKind::Glsl => "glsl",
+        };
+        write!(f, "{s}")
+    }
+}
+
+impl DataKind {
+    #[cfg(feature = "replay")]
+    fn is_string(&self) -> bool {
+        match *self {
+            DataKind::Wgsl | DataKind::Ron | DataKind::Hlsl | DataKind::Msl | DataKind::Glsl => {
+                true
+            }
+            DataKind::Bin | DataKind::Spv | DataKind::Dxil => false,
+        }
+    }
+}
+
+impl Data {
+    pub fn kind(&self) -> DataKind {
+        match self {
+            Data::File(file) => {
+                if file.ends_with(".bin") {
+                    DataKind::Bin
+                } else if file.ends_with(".wgsl") {
+                    DataKind::Wgsl
+                } else if file.ends_with(".ron") {
+                    DataKind::Ron
+                } else if file.ends_with(".spv") {
+                    DataKind::Spv
+                } else if file.ends_with(".dxil") {
+                    DataKind::Dxil
+                } else if file.ends_with(".hlsl") {
+                    DataKind::Hlsl
+                } else if file.ends_with(".msl") {
+                    DataKind::Msl
+                } else if file.ends_with(".glsl") {
+                    DataKind::Glsl
+                } else {
+                    panic!("unknown data file extension: {file}");
+                }
+            }
+            Data::String(kind, _) => *kind,
+            Data::Binary(kind, _) => *kind,
+        }
+    }
+}
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
@@ -79,11 +168,11 @@ pub enum Action<'a, R: ReferenceType> {
     CreateShaderModule {
         id: PointerId<markers::ShaderModule>,
         desc: crate::pipeline::ShaderModuleDescriptor<'a>,
-        data: FileName,
+        data: Data,
     },
     CreateShaderModulePassthrough {
         id: PointerId<markers::ShaderModule>,
-        data: Vec<FileName>,
+        data: Vec<Data>,
 
         entry_point: String,
         label: crate::Label<'a>,
@@ -119,17 +208,25 @@ pub enum Action<'a, R: ReferenceType> {
     DestroyQuerySet(PointerId<markers::QuerySet>),
     WriteBuffer {
         id: R::Buffer,
-        data: FileName,
+        data: Data,
         range: Range<wgt::BufferAddress>,
         queued: bool,
     },
     WriteTexture {
         to: wgt::TexelCopyTextureInfo<R::Texture>,
-        data: FileName,
+        data: Data,
         layout: wgt::TexelCopyBufferLayout,
         size: wgt::Extent3d,
     },
     Submit(crate::SubmissionIndex, Vec<Command<R>>),
+    FailedCommands {
+        commands: Option<Vec<Command<R>>>,
+        /// If `None`, then encoding failed due to a validation error (returned
+        /// from `CommandEncoder::finish`). If `Some`, submission failed due to
+        /// a resource having been destroyed.
+        failed_at_submit: Option<crate::SubmissionIndex>,
+        error: String,
+    },
     CreateBlas {
         id: R::Blas,
         desc: crate::resource::BlasDescriptor<'a>,
