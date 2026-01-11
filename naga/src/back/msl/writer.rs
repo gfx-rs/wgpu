@@ -7780,8 +7780,9 @@ template <typename A>
                         }
                         writeln!(self.out, " }};")?;
                     }
-                    _ => {
-                        if let Some(crate::Binding::Location { .. }) = arg.binding {
+                    _ => match arg.binding {
+                        Some(crate::Binding::Location { .. })
+                        | Some(crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. })) => {
                             if has_varyings {
                                 writeln!(
                                     self.out,
@@ -7793,7 +7794,8 @@ template <typename A>
                                 )?;
                             }
                         }
-                    }
+                        _ => {}
+                    },
                 }
             }
 
