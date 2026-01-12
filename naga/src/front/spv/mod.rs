@@ -215,6 +215,7 @@ struct Decoration {
     name: Option<String>,
     built_in: Option<spirv::Word>,
     location: Option<spirv::Word>,
+    index: Option<spirv::Word>,
     desc_set: Option<spirv::Word>,
     desc_index: Option<spirv::Word>,
     specialization_constant_id: Option<spirv::Word>,
@@ -256,6 +257,18 @@ impl Decoration {
                 invariant,
                 ..
             } => Ok(crate::Binding::BuiltIn(map_builtin(built_in, invariant)?)),
+            Decoration {
+                built_in: None,
+                location: Some(location),
+                index: Some(index),
+                ..
+            } => Ok(crate::Binding::Location {
+                location,
+                interpolation: None,
+                sampling: None,
+                blend_src: Some(index),
+                per_primitive: false,
+            }),
             Decoration {
                 built_in: None,
                 location: Some(location),
@@ -745,6 +758,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             spirv::Decoration::Location => {
                 inst.expect(base_words + 2)?;
                 dec.location = Some(self.next()?);
+            }
+            spirv::Decoration::Index => {
+                inst.expect(base_words + 2)?;
+                dec.index = Some(self.next()?);
             }
             spirv::Decoration::DescriptorSet => {
                 inst.expect(base_words + 2)?;
