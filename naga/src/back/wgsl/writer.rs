@@ -36,6 +36,7 @@ enum Attribute {
     MeshStage(String),
     TaskPayload(String),
     PerPrimitive,
+    IncomingRayPayload(String),
 }
 
 /// The WGSL form that `write_expr_with_indirection` should use to render a Naga
@@ -243,10 +244,19 @@ impl<W: Write> Writer<W> {
                         Attribute::WorkGroupSize(ep.workgroup_size),
                     ]
                 }
-                ShaderStage::RayGeneration
-                | ShaderStage::AnyHit
+                ShaderStage::RayGeneration => vec![Attribute::Stage(ShaderStage::RayGeneration)],
+                ShaderStage::AnyHit
                 | ShaderStage::ClosestHit
-                | ShaderStage::Miss => unreachable!(),
+                | ShaderStage::Miss => {
+                    let payload_name = module.global_variables[ep.incoming_ray_payload.unwrap()]
+                        .name
+                        .clone()
+                        .unwrap();
+                    vec![
+                        Attribute::Stage(ep.stage),
+                        Attribute::IncomingRayPayload(payload_name),
+                    ]
+                },
             };
             self.write_attributes(&attributes)?;
             // Add a newline after attribute
@@ -501,10 +511,10 @@ impl<W: Write> Writer<W> {
                         ShaderStage::Task => "task",
                         //Handled by another variant in the Attribute enum, so this code should never be hit.
                         ShaderStage::Mesh => unreachable!(),
-                        ShaderStage::RayGeneration
-                        | ShaderStage::AnyHit
-                        | ShaderStage::ClosestHit
-                        | ShaderStage::Miss => unreachable!(),
+                        ShaderStage::RayGeneration => "ray_generation",
+                        ShaderStage::AnyHit => "any_hit",
+                        ShaderStage::ClosestHit => "closest_hit",
+                        ShaderStage::Miss => "miss",
                     };
 
                     write!(self.out, "@{stage_str} ")?;
@@ -542,6 +552,9 @@ impl<W: Write> Writer<W> {
                     write!(self.out, "@payload({payload_name}) ")?;
                 }
                 Attribute::PerPrimitive => write!(self.out, "@per_primitive ")?,
+                Attribute::IncomingRayPayload(ref payload_name) => {
+                    write!(self.out, "@incoming_payload({payload_name}) ")?;
+                }
             };
         }
         Ok(())
@@ -1103,7 +1116,17 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, data.stride, func_ctx)?;
                 writeln!(self.out, ");")?
             }
-            Statement::RayPipelineFunction(_) => unreachable!(),
+            Statement::RayPipelineFunction(fun) => match fun {
+                crate::RayPipelineFunction::TraceRay { acceleration_structure, descriptor, payload } => {
+                    write!(self.out, "{level}traceRay(")?;
+                    self.write_expr(module, acceleration_structure, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, descriptor, func_ctx)?;
+                    write!(self.out, ", ")?;
+                    self.write_expr(module, payload, func_ctx)?;
+                    writeln!(self.out, ");")?
+                },
+            },
         }
 
         Ok(())
