@@ -279,6 +279,7 @@ impl<W: Write> Writer<W> {
         let mut needs_dual_source_blending = false;
         let mut needs_clip_distances = false;
         let mut needs_mesh_shaders = false;
+        let mut needs_cooperative_matrix = false;
 
         // Determine which `enable` declarations are needed
         for (_, ty) in module.types.iter() {
@@ -322,6 +323,9 @@ impl<W: Write> Writer<W> {
                         }
                     }
                 }
+                TypeInner::CooperativeMatrix { .. } => {
+                    needs_cooperative_matrix = true;
+                }
                 _ => {}
             }
         }
@@ -358,6 +362,10 @@ impl<W: Write> Writer<W> {
         }
         if needs_mesh_shaders {
             writeln!(self.out, "enable wgpu_mesh_shader;")?;
+            any_written = true;
+        }
+        if needs_cooperative_matrix {
+            writeln!(self.out, "enable wgpu_cooperative_matrix;")?;
             any_written = true;
         }
         if any_written {

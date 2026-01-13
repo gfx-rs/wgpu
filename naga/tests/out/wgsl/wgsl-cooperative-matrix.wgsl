@@ -1,3 +1,5 @@
+enable wgpu_cooperative_matrix;
+
 var<private> a: coop_mat8x8<f32,A>;
 var<private> b: coop_mat8x8<f32,B>;
 @group(0) @binding(0) 
