@@ -2,7 +2,7 @@ use super::{number::consume_number, Error, ExpectedToken, Result};
 use crate::front::wgsl::error::NumberError;
 use crate::front::wgsl::parse::directive::enable_extension::EnableExtensions;
 use crate::front::wgsl::parse::{conv, Number};
-use crate::front::wgsl::Scalar;
+use crate::front::wgsl::{ImplementedEnableExtension, Scalar};
 use crate::Span;
 
 use alloc::{boxed::Box, vec::Vec};
@@ -266,6 +266,9 @@ pub(in crate::front::wgsl) struct Lexer<'a> {
     /// If `true`, doc comments are treated as [`Token::Trivia`].
     ignore_doc_comments: bool,
 
+    /// The set of [enable-extensions] present in the module, determined in a pre-pass.
+    ///
+    /// [enable-extensions]: https://gpuweb.github.io/gpuweb/wgsl/#enable-extensions-sec
     pub(in crate::front::wgsl) enable_extensions: EnableExtensions,
 }
 
@@ -277,6 +280,22 @@ impl<'a> Lexer<'a> {
             last_end_offset: 0,
             enable_extensions: EnableExtensions::empty(),
             ignore_doc_comments,
+        }
+    }
+
+    /// Check that `extension` is enabled in `self`.
+    pub(in crate::front::wgsl) fn require_enable_extension(
+        &self,
+        extension: ImplementedEnableExtension,
+        span: Span,
+    ) -> Result<'static, ()> {
+        if self.enable_extensions.contains(extension) {
+            Ok(())
+        } else {
+            Err(Box::new(Error::EnableExtensionNotEnabled {
+                kind: extension.into(),
+                span,
+            }))
         }
     }
 

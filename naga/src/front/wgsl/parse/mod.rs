@@ -223,15 +223,10 @@ impl<'a> BindingParser<'a> {
                 self.invariant.set(true, name_span)?;
             }
             "blend_src" => {
-                if !lexer
-                    .enable_extensions
-                    .contains(ImplementedEnableExtension::DualSourceBlending)
-                {
-                    return Err(Box::new(Error::EnableExtensionNotEnabled {
-                        span: name_span,
-                        kind: ImplementedEnableExtension::DualSourceBlending.into(),
-                    }));
-                }
+                lexer.require_enable_extension(
+                    ImplementedEnableExtension::DualSourceBlending,
+                    name_span,
+                )?;
 
                 lexer.expect(Token::Paren('('))?;
                 self.blend_src
@@ -240,15 +235,10 @@ impl<'a> BindingParser<'a> {
                 lexer.expect(Token::Paren(')'))?;
             }
             "per_primitive" => {
-                if !lexer
-                    .enable_extensions
-                    .contains(ImplementedEnableExtension::WgpuMeshShader)
-                {
-                    return Err(Box::new(Error::EnableExtensionNotEnabled {
-                        span: name_span,
-                        kind: ImplementedEnableExtension::WgpuMeshShader.into(),
-                    }));
-                }
+                lexer.require_enable_extension(
+                    ImplementedEnableExtension::WgpuMeshShader,
+                    name_span,
+                )?;
                 self.per_primitive.set((), name_span)?;
             }
             _ => return Err(Box::new(Error::UnknownAttribute(name_span))),
@@ -899,12 +889,7 @@ impl Parser {
                 let num = res.map_err(|err| Error::BadNumber(span, err))?;
 
                 if let Some(enable_extension) = num.requires_enable_extension() {
-                    if !lexer.enable_extensions.contains(enable_extension) {
-                        return Err(Box::new(Error::EnableExtensionNotEnabled {
-                            kind: enable_extension.into(),
-                            span,
-                        }));
-                    }
+                    lexer.require_enable_extension(enable_extension, span)?;
                 }
 
                 ast::Expression::Literal(ast::Literal::Number(num))
@@ -2002,85 +1987,33 @@ impl Parser {
                 }
             }
             "acceleration_structure" => {
-                if !lexer
-                    .enable_extensions
-                    .contains(ImplementedEnableExtension::WgpuRayQuery)
-                {
-                    return Err(Box::new(Error::EnableExtensionNotEnabled {
-                        kind: EnableExtension::Implemented(
-                            ImplementedEnableExtension::WgpuRayQuery,
-                        ),
-                        span,
-                    }));
-                }
+                lexer.require_enable_extension(ImplementedEnableExtension::WgpuRayQuery, span)?;
                 let vertex_return = lexer.next_acceleration_structure_flags()?;
-                if !lexer
-                    .enable_extensions
-                    .contains(ImplementedEnableExtension::WgpuRayQueryVertexReturn)
-                    && vertex_return
-                {
-                    return Err(Box::new(Error::EnableExtensionNotEnabled {
-                        kind: EnableExtension::Implemented(
-                            ImplementedEnableExtension::WgpuRayQueryVertexReturn,
-                        ),
+                if vertex_return {
+                    lexer.require_enable_extension(
+                        ImplementedEnableExtension::WgpuRayQueryVertexReturn,
                         span,
-                    }));
+                    )?;
                 }
                 ast::Type::AccelerationStructure { vertex_return }
             }
             "ray_query" => {
-                if !lexer
-                    .enable_extensions
-                    .contains(ImplementedEnableExtension::WgpuRayQuery)
-                {
-                    return Err(Box::new(Error::EnableExtensionNotEnabled {
-                        kind: EnableExtension::Implemented(
-                            ImplementedEnableExtension::WgpuRayQuery,
-                        ),
-                        span,
-                    }));
-                }
+                lexer.require_enable_extension(ImplementedEnableExtension::WgpuRayQuery, span)?;
                 let vertex_return = lexer.next_acceleration_structure_flags()?;
-                if !lexer
-                    .enable_extensions
-                    .contains(ImplementedEnableExtension::WgpuRayQueryVertexReturn)
-                    && vertex_return
-                {
-                    return Err(Box::new(Error::EnableExtensionNotEnabled {
-                        kind: EnableExtension::Implemented(
-                            ImplementedEnableExtension::WgpuRayQueryVertexReturn,
-                        ),
+                if vertex_return {
+                    lexer.require_enable_extension(
+                        ImplementedEnableExtension::WgpuRayQueryVertexReturn,
                         span,
-                    }));
+                    )?;
                 }
                 ast::Type::RayQuery { vertex_return }
             }
             "RayDesc" => {
-                if !lexer
-                    .enable_extensions
-                    .contains(ImplementedEnableExtension::WgpuRayQuery)
-                {
-                    return Err(Box::new(Error::EnableExtensionNotEnabled {
-                        kind: EnableExtension::Implemented(
-                            ImplementedEnableExtension::WgpuRayQuery,
-                        ),
-                        span,
-                    }));
-                }
+                lexer.require_enable_extension(ImplementedEnableExtension::WgpuRayQuery, span)?;
                 ast::Type::RayDesc
             }
             "RayIntersection" => {
-                if !lexer
-                    .enable_extensions
-                    .contains(ImplementedEnableExtension::WgpuRayQuery)
-                {
-                    return Err(Box::new(Error::EnableExtensionNotEnabled {
-                        kind: EnableExtension::Implemented(
-                            ImplementedEnableExtension::WgpuRayQuery,
-                        ),
-                        span,
-                    }));
-                }
+                lexer.require_enable_extension(ImplementedEnableExtension::WgpuRayQuery, span)?;
                 ast::Type::RayIntersection
             }
             _ => return Ok(None),
@@ -3028,28 +2961,18 @@ impl Parser {
                     compute_like_span = name_span;
                 }
                 "task" => {
-                    if !lexer
-                        .enable_extensions
-                        .contains(ImplementedEnableExtension::WgpuMeshShader)
-                    {
-                        return Err(Box::new(Error::EnableExtensionNotEnabled {
-                            span: name_span,
-                            kind: ImplementedEnableExtension::WgpuMeshShader.into(),
-                        }));
-                    }
+                    lexer.require_enable_extension(
+                        ImplementedEnableExtension::WgpuMeshShader,
+                        name_span,
+                    )?;
                     stage.set(ShaderStage::Task, name_span)?;
                     compute_like_span = name_span;
                 }
                 "mesh" => {
-                    if !lexer
-                        .enable_extensions
-                        .contains(ImplementedEnableExtension::WgpuMeshShader)
-                    {
-                        return Err(Box::new(Error::EnableExtensionNotEnabled {
-                            span: name_span,
-                            kind: ImplementedEnableExtension::WgpuMeshShader.into(),
-                        }));
-                    }
+                    lexer.require_enable_extension(
+                        ImplementedEnableExtension::WgpuMeshShader,
+                        name_span,
+                    )?;
                     stage.set(ShaderStage::Mesh, name_span)?;
                     compute_like_span = name_span;
 
@@ -3058,15 +2981,10 @@ impl Parser {
                     lexer.expect(Token::Paren(')'))?;
                 }
                 "payload" => {
-                    if !lexer
-                        .enable_extensions
-                        .contains(ImplementedEnableExtension::WgpuMeshShader)
-                    {
-                        return Err(Box::new(Error::EnableExtensionNotEnabled {
-                            span: name_span,
-                            kind: ImplementedEnableExtension::WgpuMeshShader.into(),
-                        }));
-                    }
+                    lexer.require_enable_extension(
+                        ImplementedEnableExtension::WgpuMeshShader,
+                        name_span,
+                    )?;
                     lexer.expect(Token::Paren('('))?;
                     payload.set(lexer.next_ident_with_span()?, name_span)?;
                     lexer.expect(Token::Paren(')'))?;
