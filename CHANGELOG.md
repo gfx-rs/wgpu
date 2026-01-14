@@ -127,6 +127,7 @@ By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
 - Check that if the shader outputs `frag_depth`, then the pipeline must have a depth attachment. By @andyleiserson in [#8856](https://github.com/gfx-rs/wgpu/pull/8856).
 - Fix incorrect acceptance of some swizzle selectors that are not valid for their operand, e.g. `const v = vec2<i32>(); let r = v.xyz`. By @andyleiserson in [#8949](https://github.com/gfx-rs/wgpu/pull/8949).
 - Fixed calculation of the total number of bindings in a pipeline layout when validating against device limits. By @andyleiserson in [#8997](https://github.com/gfx-rs/wgpu/pull/8997).
+- Reject non-constructible types (runtime- and override-sized arrays, and structs containing non-constructible types) in more places where they should not be allowed. By @andyleiserson in [#8873](https://github.com/gfx-rs/wgpu/pull/8873).
 
 #### Vulkan
 - Fixed a variety of mesh shader SPIR-V writer issues from the original implementation. By @inner-daemons in [#8756](https://github.com/gfx-rs/wgpu/pull/8756)

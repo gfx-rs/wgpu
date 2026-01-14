@@ -344,10 +344,18 @@ impl crate::TypeInner {
         left.as_ref().unwrap_or(self) == right.as_ref().unwrap_or(rhs)
     }
 
+    /// Returns true if `self` is runtime- or override-sized.
     pub fn is_dynamically_sized(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
         use crate::TypeInner as Ti;
         match *self {
-            Ti::Array { size, .. } => size == crate::ArraySize::Dynamic,
+            Ti::Array {
+                size: crate::ArraySize::Constant(_),
+                ..
+            } => false,
+            Ti::Array {
+                size: crate::ArraySize::Pending(_) | crate::ArraySize::Dynamic,
+                ..
+            } => true,
             Ti::Struct { ref members, .. } => members
                 .last()
                 .map(|last| types[last.ty].inner.is_dynamically_sized(types))
