@@ -45,6 +45,7 @@ Bottom level categories:
 
 - Added support for cooperative load/store operations in shaders. Currently only WGSL on the input and SPIR-V, METAL, and WGSL on the output are supported. By @kvark in [#8251](https://github.com/gfx-rs/wgpu/issues/8251).
 - Added support for obtaining `AdapterInfo` from `Device`. By @sagudev in [#8807](https://github.com/gfx-rs/wgpu/pull/8807).
+- Added `Limits::or_worse_values_from`. By @atlv24 in [#8870](https://github.com/gfx-rs/wgpu/pull/8870).
 
 ### Bug Fixes
 
