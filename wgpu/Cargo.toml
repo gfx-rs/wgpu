@@ -120,9 +120,8 @@ strict_asserts = ["wgpu-core?/strict_asserts", "wgpu-types/strict_asserts"]
 ## Enables serialization via `serde` on common wgpu types.
 serde = ["wgpu-core?/serde", "wgpu-types/serde"]
 
-# Uncomment once we get to https://github.com/gfx-rs/wgpu/issues/5974
 # ## Allow writing of trace capture files. See [`Adapter::request_device`].
-# trace = ["serde", "wgpu-core/trace"]
+trace = ["serde", "wgpu-core?/trace"]
 
 #! ### External libraries
 # --------------------------------------------------------------------
