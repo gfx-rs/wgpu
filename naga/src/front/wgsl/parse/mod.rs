@@ -489,10 +489,6 @@ impl Parser {
 
                 if let Token::Paren('(') = lexer.peek().0 {
                     let arguments = self.arguments(lexer, ctx)?;
-                    ctx.unresolved.insert(ast::Dependency {
-                        ident: word,
-                        usage: span,
-                    });
                     ast::Expression::Call(ast::CallPhrase {
                         function: ident,
                         arguments,
@@ -1104,11 +1100,6 @@ impl Parser {
         }
 
         self.push_rule_span(Rule::SingularExpr, lexer);
-
-        context.unresolved.insert(ast::Dependency {
-            ident: name,
-            usage: name_span,
-        });
 
         let arguments = self.arguments(lexer, context)?;
         let span = lexer.span_with_start(name_span);
