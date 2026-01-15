@@ -1,7 +1,3 @@
-// Tests for cts_runner
-//
-// As of June 2025, these tests are not run in CI.
-
 use std::{
     ffi::OsStr,
     fs,
