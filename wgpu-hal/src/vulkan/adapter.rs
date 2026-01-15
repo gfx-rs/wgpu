@@ -2438,7 +2438,7 @@ impl super::Adapter {
                 // We need to build this separately for each invocation, so just default it out here
                 binding_map: BTreeMap::default(),
                 debug_info: None,
-                task_runtime_limits: Some(spv::TaskRuntimeLimits {
+                task_runtime_limits: Some(naga::back::TaskRuntimeLimits {
                     max_mesh_workgroups_per_dim: limits.max_task_mesh_workgroups_per_dimension,
                     max_mesh_workgroups_total: limits.max_task_mesh_workgroup_total_count,
                 }),

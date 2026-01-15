@@ -120,6 +120,7 @@ use spirv::Word;
 use thiserror::Error;
 
 use crate::arena::{Handle, HandleVec};
+use crate::back::TaskRuntimeLimits;
 use crate::proc::{BoundsCheckPolicies, TypeResolution};
 
 #[derive(Clone)]
@@ -1043,12 +1044,6 @@ pub enum ZeroInitializeWorkgroupMemoryMode {
     /// Via assignments + barrier
     Polyfill,
     None,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct TaskRuntimeLimits {
-    pub max_mesh_workgroups_per_dim: u32,
-    pub max_mesh_workgroups_total: u32,
 }
 
 #[derive(Debug, Clone)]

@@ -372,3 +372,9 @@ pub enum RayIntersectionType {
     Triangle = 1,
     BoundingBox = 4,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TaskRuntimeLimits {
+    pub max_mesh_workgroups_per_dim: u32,
+    pub max_mesh_workgroups_total: u32,
+}
