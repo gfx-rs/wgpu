@@ -919,6 +919,7 @@ export {
   GPUInternalError,
   GPUMapMode,
   GPUOutOfMemoryError,
+  GPUPipelineError,
   GPUPipelineLayout,
   GPUQuerySet,
   GPUQueue,
