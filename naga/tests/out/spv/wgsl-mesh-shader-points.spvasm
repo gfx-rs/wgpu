@@ -107,10 +107,10 @@ OpControlBarrier %32 %32 %33
 %44 = OpUConvert  %40  %47
 %48 = OpIMul  %40  %42 %43
 %49 = OpIMul  %40  %48 %44
-%50 = OpUGreaterThanEqual  %29  %49 %41
-%51 = OpUGreaterThanEqual  %29  %42 %39
-%52 = OpUGreaterThanEqual  %29  %43 %39
-%53 = OpUGreaterThanEqual  %29  %44 %39
+%50 = OpUGreaterThan  %29  %49 %41
+%51 = OpUGreaterThan  %29  %42 %39
+%52 = OpUGreaterThan  %29  %43 %39
+%53 = OpUGreaterThan  %29  %44 %39
 %54 = OpLogicalOr  %29  %50 %51
 %55 = OpLogicalOr  %29  %54 %52
 %56 = OpLogicalOr  %29  %55 %53

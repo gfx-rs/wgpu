@@ -925,7 +925,7 @@ impl super::Writer {
                 ));
                 let total_too_large = self.id_gen.next();
                 block.body.push(Instruction::binary(
-                    spirv::Op::UGreaterThanEqual,
+                    spirv::Op::UGreaterThan,
                     self.get_bool_type_id(),
                     total_too_large,
                     prod,
@@ -935,7 +935,7 @@ impl super::Writer {
                 let too_large = [self.id_gen.next(), self.id_gen.next(), self.id_gen.next()];
                 for (i, value) in values.into_iter().enumerate() {
                     block.body.push(Instruction::binary(
-                        spirv::Op::UGreaterThanEqual,
+                        spirv::Op::UGreaterThan,
                         self.get_bool_type_id(),
                         too_large[i],
                         value,
