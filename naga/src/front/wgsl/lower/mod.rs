@@ -912,6 +912,45 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     fn ensure_type_exists(&mut self, inner: ir::TypeInner) -> Handle<ir::Type> {
         self.as_global().ensure_type_exists(None, inner)
     }
+
+    fn enumerant(
+        &self,
+        expr: Handle<ast::Expression<'source>>,
+    ) -> Result<'source, (&'source str, Span)> {
+        let span = self.ast_expressions.get_span(expr);
+        let expr = &self.ast_expressions[expr];
+
+        match *expr {
+            ast::Expression::Ident(ast::TemplateElaboratedIdent {
+                ident: ast::IdentExpr::Local(_),
+                ..
+            }) => Err(Box::new(Error::UnexpectedIdentForEnumerant(span))),
+            ast::Expression::Ident(ast::TemplateElaboratedIdent {
+                ident: ast::IdentExpr::Unresolved(name),
+                ..
+            }) => {
+                if self.globals.get(name).is_some() {
+                    Err(Box::new(Error::UnexpectedIdentForEnumerant(span)))
+                } else {
+                    Ok((name, span))
+                }
+            }
+            _ => Err(Box::new(Error::UnexpectedExprForEnumerant(span))),
+        }
+    }
+
+    fn var_address_space(
+        &self,
+        template_list: &[Handle<ast::Expression<'source>>],
+    ) -> Result<'source, ir::AddressSpace> {
+        let mut tl = TemplateListIter::new(Span::UNDEFINED, template_list);
+        let mut address_space = tl.maybe_address_space(self)?;
+        if let Some(ref mut address_space) = address_space {
+            tl.maybe_access_mode(address_space, self)?;
+        }
+        tl.finish(self)?;
+        Ok(address_space.unwrap_or(ir::AddressSpace::Handle))
+    }
 }
 
 struct ArgumentContext<'ctx, 'source> {
@@ -1268,7 +1307,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                         None
                     };
 
-                    let space = Self::var_address_space(&v.template_list, &ctx.as_const())?;
+                    let space = ctx.as_const().var_address_space(&v.template_list)?;
 
                     let handle = ctx.module.global_variables.append(
                         ir::GlobalVariable {
@@ -2554,45 +2593,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Ok(Typed::Plain(crate::Expression::Binary { op, left, right }))
             }
         }
-    }
-
-    fn enumerant(
-        expr: Handle<ast::Expression<'source>>,
-        ctx: &ExpressionContext<'source, '_, '_>,
-    ) -> Result<'source, (&'source str, Span)> {
-        let span = ctx.ast_expressions.get_span(expr);
-        let expr = &ctx.ast_expressions[expr];
-
-        match *expr {
-            ast::Expression::Ident(ast::TemplateElaboratedIdent {
-                ident: ast::IdentExpr::Local(_),
-                ..
-            }) => Err(Box::new(Error::UnexpectedIdentForEnumerant(span))),
-            ast::Expression::Ident(ast::TemplateElaboratedIdent {
-                ident: ast::IdentExpr::Unresolved(name),
-                ..
-            }) => {
-                if ctx.globals.get(name).is_some() {
-                    Err(Box::new(Error::UnexpectedIdentForEnumerant(span)))
-                } else {
-                    Ok((name, span))
-                }
-            }
-            _ => Err(Box::new(Error::UnexpectedExprForEnumerant(span))),
-        }
-    }
-
-    fn var_address_space(
-        template_list: &[Handle<ast::Expression<'source>>],
-        ctx: &ExpressionContext<'source, '_, '_>,
-    ) -> Result<'source, ir::AddressSpace> {
-        let mut tl = TemplateListIter::new(Span::UNDEFINED, template_list);
-        let mut address_space = tl.maybe_address_space(ctx)?;
-        if let Some(ref mut address_space) = address_space {
-            tl.maybe_access_mode(address_space, ctx)?;
-        }
-        tl.finish(ctx)?;
-        Ok(address_space.unwrap_or(ir::AddressSpace::Handle))
     }
 
     fn type_expression(

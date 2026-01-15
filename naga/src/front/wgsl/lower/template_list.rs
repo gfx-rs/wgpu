@@ -110,7 +110,7 @@ impl<'iter, 'source> TemplateListIter<'iter, 'source> {
         ctx: &ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, ir::AddressSpace> {
         let expr = self.expect_next("`AS`, an address space")?;
-        let (enumerant, span) = Lowerer::enumerant(expr, ctx)?;
+        let (enumerant, span) = ctx.enumerant(expr)?;
         conv::map_address_space(enumerant, span, &ctx.enable_extensions)
     }
     pub fn maybe_address_space(
@@ -118,7 +118,7 @@ impl<'iter, 'source> TemplateListIter<'iter, 'source> {
         ctx: &ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, Option<ir::AddressSpace>> {
         if let Some(expr) = self.template_list.next() {
-            let (enumerant, span) = Lowerer::enumerant(*expr, ctx)?;
+            let (enumerant, span) = ctx.enumerant(*expr)?;
             Ok(Some(conv::map_address_space(
                 enumerant,
                 span,
@@ -134,7 +134,7 @@ impl<'iter, 'source> TemplateListIter<'iter, 'source> {
         ctx: &ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, ir::StorageAccess> {
         let expr = self.expect_next("`Access`, an access mode")?;
-        let (enumerant, span) = Lowerer::enumerant(expr, ctx)?;
+        let (enumerant, span) = ctx.enumerant(expr)?;
         conv::map_access_mode(enumerant, span)
     }
     pub fn maybe_access_mode(
@@ -144,7 +144,7 @@ impl<'iter, 'source> TemplateListIter<'iter, 'source> {
     ) -> Result<'source, ()> {
         if let &mut ir::AddressSpace::Storage { ref mut access } = space {
             if let Some(expr) = self.template_list.next() {
-                let (enumerant, span) = Lowerer::enumerant(*expr, ctx)?;
+                let (enumerant, span) = ctx.enumerant(*expr)?;
                 let access_mode = conv::map_access_mode(enumerant, span)?;
                 *access = access_mode;
             } else {
@@ -160,7 +160,7 @@ impl<'iter, 'source> TemplateListIter<'iter, 'source> {
         ctx: &ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, ir::StorageFormat> {
         let expr = self.expect_next("`Format`, a texel format")?;
-        let (enumerant, span) = Lowerer::enumerant(expr, ctx)?;
+        let (enumerant, span) = ctx.enumerant(expr)?;
         conv::map_storage_format(enumerant, span)
     }
 
@@ -169,7 +169,7 @@ impl<'iter, 'source> TemplateListIter<'iter, 'source> {
         ctx: &ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, bool> {
         if let Some(expr) = self.template_list.next() {
-            let (enumerant, span) = Lowerer::enumerant(*expr, ctx)?;
+            let (enumerant, span) = ctx.enumerant(*expr)?;
             conv::map_ray_flag(&ctx.enable_extensions, enumerant, span)?;
             Ok(true)
         } else {
@@ -182,7 +182,7 @@ impl<'iter, 'source> TemplateListIter<'iter, 'source> {
         ctx: &ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, crate::CooperativeRole> {
         let role_expr = self.expect_next("`Role`, a cooperative matrix role")?;
-        let (enumerant, span) = Lowerer::enumerant(role_expr, ctx)?;
+        let (enumerant, span) = ctx.enumerant(role_expr)?;
         let role = conv::map_cooperative_role(enumerant, span)?;
         Ok(role)
     }
