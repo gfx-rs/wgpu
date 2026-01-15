@@ -1,4 +1,7 @@
 // CTS test selectors that are entirely or nearly entirely skipped.
+//
+// The `cts_runner` integration test `lst_files_are_sorted` verifies that test selectors
+// appear in this file in order -- including ones in comments.
 webgpu:api,validation,encoding,queries,begin_end:nesting:*
 webgpu:api,validation,gpu_external_texture_expiration:*
 webgpu:api,validation,queue,copyToTexture,CopyExternalImageToTexture:*
