@@ -63,6 +63,11 @@ impl<'iter, 'source> TemplateListIter<'iter, 'source> {
         lowerer.type_expression(expr, ctx)
     }
 
+    /// Lower the next template list element as a type, and return its span.
+    ///
+    /// This returns the span of the template list element. This is generally
+    /// different from the span of the returned `Handle<ir::Type>`, as the
+    /// latter may refer to the type's definition, not its use in the template list.
     pub fn ty_with_span(
         &mut self,
         lowerer: &mut Lowerer<'source, '_>,
@@ -74,7 +79,7 @@ impl<'iter, 'source> TemplateListIter<'iter, 'source> {
         Ok((ty, span))
     }
 
-    pub fn scalar(
+    pub fn scalar_ty(
         &mut self,
         lowerer: &mut Lowerer<'source, '_>,
         ctx: &mut ExpressionContext<'source, '_, '_>,
