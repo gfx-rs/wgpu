@@ -3,6 +3,7 @@ use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
     vec.push(BARYCENTRIC);
+    vec.push(BARYCENTRIC_NO_PERSPECTIVE);
 }
 
 //
@@ -36,7 +37,7 @@ static BARYCENTRIC: GpuTestConfiguration = GpuTestConfiguration::new()
             .test_features_limits()
             .features(wgpu::Features::SHADER_BARYCENTRICS),
     )
-    .run_async(barycentric::<false>);
+    .run_async(|ctx| barycentric(ctx, false));
 
 #[gpu_test]
 static BARYCENTRIC_NO_PERSPECTIVE: GpuTestConfiguration = GpuTestConfiguration::new()
@@ -45,9 +46,9 @@ static BARYCENTRIC_NO_PERSPECTIVE: GpuTestConfiguration = GpuTestConfiguration::
             .test_features_limits()
             .features(wgpu::Features::SHADER_BARYCENTRICS),
     )
-    .run_async(barycentric::<true>);
+    .run_async(|ctx| barycentric(ctx, true));
 
-async fn barycentric<const NO_PERSPECTIVE: bool>(ctx: TestingContext) {
+async fn barycentric(ctx: TestingContext, no_perspective: bool) {
     let shader = ctx
         .device
         .create_shader_module(wgpu::include_wgsl!("barycentric.wgsl"));
@@ -96,7 +97,7 @@ async fn barycentric<const NO_PERSPECTIVE: bool>(ctx: TestingContext) {
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: if NO_PERSPECTIVE {
+                entry_point: if no_perspective {
                     Some("fs_main_no_perspective")
                 } else {
                     Some("fs_main")
