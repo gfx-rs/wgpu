@@ -373,7 +373,9 @@ pub enum RayIntersectionType {
     BoundingBox = 4,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct TaskRuntimeLimits {
     pub max_mesh_workgroups_per_dim: u32,
     pub max_mesh_workgroups_total: u32,

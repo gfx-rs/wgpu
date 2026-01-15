@@ -164,7 +164,7 @@ impl SpirvOutParameters {
             ray_query_initialization_tracking: true,
             debug_info,
             use_storage_input_output_16: self.use_storage_input_output_16,
-            task_runtime_limits: Some(spv::TaskRuntimeLimits {
+            task_runtime_limits: Some(naga::back::TaskRuntimeLimits {
                 max_mesh_workgroups_per_dim: 256,
                 max_mesh_workgroups_total: 1024,
             }),
