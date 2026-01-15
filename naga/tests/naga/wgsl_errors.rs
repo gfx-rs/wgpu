@@ -1210,6 +1210,31 @@ fn int64_capability() {
 }
 
 #[test]
+fn per_vertex_capability() {
+    check_validation! {
+            r#"
+            @fragment
+            fn fs_main(@location(0) @interpolate(per_vertex) v: array<f32, 3>) -> @location(0) vec4<f32> {
+                return vec4(v[0], v[1], v[2], 1.0);
+            }
+        "#:
+            Err(
+        naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Fragment,
+            source: valid::EntryPointError::Argument(
+                0,
+                valid::VaryingError::UnsupportedCapability(
+                    Capabilities::PER_VERTEX,
+
+                ),
+            ),
+            ..
+        },
+    )
+        }
+}
+
+#[test]
 fn multiple_enables_valid() {
     check_success(
         r#"
