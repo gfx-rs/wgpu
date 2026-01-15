@@ -10,26 +10,24 @@ use wgt::{
     TextureUsages, TextureViewDimension, VertexStepMode,
 };
 
-use crate::command::{
-    encoder::EncodingState,
-    pass::{self, flush_bindings_helper},
-    pass_base, pass_try, validate_and_begin_occlusion_query,
-    validate_and_begin_pipeline_statistics_query, ArcCommand, DebugGroupError, EncoderStateError,
-    InnerCommandEncoder, PassStateError, TimestampWritesError,
-};
-use crate::pipeline::{RenderPipeline, VertexStep};
-use crate::resource::RawResourceAccess;
-use crate::resource::{InvalidResourceError, ResourceErrorIdent};
-use crate::snatch::SnatchGuard;
 use crate::{
     api_log,
+    binding_model::{BindError, ImmediateUploadError},
     command::{
         bind::Binder,
-        end_occlusion_query, end_pipeline_statistics_query,
-        memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState},
-        ArcPassTimestampWrites, BasePass, BindGroupStateChange, CommandEncoderError, DrawError,
-        ExecutionError, MapPassErr, PassErrorScope, PassTimestampWrites, QueryUseError,
-        RenderCommandError, StateChange,
+        memory_init::{fixup_discarded_surfaces, SurfacesInDiscardState, TextureSurfaceDiscard},
+        pass::{self, flush_bindings_helper},
+        pass_base, pass_try,
+        query::{
+            end_occlusion_query, end_pipeline_statistics_query, validate_and_begin_occlusion_query,
+            validate_and_begin_pipeline_statistics_query, QueryResetMap,
+        },
+        render_command::ArcRenderCommand,
+        ArcCommand, ArcPassTimestampWrites, BasePass, BindGroupStateChange,
+        CommandBufferTextureMemoryActions, CommandEncoder, CommandEncoderError, DebugGroupError,
+        DrawCommandFamily, DrawError, DrawKind, EncoderStateError, EncodingState, ExecutionError,
+        InnerCommandEncoder, MapPassErr, PassErrorScope, PassStateError, PassTimestampWrites,
+        QueryUseError, Rect, RenderCommandError, StateChange, TimestampWritesError,
     },
     device::{
         AttachmentData, Device, DeviceError, MissingDownlevelFlags, MissingFeatures,
@@ -38,11 +36,13 @@ use crate::{
     global::Global,
     hal_label, id,
     init_tracker::{MemoryInitKind, TextureInitRange, TextureInitTrackerAction},
-    pipeline::PipelineFlags,
+    pipeline::{PipelineFlags, RenderPipeline, VertexStep},
     resource::{
-        DestroyedResourceError, Labeled, MissingBufferUsageError, MissingTextureUsageError,
-        ParentDevice, QuerySet, Texture, TextureView, TextureViewNotRenderableReason,
+        DestroyedResourceError, InvalidResourceError, Labeled, MissingBufferUsageError,
+        MissingTextureUsageError, ParentDevice, QuerySet, RawResourceAccess, ResourceErrorIdent,
+        Texture, TextureView, TextureViewNotRenderableReason,
     },
+    snatch::SnatchGuard,
     track::{ResourceUsageCompatibilityError, Tracker, UsageScope},
     validation, Label,
 };
@@ -52,14 +52,6 @@ use serde::Deserialize;
 #[cfg(feature = "serde")]
 use serde::Serialize;
 
-use super::render_command::ArcRenderCommand;
-use super::{
-    memory_init::TextureSurfaceDiscard, CommandBufferTextureMemoryActions, CommandEncoder,
-    QueryResetMap,
-};
-use super::{DrawCommandFamily, DrawKind, Rect};
-
-use crate::binding_model::{BindError, ImmediateUploadError};
 pub use wgt::{LoadOp, StoreOp};
 
 fn load_hal_ops<V>(load: LoadOp<V>) -> hal::AttachmentOps {

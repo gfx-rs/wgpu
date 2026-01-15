@@ -21,7 +21,7 @@ use std::{
     slice,
     sync::Arc,
 };
-use wgc::command::PointerReferences;
+use wgc::{command::PointerReferences, device::trace::DiskTraceLoader};
 
 #[derive(serde::Deserialize)]
 enum ExpectedData {
@@ -98,7 +98,7 @@ impl Test<'_> {
 
         println!("\t\t\tRunning...");
         for action in self.actions {
-            player.process(&device, &queue, action, dir);
+            player.process(&device, &queue, action, DiskTraceLoader::new(dir));
         }
         println!("\t\t\tMapping...");
         for expect in &self.expectations {

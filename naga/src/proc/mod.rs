@@ -121,6 +121,9 @@ impl crate::Literal {
         match (value, scalar.kind, scalar.width) {
             (value, crate::ScalarKind::Float, 8) => Some(Self::F64(value as _)),
             (value, crate::ScalarKind::Float, 4) => Some(Self::F32(value as _)),
+            (value, crate::ScalarKind::Float, 2) => {
+                Some(Self::F16(half::f16::from_f32_const(value as _)))
+            }
             (value, crate::ScalarKind::Uint, 4) => Some(Self::U32(value as _)),
             (value, crate::ScalarKind::Sint, 4) => Some(Self::I32(value as _)),
             (value, crate::ScalarKind::Uint, 8) => Some(Self::U64(value as _)),
@@ -169,6 +172,29 @@ impl crate::Literal {
     }
     pub const fn ty_inner(&self) -> crate::TypeInner {
         crate::TypeInner::Scalar(self.scalar())
+    }
+}
+
+impl TryFrom<crate::Literal> for u32 {
+    type Error = ConstValueError;
+
+    fn try_from(value: crate::Literal) -> Result<Self, Self::Error> {
+        match value {
+            crate::Literal::U32(value) => Ok(value),
+            crate::Literal::I32(value) => value.try_into().map_err(|_| ConstValueError::Negative),
+            _ => Err(ConstValueError::InvalidType),
+        }
+    }
+}
+
+impl TryFrom<crate::Literal> for bool {
+    type Error = ConstValueError;
+
+    fn try_from(value: crate::Literal) -> Result<Self, Self::Error> {
+        match value {
+            crate::Literal::Bool(value) => Ok(value),
+            _ => Err(ConstValueError::InvalidType),
+        }
     }
 }
 
@@ -425,9 +451,16 @@ impl crate::Module {
 }
 
 #[derive(Debug)]
-pub(super) enum U32EvalError {
+pub enum ConstValueError {
     NonConst,
     Negative,
+    InvalidType,
+}
+
+impl From<core::convert::Infallible> for ConstValueError {
+    fn from(_: core::convert::Infallible) -> Self {
+        unreachable!()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -452,63 +485,26 @@ impl GlobalCtx<'_> {
         )),
         allow(dead_code)
     )]
-    pub(super) fn eval_expr_to_u32(
+    pub(super) fn get_const_val<T, E>(
         &self,
         handle: crate::Handle<crate::Expression>,
-    ) -> Result<u32, U32EvalError> {
-        self.eval_expr_to_u32_from(handle, self.global_expressions)
+    ) -> Result<T, ConstValueError>
+    where
+        T: TryFrom<crate::Literal, Error = E>,
+        E: Into<ConstValueError>,
+    {
+        self.get_const_val_from(handle, self.global_expressions)
     }
 
-    /// Try to evaluate the expression in the `arena` using its `handle` and return it as a `u32`.
-    pub(super) fn eval_expr_to_u32_from(
+    pub(super) fn get_const_val_from<T, E>(
         &self,
         handle: crate::Handle<crate::Expression>,
         arena: &crate::Arena<crate::Expression>,
-    ) -> Result<u32, U32EvalError> {
-        match self.eval_expr_to_literal_from(handle, arena) {
-            Some(crate::Literal::U32(value)) => Ok(value),
-            Some(crate::Literal::I32(value)) => {
-                value.try_into().map_err(|_| U32EvalError::Negative)
-            }
-            _ => Err(U32EvalError::NonConst),
-        }
-    }
-
-    /// Try to evaluate the expression in `self.global_expressions` using its `handle` and return it as a `bool`.
-    #[cfg_attr(not(feature = "wgsl-in"), allow(dead_code))]
-    pub(super) fn eval_expr_to_bool(
-        &self,
-        handle: crate::Handle<crate::Expression>,
-    ) -> Option<bool> {
-        self.eval_expr_to_bool_from(handle, self.global_expressions)
-    }
-
-    /// Try to evaluate the expression in the `arena` using its `handle` and return it as a `bool`.
-    #[cfg_attr(not(feature = "wgsl-in"), allow(dead_code))]
-    pub(super) fn eval_expr_to_bool_from(
-        &self,
-        handle: crate::Handle<crate::Expression>,
-        arena: &crate::Arena<crate::Expression>,
-    ) -> Option<bool> {
-        match self.eval_expr_to_literal_from(handle, arena) {
-            Some(crate::Literal::Bool(value)) => Some(value),
-            _ => None,
-        }
-    }
-
-    #[expect(dead_code)]
-    pub(crate) fn eval_expr_to_literal(
-        &self,
-        handle: crate::Handle<crate::Expression>,
-    ) -> Option<crate::Literal> {
-        self.eval_expr_to_literal_from(handle, self.global_expressions)
-    }
-
-    pub(super) fn eval_expr_to_literal_from(
-        &self,
-        handle: crate::Handle<crate::Expression>,
-        arena: &crate::Arena<crate::Expression>,
-    ) -> Option<crate::Literal> {
+    ) -> Result<T, ConstValueError>
+    where
+        T: TryFrom<crate::Literal, Error = E>,
+        E: Into<ConstValueError>,
+    {
         fn get(
             gctx: GlobalCtx,
             handle: crate::Handle<crate::Expression>,
@@ -523,11 +519,15 @@ impl GlobalCtx<'_> {
                 _ => None,
             }
         }
-        match arena[handle] {
+        let value = match arena[handle] {
             crate::Expression::Constant(c) => {
                 get(*self, self.constants[c].init, self.global_expressions)
             }
             _ => get(*self, handle, arena),
+        };
+        match value {
+            Some(v) => v.try_into().map_err(Into::into),
+            None => Err(ConstValueError::NonConst),
         }
     }
 
@@ -561,9 +561,11 @@ impl crate::ArraySize {
                 let Some(expr) = gctx.overrides[handle].init else {
                     return Err(ResolveArraySizeError::NonConstArrayLength);
                 };
-                let length = gctx.eval_expr_to_u32(expr).map_err(|err| match err {
-                    U32EvalError::NonConst => ResolveArraySizeError::NonConstArrayLength,
-                    U32EvalError::Negative => ResolveArraySizeError::ExpectedPositiveArrayLength,
+                let length = gctx.get_const_val(expr).map_err(|err| match err {
+                    ConstValueError::NonConst => ResolveArraySizeError::NonConstArrayLength,
+                    ConstValueError::Negative | ConstValueError::InvalidType => {
+                        ResolveArraySizeError::ExpectedPositiveArrayLength
+                    }
                 })?;
 
                 if length == 0 {

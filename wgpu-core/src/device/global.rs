@@ -87,6 +87,11 @@ impl Global {
         device.limits.clone()
     }
 
+    pub fn device_adapter_info(&self, device_id: DeviceId) -> wgt::AdapterInfo {
+        let device = self.hub.devices.get(device_id);
+        device.adapter.get_info()
+    }
+
     pub fn device_downlevel_properties(&self, device_id: DeviceId) -> wgt::DownlevelCapabilities {
         let device = self.hub.devices.get(device_id);
         device.downlevel.clone()
@@ -997,27 +1002,31 @@ impl Global {
             let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
-            let data = device.trace.lock().as_mut().map(|trace| match source {
-                #[cfg(feature = "wgsl")]
-                pipeline::ShaderModuleSource::Wgsl(ref code) => {
-                    trace.make_binary("wgsl", code.as_bytes())
-                }
-                #[cfg(feature = "glsl")]
-                pipeline::ShaderModuleSource::Glsl(ref code, _) => {
-                    trace.make_binary("glsl", code.as_bytes())
-                }
-                #[cfg(feature = "spirv")]
-                pipeline::ShaderModuleSource::SpirV(ref code, _) => {
-                    trace.make_binary("spirv", bytemuck::cast_slice::<u32, u8>(code))
-                }
-                pipeline::ShaderModuleSource::Naga(ref module) => {
-                    let string =
-                        ron::ser::to_string_pretty(module, ron::ser::PrettyConfig::default())
-                            .unwrap();
-                    trace.make_binary("ron", string.as_bytes())
-                }
-                pipeline::ShaderModuleSource::Dummy(_) => {
-                    panic!("found `ShaderModuleSource::Dummy`")
+            let data = device.trace.lock().as_mut().map(|trace| {
+                use crate::device::trace::DataKind;
+
+                match source {
+                    #[cfg(feature = "wgsl")]
+                    pipeline::ShaderModuleSource::Wgsl(ref code) => {
+                        trace.make_binary(DataKind::Wgsl, code.as_bytes())
+                    }
+                    #[cfg(feature = "glsl")]
+                    pipeline::ShaderModuleSource::Glsl(ref code, _) => {
+                        trace.make_binary(DataKind::Glsl, code.as_bytes())
+                    }
+                    #[cfg(feature = "spirv")]
+                    pipeline::ShaderModuleSource::SpirV(ref code, _) => {
+                        trace.make_binary(DataKind::Spv, bytemuck::cast_slice::<u32, u8>(code))
+                    }
+                    pipeline::ShaderModuleSource::Naga(ref module) => {
+                        let string =
+                            ron::ser::to_string_pretty(module, ron::ser::PrettyConfig::default())
+                                .unwrap();
+                        trace.make_binary(DataKind::Ron, string.as_bytes())
+                    }
+                    pipeline::ShaderModuleSource::Dummy(_) => {
+                        panic!("found `ShaderModuleSource::Dummy`")
+                    }
                 }
             });
 
@@ -1081,17 +1090,22 @@ impl Global {
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
+                use crate::device::trace::DataKind;
+
                 let mut file_names = Vec::new();
-                for (data, ext) in [
-                    (desc.spirv.as_ref().map(|a| bytemuck::cast_slice(a)), "spv"),
-                    (desc.dxil.as_deref(), "dxil"),
-                    (desc.hlsl.as_ref().map(|a| a.as_bytes()), "hlsl"),
-                    (desc.msl.as_ref().map(|a| a.as_bytes()), "msl"),
-                    (desc.glsl.as_ref().map(|a| a.as_bytes()), "glsl"),
-                    (desc.wgsl.as_ref().map(|a| a.as_bytes()), "wgsl"),
+                for (data, kind) in [
+                    (
+                        desc.spirv.as_ref().map(|a| bytemuck::cast_slice(a)),
+                        DataKind::Spv,
+                    ),
+                    (desc.dxil.as_deref(), DataKind::Dxil),
+                    (desc.hlsl.as_ref().map(|a| a.as_bytes()), DataKind::Hlsl),
+                    (desc.msl.as_ref().map(|a| a.as_bytes()), DataKind::Msl),
+                    (desc.glsl.as_ref().map(|a| a.as_bytes()), DataKind::Glsl),
+                    (desc.wgsl.as_ref().map(|a| a.as_bytes()), DataKind::Wgsl),
                 ] {
                     if let Some(data) = data {
-                        file_names.push(trace.make_binary(ext, data));
+                        file_names.push(trace.make_binary(kind, data));
                     }
                 }
                 trace.add(trace::Action::CreateShaderModulePassthrough {
@@ -1982,6 +1996,15 @@ impl Global {
     ) -> Option<wgt::AllocatorReport> {
         let device = self.hub.devices.get(device_id);
         device.generate_allocator_report()
+    }
+
+    #[cfg(feature = "trace")]
+    pub fn device_take_trace(
+        &self,
+        device_id: DeviceId,
+    ) -> Option<Box<dyn trace::Trace + Send + Sync + 'static>> {
+        let device = self.hub.devices.get(device_id);
+        device.take_trace()
     }
 
     pub fn queue_drop(&self, queue_id: QueueId) {

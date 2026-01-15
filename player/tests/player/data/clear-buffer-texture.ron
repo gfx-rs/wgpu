@@ -40,7 +40,7 @@
                 mip_level: 0,
                 array_layer: 0,
             ),
-            data: "quad.bin",
+            data: File("quad.bin"),
             layout: (
                 offset: 0,
                 bytes_per_row: Some(256),
@@ -73,7 +73,7 @@
         // Make sure there is something in the buffer, otherwise it might be just zero init!
         WriteBuffer(
             id: PointerId(0x110),
-            data: "data1.bin",
+            data: File("data1.bin"),
             range: (
                 start: 0,
                 end: 16,

@@ -1,9 +1,9 @@
-// Test HLSL handling of N-by-2 matrices.
-// See the doc comment on `naga::back::hlsl` for details.
+// Test handling of N-by-2 matrices.
+// See the doc comments on `naga::back::hlsl` and `naga::back::spv` for details.
 //
 // There are additional tests in `access.wgsl`.
 //
-// Tests that we don't apply this handling to other sizes are in hlsl_mat_cx3.wgsl.
+// Tests that we don't apply this handling to other sizes are in mat_cx3.wgsl.
 
 // Access type (3rd item in variable names)
 // S = Struct

@@ -18,6 +18,9 @@ The resources to which identifiers refer are freed explicitly.
 Attempting to use an identifier for a resource that has been freed
 elicits an error result.
 
+Eventually, we would like to remove numeric IDs from wgpu-core.
+See <https://github.com/gfx-rs/wgpu/issues/5121>.
+
 ## Assigning ids to resources
 
 The users of `wgpu_core` generally want resource ids to be assigned
@@ -27,9 +30,9 @@ in one of two ways:
   For example, `wgpu` expects to call `Global::device_create_buffer`
   and have the return value indicate the newly created buffer's id.
 
-- Users like `player` and Firefox want to allocate ids themselves, and
-  pass `Global::device_create_buffer` and friends the id to assign the
-  new resource.
+- Users like Firefox want to allocate ids themselves, and pass
+  `Global::device_create_buffer` and friends the id to assign the new
+  resource.
 
 To accommodate either pattern, `wgpu_core` methods that create
 resources all expect an `id_in` argument that the caller can use to
@@ -97,6 +100,19 @@ flagged as errors as well.
 [`Id<R>`]: crate::id::Id
 [wrapped in a mutex]: trait.IdentityHandler.html#impl-IdentityHandler%3CI%3E-for-Mutex%3CIdentityManager%3E
 [WebGPU]: https://www.w3.org/TR/webgpu/
+
+## IDs and tracing
+
+As of `wgpu` v27, commands are encoded all at once when
+`CommandEncoder::finish` is called, not when the encoding methods are
+called for each command. This implies storing a representation of the
+commands in memory until `finish` is called.  `Arc`s are more suitable
+for this purpose than numeric ids. Rather than redundantly store both
+`Id`s and `Arc`s, tracing has been changed to work with `Arc`s. The
+serialized trace identifies resources by the integer value of
+`Arc::as_ptr`. These IDs have the type [`crate::id::PointerId`]. The
+trace player uses hash maps to go from `PointerId`s to `Arc`s
+when replaying a trace.
 
 */
 

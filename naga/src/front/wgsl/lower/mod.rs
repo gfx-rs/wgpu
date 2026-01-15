@@ -535,50 +535,28 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
             .map_err(|e| Box::new(Error::ConstantEvaluatorError(e.into(), span)))
     }
 
-    fn const_eval_expr_to_u32(
+    fn get_const_val<T: TryFrom<crate::Literal, Error = proc::ConstValueError>>(
         &self,
         handle: Handle<ir::Expression>,
-    ) -> core::result::Result<u32, proc::U32EvalError> {
+    ) -> core::result::Result<T, proc::ConstValueError> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref ctx) => {
                 if !ctx.local_expression_kind_tracker.is_const(handle) {
-                    return Err(proc::U32EvalError::NonConst);
+                    return Err(proc::ConstValueError::NonConst);
                 }
 
                 self.module
                     .to_ctx()
-                    .eval_expr_to_u32_from(handle, &ctx.function.expressions)
+                    .get_const_val_from(handle, &ctx.function.expressions)
             }
             ExpressionContextType::Constant(Some(ref ctx)) => {
                 assert!(ctx.local_expression_kind_tracker.is_const(handle));
                 self.module
                     .to_ctx()
-                    .eval_expr_to_u32_from(handle, &ctx.function.expressions)
+                    .get_const_val_from(handle, &ctx.function.expressions)
             }
-            ExpressionContextType::Constant(None) => self.module.to_ctx().eval_expr_to_u32(handle),
-            ExpressionContextType::Override => Err(proc::U32EvalError::NonConst),
-        }
-    }
-
-    fn const_eval_expr_to_bool(&self, handle: Handle<ir::Expression>) -> Option<bool> {
-        match self.expr_type {
-            ExpressionContextType::Runtime(ref ctx) => {
-                if !ctx.local_expression_kind_tracker.is_const(handle) {
-                    return None;
-                }
-
-                self.module
-                    .to_ctx()
-                    .eval_expr_to_bool_from(handle, &ctx.function.expressions)
-            }
-            ExpressionContextType::Constant(Some(ref ctx)) => {
-                assert!(ctx.local_expression_kind_tracker.is_const(handle));
-                self.module
-                    .to_ctx()
-                    .eval_expr_to_bool_from(handle, &ctx.function.expressions)
-            }
-            ExpressionContextType::Constant(None) => self.module.to_ctx().eval_expr_to_bool(handle),
-            ExpressionContextType::Override => None,
+            ExpressionContextType::Constant(None) => self.module.to_ctx().get_const_val(handle),
+            ExpressionContextType::Override => Err(proc::ConstValueError::NonConst),
         }
     }
 
@@ -716,12 +694,14 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
                 let index = self
                     .module
                     .to_ctx()
-                    .eval_expr_to_u32_from(expr, &rctx.function.expressions)
+                    .get_const_val_from::<u32, _>(expr, &rctx.function.expressions)
                     .map_err(|err| match err {
-                        proc::U32EvalError::NonConst => {
+                        proc::ConstValueError::NonConst | proc::ConstValueError::InvalidType => {
                             Error::ExpectedConstExprConcreteIntegerScalar(component_span)
                         }
-                        proc::U32EvalError::Negative => Error::ExpectedNonNegative(component_span),
+                        proc::ConstValueError::Negative => {
+                            Error::ExpectedNonNegative(component_span)
+                        }
                     })?;
                 ir::SwizzleComponent::XYZW
                     .get(index as usize)
@@ -1417,11 +1397,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     match ctx
                         .module
                         .to_ctx()
-                        .eval_expr_to_bool_from(condition, &ctx.module.global_expressions)
+                        .get_const_val_from(condition, &ctx.module.global_expressions)
                     {
-                        Some(true) => Ok(()),
-                        Some(false) => Err(Error::ConstAssertFailed(span)),
-                        _ => Err(Error::NotBool(span)),
+                        Ok(true) => Ok(()),
+                        Ok(false) => Err(Error::ConstAssertFailed(span)),
+                        Err(proc::ConstValueError::NonConst | proc::ConstValueError::Negative) => {
+                            unreachable!()
+                        }
+                        Err(proc::ConstValueError::InvalidType) => Err(Error::NotBool(span)),
                     }?;
                 }
             }
@@ -1940,14 +1923,10 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                     match ctx
                                         .module
                                         .to_ctx()
-                                        .eval_expr_to_literal_from(expr, &ctx.function.expressions)
+                                        .get_const_val_from(expr, &ctx.function.expressions)
                                     {
-                                        Some(ir::Literal::I32(value)) => {
-                                            ir::SwitchValue::I32(value)
-                                        }
-                                        Some(ir::Literal::U32(value)) => {
-                                            ir::SwitchValue::U32(value)
-                                        }
+                                        Ok(ir::Literal::I32(value)) => ir::SwitchValue::I32(value),
+                                        Ok(ir::Literal::U32(value)) => ir::SwitchValue::U32(value),
                                         _ => {
                                             return Err(Box::new(Error::InvalidSwitchCase {
                                                 span,
@@ -2168,11 +2147,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 match ctx
                     .module
                     .to_ctx()
-                    .eval_expr_to_bool_from(condition, &ctx.function.expressions)
+                    .get_const_val_from(condition, &ctx.function.expressions)
                 {
-                    Some(true) => Ok(()),
-                    Some(false) => Err(Error::ConstAssertFailed(span)),
-                    _ => Err(Error::NotBool(span)),
+                    Ok(true) => Ok(()),
+                    Ok(false) => Err(Error::ConstAssertFailed(span)),
+                    Err(proc::ConstValueError::NonConst | proc::ConstValueError::Negative) => {
+                        unreachable!()
+                    }
+                    Err(proc::ConstValueError::InvalidType) => Err(Error::NotBool(span)),
                 }?;
 
                 block.extend(emitter.finish(&ctx.function.expressions));
@@ -2370,7 +2352,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
                 }
 
-                lowered_base.try_map(|base| match ctx.const_eval_expr_to_u32(index).ok() {
+                lowered_base.try_map(|base| match ctx.get_const_val(index).ok() {
                     Some(index) => Ok::<_, Box<Error>>(ir::Expression::AccessIndex { base, index }),
                     None => {
                         // When an abstract array value e is indexed by an expression
@@ -2565,7 +2547,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 result_var,
             )))
         } else {
-            let left_val = ctx.const_eval_expr_to_bool(left);
+            let left_val: Option<bool> = ctx.get_const_val(left).ok();
 
             if left_val.is_some_and(|left_val| {
                 op == crate::BinaryOperator::LogicalAnd && !left_val
@@ -3059,9 +3041,33 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 ir::TypeInner::Pointer {
                                     base,
                                     space: ir::AddressSpace::WorkGroup,
-                                } => base,
-                                ref other => {
-                                    log::error!("Type {other:?} passed to workgroupUniformLoad");
+                                } => match ctx.module.types[base].inner {
+                                    // Match `Expression::Load` semantics:
+                                    // loading through a pointer to `atomic<T>` produces a `T`.
+                                    ir::TypeInner::Atomic(scalar) => ctx.module.types.insert(
+                                        ir::Type {
+                                            name: None,
+                                            inner: ir::TypeInner::Scalar(scalar),
+                                        },
+                                        span,
+                                    ),
+                                    _ => base,
+                                },
+                                ir::TypeInner::ValuePointer {
+                                    size,
+                                    scalar,
+                                    space: ir::AddressSpace::WorkGroup,
+                                } => ctx.module.types.insert(
+                                    ir::Type {
+                                        name: None,
+                                        inner: match size {
+                                            Some(size) => ir::TypeInner::Vector { size, scalar },
+                                            None => ir::TypeInner::Scalar(scalar),
+                                        },
+                                    },
+                                    span,
+                                ),
+                                _ => {
                                     let span = ctx.ast_expressions.get_span(expr);
                                     return Err(Box::new(Error::InvalidWorkGroupUniformLoad(span)));
                                 }
@@ -4201,10 +4207,12 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let value = ctx
             .module
             .to_ctx()
-            .eval_expr_to_u32(expr)
+            .get_const_val(expr)
             .map_err(|err| match err {
-                proc::U32EvalError::NonConst => Error::ExpectedConstExprConcreteIntegerScalar(span),
-                proc::U32EvalError::Negative => Error::ExpectedNonNegative(span),
+                proc::ConstValueError::NonConst | proc::ConstValueError::InvalidType => {
+                    Error::ExpectedConstExprConcreteIntegerScalar(span)
+                }
+                proc::ConstValueError::Negative => Error::ExpectedNonNegative(span),
             })?;
         Ok((value, span))
     }
@@ -4220,12 +4228,13 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 let const_expr = self.expression(expr, &mut ctx.as_const());
                 match const_expr {
                     Ok(value) => {
-                        let len = ctx.const_eval_expr_to_u32(value).map_err(|err| {
+                        let len = ctx.get_const_val(value).map_err(|err| {
                             Box::new(match err {
-                                proc::U32EvalError::NonConst => {
+                                proc::ConstValueError::NonConst
+                                | proc::ConstValueError::InvalidType => {
                                     Error::ExpectedConstExprConcreteIntegerScalar(span)
                                 }
-                                proc::U32EvalError::Negative => {
+                                proc::ConstValueError::Negative => {
                                     Error::ExpectedPositiveArrayLength(span)
                                 }
                             })
