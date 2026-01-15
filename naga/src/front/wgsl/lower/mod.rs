@@ -2634,19 +2634,16 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let mut tl = TemplateListIter::new(ident_span, template_list);
 
         if let Some(global) = ctx.globals.get(ident) {
-            match global {
-                &LoweredGlobalDecl::Type(handle) => {
-                    tl.finish(ctx)?;
-                    return Ok(handle);
-                }
-                _ => return Err(Box::new(Error::UnexpectedExprForTypeExpression(ident_span))),
-            }
+            let &LoweredGlobalDecl::Type(handle) = global else {
+                return Err(Box::new(Error::UnexpectedExprForTypeExpression(ident_span)));
+            };
+
+            tl.finish(ctx)?;
+            return Ok(handle);
         }
 
-        let ty = conv::map_predeclared_type(&ctx.enable_extensions, ident_span, ident)?;
-        let Some(ty) = ty else {
-            return Err(Box::new(Error::UnknownIdent(ident_span, ident)));
-        };
+        let ty = conv::map_predeclared_type(&ctx.enable_extensions, ident_span, ident)?
+            .ok_or_else(|| Box::new(Error::UnknownIdent(ident_span, ident)))?;
         let ty = self.finalize_type(ctx, ty, &mut tl, alias_name)?;
 
         tl.finish(ctx)?;
@@ -2663,29 +2660,28 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
     ) -> Result<'source, Handle<ir::Type>> {
         let ty = match ty {
             conv::PredeclaredType::TypeInner(ty_inner) => {
-                match ty_inner {
-                    ir::TypeInner::Image {
-                        class: ir::ImageClass::External,
-                        ..
-                    } => {
-                        // Other than the WGSL backend, every backend that supports
-                        // external textures does so by lowering them to a set of
-                        // ordinary textures and some parameters saying how to
-                        // sample from them. We don't know which backend will
-                        // consume the `Module` we're building, but in case it's not
-                        // WGSL, populate `SpecialTypes::external_texture_params`
-                        // and `SpecialTypes::external_texture_transfer_function`
-                        // with the types the backend will use for the parameter
-                        // buffer.
-                        //
-                        // Neither of these are the type we are lowering here:
-                        // that's an ordinary `TypeInner::Image`. But the fact we
-                        // are lowering a `texture_external` implies the backends
-                        // may need these additional types too.
-                        ctx.module.generate_external_texture_types();
-                    }
-                    _ => {}
+                if let ir::TypeInner::Image {
+                    class: ir::ImageClass::External,
+                    ..
+                } = ty_inner
+                {
+                    // Other than the WGSL backend, every backend that supports
+                    // external textures does so by lowering them to a set of
+                    // ordinary textures and some parameters saying how to
+                    // sample from them. We don't know which backend will
+                    // consume the `Module` we're building, but in case it's not
+                    // WGSL, populate `SpecialTypes::external_texture_params`
+                    // and `SpecialTypes::external_texture_transfer_function`
+                    // with the types the backend will use for the parameter
+                    // buffer.
+                    //
+                    // Neither of these are the type we are lowering here:
+                    // that's an ordinary `TypeInner::Image`. But the fact we
+                    // are lowering a `texture_external` implies the backends
+                    // may need these additional types too.
+                    ctx.module.generate_external_texture_types();
                 }
+
                 ctx.as_global().ensure_type_exists(alias_name, ty_inner)
             }
             conv::PredeclaredType::RayDesc => ctx.module.generate_ray_desc_type(),
@@ -4531,20 +4527,21 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Ok(ir::ArraySize::Constant(size))
             }
             Err(err) => {
-                if let Error::ConstantEvaluatorError(ref ty, _) = *err {
-                    match **ty {
-                        proc::ConstantEvaluatorError::OverrideExpr => {
-                            Ok(ir::ArraySize::Pending(self.array_size_override(
-                                expr,
-                                &mut ctx.as_global().as_override(),
-                                span,
-                            )?))
-                        }
-                        _ => Err(err),
-                    }
-                } else {
-                    Err(err)
-                }
+                // If the error is simply that `expr` was an override expression, then we
+                // can represent that as an array length.
+                let Error::ConstantEvaluatorError(ref ty, _) = *err else {
+                    return Err(err);
+                };
+
+                let proc::ConstantEvaluatorError::OverrideExpr = **ty else {
+                    return Err(err);
+                };
+
+                Ok(ir::ArraySize::Pending(self.array_size_override(
+                    expr,
+                    &mut ctx.as_global().as_override(),
+                    span,
+                )?))
             }
         }
     }
