@@ -460,6 +460,8 @@ impl VaryingContext<'_> {
                         ));
                     }
                 }
+                // If this is per-vertex, we change the type we validate to the inner type, otherwise we leave it be.
+                // This lets all validation be done on the inner type once we've ensured the per-vertex is array<T, 3>
                 let (ty, ty_inner) = if interpolation == Some(crate::Interpolation::PerVertex) {
                     let three = crate::ArraySize::Constant(core::num::NonZeroU32::new(3).unwrap());
                     match ty_inner {
