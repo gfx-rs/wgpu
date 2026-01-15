@@ -260,12 +260,13 @@ impl ExampleContext {
     async fn init_async<E: Example>(surface: &mut SurfaceWrapper, window: Arc<Window>) -> Self {
         log::info!("Initializing wgpu...");
 
-        let mut instance_descriptor = wgpu::InstanceDescriptor::from_env_or_default()
-            .with_display_handle(Box::new(
-                // TODO: Use event_loop.owned_display_handle() with winit 0.30
-                window.clone(),
-            ));
+        let mut instance_descriptor = wgpu::InstanceDescriptor::default();
+        // Use static DXC by default so we can utilize the latest features
         instance_descriptor.backend_options.dx12.shader_compiler = wgpu::Dx12Compiler::StaticDxc;
+        let instance_descriptor = instance_descriptor.with_env().with_display_handle(Box::new(
+            // TODO: Use event_loop.owned_display_handle() with winit 0.30
+            window.clone(),
+        ));
         let instance = wgpu::Instance::new(instance_descriptor);
         surface.pre_adapter(&instance, window);
         let adapter = get_adapter_with_capabilities_or_from_env(
