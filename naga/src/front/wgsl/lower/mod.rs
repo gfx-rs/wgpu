@@ -2627,7 +2627,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         let ident = match *ident {
             ast::IdentExpr::Unresolved(ident) => ident,
             ast::IdentExpr::Local(_) => {
-                return Err(Box::new(Error::UnexpectedExprForTypeExpression(ident_span)))
+                // Since WGSL only supports module-scope type definitions and
+                // aliases, a local identifier can't possibly refer to a type.
+                return Err(Box::new(Error::UnexpectedExprForTypeExpression(ident_span)));
             }
         };
 
@@ -2638,10 +2640,15 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 return Err(Box::new(Error::UnexpectedExprForTypeExpression(ident_span)));
             };
 
+            // Type generators can only be predeclared, so since `ident` refers
+            // to a module-scope declaration, the template parameter list should
+            // be empty.
             tl.finish(ctx)?;
             return Ok(handle);
         }
 
+        // If `ident` doesn't resolve to a module-scope declaration, then it
+        // must resolve to a predeclared type or type generator.
         let ty = conv::map_predeclared_type(&ctx.enable_extensions, ident_span, ident)?
             .ok_or_else(|| Box::new(Error::UnknownIdent(ident_span, ident)))?;
         let ty = self.finalize_type(ctx, ty, &mut tl, alias_name)?;
@@ -2651,6 +2658,23 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         Ok(ty)
     }
 
+    /// Construct an [`ir::Type`] from a [`conv::PredeclaredType`] and a list of
+    /// template parameters.
+    ///
+    /// If we're processing a type alias, then `alias_name` is the name we
+    /// should use in the new `ir::Type`.
+    ///
+    /// For example, when parsing `vec3<f32>`, the caller would pass:
+    ///
+    /// - for `ty`, [`TypeGenerator::Vector`], and
+    ///
+    /// - for `tl`, an iterator producing a single [`Expression::Ident`] representing `f32`.
+    ///
+    /// From those arguments this function will return a handle for the
+    /// [`ir::Type`] representing `vec3<f32>`.
+    ///
+    /// [`TypeGenerator::Vector`]: conv::TypeGenerator::Vector
+    /// [`Expression::Ident`]: crate::front::wgsl::parse::ast::Expression::Ident
     fn finalize_type(
         &mut self,
         ctx: &mut ExpressionContext<'source, '_, '_>,

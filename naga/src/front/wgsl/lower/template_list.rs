@@ -137,6 +137,17 @@ impl<'iter, 'source> TemplateListIter<'iter, 'source> {
         let (enumerant, span) = ctx.enumerant(expr)?;
         conv::map_access_mode(enumerant, span)
     }
+
+    /// Update `space` with an access mode from `self`, if appropriate.
+    ///
+    /// If `space` is [`Storage`], and there is another template parameter in
+    /// `self`, parse it as a storage mode and mutate `space` accordingly. If
+    /// there are no more template parameters, treat that like `read`.
+    ///
+    /// If `space` is some other address space, don't consume any template
+    /// parameters.
+    ///
+    /// [`Storage`]: ir::AddressSpace::Storage
     pub fn maybe_access_mode(
         &mut self,
         space: &mut ir::AddressSpace,
