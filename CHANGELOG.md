@@ -51,7 +51,7 @@ Bottom level categories:
 
 #### Naga
 
-- Allow parsing shaders which make use of `SPV_KHR_non_semantic_info` for debug info. By @inner-daemons in #8827.
+- Allow parsing shaders which make use of `SPV_KHR_non_semantic_info` for debug info. Also removes `naga::front::spv::SUPPORTED_EXT_SETS`. By @inner-daemons in #8827.
 
 ### Bug Fixes
 
