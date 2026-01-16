@@ -368,6 +368,8 @@ impl Global {
 
         let fid = self.hub.textures.prepare(texture_id_in);
 
+        let output = surface.get_current_texture()?;
+
         #[cfg(feature = "trace")]
         if let Some(present) = surface.presentation.lock().as_ref() {
             if let Some(ref mut trace) = *present.device.trace.lock() {
@@ -379,8 +381,6 @@ impl Global {
                 }
             }
         }
-
-        let output = surface.get_current_texture()?;
 
         let status = output.status;
         let texture_id = output

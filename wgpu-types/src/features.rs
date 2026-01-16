@@ -1274,6 +1274,14 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const EXPERIMENTAL_COOPERATIVE_MATRIX = 1 << 57;
+
+        /// Enables shader per-vertex attributes.
+        ///
+        /// Supported platforms:
+        /// - Vulkan (with VK_KHR_fragment_shader_barycentric)
+        ///
+        /// This is a native only feature.
+        const SHADER_PER_VERTEX = 1 << 58;
     }
 
     /// Features that are not guaranteed to be supported.

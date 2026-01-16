@@ -216,9 +216,8 @@ pub struct OffsetsBindTarget {
     pub size: u32,
 }
 
-#[cfg(any(feature = "serialize", feature = "deserialize"))]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg(feature = "deserialize")]
+#[derive(serde::Deserialize)]
 struct BindingMapSerialization {
     resource_binding: crate::ResourceBinding,
     bind_target: BindTarget,
@@ -337,9 +336,8 @@ impl Default for SamplerHeapBindTargets {
     }
 }
 
-#[cfg(any(feature = "serialize", feature = "deserialize"))]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg(feature = "deserialize")]
+#[derive(serde::Deserialize)]
 struct SamplerIndexBufferBindingSerialization {
     group: u32,
     bind_target: BindTarget,
@@ -369,9 +367,8 @@ where
 pub type SamplerIndexBufferBindingMap =
     alloc::collections::BTreeMap<SamplerIndexBufferKey, BindTarget>;
 
-#[cfg(any(feature = "serialize", feature = "deserialize"))]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg(feature = "deserialize")]
+#[derive(serde::Deserialize)]
 struct DynamicStorageBufferOffsetTargetSerialization {
     index: u32,
     bind_target: OffsetsBindTarget,
@@ -425,9 +422,8 @@ pub struct ExternalTextureBindTarget {
     pub params: BindTarget,
 }
 
-#[cfg(any(feature = "serialize", feature = "deserialize"))]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg(feature = "deserialize")]
+#[derive(serde::Deserialize)]
 struct ExternalTextureBindingMapSerialization {
     resource_binding: crate::ResourceBinding,
     bind_target: ExternalTextureBindTarget,
@@ -543,6 +539,9 @@ pub struct Options {
     /// If set, loops will have code injected into them, forcing the compiler
     /// to think the number of iterations is bounded.
     pub force_loop_bounding: bool,
+    /// if set, ray queries will get a variable to track their state to prevent
+    /// misuse.
+    pub ray_query_initialization_tracking: bool,
 }
 
 impl Default for Options {
@@ -560,6 +559,7 @@ impl Default for Options {
             zero_initialize_workgroup_memory: true,
             restrict_indexing: true,
             force_loop_bounding: true,
+            ray_query_initialization_tracking: true,
         }
     }
 }

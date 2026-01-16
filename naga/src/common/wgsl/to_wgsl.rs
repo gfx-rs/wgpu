@@ -169,7 +169,8 @@ impl TryToWgsl for crate::BuiltIn {
             Bi::FragDepth => "frag_depth",
             Bi::FrontFacing => "front_facing",
             Bi::PrimitiveIndex => "primitive_index",
-            Bi::Barycentric => "barycentric",
+            Bi::Barycentric { perspective: true } => "barycentric",
+            Bi::Barycentric { perspective: false } => "barycentric_no_perspective",
             Bi::SampleIndex => "sample_index",
             Bi::SampleMask => "sample_mask",
             Bi::GlobalInvocationId => "global_invocation_id",
@@ -210,6 +211,7 @@ impl ToWgsl for crate::Interpolation {
             crate::Interpolation::Perspective => "perspective",
             crate::Interpolation::Linear => "linear",
             crate::Interpolation::Flat => "flat",
+            crate::Interpolation::PerVertex => "per_vertex",
         }
     }
 }

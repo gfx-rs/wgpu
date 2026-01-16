@@ -35,6 +35,9 @@ ignore = [
     "RUSTSEC-2025-0081",
     "RUSTSEC-2025-0098",
     "RUSTSEC-2025-0100",
+    # `bincode` is no longer maintained https://rustsec.org/advisories/RUSTSEC-2025-0141
+    # We only use it directly for tests and tools. It is also used indirectly via deno.
+    "RUSTSEC-2025-0141",
 ]
 
 [licenses]

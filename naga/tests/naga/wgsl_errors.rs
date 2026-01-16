@@ -367,6 +367,27 @@ fn vector_constructor_incorrect_component_count() {
 }
 
 #[test]
+fn vector_constructor_type_mismatch() {
+    check(
+        r#"
+            fn x(a: u32) -> vec2f {
+                return vec2f(a);
+            }
+        "#,
+        r#"error: wrong type passed as argument #1 to `vec2<f32>`
+  ┌─ wgsl:3:24
+  │
+3 │                 return vec2f(a);
+  │                        ^^^^^ ^ argument #1 has type `u32`
+  │
+  = note: `vec2<f32>` accepts the following types for argument #1:
+  = note: allowed type: f32
+
+"#,
+    );
+}
+
+#[test]
 fn bad_texture_sample_type() {
     check(
         r#"
@@ -1186,6 +1207,31 @@ fn int64_capability() {
             ..
         })
     }
+}
+
+#[test]
+fn per_vertex_capability() {
+    check_validation! {
+            r#"
+            @fragment
+            fn fs_main(@location(0) @interpolate(per_vertex) v: array<f32, 3>) -> @location(0) vec4<f32> {
+                return vec4(v[0], v[1], v[2], 1.0);
+            }
+        "#:
+            Err(
+        naga::valid::ValidationError::EntryPoint {
+            stage: naga::ShaderStage::Fragment,
+            source: valid::EntryPointError::Argument(
+                0,
+                valid::VaryingError::UnsupportedCapability(
+                    Capabilities::PER_VERTEX,
+
+                ),
+            ),
+            ..
+        },
+    )
+        }
 }
 
 #[test]

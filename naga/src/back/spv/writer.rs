@@ -1570,9 +1570,9 @@ impl Writer {
                     .writer
                     .get_pointer_type_id(u32_type_id, spirv::StorageClass::Function);
                 let tracker_id = context.gen_id();
-                let tracker_init_id = context
-                    .writer
-                    .get_constant_scalar(crate::Literal::U32(super::RayQueryPoint::empty().bits()));
+                let tracker_init_id = context.writer.get_constant_scalar(crate::Literal::U32(
+                    crate::back::RayQueryPoint::empty().bits(),
+                ));
                 let tracker_instruction = Instruction::variable(
                     ptr_u32_type_id,
                     tracker_id,
@@ -2987,6 +2987,14 @@ impl Writer {
                         Some(crate::Interpolation::Linear) => {
                             others.push(Decoration::NoPerspective);
                         }
+                        Some(crate::Interpolation::PerVertex) => {
+                            others.push(Decoration::PerVertexKHR);
+                            self.require_any(
+                                "`per_vertex` interpolation",
+                                &[spirv::Capability::FragmentBarycentricKHR],
+                            )?;
+                            self.use_extension("SPV_KHR_fragment_shader_barycentric");
+                        }
                     }
                     match sampling {
                         // Center sampling is the default in SPIR-V.
@@ -3080,13 +3088,17 @@ impl Writer {
                         }
                         BuiltIn::PrimitiveId
                     }
-                    Bi::Barycentric => {
+                    Bi::Barycentric { perspective } => {
                         self.require_any(
                             "`barycentric` built-in",
                             &[spirv::Capability::FragmentBarycentricKHR],
                         )?;
                         self.use_extension("SPV_KHR_fragment_shader_barycentric");
-                        BuiltIn::BaryCoordKHR
+                        if perspective {
+                            BuiltIn::BaryCoordKHR
+                        } else {
+                            BuiltIn::BaryCoordNoPerspKHR
+                        }
                     }
                     Bi::SampleIndex => {
                         self.require_any(

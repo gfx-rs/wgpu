@@ -44,3 +44,6 @@ wgpu/red.png
 
 # Temporary clone location for wasm-bindgen mirroring
 wgpu/src/backend/webgpu/webgpu_sys/wasm_bindgen_clone_tmp
+
+# LLM-related
+.claude/settings.local.json

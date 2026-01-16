@@ -1479,7 +1479,23 @@ impl super::Validator {
                         base: ty,
                         space: AddressSpace::WorkGroup,
                     };
-                    if !expected_pointer_inner.non_struct_equivalent(pointer_inner, context.types) {
+                    // workgroupUniformLoad on atomic<T> returns T, not atomic<T>.
+                    // Verify the pointer's atomic scalar matches the result scalar.
+                    let atomic_specialization_ok = match *pointer_inner {
+                        Ti::Pointer {
+                            base: pointer_base,
+                            space: AddressSpace::WorkGroup,
+                        } => match (&context.types[pointer_base].inner, &context.types[ty].inner) {
+                            (&Ti::Atomic(pointer_scalar), &Ti::Scalar(result_scalar)) => {
+                                pointer_scalar == result_scalar
+                            }
+                            _ => false,
+                        },
+                        _ => false,
+                    };
+                    if !expected_pointer_inner.non_struct_equivalent(pointer_inner, context.types)
+                        && !atomic_specialization_ok
+                    {
                         return Err(FunctionError::WorkgroupUniformLoadInvalidPointer(pointer)
                             .with_span_static(span, "WorkGroupUniformLoad"));
                     }

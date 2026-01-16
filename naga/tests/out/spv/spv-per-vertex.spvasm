@@ -1,0 +1,56 @@
+; SPIR-V
+; Version: 1.1
+; Generator: rspirv
+; Bound: 34
+OpCapability Shader
+OpCapability FragmentBarycentricKHR
+OpExtension "SPV_KHR_fragment_shader_barycentric"
+%1 = OpExtInstImport "GLSL.std.450"
+OpMemoryModel Logical GLSL450
+OpEntryPoint Fragment %30 "fs_main" %25 %28
+OpExecutionMode %30 OriginUpperLeft
+OpDecorate %4 ArrayStride 4
+OpDecorate %25 Location 0
+OpDecorate %25 PerVertexKHR
+OpDecorate %28 Location 0
+%2 = OpTypeVoid
+%3 = OpTypeFloat 32
+%6 = OpTypeInt 32 0
+%5 = OpConstant  %6  3
+%4 = OpTypeArray %3 %5
+%7 = OpTypeVector %3 4
+%8 = OpConstant  %3  1
+%10 = OpTypePointer Private %4
+%11 = OpConstantNull  %4
+%9 = OpVariable  %10  Private %11
+%13 = OpTypePointer Private %7
+%14 = OpConstantNull  %7
+%12 = OpVariable  %13  Private %14
+%17 = OpTypeFunction %2
+%26 = OpTypePointer Input %4
+%25 = OpVariable  %26  Input
+%29 = OpTypePointer Output %7
+%28 = OpVariable  %29  Output
+%16 = OpFunction  %2  None %17
+%15 = OpLabel
+OpBranch %18
+%18 = OpLabel
+%19 = OpLoad  %4  %9
+%20 = OpCompositeExtract  %3  %19 0
+%21 = OpCompositeExtract  %3  %19 1
+%22 = OpCompositeExtract  %3  %19 2
+%23 = OpCompositeConstruct  %7  %20 %21 %22 %8
+OpStore %12 %23
+OpReturn
+OpFunctionEnd
+%30 = OpFunction  %2  None %17
+%24 = OpLabel
+%27 = OpLoad  %4  %25
+OpBranch %31
+%31 = OpLabel
+OpStore %9 %27
+%32 = OpFunctionCall  %2  %16
+%33 = OpLoad  %7  %12
+OpStore %28 %33
+OpReturn
+OpFunctionEnd

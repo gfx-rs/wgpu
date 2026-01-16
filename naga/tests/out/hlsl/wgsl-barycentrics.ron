@@ -6,6 +6,10 @@
             entry_point:"fs_main",
             target_profile:"ps_6_1",
         ),
+        (
+            entry_point:"fs_main_no_perspective",
+            target_profile:"ps_6_1",
+        ),
     ],
     compute:[
     ],

@@ -58,6 +58,8 @@ pub enum VaryingError {
     NotIOShareableType(Handle<crate::Type>),
     #[error("Interpolation is not valid")]
     InvalidInterpolation,
+    #[error("Interpolation {0:?} is only valid for stage {1:?}")]
+    InvalidInterpolationInStage(crate::Interpolation, crate::ShaderStage),
     #[error("Cannot combine {interpolation:?} interpolation with the {sampling:?} sample type")]
     InvalidInterpolationSamplingCombination {
         interpolation: crate::Interpolation,
@@ -100,6 +102,8 @@ pub enum VaryingError {
     InvalidPerPrimitive,
     #[error("Non-builtin members of a mesh primitive output struct must be decorated with `@per_primitive`")]
     MissingPerPrimitive,
+    #[error("Per vertex fragment inputs must be an array of length 3.")]
+    PerVertexNotArrayOfThree,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -217,10 +221,14 @@ impl VaryingContext<'_> {
             crate::Binding::BuiltIn(built_in) => {
                 // Ignore the `invariant` field for the sake of duplicate checks,
                 // but use the original in error messages.
-                let canonical = if let crate::BuiltIn::Position { .. } = built_in {
-                    crate::BuiltIn::Position { invariant: false }
-                } else {
-                    built_in
+                let canonical = match built_in {
+                    crate::BuiltIn::Position { .. } => {
+                        crate::BuiltIn::Position { invariant: false }
+                    }
+                    crate::BuiltIn::Barycentric { .. } => {
+                        crate::BuiltIn::Barycentric { perspective: false }
+                    }
+                    x => x,
                 };
 
                 if self.built_ins.contains(&canonical) {
@@ -232,7 +240,7 @@ impl VaryingContext<'_> {
                     Bi::ClipDistance => Capabilities::CLIP_DISTANCE,
                     Bi::CullDistance => Capabilities::CULL_DISTANCE,
                     Bi::PrimitiveIndex => Capabilities::PRIMITIVE_INDEX,
-                    Bi::Barycentric => Capabilities::SHADER_BARYCENTRICS,
+                    Bi::Barycentric { .. } => Capabilities::SHADER_BARYCENTRICS,
                     Bi::ViewIndex => Capabilities::MULTIVIEW,
                     Bi::SampleIndex => Capabilities::MULTISAMPLED_SHADING,
                     Bi::NumSubgroups
@@ -325,7 +333,7 @@ impl VaryingContext<'_> {
                                 && self.mesh_output_type == MeshOutputType::PrimitiveOutput),
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
-                    Bi::Barycentric => (
+                    Bi::Barycentric { .. } => (
                         self.stage == St::Fragment && !self.output,
                         *ty_inner
                             == Ti::Vector {
@@ -443,6 +451,33 @@ impl VaryingContext<'_> {
                         Capabilities::MESH_SHADER,
                     ));
                 }
+                if interpolation == Some(crate::Interpolation::PerVertex) {
+                    if self.stage != crate::ShaderStage::Fragment {
+                        return Err(VaryingError::InvalidInterpolationInStage(
+                            crate::Interpolation::PerVertex,
+                            crate::ShaderStage::Fragment,
+                        ));
+                    }
+                    if !self.capabilities.contains(Capabilities::PER_VERTEX) {
+                        return Err(VaryingError::UnsupportedCapability(
+                            Capabilities::PER_VERTEX,
+                        ));
+                    }
+                }
+                // If this is per-vertex, we change the type we validate to the inner type, otherwise we leave it be.
+                // This lets all validation be done on the inner type once we've ensured the per-vertex is array<T, 3>
+                let (ty, ty_inner) = if interpolation == Some(crate::Interpolation::PerVertex) {
+                    let three = crate::ArraySize::Constant(core::num::NonZeroU32::new(3).unwrap());
+                    match ty_inner {
+                        &Ti::Array { base, size, .. } if size == three => {
+                            (base, &self.types[base].inner)
+                        }
+                        _ => return Err(VaryingError::PerVertexNotArrayOfThree),
+                    }
+                } else {
+                    (ty, ty_inner)
+                };
+
                 // Only IO-shareable types may be stored in locations.
                 if !self.type_info[ty.index()]
                     .flags
@@ -550,19 +585,22 @@ impl VaryingContext<'_> {
                     return Err(VaryingError::UnsupportedCapability(required));
                 }
 
-                match ty_inner.scalar_kind() {
-                    Some(crate::ScalarKind::Float) => {
-                        if needs_interpolation && interpolation.is_none() {
-                            return Err(VaryingError::MissingInterpolation);
+                if interpolation != Some(crate::Interpolation::PerVertex) {
+                    match ty_inner.scalar_kind() {
+                        Some(crate::ScalarKind::Float) => {
+                            if needs_interpolation && interpolation.is_none() {
+                                return Err(VaryingError::MissingInterpolation);
+                            }
                         }
-                    }
-                    Some(_) => {
-                        if needs_interpolation && interpolation != Some(crate::Interpolation::Flat)
-                        {
-                            return Err(VaryingError::InvalidInterpolation);
+                        Some(_) => {
+                            if needs_interpolation
+                                && interpolation != Some(crate::Interpolation::Flat)
+                            {
+                                return Err(VaryingError::InvalidInterpolation);
+                            }
                         }
+                        None => return Err(VaryingError::InvalidType(ty)),
                     }
-                    None => return Err(VaryingError::InvalidType(ty)),
                 }
             }
         }

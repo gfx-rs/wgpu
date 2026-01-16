@@ -327,7 +327,7 @@ pub struct BindGroupLayoutEntry {
     /// If the binding is an array of multiple resources. Corresponds to `binding_array<T>` in the shader.
     ///
     /// When this is `Some` the following validation applies:
-    /// - Size must be of value 1 or greater.
+    /// - Count must be of value 1 or greater, this corresponds to the length of the array of resources that will be bound.
     /// - When `ty == BindingType::Texture`, [`Features::TEXTURE_BINDING_ARRAY`] must be supported.
     /// - When `ty == BindingType::Sampler`, [`Features::TEXTURE_BINDING_ARRAY`] must be supported.
     /// - When `ty == BindingType::Buffer`, [`Features::BUFFER_BINDING_ARRAY`] must be supported.
@@ -335,6 +335,7 @@ pub struct BindGroupLayoutEntry {
     /// - When `ty == BindingType::StorageTexture`, [`Features::STORAGE_RESOURCE_BINDING_ARRAY`] must be supported.
     /// - When any binding in the group is an array, no `BindingType::Buffer` in the group may have `has_dynamic_offset == true`
     /// - When any binding in the group is an array, no `BindingType::Buffer` in the group may have `ty.ty == BufferBindingType::Uniform`.
+    /// - If [`Features::PARTIALLY_BOUND_BINDING_ARRAY`] is enabled, the specified count becomes the upper bound instead.
     ///
     #[cfg_attr(feature = "serde", serde(default))]
     pub count: Option<NonZeroU32>,

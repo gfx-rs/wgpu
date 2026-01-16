@@ -27,6 +27,7 @@ use crate::{
 use crate::span::{AddSpan as _, WithSpan};
 pub use analyzer::{ExpressionInfo, FunctionInfo, GlobalUse, Uniformity, UniformityRequirements};
 pub use compose::ComposeError;
+pub use expression::builtin::ZeroValueError;
 pub use expression::{check_literal_value, LiteralError};
 pub use expression::{ConstExpressionError, ExpressionError};
 pub use function::{CallError, FunctionError, LocalVariableError, SubgroupError};
@@ -202,6 +203,8 @@ bitflags::bitflags! {
         const STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 35;
         /// Support for cooperative matrix types and operations
         const COOPERATIVE_MATRIX = 1 << 36;
+        /// Support for per-vertex fragment input.
+        const PER_VERTEX = 1 << 37;
     }
 }
 

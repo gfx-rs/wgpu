@@ -46,6 +46,9 @@ pub(crate) const F2U64_FUNCTION: &str = "naga_f2u64";
 pub(crate) const IMAGE_SAMPLE_BASE_CLAMP_TO_EDGE_FUNCTION: &str =
     "nagaTextureSampleBaseClampToEdge";
 pub(crate) const IMAGE_LOAD_EXTERNAL_FUNCTION: &str = "nagaTextureLoadExternal";
+pub(crate) const RAY_QUERY_TRACKER_VARIABLE_PREFIX: &str = "naga_query_init_tracker_for_";
+/// Prefix for variables in a naga statement
+pub(crate) const INTERNAL_PREFIX: &str = "naga_";
 
 enum Index {
     Expression(Handle<crate::Expression>),
@@ -536,6 +539,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         match *binding {
             crate::Binding::BuiltIn(crate::BuiltIn::Position { invariant: true }) => {
                 write!(self.out, "precise ")?;
+            }
+            crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { perspective: false }) => {
+                write!(self.out, "noperspective ")?;
             }
             crate::Binding::Location {
                 interpolation,
@@ -1664,9 +1670,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 self.write_array_size(module, base, size)?;
             }
 
-            match module.types[local.ty].inner {
+            let is_ray_query = match module.types[local.ty].inner {
                 // from https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#tracerayinline-example-1 it seems that ray queries shouldn't be zeroed
-                TypeInner::RayQuery { .. } => {}
+                TypeInner::RayQuery { .. } => true,
                 _ => {
                     write!(self.out, " = ")?;
                     // Write the local initializer if needed
@@ -1676,10 +1682,21 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                         // Zero initialize local variables
                         self.write_default_init(module, local.ty)?;
                     }
+                    false
                 }
-            }
+            };
             // Finish the local with `;` and add a newline (only for readability)
-            writeln!(self.out, ";")?
+            writeln!(self.out, ";")?;
+            // If it's a ray query, we also want a tracker variable
+            if is_ray_query {
+                write!(self.out, "{}", back::INDENT)?;
+                self.write_value_type(module, &TypeInner::Scalar(Scalar::U32))?;
+                writeln!(
+                    self.out,
+                    " {RAY_QUERY_TRACKER_VARIABLE_PREFIX}{} = 0;",
+                    self.names[&func_ctx.name_key(handle)]
+                )?;
+            }
         }
 
         if !func.local_variables.is_empty() {
@@ -2564,50 +2581,77 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
             } => {
                 self.write_switch(module, func_ctx, level, selector, cases)?;
             }
-            Statement::RayQuery { query, ref fun } => match *fun {
-                RayQueryFunction::Initialize {
-                    acceleration_structure,
-                    descriptor,
-                } => {
-                    write!(self.out, "{level}")?;
-                    self.write_expr(module, query, func_ctx)?;
-                    write!(self.out, ".TraceRayInline(")?;
-                    self.write_expr(module, acceleration_structure, func_ctx)?;
-                    write!(self.out, ", ")?;
-                    self.write_expr(module, descriptor, func_ctx)?;
-                    write!(self.out, ".flags, ")?;
-                    self.write_expr(module, descriptor, func_ctx)?;
-                    write!(self.out, ".cull_mask, ")?;
-                    write!(self.out, "RayDescFromRayDesc_(")?;
-                    self.write_expr(module, descriptor, func_ctx)?;
-                    writeln!(self.out, "));")?;
+            Statement::RayQuery { query, ref fun } => {
+                // There are three possibilities for a ptr to be:
+                // 1. A variable
+                // 2. A function argument
+                // 3. part of a struct
+                //
+                // 2 and 3 are not possible, a ray query (in naga IR)
+                // is not allowed to be passed into a function, and
+                // all languages disallow it in a struct (you get fun results if
+                // you try it :) ).
+                //
+                // Therefore, the ray query expression must be a variable.
+                let crate::Expression::LocalVariable(query_var) = func_ctx.expressions[query]
+                else {
+                    unreachable!()
+                };
+
+                let tracker_expr_name = format!(
+                    "{RAY_QUERY_TRACKER_VARIABLE_PREFIX}{}",
+                    self.names[&func_ctx.name_key(query_var)]
+                );
+
+                match *fun {
+                    RayQueryFunction::Initialize {
+                        acceleration_structure,
+                        descriptor,
+                    } => {
+                        self.write_initialize_function(
+                            module,
+                            level,
+                            query,
+                            acceleration_structure,
+                            descriptor,
+                            &tracker_expr_name,
+                            func_ctx,
+                        )?;
+                    }
+                    RayQueryFunction::Proceed { result } => {
+                        self.write_proceed(
+                            module,
+                            level,
+                            query,
+                            result,
+                            &tracker_expr_name,
+                            func_ctx,
+                        )?;
+                    }
+                    RayQueryFunction::GenerateIntersection { hit_t } => {
+                        self.write_generate_intersection(
+                            module,
+                            level,
+                            query,
+                            hit_t,
+                            &tracker_expr_name,
+                            func_ctx,
+                        )?;
+                    }
+                    RayQueryFunction::ConfirmIntersection => {
+                        self.write_confirm_intersection(
+                            module,
+                            level,
+                            query,
+                            &tracker_expr_name,
+                            func_ctx,
+                        )?;
+                    }
+                    RayQueryFunction::Terminate => {
+                        self.write_terminate(module, level, query, &tracker_expr_name, func_ctx)?;
+                    }
                 }
-                RayQueryFunction::Proceed { result } => {
-                    write!(self.out, "{level}")?;
-                    let name = Baked(result).to_string();
-                    write!(self.out, "const bool {name} = ")?;
-                    self.named_expressions.insert(result, name);
-                    self.write_expr(module, query, func_ctx)?;
-                    writeln!(self.out, ".Proceed();")?;
-                }
-                RayQueryFunction::GenerateIntersection { hit_t } => {
-                    write!(self.out, "{level}")?;
-                    self.write_expr(module, query, func_ctx)?;
-                    write!(self.out, ".CommitProceduralPrimitiveHit(")?;
-                    self.write_expr(module, hit_t, func_ctx)?;
-                    writeln!(self.out, ");")?;
-                }
-                RayQueryFunction::ConfirmIntersection => {
-                    write!(self.out, "{level}")?;
-                    self.write_expr(module, query, func_ctx)?;
-                    writeln!(self.out, ".CommitNonOpaqueTriangleHit();")?;
-                }
-                RayQueryFunction::Terminate => {
-                    write!(self.out, "{level}")?;
-                    self.write_expr(module, query, func_ctx)?;
-                    writeln!(self.out, ".Abort();")?;
-                }
-            },
+            }
             Statement::SubgroupBallot { result, predicate } => {
                 write!(self.out, "{level}")?;
                 let name = Baked(result).to_string();
@@ -4275,14 +4319,24 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, ")")?
             }
             Expression::RayQueryGetIntersection { query, committed } => {
+                // For reasoning, see write_stmt
+                let Expression::LocalVariable(query_var) = func_ctx.expressions[query] else {
+                    unreachable!()
+                };
+
+                let tracker_expr_name = format!(
+                    "{RAY_QUERY_TRACKER_VARIABLE_PREFIX}{}",
+                    self.names[&func_ctx.name_key(query_var)]
+                );
+
                 if committed {
                     write!(self.out, "GetCommittedIntersection(")?;
                     self.write_expr(module, query, func_ctx)?;
-                    write!(self.out, ")")?;
+                    write!(self.out, ", {tracker_expr_name})")?;
                 } else {
                     write!(self.out, "GetCandidateIntersection(")?;
                     self.write_expr(module, query, func_ctx)?;
-                    write!(self.out, ")")?;
+                    write!(self.out, ", {tracker_expr_name})")?;
                 }
             }
             // Not supported yet

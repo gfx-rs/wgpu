@@ -5,6 +5,7 @@ use crate::{
 use alloc::vec::Vec;
 use core::fmt;
 use std::sync::mpsc;
+use wgt::Features;
 
 use crate::COPY_BUFFER_ALIGNMENT;
 
@@ -26,6 +27,11 @@ use crate::COPY_BUFFER_ALIGNMENT;
 pub struct StagingBelt {
     device: Device,
     chunk_size: BufferAddress,
+    /// User-specified [`BufferUsages`] used to create the chunk buffers are created.
+    ///
+    /// [`new`](Self::new) guarantees that this always contains
+    /// [`MAP_WRITE`](BufferUsages::MAP_WRITE).
+    buffer_usages: BufferUsages,
     /// Chunks into which we are accumulating data to be transferred.
     active_chunks: Vec<Chunk>,
     /// Chunks that have scheduled transfers already; they are unmapped and some
@@ -51,11 +57,56 @@ impl StagingBelt {
     /// * 1-4 times less than the total amount of data uploaded per submission
     ///   (per [`StagingBelt::finish()`]); and
     /// * bigger is better, within these bounds.
+    ///
+    /// The buffers returned by this [`StagingBelt`] will be have the buffer usages
+    /// [`COPY_SRC | MAP_WRITE`](crate::BufferUsages)
     pub fn new(device: Device, chunk_size: BufferAddress) -> Self {
+        Self::new_with_buffer_usages(device, chunk_size, BufferUsages::COPY_SRC)
+    }
+
+    /// Create a new staging belt.
+    ///
+    /// The `chunk_size` is the unit of internal buffer allocation; writes will be
+    /// sub-allocated within each chunk. Therefore, for optimal use of memory, the
+    /// chunk size should be:
+    ///
+    /// * larger than the largest single [`StagingBelt::write_buffer()`] operation;
+    /// * 1-4 times less than the total amount of data uploaded per submission
+    ///   (per [`StagingBelt::finish()`]); and
+    /// * bigger is better, within these bounds.
+    ///
+    /// `buffer_usages` specifies the [`BufferUsages`] the staging buffers
+    /// will be created with. [`MAP_WRITE`](BufferUsages::MAP_WRITE) will be added
+    /// automatically. The method will panic if the combination of usages is not
+    /// supported. Because [`MAP_WRITE`](BufferUsages::MAP_WRITE) is implied, the allowed usages
+    /// depends on if [`Features::MAPPABLE_PRIMARY_BUFFERS`] is enabled.
+    /// - If enabled: any usage is valid.
+    /// - If disabled: only [`COPY_SRC`](BufferUsages::COPY_SRC) can be used.
+    #[track_caller]
+    pub fn new_with_buffer_usages(
+        device: Device,
+        chunk_size: BufferAddress,
+        mut buffer_usages: BufferUsages,
+    ) -> Self {
         let (sender, receiver) = mpsc::channel();
+
+        // make sure anything other than MAP_WRITE | COPY_SRC is only allowed with MAPPABLE_PRIMARY_BUFFERS.
+        let extra_usages =
+            buffer_usages.difference(BufferUsages::MAP_WRITE | BufferUsages::COPY_SRC);
+        if !extra_usages.is_empty()
+            && !device
+                .features()
+                .contains(Features::MAPPABLE_PRIMARY_BUFFERS)
+        {
+            panic!("Only BufferUsages::COPY_SRC may be used when Features::MAPPABLE_PRIMARY_BUFFERS is not enabled. Specified buffer usages: {buffer_usages:?}");
+        }
+        // always set MAP_WRITE
+        buffer_usages.insert(BufferUsages::MAP_WRITE);
+
         StagingBelt {
             device,
             chunk_size,
+            buffer_usages,
             active_chunks: Vec::new(),
             closed_chunks: Vec::new(),
             free_chunks: Vec::new(),
@@ -117,7 +168,7 @@ impl StagingBelt {
     /// (The view must be dropped before [`StagingBelt::finish()`] is called.)
     ///
     /// You can then record your own GPU commands to perform with the slice,
-    /// such as copying it to a texture or executing a compute shader that reads it (whereas
+    /// such as copying it to a texture (whereas
     /// [`StagingBelt::write_buffer()`] can only write to other buffers).
     /// All commands involving this slice must be submitted after
     /// [`StagingBelt::finish()`] is called and before [`StagingBelt::recall()`] is called.
@@ -162,7 +213,7 @@ impl StagingBelt {
                     buffer: self.device.create_buffer(&BufferDescriptor {
                         label: Some("(wgpu internal) StagingBelt staging buffer"),
                         size: self.chunk_size.max(size.get()),
-                        usage: BufferUsages::MAP_WRITE | BufferUsages::COPY_SRC,
+                        usage: self.buffer_usages,
                         mapped_at_creation: true,
                     }),
                     offset: 0,
@@ -230,6 +281,7 @@ impl fmt::Debug for StagingBelt {
         let Self {
             device,
             chunk_size,
+            buffer_usages,
             active_chunks,
             closed_chunks,
             free_chunks,
@@ -239,6 +291,7 @@ impl fmt::Debug for StagingBelt {
         f.debug_struct("StagingBelt")
             .field("device", device)
             .field("chunk_size", chunk_size)
+            .field("buffer_usages", buffer_usages)
             .field("active_chunks", &active_chunks.len())
             .field("closed_chunks", &closed_chunks.len())
             .field("free_chunks", &free_chunks.len())

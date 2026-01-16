@@ -20,7 +20,7 @@
         ),
         WriteBuffer(
             id: PointerId(0x10),
-            data: "data1.bin",
+            data: File("data1.bin"),
             range: (
                 start: 0,
                 end: 16,

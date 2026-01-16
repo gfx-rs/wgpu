@@ -97,6 +97,7 @@ pub const SUPPORTED_EXTENSIONS: &[&str] = &[
     "SPV_EXT_shader_atomic_float_add",
     "SPV_KHR_16bit_storage",
     "SPV_KHR_non_semantic_info",
+    "SPV_KHR_fragment_shader_barycentric",
 ];
 
 #[derive(Copy, Clone)]
@@ -779,6 +780,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             }
             spirv::Decoration::Flat => {
                 dec.interpolation = Some(crate::Interpolation::Flat);
+            }
+            spirv::Decoration::PerVertexKHR => {
+                dec.interpolation = Some(crate::Interpolation::PerVertex);
             }
             spirv::Decoration::Centroid => {
                 dec.sampling = Some(crate::Sampling::Centroid);
@@ -2996,10 +3000,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                             size: crate::VectorSize::Tri,
                             scalar: crate::Scalar::U32,
                         }),
-                        crate::BuiltIn::Barycentric => Some(crate::TypeInner::Vector {
-                            size: crate::VectorSize::Tri,
-                            scalar: crate::Scalar::F32,
-                        }),
+                        crate::BuiltIn::Barycentric { perspective: false } => {
+                            Some(crate::TypeInner::Vector {
+                                size: crate::VectorSize::Tri,
+                                scalar: crate::Scalar::F32,
+                            })
+                        }
                         _ => None,
                     };
                     if let (Some(inner), Some(crate::ScalarKind::Sint)) =

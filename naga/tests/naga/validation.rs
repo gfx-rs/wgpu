@@ -409,6 +409,7 @@ fn incompatible_interpolation_and_sampling_types() {
         naga::Interpolation::Flat,
         naga::Interpolation::Linear,
         naga::Interpolation::Perspective,
+        naga::Interpolation::PerVertex,
     ]
     .into_iter()
     .cartesian_product(
@@ -498,6 +499,7 @@ mod dummy_interpolation_shader {
                 naga::Interpolation::Flat => "flat",
                 naga::Interpolation::Linear => "linear",
                 naga::Interpolation::Perspective => "perspective",
+                naga::Interpolation::PerVertex => "per_vertex",
             };
             let sampling_str = match sampling {
                 None => String::new(),
@@ -515,6 +517,7 @@ mod dummy_interpolation_shader {
             let member_type = match interpolation {
                 naga::Interpolation::Perspective | naga::Interpolation::Linear => "f32",
                 naga::Interpolation::Flat => "u32",
+                naga::Interpolation::PerVertex => "array<u32, 3>",
             };
 
             let interpolate_attr = format!("@interpolate({interpolation_str}{sampling_str})");
@@ -725,6 +728,35 @@ fn bad_texture_dimensions_level() {
     assert!(validate("1").is_ok());
     assert!(validate("1i").is_ok());
     assert!(validate("1").is_ok());
+}
+
+#[test]
+fn zero_value_dyn_array_error() {
+    let source = r#"
+        @compute @workgroup_size(1)
+        fn main() {
+            let a = array<f32>();
+        }
+    "#;
+    let module = naga::front::wgsl::parse_str(source).expect("module should parse");
+    let err = valid::Validator::new(Default::default(), valid::Capabilities::all())
+        .validate(&module)
+        .map_err(|err| err.into_inner()); // discard spans
+    assert!(matches!(
+        err,
+        Err(naga::valid::ValidationError::EntryPoint {
+            stage: _,
+            name: _,
+            source: naga::valid::EntryPointError::Function(
+                naga::valid::FunctionError::Expression {
+                    handle: _,
+                    source: naga::valid::ExpressionError::ZeroValue(
+                        naga::valid::ZeroValueError::RuntimeSizedArray
+                    )
+                }
+            )
+        })
+    ));
 }
 
 #[test]

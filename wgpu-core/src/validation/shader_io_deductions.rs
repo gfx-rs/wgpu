@@ -67,7 +67,7 @@ impl MaxFragmentShaderInputDeduction {
             BuiltIn::SubgroupInvocationId => InterStageBuiltIn::SubgroupInvocationId,
 
             BuiltIn::PointCoord => InterStageBuiltIn::PointCoord,
-            BuiltIn::Barycentric => InterStageBuiltIn::Barycentric,
+            BuiltIn::Barycentric { .. } => InterStageBuiltIn::Barycentric,
             BuiltIn::ViewIndex => InterStageBuiltIn::ViewIndex,
 
             BuiltIn::BaseInstance
