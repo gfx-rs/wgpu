@@ -883,52 +883,75 @@ impl super::Writer {
             let final_value = if let Some(task_limits) = self.task_runtime_limits {
                 let zero_u32 = self.get_constant_scalar(crate::Literal::U32(0));
                 // If its greater than 2<<21 then overflow is possible without being caught
-                let max_per_dim = self.get_constant_scalar(crate::Literal::U64(
-                    task_limits.max_mesh_workgroups_per_dim.min(2 << 21) as u64,
+                let max_per_dim = self.get_constant_scalar(crate::Literal::U32(
+                    task_limits.max_mesh_workgroups_per_dim.min(2 << 21),
                 ));
-                let max_total = self.get_constant_scalar(crate::Literal::U64(
-                    task_limits.max_mesh_workgroups_total as u64,
+                let max_total = self.get_constant_scalar(crate::Literal::U32(
+                    task_limits.max_mesh_workgroups_total,
                 ));
-                let u64_type_id = self
-                    .get_numeric_type_id(crate::back::spv::NumericType::Scalar(crate::Scalar::U64));
+                let combined_struct_type = self.get_double_u32_ty_id(); // TODO
                 let values = [self.id_gen.next(), self.id_gen.next(), self.id_gen.next()];
                 for (i, value) in values.into_iter().enumerate() {
-                    let u32_val = self.id_gen.next();
                     block.body.push(Instruction::composite_extract(
                         self.get_u32_type_id(),
-                        u32_val,
+                        value,
                         result,
                         &[i as u32],
                     ));
-                    block.body.push(Instruction::unary(
-                        spirv::Op::UConvert,
-                        u64_type_id,
-                        value,
-                        u32_val,
-                    ));
                 }
                 let prod_1 = self.id_gen.next();
-                block.body.push(Instruction::binary(
-                    spirv::Op::IMul,
-                    u64_type_id,
-                    prod_1,
-                    values[0],
-                    values[1],
-                ));
-                let prod = self.id_gen.next();
-                block.body.push(Instruction::binary(
-                    spirv::Op::IMul,
-                    u64_type_id,
-                    prod,
-                    prod_1,
-                    values[2],
-                ));
+                let overflows = [self.id_gen.next(), self.id_gen.next()];
+                {
+                    let struct_out = self.id_gen.next();
+                    block.body.push(Instruction::binary(
+                        spirv::Op::UMulExtended,
+                        combined_struct_type,
+                        struct_out,
+                        values[0],
+                        values[1],
+                    ));
+                    block.body.push(Instruction::composite_extract(
+                        self.get_u32_type_id(),
+                        prod_1,
+                        struct_out,
+                        &[0],
+                    ));
+                    block.body.push(Instruction::composite_extract(
+                        self.get_u32_type_id(),
+                        overflows[0],
+                        struct_out,
+                        &[1],
+                    ));
+                }
+                let prod_final = self.id_gen.next();
+                {
+                    let struct_out = self.id_gen.next();
+                    block.body.push(Instruction::binary(
+                        spirv::Op::UMulExtended,
+                        combined_struct_type,
+                        struct_out,
+                        prod_1,
+                        values[2],
+                    ));
+                    block.body.push(Instruction::composite_extract(
+                        self.get_u32_type_id(),
+                        prod_final,
+                        struct_out,
+                        &[0],
+                    ));
+                    block.body.push(Instruction::composite_extract(
+                        self.get_u32_type_id(),
+                        overflows[1],
+                        struct_out,
+                        &[1],
+                    ));
+                }
                 let total_too_large = self.id_gen.next();
                 block.body.push(Instruction::binary(
                     spirv::Op::UGreaterThan,
                     self.get_bool_type_id(),
                     total_too_large,
-                    prod,
+                    prod_final,
                     max_total,
                 ));
 
@@ -942,17 +965,38 @@ impl super::Writer {
                         max_per_dim,
                     ));
                 }
-                let mut current = total_too_large;
+                let overflow_happens = [self.id_gen.next(), self.id_gen.next()];
+                for (i, value) in overflows.into_iter().enumerate() {
+                    block.body.push(Instruction::binary(
+                        spirv::Op::INotEqual,
+                        self.get_bool_type_id(),
+                        overflow_happens[i],
+                        value,
+                        zero_u32,
+                    ));
+                }
+                let mut current_violates_limits = total_too_large;
                 for is_too_large in too_large {
                     let new = self.id_gen.next();
                     block.body.push(Instruction::binary(
                         spirv::Op::LogicalOr,
                         self.get_bool_type_id(),
                         new,
-                        current,
+                        current_violates_limits,
                         is_too_large,
                     ));
-                    current = new;
+                    current_violates_limits = new;
+                }
+                for overflow_happens in overflow_happens {
+                    let new = self.id_gen.next();
+                    block.body.push(Instruction::binary(
+                        spirv::Op::LogicalOr,
+                        self.get_bool_type_id(),
+                        new,
+                        current_violates_limits,
+                        overflow_happens,
+                    ));
+                    current_violates_limits = new;
                 }
                 let zero_vec3 = self.id_gen.next();
                 block.body.push(Instruction::composite_construct(
@@ -964,7 +1008,7 @@ impl super::Writer {
                 block.body.push(Instruction::select(
                     self.get_vec3u_type_id(),
                     final_result,
-                    current,
+                    current_violates_limits,
                     zero_vec3,
                     result,
                 ));

@@ -934,6 +934,7 @@ pub struct Writer {
     force_loop_bounding: bool,
     use_storage_input_output_16: bool,
     void_type: Word,
+    double_u32_ty_id: Option<Word>,
     //TODO: convert most of these into vectors, addressable by handle indices
     lookup_type: crate::FastHashMap<LookupType, Word>,
     lookup_function: crate::FastHashMap<Handle<crate::Function>, Word>,

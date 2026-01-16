@@ -96,6 +96,7 @@ impl Writer {
             ray_query_initialization_tracking: options.ray_query_initialization_tracking,
             use_storage_input_output_16: options.use_storage_input_output_16,
             void_type,
+            double_u32_ty_id: None,
             lookup_type: crate::FastHashMap::default(),
             lookup_function: crate::FastHashMap::default(),
             lookup_function_type: crate::FastHashMap::default(),
@@ -177,6 +178,7 @@ impl Writer {
             // Initialized afresh:
             id_gen,
             void_type,
+            double_u32_ty_id: None,
             gl450_ext_inst_id,
 
             // Recycled:
@@ -427,6 +429,19 @@ impl Writer {
             size: crate::VectorSize::Tri,
             scalar: crate::Scalar::BOOL,
         })
+    }
+
+    pub(super) fn get_double_u32_ty_id(&mut self) -> Word {
+        if let Some(val) = self.double_u32_ty_id {
+            val
+        } else {
+            let id = self.id_gen.next();
+            let u32_id = self.get_u32_type_id();
+            let ins = Instruction::type_struct(id, &[u32_id, u32_id]);
+            ins.to_words(&mut self.logical_layout.declarations);
+            self.double_u32_ty_id = Some(id);
+            id
+        }
     }
 
     pub(super) fn decorate(&mut self, id: Word, decoration: spirv::Decoration, operands: &[Word]) {
