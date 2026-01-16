@@ -81,7 +81,12 @@ pub fn map_built_in(
     };
     match built_in {
         crate::BuiltIn::ClipDistance => {
-            if !enable_extensions.contains(ImplementedEnableExtension::ClipDistances) {}
+            if !enable_extensions.contains(ImplementedEnableExtension::ClipDistances) {
+                return Err(Box::new(Error::EnableExtensionNotEnabled {
+                    span,
+                    kind: ImplementedEnableExtension::ClipDistances.into(),
+                }));
+            }
         }
         crate::BuiltIn::DrawIndex => {
             if !enable_extensions.contains(ImplementedEnableExtension::DrawIndex) {
