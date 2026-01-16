@@ -279,6 +279,7 @@ impl<W: Write> Writer<W> {
         let mut needs_dual_source_blending = false;
         let mut needs_clip_distances = false;
         let mut needs_mesh_shaders = false;
+        let mut needs_primitive_index = false;
 
         // Determine which `enable` declarations are needed
         for (_, ty) in module.types.iter() {
@@ -298,6 +299,9 @@ impl<W: Write> Writer<W> {
                             }
                             crate::Binding::BuiltIn(crate::BuiltIn::ClipDistance) => {
                                 needs_clip_distances = true;
+                            }
+                            crate::Binding::BuiltIn(crate::BuiltIn::PrimitiveIndex) => {
+                                needs_primitive_index = true;
                             }
                             crate::Binding::Location {
                                 per_primitive: true,
@@ -358,6 +362,10 @@ impl<W: Write> Writer<W> {
         }
         if needs_mesh_shaders {
             writeln!(self.out, "enable wgpu_mesh_shader;")?;
+            any_written = true;
+        }
+        if needs_primitive_index {
+            writeln!(self.out, "enable primitive_index;")?;
             any_written = true;
         }
         if any_written {

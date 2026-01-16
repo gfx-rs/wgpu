@@ -3085,7 +3085,7 @@ impl Writer {
                         if self
                             .require_any(
                                 reason,
-                                &[spirv::Capability::Tessellation, spirv::Capability::Geometry],
+                                &[spirv::Capability::Geometry, spirv::Capability::Tessellation],
                             )
                             .is_err()
                         {
@@ -3096,8 +3096,8 @@ impl Writer {
                                 return Err(Error::MissingCapabilities(
                                     reason,
                                     vec![
-                                        spirv::Capability::Tessellation,
                                         spirv::Capability::Geometry,
+                                        spirv::Capability::Tessellation,
                                         spirv::Capability::MeshShadingEXT,
                                     ],
                                 ));
