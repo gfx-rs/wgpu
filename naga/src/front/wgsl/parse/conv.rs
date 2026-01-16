@@ -50,6 +50,7 @@ pub fn map_built_in(
         "front_facing" => crate::BuiltIn::FrontFacing,
         "frag_depth" => crate::BuiltIn::FragDepth,
         "primitive_index" => crate::BuiltIn::PrimitiveIndex,
+        "draw_index" => crate::BuiltIn::DrawIndex,
         "barycentric" => crate::BuiltIn::Barycentric { perspective: true },
         "barycentric_no_perspective" => crate::BuiltIn::Barycentric { perspective: false },
         "sample_index" => crate::BuiltIn::SampleIndex,
@@ -80,10 +81,13 @@ pub fn map_built_in(
     };
     match built_in {
         crate::BuiltIn::ClipDistance => {
-            if !enable_extensions.contains(ImplementedEnableExtension::ClipDistances) {
+            if !enable_extensions.contains(ImplementedEnableExtension::ClipDistances) {}
+        }
+        crate::BuiltIn::DrawIndex => {
+            if !enable_extensions.contains(ImplementedEnableExtension::DrawIndex) {
                 return Err(Box::new(Error::EnableExtensionNotEnabled {
                     span,
-                    kind: ImplementedEnableExtension::ClipDistances.into(),
+                    kind: ImplementedEnableExtension::DrawIndex.into(),
                 }));
             }
         }

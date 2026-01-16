@@ -205,6 +205,8 @@ bitflags::bitflags! {
         const COOPERATIVE_MATRIX = 1 << 36;
         /// Support for per-vertex fragment input.
         const PER_VERTEX = 1 << 37;
+        /// Support for draw index builtin
+        const DRAW_INDEX = 1 << 38;
     }
 }
 

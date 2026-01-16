@@ -18,6 +18,7 @@ pub struct EnableExtensions {
     f16: bool,
     clip_distances: bool,
     wgpu_cooperative_matrix: bool,
+    draw_index: bool,
 }
 
 impl EnableExtensions {
@@ -30,6 +31,7 @@ impl EnableExtensions {
             dual_source_blending: false,
             clip_distances: false,
             wgpu_cooperative_matrix: false,
+            draw_index: false,
         }
     }
 
@@ -45,6 +47,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::F16 => &mut self.f16,
             ImplementedEnableExtension::ClipDistances => &mut self.clip_distances,
             ImplementedEnableExtension::WgpuCooperativeMatrix => &mut self.wgpu_cooperative_matrix,
+            ImplementedEnableExtension::DrawIndex => &mut self.draw_index,
         };
         *field = true;
     }
@@ -61,6 +64,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::F16 => self.f16,
             ImplementedEnableExtension::ClipDistances => self.clip_distances,
             ImplementedEnableExtension::WgpuCooperativeMatrix => self.wgpu_cooperative_matrix,
+            ImplementedEnableExtension::DrawIndex => self.draw_index,
         }
     }
 }
@@ -96,6 +100,7 @@ impl EnableExtension {
     const COOPERATIVE_MATRIX: &'static str = "wgpu_cooperative_matrix";
     const SUBGROUPS: &'static str = "subgroups";
     const PRIMITIVE_INDEX: &'static str = "primitive_index";
+    const DRAW_INDEX: &'static str = "draw_index";
 
     /// Convert from a sentinel word in WGSL into its associated [`EnableExtension`], if possible.
     pub(crate) fn from_ident(word: &str, span: Span) -> Result<'_, Self> {
@@ -117,6 +122,7 @@ impl EnableExtension {
             Self::PRIMITIVE_INDEX => {
                 Self::Unimplemented(UnimplementedEnableExtension::PrimitiveIndex)
             }
+            Self::DRAW_INDEX => Self::Implemented(ImplementedEnableExtension::DrawIndex),
             _ => return Err(Box::new(Error::UnknownEnableExtension(span, word))),
         })
     }
@@ -134,6 +140,7 @@ impl EnableExtension {
                 ImplementedEnableExtension::DualSourceBlending => Self::DUAL_SOURCE_BLENDING,
                 ImplementedEnableExtension::F16 => Self::F16,
                 ImplementedEnableExtension::ClipDistances => Self::CLIP_DISTANCES,
+                ImplementedEnableExtension::DrawIndex => Self::DRAW_INDEX,
             },
             Self::Unimplemented(kind) => match kind {
                 UnimplementedEnableExtension::Subgroups => Self::SUBGROUPS,
@@ -164,6 +171,8 @@ pub enum ImplementedEnableExtension {
     ///
     /// [`enable clip_distances;`]: https://www.w3.org/TR/WGSL/#extension-clip_distances
     ClipDistances,
+    /// Enables the `draw_index` builtin. Not currently part of the WGSL spec but probably will be at some point.
+    DrawIndex,
     /// Enables the `wgpu_mesh_shader` extension, native only
     WgpuMeshShader,
     /// Enables the `wgpu_ray_query` extension, native only.

@@ -247,6 +247,7 @@ impl VaryingContext<'_> {
                     | Bi::SubgroupId
                     | Bi::SubgroupSize
                     | Bi::SubgroupInvocationId => Capabilities::SUBGROUP,
+                    Bi::DrawIndex => Capabilities::DRAW_INDEX,
                     _ => Capabilities::empty(),
                 };
                 if !self.capabilities.contains(required) {
@@ -266,7 +267,7 @@ impl VaryingContext<'_> {
                         self.stage == St::Vertex && !self.output,
                         *ty_inner == Ti::Scalar(crate::Scalar::U32),
                     ),
-                    Bi::DrawID => (
+                    Bi::DrawIndex => (
                         // Always allowed in task/vertex stage. Allowed in mesh stage if there is no task stage in the pipeline.
                         (self.stage == St::Vertex
                             || self.stage == St::Task
