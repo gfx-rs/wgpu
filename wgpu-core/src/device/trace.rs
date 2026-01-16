@@ -59,7 +59,7 @@ impl core::fmt::Display for DataKind {
             DataKind::Spv => "spv",
             DataKind::Dxil => "dxil",
             DataKind::Hlsl => "hlsl",
-            DataKind::Msl => "msl",
+            DataKind::Msl => "metal",
             DataKind::Glsl => "glsl",
         };
         write!(f, "{s}")
@@ -94,7 +94,7 @@ impl Data {
                     DataKind::Dxil
                 } else if file.ends_with(".hlsl") {
                     DataKind::Hlsl
-                } else if file.ends_with(".msl") {
+                } else if file.ends_with(".metal") {
                     DataKind::Msl
                 } else if file.ends_with(".glsl") {
                     DataKind::Glsl
