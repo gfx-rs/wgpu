@@ -869,17 +869,22 @@ impl crate::Module {
                     for member in members {
                         if matches!(
                             member.binding,
-                            Some(crate::Binding::BuiltIn(
-                                crate::BuiltIn::MeshTaskSize
-                                    | crate::BuiltIn::CullPrimitive
-                                    | crate::BuiltIn::PointIndex
-                                    | crate::BuiltIn::LineIndices
-                                    | crate::BuiltIn::TriangleIndices
-                                    | crate::BuiltIn::VertexCount
-                                    | crate::BuiltIn::Vertices
-                                    | crate::BuiltIn::PrimitiveCount
-                                    | crate::BuiltIn::Primitives,
-                            ))
+                            Some(
+                                crate::Binding::BuiltIn(
+                                    crate::BuiltIn::MeshTaskSize
+                                        | crate::BuiltIn::CullPrimitive
+                                        | crate::BuiltIn::PointIndex
+                                        | crate::BuiltIn::LineIndices
+                                        | crate::BuiltIn::TriangleIndices
+                                        | crate::BuiltIn::VertexCount
+                                        | crate::BuiltIn::Vertices
+                                        | crate::BuiltIn::PrimitiveCount
+                                        | crate::BuiltIn::Primitives,
+                                ) | crate::Binding::Location {
+                                    per_primitive: true,
+                                    ..
+                                }
+                            )
                         ) {
                             return true;
                         }
