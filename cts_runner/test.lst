@@ -240,6 +240,8 @@ webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:no_atomics
 webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:only_in_compute:*
 webgpu:shader,validation,expression,call,builtin,workgroupUniformLoad:param_constructible_only:*
 webgpu:shader,validation,extension,dual_source_blending:blend_src_syntax_validation:*
+webgpu:shader,validation,extension,pointer_composite_access:*
+webgpu:shader,validation,parse,requires:*
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="break_if"
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="break"
 webgpu:shader,validation,statement,statement_behavior:invalid_statements:body="continue"
