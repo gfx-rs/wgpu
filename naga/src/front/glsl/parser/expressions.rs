@@ -511,10 +511,6 @@ impl ParsingContext<'_> {
         })
     }
 
-    // shader grammar :-
-    // expression :
-    // assignment_expression
-    // expression COMMA assignment_expression
     pub fn parse_expression(
         &mut self,
         frontend: &mut Frontend,

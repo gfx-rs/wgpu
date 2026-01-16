@@ -433,28 +433,15 @@ impl ParsingContext<'_> {
                 meta
             }
 
-            // shader grammar :-
-            // iteration_statement : (third option only)
-            // FOR LEFT_PAREN for_init_statement for_rest_statement RIGHT_PAREN statement_no_new_scope
             TokenValue::For => {
-                //FOR
                 let mut meta = self.bump(frontend)?.meta;
                 ctx.symbol_table.push_scope();
-                self.expect(frontend, TokenValue::LeftParen)?; // LEFT_PAREN
+                self.expect(frontend, TokenValue::LeftParen)?;
 
-                // shader grammar :-
-                // for_init_statement :
-                // expression_statement
-                // declaration_statement
                 if self.bump_if(frontend, TokenValue::Semicolon).is_none() {
                     if self.peek_type_name(frontend) || self.peek_type_qualifier(frontend) {
                         self.parse_declaration(frontend, ctx, false, is_inside_loop)?;
-                    // declaration_statement (basically the same as `declaration`)
                     } else {
-                        // shader grammar :-
-                        // expression_statement :
-                        // SEMICOLON
-                        // expression SEMICOLON
                         let mut stmt = ctx.stmt_ctx();
                         let expr = self.parse_expression(frontend, ctx, &mut stmt)?;
                         ctx.lower(stmt, frontend, expr, ExprPos::Rhs)?;
@@ -462,10 +449,6 @@ impl ParsingContext<'_> {
                     }
                 }
 
-                // shader grammar :-
-                // for_rest_statement :
-                // conditionopt SEMICOLON
-                // conditionopt SEMICOLON expression
                 let loop_body = ctx.new_body(|ctx| {
                     if self.bump_if(frontend, TokenValue::Semicolon).is_none() {
                         let (expr, expr_meta) = if self.peek_type_name(frontend)
@@ -525,7 +508,6 @@ impl ParsingContext<'_> {
                     Ok(())
                 })?;
 
-                // shader grammar just has a single expression here, which can be multiple expressions separated by commas...
                 let continuing = ctx.new_body(|ctx| {
                     match self.expect_peek(frontend)?.value {
                         TokenValue::RightParen => {}
