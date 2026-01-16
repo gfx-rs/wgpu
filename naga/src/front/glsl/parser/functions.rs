@@ -432,9 +432,9 @@ impl ParsingContext<'_> {
 
                 meta
             }
-
             TokenValue::For => {
                 let mut meta = self.bump(frontend)?.meta;
+
                 ctx.symbol_table.push_scope();
                 self.expect(frontend, TokenValue::LeftParen)?;
 
