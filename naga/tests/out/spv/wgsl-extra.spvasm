@@ -3,7 +3,7 @@
 ; Generator: rspirv
 ; Bound: 47
 OpCapability Shader
-OpCapability Geometry
+OpCapability Tessellation
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
 OpEntryPoint Fragment %22 "main" %14 %17 %20

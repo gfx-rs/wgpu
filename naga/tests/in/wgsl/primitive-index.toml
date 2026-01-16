@@ -1,0 +1,6 @@
+capabilities = "PRIMITIVE_INDEX"
+targets = "WGSL | SPIRV | HLSL | GLSL"
+
+[spv]
+version = [1, 4]
+capabilities = ["Geometry"]

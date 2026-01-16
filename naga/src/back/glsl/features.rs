@@ -57,6 +57,8 @@ bitflags::bitflags! {
         const TEXTURE_ATOMICS = 1 << 25;
         /// Image atomics
         const SHADER_BARYCENTRICS = 1 << 26;
+        /// Primitive index builtin
+        const PRIMITIVE_INDEX = 1 << 27;
     }
 }
 
@@ -296,6 +298,17 @@ impl FeaturesManager {
                 out,
                 "#extension GL_EXT_fragment_shader_barycentric : require"
             )?;
+        }
+
+        if self.0.contains(Features::PRIMITIVE_INDEX) {
+            match options.version {
+                Version::Embedded { .. } => {
+                    writeln!(out, "#extension GL_OES_geometry_shader : require")?;
+                }
+                Version::Desktop(_) => {
+                    writeln!(out, "#extension GL_ARB_geometry_shader4 : require")?;
+                }
+            }
         }
 
         Ok(())
@@ -615,6 +628,9 @@ impl<W> Writer<'_, W> {
                     }
                     crate::BuiltIn::Barycentric { .. } => {
                         self.features.request(Features::SHADER_BARYCENTRICS)
+                    }
+                    crate::BuiltIn::PrimitiveIndex => {
+                        self.features.request(Features::PRIMITIVE_INDEX)
                     }
                     _ => {}
                 },

@@ -717,7 +717,12 @@ impl PhysicalDeviceFeatures {
         features.set(F::SHADER_INT64, self.core.shader_int64 != 0);
         features.set(F::SHADER_I16, self.core.shader_int16 != 0);
 
-        features.set(F::SHADER_PRIMITIVE_INDEX, self.core.geometry_shader != 0);
+        features.set(
+            F::SHADER_PRIMITIVE_INDEX,
+            self.core.geometry_shader != 0
+                || self.core.tessellation_shader != 0
+                || self.mesh_shader.is_some_and(|a| a.mesh_shader != 0),
+        );
 
         if let Some(ref shader_atomic_int64) = self.shader_atomic_int64 {
             features.set(

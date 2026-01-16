@@ -1,0 +1,11 @@
+# Tests on desktop GL/using mesh shaders on vulkan
+
+capabilities = "PRIMITIVE_INDEX"
+targets = "SPIRV"
+
+[spv]
+version = [1, 4]
+capabilities = ["MeshShadingEXT"]
+
+[glsl]
+version.Desktop = 450
