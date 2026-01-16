@@ -53,6 +53,10 @@ Bottom level categories:
 
 - Allow parsing shaders which make use of `SPV_KHR_non_semantic_info` for debug info. Also removes `naga::front::spv::SUPPORTED_EXT_SETS`. By @inner-daemons in #8827.
 
+### General
+
+- Added support for `@builtin(draw_index)`. By @inner-daemons in #8883.
+
 ### Bug Fixes
 
 #### General
