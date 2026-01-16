@@ -330,12 +330,51 @@ impl<W: Write> Writer<W> {
             }
         }
 
-        if module
-            .entry_points
-            .iter()
-            .any(|ep| matches!(ep.stage, ShaderStage::Mesh | ShaderStage::Task))
-        {
-            needs_mesh_shaders = true;
+        for ep in &module.entry_points {
+            if matches!(ep.stage, ShaderStage::Mesh | ShaderStage::Task) {
+                needs_mesh_shaders = true;
+            }
+            for binding in ep
+                .function
+                .arguments
+                .iter()
+                .filter_map(|a| a.binding.as_ref())
+                .chain(ep.function.result.iter().filter_map(|a| a.binding.as_ref()))
+            {
+                match *binding {
+                    crate::Binding::Location {
+                        blend_src: Some(_), ..
+                    } => {
+                        needs_dual_source_blending = true;
+                    }
+                    crate::Binding::BuiltIn(crate::BuiltIn::ClipDistance) => {
+                        needs_clip_distances = true;
+                    }
+                    crate::Binding::BuiltIn(crate::BuiltIn::PrimitiveIndex) => {
+                        needs_primitive_index = true;
+                    }
+                    crate::Binding::Location {
+                        per_primitive: true,
+                        ..
+                    } => {
+                        needs_mesh_shaders = true;
+                    }
+                    crate::Binding::BuiltIn(
+                        crate::BuiltIn::MeshTaskSize
+                        | crate::BuiltIn::CullPrimitive
+                        | crate::BuiltIn::PointIndex
+                        | crate::BuiltIn::LineIndices
+                        | crate::BuiltIn::TriangleIndices
+                        | crate::BuiltIn::VertexCount
+                        | crate::BuiltIn::Vertices
+                        | crate::BuiltIn::PrimitiveCount
+                        | crate::BuiltIn::Primitives,
+                    ) => {
+                        needs_mesh_shaders = true;
+                    }
+                    _ => {}
+                }
+            }
         }
 
         if module
