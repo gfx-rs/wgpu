@@ -94,7 +94,8 @@ pub(in crate::back::glsl) const fn glsl_built_in(
         Bi::PointCoord => "gl_PointCoord",
         Bi::FrontFacing => "gl_FrontFacing",
         Bi::PrimitiveIndex => "uint(gl_PrimitiveID)",
-        Bi::Barycentric => "gl_BaryCoordEXT",
+        Bi::Barycentric { perspective: true } => "gl_BaryCoordEXT",
+        Bi::Barycentric { perspective: false } => "gl_BaryCoordNoPerspEXT",
         Bi::SampleIndex => "gl_SampleID",
         Bi::SampleMask => {
             if options.output {

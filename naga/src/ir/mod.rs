@@ -412,7 +412,7 @@ pub enum BuiltIn {
     /// Read in fragment shaders, written in mesh shaders
     PrimitiveIndex,
     /// Read in fragment shaders
-    Barycentric,
+    Barycentric { perspective: bool },
     /// Read in fragment shaders
     SampleIndex,
     /// Read or written in fragment shaders

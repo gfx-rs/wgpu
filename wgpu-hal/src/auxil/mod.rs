@@ -127,20 +127,31 @@ impl crate::TextureCopy {
     }
 }
 
-/// Clamp the limits in `limits` to honor any HAL-imposed maximums.
+/// Clamp the limits in `limits` to honor HAL-imposed maximums and WebGPU
+/// alignment requirements.
 ///
-/// Limits that do not have a HAL-defined maximum are left unchanged.
+/// Other limits are left unchanged.
 #[cfg_attr(not(any_backend), allow(dead_code))]
 pub(crate) fn apply_hal_limits(mut limits: wgt::Limits) -> wgt::Limits {
-    // The Metal backend wants to have its own consistent view of the limits, so
-    // it may duplicate some of these limits.
+    // The Metal backend maintains two copies of many limit values (one as
+    // `wgt::Limits` and one as `metal::PrivateCapabilities`). In order to avoid
+    // confusing discrepancies between the two, some of the logic here is
+    // duplicated in the initialization of `metal::PrivateCapabilities`.
+    // See <https://github.com/gfx-rs/wgpu/issues/8715>.
+
     limits.max_bind_groups = limits.max_bind_groups.min(crate::MAX_BIND_GROUPS as u32);
-    limits.max_storage_buffer_binding_size &= !(wgt::STORAGE_BINDING_SIZE_ALIGNMENT - 1);
     limits.max_vertex_buffers = limits
         .max_vertex_buffers
         .min(crate::MAX_VERTEX_BUFFERS as u32);
     limits.max_color_attachments = limits
         .max_color_attachments
         .min(crate::MAX_COLOR_ATTACHMENTS as u32);
+
+    // Round some limits down to the WebGPU alignment requirement, to avoid
+    // suggesting values that won't work. (In particular, the CTS queries limits
+    // and then tests the exact limit value.)
+    limits.max_storage_buffer_binding_size &= !(wgt::STORAGE_BINDING_SIZE_ALIGNMENT - 1);
+    limits.max_vertex_buffer_array_stride &= !(wgt::VERTEX_ALIGNMENT as u32 - 1);
+
     limits
 }

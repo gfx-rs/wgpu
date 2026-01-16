@@ -50,7 +50,8 @@ pub fn map_built_in(
         "front_facing" => crate::BuiltIn::FrontFacing,
         "frag_depth" => crate::BuiltIn::FragDepth,
         "primitive_index" => crate::BuiltIn::PrimitiveIndex,
-        "barycentric" => crate::BuiltIn::Barycentric,
+        "barycentric" => crate::BuiltIn::Barycentric { perspective: true },
+        "barycentric_no_perspective" => crate::BuiltIn::Barycentric { perspective: false },
         "sample_index" => crate::BuiltIn::SampleIndex,
         "sample_mask" => crate::BuiltIn::SampleMask,
         // compute

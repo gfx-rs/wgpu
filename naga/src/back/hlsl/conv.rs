@@ -161,7 +161,7 @@ impl crate::BuiltIn {
             Self::FragDepth => "SV_Depth",
             Self::FrontFacing => "SV_IsFrontFace",
             Self::PrimitiveIndex => "SV_PrimitiveID",
-            Self::Barycentric => "SV_Barycentrics",
+            Self::Barycentric { .. } => "SV_Barycentrics",
             Self::SampleIndex => "SV_SampleIndex",
             Self::SampleMask => "SV_Coverage",
             // compute

@@ -220,6 +220,9 @@ webgpu:shader,execution,expression,call,builtin,textureSampleBaseClampToEdge:2d_
 // NOTE: This is supposed to be an exhaustive listing underneath
 // `webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:*`, so exceptions can be
 // worked around.
+webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="atomic%3Cu32%3E";*
+webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="atomic%3Ci32%3E";*
+webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="AtomicInStruct";*
 webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="bool";*
 webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="u32";*
 webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="vec4u";*
@@ -228,10 +231,6 @@ webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type=
 webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="SimpleStruct";*
 //FAIL: https://github.com/gfx-rs/wgpu/issues/8812
 // webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="ComplexStruct";*
-//FAIL: https://github.com/gfx-rs/wgpu/pull/8791
-// webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="atomic%3Cu32%3E";*
-// webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="atomic%3Ci32%3E";*
-// webgpu:shader,execution,expression,call,builtin,workgroupUniformLoad:types:type="AtomicInStruct";*
 webgpu:shader,execution,flow_control,return:*
 // Many other vertex_buffer_access subtests also passing, but there are too many to enumerate.
 // Fails on Metal in CI only, not when running locally.

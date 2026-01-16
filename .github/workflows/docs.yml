@@ -66,7 +66,7 @@ jobs:
           RUSTC_BOOTSTRAP: 1
 
       - name: Deploy the docs
-        uses: JamesIves/github-pages-deploy-action@v4.7.6
+        uses: JamesIves/github-pages-deploy-action@v4.8.0
         if: github.ref == 'refs/heads/trunk'
         with:
           token: ${{ secrets.WEB_DEPLOY }}
