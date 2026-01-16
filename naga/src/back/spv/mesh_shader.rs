@@ -882,9 +882,8 @@ impl super::Writer {
             self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body);
             let final_value = if let Some(task_limits) = self.task_runtime_limits {
                 let zero_u32 = self.get_constant_scalar(crate::Literal::U32(0));
-                // If its greater than 2<<21 then overflow is possible without being caught
                 let max_per_dim = self.get_constant_scalar(crate::Literal::U32(
-                    task_limits.max_mesh_workgroups_per_dim.min(2 << 21),
+                    task_limits.max_mesh_workgroups_per_dim,
                 ));
                 let max_total = self.get_constant_scalar(crate::Literal::U32(
                     task_limits.max_mesh_workgroups_total,
