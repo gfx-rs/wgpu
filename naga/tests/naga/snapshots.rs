@@ -253,7 +253,7 @@ fn write_output_msl(
         }
     }
 
-    input.write_output_file("msl", "msl", string, DIR_OUT);
+    input.write_output_file("msl", "metal", string, DIR_OUT);
 }
 
 #[allow(clippy::too_many_arguments)]
