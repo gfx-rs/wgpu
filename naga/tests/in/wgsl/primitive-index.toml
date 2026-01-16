@@ -4,3 +4,6 @@ targets = "WGSL | SPIRV | HLSL | GLSL"
 [spv]
 version = [1, 4]
 capabilities = ["Geometry"]
+
+[glsl]
+version.Desktop = 450

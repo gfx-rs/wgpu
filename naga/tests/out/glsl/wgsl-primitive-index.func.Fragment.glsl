@@ -1,9 +1,4 @@
-#version 310 es
-#extension GL_OES_geometry_shader : require
-
-precision highp float;
-precision highp int;
-
+#version 450 core
 layout(location = 0) out vec4 _fs2p_location0;
 
 void main() {

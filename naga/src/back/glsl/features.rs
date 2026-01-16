@@ -302,12 +302,13 @@ impl FeaturesManager {
 
         if self.0.contains(Features::PRIMITIVE_INDEX) {
             match options.version {
-                Version::Embedded { .. } => {
+                Version::Embedded { version, .. } if version < 320 => {
                     writeln!(out, "#extension GL_OES_geometry_shader : require")?;
                 }
-                Version::Desktop(_) => {
+                Version::Desktop(version) if version < 150 => {
                     writeln!(out, "#extension GL_ARB_geometry_shader4 : require")?;
                 }
+                _ => (),
             }
         }
 

@@ -6,6 +6,3 @@ targets = "SPIRV"
 [spv]
 version = [1, 4]
 capabilities = ["MeshShadingEXT"]
-
-[glsl]
-version.Desktop = 450
