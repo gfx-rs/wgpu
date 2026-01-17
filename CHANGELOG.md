@@ -22,7 +22,7 @@ Top level categories:
 - Performance
 - Documentation
 - Dependency Updates
-- deno-webgpu
+- deno_webgpu
 - Examples
 - Testing/Internal
 
@@ -92,6 +92,10 @@ Bottom level categories:
 #### Naga
 
 - Prevent UB from incorrectly using ray queries on HLSL. By @Vecvec in [#8763](https://github.com/gfx-rs/wgpu/pull/8763).
+
+### deno\_webgpu
+
+- Expose the `GPU.wgslLanguageFeatures` property. By @andyleiserson in [#8884](https://github.com/gfx-rs/wgpu/pull/8884).
 
 ## v28.0.0 (2025-12-17)
 
