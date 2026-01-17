@@ -1024,7 +1024,7 @@ impl crate::Surface for super::Surface {
     unsafe fn acquire_texture(
         &self,
         timeout: Option<core::time::Duration>,
-        fence: &super::Semaphore,
+        fence: &super::Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<super::Api>>, crate::SurfaceError> {
         let mut swapchain = self.swapchain.write();
         let swapchain = swapchain.as_mut().unwrap();

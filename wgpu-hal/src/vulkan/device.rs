@@ -2183,7 +2183,7 @@ impl crate::Device for super::Device {
         self.counters.query_sets.sub(1);
     }
 
-    unsafe fn create_fence(&self) -> Result<super::Semaphore, crate::DeviceError> {
+    unsafe fn create_fence(&self) -> Result<super::Fence, crate::DeviceError> {
         self.counters.fences.add(1);
 
         Ok(if self.shared.private_caps.timeline_semaphores {
@@ -2193,21 +2193,21 @@ impl crate::Device for super::Device {
             let raw = unsafe { self.shared.raw.create_semaphore(&vk_info, None) }
                 .map_err(super::map_host_device_oom_err)?;
 
-            super::Semaphore::TimelineSemaphore(raw)
+            super::Fence::TimelineSemaphore(raw)
         } else {
-            super::Semaphore::FencePool {
+            super::Fence::FencePool {
                 last_completed: 0,
                 active: Vec::new(),
                 free: Vec::new(),
             }
         })
     }
-    unsafe fn destroy_fence(&self, fence: super::Semaphore) {
+    unsafe fn destroy_fence(&self, fence: super::Fence) {
         match fence {
-            super::Semaphore::TimelineSemaphore(raw) => {
+            super::Fence::TimelineSemaphore(raw) => {
                 unsafe { self.shared.raw.destroy_semaphore(raw, None) };
             }
-            super::Semaphore::FencePool {
+            super::Fence::FencePool {
                 active,
                 free,
                 last_completed: _,
@@ -2225,7 +2225,7 @@ impl crate::Device for super::Device {
     }
     unsafe fn get_fence_value(
         &self,
-        fence: &super::Semaphore,
+        fence: &super::Fence,
     ) -> Result<crate::FenceValue, crate::DeviceError> {
         fence.get_latest(
             &self.shared.raw,
@@ -2234,7 +2234,7 @@ impl crate::Device for super::Device {
     }
     unsafe fn wait(
         &self,
-        fence: &super::Semaphore,
+        fence: &super::Fence,
         wait_value: crate::FenceValue,
         timeout: Option<Duration>,
     ) -> Result<bool, crate::DeviceError> {
@@ -2718,13 +2718,13 @@ impl super::DeviceShared {
 
     pub(super) fn wait_for_fence(
         &self,
-        fence: &super::Semaphore,
+        fence: &super::Fence,
         wait_value: crate::FenceValue,
         timeout_ns: u64,
     ) -> Result<bool, crate::DeviceError> {
         profiling::scope!("Device::wait");
         match *fence {
-            super::Semaphore::TimelineSemaphore(raw) => {
+            super::Fence::TimelineSemaphore(raw) => {
                 let semaphores = [raw];
                 let values = [wait_value];
                 let vk_info = vk::SemaphoreWaitInfo::default()
@@ -2745,7 +2745,7 @@ impl super::DeviceShared {
                     Err(other) => Err(super::map_host_device_oom_and_lost_err(other)),
                 }
             }
-            super::Semaphore::FencePool {
+            super::Fence::FencePool {
                 last_completed,
                 ref active,
                 free: _,

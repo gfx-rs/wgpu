@@ -1843,6 +1843,13 @@ impl super::Instance {
 
         let (phd_capabilities, phd_features) = self.shared.inspect(phd);
 
+        let timeline_semaphores = match phd_features.timeline_semaphore {
+            Some(features) => features.timeline_semaphore == vk::TRUE,
+            None => phd_features
+                .timeline_semaphore
+                .is_some_and(|ext| ext.timeline_semaphore != 0),
+        };
+
         let mem_properties = {
             profiling::scope!("vkGetPhysicalDeviceMemoryProperties");
             unsafe { self.shared.raw.get_physical_device_memory_properties(phd) }
@@ -1937,7 +1944,11 @@ impl super::Instance {
                 .map(|subgroup_size| subgroup_size.max_subgroup_size)
                 .unwrap_or(wgt::MAXIMUM_SUBGROUP_MAX_SIZE),
             transient_saves_memory: supports_lazily_allocated,
-            supported_queue_families: queue_infos,
+            supported_queue_families: if timeline_semaphores {
+                queue_infos
+            } else {
+                vec![queue_infos[0]]
+            },
         };
         let mut workarounds = super::Workarounds::empty();
         {
@@ -2025,12 +2036,7 @@ impl super::Instance {
         let private_caps = super::PrivateCapabilities {
             image_view_usage: phd_capabilities.device_api_version >= vk::API_VERSION_1_1
                 || phd_capabilities.supports_extension(khr::maintenance2::NAME),
-            timeline_semaphores: match phd_features.timeline_semaphore {
-                Some(features) => features.timeline_semaphore == vk::TRUE,
-                None => phd_features
-                    .timeline_semaphore
-                    .is_some_and(|ext| ext.timeline_semaphore != 0),
-            },
+            timeline_semaphores,
             texture_d24: supports_format(
                 &self.shared.raw,
                 phd,

@@ -57,7 +57,7 @@ pub(super) trait Swapchain: Send + Sync + 'static {
     unsafe fn acquire(
         &mut self,
         timeout: Option<Duration>,
-        fence: &super::Semaphore,
+        fence: &super::Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<crate::api::Vulkan>>, crate::SurfaceError>;
 
     /// Tries to discard the acquired texture without presenting it.

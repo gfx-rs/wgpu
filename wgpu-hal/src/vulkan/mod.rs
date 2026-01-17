@@ -42,7 +42,7 @@ use core::{
     ffi::CStr,
     fmt,
     marker::PhantomData,
-    mem::{self, ManuallyDrop},
+    mem::{self, ManuallyDrop, MaybeUninit},
     num::NonZeroU32,
 };
 
@@ -82,7 +82,7 @@ impl crate::Api for Api {
     type TextureView = TextureView;
     type Sampler = Sampler;
     type QuerySet = QuerySet;
-    type Fence = Semaphore;
+    type Fence = Fence;
     type AccelerationStructure = AccelerationStructure;
     type PipelineCache = PipelineCache;
 
@@ -104,7 +104,7 @@ crate::impl_dyn_resource!(
     CommandEncoder,
     ComputePipeline,
     Device,
-    Semaphore,
+    Fence,
     Instance,
     PipelineCache,
     PipelineLayout,
@@ -1042,6 +1042,8 @@ impl fmt::Debug for CommandEncoder {
 #[derive(Debug)]
 pub struct CommandBuffer {
     raw: vk::CommandBuffer,
+    wait_fences: Vec<(Fence, crate::FenceValue)>,
+    signal_fences: Vec<(Fence, crate::FenceValue)>,
 }
 
 impl crate::DynCommandBuffer for CommandBuffer {}
@@ -1105,7 +1107,7 @@ impl crate::DynQuerySet for QuerySet {}
 /// [`VK_KHR_timeline_semaphore`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VK_KHR_timeline_semaphore
 /// [`FencePool`]: Fence::FencePool
 #[derive(Debug)]
-pub enum Semaphore {
+pub enum Fence {
     /// A Vulkan [timeline semaphore].
     ///
     /// These are simpler to use than Vulkan fences, since timeline semaphores
@@ -1135,9 +1137,9 @@ pub enum Semaphore {
         free: Vec<vk::Fence>,
     },
 }
-impl crate::DynFence for Semaphore {}
+impl crate::DynFence for Fence {}
 
-impl Semaphore {
+impl Fence {
     /// Return the highest [`FenceValue`] among the signalled fences in `active`.
     ///
     /// As an optimization, assume that we already know that the fence has
@@ -1236,112 +1238,157 @@ impl crate::Queue for Queue {
 
     unsafe fn submit(
         &self,
-        command_buffers: &[&CommandBuffer],
-        surface_textures: &[&SurfaceTexture],
-        (signal_fence, signal_value): (&mut Semaphore, crate::FenceValue),
+        submits: &mut [crate::QueueSubmitInfo<'_, Api>],
     ) -> Result<(), crate::DeviceError> {
+        struct SubmitContext<'a> {
+            wait_semaphores: SemaphoreList,
+            signal_semaphores: SemaphoreList,
+            vk_cmd_buffers: Vec<vk::CommandBuffer>,
+            vk_timeline_info: MaybeUninit<vk::TimelineSemaphoreSubmitInfo<'a>>,
+        }
+        let mut submit_contexts = Vec::with_capacity(submits.len());
+        let mut vk_submits = vec![vk::SubmitInfo::default(); submits.len()];
         let mut fence_raw = vk::Fence::null();
+        for _ in 0..submits.len() {
+            submit_contexts.push(SubmitContext {
+                wait_semaphores: SemaphoreList::new(SemaphoreListMode::Wait),
+                signal_semaphores: SemaphoreList::new(SemaphoreListMode::Signal),
+                vk_cmd_buffers: Vec::new(),
+                vk_timeline_info: MaybeUninit::uninit(),
+            });
+        }
 
-        let mut wait_semaphores = SemaphoreList::new(SemaphoreListMode::Wait);
-        let mut signal_semaphores = SemaphoreList::new(SemaphoreListMode::Signal);
-
-        // Double check that the same swapchain image isn't being given to us multiple times,
-        // as that will deadlock when we try to lock them all.
-        debug_assert!(
-            {
-                let mut check = HashSet::with_capacity(surface_textures.len());
-                // We compare the Box by pointer, as Eq isn't well defined for SurfaceSemaphores.
-                for st in surface_textures {
-                    let ptr: *const () = <*const _>::cast(&*st.metadata);
-                    check.insert(ptr as usize);
-                }
-                check.len() == surface_textures.len()
+        for (
+            &mut super::QueueSubmitInfo {
+                command_buffers,
+                surface_textures,
+                ref mut signal_fence,
+                ref mut wait_fence,
             },
-            "More than one surface texture is being used from the same swapchain. This will cause a deadlock in release."
-        );
-
-        let locked_swapchain_semaphores = surface_textures
-            .iter()
-            .map(|st| st.metadata.get_semaphore_guard())
-            .collect::<Vec<_>>();
-
-        for mut semaphores in locked_swapchain_semaphores {
-            semaphores.set_used_fence_value(signal_value);
-
-            // If we're the first submission to operate on this image, wait on
-            // its acquire semaphore, to make sure the presentation engine is
-            // done with it.
-            if let Some(sem) = semaphores.get_acquire_wait_semaphore() {
-                wait_semaphores.push_wait(sem, vk::PipelineStageFlags::TOP_OF_PIPE);
-            }
-
-            // Get a semaphore to signal when we're done writing to this surface
-            // image. Presentation of this image will wait for this.
-            let signal_semaphore = semaphores.get_submit_signal_semaphore(&self.device)?;
-            signal_semaphores.push_signal(signal_semaphore);
-        }
-
-        let mut guard = self.signal_semaphores.lock();
-        if !guard.is_empty() {
-            signal_semaphores.append(&mut guard);
-        }
-
-        // In order for submissions to be strictly ordered, we encode a dependency between each submission
-        // using a pair of semaphores. This adds a wait if it is needed, and signals the next semaphore.
-        let semaphore_state = self.relay_semaphores.lock().advance(&self.device)?;
-
-        if let Some(sem) = semaphore_state.wait {
-            wait_semaphores.push_wait(
-                SemaphoreType::Binary(sem),
-                vk::PipelineStageFlags::TOP_OF_PIPE,
+            (
+                &mut SubmitContext {
+                    ref mut wait_semaphores,
+                    ref mut signal_semaphores,
+                    ref mut vk_cmd_buffers,
+                    ref mut vk_timeline_info,
+                },
+                vk_submit,
+            ),
+        ) in submits
+            .iter_mut()
+            .zip(submit_contexts.iter_mut().zip(vk_submits.iter_mut()))
+        {
+            // Double check that the same swapchain image isn't being given to us multiple times,
+            // as that will deadlock when we try to lock them all.
+            debug_assert!(
+                {
+                    let mut check = HashSet::with_capacity(surface_textures.len());
+                    // We compare the Box by pointer, as Eq isn't well defined for SurfaceSemaphores.
+                    for st in surface_textures {
+                        let ptr: *const () = <*const _>::cast(&*st.metadata);
+                        check.insert(ptr as usize);
+                    }
+                    check.len() == surface_textures.len()
+                },
+                "More than one surface texture is being used from the same swapchain. This will cause a deadlock in release."
             );
-        }
 
-        signal_semaphores.push_signal(SemaphoreType::Binary(semaphore_state.signal));
+            let locked_swapchain_semaphores = surface_textures
+                .iter()
+                .map(|st| st.metadata.get_semaphore_guard())
+                .collect::<Vec<_>>();
 
-        // We need to signal our wgpu::Fence if we have one, this adds it to the signal list.
-        signal_fence.maintain(&self.device.raw)?;
-        match *signal_fence {
-            Semaphore::TimelineSemaphore(raw) => {
-                signal_semaphores.push_signal(SemaphoreType::Timeline(raw, signal_value));
+            for mut semaphores in locked_swapchain_semaphores {
+                if let Some(&(_, signal_value)) = signal_fence.as_ref() {
+                    semaphores.set_used_fence_value(signal_value);
+                }
+
+                // If we're the first submission to operate on this image, wait on
+                // its acquire semaphore, to make sure the presentation engine is
+                // done with it.
+                if let Some(sem) = semaphores.get_acquire_wait_semaphore() {
+                    wait_semaphores.push_wait(sem, vk::PipelineStageFlags::TOP_OF_PIPE);
+                }
+
+                // Get a semaphore to signal when we're done writing to this surface
+                // image. Presentation of this image will wait for this.
+                let signal_semaphore = semaphores.get_submit_signal_semaphore(&self.device)?;
+                signal_semaphores.push_signal(signal_semaphore);
             }
-            Semaphore::FencePool {
-                ref mut active,
-                ref mut free,
-                ..
-            } => {
-                fence_raw = match free.pop() {
-                    Some(raw) => raw,
-                    None => unsafe {
-                        self.device
-                            .raw
-                            .create_fence(&vk::FenceCreateInfo::default(), None)
-                            .map_err(map_host_device_oom_err)?
-                    },
-                };
-                active.push((signal_value, fence_raw));
+
+            let mut guard = self.signal_semaphores.lock();
+            if !guard.is_empty() {
+                signal_semaphores.append(&mut guard);
             }
+
+            // In order for submissions to be strictly ordered, we encode a dependency between each submission
+            // using a pair of semaphores. This adds a wait if it is needed, and signals the next semaphore.
+            let semaphore_state = self.relay_semaphores.lock().advance(&self.device)?;
+
+            if let Some(sem) = semaphore_state.wait {
+                wait_semaphores.push_wait(
+                    SemaphoreType::Binary(sem),
+                    vk::PipelineStageFlags::TOP_OF_PIPE,
+                );
+            }
+
+            signal_semaphores.push_signal(SemaphoreType::Binary(semaphore_state.signal));
+
+            // We need to signal our wgpu::Fence if we have one, this adds it to the signal list.
+            if let Some((signal_fence, signal_value)) = signal_fence {
+                signal_fence.maintain(&self.device.raw)?;
+                match **signal_fence {
+                    Fence::TimelineSemaphore(raw) => {
+                        signal_semaphores.push_signal(SemaphoreType::Timeline(raw, *signal_value));
+                    }
+                    Fence::FencePool {
+                        ref mut active,
+                        ref mut free,
+                        ..
+                    } => {
+                        fence_raw = match free.pop() {
+                            Some(raw) => raw,
+                            None => unsafe {
+                                self.device
+                                    .raw
+                                    .create_fence(&vk::FenceCreateInfo::default(), None)
+                                    .map_err(map_host_device_oom_err)?
+                            },
+                        };
+                        active.push((*signal_value, fence_raw));
+                    }
+                }
+            }
+            if let Some((wait_fence, wait_value)) = wait_fence {
+                wait_fence.maintain(&self.device.raw)?;
+                match **wait_fence {
+                    Fence::TimelineSemaphore(raw) => {
+                        wait_semaphores.push_wait(SemaphoreType::Timeline(raw, *wait_value), vk::PipelineStageFlags::TOP_OF_PIPE)
+                    }
+                    _ => panic!("Multi-queue and wait fences can only be used on devices with timeline semaphores")
+                }
+            }
+
+            *vk_cmd_buffers = command_buffers
+                .iter()
+                .map(|cmd| cmd.raw)
+                .collect::<Vec<_>>();
+
+            *vk_submit = vk::SubmitInfo::default().command_buffers(vk_cmd_buffers);
+            *vk_submit = SemaphoreList::add_to_submit(
+                wait_semaphores,
+                signal_semaphores,
+                *vk_submit,
+                vk_timeline_info,
+            );
+
+            //vk_submits.push(vk_info);
         }
-
-        let vk_cmd_buffers = command_buffers
-            .iter()
-            .map(|cmd| cmd.raw)
-            .collect::<Vec<_>>();
-
-        let mut vk_info = vk::SubmitInfo::default().command_buffers(&vk_cmd_buffers);
-        let mut vk_timeline_info = mem::MaybeUninit::uninit();
-        vk_info = SemaphoreList::add_to_submit(
-            &mut wait_semaphores,
-            &mut signal_semaphores,
-            vk_info,
-            &mut vk_timeline_info,
-        );
-
         profiling::scope!("vkQueueSubmit");
         unsafe {
             self.device
                 .raw
-                .queue_submit(self.raw, &[vk_info], fence_raw)
+                .queue_submit(self.raw, &vk_submits, fence_raw)
                 .map_err(map_host_device_oom_and_lost_err)?
         };
         Ok(())

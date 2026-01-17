@@ -1224,9 +1224,7 @@ pub trait Queue: WasmNotSendSync {
     /// [st]: Api::SurfaceTexture
     unsafe fn submit(
         &self,
-        command_buffers: &[&<Self::A as Api>::CommandBuffer],
-        surface_textures: &[&<Self::A as Api>::SurfaceTexture],
-        signal_fence: (&mut <Self::A as Api>::Fence, FenceValue),
+        submits: &mut [QueueSubmitInfo<'_, Self::A>],
     ) -> Result<(), DeviceError>;
     unsafe fn present(
         &self,
@@ -2835,4 +2833,11 @@ pub struct Telemetry {
         driver_version: Result<[u16; 4], windows_core::HRESULT>,
         result: D3D12ExposeAdapterResult,
     ),
+}
+
+pub struct QueueSubmitInfo<'a, A: Api> {
+    command_buffers: &'a [&'a A::CommandBuffer],
+    surface_textures: &'a [&'a A::SurfaceTexture],
+    signal_fence: Option<(&'a mut A::Fence, FenceValue)>,
+    wait_fence: Option<(&'a mut A::Fence, FenceValue)>,
 }

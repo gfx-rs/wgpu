@@ -381,7 +381,7 @@ impl Swapchain for NativeSwapchain {
     unsafe fn acquire(
         &mut self,
         timeout: Option<core::time::Duration>,
-        fence: &crate::vulkan::Semaphore,
+        fence: &crate::vulkan::Fence,
     ) -> Result<Option<crate::AcquiredSurfaceTexture<crate::api::Vulkan>>, crate::SurfaceError>
     {
         let mut timeout_ns = match timeout {

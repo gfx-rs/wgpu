@@ -159,7 +159,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
             // VK_ERROR_INVALID_VIDEO_STD_PARAMETERS_KHR
             super::map_host_device_oom_err(err)
         }
-        Ok(super::CommandBuffer { raw })
+        Ok(super::CommandBuffer {
+            raw,
+            wait_fences: vec![],
+            signal_fences: vec![],
+        })
     }
 
     unsafe fn discard_encoding(&mut self) {
