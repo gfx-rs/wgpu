@@ -145,8 +145,8 @@ macro_rules! include_spirv_raw {
                 entry_point: $crate::__macro_helpers::String::new(),
                 // This is unused for SPIR-V
                 num_workgroups: (0, 0, 0),
-                runtime_checks: $crate::ShaderRuntimeChecks::unchecked(),
                 dxil: None,
+                metallib: None,
                 msl: None,
                 hlsl: None,
                 glsl: None,

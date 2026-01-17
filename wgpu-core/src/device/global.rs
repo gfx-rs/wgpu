@@ -1100,6 +1100,7 @@ impl Global {
                     ),
                     (desc.dxil.as_deref(), DataKind::Dxil),
                     (desc.hlsl.as_ref().map(|a| a.as_bytes()), DataKind::Hlsl),
+                    (desc.metallib.as_deref(), DataKind::MetalLib),
                     (desc.msl.as_ref().map(|a| a.as_bytes()), DataKind::Msl),
                     (desc.glsl.as_ref().map(|a| a.as_bytes()), DataKind::Glsl),
                     (desc.wgsl.as_ref().map(|a| a.as_bytes()), DataKind::Wgsl),
@@ -1115,7 +1116,6 @@ impl Global {
                     entry_point: desc.entry_point.clone(),
                     label: desc.label.clone(),
                     num_workgroups: desc.num_workgroups,
-                    runtime_checks: desc.runtime_checks,
                 });
             };
 

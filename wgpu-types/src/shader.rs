@@ -98,17 +98,17 @@ pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
     pub label: L,
     /// Number of workgroups in each dimension x, y and z. Unused for Spir-V.
     pub num_workgroups: (u32, u32, u32),
-    /// Runtime checks that should be enabled.
-    pub runtime_checks: ShaderRuntimeChecks,
 
     /// Binary SPIR-V data, in 4-byte words.
     pub spirv: Option<Cow<'a, [u32]>>,
     /// Shader DXIL source.
     pub dxil: Option<Cow<'a, [u8]>>,
-    /// Shader MSL source.
-    pub msl: Option<Cow<'a, str>>,
     /// Shader HLSL source.
     pub hlsl: Option<Cow<'a, str>>,
+    /// Shader MetalLib source.
+    pub metallib: Option<Cow<'a, [u8]>>,
+    /// Shader MSL source.
+    pub msl: Option<Cow<'a, str>>,
     /// Shader GLSL source (currently unused).
     pub glsl: Option<Cow<'a, str>>,
     /// Shader WGSL source.
@@ -123,9 +123,9 @@ impl<'a, L: Default> Default for CreateShaderModuleDescriptorPassthrough<'a, L> 
             entry_point: "".into(),
             label: Default::default(),
             num_workgroups: (0, 0, 0),
-            runtime_checks: ShaderRuntimeChecks::unchecked(),
             spirv: None,
             dxil: None,
+            metallib: None,
             msl: None,
             hlsl: None,
             glsl: None,
@@ -144,8 +144,8 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
             entry_point: self.entry_point.clone(),
             label: fun(&self.label),
             num_workgroups: self.num_workgroups,
-            runtime_checks: self.runtime_checks,
             spirv: self.spirv.clone(),
+            metallib: self.metallib.clone(),
             dxil: self.dxil.clone(),
             msl: self.msl.clone(),
             hlsl: self.hlsl.clone(),
@@ -159,10 +159,18 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
     pub fn trace_data(&self) -> &[u8] {
         if let Some(spirv) = &self.spirv {
             bytemuck::cast_slice(spirv)
+        } else if let Some(metallib) = &self.metallib {
+            metallib
         } else if let Some(msl) = &self.msl {
             msl.as_bytes()
         } else if let Some(dxil) = &self.dxil {
             dxil
+        } else if let Some(hlsl) = &self.hlsl {
+            hlsl.as_bytes()
+        } else if let Some(glsl) = &self.glsl {
+            glsl.as_bytes()
+        } else if let Some(wgsl) = &self.wgsl {
+            wgsl.as_bytes()
         } else {
             panic!("No binary data provided to `ShaderModuleDescriptorGeneric`")
         }
@@ -173,10 +181,18 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
     pub fn trace_binary_ext(&self) -> &'static str {
         if self.spirv.is_some() {
             "spv"
+        } else if self.metallib.is_some() {
+            "metallib"
         } else if self.msl.is_some() {
             "msl"
         } else if self.dxil.is_some() {
             "dxil"
+        } else if self.hlsl.is_some() {
+            "hlsl"
+        } else if self.glsl.is_some() {
+            "glsl"
+        } else if self.wgsl.is_some() {
+            "wgsl"
         } else {
             panic!("No binary data provided to `ShaderModuleDescriptorGeneric`")
         }

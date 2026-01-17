@@ -1342,6 +1342,7 @@ impl crate::Device for super::Device {
                 // The backend doesn't yet expose this feature so it should be fine
                 crate::ShaderInput::Glsl { .. } => unimplemented!(),
                 crate::ShaderInput::SpirV(_)
+                | crate::ShaderInput::MetalLib { .. }
                 | crate::ShaderInput::Msl { .. }
                 | crate::ShaderInput::Dxil { .. }
                 | crate::ShaderInput::Hlsl { .. } => {

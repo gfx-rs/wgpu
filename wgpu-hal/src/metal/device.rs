@@ -1048,6 +1048,32 @@ impl crate::Device for super::Device {
                 source: ShaderModuleSource::Naga(naga),
                 bounds_checks: desc.runtime_checks,
             }),
+            crate::ShaderInput::MetalLib {
+                file,
+                entry_point,
+                num_workgroups,
+            } => {
+                let library = self
+                    .shared
+                    .device
+                    .new_library_with_data(file)
+                    .map_err(|e| crate::ShaderError::Compilation(format!("Metallib: {e:?}")))?;
+                let function = library.get_function(&entry_point, None).map_err(|_| {
+                    crate::ShaderError::Compilation(format!(
+                        "Entry point '{entry_point}' not found"
+                    ))
+                })?;
+                Ok(super::ShaderModule {
+                    source: ShaderModuleSource::Passthrough(PassthroughShader {
+                        library,
+                        function,
+                        entry_point,
+                        num_workgroups,
+                    }),
+                    // This goes unused for passthrough shaders
+                    bounds_checks: wgt::ShaderRuntimeChecks::unchecked(),
+                })
+            }
             crate::ShaderInput::Msl {
                 shader: source,
                 entry_point,
@@ -1072,7 +1098,8 @@ impl crate::Device for super::Device {
                         entry_point,
                         num_workgroups,
                     }),
-                    bounds_checks: desc.runtime_checks,
+                    // This goes unused for passthrough shaders
+                    bounds_checks: wgt::ShaderRuntimeChecks::unchecked(),
                 })
             }
             crate::ShaderInput::SpirV(_)
