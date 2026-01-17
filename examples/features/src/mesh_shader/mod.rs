@@ -88,7 +88,7 @@ fn get_shaders(
                 compiled.clone(),
                 compiled.clone(),
                 "taskShader",
-                "taskShader",
+                "meshShader",
                 "fragShader",
             )
         }
