@@ -1700,10 +1700,9 @@ pub trait CommandEncoder: WasmNotSendSync + fmt::Debug {
             >,
         >;
 
-    unsafe fn place_acceleration_structure_barrier(
-        &mut self,
-        barrier: AccelerationStructureBarrier,
-    );
+    unsafe fn transition_acceleration_structures<'a, T>(&mut self, barriers: T)
+    where
+        T: Iterator<Item = AccelerationStructureBarrier<'a, <Self::A as Api>::Buffer>>;
     // modeled off dx12, because this is able to be polyfilled in vulkan as opposed to the other way round
     unsafe fn read_acceleration_structure_compact_size(
         &mut self,
@@ -2804,7 +2803,8 @@ bitflags::bitflags! {
 }
 
 #[derive(Debug, Clone)]
-pub struct AccelerationStructureBarrier {
+pub struct AccelerationStructureBarrier<'a, B: DynBuffer + ?Sized> {
+    pub acceleration_structure: &'a B,
     pub usage: StateTransition<AccelerationStructureUses>,
     pub dst_queue_index: Option<u32>,
 }

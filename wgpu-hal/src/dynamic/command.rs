@@ -681,7 +681,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
         &mut self,
         barrier: AccelerationStructureBarrier,
     ) {
-        unsafe { C::place_acceleration_structure_barrier(self, barrier) };
+        unsafe { C::transition_acceleration_structures(self, barrier) };
     }
 
     unsafe fn copy_acceleration_structure_to_acceleration_structure(

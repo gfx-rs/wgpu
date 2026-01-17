@@ -745,7 +745,7 @@ impl<A: hal::Api> Example<A> {
         unsafe { cmd_encoder.begin_encoding(Some("init")).unwrap() };
 
         unsafe {
-            cmd_encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
+            cmd_encoder.transition_acceleration_structures(hal::AccelerationStructureBarrier {
                 usage: hal::StateTransition {
                     from: hal::AccelerationStructureUses::empty(),
                     to: hal::AccelerationStructureUses::BUILD_OUTPUT,
@@ -774,7 +774,7 @@ impl<A: hal::Api> Example<A> {
             };
             cmd_encoder.transition_buffers(iter::once(scratch_buffer_barrier));
 
-            cmd_encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
+            cmd_encoder.transition_acceleration_structures(hal::AccelerationStructureBarrier {
                 usage: hal::StateTransition {
                     from: hal::AccelerationStructureUses::BUILD_OUTPUT,
                     to: hal::AccelerationStructureUses::BUILD_INPUT,
@@ -794,7 +794,7 @@ impl<A: hal::Api> Example<A> {
                 }],
             );
 
-            cmd_encoder.place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
+            cmd_encoder.transition_acceleration_structures(hal::AccelerationStructureBarrier {
                 usage: hal::StateTransition {
                     from: hal::AccelerationStructureUses::BUILD_OUTPUT,
                     to: hal::AccelerationStructureUses::SHADER_INPUT,
@@ -918,7 +918,7 @@ impl<A: hal::Api> Example<A> {
             };
 
             ctx.encoder
-                .place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
+                .transition_acceleration_structures(hal::AccelerationStructureBarrier {
                     usage: hal::StateTransition {
                         from: hal::AccelerationStructureUses::SHADER_INPUT,
                         to: hal::AccelerationStructureUses::BUILD_INPUT,
@@ -939,7 +939,7 @@ impl<A: hal::Api> Example<A> {
             );
 
             ctx.encoder
-                .place_acceleration_structure_barrier(hal::AccelerationStructureBarrier {
+                .transition_acceleration_structures(hal::AccelerationStructureBarrier {
                     usage: hal::StateTransition {
                         from: hal::AccelerationStructureUses::BUILD_OUTPUT,
                         to: hal::AccelerationStructureUses::SHADER_INPUT,

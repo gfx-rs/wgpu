@@ -763,29 +763,53 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn place_acceleration_structure_barrier(
-        &mut self,
-        barrier: crate::AccelerationStructureBarrier,
-    ) {
-        let (src_stage, src_access) = conv::map_acceleration_structure_usage_to_barrier(
-            barrier.usage.from,
-            self.device.features,
-        );
-        let (dst_stage, dst_access) = conv::map_acceleration_structure_usage_to_barrier(
-            barrier.usage.to,
-            self.device.features,
-        );
+    unsafe fn transition_acceleration_structures<'a, T>(&mut self, barriers: T)
+    where
+        T: Iterator<Item = crate::AccelerationStructureBarrier<'a, super::Buffer>>,
+    {
+        let mut src_stages = vk::PipelineStageFlags::TOP_OF_PIPE;
+        let mut dst_stages = vk::PipelineStageFlags::BOTTOM_OF_PIPE;
+        let vk_barriers = &mut self.temp.buffer_barriers;
+        vk_barriers.clear();
+
+        for bar in barriers {
+            let (src_stage, src_access) = conv::map_acceleration_structure_usage_to_barrier(
+                bar.usage.from,
+                self.device.features,
+            );
+            let (dst_stage, dst_access) = conv::map_acceleration_structure_usage_to_barrier(
+                bar.usage.to,
+                self.device.features,
+            );
+            src_stages |= src_stage;
+            dst_stages |= dst_stage;
+
+            let mut barrier = vk::BufferMemoryBarrier::default()
+                .src_access_mask(src_access)
+                .dst_access_mask(dst_access)
+                .buffer(bar.acceleration_structure.raw)
+                .size(vk::WHOLE_SIZE)
+                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED);
+
+            if let Some(dst) = bar.dst_queue_index {
+                let my_queue_family_index = self.queue_family_index;
+                let dst_queue_family_index = self.device.queue_families_indices[dst as usize].0;
+                barrier = barrier
+                    .src_queue_family_index(my_queue_family_index)
+                    .dst_queue_family_index(dst_queue_family_index);
+            }
+            vk_barriers.push(barrier);
+        }
 
         unsafe {
             self.device.raw.cmd_pipeline_barrier(
                 self.active,
-                src_stage | vk::PipelineStageFlags::TOP_OF_PIPE,
-                dst_stage | vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                src_stages,
+                dst_stages,
                 vk::DependencyFlags::empty(),
-                &[vk::MemoryBarrier::default()
-                    .src_access_mask(src_access)
-                    .dst_access_mask(dst_access)],
                 &[],
+                vk_barriers,
                 &[],
             )
         };

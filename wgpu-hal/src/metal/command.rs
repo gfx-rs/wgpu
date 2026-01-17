@@ -1551,7 +1551,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         unimplemented!()
     }
 
-    unsafe fn place_acceleration_structure_barrier(
+    unsafe fn transition_acceleration_structures(
         &mut self,
         _barriers: crate::AccelerationStructureBarrier,
     ) {
