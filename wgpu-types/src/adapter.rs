@@ -1,4 +1,4 @@
-use alloc::string::String;
+use alloc::{string::String, vec::Vec};
 use core::{fmt, mem};
 
 use crate::{link_to_wgpu_docs, Backend, Backends};
@@ -160,6 +160,8 @@ pub struct AdapterInfo {
     pub subgroup_max_size: u32,
     /// If true, adding [`TextureUsages::TRANSIENT`] to a texture will decrease memory usage.
     pub transient_saves_memory: bool,
+    /// List of queues and their supported operations
+    pub supported_queue_families: Vec<QueueUsageFlags>,
 }
 
 /// Error when [`Instance::request_adapter()`] fails.
@@ -281,4 +283,18 @@ pub struct CooperativeMatrixProperties {
     ///
     /// When true, the multiply-add operation clamps the result to prevent overflow.
     pub saturating_accumulation: bool,
+}
+
+bitflags::bitflags! {
+    /// Describes which operations are valid on this queue.
+    #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    pub struct QueueUsageFlags: u32 {
+        /// Queue supports graphics operations
+        const GRAPHICS = 1 << 0;
+        /// Queue supports compute operations
+        const COMPUTE = 1 << 1;
+        /// Queue supports transfer operations (usually for host->device or device->host)
+        const TRANSFER = 1 << 2;
+    }
 }

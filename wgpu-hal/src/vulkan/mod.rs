@@ -283,6 +283,8 @@ pub struct Adapter {
     downlevel_flags: wgt::DownlevelFlags,
     private_caps: PrivateCapabilities,
     workarounds: Workarounds,
+    /// Indices of each exposed queue in the physical device's queue list
+    queue_indices: Vec<u32>,
 }
 
 // TODO there's no reason why this can't be unified--the function pointers should all be the same--it's not clear how to do this with `ash`.
@@ -470,9 +472,8 @@ struct RenderPassKey {
 
 struct DeviceShared {
     raw: ash::Device,
-    family_index: u32,
-    queue_index: u32,
-    raw_queue: vk::Queue,
+    queue_families_indices: Vec<(u32, u32)>,
+    raw_queues: Vec<vk::Queue>,
     instance: Arc<InstanceShared>,
     physical_device: vk::PhysicalDevice,
     enabled_extensions: Vec<&'static CStr>,

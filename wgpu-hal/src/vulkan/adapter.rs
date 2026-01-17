@@ -1853,6 +1853,32 @@ impl super::Instance {
                 .contains(vk::MemoryPropertyFlags::LAZILY_ALLOCATED)
         });
 
+        let raw_queues = unsafe {
+            self.shared
+                .raw
+                .get_physical_device_queue_family_properties(phd)
+        };
+        let mut queue_infos = Vec::new();
+        let mut queue_indices = Vec::new();
+        for (i, queue) in raw_queues.iter().enumerate() {
+            let mut caps = wgt::QueueUsageFlags::empty();
+            if queue.queue_flags.contains(vk::QueueFlags::GRAPHICS) {
+                caps.insert(wgt::QueueUsageFlags::GRAPHICS);
+            }
+            if queue.queue_flags.contains(vk::QueueFlags::COMPUTE) {
+                caps.insert(wgt::QueueUsageFlags::COMPUTE);
+            }
+            if queue.queue_flags.contains(vk::QueueFlags::TRANSFER) {
+                caps.insert(wgt::QueueUsageFlags::TRANSFER);
+            }
+            // This might happen for sparse queues, video encoding/decoding queues, etc
+            if caps.is_empty() {
+                continue;
+            }
+            queue_infos.push(caps);
+            queue_indices.push(i as u32);
+        }
+
         let info = wgt::AdapterInfo {
             name: {
                 phd_capabilities
@@ -1911,6 +1937,7 @@ impl super::Instance {
                 .map(|subgroup_size| subgroup_size.max_subgroup_size)
                 .unwrap_or(wgt::MAXIMUM_SUBGROUP_MAX_SIZE),
             transient_saves_memory: supports_lazily_allocated,
+            supported_queue_families: queue_infos,
         };
         let mut workarounds = super::Workarounds::empty();
         {
@@ -1964,12 +1991,7 @@ impl super::Instance {
             return None;
         }
 
-        let queue_families = unsafe {
-            self.shared
-                .raw
-                .get_physical_device_queue_family_properties(phd)
-        };
-        let queue_family_properties = queue_families.first()?;
+        let queue_family_properties = raw_queues.first()?;
         let queue_flags = queue_family_properties.queue_flags;
         if !queue_flags.contains(vk::QueueFlags::GRAPHICS) {
             log::debug!("The first queue only exposes {queue_flags:?}");
@@ -2094,6 +2116,7 @@ impl super::Instance {
             downlevel_flags,
             private_caps,
             workarounds,
+            queue_indices,
         };
 
         Some(crate::ExposedAdapter {
@@ -2183,8 +2206,7 @@ impl super::Adapter {
         enabled_extensions: &[&'static CStr],
         features: wgt::Features,
         memory_hints: &wgt::MemoryHints,
-        family_index: u32,
-        queue_index: u32,
+        queue_families_indices: &[(u32, u32)],
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let mem_properties = {
             profiling::scope!("vkGetPhysicalDeviceMemoryProperties");
@@ -2447,11 +2469,13 @@ impl super::Adapter {
                 debug_info: None,
             }
         };
-
-        let raw_queue = {
-            profiling::scope!("vkGetDeviceQueue");
-            unsafe { raw_device.get_device_queue(family_index, queue_index) }
-        };
+        let mut raw_queues = Vec::new();
+        profiling::scope!("vkGetDeviceQueue");
+        {
+            for &(family, idx) in queue_families_indices {
+                raw_queues.push(unsafe { raw_device.get_device_queue(family, idx) });
+            }
+        }
 
         let driver_version = self
             .phd_capabilities
@@ -2470,9 +2494,8 @@ impl super::Adapter {
 
         let shared = Arc::new(super::DeviceShared {
             raw: raw_device,
-            family_index,
-            queue_index,
-            raw_queue,
+            queue_families_indices: queue_families_indices.to_vec(),
+            raw_queues,
             drop_guard,
             instance: Arc::clone(&self.instance),
             physical_device: self.raw,
@@ -2500,15 +2523,19 @@ impl super::Adapter {
             texture_view_identity_factory: super::ResourceIdentityFactory::new(),
         });
 
-        let relay_semaphores = super::RelaySemaphores::new(&shared)?;
-
-        let queue = super::Queue {
-            raw: raw_queue,
-            device: Arc::clone(&shared),
-            family_index,
-            relay_semaphores: Mutex::new(relay_semaphores),
-            signal_semaphores: Mutex::new(SemaphoreList::new(SemaphoreListMode::Signal)),
-        };
+        let mut queues = Vec::new();
+        for (&(family_index, _), &queue) in
+            queue_families_indices.iter().zip(shared.raw_queues.iter())
+        {
+            let relay_semaphores = super::RelaySemaphores::new(&shared)?;
+            queues.push(super::Queue {
+                raw: queue,
+                device: Arc::clone(&shared),
+                family_index,
+                relay_semaphores: Mutex::new(relay_semaphores),
+                signal_semaphores: Mutex::new(SemaphoreList::new(SemaphoreListMode::Signal)),
+            });
+        }
 
         let allocation_sizes = AllocationSizes::from_memory_hints(memory_hints).into();
 
@@ -2543,7 +2570,7 @@ impl super::Adapter {
             counters: Default::default(),
         };
 
-        Ok(crate::OpenDevice { device, queue })
+        Ok(crate::OpenDevice { device, queues })
     }
 
     pub fn texture_format_as_raw(&self, texture_format: wgt::TextureFormat) -> vk::Format {
@@ -2559,15 +2586,22 @@ impl super::Adapter {
         features: wgt::Features,
         memory_hints: &wgt::MemoryHints,
         callback: Option<Box<super::CreateDeviceCallback<'a>>>,
+        requested_queues: &[u32],
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
         let mut enabled_extensions = self.required_device_extensions(features);
         let mut enabled_phd_features = self.physical_device_features(&enabled_extensions, features);
 
-        let family_index = 0; //TODO
-        let family_info = vk::DeviceQueueCreateInfo::default()
-            .queue_family_index(family_index)
-            .queue_priorities(&[1.0]);
-        let mut family_infos = Vec::from([family_info]);
+        let mut queue_create_infos = Vec::new();
+        let mut queue_families_indices = Vec::new();
+        for &id in requested_queues {
+            let famiy_index = self.queue_indices[id as usize];
+            queue_create_infos.push(
+                vk::DeviceQueueCreateInfo::default()
+                    .queue_family_index(famiy_index)
+                    .queue_priorities(&[1.0]),
+            );
+            queue_families_indices.push((famiy_index, 0));
+        }
 
         let mut pre_info = vk::DeviceCreateInfo::default();
 
@@ -2575,7 +2609,7 @@ impl super::Adapter {
             callback(super::CreateDeviceCallbackArgs {
                 extensions: &mut enabled_extensions,
                 device_features: &mut enabled_phd_features,
-                queue_create_infos: &mut family_infos,
+                queue_create_infos: &mut queue_create_infos,
                 create_info: &mut pre_info,
                 _phantom: PhantomData,
             })
@@ -2590,7 +2624,7 @@ impl super::Adapter {
             .collect::<Vec<_>>();
 
         let pre_info = pre_info
-            .queue_create_infos(&family_infos)
+            .queue_create_infos(&queue_create_infos)
             .enabled_extension_names(&str_pointers);
         let info = enabled_phd_features.add_to_device_create(pre_info);
         let raw_device = {
@@ -2620,8 +2654,7 @@ impl super::Adapter {
                 &enabled_extensions,
                 features,
                 memory_hints,
-                family_info.queue_family_index,
-                0,
+                &queue_families_indices,
             )
         }
     }
@@ -2635,8 +2668,9 @@ impl crate::Adapter for super::Adapter {
         features: wgt::Features,
         _limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
+        queues: &[u32],
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        unsafe { self.open_with_callback(features, memory_hints, None) }
+        unsafe { self.open_with_callback(features, memory_hints, None, queues) }
     }
 
     unsafe fn texture_format_capabilities(

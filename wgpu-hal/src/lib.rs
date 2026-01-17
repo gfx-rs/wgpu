@@ -766,6 +766,7 @@ pub trait Adapter: WasmNotSendSync {
         features: wgt::Features,
         limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
+        queues: &[u32],
     ) -> Result<OpenDevice<Self::A>, DeviceError>;
 
     /// Return the set of supported capabilities for a texture format.
@@ -1992,7 +1993,7 @@ pub struct AcquiredSurfaceTexture<A: Api> {
 #[derive(Debug)]
 pub struct OpenDevice<A: Api> {
     pub device: A::Device,
-    pub queue: A::Queue,
+    pub queues: Vec<A::Queue>,
 }
 
 #[derive(Clone, Debug)]

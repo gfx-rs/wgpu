@@ -735,17 +735,13 @@ impl super::Device {
         })
     }
 
-    /// Returns the queue family index of the device's internal queue.
+    /// Returns the queue family indices of the device's internal queues.
     ///
     /// This is useful for constructing memory barriers needed for queue family ownership transfer when
     /// external memory is involved (from/to `VK_QUEUE_FAMILY_EXTERNAL_KHR` and `VK_QUEUE_FAMILY_FOREIGN_EXT`
     /// for example).
-    pub fn queue_family_index(&self) -> u32 {
-        self.shared.family_index
-    }
-
-    pub fn queue_index(&self) -> u32 {
-        self.shared.queue_index
+    pub fn queue_families_indices(&self) -> &[(u32, u32)] {
+        &self.shared.queue_families_indices
     }
 
     pub fn raw_device(&self) -> &ash::Device {
@@ -756,8 +752,8 @@ impl super::Device {
         self.shared.physical_device
     }
 
-    pub fn raw_queue(&self) -> vk::Queue {
-        self.shared.raw_queue
+    pub fn raw_queues(&self) -> &[vk::Queue] {
+        &self.shared.raw_queues
     }
 
     pub fn enabled_device_extensions(&self) -> &[&'static CStr] {
