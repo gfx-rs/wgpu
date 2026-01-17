@@ -863,29 +863,30 @@ impl crate::Module {
     }
 
     pub fn uses_mesh_shaders(&self) -> bool {
+        let binding_uses_mesh = |b: &crate::Binding| {
+            matches!(
+                b,
+                crate::Binding::BuiltIn(
+                    crate::BuiltIn::MeshTaskSize
+                        | crate::BuiltIn::CullPrimitive
+                        | crate::BuiltIn::PointIndex
+                        | crate::BuiltIn::LineIndices
+                        | crate::BuiltIn::TriangleIndices
+                        | crate::BuiltIn::VertexCount
+                        | crate::BuiltIn::Vertices
+                        | crate::BuiltIn::PrimitiveCount
+                        | crate::BuiltIn::Primitives,
+                ) | crate::Binding::Location {
+                    per_primitive: true,
+                    ..
+                }
+            )
+        };
         for (_, ty) in self.types.iter() {
             match ty.inner {
                 crate::TypeInner::Struct { ref members, .. } => {
-                    for member in members {
-                        if matches!(
-                            member.binding,
-                            Some(
-                                crate::Binding::BuiltIn(
-                                    crate::BuiltIn::MeshTaskSize
-                                        | crate::BuiltIn::CullPrimitive
-                                        | crate::BuiltIn::PointIndex
-                                        | crate::BuiltIn::LineIndices
-                                        | crate::BuiltIn::TriangleIndices
-                                        | crate::BuiltIn::VertexCount
-                                        | crate::BuiltIn::Vertices
-                                        | crate::BuiltIn::PrimitiveCount
-                                        | crate::BuiltIn::Primitives,
-                                ) | crate::Binding::Location {
-                                    per_primitive: true,
-                                    ..
-                                }
-                            )
-                        ) {
+                    for binding in members.iter().filter_map(|m| m.binding.as_ref()) {
+                        if binding_uses_mesh(binding) {
                             return true;
                         }
                     }
@@ -893,13 +894,29 @@ impl crate::Module {
                 _ => (),
             }
         }
-        if self.entry_points.iter().any(|ep| {
-            matches!(
+        for ep in &self.entry_points {
+            if matches!(
                 ep.stage,
                 crate::ShaderStage::Mesh | crate::ShaderStage::Task
-            )
-        }) {
-            return true;
+            ) {
+                return true;
+            }
+            for binding in ep
+                .function
+                .arguments
+                .iter()
+                .filter_map(|arg| arg.binding.as_ref())
+                .chain(
+                    ep.function
+                        .result
+                        .iter()
+                        .filter_map(|res| res.binding.as_ref()),
+                )
+            {
+                if binding_uses_mesh(binding) {
+                    return true;
+                }
+            }
         }
         if self
             .global_variables
