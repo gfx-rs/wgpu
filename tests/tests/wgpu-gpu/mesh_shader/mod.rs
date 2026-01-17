@@ -62,7 +62,6 @@ fn compile_hlsl(
     std::fs::remove_file(out_path).unwrap();
     unsafe {
         device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-            entry_point: entry.to_owned(),
             label: None,
             num_workgroups: (1, 1, 1),
             dxil: Some(std::borrow::Cow::Owned(file)),
@@ -71,10 +70,9 @@ fn compile_hlsl(
     }
 }
 
-fn compile_msl(device: &wgpu::Device, entry: &str) -> wgpu::ShaderModule {
+fn compile_msl(device: &wgpu::Device) -> wgpu::ShaderModule {
     unsafe {
         device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-            entry_point: entry.to_owned(),
             label: None,
             msl: Some(std::borrow::Cow::Borrowed(include_str!("shader.metal"))),
             num_workgroups: (1, 1, 1),
@@ -102,20 +100,23 @@ fn get_shaders(
     // In the case that the platform does support mesh shaders, the dummy
     // shader is used to avoid requiring EXPERIMENTAL_PASSTHROUGH_SHADERS.
     match backend {
-        wgpu::Backend::Vulkan => (
-            info.use_task.then(|| compile_wgsl(device)),
-            compile_wgsl(device),
-            info.use_frag.then(|| compile_wgsl(device)),
-            "ts_main",
-            if info.divergent {
-                "ms_divergent"
-            } else if info.use_task {
-                "ms_main"
-            } else {
-                "ms_no_ts"
-            },
-            "fs_main",
-        ),
+        wgpu::Backend::Vulkan => {
+            let compiled = compile_wgsl(device);
+            (
+                info.use_task.then_some(compiled.clone()),
+                compiled.clone(),
+                info.use_frag.then_some(compiled),
+                "ts_main",
+                if info.divergent {
+                    "ms_divergent"
+                } else if info.use_task {
+                    "ms_main"
+                } else {
+                    "ms_no_ts"
+                },
+                "fs_main",
+            )
+        }
         wgpu::Backend::Dx12 => (
             info.use_task
                 .then(|| compile_hlsl(device, "Task", "as", test_name)),
@@ -131,21 +132,21 @@ fn get_shaders(
             "main",
             "main",
         ),
-        wgpu::Backend::Metal => (
-            info.use_task.then(|| compile_msl(device, "taskShader")),
-            compile_msl(
-                device,
+        wgpu::Backend::Metal => {
+            let compiled = compile_msl(device);
+            (
+                info.use_task.then_some(compiled.clone()),
+                compiled.clone(),
+                info.use_frag.then_some(compiled),
+                "taskShader",
                 if info.use_task {
                     "meshShader"
                 } else {
                     "meshNoTaskShader"
                 },
-            ),
-            info.use_frag.then(|| compile_msl(device, "fragShader")),
-            "main",
-            "main",
-            "main",
-        ),
+                "fragShader",
+            )
+        }
         _ => unreachable!(),
     }
 }

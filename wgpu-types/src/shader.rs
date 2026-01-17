@@ -1,4 +1,4 @@
-use alloc::{borrow::Cow, string::String};
+use alloc::borrow::Cow;
 
 /// Describes how shader bound checks should be performed.
 #[derive(Copy, Clone, Debug)]
@@ -92,8 +92,6 @@ impl Default for ShaderRuntimeChecks {
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
-    /// Entrypoint. Unused for Spir-V.
-    pub entry_point: String,
     /// Debug label of the shader module. This will show up in graphics debuggers for easy identification.
     pub label: L,
     /// Number of workgroups in each dimension x, y and z. Unused for Spir-V.
@@ -120,7 +118,6 @@ pub struct CreateShaderModuleDescriptorPassthrough<'a, L> {
 impl<'a, L: Default> Default for CreateShaderModuleDescriptorPassthrough<'a, L> {
     fn default() -> Self {
         Self {
-            entry_point: "".into(),
             label: Default::default(),
             num_workgroups: (0, 0, 0),
             spirv: None,
@@ -141,7 +138,6 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
         fun: impl FnOnce(&L) -> K,
     ) -> CreateShaderModuleDescriptorPassthrough<'a, K> {
         CreateShaderModuleDescriptorPassthrough {
-            entry_point: self.entry_point.clone(),
             label: fun(&self.label),
             num_workgroups: self.num_workgroups,
             spirv: self.spirv.clone(),

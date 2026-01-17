@@ -2362,13 +2362,11 @@ impl Device {
                 if let Some(dxil) = &descriptor.dxil {
                     hal::ShaderInput::Dxil {
                         shader: dxil,
-                        entry_point: descriptor.entry_point.clone(),
                         num_workgroups: descriptor.num_workgroups,
                     }
                 } else if let Some(hlsl) = &descriptor.hlsl {
                     hal::ShaderInput::Hlsl {
                         shader: hlsl,
-                        entry_point: descriptor.entry_point.clone(),
                         num_workgroups: descriptor.num_workgroups,
                     }
                 } else {
@@ -2379,13 +2377,11 @@ impl Device {
                 if let Some(metallib) = &descriptor.metallib {
                     hal::ShaderInput::MetalLib {
                         file: metallib,
-                        entry_point: descriptor.entry_point.clone(),
                         num_workgroups: descriptor.num_workgroups,
                     }
                 } else if let Some(msl) = &descriptor.msl {
                     hal::ShaderInput::Msl {
                         shader: msl,
-                        entry_point: descriptor.entry_point.clone(),
                         num_workgroups: descriptor.num_workgroups,
                     }
                 } else {
@@ -2397,7 +2393,6 @@ impl Device {
                     .glsl
                     .as_ref()
                     .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
-                entry_point: descriptor.entry_point.clone(),
                 num_workgroups: descriptor.num_workgroups,
             },
             wgt::Backend::Noop => {

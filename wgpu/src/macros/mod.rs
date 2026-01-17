@@ -142,7 +142,6 @@ macro_rules! include_spirv_raw {
             $crate::ShaderModuleDescriptorPassthrough {
                 label: $crate::__macro_helpers::Some($($token)*),
                 spirv: Some($crate::__macro_helpers::Cow::Borrowed($crate::include_spirv_source!($($token)*))),
-                entry_point: $crate::__macro_helpers::String::new(),
                 // This is unused for SPIR-V
                 num_workgroups: (0, 0, 0),
                 dxil: None,

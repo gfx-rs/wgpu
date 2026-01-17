@@ -302,7 +302,10 @@ impl super::Device {
             }
             ShaderModuleSource::Passthrough(ref shader) => Ok(CompiledShader {
                 library: shader.library.clone(),
-                function: shader.function.clone(),
+                function: shader
+                    .library
+                    .get_function(stage.entry_point, None)
+                    .map_err(|_| crate::PipelineError::EntryPoint(naga_stage))?,
                 wg_size: MTLSize {
                     width: shader.num_workgroups.0 as u64,
                     height: shader.num_workgroups.1 as u64,
@@ -1050,7 +1053,6 @@ impl crate::Device for super::Device {
             }),
             crate::ShaderInput::MetalLib {
                 file,
-                entry_point,
                 num_workgroups,
             } => {
                 let library = self
@@ -1058,16 +1060,9 @@ impl crate::Device for super::Device {
                     .device
                     .new_library_with_data(file)
                     .map_err(|e| crate::ShaderError::Compilation(format!("Metallib: {e:?}")))?;
-                let function = library.get_function(&entry_point, None).map_err(|_| {
-                    crate::ShaderError::Compilation(format!(
-                        "Entry point '{entry_point}' not found"
-                    ))
-                })?;
                 Ok(super::ShaderModule {
                     source: ShaderModuleSource::Passthrough(PassthroughShader {
                         library,
-                        function,
-                        entry_point,
                         num_workgroups,
                     }),
                     // This goes unused for passthrough shaders
@@ -1076,7 +1071,6 @@ impl crate::Device for super::Device {
             }
             crate::ShaderInput::Msl {
                 shader: source,
-                entry_point,
                 num_workgroups,
             } => {
                 let options = metal::CompileOptions::new();
@@ -1085,17 +1079,10 @@ impl crate::Device for super::Device {
                 let library = device
                     .new_library_with_source(source, &options)
                     .map_err(|e| crate::ShaderError::Compilation(format!("MSL: {e:?}")))?;
-                let function = library.get_function(&entry_point, None).map_err(|_| {
-                    crate::ShaderError::Compilation(format!(
-                        "Entry point '{entry_point}' not found"
-                    ))
-                })?;
 
                 Ok(super::ShaderModule {
                     source: ShaderModuleSource::Passthrough(PassthroughShader {
                         library,
-                        function,
-                        entry_point,
                         num_workgroups,
                     }),
                     // This goes unused for passthrough shaders
@@ -1555,14 +1542,19 @@ impl crate::Device for super::Device {
             let descriptor = metal::ComputePipelineDescriptor::new();
 
             let module = desc.stage.module;
-            let cs = if let ShaderModuleSource::Passthrough(desc) = &module.source {
+            let cs = if let ShaderModuleSource::Passthrough(passthrough_desc) = &module.source {
                 CompiledShader {
-                    library: desc.library.clone(),
-                    function: desc.function.clone(),
+                    library: passthrough_desc.library.clone(),
+                    function: passthrough_desc
+                        .library
+                        .get_function(desc.stage.entry_point, None)
+                        .map_err(|_| {
+                            crate::PipelineError::EntryPoint(naga::ShaderStage::Compute)
+                        })?,
                     wg_size: MTLSize::new(
-                        desc.num_workgroups.0 as u64,
-                        desc.num_workgroups.1 as u64,
-                        desc.num_workgroups.2 as u64,
+                        passthrough_desc.num_workgroups.0 as u64,
+                        passthrough_desc.num_workgroups.1 as u64,
+                        passthrough_desc.num_workgroups.2 as u64,
                     ),
                     wg_memory_sizes: vec![],
                     sized_bindings: vec![],

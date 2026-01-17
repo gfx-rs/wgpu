@@ -1112,8 +1112,6 @@ impl Global {
                 trace.add(trace::Action::CreateShaderModulePassthrough {
                     id: shader.to_trace(),
                     data: file_names,
-
-                    entry_point: desc.entry_point.clone(),
                     label: desc.label.clone(),
                     num_workgroups: desc.num_workgroups,
                 });

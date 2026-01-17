@@ -178,7 +178,6 @@ pub enum Action<'a, R: ReferenceType> {
         id: PointerId<markers::ShaderModule>,
         data: Vec<Data>,
 
-        entry_point: String,
         label: crate::Label<'a>,
         num_workgroups: (u32, u32, u32),
     },

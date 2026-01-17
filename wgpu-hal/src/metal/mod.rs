@@ -830,8 +830,6 @@ pub enum ShaderModuleSource {
 #[derive(Debug)]
 pub struct PassthroughShader {
     pub library: metal::Library,
-    pub function: metal::Function,
-    pub entry_point: String,
     pub num_workgroups: (u32, u32, u32),
 }
 

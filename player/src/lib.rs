@@ -246,7 +246,6 @@ impl Player {
             Action::CreateShaderModulePassthrough {
                 id,
                 data,
-                entry_point,
                 label,
                 num_workgroups,
             } => {
@@ -279,7 +278,6 @@ impl Player {
                     .iter()
                     .find_map(|a| (a.kind() == DataKind::Wgsl).then(|| loader.load_utf8(a)));
                 let desc = wgt::CreateShaderModuleDescriptorPassthrough {
-                    entry_point,
                     label,
                     num_workgroups,
 
