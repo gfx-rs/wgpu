@@ -207,13 +207,21 @@ impl crate::CommandEncoder for super::CommandEncoder {
             let (dst_stage, dst_access) = conv::map_buffer_usage_to_barrier(bar.usage.to);
             dst_stages |= dst_stage;
 
-            vk_barriers.push(
-                vk::BufferMemoryBarrier::default()
-                    .buffer(bar.buffer.raw)
-                    .size(vk::WHOLE_SIZE)
-                    .src_access_mask(src_access)
-                    .dst_access_mask(dst_access),
-            )
+            let mut barrier = vk::BufferMemoryBarrier::default()
+                .buffer(bar.buffer.raw)
+                .size(vk::WHOLE_SIZE)
+                .src_access_mask(src_access)
+                .dst_access_mask(dst_access)
+                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED);
+            if let Some(dst) = bar.dst_queue_index {
+                let my_queue_family_index = self.queue_family_index;
+                let dst_queue_family_index = self.device.queue_families_indices[dst as usize].0;
+                barrier = barrier
+                    .src_queue_family_index(my_queue_family_index)
+                    .dst_queue_family_index(dst_queue_family_index);
+            }
+            vk_barriers.push(barrier);
         }
 
         if !vk_barriers.is_empty() {
@@ -253,15 +261,25 @@ impl crate::CommandEncoder for super::CommandEncoder {
             let dst_layout = conv::derive_image_layout(bar.usage.to, bar.texture.format);
             dst_stages |= dst_stage;
 
-            vk_barriers.push(
-                vk::ImageMemoryBarrier::default()
-                    .image(bar.texture.raw)
-                    .subresource_range(range)
-                    .src_access_mask(src_access)
-                    .dst_access_mask(dst_access)
-                    .old_layout(src_layout)
-                    .new_layout(dst_layout),
-            );
+            let mut barrier = vk::ImageMemoryBarrier::default()
+                .image(bar.texture.raw)
+                .subresource_range(range)
+                .src_access_mask(src_access)
+                .dst_access_mask(dst_access)
+                .old_layout(src_layout)
+                .new_layout(dst_layout)
+                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED);
+
+            if let Some(dst) = bar.dst_queue_index {
+                let my_queue_family_index = self.queue_family_index;
+                let dst_queue_family_index = self.device.queue_families_indices[dst as usize].0;
+                barrier = barrier
+                    .src_queue_family_index(my_queue_family_index)
+                    .dst_queue_family_index(dst_queue_family_index);
+            }
+
+            vk_barriers.push(barrier);
         }
 
         if !vk_barriers.is_empty() {

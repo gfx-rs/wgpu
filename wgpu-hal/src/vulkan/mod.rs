@@ -82,7 +82,7 @@ impl crate::Api for Api {
     type TextureView = TextureView;
     type Sampler = Sampler;
     type QuerySet = QuerySet;
-    type Fence = Fence;
+    type Fence = Semaphore;
     type AccelerationStructure = AccelerationStructure;
     type PipelineCache = PipelineCache;
 
@@ -104,7 +104,7 @@ crate::impl_dyn_resource!(
     CommandEncoder,
     ComputePipeline,
     Device,
-    Fence,
+    Semaphore,
     Instance,
     PipelineCache,
     PipelineLayout,
@@ -987,6 +987,8 @@ pub struct CommandEncoder {
     counters: Arc<wgt::HalCounters>,
 
     current_pipeline_is_multiview: bool,
+
+    queue_family_index: u32,
 }
 
 impl Drop for CommandEncoder {
@@ -1103,7 +1105,7 @@ impl crate::DynQuerySet for QuerySet {}
 /// [`VK_KHR_timeline_semaphore`]: https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#VK_KHR_timeline_semaphore
 /// [`FencePool`]: Fence::FencePool
 #[derive(Debug)]
-pub enum Fence {
+pub enum Semaphore {
     /// A Vulkan [timeline semaphore].
     ///
     /// These are simpler to use than Vulkan fences, since timeline semaphores
@@ -1133,10 +1135,9 @@ pub enum Fence {
         free: Vec<vk::Fence>,
     },
 }
+impl crate::DynFence for Semaphore {}
 
-impl crate::DynFence for Fence {}
-
-impl Fence {
+impl Semaphore {
     /// Return the highest [`FenceValue`] among the signalled fences in `active`.
     ///
     /// As an optimization, assume that we already know that the fence has
@@ -1174,7 +1175,7 @@ impl Fence {
     ) -> Result<crate::FenceValue, crate::DeviceError> {
         match *self {
             Self::TimelineSemaphore(raw) => unsafe {
-                Ok(match *extension.unwrap() {
+                Ok(match extension.unwrap() {
                     ExtensionFn::Extension(ref ext) => ext
                         .get_semaphore_counter_value(raw)
                         .map_err(map_host_device_oom_and_lost_err)?,
@@ -1237,7 +1238,7 @@ impl crate::Queue for Queue {
         &self,
         command_buffers: &[&CommandBuffer],
         surface_textures: &[&SurfaceTexture],
-        (signal_fence, signal_value): (&mut Fence, crate::FenceValue),
+        (signal_fence, signal_value): (&mut Semaphore, crate::FenceValue),
     ) -> Result<(), crate::DeviceError> {
         let mut fence_raw = vk::Fence::null();
 
@@ -1301,10 +1302,10 @@ impl crate::Queue for Queue {
         // We need to signal our wgpu::Fence if we have one, this adds it to the signal list.
         signal_fence.maintain(&self.device.raw)?;
         match *signal_fence {
-            Fence::TimelineSemaphore(raw) => {
+            Semaphore::TimelineSemaphore(raw) => {
                 signal_semaphores.push_signal(SemaphoreType::Timeline(raw, signal_value));
             }
-            Fence::FencePool {
+            Semaphore::FencePool {
                 ref mut active,
                 ref mut free,
                 ..
