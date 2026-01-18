@@ -2849,9 +2849,10 @@ pub struct Telemetry {
     ),
 }
 
+#[derive(Debug)]
 pub struct QueueSubmitInfo<'a, CB: ?Sized, F: ?Sized, ST: ?Sized> {
-    command_buffers: &'a [&'a CB],
-    surface_textures: &'a [&'a ST],
-    signal_fences: &'a mut [(&'a mut F, FenceValue)],
-    wait_fences: &'a mut [(&'a mut F, FenceValue)],
+    pub command_buffers: &'a [&'a CB],
+    pub surface_textures: &'a [&'a ST],
+    pub signal_fences: &'a mut [(&'a mut F, FenceValue)],
+    pub wait_fences: &'a mut [(&'a mut F, FenceValue)],
 }

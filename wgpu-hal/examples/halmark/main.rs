@@ -129,15 +129,17 @@ impl<A: hal::Api> Example<A> {
             .ok_or("failed to get surface capabilities")?;
         log::info!("Surface caps: {surface_caps:#?}");
 
-        let hal::OpenDevice { device, queue } = unsafe {
+        let hal::OpenDevice { device, queues } = unsafe {
             adapter
                 .open(
                     wgpu_types::Features::empty(),
                     &wgpu_types::Limits::default(),
                     &wgpu_types::MemoryHints::default(),
+                    &[0],
                 )
                 .unwrap()
         };
+        let queue = queues.into_iter().next().unwrap();
 
         let window_size: (u32, u32) = window.inner_size().into();
         let surface_config = hal::SurfaceConfiguration {
@@ -296,6 +298,7 @@ impl<A: hal::Api> Example<A> {
             size: texture_data.len() as wgpu_types::BufferAddress,
             usage: wgpu_types::BufferUses::MAP_WRITE | wgpu_types::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
+            initial_queue: 0,
         };
         let staging_buffer = unsafe { device.create_buffer(&staging_buffer_desc).unwrap() };
         unsafe {
@@ -325,6 +328,7 @@ impl<A: hal::Api> Example<A> {
             usage: wgpu_types::TextureUses::COPY_DST | wgpu_types::TextureUses::RESOURCE,
             memory_flags: hal::MemoryFlags::empty(),
             view_formats: vec![],
+            initial_queue: 0,
         };
         let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
 
@@ -341,6 +345,7 @@ impl<A: hal::Api> Example<A> {
                     from: wgpu_types::BufferUses::empty(),
                     to: wgpu_types::BufferUses::COPY_SRC,
                 },
+                dst_queue_index: None,
             };
             let texture_barrier1 = hal::TextureBarrier {
                 texture: &texture,
@@ -349,6 +354,7 @@ impl<A: hal::Api> Example<A> {
                     from: wgpu_types::TextureUses::UNINITIALIZED,
                     to: wgpu_types::TextureUses::COPY_DST,
                 },
+                dst_queue_index: None,
             };
             let texture_barrier2 = hal::TextureBarrier {
                 texture: &texture,
@@ -357,6 +363,7 @@ impl<A: hal::Api> Example<A> {
                     from: wgpu_types::TextureUses::COPY_DST,
                     to: wgpu_types::TextureUses::RESOURCE,
                 },
+                dst_queue_index: None,
             };
             let copy = hal::BufferTextureCopy {
                 buffer_layout: wgpu_types::TexelCopyBufferLayout {
@@ -414,6 +421,7 @@ impl<A: hal::Api> Example<A> {
             size: size_of::<Globals>() as wgpu_types::BufferAddress,
             usage: wgpu_types::BufferUses::MAP_WRITE | wgpu_types::BufferUses::UNIFORM,
             memory_flags: hal::MemoryFlags::PREFER_COHERENT,
+            initial_queue: 0,
         };
         let global_buffer = unsafe {
             let buffer = device.create_buffer(&global_buffer_desc).unwrap();
@@ -440,6 +448,7 @@ impl<A: hal::Api> Example<A> {
                 * (local_alignment as wgpu_types::BufferAddress),
             usage: wgpu_types::BufferUses::MAP_WRITE | wgpu_types::BufferUses::UNIFORM,
             memory_flags: hal::MemoryFlags::PREFER_COHERENT,
+            initial_queue: 0,
         };
         let local_buffer = unsafe { device.create_buffer(&local_buffer_desc).unwrap() };
 
@@ -520,9 +529,13 @@ impl<A: hal::Api> Example<A> {
         let fence = unsafe {
             let mut fence = device.create_fence().unwrap();
             let init_cmd = cmd_encoder.end_encoding().unwrap();
-            queue
-                .submit(&[&init_cmd], &[], (&mut fence, init_fence_value))
-                .unwrap();
+            let submit = hal::QueueSubmitInfo {
+                command_buffers: &[&init_cmd],
+                surface_textures: &[],
+                signal_fences: &mut [(&mut fence, init_fence_value)],
+                wait_fences: &mut [],
+            };
+            queue.submit(&mut [submit]).unwrap();
             device.wait(&fence, init_fence_value, None).unwrap();
             device.destroy_buffer(staging_buffer);
             cmd_encoder.reset_all(iter::once(init_cmd));
@@ -572,8 +585,14 @@ impl<A: hal::Api> Example<A> {
         unsafe {
             {
                 let ctx = &mut self.contexts[self.context_index];
+
                 self.queue
-                    .submit(&[], &[], (&mut ctx.fence, ctx.fence_value))
+                    .submit(&mut [hal::QueueSubmitInfo {
+                        command_buffers: &[],
+                        surface_textures: &[],
+                        signal_fences: &mut [(&mut ctx.fence, ctx.fence_value)],
+                        wait_fences: &mut [],
+                    }])
                     .unwrap();
             }
 
@@ -689,6 +708,7 @@ impl<A: hal::Api> Example<A> {
                 from: wgpu_types::TextureUses::UNINITIALIZED,
                 to: wgpu_types::TextureUses::COLOR_TARGET,
             },
+            dst_queue_index: None,
         };
         unsafe {
             ctx.encoder.begin_encoding(Some("frame")).unwrap();
@@ -761,6 +781,7 @@ impl<A: hal::Api> Example<A> {
                 from: wgpu_types::TextureUses::COLOR_TARGET,
                 to: wgpu_types::TextureUses::PRESENT,
             },
+            dst_queue_index: None,
         };
         unsafe {
             ctx.encoder.end_render_pass();
@@ -770,11 +791,12 @@ impl<A: hal::Api> Example<A> {
         unsafe {
             let cmd_buf = ctx.encoder.end_encoding().unwrap();
             self.queue
-                .submit(
-                    &[&cmd_buf],
-                    &[&surface_tex],
-                    (&mut ctx.fence, ctx.fence_value),
-                )
+                .submit(&mut [hal::QueueSubmitInfo {
+                    command_buffers: &[&cmd_buf],
+                    surface_textures: &[&surface_tex],
+                    signal_fences: &mut [(&mut ctx.fence, ctx.fence_value)],
+                    wait_fences: &mut [],
+                }])
                 .unwrap();
             self.queue.present(&self.surface, surface_tex).unwrap();
             ctx.used_cmd_bufs.push(cmd_buf);
