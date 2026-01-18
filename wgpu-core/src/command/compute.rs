@@ -1,3 +1,5 @@
+// MQ TODO: this whole file
+
 use thiserror::Error;
 use wgt::{
     error::{ErrorType, WebGpuError},
@@ -978,6 +980,7 @@ fn dispatch_indirect(
                         from: wgt::BufferUses::INDIRECT,
                         to: wgt::BufferUses::STORAGE_READ_WRITE,
                     },
+                    // MQ TODO
                 }]);
         }
 
@@ -1032,6 +1035,7 @@ fn dispatch_indirect(
                         from: wgt::BufferUses::STORAGE_READ_WRITE,
                         to: wgt::BufferUses::INDIRECT,
                     },
+                    // MQ TODO
                 }]);
         }
 

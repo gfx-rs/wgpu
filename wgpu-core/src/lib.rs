@@ -113,6 +113,8 @@ use alloc::{
 
 pub(crate) use hash_utils::*;
 
+// MQ TODO
+
 /// The index of a queue submission.
 ///
 /// These are the values stored in `Device::fence`.

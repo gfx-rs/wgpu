@@ -552,6 +552,8 @@ impl BufferTracker {
     }
 }
 
+// MQ TODO: this whole file (everything below this point)
+
 /// Stores all buffer state within a device.
 pub(crate) struct DeviceBufferTracker {
     current_states: Vec<BufferUses>,
@@ -780,6 +782,7 @@ unsafe fn barrier(
             from: current_state,
             to: new_state,
         },
+        // MQ TODO
     });
 }
 

@@ -358,6 +358,8 @@ impl PollStatus {
 pub struct CommandEncoderDescriptor<L> {
     /// Debug label for the command encoder. This will show up in graphics debuggers for easy identification.
     pub label: L,
+    /// The queue to which this will be submitted.
+    pub queue_index: u32,
 }
 
 impl<L> CommandEncoderDescriptor<L> {
@@ -366,13 +368,17 @@ impl<L> CommandEncoderDescriptor<L> {
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CommandEncoderDescriptor<K> {
         CommandEncoderDescriptor {
             label: fun(&self.label),
+            queue_index: self.queue_index,
         }
     }
 }
 
 impl<T> Default for CommandEncoderDescriptor<Option<T>> {
     fn default() -> Self {
-        Self { label: None }
+        Self {
+            label: None,
+            queue_index: 0,
+        }
     }
 }
 
