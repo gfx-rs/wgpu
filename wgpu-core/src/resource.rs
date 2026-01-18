@@ -842,6 +842,7 @@ impl Buffer {
                             from: wgt::BufferUses::MAP_WRITE,
                             to: wgt::BufferUses::COPY_SRC,
                         },
+                        src_dst_queue_index: None,
                     };
                     let transition_dst = hal::BufferBarrier::<dyn hal::DynBuffer> {
                         buffer: raw_buf,
@@ -849,6 +850,7 @@ impl Buffer {
                             from: wgt::BufferUses::empty(),
                             to: wgt::BufferUses::COPY_DST,
                         },
+                        src_dst_queue_index: None,
                     };
                     let mut pending_writes = queue.pending_writes.lock();
                     let encoder = pending_writes.activate();
@@ -1081,7 +1083,11 @@ pub struct StagingBuffer {
 }
 
 impl StagingBuffer {
-    pub(crate) fn new(device: &Arc<Device>, size: wgt::BufferSize) -> Result<Self, DeviceError> {
+    pub(crate) fn new(
+        device: &Arc<Device>,
+        size: wgt::BufferSize,
+        queue_idx: u32,
+    ) -> Result<Self, DeviceError> {
         profiling::scope!("StagingBuffer::new");
         // MQ TODO
         let stage_desc = hal::BufferDescriptor {
@@ -1089,6 +1095,7 @@ impl StagingBuffer {
             size: size.get(),
             usage: wgt::BufferUses::MAP_WRITE | wgt::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT,
+            initial_queue: queue_idx,
         };
 
         let raw = unsafe { device.raw().create_buffer(&stage_desc) }

@@ -147,6 +147,7 @@ pub(crate) fn fixup_discarded_surfaces<InitIter: Iterator<Item = TextureSurfaceD
             encoder,
             texture_tracker,
             &device.alignments,
+            // MQ TODO
             device.zero_buffer.as_ref(),
             snatch_guard,
             device.instance_flags,
@@ -303,6 +304,7 @@ impl BakedCommands {
                     self.encoder.raw.as_mut(),
                     &mut device_tracker.textures,
                     &device.alignments,
+                    // MQ TODO
                     device.zero_buffer.as_ref(),
                     snatch_guard,
                     device.instance_flags,

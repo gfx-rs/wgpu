@@ -684,7 +684,9 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
         barriers: &[AccelerationStructureBarrier<'_, dyn DynBuffer>],
     ) {
         let barriers = barriers.iter().map(|barrier| AccelerationStructureBarrier {
-            acceleration_structure: barrier.acceleration_structure.expect_downcast_ref(),
+            acceleration_structure: barrier
+                .acceleration_structure
+                .map(|a| a.expect_downcast_ref()),
             usage: barrier.usage.clone(),
             src_dst_queue_index: barrier.src_dst_queue_index,
         });

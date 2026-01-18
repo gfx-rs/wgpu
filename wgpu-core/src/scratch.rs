@@ -13,8 +13,11 @@ pub struct ScratchBuffer {
 }
 
 impl ScratchBuffer {
-    pub(crate) fn new(device: &Arc<Device>, size: wgt::BufferSize) -> Result<Self, DeviceError> {
-        // MQ TODO
+    pub(crate) fn new(
+        device: &Arc<Device>,
+        size: wgt::BufferSize,
+        queue_idx: u32,
+    ) -> Result<Self, DeviceError> {
         let raw = unsafe {
             device
                 .raw()
@@ -23,6 +26,7 @@ impl ScratchBuffer {
                     size: size.get(),
                     usage: BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
                     memory_flags: hal::MemoryFlags::empty(),
+                    initial_queue: queue_idx,
                 })
                 .map_err(DeviceError::from_hal)?
         };

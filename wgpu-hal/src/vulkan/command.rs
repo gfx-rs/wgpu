@@ -771,8 +771,9 @@ impl crate::CommandEncoder for super::CommandEncoder {
     {
         let mut src_stages = vk::PipelineStageFlags::TOP_OF_PIPE;
         let mut dst_stages = vk::PipelineStageFlags::BOTTOM_OF_PIPE;
-        let vk_barriers = &mut self.temp.buffer_barriers;
-        vk_barriers.clear();
+        let vk_buffer_barriers = &mut self.temp.buffer_barriers;
+        vk_buffer_barriers.clear();
+        let mut vk_memory_barrier: Option<vk::MemoryBarrier> = None;
 
         for bar in barriers {
             let (src_stage, src_access) = conv::map_acceleration_structure_usage_to_barrier(
@@ -786,23 +787,34 @@ impl crate::CommandEncoder for super::CommandEncoder {
             src_stages |= src_stage;
             dst_stages |= dst_stage;
 
-            let mut barrier = vk::BufferMemoryBarrier::default()
-                .src_access_mask(src_access)
-                .dst_access_mask(dst_access)
-                .buffer(bar.acceleration_structure.raw)
-                .size(vk::WHOLE_SIZE)
-                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED);
+            if let Some(r#as) = bar.acceleration_structure {
+                let mut barrier = vk::BufferMemoryBarrier::default()
+                    .src_access_mask(src_access)
+                    .dst_access_mask(dst_access)
+                    .buffer(r#as.raw)
+                    .size(vk::WHOLE_SIZE)
+                    .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                    .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED);
 
-            if let Some((src, dst)) = bar.src_dst_queue_index {
-                let src_queue_family_index = self.device.queue_families_indices[src as usize].0;
-                let dst_queue_family_index = self.device.queue_families_indices[dst as usize].0;
-                assert!(src == self.queue_family_index || dst == self.queue_family_index);
-                barrier = barrier
-                    .src_queue_family_index(src_queue_family_index)
-                    .dst_queue_family_index(dst_queue_family_index);
+                if let Some((src, dst)) = bar.src_dst_queue_index {
+                    let src_queue_family_index = self.device.queue_families_indices[src as usize].0;
+                    let dst_queue_family_index = self.device.queue_families_indices[dst as usize].0;
+                    assert!(src == self.queue_family_index || dst == self.queue_family_index);
+                    barrier = barrier
+                        .src_queue_family_index(src_queue_family_index)
+                        .dst_queue_family_index(dst_queue_family_index);
+                }
+                vk_buffer_barriers.push(barrier);
+            } else if let Some(current) = &mut vk_memory_barrier {
+                current.src_access_mask |= src_access;
+                current.dst_access_mask |= dst_access;
+            } else {
+                vk_memory_barrier = Some(
+                    vk::MemoryBarrier::default()
+                        .src_access_mask(src_access)
+                        .dst_access_mask(dst_access),
+                );
             }
-            vk_barriers.push(barrier);
         }
 
         unsafe {
@@ -811,8 +823,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 src_stages,
                 dst_stages,
                 vk::DependencyFlags::empty(),
-                &[],
-                vk_barriers,
+                if let Some(ref bar) = vk_memory_barrier {
+                    core::slice::from_ref(bar)
+                } else {
+                    &[]
+                },
+                vk_buffer_barriers,
                 &[],
             )
         };

@@ -1,5 +1,3 @@
-// MQ TODO: this whole file
-
 use alloc::{boxed::Box, string::ToString, sync::Arc, vec, vec::Vec};
 use core::{
     iter,
@@ -43,7 +41,7 @@ use crate::{
     resource_log,
     scratch::ScratchBuffer,
     snatch::{SnatchGuard, Snatchable},
-    track::{self, Tracker, TrackerIndex},
+    track::{self, DeviceTracker, Tracker, TrackerIndex, TrackerIndexAllocators},
     FastHashMap, SubmissionIndex,
 };
 use crate::{device::resource::CommandIndices, resource::RawResourceAccess};
@@ -56,6 +54,10 @@ pub struct Queue {
     pub(crate) device: Arc<Device>,
     pub(crate) index: u32,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
+
+    /// Stores the state of buffers and textures.
+    pub(crate) trackers: Mutex<DeviceTracker>,
+    pub(crate) tracker_indices: TrackerIndexAllocators,
 }
 
 impl Queue {
@@ -79,7 +81,8 @@ impl Queue {
 
         let mut pending_writes = PendingWrites::new(pending_encoder, instance_flags);
 
-        let zero_buffer = device.zero_buffer.as_ref();
+        // MQ TODO
+        let zero_buffer: Box<dyn hal::DynCommandBuffer> = device.zero_buffer.as_ref();
         pending_writes.activate();
         unsafe {
             pending_writes
@@ -90,7 +93,7 @@ impl Queue {
                         from: wgt::BufferUses::empty(),
                         to: wgt::BufferUses::COPY_DST,
                     },
-                    dst_queue_index: None,
+                    src_dst_queue_index: None,
                 }]);
             pending_writes
                 .command_encoder
@@ -103,7 +106,7 @@ impl Queue {
                         from: wgt::BufferUses::COPY_DST,
                         to: wgt::BufferUses::COPY_SRC,
                     },
-                    dst_queue_index: None,
+                    src_dst_queue_index: None,
                 }]);
         }
 
@@ -112,6 +115,8 @@ impl Queue {
             device,
             pending_writes: Mutex::new(rank::QUEUE_PENDING_WRITES, pending_writes),
             life_tracker: Mutex::new(rank::QUEUE_LIFE_TRACKER, LifetimeTracker::new()),
+            index,
+            zero_buffer: ManuallyDrop::new(zero_buffer),
         })
     }
 
@@ -277,6 +282,7 @@ pub type SubmittedWorkDoneClosure = Box<dyn FnOnce() + 'static>;
 pub enum TempResource {
     StagingBuffer(FlushedStagingBuffer),
     ScratchBuffer(ScratchBuffer),
+    // MQ TODO: these might be in multiple queues at once, so maybe use an Arc?
     DestroyedBuffer(DestroyedBuffer),
     DestroyedTexture(DestroyedTexture),
 }
@@ -553,6 +559,8 @@ impl Queue {
         // Platform validation requires that the staging buffer always be
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
+
+        // MQ TODO
         let mut staging_buffer = StagingBuffer::new(&self.device, data_size)?;
 
         let staging_buffer = {
@@ -713,6 +721,7 @@ impl Queue {
                 from: wgt::BufferUses::MAP_WRITE,
                 to: wgt::BufferUses::COPY_SRC,
             },
+            src_dst_queue_index: None,
         })
         .chain(transition.map(|pending| pending.into_hal(&buffer, snatch_guard)))
         .collect::<Vec<_>>();
@@ -937,6 +946,7 @@ impl Queue {
                     from: wgt::BufferUses::MAP_WRITE,
                     to: wgt::BufferUses::COPY_SRC,
                 },
+                src_dst_queue_index: None,
             };
 
             let mut trackers = self.device.trackers.lock();
@@ -1188,6 +1198,8 @@ impl Queue {
             });
         }
     }
+
+    // MQ TODO: add another version of this
 
     pub fn submit(
         &self,
@@ -1445,11 +1457,12 @@ impl Queue {
                 }
 
                 if let Err(e) = unsafe {
-                    self.raw().submit(
-                        &hal_command_buffers,
-                        &submit_surface_textures,
-                        (fence.as_mut(), submit_index),
-                    )
+                    self.raw().submit(&mut [hal::QueueSubmitInfo {
+                        command_buffers: &hal_command_buffers,
+                        surface_textures: &submit_surface_textures,
+                        signal_fences: &mut [(fence.as_mut(), submit_index)],
+                        wait_fences: &mut [],
+                    }])
                 }
                 .map_err(|e| self.device.handle_hal_error(e))
                 {
@@ -1554,6 +1567,7 @@ impl Queue {
                     size: size_info.acceleration_structure_size,
                     format: hal::AccelerationStructureFormat::BottomLevel,
                     allow_compaction: false,
+                    initial_queue: self.index,
                 })
         }
         .map_err(DeviceError::from_hal)?;

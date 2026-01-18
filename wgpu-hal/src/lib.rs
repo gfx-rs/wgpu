@@ -2816,7 +2816,7 @@ bitflags::bitflags! {
 
 #[derive(Debug, Clone)]
 pub struct AccelerationStructureBarrier<'a, B: DynBuffer + ?Sized> {
-    pub acceleration_structure: &'a B,
+    pub acceleration_structure: Option<&'a B>,
     pub usage: StateTransition<AccelerationStructureUses>,
     pub src_dst_queue_index: Option<(u32, u32)>,
 }

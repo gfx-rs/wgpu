@@ -208,7 +208,7 @@ impl ExternalTextureParams {
 pub struct Device {
     raw: Box<dyn hal::DynDevice>,
     pub(crate) adapter: Arc<Adapter>,
-    pub(crate) queue: OnceCellOrLock<Weak<Queue>>,
+    pub(crate) queues: Vec<OnceCellOrLock<Weak<Queue>>>,
     /// The `label` from the descriptor used to create the resource.
     label: String,
 
@@ -250,9 +250,6 @@ pub struct Device {
     /// has been destroyed and its queues are empty.
     pub(crate) device_lost_closure: Mutex<Option<DeviceLostClosure>>,
 
-    /// Stores the state of buffers and textures.
-    pub(crate) trackers: Mutex<DeviceTracker>,
-    pub(crate) tracker_indices: TrackerIndexAllocators,
     /// Pool of bind group layouts, allowing deduplication.
     pub(crate) bgl_pool: ResourcePool<bgl::EntryMap, BindGroupLayout>,
     pub(crate) alignments: hal::Alignments,
@@ -730,15 +727,6 @@ impl Device {
                 }
             }
         }
-    }
-
-    // MQ TODO
-    pub fn get_queue(&self) -> Option<Arc<Queue>> {
-        self.queue.get().as_ref()?.upgrade()
-    }
-
-    pub fn set_queue(&self, queue: &Arc<Queue>) {
-        assert!(self.queue.set(Arc::downgrade(queue)).is_ok());
     }
 
     // MQ TODO
