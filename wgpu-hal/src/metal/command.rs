@@ -1551,10 +1551,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         unimplemented!()
     }
 
-    unsafe fn transition_acceleration_structures(
-        &mut self,
-        _barriers: crate::AccelerationStructureBarrier,
-    ) {
+    unsafe fn transition_acceleration_structures<'a, T>(&mut self, _barriers: T)
+    where
+        T: Iterator<
+            Item = crate::AccelerationStructureBarrier<'a, <Self::A as crate::Api>::Buffer>,
+        >,
+    {
         unimplemented!()
     }
 

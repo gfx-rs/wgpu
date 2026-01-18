@@ -1225,13 +1225,15 @@ pub trait Queue: WasmNotSendSync {
     /// [bg]: Api::BindGroup
     /// [rp]: Api::RenderPipeline
     /// [st]: Api::SurfaceTexture
-    unsafe fn submit<T>(&self, submits: T) -> Result<(), DeviceError>
-    where
-        T: SubmitIterator<
+    unsafe fn submit(
+        &self,
+        submits: &mut [QueueSubmitInfo<
+            '_,
             <Self::A as Api>::CommandBuffer,
             <Self::A as Api>::Fence,
             <Self::A as Api>::SurfaceTexture,
-        >;
+        >],
+    ) -> Result<(), DeviceError>;
     unsafe fn present(
         &self,
         surface: &<Self::A as Api>::Surface,
@@ -2847,11 +2849,6 @@ pub struct Telemetry {
 pub struct QueueSubmitInfo<'a, CB: ?Sized, F: ?Sized, ST: ?Sized> {
     command_buffers: &'a [&'a CB],
     surface_textures: &'a [&'a ST],
-    signal_fence: Option<(&'a mut F, FenceValue)>,
-    wait_fence: Option<(&'a mut F, FenceValue)>,
-}
-
-pub trait SubmitIterator<CB, F: ?Sized, ST: ?Sized> {
-    fn len(&self) -> usize;
-    fn next<'a>(&'a mut self) -> Option<QueueSubmitInfo<'a, CB, F, ST>>;
+    signal_fences: &'a mut [(&'a mut F, FenceValue)],
+    wait_fences: &'a mut [(&'a mut F, FenceValue)],
 }

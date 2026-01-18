@@ -1868,15 +1868,16 @@ impl super::Queue {
 impl crate::Queue for super::Queue {
     type A = super::Api;
 
-    unsafe fn submit<T>(&self, mut submits: T) -> Result<(), crate::DeviceError>
-    where
-        T: crate::SubmitIterator<
-            <Self::A as crate::Api>::CommandBuffer,
-            <Self::A as crate::Api>::Fence,
-            <Self::A as crate::Api>::SurfaceTexture,
-        >,
-    {
-        while let Some(submit) = submits.next() {
+    unsafe fn submit(
+        &self,
+        submits: &mut [crate::QueueSubmitInfo<
+            '_,
+            super::CommandBuffer,
+            super::Fence,
+            super::Texture,
+        >],
+    ) -> Result<(), crate::DeviceError> {
+        for submit in submits {
             let shared = Arc::clone(&self.shared);
             let gl = &shared.context.lock();
             for cmd_buf in submit.command_buffers.iter() {
@@ -1915,11 +1916,11 @@ impl crate::Queue for super::Queue {
                 }
             }
 
-            if let Some((signal_fence, signal_value)) = submit.signal_fence {
+            if let Some((signal_fence, signal_value)) = submit.signal_fences {
                 signal_fence.maintain(gl);
                 signal_fence.signal(gl, signal_value)?;
             }
-            assert!(submit.wait_fence.is_none());
+            assert!(submit.wait_fences.is_none());
 
             // This is extremely important. If we don't flush, the above fences may never
             // be signaled, particularly in headless contexts. Headed contexts will

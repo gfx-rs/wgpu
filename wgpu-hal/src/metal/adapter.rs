@@ -46,7 +46,9 @@ impl crate::Adapter for super::Adapter {
         features: wgt::Features,
         _limits: &wgt::Limits,
         _memory_hints: &wgt::MemoryHints,
+        queues: &[u32],
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
+        assert!(queues == &[0]);
         let queue = self
             .shared
             .device
@@ -84,10 +86,10 @@ impl crate::Adapter for super::Adapter {
                 features,
                 counters: Default::default(),
             },
-            queue: super::Queue {
+            queues: vec![super::Queue {
                 raw: Arc::new(Mutex::new(queue)),
                 timestamp_period,
-            },
+            }],
         })
     }
 

@@ -290,16 +290,12 @@ impl crate::Adapter for Context {
 impl crate::Queue for Context {
     type A = Api;
 
-    unsafe fn submit<T>(&self, mut submits: T) -> Result<(), crate::DeviceError>
-    where
-        T: crate::SubmitIterator<
-            <Self::A as crate::Api>::CommandBuffer,
-            <Self::A as crate::Api>::Fence,
-            <Self::A as crate::Api>::SurfaceTexture,
-        >,
-    {
+    unsafe fn submit(
+        &self,
+        submits: &mut [crate::QueueSubmitInfo<'_, CommandBuffer, Fence, Resource>],
+    ) -> Result<(), crate::DeviceError> {
         while let Some(submit) = submits.next() {
-            if let Some((fence, fence_value)) = &submit.wait_fence {
+            if let Some((fence, fence_value)) = &submit.wait_fences {
                 assert!(
                     fence.value.load(Ordering::Acquire) >= *fence_value,
                     "noop backend cannot have submissions that wait for fences which haven't already completed"
@@ -312,7 +308,7 @@ impl crate::Queue for Context {
                     cb.execute();
                 }
             }
-            if let Some((fence, fence_value)) = &submit.signal_fence {
+            if let Some((fence, fence_value)) = &submit.signal_fences {
                 fence.value.store(*fence_value, Ordering::Release);
             }
         }

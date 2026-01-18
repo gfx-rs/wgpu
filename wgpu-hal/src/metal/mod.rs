@@ -167,6 +167,7 @@ impl crate::Instance for Instance {
                         subgroup_min_size: 4,
                         subgroup_max_size: 64,
                         transient_saves_memory: shared.private_caps.supports_memoryless_storage,
+                        supported_queue_families: vec![wgt::QueueUsageFlags::all()],
                     },
                     features: shared.private_caps.features(),
                     capabilities: shared.private_caps.capabilities(),
@@ -443,55 +444,56 @@ impl crate::Queue for Queue {
 
     unsafe fn submit(
         &self,
-        command_buffers: &[&CommandBuffer],
-        _surface_textures: &[&SurfaceTexture],
-        (signal_fence, signal_value): (&mut Fence, crate::FenceValue),
+        submits: &mut [crate::QueueSubmitInfo<'_, CommandBuffer, Fence, SurfaceTexture>],
     ) -> Result<(), crate::DeviceError> {
         objc::rc::autoreleasepool(|| {
-            let extra_command_buffer = {
-                let completed_value = Arc::clone(&signal_fence.completed_value);
-                let block = block::ConcreteBlock::new(move |_cmd_buf| {
-                    completed_value.store(signal_value, atomic::Ordering::Release);
-                })
-                .copy();
+            for submit in submits {
+                let extra_command_buffer = {
+                    let completed_value = Arc::clone(&signal_fence.completed_value);
+                    let block = block::ConcreteBlock::new(move |_cmd_buf| {
+                        completed_value.store(signal_value, atomic::Ordering::Release);
+                    })
+                    .copy();
 
-                let raw = match command_buffers.last() {
-                    Some(&cmd_buf) => cmd_buf.raw.to_owned(),
-                    None => {
-                        let queue = self.raw.lock();
-                        queue
-                            .new_command_buffer_with_unretained_references()
-                            .to_owned()
+                    let raw = match submit.command_buffers.last() {
+                        Some(&cmd_buf) => cmd_buf.raw.to_owned(),
+                        None => {
+                            let queue = self.raw.lock();
+                            queue
+                                .new_command_buffer_with_unretained_references()
+                                .to_owned()
+                        }
+                    };
+                    raw.set_label("(wgpu internal) Signal");
+                    raw.add_completed_handler(&block);
+
+                    signal_fence.maintain();
+                    signal_fence
+                        .pending_command_buffers
+                        .push((signal_value, raw.to_owned()));
+
+                    if let Some(shared_event) = signal_fence.shared_event.as_ref() {
+                        raw.encode_signal_event(shared_event, signal_value);
+                    }
+                    // only return an extra one if it's extra
+                    match submit.command_buffers.last() {
+                        Some(_) => None,
+                        None => Some(raw),
                     }
                 };
-                raw.set_label("(wgpu internal) Signal");
-                raw.add_completed_handler(&block);
 
-                signal_fence.maintain();
-                signal_fence
-                    .pending_command_buffers
-                    .push((signal_value, raw.to_owned()));
-
-                if let Some(shared_event) = signal_fence.shared_event.as_ref() {
-                    raw.encode_signal_event(shared_event, signal_value);
+                for cmd_buffer in submit.command_buffers {
+                    cmd_buffer.raw.commit();
                 }
-                // only return an extra one if it's extra
-                match command_buffers.last() {
-                    Some(_) => None,
-                    None => Some(raw),
+
+                if let Some(raw) = extra_command_buffer {
+                    raw.commit();
                 }
-            };
-
-            for cmd_buffer in command_buffers {
-                cmd_buffer.raw.commit();
-            }
-
-            if let Some(raw) = extra_command_buffer {
-                raw.commit();
             }
         });
         Ok(())
     }
+
     unsafe fn present(
         &self,
         _surface: &Surface,

@@ -1,5 +1,3 @@
-use core::marker::PhantomData;
-
 use alloc::{boxed::Box, vec::Vec};
 
 use crate::{
@@ -40,28 +38,64 @@ impl<Q: Queue + DynResource> DynQueue for Q {
         if submits.is_empty() {
             return Ok(());
         }
-        let max_cb_count = submits
-            .iter()
-            .map(|a| a.command_buffers.iter().len())
-            .max()
-            .unwrap();
-        let max_st_count = submits
-            .iter()
-            .map(|a| a.surface_textures.iter().len())
-            .max()
-            .unwrap();
 
-        unsafe {
-            Q::submit(
-                self,
-                TypedSubmitIterator::<'_, Q::A, _> {
-                    submits: submits.iter_mut(),
-                    command_buffers: Vec::with_capacity(max_cb_count),
-                    surface_textures: Vec::with_capacity(max_st_count),
-                    _p: Default::default(),
-                },
-            )
+        struct SubmitContext {
+            cb_count: usize,
+            st_count: usize,
+            signal_count: usize,
+            wait_count: usize,
         }
+        let mut command_buffers = Vec::new();
+        let mut surface_textures = Vec::new();
+        let mut fences: Vec<(&mut <Q::A as crate::Api>::Fence, u64)> = Vec::new();
+        let mut contexts = Vec::new();
+        for submit in submits.iter_mut() {
+            contexts.push(SubmitContext {
+                cb_count: submit.command_buffers.len(),
+                st_count: submit.surface_textures.len(),
+                signal_count: submit.signal_fences.len(),
+                wait_count: submit.wait_fences.len(),
+            });
+            for cb in submit.command_buffers {
+                command_buffers.push((**cb).expect_downcast_ref());
+            }
+            for st in submit.surface_textures {
+                command_buffers.push((**st).expect_downcast_ref());
+            }
+            for fence in submit.signal_fences.iter_mut() {
+                fences.push(((*fence.0).expect_downcast_mut(), fence.1));
+            }
+            for fence in submit.wait_fences.iter_mut() {
+                fences.push(((*fence.0).expect_downcast_mut(), fence.1));
+            }
+        }
+
+        let mut current_cb_slice: &[&<Q::A as crate::Api>::CommandBuffer] = &command_buffers;
+        let mut current_texture_slice: &[&<Q::A as crate::Api>::SurfaceTexture] =
+            &mut surface_textures;
+        let mut current_fence_slice: &mut [(&mut <Q::A as crate::Api>::Fence, u64)] = &mut fences;
+        let mut out_submits = Vec::new();
+
+        for ctx in contexts {
+            let (cbs, new_current_cb_slice) = current_cb_slice.split_at(ctx.cb_count);
+            current_cb_slice = new_current_cb_slice;
+            let (sts, new_current_texture_slice) = current_texture_slice.split_at(ctx.st_count);
+            current_texture_slice = new_current_texture_slice;
+            let (signal_fences, new_current_fence_slice) =
+                current_fence_slice.split_at_mut(ctx.signal_count);
+            let (wait_fences, new_current_fence_slice) =
+                new_current_fence_slice.split_at_mut(ctx.wait_count);
+            current_fence_slice = new_current_fence_slice;
+
+            out_submits.push(crate::QueueSubmitInfo {
+                command_buffers: cbs,
+                surface_textures: sts,
+                signal_fences,
+                wait_fences,
+            })
+        }
+
+        unsafe { Q::submit(self, &mut out_submits) }
     }
 
     unsafe fn present(
@@ -75,70 +109,5 @@ impl<Q: Queue + DynResource> DynQueue for Q {
 
     unsafe fn get_timestamp_period(&self) -> f32 {
         unsafe { Q::get_timestamp_period(self) }
-    }
-}
-
-struct TypedSubmitIterator<'a, A: crate::Api, I>
-where
-    I: Iterator<
-            Item = &'a mut crate::QueueSubmitInfo<
-                'a,
-                dyn DynCommandBuffer,
-                dyn DynFence,
-                dyn DynSurfaceTexture,
-            >,
-        > + ExactSizeIterator,
-{
-    submits: I,
-    command_buffers: Vec<&'a A::CommandBuffer>,
-    surface_textures: Vec<&'a A::SurfaceTexture>,
-    _p: PhantomData<A>,
-}
-impl<'a, A: crate::Api, I> crate::SubmitIterator<A::CommandBuffer, A::Fence, A::SurfaceTexture>
-    for TypedSubmitIterator<'a, A, I>
-where
-    I: ExactSizeIterator
-        + Iterator<
-            Item = &'a mut crate::QueueSubmitInfo<
-                'a,
-                dyn DynCommandBuffer,
-                dyn DynFence,
-                dyn DynSurfaceTexture,
-            >,
-        >,
-{
-    fn len(&self) -> usize {
-        self.submits.len()
-    }
-    fn next<'b>(
-        &'b mut self,
-    ) -> Option<crate::QueueSubmitInfo<'b, A::CommandBuffer, A::Fence, A::SurfaceTexture>> {
-        if let Some(submit) = self.submits.next() {
-            self.command_buffers.clear();
-            self.command_buffers.reserve(submit.command_buffers.len());
-            for cb in submit.command_buffers {
-                self.command_buffers.push((**cb).expect_downcast_ref());
-            }
-            self.surface_textures.clear();
-            for st in submit.surface_textures {
-                self.surface_textures.push((**st).expect_downcast_ref());
-            }
-            let signal_fence = submit
-                .signal_fence
-                .as_mut()
-                .map(|a| (a.0.expect_downcast_mut(), a.1));
-            let wait_fence = submit
-                .wait_fence
-                .as_mut()
-                .map(|a| (a.0.expect_downcast_mut(), a.1));
-            Some(crate::QueueSubmitInfo {
-                command_buffers: &self.command_buffers,
-                surface_textures: &self.surface_textures,
-                signal_fence,
-                wait_fence,
-            })
-        } else {
-            None
-        }
     }
 }

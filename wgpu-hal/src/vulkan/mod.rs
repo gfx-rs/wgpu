@@ -1236,10 +1236,10 @@ impl Fence {
 impl crate::Queue for Queue {
     type A = Api;
 
-    unsafe fn submit<T>(&self, mut submits: T) -> Result<(), crate::DeviceError>
-    where
-        T: crate::SubmitIterator<CommandBuffer, Fence, SurfaceTexture>,
-    {
+    unsafe fn submit(
+        &self,
+        submits: &mut [crate::QueueSubmitInfo<'_, CommandBuffer, Fence, SurfaceTexture>],
+    ) -> Result<(), crate::DeviceError> {
         struct SubmitContext<'a> {
             wait_semaphores: SemaphoreList,
             signal_semaphores: SemaphoreList,
@@ -1259,21 +1259,25 @@ impl crate::Queue for Queue {
         }
 
         for (
-            &mut SubmitContext {
-                ref mut wait_semaphores,
-                ref mut signal_semaphores,
-                ref mut vk_cmd_buffers,
-                ref mut vk_timeline_info,
-            },
-            vk_submit,
-        ) in submit_contexts.iter_mut().zip(vk_submits.iter_mut())
-        {
-            let super::QueueSubmitInfo {
+            super::QueueSubmitInfo {
                 command_buffers,
                 surface_textures,
-                ref mut signal_fence,
-                ref mut wait_fence,
-            } = submits.next().unwrap();
+                ref mut signal_fences,
+                ref mut wait_fences,
+            },
+            (
+                &mut SubmitContext {
+                    ref mut wait_semaphores,
+                    ref mut signal_semaphores,
+                    ref mut vk_cmd_buffers,
+                    ref mut vk_timeline_info,
+                },
+                vk_submit,
+            ),
+        ) in submits
+            .iter_mut
+            .zip(submit_contexts.iter_mut().zip(vk_submits.iter_mut()))
+        {
             // Double check that the same swapchain image isn't being given to us multiple times,
             // as that will deadlock when we try to lock them all.
             debug_assert!(
