@@ -167,7 +167,10 @@ impl crate::Instance for Instance {
                         subgroup_min_size: 4,
                         subgroup_max_size: 64,
                         transient_saves_memory: shared.private_caps.supports_memoryless_storage,
-                        supported_queue_families: vec![wgt::QueueUsageFlags::all()],
+                        supported_queue_families: vec![
+                            wgt::QueueUsageFlags::all(),
+                            wgt::QueueUsageFlags::TRANSFER,
+                        ],
                     },
                     features: shared.private_caps.features(),
                     capabilities: shared.private_caps.capabilities(),
@@ -446,19 +449,29 @@ impl crate::Queue for Queue {
         &self,
         submits: &mut [crate::QueueSubmitInfo<'_, CommandBuffer, Fence, SurfaceTexture>],
     ) -> Result<(), crate::DeviceError> {
+        if submits.is_empty() {
+            return Ok(());
+        }
         objc::rc::autoreleasepool(|| {
             for crate::QueueSubmitInfo {
                 command_buffers,
                 surface_textures: _,
                 signal_fences,
-                wait_fences: _,
+                wait_fences,
             } in submits
             {
-                let (ref mut signal_fence, signal_value) = signal_fences[0];
-                let extra_command_buffer = {
-                    let completed_value = Arc::clone(&signal_fence.completed_value);
+                let last_command_buffer = {
+                    let mut needing_completed_values = Vec::new();
+                    for &(ref fence, value) in signal_fences.iter() {
+                        needing_completed_values.push((Arc::clone(&fence.completed_value), value));
+                    }
+                    let needing_completed_values = Arc::new(needing_completed_values);
+
                     let block = block::ConcreteBlock::new(move |_cmd_buf| {
-                        completed_value.store(signal_value, atomic::Ordering::Release);
+                        for &(ref completed_value, signal_value) in needing_completed_values.iter()
+                        {
+                            completed_value.store(signal_value, atomic::Ordering::Release);
+                        }
                     })
                     .copy();
 
@@ -474,13 +487,15 @@ impl crate::Queue for Queue {
                     raw.set_label("(wgpu internal) Signal");
                     raw.add_completed_handler(&block);
 
-                    signal_fence.maintain();
-                    signal_fence
-                        .pending_command_buffers
-                        .push((signal_value, raw.to_owned()));
+                    for &mut (ref mut signal_fence, signal_value) in signal_fences.iter_mut() {
+                        signal_fence.maintain();
+                        signal_fence
+                            .pending_command_buffers
+                            .push((signal_value, raw.to_owned()));
 
-                    if let Some(shared_event) = signal_fence.shared_event.as_ref() {
-                        raw.encode_signal_event(shared_event, signal_value);
+                        if let Some(shared_event) = signal_fence.shared_event.as_ref() {
+                            raw.encode_signal_event(shared_event, signal_value);
+                        }
                     }
                     // only return an extra one if it's extra
                     match command_buffers.last() {
@@ -489,11 +504,29 @@ impl crate::Queue for Queue {
                     }
                 };
 
+                let fist_command_buffer = if !wait_fences.is_empty() {
+                    let raw = self
+                        .raw
+                        .lock()
+                        .new_command_buffer_with_unretained_references()
+                        .to_owned();
+                    for &mut (ref mut fence, value) in wait_fences.iter_mut() {
+                        raw.encode_wait_for_event(fence.raw_shared_event().unwrap(), value);
+                    }
+                    Some(raw)
+                } else {
+                    None
+                };
+
+                if let Some(raw) = fist_command_buffer {
+                    raw.commit();
+                }
+
                 for cmd_buffer in command_buffers.iter() {
                     cmd_buffer.raw.commit();
                 }
 
-                if let Some(raw) = extra_command_buffer {
+                if let Some(raw) = last_command_buffer {
                     raw.commit();
                 }
             }

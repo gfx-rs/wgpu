@@ -46,14 +46,8 @@ impl crate::Adapter for super::Adapter {
         features: wgt::Features,
         _limits: &wgt::Limits,
         _memory_hints: &wgt::MemoryHints,
-        queues: &[u32],
+        queues_indices: &[u32],
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        assert_eq!(queues, [0]);
-        let queue = self
-            .shared
-            .device
-            .new_command_queue_with_max_command_buffer_count(MAX_COMMAND_BUFFERS);
-
         // Acquiring the meaning of timestamp ticks is hard with Metal!
         // The only thing there is a method correlating cpu & gpu timestamps (`device.sample_timestamps`).
         // Users are supposed to call this method twice and calculate the difference,
@@ -80,16 +74,25 @@ impl crate::Adapter for super::Adapter {
             1.0
         };
 
+        let mut queues = Vec::new();
+        for _ in queues_indices {
+            let queue = self
+                .shared
+                .device
+                .new_command_queue_with_max_command_buffer_count(MAX_COMMAND_BUFFERS);
+            queues.push(super::Queue {
+                raw: Arc::new(Mutex::new(queue)),
+                timestamp_period,
+            });
+        }
+
         Ok(crate::OpenDevice {
             device: super::Device {
                 shared: Arc::clone(&self.shared),
                 features,
                 counters: Default::default(),
             },
-            queues: vec![super::Queue {
-                raw: Arc::new(Mutex::new(queue)),
-                timestamp_period,
-            }],
+            queues,
         })
     }
 
