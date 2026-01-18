@@ -1275,7 +1275,7 @@ impl crate::Queue for Queue {
                 vk_submit,
             ),
         ) in submits
-            .iter_mut
+            .iter_mut()
             .zip(submit_contexts.iter_mut().zip(vk_submits.iter_mut()))
         {
             // Double check that the same swapchain image isn't being given to us multiple times,
@@ -1284,7 +1284,7 @@ impl crate::Queue for Queue {
                 {
                     let mut check = HashSet::with_capacity(surface_textures.len());
                     // We compare the Box by pointer, as Eq isn't well defined for SurfaceSemaphores.
-                    for st in surface_textures {
+                    for st in surface_textures.iter() {
                         let ptr: *const () = <*const _>::cast(&*st.metadata);
                         check.insert(ptr as usize);
                     }
@@ -1299,9 +1299,7 @@ impl crate::Queue for Queue {
                 .collect::<Vec<_>>();
 
             for mut semaphores in locked_swapchain_semaphores {
-                if let Some(&(_, signal_value)) = signal_fence.as_ref() {
-                    semaphores.set_used_fence_value(signal_value);
-                }
+                semaphores.set_used_fence_value(signal_fences[0].1);
 
                 // If we're the first submission to operate on this image, wait on
                 // its acquire semaphore, to make sure the presentation engine is
@@ -1335,7 +1333,7 @@ impl crate::Queue for Queue {
             signal_semaphores.push_signal(SemaphoreType::Binary(semaphore_state.signal));
 
             // We need to signal our wgpu::Fence if we have one, this adds it to the signal list.
-            if let Some((signal_fence, signal_value)) = signal_fence {
+            for (signal_fence, signal_value) in signal_fences.iter_mut() {
                 signal_fence.maintain(&self.device.raw)?;
                 match **signal_fence {
                     Fence::TimelineSemaphore(raw) => {
@@ -1359,7 +1357,7 @@ impl crate::Queue for Queue {
                     }
                 }
             }
-            if let Some((wait_fence, wait_value)) = wait_fence {
+            for (wait_fence, wait_value) in wait_fences.iter_mut() {
                 wait_fence.maintain(&self.device.raw)?;
                 match **wait_fence {
                     Fence::TimelineSemaphore(raw) => {

@@ -1214,8 +1214,10 @@ pub trait Queue: WasmNotSendSync {
     /// - The [`Fence`] passed as `signal_fence.0` must remain alive until
     ///   all submissions that will signal it have completed.
     ///
-    /// - If the devie has a single queue, exactly one signal fence must be set,
+    /// - If the device has a single queue, on each submit, exactly one signal fence must be set,
     ///   and zero wait fences must be set.
+    ///
+    /// - At least one signal fence must be set on every submit.
     ///
     /// [`Fence`]: Api::Fence
     /// [cb]: Api::CommandBuffer
