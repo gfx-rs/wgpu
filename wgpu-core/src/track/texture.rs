@@ -1,5 +1,3 @@
-// MQ TODO: this whole file
-
 //! Texture Trackers
 //!
 //! Texture trackers are significantly more complicated than
@@ -1310,6 +1308,7 @@ unsafe fn barrier(
                     from: current_simple,
                     to: new_simple,
                 },
+                // MQ TODO
             });
         }
         (SingleOrManyStates::Single(current_simple), SingleOrManyStates::Many(new_many)) => {
@@ -1329,6 +1328,7 @@ unsafe fn barrier(
                         from: current_simple,
                         to: new_state,
                     },
+                    // MQ TODO
                 });
             }
         }
@@ -1355,6 +1355,7 @@ unsafe fn barrier(
                             from: current_layer_state,
                             to: new_simple,
                         },
+                        // MQ TODO
                     });
                 }
             }
@@ -1387,6 +1388,7 @@ unsafe fn barrier(
                                 from: *current_layer_state,
                                 to: new_state,
                             },
+                            // MQ TODO
                         });
                     }
                 }

@@ -95,8 +95,6 @@ Device <- CommandBuffer = insert(device.start, device.end, buffer.start, buffer.
 [`UsageScope`]: https://gpuweb.github.io/gpuweb/#programming-model-synchronization
 */
 
-// MQ TODO: this whole file
-
 mod blas;
 mod buffer;
 mod metadata;
@@ -263,7 +261,7 @@ pub(crate) struct PendingTransition<S: ResourceUses> {
     pub id: u32,
     pub selector: S::Selector,
     pub usage: hal::StateTransition<S>,
-    pub dst_queue_index: Option<u32>,
+    pub src_dst_queue_index: Option<(u32, u32)>,
 }
 
 pub(crate) type PendingTransitionList = Vec<PendingTransition<wgt::TextureUses>>;
@@ -279,7 +277,7 @@ impl PendingTransition<wgt::BufferUses> {
         hal::BufferBarrier {
             buffer,
             usage: self.usage,
-            dst_queue_index: self.dst_queue_index,
+            src_dst_queue_index: self.src_dst_queue_index,
         }
     }
 }
@@ -309,7 +307,7 @@ impl PendingTransition<wgt::TextureUses> {
                 array_layer_count: Some(layer_count),
             },
             usage: self.usage,
-            dst_queue_index: self.dst_queue_index,
+            src_dst_queue_index: self.src_dst_queue_index,
         }
     }
 }
@@ -600,6 +598,8 @@ impl<'a> UsageScope<'a> {
     }
 }
 
+// MQ TODO: make this per-queue
+
 /// A tracker used by Device.
 pub(crate) struct DeviceTracker {
     pub buffers: DeviceBufferTracker,
@@ -614,6 +614,8 @@ impl DeviceTracker {
         }
     }
 }
+
+// MQ TODO: make this per-queue
 
 /// A full double sided tracker used by CommandBuffers.
 pub(crate) struct Tracker {

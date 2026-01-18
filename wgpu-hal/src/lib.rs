@@ -2544,7 +2544,7 @@ pub struct TextureBarrier<'a, T: DynTexture + ?Sized> {
     pub range: wgt::ImageSubresourceRange,
     pub usage: StateTransition<wgt::TextureUses>,
     /// When transferring ownership
-    pub dst_queue_index: Option<u32>,
+    pub src_dst_queue_index: Option<(u32, u32)>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -2818,7 +2818,7 @@ bitflags::bitflags! {
 pub struct AccelerationStructureBarrier<'a, B: DynBuffer + ?Sized> {
     pub acceleration_structure: &'a B,
     pub usage: StateTransition<AccelerationStructureUses>,
-    pub dst_queue_index: Option<u32>,
+    pub src_dst_queue_index: Option<(u32, u32)>,
 }
 
 #[derive(Debug, Copy, Clone)]

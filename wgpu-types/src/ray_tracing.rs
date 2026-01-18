@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 #[cfg(doc)]
 use crate::{Features, VertexFormat};
 
+// MQ TODO: BLAS_USES?
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Descriptor for all size defining attributes of a single triangle geometry inside a bottom level acceleration structure.

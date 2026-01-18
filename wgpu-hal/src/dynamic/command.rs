@@ -248,7 +248,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
             texture: barrier.texture.expect_downcast_ref(),
             usage: barrier.usage.clone(),
             range: barrier.range,
-            dst_queue_index: barrier.dst_queue_index,
+            src_dst_queue_index: barrier.src_dst_queue_index,
         });
         unsafe { self.transition_textures(barriers) };
     }
@@ -686,7 +686,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
         let barriers = barriers.iter().map(|barrier| AccelerationStructureBarrier {
             acceleration_structure: barrier.acceleration_structure.expect_downcast_ref(),
             usage: barrier.usage.clone(),
-            dst_queue_index: barrier.dst_queue_index,
+            src_dst_queue_index: barrier.src_dst_queue_index,
         });
         unsafe { self.transition_acceleration_structures(barriers) };
     }

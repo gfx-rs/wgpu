@@ -151,6 +151,7 @@ bitflags::bitflags! {
         /// If a usage is ordered, then if the buffer state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
         const ORDERED = Self::INCLUSIVE.bits() | Self::MAP_WRITE.bits();
+        // MQ TODO: we should represent "not owned" here
     }
 }
 
