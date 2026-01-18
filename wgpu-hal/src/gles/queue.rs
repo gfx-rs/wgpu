@@ -1878,6 +1878,7 @@ impl crate::Queue for super::Queue {
         >],
     ) -> Result<(), crate::DeviceError> {
         for submit in submits {
+            assert!(submit.wait_fences.is_empty());
             let shared = Arc::clone(&self.shared);
             let gl = &shared.context.lock();
             for cmd_buf in submit.command_buffers.iter() {
@@ -1916,11 +1917,10 @@ impl crate::Queue for super::Queue {
                 }
             }
 
-            if let Some((signal_fence, signal_value)) = submit.signal_fences {
+            for (signal_fence, signal_value) in submit.signal_fences.iter_mut() {
                 signal_fence.maintain(gl);
-                signal_fence.signal(gl, signal_value)?;
+                signal_fence.signal(gl, *signal_value)?;
             }
-            assert!(submit.wait_fences.is_none());
 
             // This is extremely important. If we don't flush, the above fences may never
             // be signaled, particularly in headless contexts. Headed contexts will
