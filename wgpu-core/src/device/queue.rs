@@ -52,6 +52,8 @@ pub struct Queue {
     life_tracker: Mutex<LifetimeTracker>,
     // The device needs to be dropped last (`Device.zero_buffer` might be referenced by the encoder in pending writes).
     pub(crate) device: Arc<Device>,
+    pub(crate) index: u32,
+    pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
 }
 
 impl Queue {
@@ -59,6 +61,7 @@ impl Queue {
         device: Arc<Device>,
         raw: Box<dyn hal::DynQueue>,
         instance_flags: wgt::InstanceFlags,
+        index: u32,
     ) -> Result<Self, DeviceError> {
         let pending_encoder = device
             .command_allocator
@@ -85,6 +88,7 @@ impl Queue {
                         from: wgt::BufferUses::empty(),
                         to: wgt::BufferUses::COPY_DST,
                     },
+                    dst_queue_index: None,
                 }]);
             pending_writes
                 .command_encoder
@@ -97,6 +101,7 @@ impl Queue {
                         from: wgt::BufferUses::COPY_DST,
                         to: wgt::BufferUses::COPY_SRC,
                     },
+                    dst_queue_index: None,
                 }]);
         }
 
