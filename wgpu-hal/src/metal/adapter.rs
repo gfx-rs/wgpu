@@ -48,7 +48,7 @@ impl crate::Adapter for super::Adapter {
         _memory_hints: &wgt::MemoryHints,
         queues: &[u32],
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        assert!(queues == &[0]);
+        assert_eq!(queues, [0]);
         let queue = self
             .shared
             .device

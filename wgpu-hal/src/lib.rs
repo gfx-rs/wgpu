@@ -1227,6 +1227,7 @@ pub trait Queue: WasmNotSendSync {
     /// [bg]: Api::BindGroup
     /// [rp]: Api::RenderPipeline
     /// [st]: Api::SurfaceTexture
+    #[allow(clippy::type_complexity)]
     unsafe fn submit(
         &self,
         submits: &mut [QueueSubmitInfo<

@@ -1042,8 +1042,6 @@ impl fmt::Debug for CommandEncoder {
 #[derive(Debug)]
 pub struct CommandBuffer {
     raw: vk::CommandBuffer,
-    wait_fences: Vec<(Fence, crate::FenceValue)>,
-    signal_fences: Vec<(Fence, crate::FenceValue)>,
 }
 
 impl crate::DynCommandBuffer for CommandBuffer {}

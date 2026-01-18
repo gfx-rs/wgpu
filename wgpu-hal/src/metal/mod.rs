@@ -447,7 +447,14 @@ impl crate::Queue for Queue {
         submits: &mut [crate::QueueSubmitInfo<'_, CommandBuffer, Fence, SurfaceTexture>],
     ) -> Result<(), crate::DeviceError> {
         objc::rc::autoreleasepool(|| {
-            for submit in submits {
+            for crate::QueueSubmitInfo {
+                command_buffers,
+                surface_textures: _,
+                signal_fences,
+                wait_fences: _,
+            } in submits
+            {
+                let (ref mut signal_fence, signal_value) = signal_fences[0];
                 let extra_command_buffer = {
                     let completed_value = Arc::clone(&signal_fence.completed_value);
                     let block = block::ConcreteBlock::new(move |_cmd_buf| {
@@ -455,7 +462,7 @@ impl crate::Queue for Queue {
                     })
                     .copy();
 
-                    let raw = match submit.command_buffers.last() {
+                    let raw = match command_buffers.last() {
                         Some(&cmd_buf) => cmd_buf.raw.to_owned(),
                         None => {
                             let queue = self.raw.lock();
@@ -476,13 +483,13 @@ impl crate::Queue for Queue {
                         raw.encode_signal_event(shared_event, signal_value);
                     }
                     // only return an extra one if it's extra
-                    match submit.command_buffers.last() {
+                    match command_buffers.last() {
                         Some(_) => None,
                         None => Some(raw),
                     }
                 };
 
-                for cmd_buffer in submit.command_buffers {
+                for cmd_buffer in command_buffers.iter() {
                     cmd_buffer.raw.commit();
                 }
 
