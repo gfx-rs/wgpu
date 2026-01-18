@@ -279,6 +279,7 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
             wgpu_types::Features::empty(),
             &wgpu_types::Limits::downlevel_defaults(),
             &wgpu_types::MemoryHints::default(),
+            &[0],
         )
     }
     .unwrap();
@@ -305,7 +306,7 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
         od.device
             .create_command_encoder(&hal::CommandEncoderDescriptor {
                 label: None,
-                queue: &od.queue,
+                queue: &od.queues[0],
             })
             .unwrap()
     };
@@ -338,6 +339,13 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
         encoder.begin_render_pass(&rp_desc).unwrap();
         encoder.end_render_pass();
         let cmd_buf = encoder.end_encoding().unwrap();
-        od.queue.submit(&[&cmd_buf], &[], (&mut fence, 0)).unwrap();
+        od.queues[0]
+            .submit(&mut [hal::QueueSubmitInfo {
+                command_buffers: &[&cmd_buf],
+                surface_textures: &[],
+                signal_fences: &mut [(&mut fence, 0)],
+                wait_fences: &mut [],
+            }])
+            .unwrap();
     }
 }
