@@ -30,6 +30,7 @@ use wgt::{
 };
 
 const FRAME_TIMEOUT_MS: u32 = 1000;
+const SURFACE_QUEUE_ID: u32 = 0;
 
 #[derive(Debug)]
 pub(crate) struct Presentation {
@@ -193,6 +194,7 @@ impl Surface {
                     dimension: wgt::TextureDimension::D2,
                     usage: config.usage,
                     view_formats: config.view_formats,
+                    initial_queue: SURFACE_QUEUE_ID,
                 };
                 let format_features = wgt::TextureFormatFeatures {
                     allowed_usages: wgt::TextureUsages::RENDER_ATTACHMENT,
@@ -237,7 +239,10 @@ impl Surface {
 
                 let texture = Arc::new(texture);
 
+                // MQ TODO: unwrap here is bad
                 device
+                    .get_queue(SURFACE_QUEUE_ID)
+                    .unwrap()
                     .trackers
                     .lock()
                     .textures
@@ -288,7 +293,7 @@ impl Surface {
 
         device.check_is_valid()?;
         // MQ TODO
-        let queue = device.get_queue().unwrap();
+        let queue = device.get_queue(SURFACE_QUEUE_ID).unwrap();
 
         let texture = present
             .acquired_texture
