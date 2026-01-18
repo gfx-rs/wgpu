@@ -276,15 +276,17 @@ impl<A: hal::Api> Example<A> {
             .expect("Surface doesn't support presentation");
         log::info!("Surface caps: {surface_caps:#?}");
 
-        let hal::OpenDevice { device, queue } = unsafe {
+        let hal::OpenDevice { device, queues } = unsafe {
             adapter
                 .open(
                     features,
                     &wgpu_types::Limits::default(),
                     &wgpu_types::MemoryHints::Performance,
+                    &[0],
                 )
                 .unwrap()
         };
+        let queue = queues.into_iter().next().unwrap();
 
         let window_size: (u32, u32) = window.inner_size().into();
         dbg!(&surface_caps.formats);
@@ -430,6 +432,7 @@ impl<A: hal::Api> Example<A> {
                     usage: wgpu_types::BufferUses::MAP_WRITE
                         | wgpu_types::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
+                    initial_queue: 0,
                 })
                 .unwrap();
 
@@ -457,6 +460,7 @@ impl<A: hal::Api> Example<A> {
                             | wgpu_types::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                         memory_flags: hal::MemoryFlags::TRANSIENT
                             | hal::MemoryFlags::PREFER_COHERENT,
+                        initial_queue: 0,
                     })
                     .unwrap();
 
@@ -532,6 +536,7 @@ impl<A: hal::Api> Example<A> {
                 size: blas_sizes.acceleration_structure_size,
                 format: hal::AccelerationStructureFormat::BottomLevel,
                 allow_compaction: false,
+                initial_queue: 0,
             })
         }
         .unwrap();
@@ -542,6 +547,7 @@ impl<A: hal::Api> Example<A> {
                 size: tlas_sizes.acceleration_structure_size,
                 format: hal::AccelerationStructureFormat::TopLevel,
                 allow_compaction: false,
+                initial_queue: 0,
             })
         }
         .unwrap();
@@ -565,6 +571,7 @@ impl<A: hal::Api> Example<A> {
                     size: uniforms_size as u64,
                     usage: wgpu_types::BufferUses::MAP_WRITE | wgpu_types::BufferUses::UNIFORM,
                     memory_flags: hal::MemoryFlags::PREFER_COHERENT,
+                    initial_queue: 0,
                 })
                 .unwrap();
 
@@ -595,6 +602,7 @@ impl<A: hal::Api> Example<A> {
             usage: wgpu_types::TextureUses::STORAGE_READ_WRITE | wgpu_types::TextureUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::empty(),
             view_formats: vec![wgpu_types::TextureFormat::Rgba8Unorm],
+            initial_queue: 0,
         };
         let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
 
@@ -658,6 +666,7 @@ impl<A: hal::Api> Example<A> {
                         .max(tlas_sizes.build_scratch_size),
                     usage: wgpu_types::BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
                     memory_flags: hal::MemoryFlags::empty(),
+                    initial_queue: 0,
                 })
                 .unwrap()
         };
@@ -711,6 +720,7 @@ impl<A: hal::Api> Example<A> {
                     usage: wgpu_types::BufferUses::MAP_WRITE
                         | wgpu_types::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
+                    initial_queue: 0,
                 })
                 .unwrap();
 
@@ -745,12 +755,16 @@ impl<A: hal::Api> Example<A> {
         unsafe { cmd_encoder.begin_encoding(Some("init")).unwrap() };
 
         unsafe {
-            cmd_encoder.transition_acceleration_structures(hal::AccelerationStructureBarrier {
-                usage: hal::StateTransition {
-                    from: hal::AccelerationStructureUses::empty(),
-                    to: hal::AccelerationStructureUses::BUILD_OUTPUT,
+            cmd_encoder.transition_acceleration_structures(core::iter::once(
+                hal::AccelerationStructureBarrier {
+                    usage: hal::StateTransition {
+                        from: hal::AccelerationStructureUses::empty(),
+                        to: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                    },
+                    acceleration_structure: None,
+                    src_dst_queue_index: None,
                 },
-            });
+            ));
 
             cmd_encoder.build_acceleration_structures(
                 1,
@@ -771,15 +785,20 @@ impl<A: hal::Api> Example<A> {
                     from: wgpu_types::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     to: wgpu_types::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                 },
+                src_dst_queue_index: None,
             };
             cmd_encoder.transition_buffers(iter::once(scratch_buffer_barrier));
 
-            cmd_encoder.transition_acceleration_structures(hal::AccelerationStructureBarrier {
-                usage: hal::StateTransition {
-                    from: hal::AccelerationStructureUses::BUILD_OUTPUT,
-                    to: hal::AccelerationStructureUses::BUILD_INPUT,
+            cmd_encoder.transition_acceleration_structures(std::iter::once(
+                hal::AccelerationStructureBarrier {
+                    usage: hal::StateTransition {
+                        from: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                        to: hal::AccelerationStructureUses::BUILD_INPUT,
+                    },
+                    acceleration_structure: None,
+                    src_dst_queue_index: None,
                 },
-            });
+            ));
 
             cmd_encoder.build_acceleration_structures(
                 1,
@@ -794,12 +813,16 @@ impl<A: hal::Api> Example<A> {
                 }],
             );
 
-            cmd_encoder.transition_acceleration_structures(hal::AccelerationStructureBarrier {
-                usage: hal::StateTransition {
-                    from: hal::AccelerationStructureUses::BUILD_OUTPUT,
-                    to: hal::AccelerationStructureUses::SHADER_INPUT,
+            cmd_encoder.transition_acceleration_structures(std::iter::once(
+                hal::AccelerationStructureBarrier {
+                    usage: hal::StateTransition {
+                        from: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                        to: hal::AccelerationStructureUses::SHADER_INPUT,
+                    },
+                    acceleration_structure: None,
+                    src_dst_queue_index: None,
                 },
-            });
+            ));
 
             let texture_barrier = hal::TextureBarrier {
                 texture: &texture,
@@ -808,6 +831,7 @@ impl<A: hal::Api> Example<A> {
                     from: wgpu_types::TextureUses::UNINITIALIZED,
                     to: wgpu_types::TextureUses::STORAGE_READ_WRITE,
                 },
+                src_dst_queue_index: None,
             };
 
             cmd_encoder.transition_textures(iter::once(texture_barrier));
@@ -818,7 +842,12 @@ impl<A: hal::Api> Example<A> {
             let mut fence = device.create_fence().unwrap();
             let init_cmd = cmd_encoder.end_encoding().unwrap();
             queue
-                .submit(&[&init_cmd], &[], (&mut fence, init_fence_value))
+                .submit(&mut [hal::QueueSubmitInfo {
+                    command_buffers: &[&init_cmd],
+                    surface_textures: &[],
+                    signal_fences: &mut [(&mut fence, init_fence_value)],
+                    wait_fences: &mut [],
+                }])
                 .unwrap();
             device.wait(&fence, init_fence_value, None).unwrap();
             cmd_encoder.reset_all(iter::once(init_cmd));
@@ -882,6 +911,7 @@ impl<A: hal::Api> Example<A> {
                 from: wgpu_types::TextureUses::UNINITIALIZED,
                 to: wgpu_types::TextureUses::COPY_DST,
             },
+            src_dst_queue_index: None,
         };
 
         let instances_buffer_size =
@@ -918,12 +948,16 @@ impl<A: hal::Api> Example<A> {
             };
 
             ctx.encoder
-                .transition_acceleration_structures(hal::AccelerationStructureBarrier {
-                    usage: hal::StateTransition {
-                        from: hal::AccelerationStructureUses::SHADER_INPUT,
-                        to: hal::AccelerationStructureUses::BUILD_INPUT,
+                .transition_acceleration_structures(std::iter::once(
+                    hal::AccelerationStructureBarrier {
+                        usage: hal::StateTransition {
+                            from: hal::AccelerationStructureUses::SHADER_INPUT,
+                            to: hal::AccelerationStructureUses::BUILD_INPUT,
+                        },
+                        acceleration_structure: None,
+                        src_dst_queue_index: None,
                     },
-                });
+                ));
 
             ctx.encoder.build_acceleration_structures(
                 1,
@@ -939,12 +973,16 @@ impl<A: hal::Api> Example<A> {
             );
 
             ctx.encoder
-                .transition_acceleration_structures(hal::AccelerationStructureBarrier {
-                    usage: hal::StateTransition {
-                        from: hal::AccelerationStructureUses::BUILD_OUTPUT,
-                        to: hal::AccelerationStructureUses::SHADER_INPUT,
+                .transition_acceleration_structures(std::iter::once(
+                    hal::AccelerationStructureBarrier {
+                        usage: hal::StateTransition {
+                            from: hal::AccelerationStructureUses::BUILD_OUTPUT,
+                            to: hal::AccelerationStructureUses::SHADER_INPUT,
+                        },
+                        acceleration_structure: None,
+                        src_dst_queue_index: None,
                     },
-                });
+                ));
 
             let scratch_buffer_barrier = hal::BufferBarrier {
                 buffer: &self.scratch_buffer,
@@ -952,6 +990,7 @@ impl<A: hal::Api> Example<A> {
                     from: wgpu_types::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     to: wgpu_types::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                 },
+                src_dst_queue_index: None,
             };
             ctx.encoder
                 .transition_buffers(iter::once(scratch_buffer_barrier));
@@ -991,6 +1030,7 @@ impl<A: hal::Api> Example<A> {
                 from: wgpu_types::TextureUses::COPY_DST,
                 to: wgpu_types::TextureUses::PRESENT,
             },
+            src_dst_queue_index: None,
         };
         let target_barrier2 = hal::TextureBarrier {
             texture: &self.texture,
@@ -999,6 +1039,7 @@ impl<A: hal::Api> Example<A> {
                 from: wgpu_types::TextureUses::STORAGE_READ_WRITE,
                 to: wgpu_types::TextureUses::COPY_SRC,
             },
+            src_dst_queue_index: None,
         };
         let target_barrier3 = hal::TextureBarrier {
             texture: &self.texture,
@@ -1007,6 +1048,7 @@ impl<A: hal::Api> Example<A> {
                 from: wgpu_types::TextureUses::COPY_SRC,
                 to: wgpu_types::TextureUses::STORAGE_READ_WRITE,
             },
+            src_dst_queue_index: None,
         };
         unsafe {
             ctx.encoder.end_compute_pass();
@@ -1042,11 +1084,12 @@ impl<A: hal::Api> Example<A> {
         unsafe {
             let cmd_buf = ctx.encoder.end_encoding().unwrap();
             self.queue
-                .submit(
-                    &[&cmd_buf],
-                    &[&surface_tex],
-                    (&mut ctx.fence, ctx.fence_value),
-                )
+                .submit(&mut [hal::QueueSubmitInfo {
+                    command_buffers: &[&cmd_buf],
+                    surface_textures: &[&surface_tex],
+                    signal_fences: &mut [(&mut ctx.fence, ctx.fence_value)],
+                    wait_fences: &mut [],
+                }])
                 .unwrap();
             self.queue.present(&self.surface, surface_tex).unwrap();
             ctx.used_cmd_bufs.push(cmd_buf);
@@ -1084,7 +1127,12 @@ impl<A: hal::Api> Example<A> {
             {
                 let ctx = &mut self.contexts[self.context_index];
                 self.queue
-                    .submit(&[], &[], (&mut ctx.fence, ctx.fence_value))
+                    .submit(&mut [hal::QueueSubmitInfo {
+                        command_buffers: &[],
+                        surface_textures: &[],
+                        signal_fences: &mut [(&mut ctx.fence, ctx.fence_value)],
+                        wait_fences: &mut [],
+                    }])
                     .unwrap();
             }
 

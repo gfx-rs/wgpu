@@ -345,7 +345,7 @@ impl<A: hal::Api> Example<A> {
                     from: wgpu_types::BufferUses::empty(),
                     to: wgpu_types::BufferUses::COPY_SRC,
                 },
-                dst_queue_index: None,
+                src_dst_queue_index: None,
             };
             let texture_barrier1 = hal::TextureBarrier {
                 texture: &texture,
@@ -354,7 +354,7 @@ impl<A: hal::Api> Example<A> {
                     from: wgpu_types::TextureUses::UNINITIALIZED,
                     to: wgpu_types::TextureUses::COPY_DST,
                 },
-                dst_queue_index: None,
+                src_dst_queue_index: None,
             };
             let texture_barrier2 = hal::TextureBarrier {
                 texture: &texture,
@@ -363,7 +363,7 @@ impl<A: hal::Api> Example<A> {
                     from: wgpu_types::TextureUses::COPY_DST,
                     to: wgpu_types::TextureUses::RESOURCE,
                 },
-                dst_queue_index: None,
+                src_dst_queue_index: None,
             };
             let copy = hal::BufferTextureCopy {
                 buffer_layout: wgpu_types::TexelCopyBufferLayout {
@@ -708,7 +708,7 @@ impl<A: hal::Api> Example<A> {
                 from: wgpu_types::TextureUses::UNINITIALIZED,
                 to: wgpu_types::TextureUses::COLOR_TARGET,
             },
-            dst_queue_index: None,
+            src_dst_queue_index: None,
         };
         unsafe {
             ctx.encoder.begin_encoding(Some("frame")).unwrap();
@@ -781,7 +781,7 @@ impl<A: hal::Api> Example<A> {
                 from: wgpu_types::TextureUses::COLOR_TARGET,
                 to: wgpu_types::TextureUses::PRESENT,
             },
-            dst_queue_index: None,
+            src_dst_queue_index: None,
         };
         unsafe {
             ctx.encoder.end_render_pass();
