@@ -214,11 +214,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 .dst_access_mask(dst_access)
                 .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
                 .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED);
-            if let Some(dst) = bar.dst_queue_index {
-                let my_queue_family_index = self.queue_family_index;
+            if let Some((src, dst)) = bar.src_dst_queue_index {
+                let src_queue_family_index = self.device.queue_families_indices[src as usize].0;
                 let dst_queue_family_index = self.device.queue_families_indices[dst as usize].0;
+                assert!(src == self.queue_family_index || dst == self.queue_family_index);
                 barrier = barrier
-                    .src_queue_family_index(my_queue_family_index)
+                    .src_queue_family_index(src_queue_family_index)
                     .dst_queue_family_index(dst_queue_family_index);
             }
             vk_barriers.push(barrier);

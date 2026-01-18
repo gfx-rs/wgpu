@@ -2535,7 +2535,7 @@ pub struct BufferBarrier<'a, B: DynBuffer + ?Sized> {
     pub buffer: &'a B,
     pub usage: StateTransition<wgt::BufferUses>,
     /// When transferring ownership
-    pub dst_queue_index: Option<u32>,
+    pub src_dst_queue_index: Option<(u32, u32)>,
 }
 
 #[derive(Debug, Clone)]

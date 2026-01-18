@@ -238,7 +238,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
         let barriers = barriers.iter().map(|barrier| BufferBarrier {
             buffer: barrier.buffer.expect_downcast_ref(),
             usage: barrier.usage.clone(),
-            dst_queue_index: barrier.dst_queue_index,
+            src_dst_queue_index: barrier.src_dst_queue_index,
         });
         unsafe { self.transition_buffers(barriers) };
     }
