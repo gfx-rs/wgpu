@@ -15,7 +15,7 @@ use crate::{
     command::{
         clear_texture, encoder::EncodingState, ArcCommand, CommandEncoderError, EncoderStateError,
     },
-    device::MissingDownlevelFlags,
+    device::{queue::Queue, MissingDownlevelFlags},
     global::Global,
     id::{BufferId, CommandEncoderId, TextureId},
     init_tracker::{
@@ -943,6 +943,42 @@ impl Global {
             })
         })
     }
+
+    pub fn command_encoder_transfer_texture(
+        &self,
+        command_encoder_id: CommandEncoderId,
+        texture: &Arc<Texture>,
+        receiver: Arc<Queue>,
+    ) -> Result<(), EncoderStateError> {
+        todo!()
+    }
+
+    pub fn command_encoder_receive_texture(
+        &self,
+        command_encoder_id: CommandEncoderId,
+        texture: &Arc<Texture>,
+        sender: Arc<Queue>,
+    ) -> Result<(), EncoderStateError> {
+        todo!()
+    }
+
+    pub fn command_encoder_transfer_buffer(
+        &self,
+        command_encoder_id: CommandEncoderId,
+        texture: &Arc<Buffer>,
+        receiver: Arc<Queue>,
+    ) -> Result<(), EncoderStateError> {
+        todo!()
+    }
+
+    pub fn command_encoder_receive_buffer(
+        &self,
+        command_encoder_id: CommandEncoderId,
+        texture: &Arc<Buffer>,
+        sender: Arc<Queue>,
+    ) -> Result<(), EncoderStateError> {
+        todo!()
+    }
 }
 
 pub(super) fn copy_buffer_to_buffer(
@@ -1469,4 +1505,40 @@ pub(super) fn copy_texture_to_texture(
     }
 
     Ok(())
+}
+
+pub fn command_encoder_transfer_texture(
+    state: &mut EncodingState,
+    command_encoder_id: CommandEncoderId,
+    texture: &Arc<Texture>,
+    receiver: Arc<Queue>,
+) -> Result<(), EncoderStateError> {
+    todo!()
+}
+
+pub fn command_encoder_receive_texture(
+    state: &mut EncodingState,
+    command_encoder_id: CommandEncoderId,
+    texture: &Arc<Texture>,
+    sender: Arc<Queue>,
+) -> Result<(), EncoderStateError> {
+    todo!()
+}
+
+pub fn command_encoder_transfer_buffer(
+    state: &mut EncodingState,
+    command_encoder_id: CommandEncoderId,
+    texture: &Arc<Buffer>,
+    receiver: Arc<Queue>,
+) -> Result<(), EncoderStateError> {
+    todo!()
+}
+
+pub fn command_encoder_receive_buffer(
+    state: &mut EncodingState,
+    command_encoder_id: CommandEncoderId,
+    texture: &Arc<Buffer>,
+    sender: Arc<Queue>,
+) -> Result<(), EncoderStateError> {
+    todo!()
 }
