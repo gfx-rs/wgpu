@@ -20,7 +20,7 @@ use crate::{
     global::Global,
     hal_label, id,
     instance::Surface,
-    resource,
+    resource, SURFACE_QUEUE_ID,
 };
 
 use thiserror::Error;
@@ -30,7 +30,6 @@ use wgt::{
 };
 
 const FRAME_TIMEOUT_MS: u32 = 1000;
-const SURFACE_QUEUE_ID: u32 = 0;
 
 #[derive(Debug)]
 pub(crate) struct Presentation {
@@ -164,8 +163,9 @@ impl Surface {
         } else {
             return Err(SurfaceError::NotConfigured);
         };
+        let queue = device.get_queue(SURFACE_QUEUE_ID).unwrap();
 
-        let fence = device.fence.read();
+        let fence = queue.fence.read();
 
         let suf = self.raw(device.backend()).unwrap();
         let (texture, status) = match unsafe {

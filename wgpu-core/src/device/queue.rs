@@ -13,6 +13,11 @@ use wgt::{
     AccelerationStructureFlags,
 };
 
+#[cfg(supports_64bit_atomics)]
+use core::sync::atomic::AtomicU64;
+#[cfg(not(supports_64bit_atomics))]
+use portable_atomic::AtomicU64;
+
 use super::{life::LifetimeTracker, Device};
 #[cfg(feature = "trace")]
 use crate::device::trace::{Action, IntoTrace};
@@ -30,6 +35,7 @@ use crate::{
     hal_label,
     id::{self, BlasId, QueueId},
     init_tracker::{has_copy_partial_init_tracker_coverage, TextureInitRange},
+    instance::RequestDeviceError,
     lock::{rank, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
     ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError},
     resource::{
@@ -63,6 +69,27 @@ pub struct Queue {
     /// binding point will be rendered correctly. Intended to be used as the
     /// [`hal::ExternalTextureBinding::params`] field.
     pub(crate) default_external_texture_params_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
+
+    pub(crate) command_allocator: CommandAllocator,
+
+    pub(crate) command_indices: RwLock<CommandIndices>,
+
+    /// The index of the last successful submission to this device's
+    /// [`hal::Queue`].
+    ///
+    /// Unlike [`active_submission_index`], which is incremented each time
+    /// submission is attempted, this is updated only when submission succeeds,
+    /// so waiting for this value won't hang waiting for work that was never
+    /// submitted.
+    ///
+    /// [`active_submission_index`]: CommandIndices::active_submission_index
+    pub(crate) last_successful_submission_index: hal::AtomicFenceValue,
+
+    // NOTE: if both are needed, the `snatchable_lock` must be consistently acquired before the
+    // `fence` lock to avoid deadlocks.
+    pub(crate) fence: RwLock<ManuallyDrop<Box<dyn hal::DynFence>>>,
+    // Optional so that we can destroy this.
+    pub(crate) timestamp_normalizer: Option<crate::timestamp_normalization::TimestampNormalizer>,
 }
 impl core::fmt::Debug for Queue {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -76,7 +103,11 @@ impl Queue {
         raw: Box<dyn hal::DynQueue>,
         instance_flags: wgt::InstanceFlags,
         index: u32,
-    ) -> Result<Self, DeviceError> {
+    ) -> Result<Self, RequestDeviceError> {
+        let fence = unsafe { device.raw().create_fence() }.map_err(DeviceError::from_hal)?;
+
+        let command_allocator = CommandAllocator::new();
+
         let rt_uses = if device
             .features
             .intersects(wgt::Features::EXPERIMENTAL_RAY_QUERY)
@@ -103,7 +134,7 @@ impl Queue {
             && device.downlevel.flags.contains(
                 wgt::DownlevelFlags::INDIRECT_EXECUTION | wgt::DownlevelFlags::COMPUTE_SHADERS,
             )
-            && device.limits.max_storage_buffers_per_shader_stage >= 2;
+            && device.adapter.limits().max_storage_buffers_per_shader_stage >= 2;
 
         let indirect_validation = if enable_indirect_validation {
             Some(crate::indirect_validation::IndirectValidation::new(
@@ -131,15 +162,14 @@ impl Queue {
         }
         .map_err(DeviceError::from_hal)?;
 
-        let pending_encoder = device
-            .command_allocator
+        let pending_encoder = command_allocator
             .acquire_encoder(device.raw(), raw.as_ref())
             .map_err(DeviceError::from_hal);
 
         let pending_encoder = match pending_encoder {
             Ok(pending_encoder) => pending_encoder,
             Err(e) => {
-                return Err(e);
+                return Err(e.into());
             }
         };
 
@@ -172,6 +202,11 @@ impl Queue {
                 }]);
         }
 
+        let timestamp_normalizer =
+            crate::timestamp_normalization::TimestampNormalizer::new(&device, unsafe {
+                raw.get_timestamp_period()
+            })?;
+
         Ok(Queue {
             raw,
             device,
@@ -184,6 +219,19 @@ impl Queue {
             default_external_texture_params_buffer: ManuallyDrop::new(
                 default_external_texture_params_buffer,
             ),
+
+            command_allocator,
+            command_indices: RwLock::new(
+                rank::DEVICE_COMMAND_INDICES,
+                CommandIndices {
+                    active_submission_index: 0,
+                    // By starting at one, we can put the result in a NonZeroU64.
+                    next_acceleration_structure_build_command_index: 1,
+                },
+            ),
+            last_successful_submission_index: AtomicU64::new(0),
+            fence: RwLock::new(rank::DEVICE_FENCE, ManuallyDrop::new(fence)),
+            timestamp_normalizer: Some(timestamp_normalizer),
         })
     }
 
@@ -238,11 +286,10 @@ impl Drop for Queue {
         resource_log!("Drop {}", self.error_ident());
 
         let last_successful_submission_index = self
-            .device
             .last_successful_submission_index
             .load(Ordering::Acquire);
 
-        let fence = self.device.fence.read();
+        let fence = self.fence.read();
 
         // Try waiting on the last submission using the following sequence of timeouts
         let timeouts_in_ms = [100, 200, 400, 800, 1600, 3200];
@@ -338,11 +385,17 @@ impl Drop for Queue {
         // self.default_external_texture_params_buffer anymore after this point.
         let default_external_texture_params_buffer =
             unsafe { ManuallyDrop::take(&mut self.default_external_texture_params_buffer) };
+        // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
+        let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
         unsafe {
             self.device.raw().destroy_buffer(zero_buffer);
             self.device
                 .raw()
                 .destroy_buffer(default_external_texture_params_buffer);
+            self.device.raw().destroy_fence(fence);
+        }
+        if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
+            timestamp_normalizer.dispose(self.device.raw());
         }
     }
 }
@@ -502,6 +555,7 @@ impl PendingWrites {
                     raw: ManuallyDrop::new(mem::replace(&mut self.command_encoder, new_encoder)),
                     list: vec![cmd_buf],
                     device: device.clone(),
+                    queue: queue.clone(),
                     is_open: false,
                     api: crate::command::EncodingApi::InternalUse,
                     label: "(wgpu internal) PendingWrites command encoder".into(),
@@ -617,6 +671,91 @@ impl WebGpuError for QueueSubmitError {
 //TODO: move out common parts of write_xxx.
 
 impl Queue {
+    /// Initializes [`Device::default_external_texture_params_buffer`] with
+    /// required values such that a [`TextureView`] bound to a
+    /// [`wgt::BindingType::ExternalTexture`] binding point will be rendered
+    /// correctly.
+    pub(super) fn init_default_external_texture_params_buffer(
+        self: &Arc<Self>,
+    ) -> Result<(), DeviceError> {
+        let data = ExternalTextureParams {
+            #[rustfmt::skip]
+            yuv_conversion_matrix: [
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0, 0.0, 1.0,
+            ],
+            #[rustfmt::skip]
+            gamut_conversion_matrix: [
+                1.0, 0.0, 0.0, /* padding */ 0.0,
+                0.0, 1.0, 0.0, /* padding */ 0.0,
+                0.0, 0.0, 1.0, /* padding */ 0.0,
+            ],
+            src_transfer_function: Default::default(),
+            dst_transfer_function: Default::default(),
+            size: [0, 0],
+            #[rustfmt::skip]
+            sample_transform: [
+                1.0, 0.0,
+                0.0, 1.0,
+                0.0, 0.0
+            ],
+            #[rustfmt::skip]
+            load_transform: [
+                1.0, 0.0,
+                0.0, 1.0,
+                0.0, 0.0
+            ],
+            num_planes: 1,
+            _padding: Default::default(),
+        };
+        let mut staging_buffer = StagingBuffer::new(
+            &self.device,
+            self,
+            wgt::BufferSize::new(size_of_val(&data) as _).unwrap(),
+        )?;
+        staging_buffer.write(bytemuck::bytes_of(&data));
+        let staging_buffer = staging_buffer.flush();
+
+        let params_buffer = self.default_external_texture_params_buffer.as_ref();
+        let mut pending_writes = self.pending_writes.lock();
+
+        unsafe {
+            pending_writes
+                .command_encoder
+                .transition_buffers(&[hal::BufferBarrier {
+                    buffer: params_buffer,
+                    usage: hal::StateTransition {
+                        from: wgt::BufferUses::MAP_WRITE,
+                        to: wgt::BufferUses::COPY_DST,
+                    },
+                    src_dst_queue_index: None,
+                }]);
+            pending_writes.command_encoder.copy_buffer_to_buffer(
+                staging_buffer.raw(),
+                params_buffer,
+                &[hal::BufferCopy {
+                    src_offset: 0,
+                    dst_offset: 0,
+                    size: staging_buffer.size,
+                }],
+            );
+            pending_writes.consume(staging_buffer);
+            pending_writes
+                .command_encoder
+                .transition_buffers(&[hal::BufferBarrier {
+                    buffer: params_buffer,
+                    usage: hal::StateTransition {
+                        from: wgt::BufferUses::COPY_DST,
+                        to: wgt::BufferUses::UNIFORM,
+                    },
+                    src_dst_queue_index: None,
+                }]);
+        }
+
+        Ok(())
+    }
     pub fn write_buffer(
         self: &Arc<Self>,
         buffer: Arc<Buffer>,
@@ -1299,9 +1438,9 @@ impl Queue {
             let snatch_guard = self.device.snatchable_lock.read();
 
             // Fence lock must be acquired after the snatch lock everywhere to avoid deadlocks.
-            let mut fence = self.device.fence.write();
+            let mut fence = self.fence.write();
 
-            let mut command_index_guard = self.device.command_indices.write();
+            let mut command_index_guard = self.command_indices.write();
             command_index_guard.active_submission_index += 1;
             submit_index = command_index_guard.active_submission_index;
 
@@ -1516,7 +1655,7 @@ impl Queue {
                 }
             }
 
-            match pending_writes.pre_submit(&self.device.command_allocator, &self.device, self) {
+            match pending_writes.pre_submit(&self.command_allocator, &self.device, self) {
                 Ok(Some(pending_execution)) => {
                     active_executions.insert(0, pending_execution);
                 }
@@ -1558,8 +1697,7 @@ impl Queue {
                 drop(command_index_guard);
 
                 // Advance the successful submission index.
-                self.device
-                    .last_successful_submission_index
+                self.last_successful_submission_index
                     .fetch_max(submit_index, Ordering::SeqCst);
             }
 
@@ -1678,7 +1816,7 @@ impl Queue {
 
         drop(snatch_guard);
 
-        let mut command_indices_lock = device.command_indices.write();
+        let mut command_indices_lock = self.command_indices.write();
         command_indices_lock.next_acceleration_structure_build_command_index += 1;
         let built_index =
             NonZeroU64::new(command_indices_lock.next_acceleration_structure_build_command_index)
@@ -1844,7 +1982,7 @@ impl Global {
     pub fn queue_get_timestamp_period(&self, queue_id: QueueId) -> f32 {
         let queue = self.hub.queues.get(queue_id);
 
-        if queue.device.timestamp_normalizer.get().unwrap().enabled() {
+        if queue.timestamp_normalizer.as_ref().unwrap().enabled() {
             return 1.0;
         }
 

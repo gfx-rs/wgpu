@@ -1162,7 +1162,7 @@ impl Global {
         let queue = self.hub.queues.get(queue_id);
 
         let error = 'error: {
-            let cmd_enc = match device.create_command_encoder(&desc.label) {
+            let cmd_enc = match device.create_command_encoder(&desc.label, queue.index) {
                 Ok(cmd_enc) => cmd_enc,
                 Err(e) => break 'error e,
             };

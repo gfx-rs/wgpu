@@ -5,6 +5,7 @@ use alloc::{
     boxed::Box,
     string::{String, ToString as _},
     sync::{Arc, Weak},
+    vec,
     vec::Vec,
 };
 use core::{
@@ -53,21 +54,16 @@ use crate::{
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     timestamp_normalization::TIMESTAMP_NORMALIZATION_BUFFER_USES,
-    track::{BindGroupStates, QueueTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
+    track::{BindGroupStates, TrackerIndexAllocators, UsageScope, UsageScopePool},
     validation,
     weak_vec::WeakVec,
-    FastHashMap, LabelHelpers, OnceCellOrLock,
+    FastHashMap, LabelHelpers, OnceCellOrLock, SURFACE_QUEUE_ID,
 };
 
 use super::{
     queue::Queue, DeviceDescriptor, DeviceError, DeviceLostClosure, UserClosures,
-    ENTRYPOINT_FAILURE_ERROR, ZERO_BUFFER_SIZE,
+    ENTRYPOINT_FAILURE_ERROR,
 };
-
-#[cfg(supports_64bit_atomics)]
-use core::sync::atomic::AtomicU64;
-#[cfg(not(supports_64bit_atomics))]
-use portable_atomic::AtomicU64;
 
 pub(crate) struct CommandIndices {
     /// The index of the last command submission that was attempted.
@@ -211,25 +207,6 @@ pub struct Device {
     pub(crate) queues: Vec<OnceCellOrLock<Weak<Queue>>>,
     /// The `label` from the descriptor used to create the resource.
     label: String,
-
-    pub(crate) command_allocator: command::CommandAllocator,
-
-    pub(crate) command_indices: RwLock<CommandIndices>,
-
-    /// The index of the last successful submission to this device's
-    /// [`hal::Queue`].
-    ///
-    /// Unlike [`active_submission_index`], which is incremented each time
-    /// submission is attempted, this is updated only when submission succeeds,
-    /// so waiting for this value won't hang waiting for work that was never
-    /// submitted.
-    ///
-    /// [`active_submission_index`]: CommandIndices::active_submission_index
-    pub(crate) last_successful_submission_index: hal::AtomicFenceValue,
-
-    // NOTE: if both are needed, the `snatchable_lock` must be consistently acquired before the
-    // `fence` lock to avoid deadlocks.
-    pub(crate) fence: RwLock<ManuallyDrop<Box<dyn hal::DynFence>>>,
     pub(crate) snatchable_lock: SnatchLock,
 
     /// Is this device valid? Valid is closely associated with "lose the device",
@@ -259,9 +236,6 @@ pub struct Device {
     pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
     pub(crate) usage_scopes: UsageScopePool,
-    // Optional so that we can late-initialize this after the queue is created.
-    pub(crate) timestamp_normalizer:
-        OnceCellOrLock<crate::timestamp_normalization::TimestampNormalizer>,
     // needs to be dropped last
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<Box<dyn trace::Trace + Send + Sync + 'static>>>,
@@ -288,15 +262,6 @@ impl fmt::Debug for Device {
 impl Drop for Device {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
-
-        // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
-        let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
-        if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
-            timestamp_normalizer.dispose(self.raw.as_ref());
-        }
-        unsafe {
-            self.raw.destroy_fence(fence);
-        }
     }
 }
 
@@ -358,6 +323,7 @@ impl Device {
         adapter: &Arc<Adapter>,
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
+        num_queues: u32,
     ) -> Result<Self, DeviceError> {
         #[cfg(not(feature = "trace"))]
         match &desc.trace {
@@ -410,30 +376,15 @@ impl Device {
             }
         };
 
-        let fence = unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?;
-
-        let command_allocator = command::CommandAllocator::new();
-
         // Cloned as we need them below anyway.
         let alignments = adapter.raw.capabilities.alignments.clone();
         let downlevel = adapter.raw.capabilities.downlevel.clone();
-        let limits = &adapter.raw.capabilities.limits;
 
         Ok(Self {
             raw: raw_device,
+            queues: vec![OnceCellOrLock::new(); num_queues as usize],
             adapter: adapter.clone(),
             label: desc.label.to_string(),
-            command_allocator,
-            command_indices: RwLock::new(
-                rank::DEVICE_COMMAND_INDICES,
-                CommandIndices {
-                    active_submission_index: 0,
-                    // By starting at one, we can put the result in a NonZeroU64.
-                    next_acceleration_structure_build_command_index: 1,
-                },
-            ),
-            last_successful_submission_index: AtomicU64::new(0),
-            fence: RwLock::new(rank::DEVICE_FENCE, ManuallyDrop::new(fence)),
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
             valid: AtomicBool::new(true),
             device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
@@ -448,103 +399,14 @@ impl Device {
             instance_flags,
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
-            timestamp_normalizer: OnceCellOrLock::new(),
         })
     }
 
-    /// Initializes [`Device::default_external_texture_params_buffer`] with
-    /// required values such that a [`TextureView`] bound to a
-    /// [`wgt::BindingType::ExternalTexture`] binding point will be rendered
-    /// correctly.
-    fn init_default_external_texture_params_buffer(self: &Arc<Self>) -> Result<(), DeviceError> {
-        let data = ExternalTextureParams {
-            #[rustfmt::skip]
-            yuv_conversion_matrix: [
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, 1.0, 0.0,
-                0.0, 0.0, 0.0, 1.0,
-            ],
-            #[rustfmt::skip]
-            gamut_conversion_matrix: [
-                1.0, 0.0, 0.0, /* padding */ 0.0,
-                0.0, 1.0, 0.0, /* padding */ 0.0,
-                0.0, 0.0, 1.0, /* padding */ 0.0,
-            ],
-            src_transfer_function: Default::default(),
-            dst_transfer_function: Default::default(),
-            size: [0, 0],
-            #[rustfmt::skip]
-            sample_transform: [
-                1.0, 0.0,
-                0.0, 1.0,
-                0.0, 0.0
-            ],
-            #[rustfmt::skip]
-            load_transform: [
-                1.0, 0.0,
-                0.0, 1.0,
-                0.0, 0.0
-            ],
-            num_planes: 1,
-            _padding: Default::default(),
-        };
-        let mut staging_buffer =
-            StagingBuffer::new(self, wgt::BufferSize::new(size_of_val(&data) as _).unwrap())?;
-        staging_buffer.write(bytemuck::bytes_of(&data));
-        let staging_buffer = staging_buffer.flush();
-
-        let params_buffer = self.default_external_texture_params_buffer.as_ref();
-        let queue = self.get_queue().unwrap();
-        let mut pending_writes = queue.pending_writes.lock();
-
-        unsafe {
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: params_buffer,
-                    usage: hal::StateTransition {
-                        from: wgt::BufferUses::MAP_WRITE,
-                        to: wgt::BufferUses::COPY_DST,
-                    },
-                }]);
-            pending_writes.command_encoder.copy_buffer_to_buffer(
-                staging_buffer.raw(),
-                params_buffer,
-                &[hal::BufferCopy {
-                    src_offset: 0,
-                    dst_offset: 0,
-                    size: staging_buffer.size,
-                }],
-            );
-            pending_writes.consume(staging_buffer);
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: params_buffer,
-                    usage: hal::StateTransition {
-                        from: wgt::BufferUses::COPY_DST,
-                        to: wgt::BufferUses::UNIFORM,
-                    },
-                }]);
-        }
-
-        Ok(())
-    }
-
     pub fn late_init_resources_with_queue(self: &Arc<Self>) -> Result<(), RequestDeviceError> {
-        let queue = self.get_queue().unwrap();
-
-        let timestamp_normalizer = crate::timestamp_normalization::TimestampNormalizer::new(
-            self,
-            queue.get_timestamp_period(),
-        )?;
-
-        self.timestamp_normalizer
-            .set(timestamp_normalizer)
-            .unwrap_or_else(|_| panic!("Called late_init_resources_with_queue twice"));
-
-        self.init_default_external_texture_params_buffer()?;
+        for queue_index in 0..self.queues.len() {
+            let queue = self.get_queue(queue_index as u32).unwrap();
+            queue.init_default_external_texture_params_buffer()?;
+        }
 
         Ok(())
     }
@@ -1504,6 +1366,7 @@ impl Device {
             usage: hal_usage,
             memory_flags: hal::MemoryFlags::empty(),
             view_formats: hal_view_formats,
+            initial_queue: desc.initial_queue,
         };
 
         let raw_texture = unsafe { self.raw().create_texture(&hal_desc) }
@@ -1582,10 +1445,20 @@ impl Device {
 
         let texture = Arc::new(texture);
 
-        self.trackers
-            .lock()
-            .textures
-            .insert_single(&texture, wgt::TextureUses::UNINITIALIZED);
+        for queue_idx in 0..self.queues.len() as u32 {
+            let queue = self.get_queue(queue_idx).unwrap();
+            let state = if queue_idx == desc.initial_queue {
+                wgt::TextureUses::UNINITIALIZED
+            } else {
+                wgt::TextureUses::UNOWNED
+            };
+
+            queue
+                .trackers
+                .lock()
+                .textures
+                .insert_single(&texture, state);
+        }
 
         Ok(texture)
     }
@@ -2357,17 +2230,18 @@ impl Device {
     pub(crate) fn create_command_encoder(
         self: &Arc<Self>,
         label: &crate::Label,
+        queue_idx: u32,
     ) -> Result<Arc<command::CommandEncoder>, DeviceError> {
         self.check_is_valid()?;
 
-        let queue = self.get_queue().unwrap();
+        let queue = self.get_queue(queue_idx).unwrap();
 
-        let encoder = self
+        let encoder = queue
             .command_allocator
             .acquire_encoder(self.raw(), queue.raw())
             .map_err(|e| self.handle_hal_error(e))?;
 
-        let cmd_enc = command::CommandEncoder::new(encoder, self, label);
+        let cmd_enc = command::CommandEncoder::new(encoder, self, &queue, label);
 
         let cmd_enc = Arc::new(cmd_enc);
 
@@ -3566,7 +3440,7 @@ impl Device {
             .map(|bgl| bgl.raw())
             .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
 
-        let additional_flags = if self.indirect_validation.is_some() {
+        let additional_flags = if self.get_queue(0).unwrap().indirect_validation.is_some() {
             hal::PipelineLayoutFlags::INDIRECT_BUILTIN_UPDATE
         } else {
             hal::PipelineLayoutFlags::empty()
@@ -4675,11 +4549,11 @@ impl Device {
         let last_done_index = unsafe { self.raw().get_fence_value(fence.as_ref()) }
             .map_err(|e| self.handle_hal_error(e))?;
         if last_done_index < submission_index {
-            unsafe { self.raw().wait(fence.as_ref(), submission_index, None) }
+            unsafe { self.raw().wait(fence.as_ref(), submission_index.1, None) }
                 .map_err(|e| self.handle_hal_error(e))?;
             drop(fence);
-            if let Some(queue) = self.get_queue() {
-                let closures = queue.lock_life().triage_submissions(submission_index);
+            if let Some(queue) = self.get_queue(submission_index.0) {
+                let closures = queue.lock_life().triage_submissions(submission_index.1);
                 assert!(
                     closures.is_empty(),
                     "wait_for_submit is not expected to work with closures"
@@ -4930,7 +4804,8 @@ impl Device {
 
                 // Wait for all work to finish before configuring the surface.
                 let snatch_guard = self.snatchable_lock.read();
-                let fence = self.fence.read();
+                let queue = self.get_queue(SURFACE_QUEUE_ID).unwrap();
+                let fence = queue.fence.read();
 
                 let maintain_result;
                 (user_callbacks, maintain_result) =
@@ -5035,15 +4910,18 @@ impl Device {
         // "destroy" on all the resources we know about.
 
         // During these iterations, we discard all errors. We don't care!
-        let trackers = self.trackers.lock();
-        for buffer in trackers.buffers.used_resources() {
-            if let Some(buffer) = Weak::upgrade(buffer) {
-                buffer.destroy();
+        for q_idx in 0..self.queues.len() {
+            let queue = self.get_queue(q_idx as u32).unwrap();
+            let trackers = queue.trackers.lock();
+            for buffer in trackers.buffers.used_resources() {
+                if let Some(buffer) = Weak::upgrade(buffer) {
+                    buffer.destroy();
+                }
             }
-        }
-        for texture in trackers.textures.used_resources() {
-            if let Some(texture) = Weak::upgrade(texture) {
-                texture.destroy();
+            for texture in trackers.textures.used_resources() {
+                if let Some(texture) = Weak::upgrade(texture) {
+                    texture.destroy();
+                }
             }
         }
     }

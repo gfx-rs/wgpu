@@ -613,6 +613,8 @@ pub(crate) struct InnerCommandEncoder {
 
     pub(crate) device: Arc<Device>,
 
+    pub(crate) queue: Arc<Queue>,
+
     /// True if `raw` is in the "recording" state.
     ///
     /// See the documentation for [`wgpu_hal::CommandEncoder`] for
@@ -794,7 +796,7 @@ impl Drop for InnerCommandEncoder {
         }
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
         let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
-        self.device.command_allocator.release_encoder(raw);
+        self.queue.command_allocator.release_encoder(raw);
     }
 }
 
@@ -893,6 +895,7 @@ impl CommandEncoder {
                         raw: ManuallyDrop::new(encoder),
                         list: Vec::new(),
                         device: device.clone(),
+                        queue: queue.clone(),
                         is_open: false,
                         api: EncodingApi::Undecided,
                         label: label.to_string(),
@@ -1300,8 +1303,12 @@ impl CommandBuffer {
     /// It is not guaranteed to apply all of the validation that the original
     /// entrypoints provide.
     #[doc(hidden)]
-    pub fn from_trace(device: &Arc<Device>, commands: Vec<Command<ArcReferences>>) -> Arc<Self> {
-        let encoder = device.create_command_encoder(&None).unwrap();
+    pub fn from_trace(
+        device: &Arc<Device>,
+        queue_index: u32,
+        commands: Vec<Command<ArcReferences>>,
+    ) -> Arc<Self> {
+        let encoder = device.create_command_encoder(&None, queue_index).unwrap();
         let mut cmd_enc_status = encoder.data.lock();
         cmd_enc_status.replay(commands);
         drop(cmd_enc_status);

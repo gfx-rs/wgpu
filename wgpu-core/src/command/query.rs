@@ -506,18 +506,23 @@ pub(super) fn resolve_query_set(
 
     if matches!(query_set.desc.ty, wgt::QueryType::Timestamp) {
         // Timestamp normalization is only needed for timestamps.
-        state.device.timestamp_normalizer.get().unwrap().normalize(
-            state.snatch_guard,
-            state.raw_encoder,
-            &mut state.tracker.buffers,
-            dst_buffer
-                .timestamp_normalization_bind_group
-                .get(state.snatch_guard)
-                .unwrap(),
-            &dst_buffer,
-            destination_offset,
-            query_count,
-        );
+        state
+            .queue
+            .timestamp_normalizer
+            .as_ref()
+            .unwrap()
+            .normalize(
+                state.snatch_guard,
+                state.raw_encoder,
+                &mut state.tracker.buffers,
+                dst_buffer
+                    .timestamp_normalization_bind_group
+                    .get(state.snatch_guard)
+                    .unwrap(),
+                &dst_buffer,
+                destination_offset,
+                query_count,
+            );
     }
 
     state.tracker.query_sets.insert_single(query_set);

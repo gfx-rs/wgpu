@@ -819,7 +819,13 @@ impl Adapter {
     ) -> Result<(Arc<Device>, Vec<Arc<Queue>>), RequestDeviceError> {
         api_log!("Adapter::create_device");
 
-        let device = Device::new(hal_device.device, self, desc, instance_flags)?;
+        let device = Device::new(
+            hal_device.device,
+            self,
+            desc,
+            instance_flags,
+            hal_device.queues.len() as u32,
+        )?;
         let device = Arc::new(device);
 
         let mut queues = Vec::new();

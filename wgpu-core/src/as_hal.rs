@@ -4,7 +4,7 @@ use alloc::sync::Arc;
 use hal::DynResource;
 
 use crate::{
-    device::Device,
+    device::queue::Queue,
     global::Global,
     id::{
         AdapterId, BlasId, BufferId, CommandEncoderId, DeviceId, QueueId, SurfaceId, TextureId,
@@ -156,7 +156,7 @@ where
 
 /// A guard which holds alive a device and the device's fence lock, dereferencing to the Hal type.
 struct FenceGuard<Fence> {
-    device: Arc<Device>,
+    queue: Arc<Queue>,
     fence_lock_rank_data: ManuallyDrop<RankData>,
     ptr: *const Fence,
 }
@@ -169,9 +169,9 @@ where
     ///
     /// Returns `None` if:
     /// - The device's fence is not of the expected Hal type.
-    pub fn new(device: Arc<Device>) -> Option<Self> {
+    pub fn new(queue: Arc<Queue>) -> Option<Self> {
         // Grab the fence lock.
-        let fence_guard = device.fence.read();
+        let fence_guard = queue.fence.read();
 
         // Get the raw fence and downcast it to the expected Hal type, coercing it to a pointer
         // to get rid of the lifetime connecting us to the fence guard.
@@ -184,7 +184,7 @@ where
         // SAFETY: We only construct this guard while the fence lock is held,
         // as the `drop` implementation of this guard will unsafely release the lock.
         Some(Self {
-            device,
+            queue,
             fence_lock_rank_data: ManuallyDrop::new(fence_lock_rank_data),
             ptr,
         })
@@ -213,7 +213,7 @@ impl<Fence> Drop for FenceGuard<Fence> {
         // - The fence lock is being held because this type was not created
         //   until after the fence lock was forgotten.
         unsafe {
-            self.device.fence.force_unlock_read(data);
+            self.queue.fence.force_unlock_read(data);
         };
     }
 }
@@ -304,15 +304,15 @@ impl Global {
     /// # Safety
     ///
     /// - The raw fence handle must not be manually destroyed
-    pub unsafe fn device_fence_as_hal<A: hal::Api>(
+    pub unsafe fn queue_fence_as_hal<A: hal::Api>(
         &self,
-        id: DeviceId,
+        id: QueueId,
     ) -> Option<impl Deref<Target = A::Fence>> {
         profiling::scope!("Device::fence_as_hal");
 
-        let device = self.hub.devices.get(id);
+        let queue = self.hub.queues.get(id);
 
-        FenceGuard::new(device)
+        FenceGuard::new(queue)
     }
 
     /// # Safety
