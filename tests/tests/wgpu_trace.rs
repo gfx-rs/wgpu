@@ -34,17 +34,16 @@ fn trace_test(test_type: TestType) {
             None,
         )
         .unwrap();
-    let (device_id, queue_id) = global
+    let (device_id, queue_ids) = global
         .adapter_request_device(
             adapter_id,
             &wgt::DeviceDescriptor {
                 trace: wgt::Trace::Memory,
                 ..Default::default()
             },
-            None,
-            None,
         )
         .unwrap();
+    let queue_id = queue_ids.into_iter().next().unwrap();
 
     let (buffer_id, error) = global.device_create_buffer(
         device_id,
@@ -53,6 +52,7 @@ fn trace_test(test_type: TestType) {
             size: 1024,
             usage: wgt::BufferUsages::COPY_DST,
             mapped_at_creation: false,
+            initial_queue: 0,
         },
         None,
     );

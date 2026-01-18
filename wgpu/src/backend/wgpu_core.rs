@@ -921,13 +921,11 @@ impl dispatch::AdapterInterface for CoreAdapter {
         &self,
         desc: &crate::DeviceDescriptor<'_>,
     ) -> Pin<Box<dyn dispatch::RequestDeviceFuture>> {
-        let res = self.context.0.adapter_request_device(
-            self.id,
-            &desc.map_label(|l| l.map(Borrowed)),
-            None,
-            None,
-        );
-        let (device_id, queue_id) = match res {
+        let res = self
+            .context
+            .0
+            .adapter_request_device(self.id, &desc.map_label(|l| l.map(Borrowed)));
+        let (device_id, queue_ids) = match res {
             Ok(ids) => ids,
             Err(err) => {
                 return Box::pin(ready(Err(err.into())));
@@ -940,12 +938,16 @@ impl dispatch::AdapterInterface for CoreAdapter {
             error_sink: error_sink.clone(),
             features: desc.required_features,
         };
-        let queue = CoreQueue {
-            context: self.context.clone(),
-            id: queue_id,
-            error_sink,
-        };
-        Box::pin(ready(Ok((device.into(), queue.into()))))
+        let mut queues = Vec::new();
+        for queue_id in queue_ids {
+            let queue = CoreQueue {
+                context: self.context.clone(),
+                id: queue_id,
+                error_sink,
+            };
+            queues.push(queue.into());
+        }
+        Box::pin(ready(Ok((device.into(), queues))))
     }
 
     fn is_surface_supported(&self, surface: &dispatch::DispatchSurface) -> bool {

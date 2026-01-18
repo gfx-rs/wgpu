@@ -151,14 +151,13 @@ impl GPUAdapter {
       experimental_features: wgpu_types::ExperimentalFeatures::disabled(),
       memory_hints: Default::default(),
       trace,
+      queues: vec![0],
     };
 
-    let (device, queue) = self.instance.adapter_request_device(
-      self.id,
-      &wgpu_descriptor,
-      None,
-      None,
-    )?;
+    let (device, queues) = self
+      .instance
+      .adapter_request_device(self.id, &wgpu_descriptor)?;
+    let queue = queues.into_iter().next().unwrap();
 
     let spawner = state.borrow::<V8TaskSpawner>().clone();
     let lost_resolver = v8::PromiseResolver::new(scope).unwrap();

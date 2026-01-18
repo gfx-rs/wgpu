@@ -729,6 +729,16 @@ impl Device {
         }
     }
 
+    pub fn get_queue(&self, index: u32) -> Option<Arc<Queue>> {
+        self.queues[index as usize].get().as_ref()?.upgrade()
+    }
+
+    pub fn set_queue(&self, queue: &Arc<Queue>, index: u32) {
+        assert!(self.queues[index as usize]
+            .set(Arc::downgrade(queue))
+            .is_ok());
+    }
+
     // MQ TODO
     pub fn poll(
         &self,

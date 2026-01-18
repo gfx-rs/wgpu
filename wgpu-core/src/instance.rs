@@ -1,5 +1,3 @@
-// MQ TODO: this whole file
-
 use alloc::{
     borrow::{Cow, ToOwned as _},
     boxed::Box,
@@ -818,26 +816,28 @@ impl Adapter {
         hal_device: hal::DynOpenDevice,
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
-    ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
+    ) -> Result<(Arc<Device>, Vec<Arc<Queue>>), RequestDeviceError> {
         api_log!("Adapter::create_device");
 
         let device = Device::new(hal_device.device, self, desc, instance_flags)?;
         let device = Arc::new(device);
 
-        let queue = Queue::new(device.clone(), hal_device.queue, instance_flags)?;
-        let queue = Arc::new(queue);
-
-        device.set_queue(&queue);
+        let mut queues = Vec::new();
+        for (i, raw) in hal_device.queues.into_iter().enumerate() {
+            let queue = Arc::new(Queue::new(device.clone(), raw, instance_flags, i as u32)?);
+            device.set_queue(&queue, i as u32);
+            queues.push(queue);
+        }
         device.late_init_resources_with_queue()?;
 
-        Ok((device, queue))
+        Ok((device, queues))
     }
 
     pub fn create_device_and_queue(
         self: &Arc<Self>,
         desc: &DeviceDescriptor,
         instance_flags: wgt::InstanceFlags,
-    ) -> Result<(Arc<Device>, Arc<Queue>), RequestDeviceError> {
+    ) -> Result<(Arc<Device>, Vec<Arc<Queue>>), RequestDeviceError> {
         // Verify all features were exposed by the adapter
         if !self.raw.features.contains(desc.required_features) {
             return Err(RequestDeviceError::UnsupportedFeature(
@@ -882,11 +882,20 @@ impl Adapter {
             return Err(RequestDeviceError::LimitsExceeded(failed));
         }
 
+        // MQ TODO: validate queues
+
+        let queues: &[u32] = if desc.queues.is_empty() {
+            &[0]
+        } else {
+            &desc.queues
+        };
+
         let open = unsafe {
             self.raw.adapter.open(
                 desc.required_features,
                 &desc.required_limits,
                 &desc.memory_hints,
+                queues,
             )
         }
         .map_err(DeviceError::from_hal)?;
@@ -1174,25 +1183,30 @@ impl Global {
         &self,
         adapter_id: AdapterId,
         desc: &DeviceDescriptor,
-        device_id_in: Option<DeviceId>,
-        queue_id_in: Option<QueueId>,
-    ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
+    ) -> Result<(DeviceId, Vec<QueueId>), RequestDeviceError> {
         profiling::scope!("Adapter::request_device");
         api_log!("Adapter::request_device");
 
-        let device_fid = self.hub.devices.prepare(device_id_in);
-        let queue_fid = self.hub.queues.prepare(queue_id_in);
+        let device_fid = self.hub.devices.prepare(None);
+        let mut queue_fids = Vec::new();
+        for _ in 0..desc.queues.len().max(1) {
+            queue_fids.push(self.hub.queues.prepare(None));
+        }
 
         let adapter = self.hub.adapters.get(adapter_id);
-        let (device, queue) = adapter.create_device_and_queue(desc, self.instance.flags)?;
+        let (device, queues) = adapter.create_device_and_queue(desc, self.instance.flags)?;
 
         let device_id = device_fid.assign(device);
         resource_log!("Created Device {:?}", device_id);
 
-        let queue_id = queue_fid.assign(queue);
-        resource_log!("Created Queue {:?}", queue_id);
+        let mut out_queues = Vec::new();
+        for (queue_fid, queue) in queue_fids.into_iter().zip(queues.into_iter()) {
+            let queue_id = queue_fid.assign(queue);
+            out_queues.push(queue_id);
+            resource_log!("Created Queue {:?}", queue_id);
+        }
 
-        Ok((device_id, queue_id))
+        Ok((device_id, out_queues))
     }
 
     /// # Safety
@@ -1206,22 +1220,29 @@ impl Global {
         desc: &DeviceDescriptor,
         device_id_in: Option<DeviceId>,
         queue_id_in: Option<QueueId>,
-    ) -> Result<(DeviceId, QueueId), RequestDeviceError> {
+    ) -> Result<(DeviceId, Vec<QueueId>), RequestDeviceError> {
         profiling::scope!("Global::create_device_from_hal");
 
         let devices_fid = self.hub.devices.prepare(device_id_in);
-        let queues_fid = self.hub.queues.prepare(queue_id_in);
+        let mut queues_fids = Vec::new();
+        for _ in 0..desc.queues.len().max(1) {
+            queues_fids.push(self.hub.queues.prepare(queue_id_in));
+        }
 
         let adapter = self.hub.adapters.get(adapter_id);
-        let (device, queue) =
+        let (device, queues) =
             adapter.create_device_and_queue_from_hal(hal_device, desc, self.instance.flags)?;
 
         let device_id = devices_fid.assign(device);
         resource_log!("Created Device {:?}", device_id);
 
-        let queue_id = queues_fid.assign(queue);
-        resource_log!("Created Queue {:?}", queue_id);
+        let mut queue_ids = Vec::new();
+        for (queue_fid, queue) in queues_fids.into_iter().zip(queues.into_iter()) {
+            let queue_id = queue_fid.assign(queue);
+            resource_log!("Created Queue {:?}", queue_id);
+            queue_ids.push(queue_id);
+        }
 
-        Ok((device_id, queue_id))
+        Ok((device_id, queue_ids))
     }
 }
