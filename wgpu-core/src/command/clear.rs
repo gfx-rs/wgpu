@@ -274,7 +274,7 @@ pub(super) fn clear_texture_cmd(
         &mut state.tracker.textures,
         &state.device.alignments,
         // MQ TODO
-        state.device.zero_buffer.as_ref(),
+        state.queue.zero_buffer.as_ref(),
         state.snatch_guard,
         state.device.instance_flags,
     )?;

@@ -193,7 +193,10 @@ impl super::Adapter {
             subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
             subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
             transient_saves_memory: false,
-            supported_queue_families: vec![wgt::QueueUsageFlags::all()],
+            supported_queue_families: vec![wgt::QueueFamilyInfo {
+                num_queues: 1,
+                usage: wgt::QueueUsageFlags::all(),
+            }],
         }
     }
 

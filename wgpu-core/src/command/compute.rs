@@ -517,6 +517,7 @@ pub(super) fn encode_compute_pass(
     let pass_scope = PassErrorScope::Pass;
 
     let device = parent_state.device;
+    let queue = parent_state.queue;
 
     // We automatically keep extending command buffers over time, and because
     // we want to insert a command buffer _before_ what we're about to record,
@@ -538,6 +539,7 @@ pub(super) fn encode_compute_pass(
         pass: pass::PassState {
             base: EncodingState {
                 device,
+                queue,
                 raw_encoder,
                 tracker: parent_state.tracker,
                 buffer_memory_init_actions: parent_state.buffer_memory_init_actions,
@@ -562,7 +564,7 @@ pub(super) fn encode_compute_pass(
         intermediate_trackers: Tracker::new(),
     };
 
-    let indices = &device.tracker_indices;
+    let indices = &queue.tracker_indices;
     state
         .pass
         .base
@@ -768,6 +770,7 @@ pub(super) fn encode_compute_pass(
         transit,
         &mut parent_state.tracker.textures,
         device,
+        queue,
         parent_state.snatch_guard,
     );
     CommandEncoder::insert_barriers_from_tracker(

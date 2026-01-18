@@ -168,8 +168,14 @@ impl crate::Instance for Instance {
                         subgroup_max_size: 64,
                         transient_saves_memory: shared.private_caps.supports_memoryless_storage,
                         supported_queue_families: vec![
-                            wgt::QueueUsageFlags::all(),
-                            wgt::QueueUsageFlags::TRANSFER,
+                            wgt::QueueFamilyInfo {
+                                num_queues: 1,
+                                usage: wgt::QueueUsageFlags::all(),
+                            },
+                            wgt::QueueFamilyInfo {
+                                num_queues: 1,
+                                usage: wgt::QueueUsageFlags::TRANSFER,
+                            },
                         ],
                     },
                     features: shared.private_caps.features(),

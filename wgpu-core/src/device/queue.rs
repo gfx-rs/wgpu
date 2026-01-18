@@ -46,6 +46,7 @@ use crate::{
 };
 use crate::{device::resource::CommandIndices, resource::RawResourceAccess};
 
+#[derive(Debug)]
 pub struct Queue {
     raw: Box<dyn hal::DynQueue>,
     pub(crate) pending_writes: Mutex<PendingWrites>,

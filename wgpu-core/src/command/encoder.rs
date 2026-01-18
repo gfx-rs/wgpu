@@ -2,7 +2,10 @@ use alloc::{sync::Arc, vec::Vec};
 
 use crate::{
     command::memory_init::CommandBufferTextureMemoryActions,
-    device::{queue::TempResource, Device},
+    device::{
+        queue::{Queue, TempResource},
+        Device,
+    },
     init_tracker::BufferInitTrackerAction,
     ray_tracing::AsAction,
     snatch::SnatchGuard,
@@ -32,6 +35,7 @@ use crate::{
 /// cbindgen:ignore
 pub(crate) struct EncodingState<'snatch_guard, 'cmd_enc, E: ?Sized = dyn hal::DynCommandEncoder> {
     pub(crate) device: &'cmd_enc Arc<Device>,
+    pub(crate) queue: &'cmd_enc Arc<Queue>,
 
     pub(crate) raw_encoder: &'cmd_enc mut E,
 

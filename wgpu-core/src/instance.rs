@@ -882,11 +882,14 @@ impl Adapter {
             return Err(RequestDeviceError::LimitsExceeded(failed));
         }
 
-        // MQ TODO: validate queues
-
         let queues: &[u32] = if desc.queues.is_empty() {
             &[0]
         } else {
+            let mut num_queues = Vec::new();
+            for &family_index in &desc.queues {
+                num_queues.resize(family_index as usize + 1, 0);
+                num_queues[family_index as usize] += 1;
+            }
             &desc.queues
         };
 
@@ -932,6 +935,8 @@ pub enum RequestDeviceError {
         "Some experimental features, {0}, were requested, but experimental features are not enabled"
     )]
     ExperimentalFeaturesNotEnabled(wgt::Features),
+    #[error("Device queues are invalid for this adapter")]
+    InvalidQueues,
 }
 
 #[derive(Clone, Debug, Error)]

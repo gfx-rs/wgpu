@@ -1867,6 +1867,7 @@ pub(super) fn encode_render_pass(
     let pass_scope = PassErrorScope::Pass;
 
     let device = parent_state.device;
+    let queue = parent_state.queue;
 
     let mut indirect_draw_validation_batcher = crate::indirect_validation::DrawBatcher::new();
 
@@ -1905,7 +1906,7 @@ pub(super) fn encode_render_pass(
         )
         .map_pass_err(pass_scope)?;
 
-        let indices = &device.tracker_indices;
+        let indices = &queue.tracker_indices;
         parent_state
             .tracker
             .buffers
@@ -1930,6 +1931,7 @@ pub(super) fn encode_render_pass(
             pass: pass::PassState {
                 base: EncodingState {
                     device,
+                    queue,
                     raw_encoder,
                     tracker: parent_state.tracker,
                     buffer_memory_init_actions: parent_state.buffer_memory_init_actions,
@@ -2288,6 +2290,7 @@ pub(super) fn encode_render_pass(
             transit,
             &mut tracker.textures,
             device,
+            queue,
             parent_state.snatch_guard,
         );
 

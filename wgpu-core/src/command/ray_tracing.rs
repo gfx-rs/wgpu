@@ -318,7 +318,7 @@ pub(crate) fn build_acceleration_structures(
     };
 
     // MQ TODO
-    let scratch_buffer = ScratchBuffer::new(state.device, scratch_size)?;
+    let scratch_buffer = ScratchBuffer::new(state.device, state.queue, scratch_size)?;
 
     let scratch_buffer_barrier = hal::BufferBarrier::<dyn hal::DynBuffer> {
         buffer: scratch_buffer.raw(),
@@ -387,6 +387,7 @@ pub(crate) fn build_acceleration_structures(
             // MQ TODO
             let mut staging_buffer = StagingBuffer::new(
                 state.device,
+                state.queue,
                 wgt::BufferSize::new(instance_buffer_staging_source.len() as u64).unwrap(),
             )?;
             staging_buffer.write(&instance_buffer_staging_source);

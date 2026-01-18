@@ -1882,7 +1882,10 @@ impl super::Instance {
             if caps.is_empty() {
                 continue;
             }
-            queue_infos.push(caps);
+            queue_infos.push(wgt::QueueFamilyInfo {
+                num_queues: queue.queue_count,
+                usage: caps,
+            });
             queue_indices.push(i as u32);
         }
 
@@ -1947,7 +1950,7 @@ impl super::Instance {
             supported_queue_families: if timeline_semaphores {
                 queue_infos
             } else {
-                vec![queue_infos[0]]
+                vec![queue_infos.into_iter().next().unwrap()]
             },
         };
         let mut workarounds = super::Workarounds::empty();

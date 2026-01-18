@@ -104,7 +104,9 @@ use crate::{
         bind::Binder, BasePass, BindGroupStateChange, ColorAttachmentError, DrawError,
         IdReferences, MapPassErr, PassErrorScope, RenderCommand, RenderCommandError, StateChange,
     },
-    device::{AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext},
+    device::{
+        queue::Queue, AttachmentData, Device, DeviceError, MissingDownlevelFlags, RenderPassContext,
+    },
     hub::Hub,
     id,
     init_tracker::{BufferInitTrackerAction, MemoryInitKind, TextureInitTrackerAction},
@@ -164,12 +166,14 @@ pub struct RenderBundleEncoder {
     current_bind_groups: BindGroupStateChange,
     #[cfg_attr(feature = "serde", serde(skip))]
     current_pipeline: StateChange<id::RenderPipelineId>,
+    queue_id: id::QueueId,
 }
 
 impl RenderBundleEncoder {
     pub fn new(
         desc: &RenderBundleEncoderDescriptor,
         parent_id: id::DeviceId,
+        queue_id: id::QueueId,
     ) -> Result<Self, CreateRenderBundleError> {
         let (is_depth_read_only, is_stencil_read_only) = match desc.depth_stencil {
             Some(ds) => {
@@ -222,10 +226,11 @@ impl RenderBundleEncoder {
             is_stencil_read_only,
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
+            queue_id,
         })
     }
 
-    pub fn dummy(parent_id: id::DeviceId) -> Self {
+    pub fn dummy(parent_id: id::DeviceId, queue_id: id::QueueId) -> Self {
         Self {
             base: BasePass::new(&None),
             parent_id,
@@ -243,6 +248,7 @@ impl RenderBundleEncoder {
 
             current_bind_groups: BindGroupStateChange::new(),
             current_pipeline: StateChange::new(),
+            queue_id,
         }
     }
 
@@ -264,6 +270,7 @@ impl RenderBundleEncoder {
         self,
         desc: &RenderBundleDescriptor,
         device: &Arc<Device>,
+        queue: &Arc<Queue>,
         hub: &Hub,
     ) -> Result<Arc<RenderBundle>, RenderBundleError> {
         let scope = PassErrorScope::Bundle;
@@ -288,7 +295,7 @@ impl RenderBundleEncoder {
             binder: Binder::new(),
         };
 
-        let indices = &state.device.tracker_indices;
+        let indices = &queue.tracker_indices;
         state.trackers.buffers.set_size(indices.buffers.size());
         state.trackers.textures.set_size(indices.textures.size());
 
@@ -467,7 +474,7 @@ impl RenderBundleEncoder {
             ..
         } = state;
 
-        let tracker_indices = device.tracker_indices.bundles.clone();
+        let tracker_indices = queue.tracker_indices.bundles.clone();
         let discard_hal_labels = device
             .instance_flags
             .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS);

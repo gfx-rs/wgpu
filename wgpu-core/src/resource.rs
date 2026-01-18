@@ -19,8 +19,10 @@ use crate::device::trace;
 use crate::{
     binding_model::{BindGroup, BindingError},
     device::{
-        queue, resource::DeferredDestroy, BufferMapPendingClosure, Device, DeviceError,
-        DeviceMismatch, HostMap, MissingDownlevelFlags, MissingFeatures,
+        queue::{self, Queue},
+        resource::DeferredDestroy,
+        BufferMapPendingClosure, Device, DeviceError, DeviceMismatch, HostMap,
+        MissingDownlevelFlags, MissingFeatures,
     },
     hal_label,
     init_tracker::{BufferInitTracker, TextureInitTracker},
@@ -1077,6 +1079,7 @@ unsafe impl Sync for StagingBuffer {}
 pub struct StagingBuffer {
     raw: Box<dyn hal::DynBuffer>,
     device: Arc<Device>,
+    queue: Arc<Queue>,
     pub(crate) size: wgt::BufferSize,
     is_coherent: bool,
     ptr: NonNull<u8>,
@@ -1085,8 +1088,8 @@ pub struct StagingBuffer {
 impl StagingBuffer {
     pub(crate) fn new(
         device: &Arc<Device>,
+        queue: &Arc<Queue>,
         size: wgt::BufferSize,
-        queue_idx: u32,
     ) -> Result<Self, DeviceError> {
         profiling::scope!("StagingBuffer::new");
         // MQ TODO
@@ -1095,7 +1098,7 @@ impl StagingBuffer {
             size: size.get(),
             usage: wgt::BufferUses::MAP_WRITE | wgt::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT,
-            initial_queue: queue_idx,
+            initial_queue: queue.index,
         };
 
         let raw = unsafe { device.raw().create_buffer(&stage_desc) }
@@ -1109,6 +1112,7 @@ impl StagingBuffer {
             size,
             is_coherent: mapping.is_coherent,
             ptr: mapping.ptr,
+            queue: queue.clone(),
         };
 
         Ok(staging_buffer)
@@ -2265,6 +2269,7 @@ impl Blas {
     pub(crate) fn prepare_compact_async(
         self: &Arc<Self>,
         op: Option<BlasCompactCallback>,
+        queue_idx: u32,
     ) -> Result<SubmissionIndex, (Option<BlasCompactCallback>, BlasPrepareCompactError)> {
         let device = &self.device;
         if let Err(e) = device.check_is_valid() {
@@ -2300,15 +2305,18 @@ impl Blas {
         };
 
         // MQ TODO
-        let submit_index = if let Some(queue) = device.get_queue() {
-            queue.lock_life().prepare_compact(self).unwrap_or(0) // '0' means no wait is necessary
+        let submit_index = if let Some(queue) = device.get_queue(queue_idx) {
+            queue
+                .lock_life()
+                .prepare_compact(self)
+                .unwrap_or(SubmissionIndex(0, 0)) // '0' means no wait is necessary
         } else {
             // We can safely unwrap below since we just set the `compacted_state` to `BlasCompactState::Waiting`.
             let (mut callback, status) = self.read_back_compact_size().unwrap();
             if let Some(callback) = callback.take() {
                 callback(status);
             }
-            0
+            SubmissionIndex(0, 0)
         };
 
         Ok(submit_index)

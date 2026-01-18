@@ -7,7 +7,7 @@ use core::ops::Range;
 use hashbrown::hash_map::Entry;
 
 use crate::{
-    device::Device,
+    device::{queue::Queue, Device},
     init_tracker::*,
     resource::{DestroyedResourceError, ParentDevice, RawResourceAccess, Texture, Trackable},
     snatch::SnatchGuard,
@@ -135,6 +135,7 @@ pub(crate) fn fixup_discarded_surfaces<InitIter: Iterator<Item = TextureSurfaceD
     encoder: &mut dyn hal::DynCommandEncoder,
     texture_tracker: &mut TextureTracker,
     device: &Device,
+    queue: &Queue,
     snatch_guard: &SnatchGuard<'_>,
 ) {
     for init in inits {
@@ -148,7 +149,7 @@ pub(crate) fn fixup_discarded_surfaces<InitIter: Iterator<Item = TextureSurfaceD
             texture_tracker,
             &device.alignments,
             // MQ TODO
-            device.zero_buffer.as_ref(),
+            queue.zero_buffer.as_ref(),
             snatch_guard,
             device.instance_flags,
         )
@@ -263,6 +264,7 @@ impl BakedCommands {
         &mut self,
         device_tracker: &mut DeviceTracker,
         device: &Device,
+        queue: &Queue,
         snatch_guard: &SnatchGuard<'_>,
     ) -> Result<(), DestroyedResourceError> {
         profiling::scope!("initialize_texture_memory");
@@ -305,7 +307,7 @@ impl BakedCommands {
                     &mut device_tracker.textures,
                     &device.alignments,
                     // MQ TODO
-                    device.zero_buffer.as_ref(),
+                    queue.zero_buffer.as_ref(),
                     snatch_guard,
                     device.instance_flags,
                 );

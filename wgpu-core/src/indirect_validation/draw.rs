@@ -268,12 +268,12 @@ impl Draw {
                     .map(|batch| batch.staging_buffer_index)
                     .unique(unique_index_scratch)
                     .map(|index| hal::BufferBarrier {
-                        // MQ TODO
                         buffer: staging_buffers[index].raw(),
                         usage: hal::StateTransition {
                             from: wgt::BufferUses::MAP_WRITE,
                             to: wgt::BufferUses::COPY_SRC,
                         },
+                        src_dst_queue_index: None,
                     }),
             )
             .extend(
@@ -282,12 +282,12 @@ impl Draw {
                     .map(|batch| batch.metadata_resource_index)
                     .unique(unique_index_scratch)
                     .map(|index| hal::BufferBarrier {
-                        // MQ TODO
                         buffer: resources.get_metadata_buffer(index),
                         usage: hal::StateTransition {
                             from: wgt::BufferUses::STORAGE_READ_ONLY,
                             to: wgt::BufferUses::COPY_DST,
                         },
+                        src_dst_queue_index: None,
                     }),
             )
             .encode(encoder);

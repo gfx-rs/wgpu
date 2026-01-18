@@ -3,6 +3,7 @@ use core::mem::ManuallyDrop;
 
 use wgt::BufferUses;
 
+use crate::device::queue::Queue;
 use crate::device::{Device, DeviceError};
 use crate::{hal_label, resource_log};
 
@@ -15,8 +16,8 @@ pub struct ScratchBuffer {
 impl ScratchBuffer {
     pub(crate) fn new(
         device: &Arc<Device>,
+        queue: &Arc<Queue>,
         size: wgt::BufferSize,
-        queue_idx: u32,
     ) -> Result<Self, DeviceError> {
         let raw = unsafe {
             device
@@ -26,7 +27,7 @@ impl ScratchBuffer {
                     size: size.get(),
                     usage: BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
                     memory_flags: hal::MemoryFlags::empty(),
-                    initial_queue: queue_idx,
+                    initial_queue: queue.index,
                 })
                 .map_err(DeviceError::from_hal)?
         };

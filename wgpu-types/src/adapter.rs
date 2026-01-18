@@ -161,7 +161,7 @@ pub struct AdapterInfo {
     /// If true, adding [`TextureUsages::TRANSIENT`] to a texture will decrease memory usage.
     pub transient_saves_memory: bool,
     /// List of queues and their supported operations
-    pub supported_queue_families: Vec<QueueUsageFlags>,
+    pub supported_queue_families: Vec<QueueFamilyInfo>,
 }
 
 /// Error when [`Instance::request_adapter()`] fails.
@@ -297,4 +297,14 @@ bitflags::bitflags! {
         /// Queue supports transfer operations (usually for host->device or device->host)
         const TRANSFER = 1 << 2;
     }
+}
+
+/// Describes a family of queues which can be created.
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct QueueFamilyInfo {
+    /// The maximum number of queues of this family that can be created
+    pub num_queues: u32,
+    /// Operations that this queue can be used with
+    pub usage: QueueUsageFlags,
 }

@@ -87,7 +87,7 @@ pub(crate) use timestamp_writes::ArcPassTimestampWrites;
 pub use timestamp_writes::PassTimestampWrites;
 
 use crate::binding_model::BindingError;
-use crate::device::queue::TempResource;
+use crate::device::queue::{Queue, TempResource};
 use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::id::Id;
 use crate::lock::{rank, Mutex};
@@ -522,6 +522,7 @@ impl<'a> ops::DerefMut for RecordingGuard<'a> {
 
 pub(crate) struct CommandEncoder {
     pub(crate) device: Arc<Device>,
+    pub(crate) queue: Arc<Queue>,
 
     pub(crate) label: String,
 
@@ -878,10 +879,12 @@ impl CommandEncoder {
     pub(crate) fn new(
         encoder: Box<dyn hal::DynCommandEncoder>,
         device: &Arc<Device>,
+        queue: &Arc<Queue>,
         label: &Label,
     ) -> Self {
         CommandEncoder {
             device: device.clone(),
+            queue: queue.clone(),
             label: label.to_string(),
             data: Mutex::new(
                 rank::COMMAND_BUFFER_DATA,
@@ -915,11 +918,13 @@ impl CommandEncoder {
 
     pub(crate) fn new_invalid(
         device: &Arc<Device>,
+        queue: &Arc<Queue>,
         label: &Label,
         err: CommandEncoderError,
     ) -> Self {
         CommandEncoder {
             device: device.clone(),
+            queue: queue.clone(),
             label: label.to_string(),
             data: Mutex::new(rank::COMMAND_BUFFER_DATA, make_error_state(err)),
         }
@@ -1003,6 +1008,7 @@ impl CommandEncoder {
 
     fn encode_commands(
         device: &Arc<Device>,
+        queue: &Arc<Queue>,
         cmd_buf_data: &mut CommandBufferMutable,
     ) -> Result<(), CommandEncoderError> {
         device.check_is_valid()?;
@@ -1038,6 +1044,7 @@ impl CommandEncoder {
                 // [`EncodingState`].
                 let mut state = EncodingState {
                     device,
+                    queue,
                     raw_encoder: &mut cmd_buf_data.encoder,
                     tracker: &mut cmd_buf_data.trackers,
                     buffer_memory_init_actions: &mut cmd_buf_data.buffer_memory_init_actions,
@@ -1112,6 +1119,7 @@ impl CommandEncoder {
                 let raw_encoder = cmd_buf_data.encoder.open_if_closed()?;
                 let mut state = EncodingState {
                     device,
+                    queue,
                     raw_encoder,
                     tracker: &mut cmd_buf_data.trackers,
                     buffer_memory_init_actions: &mut cmd_buf_data.buffer_memory_init_actions,
@@ -1227,7 +1235,7 @@ impl CommandEncoder {
 
         let res = match cmd_enc_status.finish() {
             CommandEncoderStatus::Finished(mut cmd_buf_data) => {
-                match Self::encode_commands(&self.device, &mut cmd_buf_data) {
+                match Self::encode_commands(&self.device, &self.queue, &mut cmd_buf_data) {
                     Ok(()) => Ok(cmd_buf_data),
                     Err(error) => Err(EncoderErrorState {
                         error,
