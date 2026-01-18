@@ -280,10 +280,12 @@ impl crate::CommandEncoder for CommandBuffer {
     {
     }
 
-    unsafe fn transition_acceleration_structures(
-        &mut self,
-        _barriers: crate::AccelerationStructureBarrier,
-    ) {
+    unsafe fn transition_acceleration_structures<'a, T>(&mut self, barriers: T)
+    where
+        T: Iterator<
+            Item = crate::AccelerationStructureBarrier<'a, <Self::A as crate::Api>::Buffer>,
+        >,
+    {
     }
 
     unsafe fn copy_acceleration_structure_to_acceleration_structure(

@@ -1,4 +1,4 @@
-use alloc::boxed::Box;
+use alloc::{boxed::Box, vec::Vec};
 
 use crate::{
     Adapter, Api, DeviceError, OpenDevice, SurfaceCapabilities, TextureFormatCapabilities,
@@ -8,14 +8,21 @@ use super::{DynDevice, DynQueue, DynResource, DynResourceExt, DynSurface};
 
 pub struct DynOpenDevice {
     pub device: Box<dyn DynDevice>,
-    pub queue: Box<dyn DynQueue>,
+    pub queues: Vec<Box<dyn DynQueue>>,
 }
 
 impl<A: Api> From<OpenDevice<A>> for DynOpenDevice {
     fn from(open_device: OpenDevice<A>) -> Self {
         Self {
             device: Box::new(open_device.device),
-            queue: Box::new(open_device.queue),
+            queues: open_device
+                .queues
+                .into_iter()
+                .map(|q| {
+                    let b: Box<dyn DynQueue> = Box::new(q);
+                    b
+                })
+                .collect(),
         }
     }
 }
@@ -26,6 +33,7 @@ pub trait DynAdapter: DynResource {
         features: wgt::Features,
         limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
+        queues: &[u32],
     ) -> Result<DynOpenDevice, DeviceError>;
 
     unsafe fn texture_format_capabilities(
@@ -44,10 +52,20 @@ impl<A: Adapter + DynResource> DynAdapter for A {
         features: wgt::Features,
         limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
+        queues: &[u32],
     ) -> Result<DynOpenDevice, DeviceError> {
-        unsafe { A::open(self, features, limits, memory_hints) }.map(|open_device| DynOpenDevice {
-            device: Box::new(open_device.device),
-            queue: Box::new(open_device.queue),
+        unsafe { A::open(self, features, limits, memory_hints, queues) }.map(|open_device| {
+            DynOpenDevice {
+                device: Box::new(open_device.device),
+                queues: open_device
+                    .queues
+                    .into_iter()
+                    .map(|q| {
+                        let b: Box<dyn DynQueue> = Box::new(q);
+                        b
+                    })
+                    .collect(),
+            }
         })
     }
 

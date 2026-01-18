@@ -146,6 +146,7 @@ pub fn adapter_info() -> wgt::AdapterInfo {
         subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
         subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
         transient_saves_memory: false,
+        supported_queue_families: vec![wgt::QueueUsageFlags::all()],
     }
 }
 
@@ -263,10 +264,11 @@ impl crate::Adapter for Context {
         features: wgt::Features,
         _limits: &wgt::Limits,
         _memory_hints: &wgt::MemoryHints,
+        queues: &[u32],
     ) -> DeviceResult<crate::OpenDevice<Api>> {
         Ok(crate::OpenDevice {
             device: Context,
-            queue: Context,
+            queues: queues.iter().map(|_| Context).collect(),
         })
     }
     unsafe fn texture_format_capabilities(
@@ -288,23 +290,35 @@ impl crate::Adapter for Context {
 impl crate::Queue for Context {
     type A = Api;
 
-    unsafe fn submit(
-        &self,
-        command_buffers: &[&CommandBuffer],
-        surface_textures: &[&Resource],
-        (fence, fence_value): (&mut Fence, crate::FenceValue),
-    ) -> DeviceResult<()> {
-        // All commands are executed synchronously.
-        for cb in command_buffers {
-            // SAFETY: Caller is responsible for ensuring synchronization between commands and
-            // other mutations.
-            unsafe {
-                cb.execute();
+    unsafe fn submit<T>(&self, mut submits: T) -> Result<(), crate::DeviceError>
+    where
+        T: crate::SubmitIterator<
+            <Self::A as crate::Api>::CommandBuffer,
+            <Self::A as crate::Api>::Fence,
+            <Self::A as crate::Api>::SurfaceTexture,
+        >,
+    {
+        while let Some(submit) = submits.next() {
+            if let Some((fence, fence_value)) = &submit.wait_fence {
+                assert!(
+                    fence.value.load(Ordering::Acquire) >= *fence_value,
+                    "noop backend cannot have submissions that wait for fences which haven't already completed"
+                );
+            }
+            for &cb in submit.command_buffers {
+                // SAFETY: Caller is responsible for ensuring synchronization between commands and
+                // other mutations.
+                unsafe {
+                    cb.execute();
+                }
+            }
+            if let Some((fence, fence_value)) = &submit.signal_fence {
+                fence.value.store(*fence_value, Ordering::Release);
             }
         }
-        fence.value.store(fence_value, Ordering::Release);
         Ok(())
     }
+
     unsafe fn present(
         &self,
         surface: &Context,

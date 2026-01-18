@@ -1868,57 +1868,64 @@ impl super::Queue {
 impl crate::Queue for super::Queue {
     type A = super::Api;
 
-    unsafe fn submit(
-        &self,
-        command_buffers: &[&super::CommandBuffer],
-        _surface_textures: &[&super::Texture],
-        (signal_fence, signal_value): (&mut super::Fence, crate::FenceValue),
-    ) -> Result<(), crate::DeviceError> {
-        let shared = Arc::clone(&self.shared);
-        let gl = &shared.context.lock();
-        for cmd_buf in command_buffers.iter() {
-            // The command encoder assumes a default state when encoding the command buffer.
-            // Always reset the state between command_buffers to reflect this assumption. Do
-            // this at the beginning of the loop in case something outside of wgpu modified
-            // this state prior to commit.
-            unsafe { self.reset_state(gl) };
-            if let Some(ref label) = cmd_buf.label {
-                if self
-                    .shared
-                    .private_caps
-                    .contains(PrivateCapabilities::DEBUG_FNS)
+    unsafe fn submit<T>(&self, mut submits: T) -> Result<(), crate::DeviceError>
+    where
+        T: crate::SubmitIterator<
+            <Self::A as crate::Api>::CommandBuffer,
+            <Self::A as crate::Api>::Fence,
+            <Self::A as crate::Api>::SurfaceTexture,
+        >,
+    {
+        while let Some(submit) = submits.next() {
+            let shared = Arc::clone(&self.shared);
+            let gl = &shared.context.lock();
+            for cmd_buf in submit.command_buffers.iter() {
+                // The command encoder assumes a default state when encoding the command buffer.
+                // Always reset the state between command_buffers to reflect this assumption. Do
+                // this at the beginning of the loop in case something outside of wgpu modified
+                // this state prior to commit.
+                unsafe { self.reset_state(gl) };
+                if let Some(ref label) = cmd_buf.label {
+                    if self
+                        .shared
+                        .private_caps
+                        .contains(PrivateCapabilities::DEBUG_FNS)
+                    {
+                        unsafe {
+                            gl.push_debug_group(
+                                glow::DEBUG_SOURCE_APPLICATION,
+                                DEBUG_ID,
+                                to_debug_str(label),
+                            )
+                        };
+                    }
+                }
+
+                for command in cmd_buf.commands.iter() {
+                    unsafe { self.process(gl, command, &cmd_buf.data_bytes, &cmd_buf.queries) };
+                }
+
+                if cmd_buf.label.is_some()
+                    && self
+                        .shared
+                        .private_caps
+                        .contains(PrivateCapabilities::DEBUG_FNS)
                 {
-                    unsafe {
-                        gl.push_debug_group(
-                            glow::DEBUG_SOURCE_APPLICATION,
-                            DEBUG_ID,
-                            to_debug_str(label),
-                        )
-                    };
+                    unsafe { gl.pop_debug_group() };
                 }
             }
 
-            for command in cmd_buf.commands.iter() {
-                unsafe { self.process(gl, command, &cmd_buf.data_bytes, &cmd_buf.queries) };
+            if let Some((signal_fence, signal_value)) = submit.signal_fence {
+                signal_fence.maintain(gl);
+                signal_fence.signal(gl, signal_value)?;
             }
+            assert!(submit.wait_fence.is_none());
 
-            if cmd_buf.label.is_some()
-                && self
-                    .shared
-                    .private_caps
-                    .contains(PrivateCapabilities::DEBUG_FNS)
-            {
-                unsafe { gl.pop_debug_group() };
-            }
+            // This is extremely important. If we don't flush, the above fences may never
+            // be signaled, particularly in headless contexts. Headed contexts will
+            // often flush every so often, but headless contexts may not.
+            unsafe { gl.flush() };
         }
-
-        signal_fence.maintain(gl);
-        signal_fence.signal(gl, signal_value)?;
-
-        // This is extremely important. If we don't flush, the above fences may never
-        // be signaled, particularly in headless contexts. Headed contexts will
-        // often flush every so often, but headless contexts may not.
-        unsafe { gl.flush() };
 
         Ok(())
     }

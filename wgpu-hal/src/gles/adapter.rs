@@ -193,6 +193,7 @@ impl super::Adapter {
             subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
             subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
             transient_saves_memory: false,
+            supported_queue_families: vec![wgt::QueueUsageFlags::all()],
         }
     }
 
@@ -988,7 +989,9 @@ impl crate::Adapter for super::Adapter {
         features: wgt::Features,
         _limits: &wgt::Limits,
         _memory_hints: &wgt::MemoryHints,
+        queues: &[u32],
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
+        assert_eq!(queues, &[0]);
         let gl = &self.shared.context.lock();
         unsafe { gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1) };
         unsafe { gl.pixel_store_i32(glow::PACK_ALIGNMENT, 1) };
@@ -1027,7 +1030,7 @@ impl crate::Adapter for super::Adapter {
                 render_doc: Default::default(),
                 counters: Default::default(),
             },
-            queue: super::Queue {
+            queues: vec![super::Queue {
                 shared: Arc::clone(&self.shared),
                 features,
                 draw_fbo: unsafe { gl.create_framebuffer() }
@@ -1039,7 +1042,7 @@ impl crate::Adapter for super::Adapter {
                 temp_query_results: Mutex::new(Vec::new()),
                 draw_buffer_count: AtomicU8::new(1),
                 current_index_buffer: Mutex::new(None),
-            },
+            }],
         })
     }
 

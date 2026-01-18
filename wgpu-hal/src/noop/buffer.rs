@@ -36,6 +36,7 @@ impl Buffer {
             size,
             usage: _,
             memory_flags: _,
+            initial_queue: _,
         } = desc;
 
         let size = usize::try_from(size).map_err(|_| crate::DeviceError::OutOfMemory)?;

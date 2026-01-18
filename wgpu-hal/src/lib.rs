@@ -1214,6 +1214,9 @@ pub trait Queue: WasmNotSendSync {
     /// - The [`Fence`] passed as `signal_fence.0` must remain alive until
     ///   all submissions that will signal it have completed.
     ///
+    /// - If the devie has a single queue, exactly one signal fence must be set,
+    ///   and zero wait fences must be set.
+    ///
     /// [`Fence`]: Api::Fence
     /// [cb]: Api::CommandBuffer
     /// [ce]: Api::CommandEncoder
@@ -1222,10 +1225,13 @@ pub trait Queue: WasmNotSendSync {
     /// [bg]: Api::BindGroup
     /// [rp]: Api::RenderPipeline
     /// [st]: Api::SurfaceTexture
-    unsafe fn submit(
-        &self,
-        submits: &mut [QueueSubmitInfo<'_, Self::A>],
-    ) -> Result<(), DeviceError>;
+    unsafe fn submit<T>(&self, submits: T) -> Result<(), DeviceError>
+    where
+        T: SubmitIterator<
+            <Self::A as Api>::CommandBuffer,
+            <Self::A as Api>::Fence,
+            <Self::A as Api>::SurfaceTexture,
+        >;
     unsafe fn present(
         &self,
         surface: &<Self::A as Api>::Surface,
@@ -2005,6 +2011,7 @@ pub struct BufferDescriptor<'a> {
     pub size: wgt::BufferAddress,
     pub usage: wgt::BufferUses,
     pub memory_flags: MemoryFlags,
+    pub initial_queue: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -2020,6 +2027,7 @@ pub struct TextureDescriptor<'a> {
     /// Allows views of this texture to have a different format
     /// than the texture does.
     pub view_formats: Vec<wgt::TextureFormat>,
+    pub initial_queue: u32,
 }
 
 impl TextureDescriptor<'_> {
@@ -2664,6 +2672,7 @@ pub struct AccelerationStructureDescriptor<'a> {
     pub size: wgt::BufferAddress,
     pub format: AccelerationStructureFormat,
     pub allow_compaction: bool,
+    pub initial_queue: u32,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -2835,9 +2844,14 @@ pub struct Telemetry {
     ),
 }
 
-pub struct QueueSubmitInfo<'a, A: Api> {
-    command_buffers: &'a [&'a A::CommandBuffer],
-    surface_textures: &'a [&'a A::SurfaceTexture],
-    signal_fence: Option<(&'a mut A::Fence, FenceValue)>,
-    wait_fence: Option<(&'a mut A::Fence, FenceValue)>,
+pub struct QueueSubmitInfo<'a, CB: ?Sized, F: ?Sized, ST: ?Sized> {
+    command_buffers: &'a [&'a CB],
+    surface_textures: &'a [&'a ST],
+    signal_fence: Option<(&'a mut F, FenceValue)>,
+    wait_fence: Option<(&'a mut F, FenceValue)>,
+}
+
+pub trait SubmitIterator<CB, F: ?Sized, ST: ?Sized> {
+    fn len(&self) -> usize;
+    fn next<'a>(&'a mut self) -> Option<QueueSubmitInfo<'a, CB, F, ST>>;
 }

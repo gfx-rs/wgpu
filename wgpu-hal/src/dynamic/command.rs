@@ -195,9 +195,9 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         >],
     );
 
-    unsafe fn place_acceleration_structure_barrier(
+    unsafe fn transition_acceleration_structures(
         &mut self,
-        barrier: AccelerationStructureBarrier,
+        barriers: &[AccelerationStructureBarrier<'_, dyn DynBuffer>],
     );
 
     unsafe fn copy_acceleration_structure_to_acceleration_structure(
@@ -238,6 +238,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
         let barriers = barriers.iter().map(|barrier| BufferBarrier {
             buffer: barrier.buffer.expect_downcast_ref(),
             usage: barrier.usage.clone(),
+            dst_queue_index: barrier.dst_queue_index,
         });
         unsafe { self.transition_buffers(barriers) };
     }
@@ -247,6 +248,7 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
             texture: barrier.texture.expect_downcast_ref(),
             usage: barrier.usage.clone(),
             range: barrier.range,
+            dst_queue_index: barrier.dst_queue_index,
         });
         unsafe { self.transition_textures(barriers) };
     }
@@ -677,11 +679,16 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
         unsafe { C::build_acceleration_structures(self, descriptors.len() as _, descriptors) };
     }
 
-    unsafe fn place_acceleration_structure_barrier(
+    unsafe fn transition_acceleration_structures(
         &mut self,
-        barrier: AccelerationStructureBarrier,
+        barriers: &[AccelerationStructureBarrier<'_, dyn DynBuffer>],
     ) {
-        unsafe { C::transition_acceleration_structures(self, barrier) };
+        let barriers = barriers.iter().map(|barrier| AccelerationStructureBarrier {
+            acceleration_structure: barrier.acceleration_structure.expect_downcast_ref(),
+            usage: barrier.usage.clone(),
+            dst_queue_index: barrier.dst_queue_index,
+        });
+        unsafe { self.transition_acceleration_structures(barriers) };
     }
 
     unsafe fn copy_acceleration_structure_to_acceleration_structure(
