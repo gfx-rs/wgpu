@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use core::ops::Range;
 
 #[cfg(any(feature = "serde", test))]
@@ -32,6 +33,8 @@ pub struct DeviceDescriptor<L> {
     /// Whether API tracing for debugging is enabled,
     /// and where the trace is written if so.
     pub trace: Trace,
+    /// The indices of queue families to create queues for
+    pub queues: Vec<u32>,
 }
 
 impl<L> DeviceDescriptor<L> {
@@ -45,6 +48,7 @@ impl<L> DeviceDescriptor<L> {
             experimental_features: self.experimental_features,
             memory_hints: self.memory_hints.clone(),
             trace: self.trace.clone(),
+            queues: self.queues.clone(),
         }
     }
 }

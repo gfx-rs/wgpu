@@ -95,6 +95,8 @@ Device <- CommandBuffer = insert(device.start, device.end, buffer.start, buffer.
 [`UsageScope`]: https://gpuweb.github.io/gpuweb/#programming-model-synchronization
 */
 
+// MQ TODO: this entire folder
+
 mod blas;
 mod buffer;
 mod metadata;

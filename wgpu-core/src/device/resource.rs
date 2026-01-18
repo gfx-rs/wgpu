@@ -730,6 +730,7 @@ impl Device {
         }
     }
 
+    // MQ TODO
     pub fn get_queue(&self) -> Option<Arc<Queue>> {
         self.queue.get().as_ref()?.upgrade()
     }
@@ -738,6 +739,7 @@ impl Device {
         assert!(self.queue.set(Arc::downgrade(queue)).is_ok());
     }
 
+    // MQ TODO
     pub fn poll(
         &self,
         poll_type: wgt::PollType<crate::SubmissionIndex>,

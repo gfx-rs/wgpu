@@ -664,6 +664,7 @@ impl Buffer {
             .set_single(self, internal_use);
 
         let submit_index = if let Some(queue) = device.get_queue() {
+            // MQ TODO
             queue.lock_life().map(self).unwrap_or(0) // '0' means no wait is necessary
         } else {
             // We can safely unwrap below since we just set the `map_state` to `BufferMapState::Waiting`.
@@ -834,6 +835,7 @@ impl Buffer {
                         dst_offset: 0,
                         size,
                     });
+                    // MQ TODO
                     let transition_src = hal::BufferBarrier {
                         buffer: staging_buffer.raw(),
                         usage: hal::StateTransition {
@@ -940,6 +942,7 @@ impl Buffer {
             })
         };
 
+        // MQ TODO
         if let Some(queue) = device.get_queue() {
             let mut pending_writes = queue.pending_writes.lock();
             if pending_writes.contains_buffer(self) {
@@ -1080,6 +1083,7 @@ pub struct StagingBuffer {
 impl StagingBuffer {
     pub(crate) fn new(device: &Arc<Device>, size: wgt::BufferSize) -> Result<Self, DeviceError> {
         profiling::scope!("StagingBuffer::new");
+        // MQ TODO
         let stage_desc = hal::BufferDescriptor {
             label: hal_label(Some("(wgpu internal) Staging"), device.instance_flags),
             size: size.get(),
@@ -1438,6 +1442,7 @@ impl Texture {
             })
         };
 
+        // MQ TODO
         if let Some(queue) = device.get_queue() {
             let mut pending_writes = queue.pending_writes.lock();
             if pending_writes.contains_texture(self) {
@@ -2287,6 +2292,7 @@ impl Blas {
             }),
         };
 
+        // MQ TODO
         let submit_index = if let Some(queue) = device.get_queue() {
             queue.lock_life().prepare_compact(self).unwrap_or(0) // '0' means no wait is necessary
         } else {

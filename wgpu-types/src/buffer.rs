@@ -29,6 +29,8 @@ pub struct BufferDescriptor<L> {
     /// If this is `true`, [`size`](#structfield.size) must be a multiple of
     /// [`COPY_BUFFER_ALIGNMENT`].
     pub mapped_at_creation: bool,
+    /// The queue with ownership at resource creation time
+    pub initial_queue: u32,
 }
 
 impl<L> BufferDescriptor<L> {
@@ -40,6 +42,7 @@ impl<L> BufferDescriptor<L> {
             size: self.size,
             usage: self.usage,
             mapped_at_creation: self.mapped_at_creation,
+            initial_queue: self.initial_queue,
         }
     }
 }

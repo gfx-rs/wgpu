@@ -14,6 +14,7 @@ pub struct ScratchBuffer {
 
 impl ScratchBuffer {
     pub(crate) fn new(device: &Arc<Device>, size: wgt::BufferSize) -> Result<Self, DeviceError> {
+        // MQ TODO
         let raw = unsafe {
             device
                 .raw()

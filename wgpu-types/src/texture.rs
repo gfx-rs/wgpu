@@ -510,6 +510,8 @@ pub struct TextureDescriptor<L, V> {
     ///
     /// Note: currently, only the srgb-ness is allowed to change. (ex: `Rgba8Unorm` texture + `Rgba8UnormSrgb` view)
     pub view_formats: V,
+    /// The queue with ownership at resource creation time
+    pub initial_queue: u32,
 }
 
 impl<L, V> TextureDescriptor<L, V> {
@@ -528,6 +530,7 @@ impl<L, V> TextureDescriptor<L, V> {
             format: self.format,
             usage: self.usage,
             view_formats: self.view_formats.clone(),
+            initial_queue: self.initial_queue,
         }
     }
 
@@ -550,6 +553,7 @@ impl<L, V> TextureDescriptor<L, V> {
             format: self.format,
             usage: self.usage,
             view_formats: v_fun(self.view_formats.clone()),
+            initial_queue: self.initial_queue,
         }
     }
 

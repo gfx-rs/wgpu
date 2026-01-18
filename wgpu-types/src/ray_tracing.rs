@@ -62,6 +62,8 @@ pub struct CreateBlasDescriptor<L> {
     pub flags: AccelerationStructureFlags,
     /// Update mode for the bottom level acceleration structure.
     pub update_mode: AccelerationStructureUpdateMode,
+    /// The queue with ownership at resource creation time
+    pub initial_queue: u32,
 }
 
 impl<L> CreateBlasDescriptor<L> {
@@ -71,6 +73,7 @@ impl<L> CreateBlasDescriptor<L> {
             label: fun(&self.label),
             flags: self.flags,
             update_mode: self.update_mode,
+            initial_queue: self.initial_queue,
         }
     }
 }
@@ -88,6 +91,8 @@ pub struct CreateTlasDescriptor<L> {
     pub flags: AccelerationStructureFlags,
     /// Update mode for the bottom level acceleration structure.
     pub update_mode: AccelerationStructureUpdateMode,
+    /// The queue with ownership at resource creation time
+    pub initial_queue: u32,
 }
 
 impl<L> CreateTlasDescriptor<L> {
@@ -98,6 +103,7 @@ impl<L> CreateTlasDescriptor<L> {
             flags: self.flags,
             update_mode: self.update_mode,
             max_instances: self.max_instances,
+            initial_queue: self.initial_queue,
         }
     }
 }

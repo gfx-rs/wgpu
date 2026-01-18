@@ -326,6 +326,8 @@ mod tests {
         subgroup_min_size: 32,
         subgroup_max_size: 32,
         transient_saves_memory: true,
+        // MQ TODO: this should be safe but test just to be sure
+        supported_queue_families: Vec::new(),
     };
 
     // IMPORTANT: If these tests fail, then you MUST increment HEADER_VERSION
