@@ -294,8 +294,8 @@ impl crate::Queue for Context {
         &self,
         submits: &mut [crate::QueueSubmitInfo<'_, CommandBuffer, Fence, Resource>],
     ) -> Result<(), crate::DeviceError> {
-        while let Some(submit) = submits.next() {
-            if let Some((fence, fence_value)) = &submit.wait_fences {
+        for submit in submits {
+            for (fence, fence_value) in submit.wait_fences.iter_mut() {
                 assert!(
                     fence.value.load(Ordering::Acquire) >= *fence_value,
                     "noop backend cannot have submissions that wait for fences which haven't already completed"
@@ -308,7 +308,7 @@ impl crate::Queue for Context {
                     cb.execute();
                 }
             }
-            if let Some((fence, fence_value)) = &submit.signal_fences {
+            for (fence, fence_value) in submit.signal_fences.iter_mut() {
                 fence.value.store(*fence_value, Ordering::Release);
             }
         }
