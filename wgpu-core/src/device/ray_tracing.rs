@@ -39,6 +39,7 @@ impl Device {
         {
             self.require_features(Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)?;
         }
+        let queue = self.get_queue(blas_desc.initial_queue).unwrap();
 
         let size_info = match &sizes {
             wgt::BlasGeometrySizeDescriptors::Triangles { descriptors } => {
@@ -85,7 +86,7 @@ impl Device {
                         .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
                     {
                         transform = Some(wgpu_hal::AccelerationStructureTriangleTransform {
-                            buffer: self.zero_buffer.as_ref(),
+                            buffer: queue.zero_buffer.as_ref(),
                             offset: 0,
                         })
                     }
@@ -372,14 +373,15 @@ impl Global {
         &self,
         blas_id: BlasId,
         callback: Option<BlasCompactCallback>,
-    ) -> Result<crate::SubmissionIndex, BlasPrepareCompactError> {
+        queue_index: u32,
+    ) -> Result<u64, BlasPrepareCompactError> {
         profiling::scope!("Blas::prepare_compact_async");
         api_log!("Blas::prepare_compact_async {blas_id:?}");
 
         let hub = &self.hub;
 
         let compact_result = match hub.blas_s.get(blas_id).get() {
-            Ok(blas) => blas.prepare_compact_async(callback),
+            Ok(blas) => blas.prepare_compact_async(callback, queue_index),
             Err(e) => Err((callback, e.into())),
         };
 

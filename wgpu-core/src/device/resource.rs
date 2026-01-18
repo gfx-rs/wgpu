@@ -53,7 +53,7 @@ use crate::{
     resource_log,
     snatch::{SnatchGuard, SnatchLock, Snatchable},
     timestamp_normalization::TIMESTAMP_NORMALIZATION_BUFFER_USES,
-    track::{BindGroupStates, DeviceTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
+    track::{BindGroupStates, QueueTracker, TrackerIndexAllocators, UsageScope, UsageScopePool},
     validation,
     weak_vec::WeakVec,
     FastHashMap, LabelHelpers, OnceCellOrLock,
@@ -259,18 +259,14 @@ pub struct Device {
     pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
     pub(crate) usage_scopes: UsageScopePool,
-    pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
     // Optional so that we can late-initialize this after the queue is created.
     pub(crate) timestamp_normalizer:
         OnceCellOrLock<crate::timestamp_normalization::TimestampNormalizer>,
-    /// Uniform buffer containing [`ExternalTextureParams`] with values such
-    /// that a [`TextureView`] bound to a [`wgt::BindingType::ExternalTexture`]
-    /// binding point will be rendered correctly. Intended to be used as the
-    /// [`hal::ExternalTextureBinding::params`] field.
-    pub(crate) default_external_texture_params_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     // needs to be dropped last
     #[cfg(feature = "trace")]
     pub(crate) trace: Mutex<Option<Box<dyn trace::Trace + Send + Sync + 'static>>>,
+
+    pub(crate) tracker_indices: TrackerIndexAllocators,
 }
 
 pub(crate) enum DeferredDestroy {
@@ -293,24 +289,12 @@ impl Drop for Device {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
 
-        // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this point.
-        let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
-        // SAFETY: We are in the Drop impl and we don't use
-        // self.default_external_texture_params_buffer anymore after this point.
-        let default_external_texture_params_buffer =
-            unsafe { ManuallyDrop::take(&mut self.default_external_texture_params_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
-        if let Some(indirect_validation) = self.indirect_validation.take() {
-            indirect_validation.dispose(self.raw.as_ref());
-        }
         if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
             timestamp_normalizer.dispose(self.raw.as_ref());
         }
         unsafe {
-            self.raw.destroy_buffer(zero_buffer);
-            self.raw
-                .destroy_buffer(default_external_texture_params_buffer);
             self.raw.destroy_fence(fence);
         }
     }
@@ -430,70 +414,14 @@ impl Device {
 
         let command_allocator = command::CommandAllocator::new();
 
-        let rt_uses = if desc
-            .required_features
-            .intersects(wgt::Features::EXPERIMENTAL_RAY_QUERY)
-        {
-            wgt::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT
-        } else {
-            wgt::BufferUses::empty()
-        };
-
-        // Create zeroed buffer used for texture clears (and raytracing if required).
-        let zero_buffer = unsafe {
-            raw_device.create_buffer(&hal::BufferDescriptor {
-                label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
-                size: ZERO_BUFFER_SIZE,
-                usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST | rt_uses,
-                memory_flags: hal::MemoryFlags::empty(),
-            })
-        }
-        .map_err(DeviceError::from_hal)?;
-
-        let default_external_texture_params_buffer = unsafe {
-            raw_device.create_buffer(&hal::BufferDescriptor {
-                label: hal_label(
-                    Some("(wgpu internal) default external texture params buffer"),
-                    instance_flags,
-                ),
-                size: size_of::<ExternalTextureParams>() as _,
-                usage: wgt::BufferUses::COPY_DST | wgt::BufferUses::UNIFORM,
-                memory_flags: hal::MemoryFlags::empty(),
-            })
-        }
-        .map_err(DeviceError::from_hal)?;
-
         // Cloned as we need them below anyway.
         let alignments = adapter.raw.capabilities.alignments.clone();
         let downlevel = adapter.raw.capabilities.downlevel.clone();
         let limits = &adapter.raw.capabilities.limits;
 
-        let enable_indirect_validation = instance_flags
-            .contains(wgt::InstanceFlags::VALIDATION_INDIRECT_CALL)
-            && downlevel.flags.contains(
-                wgt::DownlevelFlags::INDIRECT_EXECUTION | wgt::DownlevelFlags::COMPUTE_SHADERS,
-            )
-            && limits.max_storage_buffers_per_shader_stage >= 2;
-
-        let indirect_validation = if enable_indirect_validation {
-            Some(crate::indirect_validation::IndirectValidation::new(
-                raw_device.as_ref(),
-                &desc.required_limits,
-                &desc.required_features,
-                adapter.backend(),
-            )?)
-        } else {
-            None
-        };
-
         Ok(Self {
             raw: raw_device,
             adapter: adapter.clone(),
-            queue: OnceCellOrLock::new(),
-            zero_buffer: ManuallyDrop::new(zero_buffer),
-            default_external_texture_params_buffer: ManuallyDrop::new(
-                default_external_texture_params_buffer,
-            ),
             label: desc.label.to_string(),
             command_allocator,
             command_indices: RwLock::new(
@@ -509,7 +437,6 @@ impl Device {
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
             valid: AtomicBool::new(true),
             device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
-            trackers: Mutex::new(rank::DEVICE_TRACKERS, DeviceTracker::new()),
             tracker_indices: TrackerIndexAllocators::new(),
             bgl_pool: ResourcePool::new(),
             #[cfg(feature = "trace")]
@@ -522,7 +449,6 @@ impl Device {
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
             timestamp_normalizer: OnceCellOrLock::new(),
-            indirect_validation,
         })
     }
 

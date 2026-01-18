@@ -2270,7 +2270,7 @@ impl Blas {
         self: &Arc<Self>,
         op: Option<BlasCompactCallback>,
         queue_idx: u32,
-    ) -> Result<SubmissionIndex, (Option<BlasCompactCallback>, BlasPrepareCompactError)> {
+    ) -> Result<u64, (Option<BlasCompactCallback>, BlasPrepareCompactError)> {
         let device = &self.device;
         if let Err(e) = device.check_is_valid() {
             return Err((op, e.into()));
@@ -2306,17 +2306,14 @@ impl Blas {
 
         // MQ TODO
         let submit_index = if let Some(queue) = device.get_queue(queue_idx) {
-            queue
-                .lock_life()
-                .prepare_compact(self)
-                .unwrap_or(SubmissionIndex(0, 0)) // '0' means no wait is necessary
+            queue.lock_life().prepare_compact(self).unwrap_or(0) // '0' means no wait is necessary
         } else {
             // We can safely unwrap below since we just set the `compacted_state` to `BlasCompactState::Waiting`.
             let (mut callback, status) = self.read_back_compact_size().unwrap();
             if let Some(callback) = callback.take() {
                 callback(status);
             }
-            SubmissionIndex(0, 0)
+            0
         };
 
         Ok(submit_index)

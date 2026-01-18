@@ -34,15 +34,16 @@ impl IndirectValidation {
         required_limits: &wgt::Limits,
         required_features: &wgt::Features,
         backend: wgt::Backend,
+        queue_index: u32,
     ) -> Result<Self, DeviceError> {
-        let dispatch = match Dispatch::new(device, required_limits) {
+        let dispatch = match Dispatch::new(device, required_limits, queue_index) {
             Ok(dispatch) => dispatch,
             Err(e) => {
                 log::error!("indirect-validation error: {e:?}");
                 return Err(DeviceError::Lost);
             }
         };
-        let draw = match Draw::new(device, required_features, backend) {
+        let draw = match Draw::new(device, required_features, backend, queue_index) {
             Ok(draw) => draw,
             Err(e) => {
                 log::error!("indirect-draw-validation error: {e:?}");

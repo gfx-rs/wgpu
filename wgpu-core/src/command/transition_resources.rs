@@ -56,7 +56,7 @@ pub(crate) fn transition_resources(
     texture_transitions: Vec<wgt::TextureTransition<Arc<Texture>>>,
 ) -> Result<(), TransitionResourcesError> {
     let mut usage_scope = state.device.new_usage_scope();
-    let indices = &state.queue.tracker_indices;
+    let indices = &state.device.tracker_indices;
     usage_scope.buffers.set_size(indices.buffers.size());
     usage_scope.textures.set_size(indices.textures.size());
 

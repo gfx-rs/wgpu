@@ -41,6 +41,7 @@ impl Dispatch {
     pub(super) fn new(
         device: &dyn hal::DynDevice,
         limits: &wgt::Limits,
+        queue_index: u32,
     ) -> Result<Self, CreateIndirectValidationPipelineError> {
         let max_compute_workgroups_per_dimension = limits.max_compute_workgroups_per_dimension;
 
@@ -218,6 +219,7 @@ impl Dispatch {
             size: DST_BUFFER_SIZE.get(),
             usage: wgt::BufferUses::INDIRECT | wgt::BufferUses::STORAGE_READ_WRITE,
             memory_flags: hal::MemoryFlags::empty(),
+            initial_queue: queue_index,
         };
         let dst_buffer =
             unsafe { device.create_buffer(&dst_buffer_desc) }.map_err(DeviceError::from_hal)?;

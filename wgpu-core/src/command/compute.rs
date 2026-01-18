@@ -564,7 +564,7 @@ pub(super) fn encode_compute_pass(
         intermediate_trackers: Tracker::new(),
     };
 
-    let indices = &queue.tracker_indices;
+    let indices = &device.tracker_indices;
     state
         .pass
         .base
@@ -909,7 +909,7 @@ fn dispatch_indirect(
         ),
     );
 
-    if let Some(ref indirect_validation) = state.pass.base.device.indirect_validation {
+    if let Some(ref indirect_validation) = state.pass.base.queue.indirect_validation {
         let params = indirect_validation.dispatch.params(
             &state.pass.base.device.limits,
             offset,

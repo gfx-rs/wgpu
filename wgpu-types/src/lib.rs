@@ -295,7 +295,7 @@ pub enum PollError {
     /// The requested Wait timed out before the submission was completed.
     Timeout,
     /// The requested Wait was given a wrong submission index.
-    WrongSubmissionIndex(u64, u64),
+    WrongSubmissionIndex((u32, u64), (u32, u64)),
 }
 
 // This impl could be derived by `thiserror`, but by not doing so, we can reduce the number of
@@ -308,9 +308,9 @@ impl fmt::Display for PollError {
             }
             PollError::WrongSubmissionIndex(requested, successful) => write!(
                 f,
-                "Tried to wait using a submission index ({requested}) \
+                "Tried to wait using a submission index ({requested:?}) \
                 that has not been returned by a successful submission \
-                (last successful submission: {successful}"
+                (last successful submission: {successful:?}"
             ),
         }
     }

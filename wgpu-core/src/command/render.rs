@@ -1906,7 +1906,7 @@ pub(super) fn encode_render_pass(
         )
         .map_pass_err(pass_scope)?;
 
-        let indices = &queue.tracker_indices;
+        let indices = &device.tracker_indices;
         parent_state
             .tracker
             .buffers
@@ -2303,11 +2303,12 @@ pub(super) fn encode_render_pass(
             parent_state.snatch_guard,
         );
 
-        if let Some(ref indirect_validation) = device.indirect_validation {
+        if let Some(ref indirect_validation) = queue.indirect_validation {
             indirect_validation
                 .draw
                 .inject_validation_pass(
                     device,
+                    queue,
                     parent_state.snatch_guard,
                     parent_state.indirect_draw_validation_resources,
                     parent_state.temp_resources,
@@ -2828,7 +2829,7 @@ fn multi_draw_indirect(
         }
     }
 
-    if state.pass.base.device.indirect_validation.is_some() {
+    if state.pass.base.queue.indirect_validation.is_some() {
         state
             .pass
             .scope

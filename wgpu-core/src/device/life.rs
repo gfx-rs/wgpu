@@ -27,7 +27,7 @@ struct ActiveSubmission {
     ///
     /// When `Device::fence`'s value is greater than or equal to this, our queue
     /// submission has completed.
-    index: SubmissionIndex,
+    index: u64,
 
     /// Buffers to be mapped once this submission has completed.
     mapped: Vec<Arc<Buffer>>,
@@ -128,7 +128,7 @@ impl ActiveSubmission {
 pub enum WaitIdleError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("Tried to wait using a submission index ({0}) that has not been returned by a successful submission (last successful submission: {1})")]
+    #[error("Tried to wait using a submission index ({0:?}) that has not been returned by a successful submission (last successful submission: {1:?})")]
     WrongSubmissionIndex(SubmissionIndex, SubmissionIndex),
     #[error("Timed out trying to wait for the given submission index.")]
     Timeout,
@@ -210,7 +210,7 @@ impl LifetimeTracker {
     }
 
     /// Start tracking resources associated with a new queue submission.
-    pub fn track_submission(&mut self, index: SubmissionIndex, encoders: Vec<EncoderInFlight>) {
+    pub fn track_submission(&mut self, index: u64, encoders: Vec<EncoderInFlight>) {
         self.active.push(ActiveSubmission {
             index,
             mapped: Vec::new(),
@@ -220,7 +220,7 @@ impl LifetimeTracker {
         });
     }
 
-    pub(crate) fn map(&mut self, buffer: &Arc<Buffer>) -> Option<SubmissionIndex> {
+    pub(crate) fn map(&mut self, buffer: &Arc<Buffer>) -> Option<u64> {
         // Determine which buffers are ready to map, and which must wait for the GPU.
         let submission = self
             .active
@@ -237,7 +237,7 @@ impl LifetimeTracker {
         maybe_submission_index
     }
 
-    pub(crate) fn prepare_compact(&mut self, blas: &Arc<Blas>) -> Option<SubmissionIndex> {
+    pub(crate) fn prepare_compact(&mut self, blas: &Arc<Blas>) -> Option<u64> {
         // Determine which BLASes are ready to map, and which must wait for the GPU.
         let submission = self.active.iter_mut().rev().find(|a| a.contains_blas(blas));
 
@@ -252,7 +252,7 @@ impl LifetimeTracker {
 
     /// Returns the submission index of the most recent submission that uses the
     /// given buffer.
-    pub fn get_buffer_latest_submission_index(&self, buffer: &Buffer) -> Option<SubmissionIndex> {
+    pub fn get_buffer_latest_submission_index(&self, buffer: &Buffer) -> Option<u64> {
         // We iterate in reverse order, so that we can bail out early as soon
         // as we find a hit.
         self.active.iter().rev().find_map(|submission| {
@@ -266,10 +266,7 @@ impl LifetimeTracker {
 
     /// Returns the submission index of the most recent submission that uses the
     /// given texture.
-    pub fn get_texture_latest_submission_index(
-        &self,
-        texture: &Texture,
-    ) -> Option<SubmissionIndex> {
+    pub fn get_texture_latest_submission_index(&self, texture: &Texture) -> Option<u64> {
         // We iterate in reverse order, so that we can bail out early as soon
         // as we find a hit.
         self.active.iter().rev().find_map(|submission| {
@@ -298,7 +295,7 @@ impl LifetimeTracker {
     #[must_use]
     pub fn triage_submissions(
         &mut self,
-        last_done: SubmissionIndex,
+        last_done: u64,
     ) -> SmallVec<[SubmittedWorkDoneClosure; 1]> {
         // MQ TODO: looking forward to this
         profiling::scope!("triage_submissions");
@@ -329,7 +326,7 @@ impl LifetimeTracker {
     pub fn schedule_resource_destruction(
         &mut self,
         temp_resource: TempResource,
-        last_submit_index: SubmissionIndex,
+        last_submit_index: u64,
     ) {
         let resources = self
             .active
@@ -346,10 +343,7 @@ impl LifetimeTracker {
         }
     }
 
-    pub fn add_work_done_closure(
-        &mut self,
-        closure: SubmittedWorkDoneClosure,
-    ) -> Option<SubmissionIndex> {
+    pub fn add_work_done_closure(&mut self, closure: SubmittedWorkDoneClosure) -> Option<u64> {
         match self.active.last_mut() {
             Some(active) => {
                 active.work_done_closures.push(closure);

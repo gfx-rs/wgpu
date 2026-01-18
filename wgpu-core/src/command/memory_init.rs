@@ -11,7 +11,7 @@ use crate::{
     init_tracker::*,
     resource::{DestroyedResourceError, ParentDevice, RawResourceAccess, Texture, Trackable},
     snatch::SnatchGuard,
-    track::{DeviceTracker, TextureTracker},
+    track::{QueueTracker, TextureTracker},
     FastHashMap,
 };
 
@@ -162,7 +162,7 @@ impl BakedCommands {
     // executing the commands and updates resource init states accordingly
     pub(crate) fn initialize_buffer_memory(
         &mut self,
-        device_tracker: &mut DeviceTracker,
+        device_tracker: &mut QueueTracker,
         snatch_guard: &SnatchGuard<'_>,
     ) -> Result<(), DestroyedResourceError> {
         profiling::scope!("initialize_buffer_memory");
@@ -262,7 +262,7 @@ impl BakedCommands {
     // uninitialized
     pub(crate) fn initialize_texture_memory(
         &mut self,
-        device_tracker: &mut DeviceTracker,
+        device_tracker: &mut QueueTracker,
         device: &Device,
         queue: &Queue,
         snatch_guard: &SnatchGuard<'_>,

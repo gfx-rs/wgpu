@@ -4,7 +4,10 @@ use super::{
 };
 use crate::{
     command::RenderPassErrorInner,
-    device::{queue::TempResource, Device, DeviceError},
+    device::{
+        queue::{Queue, TempResource},
+        Device, DeviceError,
+    },
     lock::{rank, Mutex},
     pipeline::{CreateComputePipelineError, CreateShaderModuleError},
     resource::{RawResourceAccess as _, StagingBuffer, Trackable},
@@ -54,6 +57,7 @@ pub(crate) struct Draw {
     dst_bind_group_layout: Box<dyn hal::DynBindGroupLayout>,
     pipeline_layout: Box<dyn hal::DynPipelineLayout>,
     pipeline: Box<dyn hal::DynComputePipeline>,
+    queue_index: u32,
 
     free_indirect_entries: Mutex<Vec<BufferPoolEntry>>,
     free_metadata_entries: Mutex<Vec<BufferPoolEntry>>,
@@ -64,6 +68,7 @@ impl Draw {
         device: &dyn hal::DynDevice,
         required_features: &wgt::Features,
         backend: wgt::Backend,
+        queue_index: u32,
     ) -> Result<Self, CreateIndirectValidationPipelineError> {
         let module = create_validation_module(device)?;
 
@@ -107,6 +112,7 @@ impl Draw {
             dst_bind_group_layout,
             pipeline_layout,
             pipeline,
+            queue_index,
 
             free_indirect_entries: Mutex::new(rank::BUFFER_POOL, Vec::new()),
             free_metadata_entries: Mutex::new(rank::BUFFER_POOL, Vec::new()),
@@ -192,6 +198,7 @@ impl Draw {
     pub(crate) fn inject_validation_pass(
         &self,
         device: &Arc<Device>,
+        queue: &Arc<Queue>,
         snatch_guard: &SnatchGuard,
         resources: &mut DrawResources,
         temp_resources: &mut Vec<TempResource>,
@@ -212,8 +219,11 @@ impl Draw {
         for batch in batches.values_mut() {
             let data = batch.metadata();
             let offset = if current_size + data.len() > max_staging_buffer_size {
-                let staging_buffer =
-                    StagingBuffer::new(device, NonZeroU64::new(current_size as u64).unwrap())?;
+                let staging_buffer = StagingBuffer::new(
+                    device,
+                    queue,
+                    NonZeroU64::new(current_size as u64).unwrap(),
+                )?;
                 staging_buffers.push(staging_buffer);
                 current_size = data.len();
                 0
@@ -227,7 +237,7 @@ impl Draw {
         }
         if current_size != 0 {
             let staging_buffer =
-                StagingBuffer::new(device, NonZeroU64::new(current_size as u64).unwrap())?;
+                StagingBuffer::new(device, queue, NonZeroU64::new(current_size as u64).unwrap())?;
             staging_buffers.push(staging_buffer);
         }
 
@@ -330,6 +340,7 @@ impl Draw {
                             from: wgt::BufferUses::COPY_DST,
                             to: wgt::BufferUses::STORAGE_READ_ONLY,
                         },
+                        src_dst_queue_index: None,
                     }),
             )
             .extend(
@@ -344,6 +355,7 @@ impl Draw {
                             from: wgt::BufferUses::INDIRECT,
                             to: wgt::BufferUses::STORAGE_READ_WRITE,
                         },
+                        src_dst_queue_index: None,
                     }),
             )
             .encode(encoder);
@@ -421,6 +433,7 @@ impl Draw {
                             from: wgt::BufferUses::STORAGE_READ_WRITE,
                             to: wgt::BufferUses::INDIRECT,
                         },
+                        src_dst_queue_index: None,
                     }),
             )
             .encode(encoder);
@@ -436,6 +449,7 @@ impl Draw {
             dst_bind_group_layout,
             pipeline_layout,
             pipeline,
+            queue_index: _,
 
             free_indirect_entries,
             free_metadata_entries,
@@ -674,6 +688,7 @@ fn create_buffer_and_bind_group(
         size: BUFFER_SIZE.get(),
         usage,
         memory_flags: hal::MemoryFlags::empty(),
+        initial_queue: 0,
     };
     let buffer = unsafe { device.create_buffer(&buffer_desc) }?;
     let bind_group_desc = hal::BindGroupDescriptor {
@@ -708,13 +723,14 @@ struct CurrentEntry {
 /// Holds all command buffer-level resources that are needed to validate indirect draws.
 pub(crate) struct DrawResources {
     device: Arc<Device>,
+    queue: Arc<Queue>,
     dst_entries: Vec<BufferPoolEntry>,
     metadata_entries: Vec<BufferPoolEntry>,
 }
 
 impl Drop for DrawResources {
     fn drop(&mut self) {
-        if let Some(ref indirect_validation) = self.device.indirect_validation {
+        if let Some(ref indirect_validation) = self.queue.indirect_validation {
             let indirect_draw_validation = &indirect_validation.draw;
             indirect_draw_validation.release_dst_entries(self.dst_entries.drain(..));
             indirect_draw_validation.release_metadata_entries(self.metadata_entries.drain(..));
@@ -723,9 +739,10 @@ impl Drop for DrawResources {
 }
 
 impl DrawResources {
-    pub(crate) fn new(device: Arc<Device>) -> Self {
+    pub(crate) fn new(device: Arc<Device>, queue: Arc<Queue>) -> Self {
         DrawResources {
             device,
+            queue,
             dst_entries: Vec::new(),
             metadata_entries: Vec::new(),
         }
@@ -756,7 +773,7 @@ impl DrawResources {
         size: u64,
         current_entry: &mut Option<CurrentEntry>,
     ) -> Result<(usize, u64), DeviceError> {
-        let indirect_draw_validation = &self.device.indirect_validation.as_ref().unwrap().draw;
+        let indirect_draw_validation = &self.queue.indirect_validation.as_ref().unwrap().draw;
         let ensure_entry = |index: usize| {
             if self.dst_entries.len() <= index {
                 let entry = indirect_draw_validation.acquire_dst_entry(self.device.raw())?;
@@ -773,7 +790,7 @@ impl DrawResources {
         size: u64,
         current_entry: &mut Option<CurrentEntry>,
     ) -> Result<(usize, u64), DeviceError> {
-        let indirect_draw_validation = &self.device.indirect_validation.as_ref().unwrap().draw;
+        let indirect_draw_validation = &self.queue.indirect_validation.as_ref().unwrap().draw;
         let ensure_entry = |index: usize| {
             if self.metadata_entries.len() <= index {
                 let entry = indirect_draw_validation.acquire_metadata_entry(self.device.raw())?;

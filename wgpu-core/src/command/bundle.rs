@@ -256,6 +256,10 @@ impl RenderBundleEncoder {
         self.parent_id
     }
 
+    pub fn queue(&self) -> id::QueueId {
+        self.queue_id
+    }
+
     /// Convert this encoder's commands into a [`RenderBundle`].
     ///
     /// We want executing a [`RenderBundle`] to be quick, so we take
@@ -288,6 +292,7 @@ impl RenderBundleEncoder {
             index: None,
             flat_dynamic_offsets: Vec::new(),
             device: device.clone(),
+            queue: queue.clone(),
             commands: Vec::new(),
             buffer_memory_init_actions: Vec::new(),
             texture_memory_init_actions: Vec::new(),
@@ -295,7 +300,7 @@ impl RenderBundleEncoder {
             binder: Binder::new(),
         };
 
-        let indices = &queue.tracker_indices;
+        let indices = &device.tracker_indices;
         state.trackers.buffers.set_size(indices.buffers.size());
         state.trackers.textures.set_size(indices.textures.size());
 
@@ -474,7 +479,7 @@ impl RenderBundleEncoder {
             ..
         } = state;
 
-        let tracker_indices = queue.tracker_indices.bundles.clone();
+        let tracker_indices = device.tracker_indices.bundles.clone();
         let discard_hal_labels = device
             .instance_flags
             .contains(wgt::InstanceFlags::DISCARD_HAL_LABELS);
@@ -491,6 +496,7 @@ impl RenderBundleEncoder {
             is_depth_read_only: self.is_depth_read_only,
             is_stencil_read_only: self.is_stencil_read_only,
             device: device.clone(),
+            queue: queue.clone(),
             used: trackers,
             buffer_memory_init_actions,
             texture_memory_init_actions,
@@ -864,7 +870,7 @@ fn multi_draw_indirect(
     };
     let instance_limit = vertex_limits.instance_limit;
 
-    let buffer_uses = if state.device.indirect_validation.is_some() {
+    let buffer_uses = if state.queue.indirect_validation.is_some() {
         wgt::BufferUses::STORAGE_READ_ONLY
     } else {
         wgt::BufferUses::INDIRECT
@@ -931,6 +937,7 @@ pub struct RenderBundle {
     pub(super) is_depth_read_only: bool,
     pub(super) is_stencil_read_only: bool,
     pub(crate) device: Arc<Device>,
+    pub(crate) queue: Arc<Queue>,
     pub(crate) used: RenderBundleScope,
     pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction>,
@@ -1113,7 +1120,7 @@ impl RenderBundle {
                     vertex_or_index_limit,
                     instance_limit,
                 } => {
-                    let (buffer, offset) = if self.device.indirect_validation.is_some() {
+                    let (buffer, offset) = if self.queue.indirect_validation.is_some() {
                         let (dst_resource_index, offset) = indirect_draw_validation_batcher.add(
                             indirect_draw_validation_resources,
                             &self.device,
@@ -1355,6 +1362,7 @@ struct State {
     flat_dynamic_offsets: Vec<wgt::DynamicOffset>,
 
     device: Arc<Device>,
+    queue: Arc<Queue>,
     commands: Vec<ArcRenderCommand>,
     buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     texture_memory_init_actions: Vec<TextureInitTrackerAction>,

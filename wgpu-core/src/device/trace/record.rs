@@ -36,7 +36,6 @@ pub(crate) fn new_render_bundle_encoder_descriptor(
         }),
         sample_count: context.sample_count,
         multiview: context.multiview_mask,
-        queue_index: context.queue_index,
     }
 }
 

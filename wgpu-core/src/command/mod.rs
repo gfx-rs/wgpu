@@ -99,7 +99,7 @@ use crate::resource::{
     DestroyedResourceError, Fallible, InvalidResourceError, Labeled, ParentDevice as _, QuerySet,
 };
 use crate::storage::Storage;
-use crate::track::{DeviceTracker, ResourceUsageCompatibilityError, Tracker, UsageScope};
+use crate::track::{QueueTracker, ResourceUsageCompatibilityError, Tracker, UsageScope};
 use crate::{api_log, global::Global, id, resource_log, Label};
 use crate::{hal_label, LabelHelpers};
 
@@ -903,7 +903,10 @@ impl CommandEncoder {
                     as_actions: Default::default(),
                     temp_resources: Default::default(),
                     indirect_draw_validation_resources:
-                        crate::indirect_validation::DrawResources::new(device.clone()),
+                        crate::indirect_validation::DrawResources::new(
+                            device.clone(),
+                            queue.clone(),
+                        ),
                     commands: Vec::new(),
                     #[cfg(feature = "trace")]
                     trace_commands: if device.trace.lock().is_some() {
@@ -984,7 +987,7 @@ impl CommandEncoder {
 
     pub(crate) fn insert_barriers_from_device_tracker(
         raw: &mut dyn hal::DynCommandEncoder,
-        base: &mut DeviceTracker,
+        base: &mut QueueTracker,
         head: &Tracker,
         snatch_guard: &SnatchGuard,
     ) {

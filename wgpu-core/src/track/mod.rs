@@ -601,12 +601,12 @@ impl<'a> UsageScope<'a> {
 // MQ TODO: make this per-queue
 
 /// A tracker used by Device.
-pub(crate) struct DeviceTracker {
+pub(crate) struct QueueTracker {
     pub buffers: DeviceBufferTracker,
     pub textures: DeviceTextureTracker,
 }
 
-impl DeviceTracker {
+impl QueueTracker {
     pub fn new() -> Self {
         Self {
             buffers: DeviceBufferTracker::new(),
