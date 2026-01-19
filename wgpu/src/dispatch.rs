@@ -370,6 +370,8 @@ pub trait CommandEncoderInterface: CommonTraits {
         &mut self,
         buffer_transitions: &mut dyn Iterator<Item = wgt::BufferTransition<&'a DispatchBuffer>>,
         texture_transitions: &mut dyn Iterator<Item = wgt::TextureTransition<&'a DispatchTexture>>,
+        blas_transitions: &mut dyn Iterator<Item = wgt::BlasTransition<&'a DispatchBlas>>,
+        tlas_transitions: &mut dyn Iterator<Item = wgt::TlasTransition<&'a DispatchTlas>>,
     );
 }
 pub trait ComputePassInterface: CommonTraits {

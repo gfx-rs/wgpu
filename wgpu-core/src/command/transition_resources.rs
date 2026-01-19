@@ -7,8 +7,8 @@ use crate::{
     command::{encoder::EncodingState, ArcCommand, CommandEncoder, EncoderStateError},
     device::DeviceError,
     global::Global,
-    id::{BufferId, CommandEncoderId, TextureId},
-    resource::{Buffer, InvalidResourceError, ParentDevice, Texture},
+    id::{BlasId, BufferId, CommandEncoderId, TextureId, TlasId},
+    resource::{Blas, Buffer, InvalidResourceError, ParentDevice, Texture, Tlas},
     track::ResourceUsageCompatibilityError,
 };
 
@@ -18,6 +18,8 @@ impl Global {
         command_encoder_id: CommandEncoderId,
         buffer_transitions: impl Iterator<Item = wgt::BufferTransition<BufferId>>,
         texture_transitions: impl Iterator<Item = wgt::TextureTransition<TextureId>>,
+        blas_transitions: impl Iterator<Item = wgt::BlasTransition<BlasId>>,
+        tlas_transitions: impl Iterator<Item = wgt::TlasTransition<TlasId>>,
     ) -> Result<(), EncoderStateError> {
         profiling::scope!("CommandEncoder::transition_resources");
 
@@ -47,6 +49,22 @@ impl Global {
                         })
                     })
                     .collect::<Result<_, TransitionResourcesError>>()?,
+                blas_transitions: blas_transitions
+                    .map(|t| {
+                        Ok(wgt::BlasTransition {
+                            blas: self.resolve_blas_id(t.blas)?,
+                            src_dst_queue_indices: t.src_dst_queue_indices,
+                        })
+                    })
+                    .collect::<Result<_, TransitionResourcesError>>()?,
+                tlas_transitions: tlas_transitions
+                    .map(|t| {
+                        Ok(wgt::TlasTransition {
+                            tlas: self.resolve_tlas_id(t.tlas)?,
+                            src_dst_queue_indices: t.src_dst_queue_indices,
+                        })
+                    })
+                    .collect::<Result<_, TransitionResourcesError>>()?,
             })
         })
     }
@@ -56,6 +74,8 @@ pub(crate) fn transition_resources(
     state: &mut EncodingState,
     buffer_transitions: Vec<wgt::BufferTransition<Arc<Buffer>>>,
     texture_transitions: Vec<wgt::TextureTransition<Arc<Texture>>>,
+    blas_transitions: Vec<wgt::BlasTransition<Arc<Blas>>>,
+    tlas_transitions: Vec<wgt::TlasTransition<Arc<Tlas>>>,
 ) -> Result<(), TransitionResourcesError> {
     let mut usage_scope = state.device.new_usage_scope();
     let indices = &state.device.tracker_indices;
@@ -82,6 +102,18 @@ pub(crate) fn transition_resources(
                 texture_transition.state,
             )
         }?;
+    }
+
+    for blas_transition in blas_transitions {
+        blas_transition.blas.same_device(state.device)?;
+
+        // MQ TODO
+    }
+
+    for tlas_transition in tlas_transitions {
+        tlas_transition.tlas.same_device(state.device)?;
+
+        // MQ TODO
     }
 
     // Record any needed barriers based on tracker data

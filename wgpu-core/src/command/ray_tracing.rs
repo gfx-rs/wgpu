@@ -10,7 +10,6 @@ use wgt::{math::align_to, BufferUsages, BufferUses, Features};
 use crate::{
     command::encoder::EncodingState,
     ray_tracing::{AsAction, AsBuild, BlasTriangleGeometryInfo, TlasBuild, ValidateAsActionsError},
-    resource::InvalidResourceError,
     track::Tracker,
 };
 use crate::{command::EncoderStateError, device::resource::CommandIndices};
@@ -61,14 +60,6 @@ struct TlasStore<'a> {
 }
 
 impl Global {
-    fn resolve_blas_id(&self, blas_id: BlasId) -> Result<Arc<Blas>, InvalidResourceError> {
-        self.hub.blas_s.get(blas_id).get()
-    }
-
-    fn resolve_tlas_id(&self, tlas_id: TlasId) -> Result<Arc<Tlas>, InvalidResourceError> {
-        self.hub.tlas_s.get(tlas_id).get()
-    }
-
     pub fn command_encoder_mark_acceleration_structures_built(
         &self,
         command_encoder_id: CommandEncoderId,

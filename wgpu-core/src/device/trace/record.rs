@@ -273,6 +273,8 @@ impl IntoTrace for ArcCommand {
             ArcCommand::TransitionResources {
                 buffer_transitions: _,
                 texture_transitions: _,
+                blas_transitions: _,
+                tlas_transitions: _,
             } => {
                 // TransitionResources does not exist in Command, so skip or handle as needed.
                 // If you want to ignore, you could panic or return a default.

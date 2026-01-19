@@ -183,3 +183,23 @@ pub const TRANSFORM_BUFFER_ALIGNMENT: crate::BufferAddress = 16;
 
 /// Alignment requirement for instance buffers used in acceleration structure builds (`build_acceleration_structures_unsafe_tlas`)
 pub const INSTANCE_BUFFER_ALIGNMENT: crate::BufferAddress = 16;
+
+/// A blas transition for use with `CommandEncoder::transition_resources`.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct BlasTransition<T> {
+    /// The blas to transition.
+    pub blas: T,
+    /// Used for queue family ownership transfers
+    pub src_dst_queue_indices: Option<(u32, u32)>,
+}
+
+/// A tlas transition for use with `CommandEncoder::transition_resources`.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct TlasTransition<T> {
+    /// The tlas to transition.
+    pub tlas: T,
+    /// Used for queue family ownership transfers
+    pub src_dst_queue_indices: Option<(u32, u32)>,
+}

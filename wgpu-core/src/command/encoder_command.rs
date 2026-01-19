@@ -180,6 +180,8 @@ pub enum Command<R: ReferenceType> {
     TransitionResources {
         buffer_transitions: Vec<wgt::BufferTransition<R::Buffer>>,
         texture_transitions: Vec<wgt::TextureTransition<R::Texture>>,
+        blas_transitions: Vec<wgt::BlasTransition<R::Blas>>,
+        tlas_transitions: Vec<wgt::TlasTransition<R::Tlas>>,
     },
 }
 

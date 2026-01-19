@@ -1204,11 +1204,15 @@ impl CommandEncoder {
                     ArcCommand::TransitionResources {
                         buffer_transitions,
                         texture_transitions,
+                        blas_transitions,
+                        tlas_transitions,
                     } => {
                         transition_resources::transition_resources(
                             &mut state,
                             buffer_transitions,
                             texture_transitions,
+                            blas_transitions,
+                            tlas_transitions,
                         )?;
                     }
                     ArcCommand::RunComputePass { .. } | ArcCommand::RunRenderPass { .. } => {
@@ -1689,6 +1693,20 @@ impl Global {
         texture_id: Id<id::markers::Texture>,
     ) -> Result<Arc<crate::resource::Texture>, InvalidResourceError> {
         self.hub.textures.get(texture_id).get()
+    }
+
+    fn resolve_blas_id(
+        &self,
+        blas_id: Id<id::markers::Blas>,
+    ) -> Result<Arc<crate::resource::Blas>, InvalidResourceError> {
+        self.hub.blas_s.get(blas_id).get()
+    }
+
+    fn resolve_tlas_id(
+        &self,
+        tlas_id: Id<id::markers::Tlas>,
+    ) -> Result<Arc<crate::resource::Tlas>, InvalidResourceError> {
+        self.hub.tlas_s.get(tlas_id).get()
     }
 
     fn resolve_query_set(
