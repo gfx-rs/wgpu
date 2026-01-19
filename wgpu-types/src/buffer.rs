@@ -163,4 +163,6 @@ pub struct BufferTransition<T> {
     pub buffer: T,
     /// The new state to transition to.
     pub state: BufferUses,
+    /// Used for queue family ownership transfers
+    pub src_dst_queue_indices: Option<(u32, u32)>,
 }

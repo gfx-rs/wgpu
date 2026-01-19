@@ -279,6 +279,8 @@ pub struct TextureTransition<T> {
     pub selector: Option<TextureSelector>,
     /// The new state to transition to.
     pub state: TextureUses,
+    /// Used for queue family ownership transfers
+    pub src_dst_queue_indices: Option<(u32, u32)>,
 }
 
 /// Specifies a particular set of subresources in a texture.

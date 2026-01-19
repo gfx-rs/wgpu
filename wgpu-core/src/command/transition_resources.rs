@@ -33,6 +33,7 @@ impl Global {
                         Ok(wgt::BufferTransition {
                             buffer: self.resolve_buffer_id(t.buffer)?,
                             state: t.state,
+                            src_dst_queue_indices: t.src_dst_queue_indices,
                         })
                     })
                     .collect::<Result<_, TransitionResourcesError>>()?,
@@ -42,6 +43,7 @@ impl Global {
                             texture: self.resolve_texture_id(t.texture)?,
                             selector: t.selector,
                             state: t.state,
+                            src_dst_queue_indices: t.src_dst_queue_indices,
                         })
                     })
                     .collect::<Result<_, TransitionResourcesError>>()?,

@@ -437,11 +437,13 @@ impl CommandEncoder {
             &mut buffer_transitions.map(|t| wgt::BufferTransition {
                 buffer: &t.buffer.inner,
                 state: t.state,
+                src_dst_queue_indices: t.src_dst_queue_indices,
             }),
             &mut texture_transitions.map(|t| wgt::TextureTransition {
                 texture: &t.texture.inner,
                 selector: t.selector,
                 state: t.state,
+                src_dst_queue_indices: t.src_dst_queue_indices,
             }),
         );
     }
