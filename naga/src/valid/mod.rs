@@ -404,7 +404,7 @@ enum TraceRayVertexReturnState {
     // this error for.
     #[expect(unused)]
     NoVertexReturn(crate::Span),
-    /// Trace ray calls have been found, all 
+    /// Trace ray calls have been found, all
     /// acceleration structures have the flag enabling
     /// vertex return.
     VertexReturn,
