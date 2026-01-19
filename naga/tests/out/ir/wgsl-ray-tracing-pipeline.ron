@@ -217,7 +217,7 @@
             ),
             mesh_info: None,
             task_payload: None,
-            ray_incoming_payload: None,
+            incoming_ray_payload: None,
         ),
         (
             name: "miss",
@@ -241,7 +241,7 @@
             ),
             mesh_info: None,
             task_payload: None,
-            ray_incoming_payload: Some(2),
+            incoming_ray_payload: Some(2),
         ),
         (
             name: "any_hit_main",
@@ -317,7 +317,7 @@
             ),
             mesh_info: None,
             task_payload: None,
-            ray_incoming_payload: Some(2),
+            incoming_ray_payload: Some(2),
         ),
         (
             name: "closest_hit_main",
@@ -341,7 +341,7 @@
             ),
             mesh_info: None,
             task_payload: None,
-            ray_incoming_payload: Some(2),
+            incoming_ray_payload: Some(2),
         ),
     ],
     diagnostic_filters: [],
