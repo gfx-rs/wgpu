@@ -2768,6 +2768,7 @@ pub enum RayPipelineFunction {
         /// A pointer in the ray_payload or incoming_ray_payload address spaces
         payload: Handle<Expression>,
         // Do we want miss index? What about sbt offset and sbt stride (could be hard to validate)?
+        // https://github.com/gfx-rs/wgpu/issues/8894
     },
 }
 
