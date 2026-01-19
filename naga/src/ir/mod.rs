@@ -2523,7 +2523,7 @@ pub struct EntryPoint {
     pub task_payload: Option<Handle<GlobalVariable>>,
     /// The unique global variable used as an incoming ray payload going into any hit, closest hit and miss shaders.
     /// Unlike the outgoing ray payload, an incoming ray payload must be unique
-    pub ray_incoming_payload: Option<Handle<GlobalVariable>>,
+    pub incoming_ray_payload: Option<Handle<GlobalVariable>>,
 }
 
 /// Return types predeclared for the frexp, modf, and atomicCompareExchangeWeak built-in functions.

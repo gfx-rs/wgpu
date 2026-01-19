@@ -1641,7 +1641,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 None
             };
 
-            let ray_incoming_payload =
+            let incoming_ray_payload =
                 if let Some((var_name, var_span)) = entry.ray_incoming_payload {
                     Some(match ctx.globals.get(var_name) {
                         Some(&LoweredGlobalDecl::Var(handle)) => handle,
@@ -1665,7 +1665,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 function,
                 mesh_info,
                 task_payload,
-                ray_incoming_payload,
+                incoming_ray_payload,
             });
             Ok(LoweredGlobalDecl::EntryPoint(
                 ctx.module.entry_points.len() - 1,
