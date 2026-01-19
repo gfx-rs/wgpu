@@ -2,69 +2,64 @@ use wgpu::util::DeviceExt;
 use wgpu_test::{gpu_test, GpuTestConfiguration, TestParameters, TestingContext};
 
 pub fn all_tests(vec: &mut Vec<wgpu_test::GpuTestInitializer>) {
-    vec.push(BARYCENTRIC);
-    vec.push(BARYCENTRIC_NO_PERSPECTIVE);
+    vec.push(PER_VERTEX);
 }
 
 //
-// This test renders one triangle to a 2x2 render target. The triangle
-// covers the bottom-left, bottom-right, and the top-left pixel.
-// XY layout of the render target, with the triangle:
+// These tests render a triangle strip to a 2x2 render target. The first triangle
+// in the vertex buffer covers the top-left pixel, the second triangle
+// covers the bottom two pixels, and the last triangle covers the top-right pixel.
+// XY layout of the render target, with the three triangles, pixel centers marked with '
 //
-//     (-1,1)  (0,1)  (1,1)
-//        +------+------+
-//        |      |      |
-//        |   o  |      |
-//        |   |\ |      |
-//        |   | \|      |
-// (-1,0) +---|--\------+ (1,0)
-//        |   |  |\     |
-//        |   |  | \    |
-//        |   o--+--o   |
-//        |      |      |
-//        +------+------+
-//     (-1,-1) (0,-1) (1,-1)
+//      (-1,1)    (0,1)     (1,1)
+//        +---------+---------+
+//        | o-------o-------o |
+//        | |      /|\      | |
+//        | |  '  / | \  '  | |
+//        | |    /  |  \    | |
+// (-1,0) +-|---/---+---\---|-+ (1,0)
+//        | |  /    |    \  | |
+//        | | /     |     \ | |
+//        | |/ '    |    ' \| |
+//        | o---------------o |
+//        +---------+---------+
+//     (-1,-1)    (0,-1)    (1,-1)
 //
-// The fragment shader outputs color based on builtin(barycentric):
+// The fragment shader outputs color based on per-vertex position:
 //
-//     return vec4<f32>(bary * 1.1 - 0.05, 1.0);
+//     return vec4(z[0], z[1], z[2], 1.0);
 //
 
 #[gpu_test]
-static BARYCENTRIC: GpuTestConfiguration = GpuTestConfiguration::new()
+static PER_VERTEX: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
             .test_features_limits()
-            .features(wgpu::Features::SHADER_BARYCENTRICS),
+            .features(wgpu::Features::SHADER_PER_VERTEX),
     )
-    .run_async(|ctx| barycentric(ctx, false));
+    .run_async(per_vertex);
 
-#[gpu_test]
-static BARYCENTRIC_NO_PERSPECTIVE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(
-        TestParameters::default()
-            .test_features_limits()
-            .features(wgpu::Features::SHADER_BARYCENTRICS),
-    )
-    .run_async(|ctx| barycentric(ctx, true));
-
-async fn barycentric(ctx: TestingContext, no_perspective: bool) {
+async fn per_vertex(ctx: TestingContext) {
     let shader = ctx
         .device
-        .create_shader_module(wgpu::include_wgsl!("barycentric.wgsl"));
+        .create_shader_module(wgpu::include_wgsl!("per_vertex.wgsl"));
 
-    let n = -0.505;
-    let p = 0.51;
-    let triangle_xy: [f32; 6] = [n, n, p, n, n, p];
+    let trianglestrip_xyz: [f32; 15] = [
+        -0.9, 0.9, 0.0, // top left
+        -0.9, -0.9, 0.25, // bottom left
+        0.0, 0.9, 0.5, // top center
+        0.9, -0.9, 0.75, // bottom right
+        0.9, 0.9, 1.0, // top right
+    ];
     let vertex_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: None,
-            contents: bytemuck::cast_slice(&triangle_xy),
+            contents: bytemuck::cast_slice(&trianglestrip_xyz),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
-    let indices = [0u32, 1, 2];
+    let indices = [0u32, 1, 2, 3, 4];
     let index_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -83,25 +78,25 @@ async fn barycentric(ctx: TestingContext, no_perspective: bool) {
                 entry_point: Some("vs_main"),
                 compilation_options: Default::default(),
                 buffers: &[wgpu::VertexBufferLayout {
-                    array_stride: 8,
+                    array_stride: 12,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &[wgpu::VertexAttribute {
-                        format: wgpu::VertexFormat::Float32x2,
+                        format: wgpu::VertexFormat::Float32x3,
                         offset: 0,
                         shader_location: 0,
                     }],
                 }],
             },
-            primitive: wgpu::PrimitiveState::default(),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleStrip,
+                strip_index_format: Some(wgpu::IndexFormat::Uint32),
+                ..wgpu::PrimitiveState::default()
+            },
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: if no_perspective {
-                    Some("fs_main_no_perspective")
-                } else {
-                    Some("fs_main")
-                },
+                entry_point: Some("fs_main"),
                 compilation_options: Default::default(),
                 targets: &[Some(wgpu::ColorTargetState {
                     format: wgpu::TextureFormat::Rgba8Unorm,
@@ -158,20 +153,25 @@ async fn barycentric(ctx: TestingContext, no_perspective: bool) {
         rpass.set_pipeline(&pipeline);
         rpass.set_index_buffer(index_buffer.slice(..), wgpu::IndexFormat::Uint32);
         rpass.set_vertex_buffer(0, vertex_buffer.slice(..));
-        rpass.draw(0..3, 0..1);
+        rpass.draw(0..5, 0..1);
     }
     readback_buffer.copy_from(&ctx.device, &mut encoder, &color_texture);
     ctx.queue.submit(Some(encoder.finish()));
 
-    //
-    //   +-----+-----+
-    //   |blue |white|
-    //   +-----+-----+
-    //   | red |green|
-    //   +-----+-----+
-    //
+    //   0    127   255
+    //   o-----o-----o
+    //   |    /|\    |
+    //   |  '/ | \'  |
+    //   +--/--+--\--+
+    //   | /   |   \ |
+    //   |/ '  |  ' \|
+    //   o-----+-----o
+    //  64          191
     let expected = [
-        0, 0, 255, 255, 255, 255, 255, 255, 255, 0, 0, 255, 0, 255, 0, 255,
+        0, 64, 127, 255, // top left
+        127, 191, 255, 255, // top right
+        64, 191, 127, 255, // bottom left
+        64, 191, 127, 255, // bottom right
     ];
     readback_buffer
         .assert_buffer_contents(&ctx, &expected)

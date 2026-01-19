@@ -543,6 +543,10 @@ pub fn create_validator(
         Caps::COOPERATIVE_MATRIX,
         features.intersects(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX),
     );
+    caps.set(
+        Caps::PER_VERTEX,
+        features.intersects(wgt::Features::SHADER_PER_VERTEX),
+    );
 
     naga::valid::Validator::new(flags, caps)
 }

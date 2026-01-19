@@ -619,6 +619,11 @@ impl super::PrivateCapabilities {
             MTLLanguageVersion::V1_0
         };
 
+        // The `PrivateCapabilities` we are constructing here duplicates many of the limits
+        // in `wgt::Limits`, creating a risk of confusion if the limits are adjusted between
+        // the initialization here and the final `wgt::Limits` values. To reduce this risk,
+        // some of the calculations here duplicate logic in `auxil::apply_hal_limits`.
+        // See <https://github.com/gfx-rs/wgpu/issues/8715>.
         Self {
             msl_version,
             // macOS 10.11 doesn't support read-write resources
@@ -723,7 +728,7 @@ impl super::PrivateCapabilities {
             format_bgr10a2_all: Self::supports_any(device, BGR10A2_ALL),
             format_bgr10a2_no_write: !Self::supports_any(device, BGR10A2_ALL),
             max_buffers_per_stage: 31,
-            max_vertex_buffers: 31.min(crate::MAX_VERTEX_BUFFERS as u32),
+            max_vertex_buffers: 31.min(crate::MAX_VERTEX_BUFFERS as u32), // duplicative of `apply_hal_limits`
             max_textures_per_stage: if os_type == super::OsType::Macos
                 || (family_check && device.supports_family(MTLGPUFamily::Apple6))
             {
@@ -1162,7 +1167,7 @@ impl super::PrivateCapabilities {
         let base = wgt::Limits::default();
         // Be careful adjusting limits here. The `AdapterShared` stores the
         // original `PrivateCapabilities`, so code could accidentally use
-        // the wrong value.
+        // the wrong value. See <https://github.com/gfx-rs/wgpu/issues/8715>.
 
         let limits = wgt::Limits {
             max_texture_dimension_1d: self.max_texture_size as u32,
@@ -1241,7 +1246,7 @@ impl super::PrivateCapabilities {
         // Since a bunch of the limits are duplicated between `Limits` and
         // `PrivateCapabilities`, reducing the limits at this point could make
         // things inconsistent and lead to confusion. Make sure that doesn't
-        // happen.
+        // happen. See <https://github.com/gfx-rs/wgpu/issues/8715>.
         debug_assert!(
             crate::auxil::apply_hal_limits(limits.clone()) == limits,
             "Limits were modified by apply_hal_limits\nOriginal:\n{:#?}\nModified:\n{:#?}",

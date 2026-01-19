@@ -7036,11 +7036,8 @@ template <typename A>
                     writeln!(self.out, "struct {stage_in_name} {{")?;
                 }
                 for &(ref name_key, ty, binding) in flattened_arguments.iter() {
-                    let (binding, location) = match binding {
-                        Some(ref binding @ &crate::Binding::Location { location, .. }) => {
-                            (binding, location)
-                        }
-                        _ => continue,
+                    let Some(binding) = binding else {
+                        continue;
                     };
                     let name = match *name_key {
                         NameKey::StructMember(..) => &flattened_member_names[name_key],
@@ -7054,7 +7051,15 @@ template <typename A>
                         first_time: false,
                     };
                     let resolved = options.resolve_local_binding(binding, in_mode)?;
+                    let location = match *binding {
+                        crate::Binding::Location { location, .. } => Some(location),
+                        crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. }) => None,
+                        crate::Binding::BuiltIn(_) => continue,
+                    };
                     if do_vertex_pulling {
+                        let Some(location) = location else {
+                            continue;
+                        };
                         // Update our attribute mapping.
                         am_resolved.insert(
                             location,
@@ -7202,6 +7207,7 @@ template <typename A>
             // struct.
             for &(ref name_key, ty, binding) in flattened_arguments.iter() {
                 let binding = match binding {
+                    Some(&crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. })) => continue,
                     Some(binding @ &crate::Binding::BuiltIn { .. }) => binding,
                     _ => continue,
                 };
@@ -7786,8 +7792,9 @@ template <typename A>
                         }
                         writeln!(self.out, " }};")?;
                     }
-                    _ => {
-                        if let Some(crate::Binding::Location { .. }) = arg.binding {
+                    _ => match arg.binding {
+                        Some(crate::Binding::Location { .. })
+                        | Some(crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. })) => {
                             if has_varyings {
                                 writeln!(
                                     self.out,
@@ -7799,7 +7806,8 @@ template <typename A>
                                 )?;
                             }
                         }
-                    }
+                        _ => {}
+                    },
                 }
             }
 

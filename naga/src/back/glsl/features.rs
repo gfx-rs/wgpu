@@ -613,7 +613,7 @@ impl<W> Writer<'_, W> {
                     crate::BuiltIn::InstanceIndex | crate::BuiltIn::DrawID => {
                         self.features.request(Features::INSTANCE_INDEX)
                     }
-                    crate::BuiltIn::Barycentric => {
+                    crate::BuiltIn::Barycentric { .. } => {
                         self.features.request(Features::SHADER_BARYCENTRICS)
                     }
                     _ => {}

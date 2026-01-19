@@ -46,7 +46,14 @@ Bottom level categories:
 - Initial wgsl-in ray tracing pipelines. By @Vecvec in [#8570](https://github.com/gfx-rs/wgpu/pull/8570).
 
 - Added support for cooperative load/store operations in shaders. Currently only WGSL on the input and SPIR-V, METAL, and WGSL on the output are supported. By @kvark in [#8251](https://github.com/gfx-rs/wgpu/issues/8251).
+- Added support for per-vertex attributes in fragment shaders. Currently only WGSL input is supported, and only SPIR-V or WGSL output is supported. By @atlv24 in [#8821](https://github.com/gfx-rs/wgpu/issues/8821).
+- Added support for no-perspective barycentric coordinates. By @atlv24 in [#8852](https://github.com/gfx-rs/wgpu/issues/8852).
 - Added support for obtaining `AdapterInfo` from `Device`. By @sagudev in [#8807](https://github.com/gfx-rs/wgpu/pull/8807).
+- Added `Limits::or_worse_values_from`. By @atlv24 in [#8870](https://github.com/gfx-rs/wgpu/pull/8870).
+
+#### Naga
+
+- Allow parsing shaders which make use of `SPV_KHR_non_semantic_info` for debug info. Also removes `naga::front::spv::SUPPORTED_EXT_SETS`. By @inner-daemons in #8827.
 
 ### Bug Fixes
 
@@ -77,6 +84,12 @@ Bottom level categories:
 #### General
 
 - Expanded documentation of `QuerySet`, `QueryType`, and `resolve_query_set()` describing how to use queries. By @kpreid in [#8776](https://github.com/gfx-rs/wgpu/pull/8776).
+
+### Changes
+
+#### Naga
+
+- Prevent UB from incorrectly using ray queries on HLSL. By @Vecvec in [#8763](https://github.com/gfx-rs/wgpu/pull/8763).
 
 ## v28.0.0 (2025-12-17)
 

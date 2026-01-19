@@ -432,7 +432,7 @@ pub enum BuiltIn {
     /// Read in fragment shaders, written in mesh shaders, read in any and closest hit shaders.
     PrimitiveIndex,
     /// Read in fragment shaders
-    Barycentric,
+    Barycentric { perspective: bool },
     /// Read in fragment shaders
     SampleIndex,
     /// Read or written in fragment shaders
@@ -648,6 +648,9 @@ pub enum Interpolation {
     Linear,
     /// Indicates that no interpolation will be performed.
     Flat,
+    /// Indicates the fragment input binding holds an array of per-vertex values.
+    /// This is typically used with barycentrics.
+    PerVertex,
 }
 
 /// The sampling qualifiers of a binding or struct field.

@@ -26,7 +26,7 @@ system there are two kind of writes:
   Shader. The system is not able to determine if a resource is fully
   initialized afterwards but is no longer allowed to perform any
   clears, therefore this leads to a
-  `MemoryInitKind.ImplicitlyInitialized` action, exactly like a read
+  `MemoryInitKind.NeedsInitializedMemory` action, exactly like a read
   would.
 
  */

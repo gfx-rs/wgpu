@@ -1008,19 +1008,6 @@ bitflags::bitflags! {
     }
 }
 
-bitflags::bitflags! {
-    /// How far through a ray query are we
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub(super) struct RayQueryPoint: u32 {
-        /// Ray query has been successfully initialized.
-        const INITIALIZED = 1 << 0;
-        /// Proceed has been called on ray query.
-        const PROCEED = 1 << 1;
-        /// Proceed has returned false (have finished traversal).
-        const FINISHED_TRAVERSAL = 1 << 2;
-    }
-}
-
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]

@@ -1,9 +1,6 @@
-// Tests for cts_runner
-//
-// As of June 2025, these tests are not run in CI.
-
 use std::{
     ffi::OsStr,
+    fs,
     io::Write,
     path::PathBuf,
     process::{Command, Output},
@@ -94,4 +91,66 @@ Shader '' parsing error: the type of `val` is expected to be `u32`, but got `{Ab
 1 │ const val: u32 = 1.1;
   │       ^^^ definition of `val`\n\n",
     );
+}
+
+#[test]
+fn lst_files_are_sorted() {
+    let workspace_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .to_path_buf();
+    let files = ["test.lst", "fail.lst", "skip.lst"];
+
+    for file in &files {
+        let file_path = workspace_dir.join("cts_runner").join(file);
+        let contents = fs::read_to_string(&file_path).unwrap();
+        let selectors = contents
+            .lines()
+            .enumerate()
+            .filter_map(|(idx, line)| {
+                // Extract selectors (including in comments, removing fails-if annotations)
+                let trimmed = line.trim();
+                trimmed
+                    .find("webgpu:")
+                    .or_else(|| trimmed.find("unittests:"))
+                    .map(|pos| (idx, &trimmed[pos..]))
+            })
+            .map(|(idx, line)| {
+                // Crude en_US sort. '_' < ',' < ':' < digits < letters
+                let sort_key = line
+                    .chars()
+                    .map(|c| {
+                        if c.is_ascii_uppercase() {
+                            c.to_ascii_lowercase()
+                        } else if c == '_' {
+                            ' '
+                        } else if c == ':' {
+                            '-'
+                        } else {
+                            c
+                        }
+                    })
+                    .collect::<String>();
+                (idx, line, sort_key)
+            })
+            .collect::<Vec<_>>();
+
+        let mut sorted = selectors.clone();
+        sorted.sort_by_key(|(_, _, sort_key)| sort_key.clone());
+
+        if selectors != sorted {
+            let (found, expected) = selectors
+                .iter()
+                .zip(sorted.iter())
+                .find(|(a, b)| a != b)
+                .unwrap();
+            panic!(
+                "{} is not sorted. First mismatch on line {}:\nFound: {}\nShould be: {}",
+                file,
+                found.0 + 1,
+                found.1,
+                expected.1,
+            );
+        }
+    }
 }
