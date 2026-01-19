@@ -14,6 +14,4 @@ void main() {
     }
 
     // a, b and c should be all ~0.5!
-    // right now it only ever takes the last expression in the block... 
-    // leading to infinite loops, lost devices and incorrect results.
 }

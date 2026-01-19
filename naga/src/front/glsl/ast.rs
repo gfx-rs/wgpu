@@ -116,7 +116,7 @@ pub struct HirExpr {
 
 #[derive(Debug, Clone)]
 pub enum HirExprKind {
-    /// helper to represent a sequence of expressions where side effects matter, the last one is returned to the caller
+    /// Represents a sequence of expressions. It returns the type and value of the last (i.e. right-most) expression.
     Sequence {
         exprs: Vec<Handle<HirExpr>>,
     },
