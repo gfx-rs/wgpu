@@ -99,7 +99,7 @@ fn lst_files_are_sorted() {
         .parent()
         .unwrap()
         .to_path_buf();
-    let files = ["test.lst", "fail.lst", "skip.lst"];
+    let files = ["test.lst", "fail.lst", "skip.lst", "external_texture.lst"];
 
     for file in &files {
         let file_path = workspace_dir.join("cts_runner").join(file);

@@ -189,7 +189,6 @@ webgpu:shader,validation,parse,shadow_builtins:* // 83%, function param shadowin
 webgpu:shader,validation,shader_io,align:* // 98%, https://github.com/gfx-rs/wgpu/issues/8892
 webgpu:shader,validation,shader_io,binding:* // 95%, https://github.com/gfx-rs/wgpu/issues/8892
 webgpu:shader,validation,shader_io,builtins:* // 50%, trailing comma not accepted
-webgpu:shader,validation,shader_io,group_and_binding:* // 87%, texture_external
 webgpu:shader,validation,shader_io,group:* // 95%, https://github.com/gfx-rs/wgpu/issues/8892
 webgpu:shader,validation,shader_io,id:* // 94%, https://github.com/gfx-rs/wgpu/issues/8892, @id on const
 webgpu:shader,validation,shader_io,interpolate:* // 91%, https://github.com/gfx-rs/wgpu/issues/8892

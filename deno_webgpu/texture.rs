@@ -710,7 +710,9 @@ impl From<GPUTextureFormat> for TextureFormat {
   }
 }
 
-pub struct GPUExternalTexture {}
+pub struct GPUExternalTexture {
+  pub id: wgpu_core::id::ExternalTextureId,
+}
 
 impl WebIdlInterfaceConverter for GPUExternalTexture {
   const NAME: &'static str = "GPUExternalTexture";

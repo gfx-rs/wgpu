@@ -71,6 +71,7 @@ pub fn run_cts(
     let skip_checkout = args.contains("--skip-checkout");
     let llvm_cov = args.contains("--llvm-cov");
     let release = args.contains("--release");
+    let enable_external_texture = args.contains("--enable-external-texture");
 
     let output_filter = args
         .opt_value_from_str::<_, String>("--print-output-when")?
@@ -313,18 +314,16 @@ pub fn run_cts(
     };
 
     if let Some(passthrough_args) = passthrough_args {
-        let mut cmd = shell
+        shell
             .cmd("cargo")
             .args(run_flags)
             .args(["--manifest-path".as_ref(), wgpu_cargo_toml.as_os_str()])
             .args(["-p", "cts_runner"])
-            .args(["--bin", "cts_runner"]);
-
-        if release {
-            cmd = cmd.arg("--release")
-        }
-
-        cmd.args(["--", "./tools/run_deno", "--verbose"])
+            .args(["--bin", "cts_runner"])
+            .args(release.then_some("--release"))
+            .arg("--")
+            .args(enable_external_texture.then_some("--enable-external-texture"))
+            .args(["./tools/run_deno", "--verbose"])
             .args(&passthrough_args)
             .run()?;
 
@@ -348,19 +347,16 @@ pub fn run_cts(
             log::info!("Running {}", test.selector.to_string_lossy());
         }
 
-        let mut cmd = shell
+        let cmd = shell
             .cmd("cargo")
             .args(run_flags)
             .args(["--manifest-path".as_ref(), wgpu_cargo_toml.as_os_str()])
             .args(["-p", "cts_runner"])
-            .args(["--bin", "cts_runner"]);
-
-        if release {
-            cmd = cmd.arg("--release")
-        }
-
-        cmd = cmd
-            .args(["--", "./tools/run_deno", "--verbose"])
+            .args(["--bin", "cts_runner"])
+            .args(release.then_some("--release"))
+            .arg("--")
+            .args(enable_external_texture.then_some("--enable-external-texture"))
+            .args(["./tools/run_deno", "--verbose"])
             .args([&test.selector]);
 
         match output_filter {

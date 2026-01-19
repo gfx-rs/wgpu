@@ -1,0 +1,15 @@
+// CTS test selectors that are expected to pass if the external-texture feature
+// is available. These are run in CI.
+//
+// Deno does not have external texture functionality in a form that is useful
+// to applications, but we can turn it on in `cts_runner` and pass some CTS
+// tests that exercise shader compilation or binding layouts without actually
+// attempting to create an external texture.
+//
+// The `cts_runner` integration test `lst_files_are_sorted` verifies that test selectors
+// appear in this file in order -- including ones in comments.
+
+webgpu:api,validation,render_pipeline,misc:external_texture:*
+webgpu:shader,validation,expression,call,builtin,textureLoad:*
+webgpu:shader,validation,expression,call,builtin,textureSampleBaseClampToEdge:*
+webgpu:shader,validation,shader_io,group_and_binding:*
