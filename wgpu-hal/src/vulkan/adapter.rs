@@ -2600,16 +2600,20 @@ impl super::Adapter {
         let mut enabled_extensions = self.required_device_extensions(features);
         let mut enabled_phd_features = self.physical_device_features(&enabled_extensions, features);
 
+        let mut queues_by_family = Vec::new();
         let mut queue_create_infos = Vec::new();
         let mut queue_families_indices = Vec::new();
         for &id in requested_queues {
+            queues_by_family.resize(queues_by_family.len().max(id as usize + 1), 0);
+            let index_in_family = queues_by_family[id as usize];
+            queues_by_family[id as usize] += 1;
             let famiy_index = self.queue_indices[id as usize];
             queue_create_infos.push(
                 vk::DeviceQueueCreateInfo::default()
                     .queue_family_index(famiy_index)
                     .queue_priorities(&[1.0]),
             );
-            queue_families_indices.push((famiy_index, 0));
+            queue_families_indices.push((famiy_index, index_in_family));
         }
 
         let mut pre_info = vk::DeviceCreateInfo::default();

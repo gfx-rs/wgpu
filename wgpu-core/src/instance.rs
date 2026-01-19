@@ -888,13 +888,22 @@ impl Adapter {
             return Err(RequestDeviceError::LimitsExceeded(failed));
         }
 
+        let queue_families = self.get_info().supported_queue_families;
         let queues: &[u32] = if desc.queues.is_empty() {
             &[0]
         } else {
             let mut num_queues = Vec::new();
             for &family_index in &desc.queues {
-                num_queues.resize(family_index as usize + 1, 0);
+                if family_index >= queue_families.len() as u32 {
+                    return Err(RequestDeviceError::InvalidQueues);
+                }
+                num_queues.resize(num_queues.len().max(family_index as usize + 1), 0);
                 num_queues[family_index as usize] += 1;
+                if num_queues[family_index as usize]
+                    > queue_families[family_index as usize].num_queues
+                {
+                    return Err(RequestDeviceError::InvalidQueues);
+                }
             }
             &desc.queues
         };
