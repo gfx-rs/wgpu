@@ -383,18 +383,31 @@ pub struct Validator {
     /// [`Statement`]: crate::Statement
     needs_visit: HandleSet<crate::Expression>,
 
-    /// Whether any trace rays call doesn't get called with an acceleration structure
-    /// with vertex return. This is in case another shader uses a vertex return only
-    /// builtin. If inner option is `Some`, then the span is of one of the `traceRay`
-    /// calls with a acceleration structure without vertex return. If the inner option
-    /// is `None` then the shader only uses acceleration structures with vertex return
-    /// in its trace ray calls. If the outer option is `None`, there are no `traceRay`
-    /// calls.
-    trace_rays_no_vertex_return: Option<Option<crate::Span>>,
+    /// Whether any trace rays call is called, and whether all have vertex return.
+    /// If one call doesn't use vertex ruturn, builtins for triangle vertex positions
+    /// (not yet implemented) are not allowed.
+    trace_rays_vertex_return: TraceRayVertexReturnState,
 
     /// The type of the ray payload, this must always be the same type in a particular
     /// entrypoint
     trace_rays_payload_type: Option<Handle<crate::Type>>,
+}
+
+#[derive(Debug)]
+enum TraceRayVertexReturnState {
+    /// No trace ray calls yet have been found.
+    NoTraceRays,
+    /// Trace ray calls have been found, at least
+    /// one uses an acceleration structure that
+    /// does not have the flag enabling vertex return.
+    // Don't yet have vertex return builtins to return.
+    // this error for.
+    #[expect(unused)]
+    NoVertexReturn(crate::Span),
+    /// Trace ray calls have been found, all 
+    /// acceleration structures have the flag enabling
+    /// vertex return.
+    VertexReturn,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -594,7 +607,7 @@ impl Validator {
             override_ids: FastHashSet::default(),
             overrides_resolved: false,
             needs_visit: HandleSet::new(),
-            trace_rays_no_vertex_return: None,
+            trace_rays_vertex_return: TraceRayVertexReturnState::NoTraceRays,
             trace_rays_payload_type: None,
         }
     }

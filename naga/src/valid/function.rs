@@ -1696,9 +1696,9 @@ impl super::Validator {
                         )? {
                             crate::TypeInner::AccelerationStructure { vertex_return } => {
                                 if !vertex_return {
-                                    self.trace_rays_no_vertex_return = Some(Some(span));
-                                } else if self.trace_rays_no_vertex_return.is_none() {
-                                    self.trace_rays_no_vertex_return = Some(None);
+                                    self.trace_rays_vertex_return = super::TraceRayVertexReturnState::NoVertexReturn(span);
+                                } else if let super::TraceRayVertexReturnState::NoTraceRays = self.trace_rays_vertex_return {
+                                    self.trace_rays_vertex_return = super::TraceRayVertexReturnState::VertexReturn;
                                 }
                             }
                             _ => {
