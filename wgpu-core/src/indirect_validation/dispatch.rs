@@ -218,7 +218,7 @@ impl Dispatch {
             size: DST_BUFFER_SIZE.get(),
             usage: wgt::BufferUses::INDIRECT | wgt::BufferUses::STORAGE_READ_WRITE,
             memory_flags: hal::MemoryFlags::empty(),
-            initial_queue: queue_index,
+            initial_queue: Some(queue_index),
         };
         let dst_buffer =
             unsafe { device.create_buffer(&dst_buffer_desc) }.map_err(DeviceError::from_hal)?;

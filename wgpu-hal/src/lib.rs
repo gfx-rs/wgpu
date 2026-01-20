@@ -2016,7 +2016,8 @@ pub struct BufferDescriptor<'a> {
     pub size: wgt::BufferAddress,
     pub usage: wgt::BufferUses,
     pub memory_flags: MemoryFlags,
-    pub initial_queue: u32,
+    /// None means the buffer supports concurrent use across threads (dangerous)
+    pub initial_queue: Option<u32>,
 }
 
 #[derive(Clone, Debug)]

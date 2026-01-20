@@ -57,7 +57,7 @@ use crate::{
     track::{BindGroupStates, TrackerIndexAllocators, UsageScope, UsageScopePool},
     validation,
     weak_vec::WeakVec,
-    FastHashMap, LabelHelpers, OnceCellOrLock, SURFACE_QUEUE_ID,
+    FastHashMap, LabelHelpers, OnceCellOrLock, PerQueueArray, SURFACE_QUEUE_ID,
 };
 
 use super::{
@@ -241,6 +241,11 @@ pub struct Device {
     pub(crate) trace: Mutex<Option<Box<dyn trace::Trace + Send + Sync + 'static>>>,
 
     pub(crate) tracker_indices: TrackerIndexAllocators,
+    /// Uniform buffer containing [`ExternalTextureParams`] with values such
+    /// that a [`TextureView`] bound to a [`wgt::BindingType::ExternalTexture`]
+    /// binding point will be rendered correctly. Intended to be used as the
+    /// [`hal::ExternalTextureBinding::params`] field.
+    pub(crate) default_external_texture_params_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
 }
 
 pub(crate) enum DeferredDestroy {
@@ -262,6 +267,15 @@ impl fmt::Debug for Device {
 impl Drop for Device {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
+
+        // SAFETY: We are in the Drop impl and we don't use
+        // self.default_external_texture_params_buffer anymore after this point.
+        let default_external_texture_params_buffer =
+            unsafe { ManuallyDrop::take(&mut self.default_external_texture_params_buffer) };
+        unsafe {
+            self.raw
+                .destroy_buffer(default_external_texture_params_buffer);
+        }
     }
 }
 
@@ -380,6 +394,20 @@ impl Device {
         let alignments = adapter.raw.capabilities.alignments.clone();
         let downlevel = adapter.raw.capabilities.downlevel.clone();
 
+        let default_external_texture_params_buffer = unsafe {
+            raw_device.create_buffer(&hal::BufferDescriptor {
+                label: hal_label(
+                    Some("(wgpu internal) default external texture params buffer"),
+                    instance_flags,
+                ),
+                size: size_of::<ExternalTextureParams>() as _,
+                usage: wgt::BufferUses::COPY_DST | wgt::BufferUses::UNIFORM,
+                memory_flags: hal::MemoryFlags::empty(),
+                initial_queue: None,
+            })
+        }
+        .map_err(DeviceError::from_hal)?;
+
         Ok(Self {
             raw: raw_device,
             queues: vec![OnceCellOrLock::new(); num_queues as usize],
@@ -399,14 +427,157 @@ impl Device {
             instance_flags,
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
+            default_external_texture_params_buffer: ManuallyDrop::new(
+                default_external_texture_params_buffer,
+            ),
         })
     }
 
-    pub fn late_init_resources_with_queue(self: &Arc<Self>) -> Result<(), RequestDeviceError> {
-        for queue_index in 0..self.queues.len() {
-            let queue = self.get_queue(queue_index as u32).unwrap();
-            queue.init_default_external_texture_params_buffer()?;
+    fn create_external_texture_binding_from_view<'a>(
+        &'a self,
+        binding: u32,
+        decl: &wgt::BindGroupLayoutEntry,
+        view: &'a Arc<TextureView>,
+        used: &mut BindGroupStates,
+        snatch_guard: &'a SnatchGuard,
+    ) -> Result<
+        hal::ExternalTextureBinding<'a, dyn hal::DynBuffer, dyn hal::DynTextureView>,
+        binding_model::CreateBindGroupError,
+    > {
+        use crate::binding_model::CreateBindGroupError as Error;
+
+        view.same_device(self)?;
+
+        let internal_use = self.texture_use_parameters(binding, decl, view, "SampledTexture")?;
+        used.views.insert_single(view.clone(), internal_use);
+
+        match decl.ty {
+            wgt::BindingType::ExternalTexture => {}
+            _ => {
+                return Err(Error::WrongBindingType {
+                    binding,
+                    actual: decl.ty,
+                    expected: "ExternalTexture",
+                });
+            }
         }
+
+        // We need 3 bindings, so just repeat the same texture view 3 times.
+        let planes = [
+            hal::TextureBinding {
+                view: view.try_raw(snatch_guard)?,
+                usage: internal_use,
+            },
+            hal::TextureBinding {
+                view: view.try_raw(snatch_guard)?,
+                usage: internal_use,
+            },
+            hal::TextureBinding {
+                view: view.try_raw(snatch_guard)?,
+                usage: internal_use,
+            },
+        ];
+        let params = hal::BufferBinding::new_unchecked(
+            self.default_external_texture_params_buffer.as_ref(),
+            0,
+            None,
+        );
+
+        Ok(hal::ExternalTextureBinding { planes, params })
+    }
+
+    /// Initializes [`Device::default_external_texture_params_buffer`] with
+    /// required values such that a [`TextureView`] bound to a
+    /// [`wgt::BindingType::ExternalTexture`] binding point will be rendered
+    /// correctly.
+    pub(super) fn init_default_external_texture_params_buffer(
+        self: &Arc<Self>,
+    ) -> Result<(), DeviceError> {
+        let data = ExternalTextureParams {
+            #[rustfmt::skip]
+            yuv_conversion_matrix: [
+                1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0, 0.0, 1.0,
+            ],
+            #[rustfmt::skip]
+            gamut_conversion_matrix: [
+                1.0, 0.0, 0.0, /* padding */ 0.0,
+                0.0, 1.0, 0.0, /* padding */ 0.0,
+                0.0, 0.0, 1.0, /* padding */ 0.0,
+            ],
+            src_transfer_function: Default::default(),
+            dst_transfer_function: Default::default(),
+            size: [0, 0],
+            #[rustfmt::skip]
+            sample_transform: [
+                1.0, 0.0,
+                0.0, 1.0,
+                0.0, 0.0
+            ],
+            #[rustfmt::skip]
+            load_transform: [
+                1.0, 0.0,
+                0.0, 1.0,
+                0.0, 0.0
+            ],
+            num_planes: 1,
+            _padding: Default::default(),
+        };
+        let queue = self.get_queue(0).unwrap();
+        let mut staging_buffer = StagingBuffer::new(
+            &self,
+            &queue,
+            wgt::BufferSize::new(size_of_val(&data) as _).unwrap(),
+        )?;
+        staging_buffer.write(bytemuck::bytes_of(&data));
+        let staging_buffer = staging_buffer.flush();
+
+        let params_buffer = self.default_external_texture_params_buffer.as_ref();
+        let mut pending_writes = queue.pending_writes.lock();
+
+        unsafe {
+            pending_writes
+                .command_encoder
+                .transition_buffers(&[hal::BufferBarrier {
+                    buffer: params_buffer,
+                    usage: hal::StateTransition {
+                        from: wgt::BufferUses::MAP_WRITE,
+                        to: wgt::BufferUses::COPY_DST,
+                    },
+                    src_dst_queue_index: None,
+                }]);
+            pending_writes.command_encoder.copy_buffer_to_buffer(
+                staging_buffer.raw(),
+                params_buffer,
+                &[hal::BufferCopy {
+                    src_offset: 0,
+                    dst_offset: 0,
+                    size: staging_buffer.size,
+                }],
+            );
+            pending_writes.consume(staging_buffer);
+            pending_writes
+                .command_encoder
+                .transition_buffers(&[hal::BufferBarrier {
+                    buffer: params_buffer,
+                    usage: hal::StateTransition {
+                        from: wgt::BufferUses::COPY_DST,
+                        to: wgt::BufferUses::UNIFORM,
+                    },
+                    src_dst_queue_index: None,
+                }]);
+        }
+
+        // MQ TODO: we should flush this and then have all other queues wait for this.
+        // Currently, only queue 0 is guarnateed to see this.
+
+        Ok(())
+    }
+
+    pub fn late_init_resources_with_queue(self: &Arc<Self>) -> Result<(), RequestDeviceError> {
+        self.init_default_external_texture_params_buffer()?;
 
         Ok(())
     }
@@ -527,7 +698,6 @@ impl Device {
             .is_ok());
     }
 
-    // MQ TODO
     pub fn poll(
         &self,
         poll_type: wgt::PollType<crate::SubmissionIndex>,
@@ -547,6 +717,7 @@ impl Device {
         &self,
         poll_type: wgt::PollType<crate::SubmissionIndex>,
     ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
+        // MQ TODO
         let snatch_guard = self.snatchable_lock.read();
         let fence = self.fence.read();
         let maintain_result = self.maintain(fence, poll_type, snatch_guard);
@@ -583,6 +754,7 @@ impl Device {
         poll_type: wgt::PollType<crate::SubmissionIndex>,
         snatch_guard: SnatchGuard,
     ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
+        // MQ TODO
         profiling::scope!("Device::maintain");
 
         let mut user_closures = UserClosures::default();
@@ -838,14 +1010,21 @@ impl Device {
             size: aligned_size,
             usage,
             memory_flags: hal::MemoryFlags::empty(),
+            initial_queue: desc.initial_queue,
         };
         let buffer = unsafe { self.raw().create_buffer(&hal_desc) }
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
-        let timestamp_normalization_bind_group = Snatchable::new(unsafe {
+        let mut timestamp_normalization_bind_groups = PerQueueArray::new();
+        for _ in 0..self.queues.len() {
+            timestamp_normalization_bind_groups.push(Snatchable::empty());
+        }
+
+        // MQ TODO: timestamp normalization
+        /*let timestamp_normalization_bind_group = Snatchable::new(unsafe {
             // SAFETY: The size passed here must not overflow the buffer.
             self.timestamp_normalizer
-                .get()
+                .as_ref()
                 .unwrap()
                 .create_normalization_bind_group(
                     self,
@@ -854,7 +1033,7 @@ impl Device {
                     wgt::BufferSize::new(hal_desc.size).unwrap(),
                     desc.usage,
                 )
-        }?);
+        }?);*/
 
         let indirect_validation_bind_groups =
             self.create_indirect_validation_bind_groups(buffer.as_ref(), desc.size, desc.usage)?;
@@ -872,7 +1051,7 @@ impl Device {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
-            timestamp_normalization_bind_group,
+            timestamp_normalization_bind_groups,
             indirect_validation_bind_groups,
         };
 
@@ -899,8 +1078,11 @@ impl Device {
             };
             wgt::BufferUses::MAP_WRITE
         } else {
-            let mut staging_buffer =
-                StagingBuffer::new(self, wgt::BufferSize::new(aligned_size).unwrap())?;
+            let mut staging_buffer = StagingBuffer::new(
+                self,
+                &self.get_queue(desc.initial_queue).unwrap(),
+                wgt::BufferSize::new(aligned_size).unwrap(),
+            )?;
 
             // Zero initialize memory and then mark the buffer as initialized
             // (it's guaranteed that this is the case by the time the buffer is usable)
@@ -911,10 +1093,19 @@ impl Device {
             wgt::BufferUses::COPY_DST
         };
 
-        self.trackers
-            .lock()
-            .buffers
-            .insert_single(&buffer, buffer_use);
+        for queue_id in 0..self.queues.len() as u32 {
+            let uses = if queue_id == desc.initial_queue {
+                buffer_use
+            } else {
+                wgt::BufferUses::UNOWNED
+            };
+            self.get_queue(queue_id)
+                .unwrap()
+                .trackers
+                .lock()
+                .buffers
+                .insert_single(&buffer, uses);
+        }
 
         Ok(buffer)
     }
@@ -926,6 +1117,7 @@ impl Device {
         offset: wgt::BufferAddress,
         data: &[u8],
     ) -> resource::BufferAccessResult {
+        // MQ TODO
         use crate::resource::RawResourceAccess;
 
         let device = &buffer.device;
@@ -990,10 +1182,19 @@ impl Device {
 
         let texture = Arc::new(texture);
 
-        self.trackers
-            .lock()
-            .textures
-            .insert_single(&texture, wgt::TextureUses::UNINITIALIZED);
+        for i in 0..self.queues.len() as u32 {
+            let uses = if i == desc.initial_queue {
+                wgt::TextureUses::UNINITIALIZED
+            } else {
+                wgt::TextureUses::UNOWNED
+            };
+            self.get_queue(i)
+                .unwrap()
+                .trackers
+                .lock()
+                .textures
+                .insert_single(&texture, uses);
+        }
 
         Ok(texture)
     }
@@ -1009,7 +1210,8 @@ impl Device {
         hal_buffer: Box<dyn hal::DynBuffer>,
         desc: &resource::BufferDescriptor,
     ) -> (Fallible<Buffer>, Option<resource::CreateBufferError>) {
-        let timestamp_normalization_bind_group = unsafe {
+        // MQ TODO: timestamp normalization
+        /*let timestamp_normalization_bind_group = unsafe {
             match self
                 .timestamp_normalizer
                 .get()
@@ -1029,7 +1231,11 @@ impl Device {
                     )
                 }
             }
-        };
+        };*/
+        let mut timestamp_normalization_bind_groups = PerQueueArray::new();
+        for _ in 0..self.queues.len() {
+            timestamp_normalization_bind_groups.push(Snatchable::empty());
+        }
 
         let indirect_validation_bind_groups = match self.create_indirect_validation_bind_groups(
             hal_buffer.as_ref(),
@@ -1055,16 +1261,25 @@ impl Device {
             label: desc.label.to_string(),
             tracking_data: TrackingData::new(self.tracker_indices.buffers.clone()),
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
-            timestamp_normalization_bind_group,
+            timestamp_normalization_bind_groups,
             indirect_validation_bind_groups,
         };
 
         let buffer = Arc::new(buffer);
 
-        self.trackers
-            .lock()
-            .buffers
-            .insert_single(&buffer, wgt::BufferUses::empty());
+        for i in 0..self.queues.len() as u32 {
+            let uses = if i == desc.initial_queue {
+                wgt::BufferUses::empty()
+            } else {
+                wgt::BufferUses::UNOWNED
+            };
+            self.get_queue(i)
+                .unwrap()
+                .trackers
+                .lock()
+                .buffers
+                .insert_single(&buffer, uses);
+        }
 
         (Fallible::Valid(buffer), None)
     }
@@ -1074,13 +1289,14 @@ impl Device {
         raw_buffer: &dyn hal::DynBuffer,
         buffer_size: u64,
         usage: wgt::BufferUsages,
+        queue: &Queue,
     ) -> Result<Snatchable<crate::indirect_validation::BindGroups>, resource::CreateBufferError>
     {
         if !usage.contains(wgt::BufferUsages::INDIRECT) {
             return Ok(Snatchable::empty());
         }
 
-        let Some(ref indirect_validation) = self.indirect_validation else {
+        let Some(ref indirect_validation) = queue.indirect_validation else {
             return Ok(Snatchable::empty());
         };
 
@@ -1882,6 +2098,7 @@ impl Device {
             size: size_of_val(&params_data) as wgt::BufferAddress,
             usage: wgt::BufferUsages::UNIFORM | wgt::BufferUsages::COPY_DST,
             mapped_at_creation: false,
+            initial_queue: desc.initial_queue,
         };
         let params = self.create_buffer(&params_desc)?;
         self.get_queue().unwrap().write_buffer(
@@ -2907,59 +3124,6 @@ impl Device {
         Ok(hal::ExternalTextureBinding { planes, params })
     }
 
-    fn create_external_texture_binding_from_view<'a>(
-        &'a self,
-        binding: u32,
-        decl: &wgt::BindGroupLayoutEntry,
-        view: &'a Arc<TextureView>,
-        used: &mut BindGroupStates,
-        snatch_guard: &'a SnatchGuard,
-    ) -> Result<
-        hal::ExternalTextureBinding<'a, dyn hal::DynBuffer, dyn hal::DynTextureView>,
-        binding_model::CreateBindGroupError,
-    > {
-        use crate::binding_model::CreateBindGroupError as Error;
-
-        view.same_device(self)?;
-
-        let internal_use = self.texture_use_parameters(binding, decl, view, "SampledTexture")?;
-        used.views.insert_single(view.clone(), internal_use);
-
-        match decl.ty {
-            wgt::BindingType::ExternalTexture => {}
-            _ => {
-                return Err(Error::WrongBindingType {
-                    binding,
-                    actual: decl.ty,
-                    expected: "ExternalTexture",
-                });
-            }
-        }
-
-        // We need 3 bindings, so just repeat the same texture view 3 times.
-        let planes = [
-            hal::TextureBinding {
-                view: view.try_raw(snatch_guard)?,
-                usage: internal_use,
-            },
-            hal::TextureBinding {
-                view: view.try_raw(snatch_guard)?,
-                usage: internal_use,
-            },
-            hal::TextureBinding {
-                view: view.try_raw(snatch_guard)?,
-                usage: internal_use,
-            },
-        ];
-        let params = hal::BufferBinding::new_unchecked(
-            self.default_external_texture_params_buffer.as_ref(),
-            0,
-            None,
-        );
-
-        Ok(hal::ExternalTextureBinding { planes, params })
-    }
-
     // This function expects the provided bind group layout to be resolved
     // (not passing a duplicate) beforehand.
     pub fn create_bind_group(
@@ -3237,7 +3401,7 @@ impl Device {
         Ok(())
     }
 
-    fn texture_use_parameters(
+    pub(crate) fn texture_use_parameters(
         &self,
         binding: u32,
         decl: &wgt::BindGroupLayoutEntry,

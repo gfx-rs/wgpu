@@ -146,7 +146,7 @@ impl Device {
                         usage: wgpu_types::BufferUses::ACCELERATION_STRUCTURE_QUERY
                             | wgpu_types::BufferUses::MAP_READ,
                         memory_flags: hal::MemoryFlags::PREFER_COHERENT,
-                        initial_queue: blas_desc.initial_queue,
+                        initial_queue: Some(blas_desc.initial_queue),
                     })
                     .map_err(DeviceError::from_hal)?
             }))
@@ -241,7 +241,7 @@ impl Device {
                 usage: wgt::BufferUses::COPY_DST
                     | wgt::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                 memory_flags: hal::MemoryFlags::PREFER_COHERENT,
-                initial_queue: desc.initial_queue,
+                initial_queue: Some(desc.initial_queue),
             })
         }
         .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;

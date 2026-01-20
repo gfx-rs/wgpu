@@ -515,8 +515,7 @@ pub(super) fn resolve_query_set(
                 state.snatch_guard,
                 state.raw_encoder,
                 &mut state.tracker.buffers,
-                dst_buffer
-                    .timestamp_normalization_bind_group
+                dst_buffer.timestamp_normalization_bind_groups[state.queue.index as usize]
                     .get(state.snatch_guard)
                     .unwrap(),
                 &dst_buffer,

@@ -163,7 +163,12 @@ impl Draw {
             Some(buffer) => Ok(buffer),
             None => {
                 let usage = wgt::BufferUses::INDIRECT | wgt::BufferUses::STORAGE_READ_WRITE;
-                create_buffer_and_bind_group(device, usage, self.dst_bind_group_layout.as_ref())
+                create_buffer_and_bind_group(
+                    device,
+                    usage,
+                    self.dst_bind_group_layout.as_ref(),
+                    self.queue_index,
+                )
             }
         }
     }
@@ -185,6 +190,7 @@ impl Draw {
                     device,
                     usage,
                     self.metadata_bind_group_layout.as_ref(),
+                    self.queue_index,
                 )
             }
         }
@@ -388,9 +394,8 @@ impl Draw {
             // Make sure the indirect buffer is still valid.
             batch.src_buffer.try_raw(snatch_guard)?;
 
-            let src_bind_group = batch
-                .src_buffer
-                .indirect_validation_bind_groups
+            let src_bind_group = batch.src_buffer.indirect_validation_bind_groups
+                [queue.index as usize]
                 .get(snatch_guard)
                 .unwrap()
                 .draw
@@ -678,13 +683,14 @@ fn create_buffer_and_bind_group(
     device: &dyn hal::DynDevice,
     usage: wgt::BufferUses,
     bind_group_layout: &dyn hal::DynBindGroupLayout,
+    initial_queue: u32,
 ) -> Result<BufferPoolEntry, hal::DeviceError> {
     let buffer_desc = hal::BufferDescriptor {
         label: None,
         size: BUFFER_SIZE.get(),
         usage,
         memory_flags: hal::MemoryFlags::empty(),
-        initial_queue: 0,
+        initial_queue: Some(initial_queue),
     };
     let buffer = unsafe { device.create_buffer(&buffer_desc) }?;
     let bind_group_desc = hal::BindGroupDescriptor {

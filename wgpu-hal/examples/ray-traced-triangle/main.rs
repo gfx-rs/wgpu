@@ -432,7 +432,7 @@ impl<A: hal::Api> Example<A> {
                     usage: wgpu_types::BufferUses::MAP_WRITE
                         | wgpu_types::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
-                    initial_queue: 0,
+                    initial_queue: Some(0),
                 })
                 .unwrap();
 
@@ -460,7 +460,7 @@ impl<A: hal::Api> Example<A> {
                             | wgpu_types::BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                         memory_flags: hal::MemoryFlags::TRANSIENT
                             | hal::MemoryFlags::PREFER_COHERENT,
-                        initial_queue: 0,
+                        initial_queue: Some(0),
                     })
                     .unwrap();
 
@@ -571,7 +571,7 @@ impl<A: hal::Api> Example<A> {
                     size: uniforms_size as u64,
                     usage: wgpu_types::BufferUses::MAP_WRITE | wgpu_types::BufferUses::UNIFORM,
                     memory_flags: hal::MemoryFlags::PREFER_COHERENT,
-                    initial_queue: 0,
+                    initial_queue: Some(0),
                 })
                 .unwrap();
 
@@ -666,7 +666,7 @@ impl<A: hal::Api> Example<A> {
                         .max(tlas_sizes.build_scratch_size),
                     usage: wgpu_types::BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
                     memory_flags: hal::MemoryFlags::empty(),
-                    initial_queue: 0,
+                    initial_queue: Some(0),
                 })
                 .unwrap()
         };
@@ -720,7 +720,7 @@ impl<A: hal::Api> Example<A> {
                     usage: wgpu_types::BufferUses::MAP_WRITE
                         | wgpu_types::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
-                    initial_queue: 0,
+                    initial_queue: Some(0),
                 })
                 .unwrap();
 

@@ -33,7 +33,7 @@ use crate::{
     timestamp_normalization::TimestampNormalizationBindGroup,
     track::{SharedTrackerIndexAllocator, TrackerIndex},
     weak_vec::WeakVec,
-    Label, LabelHelpers, SubmissionIndex,
+    Label, LabelHelpers, PerQueueArray, SubmissionIndex,
 };
 
 /// Information about the wgpu-core resource.
@@ -438,18 +438,25 @@ pub struct Buffer {
     pub(crate) tracking_data: TrackingData,
     pub(crate) map_state: Mutex<BufferMapState>,
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
-    pub(crate) timestamp_normalization_bind_group: Snatchable<TimestampNormalizationBindGroup>,
-    pub(crate) indirect_validation_bind_groups: Snatchable<crate::indirect_validation::BindGroups>,
+    /// Each queue can have a different normalization factor
+    pub(crate) timestamp_normalization_bind_groups:
+        PerQueueArray<Snatchable<TimestampNormalizationBindGroup>>,
+    /// Each queue has its own buffers that cannot be shared
+    pub(crate) indirect_validation_bind_groups:
+        PerQueueArray<Snatchable<crate::indirect_validation::BindGroups>>,
 }
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        if let Some(raw) = self.timestamp_normalization_bind_group.take() {
-            raw.dispose(self.device.raw());
+        for bg in self.timestamp_normalization_bind_groups.drain(..) {
+            if let Some(raw) = bg.take() {
+                raw.dispose(self.device.raw());
+            }
         }
-
-        if let Some(raw) = self.indirect_validation_bind_groups.take() {
-            raw.dispose(self.device.raw());
+        for bg in self.indirect_validation_bind_groups.drain(..) {
+            if let Some(raw) = bg.take() {
+                raw.dispose(self.device.raw());
+            }
         }
 
         if let Some(raw) = self.raw.take() {
@@ -922,7 +929,7 @@ impl Buffer {
             };
 
             let timestamp_normalization_bind_group = self
-                .timestamp_normalization_bind_group
+                .timestamp_normalization_bind_groups
                 .snatch(&mut snatch_guard);
 
             let indirect_validation_bind_groups = self

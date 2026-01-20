@@ -945,8 +945,7 @@ fn dispatch_indirect(
                 params.pipeline_layout,
                 1,
                 Some(
-                    buffer
-                        .indirect_validation_bind_groups
+                    buffer.indirect_validation_bind_groups[state.pass.base.queue.index as usize]
                         .get(state.pass.base.snatch_guard)
                         .unwrap()
                         .dispatch

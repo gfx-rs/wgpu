@@ -27,7 +27,7 @@ impl ScratchBuffer {
                     size: size.get(),
                     usage: BufferUses::ACCELERATION_STRUCTURE_SCRATCH,
                     memory_flags: hal::MemoryFlags::empty(),
-                    initial_queue: queue.index,
+                    initial_queue: Some(queue.index),
                 })
                 .map_err(DeviceError::from_hal)?
         };

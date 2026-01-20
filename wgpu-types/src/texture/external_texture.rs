@@ -136,6 +136,8 @@ pub struct ExternalTextureDescriptor<L> {
     /// [`width`]: Self::width
     /// [`height`]: Self::height
     pub load_transform: [f32; 6],
+    /// The queue with ownership at resource creation time
+    pub initial_queue: u32,
 }
 
 impl<L> ExternalTextureDescriptor<L> {
@@ -153,6 +155,7 @@ impl<L> ExternalTextureDescriptor<L> {
             gamut_conversion_matrix: self.gamut_conversion_matrix,
             src_transfer_function: self.src_transfer_function,
             dst_transfer_function: self.dst_transfer_function,
+            initial_queue: self.initial_queue,
         }
     }
 

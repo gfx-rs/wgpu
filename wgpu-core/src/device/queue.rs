@@ -29,7 +29,7 @@ use crate::{
         CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopySide,
         TransferError,
     },
-    device::{resource::ExternalTextureParams, DeviceError, WaitIdleError, ZERO_BUFFER_SIZE},
+    device::{DeviceError, WaitIdleError, ZERO_BUFFER_SIZE},
     get_lowest_common_denom,
     global::Global,
     hal_label,
@@ -64,11 +64,6 @@ pub struct Queue {
     /// Stores the state of buffers and textures.
     pub(crate) trackers: Mutex<QueueTracker>,
     pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
-    /// Uniform buffer containing [`ExternalTextureParams`] with values such
-    /// that a [`TextureView`] bound to a [`wgt::BindingType::ExternalTexture`]
-    /// binding point will be rendered correctly. Intended to be used as the
-    /// [`hal::ExternalTextureBinding::params`] field.
-    pub(crate) default_external_texture_params_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
 
     pub(crate) command_allocator: CommandAllocator,
 
@@ -124,7 +119,7 @@ impl Queue {
                 size: ZERO_BUFFER_SIZE,
                 usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST | rt_uses,
                 memory_flags: hal::MemoryFlags::empty(),
-                initial_queue: index,
+                initial_queue: Some(index),
             })
         }
         .map_err(DeviceError::from_hal)?;
@@ -147,20 +142,6 @@ impl Queue {
         } else {
             None
         };
-
-        let default_external_texture_params_buffer = unsafe {
-            device.raw().create_buffer(&hal::BufferDescriptor {
-                label: hal_label(
-                    Some("(wgpu internal) default external texture params buffer"),
-                    instance_flags,
-                ),
-                size: size_of::<ExternalTextureParams>() as _,
-                usage: wgt::BufferUses::COPY_DST | wgt::BufferUses::UNIFORM,
-                memory_flags: hal::MemoryFlags::empty(),
-                initial_queue: index,
-            })
-        }
-        .map_err(DeviceError::from_hal)?;
 
         let pending_encoder = command_allocator
             .acquire_encoder(device.raw(), raw.as_ref())
@@ -216,9 +197,6 @@ impl Queue {
             zero_buffer: ManuallyDrop::new(zero_buffer),
             indirect_validation,
             trackers: Mutex::new(rank::DEVICE_TRACKERS, QueueTracker::new()),
-            default_external_texture_params_buffer: ManuallyDrop::new(
-                default_external_texture_params_buffer,
-            ),
 
             command_allocator,
             command_indices: RwLock::new(
@@ -381,17 +359,10 @@ impl Drop for Queue {
 
         // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this point.
         let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
-        // SAFETY: We are in the Drop impl and we don't use
-        // self.default_external_texture_params_buffer anymore after this point.
-        let default_external_texture_params_buffer =
-            unsafe { ManuallyDrop::take(&mut self.default_external_texture_params_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
         unsafe {
             self.device.raw().destroy_buffer(zero_buffer);
-            self.device
-                .raw()
-                .destroy_buffer(default_external_texture_params_buffer);
             self.device.raw().destroy_fence(fence);
         }
         if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
@@ -671,91 +642,6 @@ impl WebGpuError for QueueSubmitError {
 //TODO: move out common parts of write_xxx.
 
 impl Queue {
-    /// Initializes [`Device::default_external_texture_params_buffer`] with
-    /// required values such that a [`TextureView`] bound to a
-    /// [`wgt::BindingType::ExternalTexture`] binding point will be rendered
-    /// correctly.
-    pub(super) fn init_default_external_texture_params_buffer(
-        self: &Arc<Self>,
-    ) -> Result<(), DeviceError> {
-        let data = ExternalTextureParams {
-            #[rustfmt::skip]
-            yuv_conversion_matrix: [
-                1.0, 0.0, 0.0, 0.0,
-                0.0, 1.0, 0.0, 0.0,
-                0.0, 0.0, 1.0, 0.0,
-                0.0, 0.0, 0.0, 1.0,
-            ],
-            #[rustfmt::skip]
-            gamut_conversion_matrix: [
-                1.0, 0.0, 0.0, /* padding */ 0.0,
-                0.0, 1.0, 0.0, /* padding */ 0.0,
-                0.0, 0.0, 1.0, /* padding */ 0.0,
-            ],
-            src_transfer_function: Default::default(),
-            dst_transfer_function: Default::default(),
-            size: [0, 0],
-            #[rustfmt::skip]
-            sample_transform: [
-                1.0, 0.0,
-                0.0, 1.0,
-                0.0, 0.0
-            ],
-            #[rustfmt::skip]
-            load_transform: [
-                1.0, 0.0,
-                0.0, 1.0,
-                0.0, 0.0
-            ],
-            num_planes: 1,
-            _padding: Default::default(),
-        };
-        let mut staging_buffer = StagingBuffer::new(
-            &self.device,
-            self,
-            wgt::BufferSize::new(size_of_val(&data) as _).unwrap(),
-        )?;
-        staging_buffer.write(bytemuck::bytes_of(&data));
-        let staging_buffer = staging_buffer.flush();
-
-        let params_buffer = self.default_external_texture_params_buffer.as_ref();
-        let mut pending_writes = self.pending_writes.lock();
-
-        unsafe {
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: params_buffer,
-                    usage: hal::StateTransition {
-                        from: wgt::BufferUses::MAP_WRITE,
-                        to: wgt::BufferUses::COPY_DST,
-                    },
-                    src_dst_queue_index: None,
-                }]);
-            pending_writes.command_encoder.copy_buffer_to_buffer(
-                staging_buffer.raw(),
-                params_buffer,
-                &[hal::BufferCopy {
-                    src_offset: 0,
-                    dst_offset: 0,
-                    size: staging_buffer.size,
-                }],
-            );
-            pending_writes.consume(staging_buffer);
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: params_buffer,
-                    usage: hal::StateTransition {
-                        from: wgt::BufferUses::COPY_DST,
-                        to: wgt::BufferUses::UNIFORM,
-                    },
-                    src_dst_queue_index: None,
-                }]);
-        }
-
-        Ok(())
-    }
     pub fn write_buffer(
         self: &Arc<Self>,
         buffer: Arc<Buffer>,

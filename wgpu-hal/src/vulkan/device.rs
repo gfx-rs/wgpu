@@ -863,10 +863,15 @@ impl crate::Device for super::Device {
         &self,
         desc: &crate::BufferDescriptor,
     ) -> Result<super::Buffer, crate::DeviceError> {
+        let sharing_mode = if self.raw_queues().len() > 1 && desc.initial_queue.is_none() {
+            vk::SharingMode::CONCURRENT
+        } else {
+            vk::SharingMode::EXCLUSIVE
+        };
         let vk_info = vk::BufferCreateInfo::default()
             .size(desc.size)
             .usage(conv::map_buffer_usage(desc.usage))
-            .sharing_mode(vk::SharingMode::EXCLUSIVE);
+            .sharing_mode(sharing_mode);
 
         let raw = unsafe {
             self.shared

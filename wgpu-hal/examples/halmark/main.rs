@@ -298,7 +298,7 @@ impl<A: hal::Api> Example<A> {
             size: texture_data.len() as wgpu_types::BufferAddress,
             usage: wgpu_types::BufferUses::MAP_WRITE | wgpu_types::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
-            initial_queue: 0,
+            initial_queue: Some(0),
         };
         let staging_buffer = unsafe { device.create_buffer(&staging_buffer_desc).unwrap() };
         unsafe {
@@ -421,7 +421,7 @@ impl<A: hal::Api> Example<A> {
             size: size_of::<Globals>() as wgpu_types::BufferAddress,
             usage: wgpu_types::BufferUses::MAP_WRITE | wgpu_types::BufferUses::UNIFORM,
             memory_flags: hal::MemoryFlags::PREFER_COHERENT,
-            initial_queue: 0,
+            initial_queue: Some(0),
         };
         let global_buffer = unsafe {
             let buffer = device.create_buffer(&global_buffer_desc).unwrap();
@@ -448,7 +448,7 @@ impl<A: hal::Api> Example<A> {
                 * (local_alignment as wgpu_types::BufferAddress),
             usage: wgpu_types::BufferUses::MAP_WRITE | wgpu_types::BufferUses::UNIFORM,
             memory_flags: hal::MemoryFlags::PREFER_COHERENT,
-            initial_queue: 0,
+            initial_queue: Some(0),
         };
         let local_buffer = unsafe { device.create_buffer(&local_buffer_desc).unwrap() };
 
