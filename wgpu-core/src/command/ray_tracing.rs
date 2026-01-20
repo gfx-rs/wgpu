@@ -204,7 +204,7 @@ pub(crate) fn build_acceleration_structures(
     let mut scratch_buffer_blas_size = 0;
     let mut blas_storage = Vec::new();
     iter_blas(
-        blas.into_iter(),
+        blas.iter(),
         &mut build_command,
         &mut buf_storage,
         &mut input_barriers,
@@ -546,7 +546,7 @@ impl CommandBufferMutable {
 
 ///iterates over the blas iterator, and it's geometry, pushing the buffers into a storage vector (and also some validation).
 fn iter_blas<'snatch_guard:'buffers, 'buffers>(
-    blas_iter: impl Iterator<Item = OwnedBlasBuildEntry<ArcReferences>>,
+    blas_iter: impl Iterator<Item = &'buffers OwnedBlasBuildEntry<ArcReferences>>,
     build_command: &mut AsBuild,
     buf_storage: &mut Vec<TriangleBufferStore>,
     input_barriers: &mut Vec<hal::BufferBarrier<'buffers, dyn hal::DynBuffer>>,
@@ -562,7 +562,7 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
 
         build_command.blas_s_built.push(blas.clone());
 
-        match entry.geometries {
+        match &entry.geometries {
             ArcBlasGeometries::TriangleGeometries(triangle_geometries) => {
                 for (i, mesh) in triangle_geometries.into_iter().enumerate() {
                     let size_desc = match &blas.sizes {
@@ -699,7 +699,7 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         );
                         vertex_raw
                     };
-                    let index_buffer = if let Some(index_buffer) = mesh.index_buffer {
+                    let index_buffer = if let Some(ref index_buffer) = mesh.index_buffer {
                         if mesh.first_index.is_none()
                             || mesh.size.index_count.is_none()
                             || mesh.size.index_count.is_none()
@@ -749,7 +749,7 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                     } else {
                         None
                     };
-                    let transform_buffer = if let Some(transform_buffer) = mesh.transform_buffer {
+                    let transform_buffer = if let Some(ref transform_buffer) = mesh.transform_buffer {
                         if !blas
                             .flags
                             .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
