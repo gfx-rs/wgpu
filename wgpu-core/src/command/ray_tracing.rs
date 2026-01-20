@@ -821,20 +821,6 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         }
                         None
                     };
-                    temp_buffer.push(TriangleBufferStore {
-                        vertex_buffer,
-                        vertex_transition: vertex_pending,
-                        index_buffer_transition: index_data,
-                        transform_buffer_transition: transform_data,
-                        geometry: BlasTriangleGeometryInfo {
-                            size: mesh.size,
-                            first_vertex: mesh.first_vertex,
-                            vertex_stride: mesh.vertex_stride,
-                            first_index: mesh.first_index,
-                            transform_buffer_offset: mesh.transform_buffer_offset,
-                        },
-                        ending_blas: None,
-                    });
                 
                     let triangles = hal::AccelerationStructureTriangles {
                         vertex_buffer: Some(vertex_buffer),
@@ -860,7 +846,9 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         flags: mesh.size.flags,
                     };
                     triangle_entries.push(triangles);
-                    if let Some(blas) = buf.ending_blas.take() {
+                }
+
+                {
                         let scratch_buffer_offset = *scratch_buffer_blas_size;
                         *scratch_buffer_blas_size += align_to(
                             blas.size_info.build_scratch_size as u32,
@@ -868,17 +856,11 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         ) as u64;
                     
                         blas_storage.push(BlasStore {
-                            blas,
+                            blas: blas.clone(),
                             entries: hal::AccelerationStructureEntries::Triangles(triangle_entries),
                             scratch_buffer_offset,
                         });
                         triangle_entries = Vec::new();
-                    }
-                }
-
-                if let Some(last) = temp_buffer.last_mut() {
-                    last.ending_blas = Some(blas.clone());
-                    buf_storage.append(&mut temp_buffer);
                 }
             }
         }
