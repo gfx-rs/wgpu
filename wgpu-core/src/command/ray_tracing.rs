@@ -197,14 +197,14 @@ pub(crate) fn build_acceleration_structures(
         &mut input_barriers,
         &mut scratch_buffer_blas_size,
         &mut blas_storage,
-        state
+        state,
     )?;
 
     let mut scratch_buffer_tlas_size = 0;
     let mut tlas_storage = Vec::<TlasStore>::with_capacity(tlas.len());
     let mut instance_buffer_staging_source = Vec::<u8>::new();
 
-    for package  in tlas.iter() {
+    for package in tlas.iter() {
         let tlas = &package.tlas;
         state.tracker.tlas_s.insert_single(tlas.clone());
 
@@ -525,7 +525,7 @@ impl CommandBufferMutable {
 }
 
 ///iterates over the blas iterator, and it's geometry, pushing the buffers into a storage vector (and also some validation).
-fn iter_blas<'snatch_guard:'buffers, 'buffers>(
+fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
     blas_iter: impl Iterator<Item = &'buffers OwnedBlasBuildEntry<ArcReferences>>,
     build_command: &mut AsBuild,
     input_barriers: &mut Vec<hal::BufferBarrier<'buffers, dyn hal::DynBuffer>>,
@@ -651,19 +651,21 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         let vertex_raw = mesh.vertex_buffer.as_ref().try_raw(state.snatch_guard)?;
                         let vertex_buffer = &mesh.vertex_buffer;
                         vertex_buffer.check_usage(BufferUsages::BLAS_INPUT)?;
-                    
-                        if let Some(barrier) = vertex_pending
-                            .map(|pending| pending.into_hal(vertex_buffer.as_ref(), state.snatch_guard))
-                        {
+
+                        if let Some(barrier) = vertex_pending.map(|pending| {
+                            pending.into_hal(vertex_buffer.as_ref(), state.snatch_guard)
+                        }) {
                             input_barriers.push(barrier);
                         }
                         if vertex_buffer.size
-                            < (mesh.size.vertex_count + mesh.first_vertex) as u64 * mesh.vertex_stride
+                            < (mesh.size.vertex_count + mesh.first_vertex) as u64
+                                * mesh.vertex_stride
                         {
                             return Err(BuildAccelerationStructureError::InsufficientBufferSize(
                                 vertex_buffer.error_ident(),
                                 vertex_buffer.size,
-                                (mesh.size.vertex_count + mesh.first_vertex) as u64 * mesh.vertex_stride,
+                                (mesh.size.vertex_count + mesh.first_vertex) as u64
+                                    * mesh.vertex_stride,
                             ));
                         }
                         let vertex_buffer_offset = mesh.first_vertex as u64 * mesh.vertex_stride;
@@ -693,30 +695,33 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         );
                         let index_raw = index_buffer.try_raw(state.snatch_guard)?;
                         index_buffer.check_usage(BufferUsages::BLAS_INPUT)?;
-                    
-                        if let Some(barrier) = index_pending
-                            .map(|pending| pending.into_hal(index_buffer.as_ref(), state.snatch_guard))
-                        {
+
+                        if let Some(barrier) = index_pending.map(|pending| {
+                            pending.into_hal(index_buffer.as_ref(), state.snatch_guard)
+                        }) {
                             input_barriers.push(barrier);
                         }
                         let index_stride = mesh.size.index_format.unwrap().byte_size() as u64;
                         let offset = mesh.first_index.unwrap() as u64 * index_stride;
-                        let index_buffer_size = mesh.size.index_count.unwrap() as u64 * index_stride;
-                    
+                        let index_buffer_size =
+                            mesh.size.index_count.unwrap() as u64 * index_stride;
+
                         if mesh.size.index_count.unwrap() % 3 != 0 {
                             return Err(BuildAccelerationStructureError::InvalidIndexCount(
                                 index_buffer.error_ident(),
                                 mesh.size.index_count.unwrap(),
                             ));
                         }
-                        if index_buffer.size < mesh.size.index_count.unwrap() as u64 * index_stride + offset {
+                        if index_buffer.size
+                            < mesh.size.index_count.unwrap() as u64 * index_stride + offset
+                        {
                             return Err(BuildAccelerationStructureError::InsufficientBufferSize(
                                 index_buffer.error_ident(),
                                 index_buffer.size,
                                 mesh.size.index_count.unwrap() as u64 * index_stride + offset,
                             ));
                         }
-                    
+
                         state.buffer_memory_init_actions.extend(
                             index_buffer.initialization_status.read().create_action(
                                 &index_buffer,
@@ -728,7 +733,8 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                     } else {
                         None
                     };
-                    let transform_buffer = if let Some(ref transform_buffer) = mesh.transform_buffer {
+                    let transform_buffer = if let Some(ref transform_buffer) = mesh.transform_buffer
+                    {
                         if !blas
                             .flags
                             .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
@@ -753,15 +759,15 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         }
                         let transform_raw = transform_buffer.try_raw(state.snatch_guard)?;
                         transform_buffer.check_usage(BufferUsages::BLAS_INPUT)?;
-                    
-                        if let Some(barrier) = transform_pending
-                            .map(|pending| pending.into_hal(transform_buffer.as_ref(), state.snatch_guard))
-                        {
+
+                        if let Some(barrier) = transform_pending.map(|pending| {
+                            pending.into_hal(transform_buffer.as_ref(), state.snatch_guard)
+                        }) {
                             input_barriers.push(barrier);
                         }
-                    
+
                         let offset = mesh.transform_buffer_offset.unwrap();
-                    
+
                         if offset % wgt::TRANSFORM_BUFFER_ALIGNMENT != 0 {
                             return Err(
                                 BuildAccelerationStructureError::UnalignedTransformBufferOffset(
@@ -795,7 +801,7 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         }
                         None
                     };
-                
+
                     let triangles = hal::AccelerationStructureTriangles {
                         vertex_buffer: Some(vertex_buffer),
                         vertex_format: mesh.size.vertex_format,
@@ -823,18 +829,18 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                 }
 
                 {
-                        let scratch_buffer_offset = *scratch_buffer_blas_size;
-                        *scratch_buffer_blas_size += align_to(
-                            blas.size_info.build_scratch_size as u32,
-                            state.device.alignments.ray_tracing_scratch_buffer_alignment,
-                        ) as u64;
-                    
-                        blas_storage.push(BlasStore {
-                            blas: blas.clone(),
-                            entries: hal::AccelerationStructureEntries::Triangles(triangle_entries),
-                            scratch_buffer_offset,
-                        });
-                        triangle_entries = Vec::new();
+                    let scratch_buffer_offset = *scratch_buffer_blas_size;
+                    *scratch_buffer_blas_size += align_to(
+                        blas.size_info.build_scratch_size as u32,
+                        state.device.alignments.ray_tracing_scratch_buffer_alignment,
+                    ) as u64;
+
+                    blas_storage.push(BlasStore {
+                        blas: blas.clone(),
+                        entries: hal::AccelerationStructureEntries::Triangles(triangle_entries),
+                        scratch_buffer_offset,
+                    });
+                    triangle_entries = Vec::new();
                 }
             }
         }
