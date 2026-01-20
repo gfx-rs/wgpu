@@ -780,7 +780,6 @@ unsafe fn barrier(
             from: current_state,
             to: new_state,
         },
-        // MQ TODO
     });
 }
 

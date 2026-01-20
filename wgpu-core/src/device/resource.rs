@@ -1,5 +1,3 @@
-// MQ TODO: this whole file (hoo boy)
-
 use alloc::{
     borrow::Cow,
     boxed::Box,
@@ -13,12 +11,14 @@ use core::{
     mem::{self, ManuallyDrop},
     num::NonZeroU32,
     sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
 };
 use hal::ShouldBeNonZeroExt;
+use std::time::Instant;
 
 use arrayvec::ArrayVec;
 use bitflags::Flags;
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 use wgt::{
     math::align_to, DeviceLostReason, TextureFormat, TextureSampleType, TextureSelector,
     TextureViewDimension,
@@ -772,7 +772,6 @@ impl Device {
         &self,
         poll_type: wgt::PollType<crate::SubmissionIndex>,
     ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
-        // MQ TODO
         let snatch_guard = self.snatchable_lock.read();
         let maintain_result = self.maintain(poll_type, snatch_guard);
 
@@ -807,7 +806,7 @@ impl Device {
         poll_type: wgt::PollType<crate::SubmissionIndex>,
         snatch_guard: SnatchGuard,
     ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
-        // MQ TODO
+        // MQ TODO: I have zero confidence in my changes here
         profiling::scope!("Device::maintain");
 
         let mut user_closures = UserClosures::default();
@@ -818,46 +817,68 @@ impl Device {
                 submission_index: Some(submission_index),
                 ..
             } => {
-                let last_successful_submission_index = self
+                let Some(queue) = self.get_queue(submission_index.0) else {
+                    return (UserClosures::default(), Ok(wgt::PollStatus::WaitSucceeded));
+                };
+                let last_successful_submission_index = queue
                     .last_successful_submission_index
                     .load(Ordering::Acquire);
 
-                if submission_index > last_successful_submission_index {
+                if submission_index.1 > last_successful_submission_index {
                     let result = Err(WaitIdleError::WrongSubmissionIndex(
                         submission_index,
-                        last_successful_submission_index,
+                        (submission_index.0, last_successful_submission_index),
                     ));
 
                     return (user_closures, result);
                 }
 
-                Some(submission_index)
+                smallvec![submission_index]
             }
             wgt::PollType::Wait {
                 submission_index: None,
                 ..
-            } => Some(
-                self.last_successful_submission_index
-                    .load(Ordering::Acquire),
-            ),
-            wgt::PollType::Poll => None,
+            } => {
+                let mut out = PerQueueArray::new();
+                for i in 0..self.queues.len() as u32 {
+                    let queue = self.get_queue(i).unwrap();
+                    out.push((
+                        i,
+                        queue
+                            .last_successful_submission_index
+                            .load(Ordering::Acquire),
+                    ));
+                }
+                out
+            }
+            wgt::PollType::Poll => smallvec![],
         };
 
+        let mut current_duration = Duration::ZERO;
         // Wait for the submission index if requested.
-        if let Some(target_submission_index) = wait_submission_index {
-            log::trace!("Device::maintain: waiting for submission index {target_submission_index}");
+        for (queue_id, target_submission_index) in wait_submission_index {
+            let queue = self.get_queue(queue_id).unwrap();
+            log::trace!("Device::maintain: waiting for submission index ({queue_id}, {target_submission_index})");
 
             let wait_timeout = match poll_type {
-                wgt::PollType::Wait { timeout, .. } => timeout,
+                wgt::PollType::Wait {
+                    timeout: Some(timeout),
+                    ..
+                } => Some(timeout - current_duration.min(timeout)),
+                wgt::PollType::Wait { timeout: None, .. } => None,
                 wgt::PollType::Poll => unreachable!(
                     "`wait_submission_index` index for poll type `Poll` should be None"
                 ),
             };
 
+            let fence = queue.fence.read();
+            let start_time = Instant::now();
             let wait_result = unsafe {
                 self.raw()
                     .wait(fence.as_ref(), target_submission_index, wait_timeout)
             };
+            let end_time = Instant::now();
+            current_duration += end_time - start_time;
 
             // This error match is only about `DeviceErrors`. At this stage we do not care if
             // the wait succeeded or not, and the `Ok(bool)`` variant is ignored.
@@ -866,6 +887,8 @@ impl Device {
                 return (user_closures, Err(hal_error));
             }
         }
+
+        let mut all_queues_empty = true;
 
         // Get the currently finished submission index. This may be higher than the requested
         // wait, or it may be less than the requested wait if the wait failed.
@@ -1174,7 +1197,6 @@ impl Device {
         offset: wgt::BufferAddress,
         data: &[u8],
     ) -> resource::BufferAccessResult {
-        // MQ TODO
         use crate::resource::RawResourceAccess;
 
         let device = &buffer.device;
@@ -1269,28 +1291,6 @@ impl Device {
         hal_buffer: Box<dyn hal::DynBuffer>,
         desc: &resource::BufferDescriptor,
     ) -> (Fallible<Buffer>, Option<resource::CreateBufferError>) {
-        // MQ TODO: timestamp normalization
-        /*let timestamp_normalization_bind_group = unsafe {
-            match self
-                .timestamp_normalizer
-                .get()
-                .unwrap()
-                .create_normalization_bind_group(
-                    self,
-                    &*hal_buffer,
-                    desc.label.as_deref(),
-                    wgt::BufferSize::new(desc.size).unwrap(),
-                    desc.usage,
-                ) {
-                Ok(bg) => Snatchable::new(bg),
-                Err(e) => {
-                    return (
-                        Fallible::Invalid(Arc::new(desc.label.to_string())),
-                        Some(e.into()),
-                    )
-                }
-            }
-        };*/
         let mut timestamp_normalization_bind_groups = PerQueueArray::new();
         let mut indirect_validation_bind_groups = PerQueueArray::new();
         for _ in 0..self.queues.len() {

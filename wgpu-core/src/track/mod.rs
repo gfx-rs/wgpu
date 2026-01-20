@@ -261,7 +261,6 @@ pub(crate) struct PendingTransition<S: ResourceUses> {
     pub id: u32,
     pub selector: S::Selector,
     pub usage: hal::StateTransition<S>,
-    pub src_dst_queue_index: Option<(u32, u32)>,
 }
 
 pub(crate) type PendingTransitionList = Vec<PendingTransition<wgt::TextureUses>>;
@@ -277,7 +276,7 @@ impl PendingTransition<wgt::BufferUses> {
         hal::BufferBarrier {
             buffer,
             usage: self.usage,
-            src_dst_queue_index: self.src_dst_queue_index,
+            src_dst_queue_index: None,
         }
     }
 }
@@ -307,7 +306,7 @@ impl PendingTransition<wgt::TextureUses> {
                 array_layer_count: Some(layer_count),
             },
             usage: self.usage,
-            src_dst_queue_index: self.src_dst_queue_index,
+            src_dst_queue_index: None,
         }
     }
 }
@@ -517,14 +516,7 @@ impl RenderBundleScope {
 /// A pool for storing the memory used by [`UsageScope`]s. We take and store this memory when the
 /// scope is dropped to avoid reallocating. The memory required only grows and allocation cost is
 /// significant when a large number of resources have been used.
-pub(crate) type UsageScopePool = Mutex<
-    Vec<(
-        BufferUsageScope,
-        TextureUsageScope,
-        BlasUsageScope,
-        TlasUsageScope,
-    )>,
->;
+pub(crate) type UsageScopePool = Mutex<Vec<(BufferUsageScope, TextureUsageScope)>>;
 
 /// A usage scope tracker. Only needs to store stateful resources as stateless
 /// resources cannot possibly have a usage conflict.
@@ -533,8 +525,6 @@ pub(crate) struct UsageScope<'a> {
     pub pool: &'a UsageScopePool,
     pub buffers: BufferUsageScope,
     pub textures: TextureUsageScope,
-    pub blas: BlasUsageScope,
-    pub tlas: TlasUsageScope,
 }
 
 impl<'a> Drop for UsageScope<'a> {
@@ -542,12 +532,9 @@ impl<'a> Drop for UsageScope<'a> {
         // clear vecs and push into pool
         self.buffers.clear();
         self.textures.clear();
-        self.pool.lock().push((
-            mem::take(&mut self.buffers),
-            mem::take(&mut self.textures),
-            mem::take(&mut self.blas),
-            mem::take(&mut self.tlas),
-        ));
+        self.pool
+            .lock()
+            .push((mem::take(&mut self.buffers), mem::take(&mut self.textures)));
     }
 }
 
@@ -562,8 +549,6 @@ impl UsageScope<'static> {
             pool,
             buffers: pooled.0,
             textures: pooled.1,
-            blas: pooled.2,
-            tlas: pooled.3,
         };
 
         scope.buffers.set_size(tracker_indices.buffers.size());

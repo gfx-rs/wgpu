@@ -902,7 +902,6 @@ impl Buffer {
 
                 let staging_buffer = staging_buffer.flush();
 
-                // MQ TODO: this will be hard
                 if let Some(queue) = device.get_queue(self.unique_queue.unwrap()) {
                     let region = wgt::BufferSize::new(self.size).map(|size| hal::BufferCopy {
                         src_offset: 0,
@@ -1191,7 +1190,6 @@ impl StagingBuffer {
         size: wgt::BufferSize,
     ) -> Result<Self, DeviceError> {
         profiling::scope!("StagingBuffer::new");
-        // MQ TODO
         let stage_desc = hal::BufferDescriptor {
             label: hal_label(Some("(wgpu internal) Staging"), device.instance_flags),
             size: size.get(),
@@ -1551,8 +1549,6 @@ impl Texture {
                 label: self.label().to_owned(),
             }
         };
-
-        // MQ TODO
 
         if device.queues.len() > 1 {
             let temp = Arc::new(temp);
@@ -2430,7 +2426,6 @@ impl Blas {
             }),
         };
 
-        // MQ TODO
         let submit_index = if let Some(queue) = device.get_queue(queue_idx) {
             queue.lock_life().prepare_compact(self).unwrap_or(0) // '0' means no wait is necessary
         } else {
