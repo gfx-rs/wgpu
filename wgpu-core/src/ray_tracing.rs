@@ -302,6 +302,15 @@ pub(crate) struct AsBuild {
     pub tlas_s_built: Vec<TlasBuild>,
 }
 
+impl AsBuild {
+    pub(crate) fn with_capacity(blas: usize, tlas: usize) -> Self {
+        Self {
+            blas_s_built: Vec::with_capacity(blas),
+            tlas_s_built: Vec::with_capacity(tlas),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum AsAction {
     Build(AsBuild),

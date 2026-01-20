@@ -78,7 +78,7 @@ impl Global {
                 device.check_is_valid()?;
                 device.require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
 
-                let mut build_command = AsBuild::default();
+                let mut build_command = AsBuild::with_capacity(blas_ids.len(), tlas_ids.len());
 
                 for blas in blas_ids {
                     let blas = hub.blas_s.get(*blas).get()?;
@@ -187,7 +187,7 @@ pub(crate) fn build_acceleration_structures(
         .device
         .require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
 
-    let mut build_command = AsBuild::default();
+    let mut build_command = AsBuild::with_capacity(blas.len(), tlas.len());
     let mut input_barriers = Vec::<hal::BufferBarrier<dyn hal::DynBuffer>>::new();
     let mut scratch_buffer_blas_size = 0;
     let mut blas_storage = Vec::with_capacity(blas.len());
