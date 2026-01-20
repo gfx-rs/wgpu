@@ -3500,6 +3500,45 @@ fn only_one_swizzle_type() {
 }
 
 #[test]
+fn swizzle_oob() {
+    // 3-component swizzle from const vec2
+    check(
+        "
+        @compute @workgroup_size(1)
+        fn main() {
+            const v = vec2<i32>();
+            let r : vec3<i32> = v.xyz;
+        }
+        ",
+        r###"error: invalid field accessor `xyz`
+  ┌─ wgsl:5:35
+  │
+5 │             let r : vec3<i32> = v.xyz;
+  │                                   ^^^ invalid accessor
+
+"###,
+    );
+
+    // 4-component swizzle from non-const vec3
+    check(
+        "
+        @compute @workgroup_size(1)
+        fn main() {
+            var v = vec3<i32>();
+            let r : vec4<i32> = v.xyzw;
+        }
+        ",
+        r###"error: invalid field accessor `xyzw`
+  ┌─ wgsl:5:35
+  │
+5 │             let r : vec4<i32> = v.xyzw;
+  │                                   ^^^^ invalid accessor
+
+"###,
+    );
+}
+
+#[test]
 fn const_assert_must_be_const() {
     check(
         "
