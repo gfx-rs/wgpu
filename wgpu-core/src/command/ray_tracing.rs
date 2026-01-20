@@ -190,7 +190,7 @@ pub(crate) fn build_acceleration_structures(
     let mut build_command = AsBuild::default();
     let mut input_barriers = Vec::<hal::BufferBarrier<dyn hal::DynBuffer>>::new();
     let mut scratch_buffer_blas_size = 0;
-    let mut blas_storage = Vec::new();
+    let mut blas_storage = Vec::with_capacity(blas.len());
     iter_blas(
         blas.iter(),
         &mut build_command,
@@ -201,7 +201,7 @@ pub(crate) fn build_acceleration_structures(
     )?;
 
     let mut scratch_buffer_tlas_size = 0;
-    let mut tlas_storage = Vec::<TlasStore>::new();
+    let mut tlas_storage = Vec::<TlasStore>::with_capacity(tlas.len());
     let mut instance_buffer_staging_source = Vec::<u8>::new();
 
     for package  in tlas.iter() {
@@ -335,7 +335,7 @@ pub(crate) fn build_acceleration_structures(
     let raw_encoder = &mut state.raw_encoder;
 
     let mut blas_s_compactable = Vec::new();
-    let mut descriptors = Vec::new();
+    let mut descriptors = Vec::with_capacity(blas.len());
 
     for storage in &blas_storage {
         descriptors.push(map_blas(
