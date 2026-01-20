@@ -170,7 +170,6 @@ impl WaitIdleError {
 /// Only calling `Global::buffer_map_async` clones a new `Arc` for the
 /// buffer. This new `Arc` is only dropped by `handle_mapping`.
 pub(crate) struct LifetimeTracker {
-    // MQ TODO: this needs to be a per-queue array
     /// Resources used by queue submissions still in flight. One entry per
     /// submission, with older submissions appearing before younger.
     ///
@@ -297,7 +296,6 @@ impl LifetimeTracker {
         &mut self,
         last_done: u64,
     ) -> SmallVec<[SubmittedWorkDoneClosure; 1]> {
-        // MQ TODO: looking forward to this
         profiling::scope!("triage_submissions");
 
         //TODO: enable when `is_sorted_by_key` is stable

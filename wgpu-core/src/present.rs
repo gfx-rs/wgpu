@@ -177,7 +177,6 @@ impl Surface {
             Ok(Some(ast)) => {
                 drop(fence);
 
-                // MQ TODO
                 let texture_desc = wgt::TextureDescriptor {
                     label: hal_label(
                         Some(alloc::borrow::Cow::Borrowed("<Surface Texture>")),
@@ -239,7 +238,6 @@ impl Surface {
 
                 let texture = Arc::new(texture);
 
-                // MQ TODO: unwrap here is bad
                 device
                     .get_queue(SURFACE_QUEUE_ID)
                     .unwrap()
@@ -292,7 +290,6 @@ impl Surface {
         let device = &present.device;
 
         device.check_is_valid()?;
-        // MQ TODO
         let queue = device.get_queue(SURFACE_QUEUE_ID).unwrap();
 
         let texture = present

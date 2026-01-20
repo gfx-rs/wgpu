@@ -512,6 +512,8 @@ impl RenderBundleScope {
     }
 }
 
+// MQ TODO: usage scopes for blases/tlases
+
 /// A pool for storing the memory used by [`UsageScope`]s. We take and store this memory when the
 /// scope is dropped to avoid reallocating. The memory required only grows and allocation cost is
 /// significant when a large number of resources have been used.
@@ -612,8 +614,6 @@ impl<'a> UsageScope<'a> {
     }
 }
 
-// MQ TODO: make this per-queue
-
 /// A tracker used by Device.
 pub(crate) struct QueueTracker {
     pub buffers: DeviceBufferTracker,
@@ -628,8 +628,6 @@ impl QueueTracker {
         }
     }
 }
-
-// MQ TODO: make this per-queue
 
 /// A full double sided tracker used by CommandBuffers.
 pub(crate) struct Tracker {

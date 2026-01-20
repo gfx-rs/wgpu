@@ -982,7 +982,6 @@ fn dispatch_indirect(
                         to: wgt::BufferUses::STORAGE_READ_WRITE,
                     },
                     src_dst_queue_index: None,
-                    // MQ TODO
                 }]);
         }
 
@@ -1038,7 +1037,6 @@ fn dispatch_indirect(
                         to: wgt::BufferUses::INDIRECT,
                     },
                     src_dst_queue_index: None,
-                    // MQ TODO
                 }]);
         }
 

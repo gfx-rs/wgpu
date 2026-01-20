@@ -151,7 +151,8 @@ bitflags::bitflags! {
         /// If a usage is ordered, then if the buffer state doesn't change between draw calls, there
         /// are no barriers needed for synchronization.
         const ORDERED = Self::INCLUSIVE.bits() | Self::MAP_WRITE.bits();
-        // MQ TODO: we should represent "not owned" here
+        /// Flag is used by the wgpu-core buffer tracker to say that the buffer isn't owned by the queue.
+        const UNOWNED = 1 << 15;
     }
 }
 

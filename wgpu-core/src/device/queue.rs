@@ -784,7 +784,6 @@ impl Queue {
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
 
-        // MQ TODO
         let mut staging_buffer = StagingBuffer::new(&self.device, self, data_size)?;
 
         let staging_buffer = {

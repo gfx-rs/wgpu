@@ -334,7 +334,6 @@ impl Draw {
                     .map(|batch| batch.metadata_resource_index)
                     .unique(unique_index_scratch)
                     .map(|index| hal::BufferBarrier {
-                        // MQ TODO
                         buffer: resources.get_metadata_buffer(index),
                         usage: hal::StateTransition {
                             from: wgt::BufferUses::COPY_DST,
@@ -349,7 +348,6 @@ impl Draw {
                     .map(|batch| batch.dst_resource_index)
                     .unique(unique_index_scratch)
                     .map(|index| hal::BufferBarrier {
-                        // MQ TODO
                         buffer: resources.get_dst_buffer(index),
                         usage: hal::StateTransition {
                             from: wgt::BufferUses::INDIRECT,
@@ -427,7 +425,6 @@ impl Draw {
                     .map(|batch| batch.dst_resource_index)
                     .unique(unique_index_scratch)
                     .map(|index| hal::BufferBarrier {
-                        // MQ TODO
                         buffer: resources.get_dst_buffer(index),
                         usage: hal::StateTransition {
                             from: wgt::BufferUses::STORAGE_READ_WRITE,
@@ -682,7 +679,6 @@ fn create_buffer_and_bind_group(
     usage: wgt::BufferUses,
     bind_group_layout: &dyn hal::DynBindGroupLayout,
 ) -> Result<BufferPoolEntry, hal::DeviceError> {
-    // MQ TODO
     let buffer_desc = hal::BufferDescriptor {
         label: None,
         size: BUFFER_SIZE.get(),

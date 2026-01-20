@@ -666,7 +666,6 @@ fn handle_texture_init(
                 state.raw_encoder,
                 &mut state.tracker.textures,
                 &state.device.alignments,
-                // MQ TODO
                 state.queue.zero_buffer.as_ref(),
                 state.snatch_guard,
                 state.device.instance_flags,
