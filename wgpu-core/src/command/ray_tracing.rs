@@ -554,8 +554,6 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
     blas_storage: &mut Vec<BlasStore<'buffers>>,
     state: &mut EncodingState<'snatch_guard, '_>,
 ) -> Result<(), BuildAccelerationStructureError> {
-    let mut temp_buffer = Vec::new();
-    
     let mut triangle_entries =
         Vec::<hal::AccelerationStructureTriangles<dyn hal::DynBuffer>>::new();
     for entry in blas_iter {
@@ -676,7 +674,6 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         vertex_buffer.check_usage(BufferUsages::BLAS_INPUT)?;
                     
                         if let Some(barrier) = vertex_pending
-                            .take()
                             .map(|pending| pending.into_hal(vertex_buffer.as_ref(), state.snatch_guard))
                         {
                             input_barriers.push(barrier);
@@ -719,7 +716,6 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         index_buffer.check_usage(BufferUsages::BLAS_INPUT)?;
                     
                         if let Some(barrier) = index_pending
-                            .take()
                             .map(|pending| pending.into_hal(index_buffer.as_ref(), state.snatch_guard))
                         {
                             input_barriers.push(barrier);
@@ -780,7 +776,6 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         transform_buffer.check_usage(BufferUsages::BLAS_INPUT)?;
                     
                         if let Some(barrier) = transform_pending
-                            .take()
                             .map(|pending| pending.into_hal(transform_buffer.as_ref(), state.snatch_guard))
                         {
                             input_barriers.push(barrier);
