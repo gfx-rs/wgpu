@@ -543,7 +543,7 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
 
         match &entry.geometries {
             ArcBlasGeometries::TriangleGeometries(triangle_geometries) => {
-                for (i, mesh) in triangle_geometries.into_iter().enumerate() {
+                for (i, mesh) in triangle_geometries.iter().enumerate() {
                     let size_desc = match &blas.sizes {
                         wgt::BlasGeometrySizeDescriptors::Triangles { descriptors } => descriptors,
                     };
@@ -690,7 +690,7 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                             ));
                         }
                         let index_pending = state.tracker.buffers.set_single(
-                            &index_buffer,
+                            index_buffer,
                             BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                         );
                         let index_raw = index_buffer.try_raw(state.snatch_guard)?;
@@ -724,7 +724,7 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
 
                         state.buffer_memory_init_actions.extend(
                             index_buffer.initialization_status.read().create_action(
-                                &index_buffer,
+                                index_buffer,
                                 offset..(offset + index_buffer_size),
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
@@ -749,7 +749,7 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                             ));
                         }
                         let transform_pending = state.tracker.buffers.set_single(
-                            &transform_buffer,
+                            transform_buffer,
                             BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                         );
                         if mesh.transform_buffer_offset.is_none() {
@@ -784,7 +784,7 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                         }
                         state.buffer_memory_init_actions.extend(
                             transform_buffer.initialization_status.read().create_action(
-                                &transform_buffer,
+                                transform_buffer,
                                 offset..(offset + 48),
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
