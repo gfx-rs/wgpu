@@ -491,6 +491,9 @@ impl Device {
                 }]);
         }
 
+        let submission = queue0.submit(&[]).unwrap();
+        self.wait_for_submit(submission);
+
         Ok(())
     }
 
@@ -630,9 +633,6 @@ impl Device {
                     src_dst_queue_index: None,
                 }]);
         }
-
-        // MQ TODO: we should flush queue 0 and then have all other queues wait for this.
-        // Currently, only queue 0 is guarnateed to see this.
 
         Ok(())
     }
