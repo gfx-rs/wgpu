@@ -9,9 +9,8 @@ use wgt::{math::align_to, BufferUsages, BufferUses, Features};
 
 use crate::{
     command::encoder::EncodingState,
-    ray_tracing::{AsAction, AsBuild, BlasTriangleGeometryInfo, TlasBuild, ValidateAsActionsError},
+    ray_tracing::{AsAction, AsBuild, TlasBuild, ValidateAsActionsError},
     resource::InvalidResourceError,
-    track::Tracker,
 };
 use crate::{command::EncoderStateError, device::resource::CommandIndices};
 use crate::{
@@ -25,23 +24,13 @@ use crate::{
         ArcTlasPackage, BlasBuildEntry, BlasGeometries, BuildAccelerationStructureError,
         OwnedBlasBuildEntry, OwnedTlasPackage, TlasPackage,
     },
-    resource::{Blas, BlasCompactState, Buffer, Labeled, StagingBuffer, Tlas},
+    resource::{Blas, BlasCompactState, Labeled, StagingBuffer, Tlas},
     scratch::ScratchBuffer,
     snatch::SnatchGuard,
-    track::PendingTransition,
 };
 use crate::{lock::RwLockWriteGuard, resource::RawResourceAccess};
 
 use crate::id::{BlasId, TlasId};
-
-struct TriangleBufferStore {
-    vertex_buffer: Arc<Buffer>,
-    vertex_transition: Option<PendingTransition<BufferUses>>,
-    index_buffer_transition: Option<(Arc<Buffer>, Option<PendingTransition<BufferUses>>)>,
-    transform_buffer_transition: Option<(Arc<Buffer>, Option<PendingTransition<BufferUses>>)>,
-    geometry: BlasTriangleGeometryInfo,
-    ending_blas: Option<Arc<Blas>>,
-}
 
 struct BlasStore<'a> {
     blas: Arc<Blas>,
@@ -199,14 +188,12 @@ pub(crate) fn build_acceleration_structures(
         .require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
 
     let mut build_command = AsBuild::default();
-    let mut buf_storage = Vec::new();
     let mut input_barriers = Vec::<hal::BufferBarrier<dyn hal::DynBuffer>>::new();
     let mut scratch_buffer_blas_size = 0;
     let mut blas_storage = Vec::new();
     iter_blas(
         blas.iter(),
         &mut build_command,
-        &mut buf_storage,
         &mut input_barriers,
         &mut scratch_buffer_blas_size,
         &mut blas_storage,
@@ -548,7 +535,6 @@ impl CommandBufferMutable {
 fn iter_blas<'snatch_guard:'buffers, 'buffers>(
     blas_iter: impl Iterator<Item = &'buffers OwnedBlasBuildEntry<ArcReferences>>,
     build_command: &mut AsBuild,
-    buf_storage: &mut Vec<TriangleBufferStore>,
     input_barriers: &mut Vec<hal::BufferBarrier<'buffers, dyn hal::DynBuffer>>,
     scratch_buffer_blas_size: &mut u64,
     blas_storage: &mut Vec<BlasStore<'buffers>>,
