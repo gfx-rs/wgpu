@@ -533,8 +533,6 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
     blas_storage: &mut Vec<BlasStore<'buffers>>,
     state: &mut EncodingState<'snatch_guard, '_>,
 ) -> Result<(), BuildAccelerationStructureError> {
-    let mut triangle_entries =
-        Vec::<hal::AccelerationStructureTriangles<dyn hal::DynBuffer>>::new();
     for entry in blas_iter {
         let blas = &entry.blas;
         state.tracker.blas_s.insert_single(blas.clone());
@@ -543,6 +541,9 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
 
         match &entry.geometries {
             ArcBlasGeometries::TriangleGeometries(triangle_geometries) => {
+                let mut triangle_entries =
+                    Vec::<hal::AccelerationStructureTriangles<dyn hal::DynBuffer>>::new();
+
                 for (i, mesh) in triangle_geometries.iter().enumerate() {
                     let size_desc = match &blas.sizes {
                         wgt::BlasGeometrySizeDescriptors::Triangles { descriptors } => descriptors,
@@ -840,7 +841,6 @@ fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
                         entries: hal::AccelerationStructureEntries::Triangles(triangle_entries),
                         scratch_buffer_offset,
                     });
-                    triangle_entries = Vec::new();
                 }
             }
         }
