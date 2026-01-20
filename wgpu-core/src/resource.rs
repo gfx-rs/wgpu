@@ -25,6 +25,7 @@ use crate::{
         MissingDownlevelFlags, MissingFeatures,
     },
     hal_label,
+    indirect_validation::BindGroups,
     init_tracker::{BufferInitTracker, TextureInitTracker},
     lock::{rank, Mutex, RwLock},
     ray_tracing::{BlasCompactReadyPendingClosure, BlasPrepareCompactError},
@@ -440,21 +441,21 @@ pub struct Buffer {
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
     /// Each queue can have a different normalization factor
     pub(crate) timestamp_normalization_bind_groups:
-        PerQueueArray<Snatchable<TimestampNormalizationBindGroup>>,
+        PerQueueArray<parking_lot::RwLock<Option<TimestampNormalizationBindGroup>>>,
     /// Each queue has its own buffers that cannot be shared
     pub(crate) indirect_validation_bind_groups:
-        PerQueueArray<Snatchable<crate::indirect_validation::BindGroups>>,
+        PerQueueArray<parking_lot::RwLock<Option<BindGroups>>>,
 }
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        for mut bg in self.timestamp_normalization_bind_groups.drain(..) {
-            if let Some(raw) = bg.take() {
+        for bg in self.timestamp_normalization_bind_groups.drain(..) {
+            if let Some(raw) = bg.write().take() {
                 raw.dispose(self.device.raw());
             }
         }
-        for mut bg in self.indirect_validation_bind_groups.drain(..) {
-            if let Some(raw) = bg.take() {
+        for bg in self.indirect_validation_bind_groups.drain(..) {
+            if let Some(raw) = bg.write().take() {
                 raw.dispose(self.device.raw());
             }
         }
@@ -477,6 +478,70 @@ impl RawResourceAccess for Buffer {
 }
 
 impl Buffer {
+    pub(crate) fn get_indirect_validation_bg(
+        &self,
+        queue: &Arc<Queue>,
+    ) -> parking_lot::RwLockReadGuard<Option<BindGroups>> {
+        // TODO: this validation sucks lmao
+        let read = self.indirect_validation_bind_groups[queue.index as usize].read();
+        if read.is_some() {
+            return read;
+        }
+        drop(read);
+        let mut write = self.indirect_validation_bind_groups[queue.index as usize].write();
+        if write.is_some() {
+            drop(write);
+            return self.indirect_validation_bind_groups[queue.index as usize].read();
+        }
+        let global_read = queue.device.snatchable_lock.read();
+        let bg = queue
+            .create_indirect_validation_bind_groups(
+                &**self.raw.get(&global_read).unwrap(),
+                self.size,
+                self.usage,
+            )
+            .unwrap();
+        *write = Some(bg);
+        drop(write);
+        return self.indirect_validation_bind_groups[queue.index as usize].read();
+    }
+
+    pub(crate) fn get_timestamp_normalization_bg(
+        &self,
+        queue: &Arc<Queue>,
+    ) -> parking_lot::RwLockReadGuard<Option<TimestampNormalizationBindGroup>> {
+        // TODO: this validation sucks lmao
+        let read = self.timestamp_normalization_bind_groups[queue.index as usize].read();
+        if read.is_some() {
+            return read;
+        }
+        drop(read);
+        let mut write = self.timestamp_normalization_bind_groups[queue.index as usize].write();
+        if write.is_some() {
+            drop(write);
+            return self.timestamp_normalization_bind_groups[queue.index as usize].read();
+        }
+        let global_read = self.device.snatchable_lock.read();
+        let bg = unsafe {
+            // SAFETY: The size passed here must not overflow the buffer.
+            queue
+                .timestamp_normalizer
+                .as_ref()
+                .unwrap()
+                .create_normalization_bind_group(
+                    &self.device,
+                    &**self.raw.get(&global_read).unwrap(),
+                    Some(&self.label),
+                    wgt::BufferSize::new(self.size).unwrap(),
+                    self.usage,
+                )
+                .unwrap()
+        };
+        *write = Some(bg);
+        drop(write);
+        return self.timestamp_normalization_bind_groups[queue.index as usize].read();
+    }
+
     pub(crate) fn check_destroyed(
         &self,
         guard: &SnatchGuard,
@@ -928,9 +993,11 @@ impl Buffer {
                 }
             };
 
-            let timestamp_normalization_bind_group = self
-                .timestamp_normalization_bind_groups
-                .snatch(&mut snatch_guard);
+            for lock in self.timestamp_normalization_bind_groups {
+                let value = lock.write().take();
+            }
+            let timestamp_normalization_bind_group =
+                self.timestamp_normalization_bind_groups.write();
 
             let indirect_validation_bind_groups = self
                 .indirect_validation_bind_groups

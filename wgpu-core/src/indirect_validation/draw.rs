@@ -394,12 +394,8 @@ impl Draw {
             // Make sure the indirect buffer is still valid.
             batch.src_buffer.try_raw(snatch_guard)?;
 
-            let src_bind_group = batch.src_buffer.indirect_validation_bind_groups
-                [queue.index as usize]
-                .get(snatch_guard)
-                .unwrap()
-                .draw
-                .as_ref();
+            let src_bind_group_lock = batch.src_buffer.get_indirect_validation_bg(queue);
+            let src_bind_group = src_bind_group_lock.as_ref().unwrap().draw.as_ref();
             unsafe {
                 encoder.set_bind_group(
                     pipeline_layout,

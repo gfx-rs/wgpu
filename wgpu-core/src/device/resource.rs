@@ -1076,27 +1076,11 @@ impl Device {
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
 
         let mut timestamp_normalization_bind_groups = PerQueueArray::new();
+        let mut indirect_validation_bind_groups = PerQueueArray::new();
         for _ in 0..self.queues.len() {
-            timestamp_normalization_bind_groups.push(Snatchable::empty());
+            timestamp_normalization_bind_groups.push(parking_lot::RwLock::new(None));
+            indirect_validation_bind_groups.push(parking_lot::RwLock::new(None));
         }
-
-        // MQ TODO: timestamp normalization
-        /*let timestamp_normalization_bind_group = Snatchable::new(unsafe {
-            // SAFETY: The size passed here must not overflow the buffer.
-            self.timestamp_normalizer
-                .as_ref()
-                .unwrap()
-                .create_normalization_bind_group(
-                    self,
-                    &*buffer,
-                    desc.label.as_deref(),
-                    wgt::BufferSize::new(hal_desc.size).unwrap(),
-                    desc.usage,
-                )
-        }?);*/
-
-        let indirect_validation_bind_groups =
-            self.create_indirect_validation_bind_groups(buffer.as_ref(), desc.size, desc.usage)?;
 
         let buffer = Buffer {
             raw: Snatchable::new(buffer),
@@ -1300,18 +1284,11 @@ impl Device {
             }
         };*/
         let mut timestamp_normalization_bind_groups = PerQueueArray::new();
+        let mut indirect_validation_bind_groups = PerQueueArray::new();
         for _ in 0..self.queues.len() {
-            timestamp_normalization_bind_groups.push(Snatchable::empty());
+            timestamp_normalization_bind_groups.push(parking_lot::RwLock::new(None));
+            indirect_validation_bind_groups.push(parking_lot::RwLock::new(None));
         }
-
-        let indirect_validation_bind_groups = match self.create_indirect_validation_bind_groups(
-            hal_buffer.as_ref(),
-            desc.size,
-            desc.usage,
-        ) {
-            Ok(ok) => ok,
-            Err(e) => return (Fallible::Invalid(Arc::new(desc.label.to_string())), Some(e)),
-        };
 
         unsafe { self.raw().add_raw_buffer(&*hal_buffer) };
 
@@ -1349,37 +1326,6 @@ impl Device {
         }
 
         (Fallible::Valid(buffer), None)
-    }
-
-    fn create_indirect_validation_bind_groups(
-        &self,
-        raw_buffer: &dyn hal::DynBuffer,
-        buffer_size: u64,
-        usage: wgt::BufferUsages,
-        queue: &Queue,
-    ) -> Result<Snatchable<crate::indirect_validation::BindGroups>, resource::CreateBufferError>
-    {
-        if !usage.contains(wgt::BufferUsages::INDIRECT) {
-            return Ok(Snatchable::empty());
-        }
-
-        let Some(ref indirect_validation) = queue.indirect_validation else {
-            return Ok(Snatchable::empty());
-        };
-
-        let bind_groups = crate::indirect_validation::BindGroups::new(
-            indirect_validation,
-            self,
-            buffer_size,
-            raw_buffer,
-        )
-        .map_err(resource::CreateBufferError::IndirectValidationBindGroup)?;
-
-        if let Some(bind_groups) = bind_groups {
-            Ok(Snatchable::new(bind_groups))
-        } else {
-            Ok(Snatchable::empty())
-        }
     }
 
     pub fn create_texture(

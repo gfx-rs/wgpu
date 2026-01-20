@@ -39,7 +39,7 @@ use crate::{
     lock::{rank, Mutex, MutexGuard, RwLock, RwLockWriteGuard},
     ray_tracing::{BlasCompactReadyPendingClosure, CompactBlasError},
     resource::{
-        Blas, BlasCompactState, Buffer, BufferAccessError, BufferMapState, DestroyedBuffer,
+        self, Blas, BlasCompactState, Buffer, BufferAccessError, BufferMapState, DestroyedBuffer,
         DestroyedResourceError, DestroyedTexture, Fallible, FlushedStagingBuffer,
         InvalidResourceError, Labeled, ParentDevice, ResourceErrorIdent, StagingBuffer, Texture,
         TextureInner, Trackable, TrackingData,
@@ -163,6 +163,36 @@ impl Queue {
             fence: RwLock::new(rank::DEVICE_FENCE, ManuallyDrop::new(fence)),
             timestamp_normalizer: Some(timestamp_normalizer),
         })
+    }
+
+    pub(crate) fn create_indirect_validation_bind_groups(
+        self: &Arc<Self>,
+        raw_buffer: &dyn hal::DynBuffer,
+        buffer_size: u64,
+        usage: wgt::BufferUsages,
+    ) -> Option<crate::indirect_validation::BindGroups> {
+        if !usage.contains(wgt::BufferUsages::INDIRECT) {
+            return None;
+        }
+
+        let Some(ref indirect_validation) = self.indirect_validation else {
+            return None;
+        };
+
+        let bind_groups = crate::indirect_validation::BindGroups::new(
+            indirect_validation,
+            &self.device,
+            buffer_size,
+            raw_buffer,
+        )
+        .map_err(resource::CreateBufferError::IndirectValidationBindGroup)
+        .unwrap();
+
+        if let Some(bind_groups) = bind_groups {
+            Some(bind_groups)
+        } else {
+            None
+        }
     }
 
     pub(crate) fn raw(&self) -> &dyn hal::DynQueue {
