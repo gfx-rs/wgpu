@@ -28,7 +28,7 @@ use crate::{
         Fallible,
     },
     storage::Storage,
-    Label, LabelHelpers,
+    Label, LabelHelpers, PerQueueArray,
 };
 
 use wgt::{BufferAddress, TextureFormat};
@@ -2031,7 +2031,7 @@ impl Global {
         offset: BufferAddress,
         size: Option<BufferAddress>,
         op: BufferMapOperation,
-    ) -> Result<crate::SubmissionIndex, BufferAccessError> {
+    ) -> Result<PerQueueArray<crate::SubmissionIndex>, BufferAccessError> {
         profiling::scope!("Buffer::map_async");
         api_log!("Buffer::map_async {buffer_id:?} offset {offset:?} size {size:?} op: {op:?}");
 

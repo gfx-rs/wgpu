@@ -369,9 +369,11 @@ pub type SubmittedWorkDoneClosure = Box<dyn FnOnce() + 'static>;
 pub enum TempResource {
     StagingBuffer(FlushedStagingBuffer),
     ScratchBuffer(ScratchBuffer),
-    // MQ TODO: these might be in multiple queues at once, so maybe use an Arc?
     DestroyedBuffer(DestroyedBuffer),
     DestroyedTexture(DestroyedTexture),
+    // Used for resources that might be in multiple queues
+    SharedDestroyedBuffer(Arc<DestroyedBuffer>),
+    SharedDestroyedTexture(Arc<DestroyedTexture>),
 }
 
 /// A series of raw [`CommandBuffer`]s that have been submitted to a
@@ -1573,10 +1575,8 @@ impl Queue {
 
             // This will schedule destruction of all resources that are no longer needed
             // by the user but used in the command stream, among other things.
-            let fence_guard = RwLockWriteGuard::downgrade(fence);
-            let (closures, result) =
-                self.device
-                    .maintain(fence_guard, wgt::PollType::Poll, snatch_guard);
+            drop(fence);
+            let (closures, result) = self.device.maintain(wgt::PollType::Poll, snatch_guard);
             match result {
                 Ok(status) => {
                     debug_assert!(matches!(

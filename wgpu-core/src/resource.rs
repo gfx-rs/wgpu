@@ -445,6 +445,7 @@ pub struct Buffer {
     /// Each queue has its own buffers that cannot be shared
     pub(crate) indirect_validation_bind_groups:
         PerQueueArray<parking_lot::RwLock<Option<BindGroups>>>,
+    pub unique_queue: Option<u32>,
 }
 
 impl Drop for Buffer {
@@ -652,7 +653,7 @@ impl Buffer {
         offset: wgt::BufferAddress,
         size: Option<wgt::BufferAddress>,
         op: BufferMapOperation,
-    ) -> Result<SubmissionIndex, (BufferMapOperation, BufferAccessError)> {
+    ) -> Result<PerQueueArray<SubmissionIndex>, (BufferMapOperation, BufferAccessError)> {
         let range_size = if let Some(size) = size {
             size
         } else {
@@ -729,27 +730,25 @@ impl Buffer {
             };
         }
 
-        // TODO: we are ignoring the transition here, I think we need to add a barrier
-        // at the end of the submission
-        device
-            .trackers
-            .lock()
-            .buffers
-            .set_single(self, internal_use);
+        let mut indices = PerQueueArray::new();
+        for i in 0..self.device.queues.len() {
+            let submit_index = if let Some(queue) = self.device.get_queue(i as u32) {
+                // TODO: we are ignoring the transition here, I think we need to add a barrier
+                // at the end of the submission
+                queue.trackers.lock().buffers.set_single(self, internal_use);
+                queue.lock_life().map(self).unwrap_or(0) // '0' means no wait is necessary
+            } else {
+                // We can safely unwrap below since we just set the `map_state` to `BufferMapState::Waiting`.
+                let (mut operation, status) = self.map(&device.snatchable_lock.read()).unwrap();
+                if let Some(callback) = operation.callback.take() {
+                    callback(status);
+                }
+                0
+            };
+            indices.push((i as u32, submit_index));
+        }
 
-        let submit_index = if let Some(queue) = device.get_queue() {
-            // MQ TODO
-            queue.lock_life().map(self).unwrap_or(0) // '0' means no wait is necessary
-        } else {
-            // We can safely unwrap below since we just set the `map_state` to `BufferMapState::Waiting`.
-            let (mut operation, status) = self.map(&device.snatchable_lock.read()).unwrap();
-            if let Some(callback) = operation.callback.take() {
-                callback(status);
-            }
-            0
-        };
-
-        Ok(submit_index)
+        Ok(indices)
     }
 
     pub fn get_mapped_range(
@@ -903,13 +902,13 @@ impl Buffer {
 
                 let staging_buffer = staging_buffer.flush();
 
-                if let Some(queue) = device.get_queue() {
+                // MQ TODO: this will be hard
+                if let Some(queue) = device.get_queue(self.unique_queue.unwrap()) {
                     let region = wgt::BufferSize::new(self.size).map(|size| hal::BufferCopy {
                         src_offset: 0,
                         dst_offset: 0,
                         size,
                     });
-                    // MQ TODO
                     let transition_src = hal::BufferBarrier {
                         buffer: staging_buffer.raw(),
                         usage: hal::StateTransition {
@@ -993,15 +992,17 @@ impl Buffer {
                 }
             };
 
-            for lock in self.timestamp_normalization_bind_groups {
-                let value = lock.write().take();
-            }
-            let timestamp_normalization_bind_group =
-                self.timestamp_normalization_bind_groups.write();
+            let timestamp_normalization_bind_groups = self
+                .timestamp_normalization_bind_groups
+                .iter()
+                .filter_map(|a| a.write().take())
+                .collect();
 
             let indirect_validation_bind_groups = self
                 .indirect_validation_bind_groups
-                .snatch(&mut snatch_guard);
+                .iter()
+                .filter_map(|a| a.write().take())
+                .collect();
 
             drop(snatch_guard);
 
@@ -1010,26 +1011,51 @@ impl Buffer {
                 mem::take(&mut *guard)
             };
 
-            queue::TempResource::DestroyedBuffer(DestroyedBuffer {
+            DestroyedBuffer {
                 raw: ManuallyDrop::new(raw),
                 device: Arc::clone(&self.device),
                 label: self.label().to_owned(),
                 bind_groups,
-                timestamp_normalization_bind_group,
+                timestamp_normalization_bind_groups,
                 indirect_validation_bind_groups,
-            })
+            }
         };
 
-        // MQ TODO
-        if let Some(queue) = device.get_queue() {
-            let mut pending_writes = queue.pending_writes.lock();
-            if pending_writes.contains_buffer(self) {
-                pending_writes.consume_temp(temp);
-            } else {
-                let mut life_lock = queue.lock_life();
-                let last_submit_index = life_lock.get_buffer_latest_submission_index(self);
-                if let Some(last_submit_index) = last_submit_index {
-                    life_lock.schedule_resource_destruction(temp, last_submit_index);
+        // Prefer to avoid Arc
+        if device.queues.len() > 1 {
+            let temp = Arc::new(temp);
+            for i in 0..device.queues.len() as u32 {
+                if let Some(queue) = device.get_queue(i) {
+                    let mut pending_writes = queue.pending_writes.lock();
+                    if pending_writes.contains_buffer(self) {
+                        pending_writes
+                            .consume_temp(queue::TempResource::SharedDestroyedBuffer(temp.clone()));
+                    } else {
+                        let mut life_lock = queue.lock_life();
+                        let last_submit_index = life_lock.get_buffer_latest_submission_index(self);
+                        if let Some(last_submit_index) = last_submit_index {
+                            life_lock.schedule_resource_destruction(
+                                queue::TempResource::SharedDestroyedBuffer(temp.clone()),
+                                last_submit_index,
+                            );
+                        }
+                    }
+                }
+            }
+        } else {
+            if let Some(queue) = device.get_queue(0) {
+                let mut pending_writes = queue.pending_writes.lock();
+                if pending_writes.contains_buffer(self) {
+                    pending_writes.consume_temp(queue::TempResource::DestroyedBuffer(temp));
+                } else {
+                    let mut life_lock = queue.lock_life();
+                    let last_submit_index = life_lock.get_buffer_latest_submission_index(self);
+                    if let Some(last_submit_index) = last_submit_index {
+                        life_lock.schedule_resource_destruction(
+                            queue::TempResource::DestroyedBuffer(temp),
+                            last_submit_index,
+                        );
+                    }
                 }
             }
         }
@@ -1090,8 +1116,8 @@ pub struct DestroyedBuffer {
     device: Arc<Device>,
     label: String,
     bind_groups: WeakVec<BindGroup>,
-    timestamp_normalization_bind_group: Option<TimestampNormalizationBindGroup>,
-    indirect_validation_bind_groups: Option<crate::indirect_validation::BindGroups>,
+    timestamp_normalization_bind_groups: PerQueueArray<TimestampNormalizationBindGroup>,
+    indirect_validation_bind_groups: PerQueueArray<BindGroups>,
 }
 
 impl DestroyedBuffer {
@@ -1108,12 +1134,11 @@ impl Drop for DestroyedBuffer {
         )));
         drop(deferred);
 
-        if let Some(raw) = self.timestamp_normalization_bind_group.take() {
-            raw.dispose(self.device.raw());
+        for bg in self.timestamp_normalization_bind_groups.drain(..) {
+            bg.dispose(self.device.raw());
         }
-
-        if let Some(raw) = self.indirect_validation_bind_groups.take() {
-            raw.dispose(self.device.raw());
+        for bg in self.indirect_validation_bind_groups.drain(..) {
+            bg.dispose(self.device.raw());
         }
 
         resource_log!("Destroy raw Buffer (destroyed) {:?}", self.label());
@@ -1172,7 +1197,7 @@ impl StagingBuffer {
             size: size.get(),
             usage: wgt::BufferUses::MAP_WRITE | wgt::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT,
-            initial_queue: queue.index,
+            initial_queue: Some(queue.index),
         };
 
         let raw = unsafe { device.raw().create_buffer(&stage_desc) }
@@ -1517,26 +1542,53 @@ impl Texture {
                 mem::take(&mut *guard)
             };
 
-            queue::TempResource::DestroyedTexture(DestroyedTexture {
+            DestroyedTexture {
                 raw: ManuallyDrop::new(raw),
                 views,
                 clear_mode: mem::replace(&mut *self.clear_mode.write(), TextureClearMode::None),
                 bind_groups,
                 device: Arc::clone(&self.device),
                 label: self.label().to_owned(),
-            })
+            }
         };
 
         // MQ TODO
-        if let Some(queue) = device.get_queue() {
-            let mut pending_writes = queue.pending_writes.lock();
-            if pending_writes.contains_texture(self) {
-                pending_writes.consume_temp(temp);
-            } else {
-                let mut life_lock = queue.lock_life();
-                let last_submit_index = life_lock.get_texture_latest_submission_index(self);
-                if let Some(last_submit_index) = last_submit_index {
-                    life_lock.schedule_resource_destruction(temp, last_submit_index);
+
+        if device.queues.len() > 1 {
+            let temp = Arc::new(temp);
+            for i in 0..device.queues.len() as u32 {
+                if let Some(queue) = device.get_queue(i) {
+                    let mut pending_writes = queue.pending_writes.lock();
+                    if pending_writes.contains_texture(self) {
+                        pending_writes.consume_temp(queue::TempResource::SharedDestroyedTexture(
+                            temp.clone(),
+                        ));
+                    } else {
+                        let mut life_lock = queue.lock_life();
+                        let last_submit_index = life_lock.get_texture_latest_submission_index(self);
+                        if let Some(last_submit_index) = last_submit_index {
+                            life_lock.schedule_resource_destruction(
+                                queue::TempResource::SharedDestroyedTexture(temp.clone()),
+                                last_submit_index,
+                            );
+                        }
+                    }
+                }
+            }
+        } else {
+            if let Some(queue) = device.get_queue(0) {
+                let mut pending_writes = queue.pending_writes.lock();
+                if pending_writes.contains_texture(self) {
+                    pending_writes.consume_temp(queue::TempResource::DestroyedTexture(temp));
+                } else {
+                    let mut life_lock = queue.lock_life();
+                    let last_submit_index = life_lock.get_texture_latest_submission_index(self);
+                    if let Some(last_submit_index) = last_submit_index {
+                        life_lock.schedule_resource_destruction(
+                            queue::TempResource::DestroyedTexture(temp),
+                            last_submit_index,
+                        );
+                    }
                 }
             }
         }

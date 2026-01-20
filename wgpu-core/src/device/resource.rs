@@ -58,7 +58,7 @@ use crate::{
     track::{BindGroupStates, TrackerIndexAllocators, UsageScope, UsageScopePool},
     validation,
     weak_vec::WeakVec,
-    FastHashMap, LabelHelpers, OnceCellOrLock, PerQueueArray, SURFACE_QUEUE_ID,
+    FastHashMap, LabelHelpers, OnceCellOrLock, PerQueueArray,
 };
 
 use super::{
@@ -774,8 +774,7 @@ impl Device {
     ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
         // MQ TODO
         let snatch_guard = self.snatchable_lock.read();
-        let fence = self.fence.read();
-        let maintain_result = self.maintain(fence, poll_type, snatch_guard);
+        let maintain_result = self.maintain(poll_type, snatch_guard);
 
         self.lose_if_oom();
 
@@ -805,7 +804,6 @@ impl Device {
     ///   if there was a timeout or a validation error.
     pub(crate) fn maintain<'this>(
         &'this self,
-        fence: crate::lock::RwLockReadGuard<ManuallyDrop<Box<dyn hal::DynFence>>>,
         poll_type: wgt::PollType<crate::SubmissionIndex>,
         snatch_guard: SnatchGuard,
     ) -> (UserClosures, Result<wgt::PollStatus, WaitIdleError>) {
@@ -958,9 +956,6 @@ impl Device {
             }
         }
 
-        // Don't hold the locks while calling release_gpu_resources.
-        drop(fence);
-
         if should_release_gpu_resource {
             self.release_gpu_resources();
         }
@@ -1082,6 +1077,16 @@ impl Device {
             indirect_validation_bind_groups.push(parking_lot::RwLock::new(None));
         }
 
+        let unique_queue = if !concurrent_usage
+            && desc
+                .usage
+                .intersects(wgt::BufferUsages::MAP_READ | wgt::BufferUsages::MAP_WRITE)
+        {
+            Some(desc.initial_queue)
+        } else {
+            None
+        };
+
         let buffer = Buffer {
             raw: Snatchable::new(buffer),
             device: self.clone(),
@@ -1097,6 +1102,7 @@ impl Device {
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
             timestamp_normalization_bind_groups,
             indirect_validation_bind_groups,
+            unique_queue,
         };
 
         let buffer = Arc::new(buffer);
@@ -1176,12 +1182,14 @@ impl Device {
         device.check_is_valid()?;
         buffer.check_usage(wgt::BufferUsages::MAP_WRITE)?;
 
-        let last_submission = device
-            .get_queue()
-            .and_then(|queue| queue.lock_life().get_buffer_latest_submission_index(buffer));
+        for i in 0..self.queues.len() as u32 {
+            let last_submission = device
+                .get_queue(i)
+                .and_then(|queue| queue.lock_life().get_buffer_latest_submission_index(buffer));
 
-        if let Some(last_submission) = last_submission {
-            device.wait_for_submit(last_submission)?;
+            if let Some(last_submission) = last_submission {
+                device.wait_for_submit((i, last_submission))?;
+            }
         }
 
         let snatch_guard = device.snatchable_lock.read();
@@ -1307,6 +1315,7 @@ impl Device {
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
             timestamp_normalization_bind_groups,
             indirect_validation_bind_groups,
+            unique_queue: Some(desc.initial_queue),
         };
 
         let buffer = Arc::new(buffer);
@@ -4722,20 +4731,19 @@ impl Device {
         &self,
         submission_index: crate::SubmissionIndex,
     ) -> Result<(), DeviceError> {
-        let fence = self.fence.read();
+        let queue = self.get_queue(submission_index.0).unwrap();
+        let fence = queue.fence.read();
         let last_done_index = unsafe { self.raw().get_fence_value(fence.as_ref()) }
             .map_err(|e| self.handle_hal_error(e))?;
-        if last_done_index < submission_index {
+        if last_done_index < submission_index.1 {
             unsafe { self.raw().wait(fence.as_ref(), submission_index.1, None) }
                 .map_err(|e| self.handle_hal_error(e))?;
             drop(fence);
-            if let Some(queue) = self.get_queue(submission_index.0) {
-                let closures = queue.lock_life().triage_submissions(submission_index.1);
-                assert!(
-                    closures.is_empty(),
-                    "wait_for_submit is not expected to work with closures"
-                );
-            }
+            let closures = queue.lock_life().triage_submissions(submission_index.1);
+            assert!(
+                closures.is_empty(),
+                "wait_for_submit is not expected to work with closures"
+            );
         }
         Ok(())
     }
@@ -4981,12 +4989,10 @@ impl Device {
 
                 // Wait for all work to finish before configuring the surface.
                 let snatch_guard = self.snatchable_lock.read();
-                let queue = self.get_queue(SURFACE_QUEUE_ID).unwrap();
-                let fence = queue.fence.read();
 
                 let maintain_result;
                 (user_callbacks, maintain_result) =
-                    self.maintain(fence, wgt::PollType::wait_indefinitely(), snatch_guard);
+                    self.maintain(wgt::PollType::wait_indefinitely(), snatch_guard);
 
                 match maintain_result {
                     // We're happy
