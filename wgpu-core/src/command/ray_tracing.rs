@@ -200,23 +200,19 @@ pub(crate) fn build_acceleration_structures(
 
     let mut build_command = AsBuild::default();
     let mut buf_storage = Vec::new();
-    iter_blas(
-        blas.into_iter(),
-        state.tracker,
-        &mut build_command,
-        &mut buf_storage,
-    )?;
-
     let mut input_barriers = Vec::<hal::BufferBarrier<dyn hal::DynBuffer>>::new();
     let mut scratch_buffer_blas_size = 0;
     let mut blas_storage = Vec::new();
-    iter_buffers(
-        state,
+    iter_blas(
+        blas.into_iter(),
+        &mut build_command,
         &mut buf_storage,
         &mut input_barriers,
         &mut scratch_buffer_blas_size,
         &mut blas_storage,
+        state
     )?;
+
     let mut tlas_lock_store = Vec::<(Option<OwnedTlasPackage<ArcReferences>>, Arc<Tlas>)>::new();
 
     for package in tlas.into_iter() {
@@ -551,7 +547,6 @@ impl CommandBufferMutable {
 ///iterates over the blas iterator, and it's geometry, pushing the buffers into a storage vector (and also some validation).
 fn iter_blas<'snatch_guard:'buffers, 'buffers>(
     blas_iter: impl Iterator<Item = OwnedBlasBuildEntry<ArcReferences>>,
-    tracker: &mut Tracker,
     build_command: &mut AsBuild,
     buf_storage: &mut Vec<TriangleBufferStore>,
     input_barriers: &mut Vec<hal::BufferBarrier<'buffers, dyn hal::DynBuffer>>,
@@ -565,7 +560,7 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
         Vec::<hal::AccelerationStructureTriangles<dyn hal::DynBuffer>>::new();
     for entry in blas_iter {
         let blas = &entry.blas;
-        tracker.blas_s.insert_single(blas.clone());
+        state.tracker.blas_s.insert_single(blas.clone());
 
         build_command.blas_s_built.push(blas.clone());
 
@@ -671,7 +666,7 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         ));
                     }
                     let vertex_buffer = mesh.vertex_buffer.clone();
-                    let vertex_pending = tracker.buffers.set_single(
+                    let vertex_pending = state.tracker.buffers.set_single(
                         &vertex_buffer,
                         BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     );
@@ -717,7 +712,7 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                                 index_buffer.error_ident(),
                             ));
                         }
-                        let data = tracker.buffers.set_single(
+                        let data = state.tracker.buffers.set_single(
                             &index_buffer,
                             BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                         );
@@ -774,7 +769,7 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                                 transform_buffer.error_ident(),
                             ));
                         }
-                        let data = tracker.buffers.set_single(
+                        let data = state.tracker.buffers.set_single(
                             &transform_buffer,
                             BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                         );
