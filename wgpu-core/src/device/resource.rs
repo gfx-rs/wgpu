@@ -913,9 +913,10 @@ impl Device {
         (user_closures, result)
     }
 
-    pub fn create_buffer(
+    fn create_buffer_internal(
         self: &Arc<Self>,
         desc: &resource::BufferDescriptor,
+        concurrent_usage: bool,
     ) -> Result<Arc<Buffer>, resource::CreateBufferError> {
         self.check_is_valid()?;
 
@@ -1010,7 +1011,11 @@ impl Device {
             size: aligned_size,
             usage,
             memory_flags: hal::MemoryFlags::empty(),
-            initial_queue: desc.initial_queue,
+            initial_queue: if concurrent_usage {
+                None
+            } else {
+                Some(desc.initial_queue)
+            },
         };
         let buffer = unsafe { self.raw().create_buffer(&hal_desc) }
             .map_err(|e| self.handle_hal_error_with_nonfatal_oom(e))?;
@@ -1108,6 +1113,13 @@ impl Device {
         }
 
         Ok(buffer)
+    }
+
+    pub fn create_buffer(
+        self: &Arc<Self>,
+        desc: &resource::BufferDescriptor,
+    ) -> Result<Arc<Buffer>, resource::CreateBufferError> {
+        self.create_buffer_internal(desc, false)
     }
 
     #[cfg(feature = "replay")]
@@ -2100,8 +2112,8 @@ impl Device {
             mapped_at_creation: false,
             initial_queue: desc.initial_queue,
         };
-        let params = self.create_buffer(&params_desc)?;
-        self.get_queue().unwrap().write_buffer(
+        let params = self.create_buffer_internal(&params_desc, true)?;
+        self.get_queue(desc.initial_queue).unwrap().write_buffer(
             params.clone(),
             0,
             bytemuck::bytes_of(&params_data),
