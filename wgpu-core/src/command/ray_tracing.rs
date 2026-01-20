@@ -675,69 +675,6 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         &vertex_buffer,
                         BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     );
-                    let index_data = if let Some(index_buffer) = mesh.index_buffer {
-                        if mesh.first_index.is_none()
-                            || mesh.size.index_count.is_none()
-                            || mesh.size.index_count.is_none()
-                        {
-                            return Err(BuildAccelerationStructureError::MissingAssociatedData(
-                                index_buffer.error_ident(),
-                            ));
-                        }
-                        let data = tracker.buffers.set_single(
-                            &index_buffer,
-                            BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-                        );
-                        Some((index_buffer, data))
-                    } else {
-                        None
-                    };
-                    let transform_data = if let Some(transform_buffer) = mesh.transform_buffer {
-                        if !blas
-                            .flags
-                            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
-                        {
-                            return Err(BuildAccelerationStructureError::UseTransformMissing(
-                                blas.error_ident(),
-                            ));
-                        }
-                        if mesh.transform_buffer_offset.is_none() {
-                            return Err(BuildAccelerationStructureError::MissingAssociatedData(
-                                transform_buffer.error_ident(),
-                            ));
-                        }
-                        let data = tracker.buffers.set_single(
-                            &transform_buffer,
-                            BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-                        );
-                        Some((transform_buffer, data))
-                    } else {
-                        if blas
-                            .flags
-                            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
-                        {
-                            return Err(BuildAccelerationStructureError::TransformMissing(
-                                blas.error_ident(),
-                            ));
-                        }
-                        None
-                    };
-                    temp_buffer.push(TriangleBufferStore {
-                        vertex_buffer,
-                        vertex_transition: vertex_pending,
-                        index_buffer_transition: index_data,
-                        transform_buffer_transition: transform_data,
-                        geometry: BlasTriangleGeometryInfo {
-                            size: mesh.size,
-                            first_vertex: mesh.first_vertex,
-                            vertex_stride: mesh.vertex_stride,
-                            first_index: mesh.first_index,
-                            transform_buffer_offset: mesh.transform_buffer_offset,
-                        },
-                        ending_blas: None,
-                    });
-
-                    let mesh = &buf.geometry;
                     let vertex_buffer = {
                         let vertex_raw = buf.vertex_buffer.as_ref().try_raw(state.snatch_guard)?;
                         let vertex_buffer = &buf.vertex_buffer;
@@ -771,9 +708,20 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         );
                         vertex_raw
                     };
-                    let index_buffer = if let Some((ref mut index_buffer, ref mut index_pending)) =
-                        buf.index_buffer_transition
-                    {
+                    let index_data = if let Some(index_buffer) = mesh.index_buffer {
+                        if mesh.first_index.is_none()
+                            || mesh.size.index_count.is_none()
+                            || mesh.size.index_count.is_none()
+                        {
+                            return Err(BuildAccelerationStructureError::MissingAssociatedData(
+                                index_buffer.error_ident(),
+                            ));
+                        }
+                        let data = tracker.buffers.set_single(
+                            &index_buffer,
+                            BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                        );
+                        Some((index_buffer, data))
                         let index_raw = index_buffer.try_raw(state.snatch_guard)?;
                         index_buffer.check_usage(BufferUsages::BLAS_INPUT)?;
                     
@@ -812,9 +760,25 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                     } else {
                         None
                     };
-                    let transform_buffer = if let Some((ref mut transform_buffer, ref mut transform_pending)) =
-                        buf.transform_buffer_transition
-                    {
+                    let transform_data = if let Some(transform_buffer) = mesh.transform_buffer {
+                        if !blas
+                            .flags
+                            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                        {
+                            return Err(BuildAccelerationStructureError::UseTransformMissing(
+                                blas.error_ident(),
+                            ));
+                        }
+                        if mesh.transform_buffer_offset.is_none() {
+                            return Err(BuildAccelerationStructureError::MissingAssociatedData(
+                                transform_buffer.error_ident(),
+                            ));
+                        }
+                        let data = tracker.buffers.set_single(
+                            &transform_buffer,
+                            BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                        );
+                        Some((transform_buffer, data))
                         if mesh.transform_buffer_offset.is_none() {
                             return Err(BuildAccelerationStructureError::MissingAssociatedData(
                                 transform_buffer.error_ident(),
@@ -855,8 +819,30 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         );
                         Some(transform_raw)
                     } else {
+                        if blas
+                            .flags
+                            .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
+                        {
+                            return Err(BuildAccelerationStructureError::TransformMissing(
+                                blas.error_ident(),
+                            ));
+                        }
                         None
                     };
+                    temp_buffer.push(TriangleBufferStore {
+                        vertex_buffer,
+                        vertex_transition: vertex_pending,
+                        index_buffer_transition: index_data,
+                        transform_buffer_transition: transform_data,
+                        geometry: BlasTriangleGeometryInfo {
+                            size: mesh.size,
+                            first_vertex: mesh.first_vertex,
+                            vertex_stride: mesh.vertex_stride,
+                            first_index: mesh.first_index,
+                            transform_buffer_offset: mesh.transform_buffer_offset,
+                        },
+                        ending_blas: None,
+                    });
                 
                     let triangles = hal::AccelerationStructureTriangles {
                         vertex_buffer: Some(vertex_buffer),
