@@ -200,20 +200,13 @@ pub(crate) fn build_acceleration_structures(
         state
     )?;
 
-    let mut tlas_lock_store = Vec::<(Option<OwnedTlasPackage<ArcReferences>>, Arc<Tlas>)>::new();
-
-    for package in tlas.into_iter() {
-        let tlas = package.tlas.clone();
-        state.tracker.tlas_s.insert_single(tlas.clone());
-        tlas_lock_store.push((Some(package), tlas))
-    }
-
     let mut scratch_buffer_tlas_size = 0;
     let mut tlas_storage = Vec::<TlasStore>::new();
     let mut instance_buffer_staging_source = Vec::<u8>::new();
 
-    for (package, tlas) in &mut tlas_lock_store {
-        let package = package.take().unwrap();
+    for package  in tlas.iter() {
+        let tlas = &package.tlas;
+        state.tracker.tlas_s.insert_single(tlas.clone());
 
         let scratch_buffer_offset = scratch_buffer_tlas_size;
         scratch_buffer_tlas_size += align_to(
@@ -226,7 +219,7 @@ pub(crate) fn build_acceleration_structures(
         let mut dependencies = Vec::new();
 
         let mut instance_count = 0;
-        for instance in package.instances.into_iter().flatten() {
+        for instance in package.instances.iter().flatten() {
             if instance.custom_data >= (1u32 << 24u32) {
                 return Err(BuildAccelerationStructureError::TlasInvalidCustomIndex(
                     tlas.error_ident(),
