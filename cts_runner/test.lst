@@ -251,6 +251,8 @@ webgpu:shader,validation,expression,binary,short_circuiting_and_or:array_overrid
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:invalid_types:*
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:scalar_vector:op="%26%26";lhs="bool";rhs="bool"
 webgpu:shader,validation,expression,call,builtin,all:arguments:test="ptr_deref"
+webgpu:shader,validation,expression,call,builtin,distance:values:stage="constant";type="f32"
+webgpu:shader,validation,expression,call,builtin,length:scalar:stage="constant";type="f32"
 webgpu:shader,validation,expression,call,builtin,max:values:*
 // FAIL: others in `value_constructor` due to https://github.com/gfx-rs/wgpu/issues/4720, possibly more
 webgpu:shader,validation,expression,call,builtin,value_constructor:array_value:*

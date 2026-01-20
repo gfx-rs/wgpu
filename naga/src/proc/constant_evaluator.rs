@@ -1791,7 +1791,12 @@ impl<'a> ConstantEvaluator<'a> {
                     F: core::ops::Mul<F>,
                     F: num_traits::Float + iter::Sum,
                 {
-                    e.iter().map(|&ei| ei * ei).sum::<F>().sqrt()
+                    if e.len() == 1 {
+                        // Avoids possible overflow in squaring
+                        e[0].abs()
+                    } else {
+                        e.iter().map(|&ei| ei * ei).sum::<F>().sqrt()
+                    }
                 }
 
                 let result = match_literal_vector!(match e1 => Literal {
@@ -1812,12 +1817,17 @@ impl<'a> ConstantEvaluator<'a> {
                     F: core::ops::Mul<F>,
                     F: num_traits::Float + iter::Sum + core::ops::Sub,
                 {
-                    a.iter()
-                        .zip(b.iter())
-                        .map(|(&aa, &bb)| aa - bb)
-                        .map(|ei| ei * ei)
-                        .sum::<F>()
-                        .sqrt()
+                    if a.len() == 1 {
+                        // Avoids possible overflow in squaring
+                        (a[0] - b[0]).abs()
+                    } else {
+                        a.iter()
+                            .zip(b.iter())
+                            .map(|(&aa, &bb)| aa - bb)
+                            .map(|ei| ei * ei)
+                            .sum::<F>()
+                            .sqrt()
+                    }
                 }
                 let result = match_literal_vector!(match (e1, e2) => Literal {
                     Float => |e1, e2| { float_distance(e1, e2) },
