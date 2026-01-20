@@ -175,24 +175,16 @@ impl Queue {
             return None;
         }
 
-        let Some(ref indirect_validation) = self.indirect_validation else {
-            return None;
-        };
+        let indirect_validation = self.indirect_validation.as_ref()?;
 
-        let bind_groups = crate::indirect_validation::BindGroups::new(
+        crate::indirect_validation::BindGroups::new(
             indirect_validation,
             &self.device,
             buffer_size,
             raw_buffer,
         )
         .map_err(resource::CreateBufferError::IndirectValidationBindGroup)
-        .unwrap();
-
-        if let Some(bind_groups) = bind_groups {
-            Some(bind_groups)
-        } else {
-            None
-        }
+        .unwrap()
     }
 
     pub(crate) fn raw(&self) -> &dyn hal::DynQueue {
@@ -366,6 +358,7 @@ pub type SubmittedWorkDoneClosure = Box<dyn FnOnce() + 'static>;
 /// - `ActiveSubmission::temp_resources`: temporary resources used by a queue
 ///   submission, to be freed when it completes
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum TempResource {
     StagingBuffer(FlushedStagingBuffer),
     ScratchBuffer(ScratchBuffer),
@@ -651,7 +644,7 @@ impl Queue {
         // freed, even if an error occurs. All paths from here must call
         // `device.pending_writes.consume`.
 
-        let mut staging_buffer = StagingBuffer::new(&self.device, self, data_size)?;
+        let mut staging_buffer = StagingBuffer::new(&self.device, self.index, data_size)?;
 
         let staging_buffer = {
             profiling::scope!("copy");
@@ -688,7 +681,7 @@ impl Queue {
 
         self.device.check_is_valid()?;
 
-        let staging_buffer = StagingBuffer::new(&self.device, self, buffer_size)?;
+        let staging_buffer = StagingBuffer::new(&self.device, self.index, buffer_size)?;
         let ptr = unsafe { staging_buffer.ptr() };
 
         Ok((staging_buffer, ptr))
@@ -979,7 +972,7 @@ impl Queue {
             profiling::scope!("copy aligned");
             // Fast path if the data is already being aligned optimally.
             let stage_size = wgt::BufferSize::new(required_bytes_in_copy).unwrap();
-            let mut staging_buffer = StagingBuffer::new(&self.device, self, stage_size)?;
+            let mut staging_buffer = StagingBuffer::new(&self.device, self.index, stage_size)?;
             staging_buffer.write(&data[data_layout.offset as usize..]);
             staging_buffer
         } else {
@@ -990,7 +983,7 @@ impl Queue {
             let stage_size =
                 wgt::BufferSize::new(stage_bytes_per_row as u64 * block_rows_in_copy as u64)
                     .unwrap();
-            let mut staging_buffer = StagingBuffer::new(&self.device, self, stage_size)?;
+            let mut staging_buffer = StagingBuffer::new(&self.device, self.index, stage_size)?;
             for layer in 0..size.depth_or_array_layers {
                 let rows_offset = layer * rows_per_image;
                 for row in rows_offset..rows_offset + height_in_blocks {

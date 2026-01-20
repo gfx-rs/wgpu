@@ -492,7 +492,7 @@ impl Device {
         }
 
         let submission = queue0.submit(&[]).unwrap();
-        self.wait_for_submit(submission);
+        self.wait_for_submit(submission)?;
 
         Ok(())
     }
@@ -591,8 +591,8 @@ impl Device {
         };
         let queue = self.get_queue(0).unwrap();
         let mut staging_buffer = StagingBuffer::new(
-            &self,
-            &queue,
+            self,
+            0,
             wgt::BufferSize::new(size_of_val(&data) as _).unwrap(),
         )?;
         staging_buffer.write(bytemuck::bytes_of(&data));
@@ -743,6 +743,7 @@ impl Device {
         }
     }
 
+    // MQ TODO: should we unwrap here?
     pub fn get_queue(&self, index: u32) -> Option<Arc<Queue>> {
         self.queues[index as usize].get().as_ref()?.upgrade()
     }
@@ -812,7 +813,7 @@ impl Device {
         let mut user_closures = UserClosures::default();
 
         // If a wait was requested, determine which submission index to wait for.
-        let wait_submission_index = match poll_type {
+        let wait_submission_indices = match poll_type {
             wgt::PollType::Wait {
                 submission_index: Some(submission_index),
                 ..
@@ -856,7 +857,7 @@ impl Device {
 
         let mut current_duration = Duration::ZERO;
         // Wait for the submission index if requested.
-        for (queue_id, target_submission_index) in wait_submission_index {
+        for &(queue_id, target_submission_index) in &wait_submission_indices {
             let queue = self.get_queue(queue_id).unwrap();
             log::trace!("Device::maintain: waiting for submission index ({queue_id}, {target_submission_index})");
 
@@ -889,70 +890,73 @@ impl Device {
         }
 
         let mut all_queues_empty = true;
+        let mut result = Ok(match poll_type {
+            wgt::PollType::Poll => wgt::PollStatus::Poll,
+            wgt::PollType::Wait { .. } => wgt::PollStatus::WaitSucceeded,
+        });
 
-        // Get the currently finished submission index. This may be higher than the requested
-        // wait, or it may be less than the requested wait if the wait failed.
-        let fence_value_result = unsafe { self.raw().get_fence_value(fence.as_ref()) };
-        let current_finished_submission = match fence_value_result {
-            Ok(fence_value) => fence_value,
-            Err(e) => {
-                let hal_error: WaitIdleError = self.handle_hal_error(e).into();
-                return (user_closures, Err(hal_error));
-            }
-        };
+        for queue_i in 0..self.queues.len() as u32 {
+            let queue = self.get_queue(queue_i).unwrap();
 
-        // Maintain all finished submissions on the queue, updating the relevant user closures and collecting if the queue is empty.
-        //
-        // We don't use the result of the wait here, as we want to progress forward as far as possible
-        // and the wait could have been for submissions that finished long ago.
-        let mut queue_empty = false;
-        if let Some(queue) = self.get_queue() {
+            let fence = queue.fence.read();
+
+            // Get the currently finished submission index. This may be higher than the requested
+            // wait, or it may be less than the requested wait if the wait failed.
+            let fence_value_result = unsafe { self.raw().get_fence_value(fence.as_ref()) };
+            let current_finished_submission = match fence_value_result {
+                Ok(fence_value) => fence_value,
+                Err(e) => {
+                    let hal_error: WaitIdleError = self.handle_hal_error(e).into();
+                    return (user_closures, Err(hal_error));
+                }
+            };
+
+            // Maintain all finished submissions on the queue, updating the relevant user closures and collecting if the queue is empty.
+            //
+            // We don't use the result of the wait here, as we want to progress forward as far as possible
+            // and the wait could have been for submissions that finished long ago.
             let queue_result = queue.maintain(current_finished_submission, &snatch_guard);
-            (
-                user_closures.submissions,
-                user_closures.mappings,
-                user_closures.blas_compact_ready,
-                queue_empty,
-            ) = queue_result;
-            // DEADLOCK PREVENTION: We must drop `snatch_guard` before `queue` goes out of scope.
-            //
-            // `Queue::drop` acquires the snatch guard. If we still hold it when `queue` is dropped
-            // at the end of this block, we would deadlock. This can happen in the following scenario:
-            //
-            // - Thread A calls `Device::maintain` while Thread B holds the last strong ref to the queue.
-            // - Thread A calls `self.get_queue()`, obtaining a new strong ref, and enters this branch.
-            // - Thread B drops its strong ref, making Thread A's ref the last one.
-            // - When `queue` goes out of scope here, `Queue::drop` runs and tries to acquire the
-            //   snatch guard — but Thread A (this thread) still holds it, causing a deadlock.
-            drop(snatch_guard);
-        } else {
-            drop(snatch_guard);
-        };
+            let (mut submissions, mut mappings, mut blas_compact_ready, queue_empty) = queue_result;
+            user_closures.submissions.append(&mut submissions);
+            user_closures.mappings.append(&mut mappings);
+            user_closures
+                .blas_compact_ready
+                .append(&mut blas_compact_ready);
 
-        // Based on the queue empty status, and the current finished submission index, determine the result of the poll.
-        let result = if queue_empty {
-            if let Some(wait_submission_index) = wait_submission_index {
-                // Assert to ensure that if we received a queue empty status, the fence shows the correct value.
-                // This is defensive, as this should never be hit.
-                assert!(
+            let wait_submission_index = wait_submission_indices.iter().find(|a| a.0 == queue_i);
+
+            // Based on the queue empty status, and the current finished submission index, determine the result of the poll.
+            if queue_empty {
+                if let Some(&(_, wait_submission_index)) = wait_submission_index {
+                    // Assert to ensure that if we received a queue empty status, the fence shows the correct value.
+                    // This is defensive, as this should never be hit.
+                    assert!(
                     current_finished_submission >= wait_submission_index,
                     "If the queue is empty, the current submission index ({current_finished_submission}) should be at least the wait submission index ({wait_submission_index})"
                 );
+                }
+            } else if let Some(&(_, wait_submission_index)) = wait_submission_index {
+                // This is theoretically possible to succeed more than checking on the poll result
+                // as submissions could have finished in the time between the timeout resolving,
+                // the thread getting scheduled again, and us checking the fence value.
+                if current_finished_submission < wait_submission_index {
+                    result = Err(WaitIdleError::Timeout);
+                }
             }
+            all_queues_empty &= queue_empty;
+        }
 
-            Ok(wgt::PollStatus::QueueEmpty)
-        } else if let Some(wait_submission_index) = wait_submission_index {
-            // This is theoretically possible to succeed more than checking on the poll result
-            // as submissions could have finished in the time between the timeout resolving,
-            // the thread getting scheduled again, and us checking the fence value.
-            if current_finished_submission >= wait_submission_index {
-                Ok(wgt::PollStatus::WaitSucceeded)
-            } else {
-                Err(WaitIdleError::Timeout)
-            }
-        } else {
-            Ok(wgt::PollStatus::Poll)
-        };
+        // DEADLOCK PREVENTION: We must drop `snatch_guard` before `queue` goes out of scope.
+        //
+        // `Queue::drop` acquires the snatch guard. If we still hold it when `queue` is dropped
+        // at the end of this block, we would deadlock. This can happen in the following scenario:
+        //
+        // - Thread A calls `Device::maintain` while Thread B holds the last strong ref to the queue.
+        // - Thread A calls `self.get_queue()`, obtaining a new strong ref, and enters this branch.
+        // - Thread B drops its strong ref, making Thread A's ref the last one.
+        // - When `queue` goes out of scope here, `Queue::drop` runs and tries to acquire the
+        //   snatch guard — but Thread A (this thread) still holds it, causing a deadlock.
+        drop(snatch_guard);
 
         // Detect if we have been destroyed and now need to lose the device.
         //
@@ -961,7 +965,7 @@ impl Device {
         // our caller. This will complete the steps for both destroy and for
         // "lose the device".
         let mut should_release_gpu_resource = false;
-        if !self.is_valid() && queue_empty {
+        if !self.is_valid() && all_queues_empty {
             // We can release gpu resources associated with this device (but not
             // while holding the life_tracker lock).
             should_release_gpu_resource = true;
@@ -977,6 +981,9 @@ impl Device {
                         message: String::new(),
                     });
             }
+        }
+        if all_queues_empty && result.is_ok() {
+            result = Ok(wgt::PollStatus::QueueEmpty);
         }
 
         if should_release_gpu_resource {
@@ -1153,7 +1160,7 @@ impl Device {
         } else {
             let mut staging_buffer = StagingBuffer::new(
                 self,
-                &self.get_queue(desc.initial_queue).unwrap(),
+                desc.initial_queue,
                 wgt::BufferSize::new(aligned_size).unwrap(),
             )?;
 

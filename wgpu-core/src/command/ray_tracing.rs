@@ -376,7 +376,7 @@ pub(crate) fn build_acceleration_structures(
         let staging_buffer = if !instance_buffer_staging_source.is_empty() {
             let mut staging_buffer = StagingBuffer::new(
                 state.device,
-                state.queue,
+                state.queue.index,
                 wgt::BufferSize::new(instance_buffer_staging_source.len() as u64).unwrap(),
             )?;
             staging_buffer.write(&instance_buffer_staging_source);

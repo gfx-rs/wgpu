@@ -511,8 +511,6 @@ impl RenderBundleScope {
     }
 }
 
-// MQ TODO: usage scopes for blases/tlases
-
 /// A pool for storing the memory used by [`UsageScope`]s. We take and store this memory when the
 /// scope is dropped to avoid reallocating. The memory required only grows and allocation cost is
 /// significant when a large number of resources have been used.

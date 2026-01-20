@@ -227,7 +227,7 @@ impl Draw {
             let offset = if current_size + data.len() > max_staging_buffer_size {
                 let staging_buffer = StagingBuffer::new(
                     device,
-                    queue,
+                    queue.index,
                     NonZeroU64::new(current_size as u64).unwrap(),
                 )?;
                 staging_buffers.push(staging_buffer);
@@ -242,8 +242,11 @@ impl Draw {
             batch.staging_buffer_offset = offset;
         }
         if current_size != 0 {
-            let staging_buffer =
-                StagingBuffer::new(device, queue, NonZeroU64::new(current_size as u64).unwrap())?;
+            let staging_buffer = StagingBuffer::new(
+                device,
+                queue.index,
+                NonZeroU64::new(current_size as u64).unwrap(),
+            )?;
             staging_buffers.push(staging_buffer);
         }
 

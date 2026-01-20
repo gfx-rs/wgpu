@@ -186,6 +186,7 @@ impl<'a, T> RwLockReadGuard<'a, T> {
 }
 
 impl<'a, T> RwLockWriteGuard<'a, T> {
+    #[expect(unused)]
     pub fn downgrade(this: Self) -> RwLockReadGuard<'a, T> {
         RwLockReadGuard {
             inner: parking_lot::RwLockWriteGuard::downgrade(this.inner),

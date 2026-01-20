@@ -479,10 +479,10 @@ impl RawResourceAccess for Buffer {
 }
 
 impl Buffer {
-    pub(crate) fn get_indirect_validation_bg(
-        &self,
+    pub(crate) fn get_indirect_validation_bg<'a>(
+        &'a self,
         queue: &Arc<Queue>,
-    ) -> parking_lot::RwLockReadGuard<Option<BindGroups>> {
+    ) -> parking_lot::RwLockReadGuard<'a, Option<BindGroups>> {
         // TODO: this validation sucks lmao
         let read = self.indirect_validation_bind_groups[queue.index as usize].read();
         if read.is_some() {
@@ -504,13 +504,13 @@ impl Buffer {
             .unwrap();
         *write = Some(bg);
         drop(write);
-        return self.indirect_validation_bind_groups[queue.index as usize].read();
+        self.indirect_validation_bind_groups[queue.index as usize].read()
     }
 
-    pub(crate) fn get_timestamp_normalization_bg(
-        &self,
+    pub(crate) fn get_timestamp_normalization_bg<'a>(
+        &'a self,
         queue: &Arc<Queue>,
-    ) -> parking_lot::RwLockReadGuard<Option<TimestampNormalizationBindGroup>> {
+    ) -> parking_lot::RwLockReadGuard<'a, Option<TimestampNormalizationBindGroup>> {
         // TODO: this validation sucks lmao
         let read = self.timestamp_normalization_bind_groups[queue.index as usize].read();
         if read.is_some() {
@@ -540,7 +540,7 @@ impl Buffer {
         };
         *write = Some(bg);
         drop(write);
-        return self.timestamp_normalization_bind_groups[queue.index as usize].read();
+        self.timestamp_normalization_bind_groups[queue.index as usize].read()
     }
 
     pub(crate) fn check_destroyed(
@@ -1041,20 +1041,18 @@ impl Buffer {
                     }
                 }
             }
-        } else {
-            if let Some(queue) = device.get_queue(0) {
-                let mut pending_writes = queue.pending_writes.lock();
-                if pending_writes.contains_buffer(self) {
-                    pending_writes.consume_temp(queue::TempResource::DestroyedBuffer(temp));
-                } else {
-                    let mut life_lock = queue.lock_life();
-                    let last_submit_index = life_lock.get_buffer_latest_submission_index(self);
-                    if let Some(last_submit_index) = last_submit_index {
-                        life_lock.schedule_resource_destruction(
-                            queue::TempResource::DestroyedBuffer(temp),
-                            last_submit_index,
-                        );
-                    }
+        } else if let Some(queue) = device.get_queue(0) {
+            let mut pending_writes = queue.pending_writes.lock();
+            if pending_writes.contains_buffer(self) {
+                pending_writes.consume_temp(queue::TempResource::DestroyedBuffer(temp));
+            } else {
+                let mut life_lock = queue.lock_life();
+                let last_submit_index = life_lock.get_buffer_latest_submission_index(self);
+                if let Some(last_submit_index) = last_submit_index {
+                    life_lock.schedule_resource_destruction(
+                        queue::TempResource::DestroyedBuffer(temp),
+                        last_submit_index,
+                    );
                 }
             }
         }
@@ -1177,7 +1175,6 @@ unsafe impl Sync for StagingBuffer {}
 pub struct StagingBuffer {
     raw: Box<dyn hal::DynBuffer>,
     device: Arc<Device>,
-    queue: Arc<Queue>,
     pub(crate) size: wgt::BufferSize,
     is_coherent: bool,
     ptr: NonNull<u8>,
@@ -1186,7 +1183,7 @@ pub struct StagingBuffer {
 impl StagingBuffer {
     pub(crate) fn new(
         device: &Arc<Device>,
-        queue: &Arc<Queue>,
+        queue_index: u32,
         size: wgt::BufferSize,
     ) -> Result<Self, DeviceError> {
         profiling::scope!("StagingBuffer::new");
@@ -1195,7 +1192,7 @@ impl StagingBuffer {
             size: size.get(),
             usage: wgt::BufferUses::MAP_WRITE | wgt::BufferUses::COPY_SRC,
             memory_flags: hal::MemoryFlags::TRANSIENT,
-            initial_queue: Some(queue.index),
+            initial_queue: Some(queue_index),
         };
 
         let raw = unsafe { device.raw().create_buffer(&stage_desc) }
@@ -1209,7 +1206,6 @@ impl StagingBuffer {
             size,
             is_coherent: mapping.is_coherent,
             ptr: mapping.ptr,
-            queue: queue.clone(),
         };
 
         Ok(staging_buffer)
@@ -1571,20 +1567,18 @@ impl Texture {
                     }
                 }
             }
-        } else {
-            if let Some(queue) = device.get_queue(0) {
-                let mut pending_writes = queue.pending_writes.lock();
-                if pending_writes.contains_texture(self) {
-                    pending_writes.consume_temp(queue::TempResource::DestroyedTexture(temp));
-                } else {
-                    let mut life_lock = queue.lock_life();
-                    let last_submit_index = life_lock.get_texture_latest_submission_index(self);
-                    if let Some(last_submit_index) = last_submit_index {
-                        life_lock.schedule_resource_destruction(
-                            queue::TempResource::DestroyedTexture(temp),
-                            last_submit_index,
-                        );
-                    }
+        } else if let Some(queue) = device.get_queue(0) {
+            let mut pending_writes = queue.pending_writes.lock();
+            if pending_writes.contains_texture(self) {
+                pending_writes.consume_temp(queue::TempResource::DestroyedTexture(temp));
+            } else {
+                let mut life_lock = queue.lock_life();
+                let last_submit_index = life_lock.get_texture_latest_submission_index(self);
+                if let Some(last_submit_index) = last_submit_index {
+                    life_lock.schedule_resource_destruction(
+                        queue::TempResource::DestroyedTexture(temp),
+                        last_submit_index,
+                    );
                 }
             }
         }
