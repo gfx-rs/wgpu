@@ -671,14 +671,13 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     );
                     let vertex_buffer = {
-                        let vertex_raw = buf.vertex_buffer.as_ref().try_raw(state.snatch_guard)?;
-                        let vertex_buffer = &buf.vertex_buffer;
+                        let vertex_raw = mesh.vertex_buffer.as_ref().try_raw(state.snatch_guard)?;
+                        let vertex_buffer = &mesh.vertex_buffer;
                         vertex_buffer.check_usage(BufferUsages::BLAS_INPUT)?;
                     
-                        if let Some(barrier) = buf
-                            .vertex_transition
+                        if let Some(barrier) = vertex_pending
                             .take()
-                            .map(|pending| pending.into_hal(buf.vertex_buffer.as_ref(), state.snatch_guard))
+                            .map(|pending| pending.into_hal(vertex_buffer.as_ref(), state.snatch_guard))
                         {
                             input_barriers.push(barrier);
                         }
@@ -703,7 +702,7 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         );
                         vertex_raw
                     };
-                    let index_data = if let Some(index_buffer) = mesh.index_buffer {
+                    let index_buffer = if let Some(index_buffer) = mesh.index_buffer {
                         if mesh.first_index.is_none()
                             || mesh.size.index_count.is_none()
                             || mesh.size.index_count.is_none()
@@ -712,17 +711,16 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                                 index_buffer.error_ident(),
                             ));
                         }
-                        let data = state.tracker.buffers.set_single(
+                        let index_pending = state.tracker.buffers.set_single(
                             &index_buffer,
                             BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                         );
-                        Some((index_buffer, data))
                         let index_raw = index_buffer.try_raw(state.snatch_guard)?;
                         index_buffer.check_usage(BufferUsages::BLAS_INPUT)?;
                     
                         if let Some(barrier) = index_pending
                             .take()
-                            .map(|pending| pending.into_hal(index_buffer, state.snatch_guard))
+                            .map(|pending| pending.into_hal(index_buffer.as_ref(), state.snatch_guard))
                         {
                             input_barriers.push(barrier);
                         }
@@ -746,7 +744,7 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                     
                         state.buffer_memory_init_actions.extend(
                             index_buffer.initialization_status.read().create_action(
-                                index_buffer,
+                                &index_buffer,
                                 offset..(offset + index_buffer_size),
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
@@ -755,7 +753,7 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                     } else {
                         None
                     };
-                    let transform_data = if let Some(transform_buffer) = mesh.transform_buffer {
+                    let transform_buffer = if let Some(transform_buffer) = mesh.transform_buffer {
                         if !blas
                             .flags
                             .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
@@ -769,11 +767,10 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                                 transform_buffer.error_ident(),
                             ));
                         }
-                        let data = state.tracker.buffers.set_single(
+                        let transform_pending = state.tracker.buffers.set_single(
                             &transform_buffer,
                             BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                         );
-                        Some((transform_buffer, data))
                         if mesh.transform_buffer_offset.is_none() {
                             return Err(BuildAccelerationStructureError::MissingAssociatedData(
                                 transform_buffer.error_ident(),
@@ -784,7 +781,7 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                     
                         if let Some(barrier) = transform_pending
                             .take()
-                            .map(|pending| pending.into_hal(transform_buffer, state.snatch_guard))
+                            .map(|pending| pending.into_hal(transform_buffer.as_ref(), state.snatch_guard))
                         {
                             input_barriers.push(barrier);
                         }
@@ -807,7 +804,7 @@ fn iter_blas<'snatch_guard:'buffers, 'buffers>(
                         }
                         state.buffer_memory_init_actions.extend(
                             transform_buffer.initialization_status.read().create_action(
-                                transform_buffer,
+                                &transform_buffer,
                                 offset..(offset + 48),
                                 MemoryInitKind::NeedsInitializedMemory,
                             ),
