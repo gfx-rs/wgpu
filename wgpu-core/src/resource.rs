@@ -448,12 +448,12 @@ pub struct Buffer {
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        for bg in self.timestamp_normalization_bind_groups.drain(..) {
+        for mut bg in self.timestamp_normalization_bind_groups.drain(..) {
             if let Some(raw) = bg.take() {
                 raw.dispose(self.device.raw());
             }
         }
-        for bg in self.indirect_validation_bind_groups.drain(..) {
+        for mut bg in self.indirect_validation_bind_groups.drain(..) {
             if let Some(raw) = bg.take() {
                 raw.dispose(self.device.raw());
             }

@@ -39,7 +39,6 @@ impl Device {
         {
             self.require_features(Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN)?;
         }
-        let queue = self.get_queue(blas_desc.initial_queue).unwrap();
 
         let size_info = match &sizes {
             wgt::BlasGeometrySizeDescriptors::Triangles { descriptors } => {
@@ -86,7 +85,7 @@ impl Device {
                         .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
                     {
                         transform = Some(wgpu_hal::AccelerationStructureTriangleTransform {
-                            buffer: queue.zero_buffer.as_ref(),
+                            buffer: self.zero_buffer.as_ref(),
                             offset: 0,
                         })
                     }

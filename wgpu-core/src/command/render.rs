@@ -2290,7 +2290,6 @@ pub(super) fn encode_render_pass(
             transit,
             &mut tracker.textures,
             device,
-            queue,
             parent_state.snatch_guard,
         );
 

@@ -35,6 +35,7 @@ use crate::{
     device::{
         bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
         DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures, RenderPassContext,
+        ZERO_BUFFER_SIZE,
     },
     hal_label,
     init_tracker::{
@@ -205,6 +206,7 @@ pub struct Device {
     raw: Box<dyn hal::DynDevice>,
     pub(crate) adapter: Arc<Adapter>,
     pub(crate) queues: Vec<OnceCellOrLock<Weak<Queue>>>,
+    pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     /// The `label` from the descriptor used to create the resource.
     label: String,
     pub(crate) snatchable_lock: SnatchLock,
@@ -227,6 +229,7 @@ pub struct Device {
     /// has been destroyed and its queues are empty.
     pub(crate) device_lost_closure: Mutex<Option<DeviceLostClosure>>,
 
+    pub(crate) tracker_indices: TrackerIndexAllocators,
     /// Pool of bind group layouts, allowing deduplication.
     pub(crate) bgl_pool: ResourcePool<bgl::EntryMap, BindGroupLayout>,
     pub(crate) alignments: hal::Alignments,
@@ -236,16 +239,15 @@ pub struct Device {
     pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
     pub(crate) usage_scopes: UsageScopePool,
-    // needs to be dropped last
-    #[cfg(feature = "trace")]
-    pub(crate) trace: Mutex<Option<Box<dyn trace::Trace + Send + Sync + 'static>>>,
 
-    pub(crate) tracker_indices: TrackerIndexAllocators,
     /// Uniform buffer containing [`ExternalTextureParams`] with values such
     /// that a [`TextureView`] bound to a [`wgt::BindingType::ExternalTexture`]
     /// binding point will be rendered correctly. Intended to be used as the
     /// [`hal::ExternalTextureBinding::params`] field.
     pub(crate) default_external_texture_params_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
+    // needs to be dropped last
+    #[cfg(feature = "trace")]
+    pub(crate) trace: Mutex<Option<Box<dyn trace::Trace + Send + Sync + 'static>>>,
 }
 
 pub(crate) enum DeferredDestroy {
@@ -272,9 +274,12 @@ impl Drop for Device {
         // self.default_external_texture_params_buffer anymore after this point.
         let default_external_texture_params_buffer =
             unsafe { ManuallyDrop::take(&mut self.default_external_texture_params_buffer) };
+        // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this point.
+        let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
         unsafe {
             self.raw
                 .destroy_buffer(default_external_texture_params_buffer);
+            self.raw.destroy_buffer(zero_buffer);
         }
     }
 }
@@ -408,9 +413,30 @@ impl Device {
         }
         .map_err(DeviceError::from_hal)?;
 
+        let rt_uses = if desc
+            .required_features
+            .intersects(wgt::Features::EXPERIMENTAL_RAY_QUERY)
+        {
+            wgt::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT
+        } else {
+            wgt::BufferUses::empty()
+        };
+        // Create zeroed buffer used for texture clears (and raytracing if required).
+        let zero_buffer = unsafe {
+            raw_device.create_buffer(&hal::BufferDescriptor {
+                label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
+                size: ZERO_BUFFER_SIZE,
+                usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST | rt_uses,
+                memory_flags: hal::MemoryFlags::empty(),
+                initial_queue: None,
+            })
+        }
+        .map_err(DeviceError::from_hal)?;
+
         Ok(Self {
             raw: raw_device,
             queues: vec![OnceCellOrLock::new(); num_queues as usize],
+            zero_buffer: ManuallyDrop::new(zero_buffer),
             adapter: adapter.clone(),
             label: desc.label.to_string(),
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
@@ -431,6 +457,41 @@ impl Device {
                 default_external_texture_params_buffer,
             ),
         })
+    }
+
+    pub fn late_init_resources_with_queue(self: &Arc<Self>) -> Result<(), RequestDeviceError> {
+        self.init_default_external_texture_params_buffer()?;
+
+        let queue0 = self.get_queue(0).unwrap();
+        let mut pending_writes = queue0.pending_writes.lock();
+
+        unsafe {
+            pending_writes
+                .command_encoder
+                .transition_buffers(&[hal::BufferBarrier {
+                    buffer: self.zero_buffer.as_ref(),
+                    usage: hal::StateTransition {
+                        from: wgt::BufferUses::empty(),
+                        to: wgt::BufferUses::COPY_DST,
+                    },
+                    src_dst_queue_index: None,
+                }]);
+            pending_writes
+                .command_encoder
+                .clear_buffer(self.zero_buffer.as_ref(), 0..ZERO_BUFFER_SIZE);
+            pending_writes
+                .command_encoder
+                .transition_buffers(&[hal::BufferBarrier {
+                    buffer: self.zero_buffer.as_ref(),
+                    usage: hal::StateTransition {
+                        from: wgt::BufferUses::COPY_DST,
+                        to: wgt::BufferUses::COPY_SRC,
+                    },
+                    src_dst_queue_index: None,
+                }]);
+        }
+
+        Ok(())
     }
 
     fn create_external_texture_binding_from_view<'a>(
@@ -570,14 +631,8 @@ impl Device {
                 }]);
         }
 
-        // MQ TODO: we should flush this and then have all other queues wait for this.
+        // MQ TODO: we should flush queue 0 and then have all other queues wait for this.
         // Currently, only queue 0 is guarnateed to see this.
-
-        Ok(())
-    }
-
-    pub fn late_init_resources_with_queue(self: &Arc<Self>) -> Result<(), RequestDeviceError> {
-        self.init_default_external_texture_params_buffer()?;
 
         Ok(())
     }

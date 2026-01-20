@@ -29,7 +29,7 @@ use crate::{
         CommandAllocator, CommandBuffer, CommandEncoder, CommandEncoderError, CopySide,
         TransferError,
     },
-    device::{DeviceError, WaitIdleError, ZERO_BUFFER_SIZE},
+    device::{DeviceError, WaitIdleError},
     get_lowest_common_denom,
     global::Global,
     hal_label,
@@ -59,7 +59,6 @@ pub struct Queue {
     // The device needs to be dropped last (`Device.zero_buffer` might be referenced by the encoder in pending writes).
     pub(crate) device: Arc<Device>,
     pub(crate) index: u32,
-    pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
 
     /// Stores the state of buffers and textures.
     pub(crate) trackers: Mutex<QueueTracker>,
@@ -103,27 +102,6 @@ impl Queue {
 
         let command_allocator = CommandAllocator::new();
 
-        let rt_uses = if device
-            .features
-            .intersects(wgt::Features::EXPERIMENTAL_RAY_QUERY)
-        {
-            wgt::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT
-        } else {
-            wgt::BufferUses::empty()
-        };
-
-        // Create zeroed buffer used for texture clears (and raytracing if required).
-        let zero_buffer = unsafe {
-            device.raw().create_buffer(&hal::BufferDescriptor {
-                label: hal_label(Some("(wgpu internal) zero init buffer"), instance_flags),
-                size: ZERO_BUFFER_SIZE,
-                usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST | rt_uses,
-                memory_flags: hal::MemoryFlags::empty(),
-                initial_queue: Some(index),
-            })
-        }
-        .map_err(DeviceError::from_hal)?;
-
         let enable_indirect_validation = instance_flags
             .contains(wgt::InstanceFlags::VALIDATION_INDIRECT_CALL)
             && device.downlevel.flags.contains(
@@ -157,31 +135,6 @@ impl Queue {
         let mut pending_writes = PendingWrites::new(pending_encoder, instance_flags);
 
         pending_writes.activate();
-        unsafe {
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: zero_buffer.as_ref(),
-                    usage: hal::StateTransition {
-                        from: wgt::BufferUses::empty(),
-                        to: wgt::BufferUses::COPY_DST,
-                    },
-                    src_dst_queue_index: None,
-                }]);
-            pending_writes
-                .command_encoder
-                .clear_buffer(zero_buffer.as_ref(), 0..ZERO_BUFFER_SIZE);
-            pending_writes
-                .command_encoder
-                .transition_buffers(&[hal::BufferBarrier {
-                    buffer: zero_buffer.as_ref(),
-                    usage: hal::StateTransition {
-                        from: wgt::BufferUses::COPY_DST,
-                        to: wgt::BufferUses::COPY_SRC,
-                    },
-                    src_dst_queue_index: None,
-                }]);
-        }
 
         let timestamp_normalizer =
             crate::timestamp_normalization::TimestampNormalizer::new(&device, unsafe {
@@ -194,7 +147,6 @@ impl Queue {
             pending_writes: Mutex::new(rank::QUEUE_PENDING_WRITES, pending_writes),
             life_tracker: Mutex::new(rank::QUEUE_LIFE_TRACKER, LifetimeTracker::new()),
             index,
-            zero_buffer: ManuallyDrop::new(zero_buffer),
             indirect_validation,
             trackers: Mutex::new(rank::DEVICE_TRACKERS, QueueTracker::new()),
 
@@ -357,12 +309,9 @@ impl Drop for Queue {
             indirect_validation.dispose(self.device.raw());
         }
 
-        // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this point.
-        let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
         // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
         let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
         unsafe {
-            self.device.raw().destroy_buffer(zero_buffer);
             self.device.raw().destroy_fence(fence);
         }
         if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
@@ -959,7 +908,7 @@ impl Queue {
                         encoder,
                         &mut trackers.textures,
                         &self.device.alignments,
-                        self.zero_buffer.as_ref(),
+                        self.device.zero_buffer.as_ref(),
                         &snatch_guard,
                         self.device.instance_flags,
                     )
@@ -1432,7 +1381,6 @@ impl Queue {
                         if let Err(e) = baked.initialize_texture_memory(
                             &mut trackers,
                             &self.device,
-                            self,
                             &snatch_guard,
                         ) {
                             break 'error Err(e.into());

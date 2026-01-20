@@ -770,7 +770,6 @@ pub(super) fn encode_compute_pass(
         transit,
         &mut parent_state.tracker.textures,
         device,
-        queue,
         parent_state.snatch_guard,
     );
     CommandEncoder::insert_barriers_from_tracker(
