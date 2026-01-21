@@ -491,7 +491,7 @@ pub struct TextureViewDescriptor<L> {
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct TextureDescriptor<L, V> {
+pub struct TextureDescriptor<L, V, Q> {
     /// Debug label of the texture. This will show up in graphics debuggers for easy identification.
     pub label: L,
     /// Size of the texture. All components must be greater than zero. For a
@@ -515,15 +515,16 @@ pub struct TextureDescriptor<L, V> {
     /// Note: currently, only the srgb-ness is allowed to change. (ex: `Rgba8Unorm` texture + `Rgba8UnormSrgb` view)
     pub view_formats: V,
     /// The queue with ownership at resource creation time
-    pub initial_queue: u32,
+    pub initial_queue: Q,
 }
 
-impl<L, V> TextureDescriptor<L, V> {
+impl<L, V, Q: Clone> TextureDescriptor<L, V, Q> {
     /// Takes a closure and maps the label of the texture descriptor into another.
     #[must_use]
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K, V>
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K, V, Q>
     where
         V: Clone,
+        Q: Clone,
     {
         TextureDescriptor {
             label: fun(&self.label),
@@ -534,7 +535,7 @@ impl<L, V> TextureDescriptor<L, V> {
             format: self.format,
             usage: self.usage,
             view_formats: self.view_formats.clone(),
-            initial_queue: self.initial_queue,
+            initial_queue: self.initial_queue.clone(),
         }
     }
 
@@ -544,9 +545,10 @@ impl<L, V> TextureDescriptor<L, V> {
         &self,
         l_fun: impl FnOnce(&L) -> K,
         v_fun: impl FnOnce(V) -> M,
-    ) -> TextureDescriptor<K, M>
+    ) -> TextureDescriptor<K, M, Q>
     where
         V: Clone,
+        Q: Clone,
     {
         TextureDescriptor {
             label: l_fun(&self.label),
@@ -557,7 +559,7 @@ impl<L, V> TextureDescriptor<L, V> {
             format: self.format,
             usage: self.usage,
             view_formats: v_fun(self.view_formats.clone()),
-            initial_queue: self.initial_queue,
+            initial_queue: self.initial_queue.clone(),
         }
     }
 

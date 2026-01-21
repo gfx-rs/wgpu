@@ -371,7 +371,7 @@ pub(crate) fn clear_texture<T: TextureTrackerSetSingle>(
 }
 
 fn clear_texture_via_buffer_copies(
-    texture_desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
+    texture_desc: &wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>, u32>,
     alignments: &hal::Alignments,
     zero_buffer: &dyn hal::DynBuffer, // Buffer of size device::ZERO_BUFFER_SIZE
     range: TextureInitRange,

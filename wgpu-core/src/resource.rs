@@ -425,7 +425,7 @@ pub(crate) struct BufferPendingMapping {
     pub(crate) _parent_buffer: Arc<Buffer>,
 }
 
-pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>>;
+pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>, u32>;
 
 #[derive(Debug)]
 pub struct Buffer {
@@ -1310,7 +1310,7 @@ impl Drop for FlushedStagingBuffer {
     }
 }
 
-pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::TextureFormat>>;
+pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, Vec<wgt::TextureFormat>, u32>;
 
 #[derive(Debug)]
 pub(crate) enum TextureInner {
@@ -1351,7 +1351,7 @@ pub enum TextureClearMode {
 pub struct Texture {
     pub(crate) inner: Snatchable<TextureInner>,
     pub(crate) device: Arc<Device>,
-    pub(crate) desc: wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
+    pub(crate) desc: wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>, u32>,
     pub(crate) _hal_usage: wgt::TextureUses,
     pub(crate) format_features: wgt::TextureFormatFeatures,
     pub(crate) initialization_status: RwLock<TextureInitTracker>,
@@ -1484,7 +1484,7 @@ impl Texture {
 
     pub(crate) fn get_clear_view<'a>(
         clear_mode: &'a TextureClearMode,
-        desc: &'a wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>>,
+        desc: &'a wgt::TextureDescriptor<(), Vec<wgt::TextureFormat>, u32>,
         mip_level: u32,
         depth_or_layer: u32,
     ) -> &'a dyn hal::DynTextureView {
@@ -2295,8 +2295,8 @@ impl QuerySet {
     }
 }
 
-pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
-pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>>;
+pub type BlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>, u32>;
+pub type TlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>, u32>;
 
 pub type BlasPrepareCompactResult = Result<(), BlasPrepareCompactError>;
 

@@ -55,7 +55,7 @@ pub enum AccelerationStructureUpdateMode {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Descriptor for creating a bottom level acceleration structure.
-pub struct CreateBlasDescriptor<L> {
+pub struct CreateBlasDescriptor<L, Q> {
     /// Label for the bottom level acceleration structure.
     pub label: L,
     /// Flags for the bottom level acceleration structure.
@@ -63,17 +63,20 @@ pub struct CreateBlasDescriptor<L> {
     /// Update mode for the bottom level acceleration structure.
     pub update_mode: AccelerationStructureUpdateMode,
     /// The queue with ownership at resource creation time
-    pub initial_queue: u32,
+    pub initial_queue: Q,
 }
 
-impl<L> CreateBlasDescriptor<L> {
+impl<L, Q> CreateBlasDescriptor<L, Q> {
     /// Takes a closure and maps the label of the blas descriptor into another.
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CreateBlasDescriptor<K> {
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CreateBlasDescriptor<K, Q>
+    where
+        Q: Clone,
+    {
         CreateBlasDescriptor {
             label: fun(&self.label),
             flags: self.flags,
             update_mode: self.update_mode,
-            initial_queue: self.initial_queue,
+            initial_queue: self.initial_queue.clone(),
         }
     }
 }
@@ -82,7 +85,7 @@ impl<L> CreateBlasDescriptor<L> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 /// Descriptor for creating a top level acceleration structure.
-pub struct CreateTlasDescriptor<L> {
+pub struct CreateTlasDescriptor<L, Q> {
     /// Label for the top level acceleration structure.
     pub label: L,
     /// Number of instances that can be stored in the acceleration structure.
@@ -92,18 +95,21 @@ pub struct CreateTlasDescriptor<L> {
     /// Update mode for the bottom level acceleration structure.
     pub update_mode: AccelerationStructureUpdateMode,
     /// The queue with ownership at resource creation time
-    pub initial_queue: u32,
+    pub initial_queue: Q,
 }
 
-impl<L> CreateTlasDescriptor<L> {
+impl<L, Q> CreateTlasDescriptor<L, Q> {
     /// Takes a closure and maps the label of the blas descriptor into another.
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CreateTlasDescriptor<K> {
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CreateTlasDescriptor<K, Q>
+    where
+        Q: Clone,
+    {
         CreateTlasDescriptor {
             label: fun(&self.label),
             flags: self.flags,
             update_mode: self.update_mode,
             max_instances: self.max_instances,
-            initial_queue: self.initial_queue,
+            initial_queue: self.initial_queue.clone(),
         }
     }
 }
