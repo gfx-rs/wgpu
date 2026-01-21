@@ -175,13 +175,6 @@ impl Namer {
     /// Guarantee uniqueness by applying a numeric suffix when necessary. If `label_raw`
     /// itself ends with digits, separate them from the suffix with an underscore.
     pub fn call(&mut self, label_raw: &str) -> String {
-        self.call_impl(label_raw, false)
-    }
-
-    /// See documentation of [`Self::call`]. Additionally this function allows ignoring
-    /// `Namer::builtin_identifiers` mainly for [`NameKey::StructMember`] since struct members
-    /// can't shadow builtin identifiers.
-    pub fn call_impl(&mut self, label_raw: &str, ignore_builtin_identifiers: bool) -> String {
         use core::fmt::Write as _; // for write!-ing to Strings
 
         let base = self.sanitize(label_raw);
@@ -205,8 +198,7 @@ impl Namer {
                 if base.ends_with(char::is_numeric)
                     || self.keywords.contains(base.as_ref())
                     || self.keywords_case_insensitive.contains(base.as_ref())
-                    || (!ignore_builtin_identifiers
-                        && self.builtin_identifiers.contains(base.as_ref()))
+                    || self.builtin_identifiers.contains(base.as_ref())
                 {
                     suffixed.push(SEPARATOR);
                 }
@@ -220,22 +212,10 @@ impl Namer {
     }
 
     pub fn call_or(&mut self, label: &Option<String>, fallback: &str) -> String {
-        self.call_or_impl(label, fallback, false)
-    }
-
-    fn call_or_impl(
-        &mut self,
-        label: &Option<String>,
-        fallback: &str,
-        ignore_builtin_identifiers: bool,
-    ) -> String {
-        self.call_impl(
-            match *label {
-                Some(ref name) => name,
-                None => fallback,
-            },
-            ignore_builtin_identifiers,
-        )
+        self.call(match *label {
+            Some(ref name) => name,
+            None => fallback,
+        })
     }
 
     /// Enter a local namespace for things like structs.
@@ -244,10 +224,12 @@ impl Namer {
     /// globally. This function temporarily establishes a fresh, empty naming
     /// context for the duration of the call to `body`.
     fn namespace(&mut self, capacity: usize, body: impl FnOnce(&mut Self)) {
-        let fresh = FastHashMap::with_capacity_and_hasher(capacity, Default::default());
-        let outer = core::mem::replace(&mut self.unique, fresh);
+        let empty_unique = FastHashMap::with_capacity_and_hasher(capacity, Default::default());
+        let saved_unique = core::mem::replace(&mut self.unique, empty_unique);
+        let saved_builtin_identifiers = core::mem::take(&mut self.builtin_identifiers);
         body(self);
-        self.unique = outer;
+        self.unique = saved_unique;
+        self.builtin_identifiers = saved_builtin_identifiers;
     }
 
     pub fn reset(
@@ -306,7 +288,7 @@ impl Namer {
                 // struct members have their own namespace, because access is always prefixed
                 self.namespace(members.len(), |namer| {
                     for (index, member) in members.iter().enumerate() {
-                        let name = namer.call_or_impl(&member.name, "member", true);
+                        let name = namer.call_or(&member.name, "member");
                         output.insert(NameKey::StructMember(ty_handle, index as u32), name);
                     }
                 })
