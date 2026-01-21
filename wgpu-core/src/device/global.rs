@@ -1148,7 +1148,7 @@ impl Global {
         &self,
         device_id: DeviceId,
         queue_id: QueueId,
-        desc: &wgt::CommandEncoderDescriptor<Label>,
+        desc: &wgt::CommandEncoderDescriptor<Label, u32>,
         id_in: Option<id::CommandEncoderId>,
     ) -> (id::CommandEncoderId, Option<DeviceError>) {
         profiling::scope!("Device::create_command_encoder");

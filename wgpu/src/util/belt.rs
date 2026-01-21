@@ -1,6 +1,6 @@
 use crate::{
     util::align_to, Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferSlice, BufferUsages,
-    BufferViewMut, CommandEncoder, Device, MapMode,
+    BufferViewMut, CommandEncoder, Device, MapMode, Queue,
 };
 use alloc::vec::Vec;
 use core::fmt;
@@ -44,6 +44,7 @@ pub struct StagingBelt {
     sender: Exclusive<mpsc::Sender<Chunk>>,
     /// Free chunks are received here to be put on `self.free_chunks`.
     receiver: Exclusive<mpsc::Receiver<Chunk>>,
+    queue: Queue,
 }
 
 impl StagingBelt {
@@ -60,8 +61,8 @@ impl StagingBelt {
     ///
     /// The buffers returned by this [`StagingBelt`] will be have the buffer usages
     /// [`COPY_SRC | MAP_WRITE`](crate::BufferUsages)
-    pub fn new(device: Device, chunk_size: BufferAddress) -> Self {
-        Self::new_with_buffer_usages(device, chunk_size, BufferUsages::COPY_SRC)
+    pub fn new(device: Device, chunk_size: BufferAddress, queue: &Queue) -> Self {
+        Self::new_with_buffer_usages(device, chunk_size, BufferUsages::COPY_SRC, queue)
     }
 
     /// Create a new staging belt.
@@ -87,6 +88,7 @@ impl StagingBelt {
         device: Device,
         chunk_size: BufferAddress,
         mut buffer_usages: BufferUsages,
+        queue: &Queue,
     ) -> Self {
         let (sender, receiver) = mpsc::channel();
 
@@ -112,6 +114,7 @@ impl StagingBelt {
             free_chunks: Vec::new(),
             sender: Exclusive::new(sender),
             receiver: Exclusive::new(receiver),
+            queue: queue.clone(),
         }
     }
 
@@ -215,6 +218,7 @@ impl StagingBelt {
                         size: self.chunk_size.max(size.get()),
                         usage: self.buffer_usages,
                         mapped_at_creation: true,
+                        initial_queue: &self.queue,
                     }),
                     offset: 0,
                 }
@@ -285,6 +289,7 @@ impl fmt::Debug for StagingBelt {
             active_chunks,
             closed_chunks,
             free_chunks,
+            queue,
             sender: _,
             receiver: _,
         } = self;
@@ -295,6 +300,7 @@ impl fmt::Debug for StagingBelt {
             .field("active_chunks", &active_chunks.len())
             .field("closed_chunks", &closed_chunks.len())
             .field("free_chunks", &free_chunks.len())
+            .field("queue", queue)
             .finish_non_exhaustive()
     }
 }

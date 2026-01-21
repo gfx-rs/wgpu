@@ -28,7 +28,7 @@ static TRANSITION_RESOURCES: GpuTestConfiguration = GpuTestConfiguration::new()
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: None,
-                queue_index: 0,
+                queue: 0,
             });
 
         encoder.transition_resources(

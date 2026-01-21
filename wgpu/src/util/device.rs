@@ -2,6 +2,8 @@ use alloc::borrow::ToOwned as _;
 
 use wgt::TextureDataOrder;
 
+use crate::Queue;
+
 /// Describes a [Buffer](crate::Buffer) when allocating.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BufferInitDescriptor<'a> {
@@ -12,6 +14,7 @@ pub struct BufferInitDescriptor<'a> {
     /// Usages of a buffer. If the buffer is used in any way that isn't specified here, the operation
     /// will panic.
     pub usage: wgt::BufferUsages,
+    pub initial_queue: &'a Queue,
 }
 
 /// Utility methods not meant to be in the main API.
@@ -45,6 +48,7 @@ impl DeviceExt for crate::Device {
                 size: 0,
                 usage: descriptor.usage,
                 mapped_at_creation: false,
+                initial_queue: descriptor.initial_queue,
             };
 
             self.create_buffer(&wgt_descriptor)
@@ -63,6 +67,7 @@ impl DeviceExt for crate::Device {
                 size: padded_size,
                 usage: descriptor.usage,
                 mapped_at_creation: true,
+                initial_queue: descriptor.initial_queue,
             };
 
             let buffer = self.create_buffer(&wgt_descriptor);

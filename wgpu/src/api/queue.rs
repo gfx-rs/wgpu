@@ -13,6 +13,7 @@ use crate::{api::DeferredCommandBufferActions, *};
 #[derive(Debug, Clone)]
 pub struct Queue {
     pub(crate) inner: dispatch::DispatchQueue,
+    pub(crate) index: u32,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Queue: Send, Sync);
@@ -28,9 +29,10 @@ impl Queue {
 
     #[cfg(custom)]
     /// Creates Queue from custom implementation
-    pub fn from_custom<T: custom::QueueInterface>(queue: T) -> Self {
+    pub fn from_custom<T: custom::QueueInterface>(queue: T, index: u32) -> Self {
         Self {
             inner: dispatch::DispatchQueue::custom(queue),
+            index,
         }
     }
 }

@@ -144,6 +144,7 @@ impl Surface<'_> {
             sample_count: 1,
             dimension: TextureDimension::D2,
             view_formats: &[],
+            initial_queue: 
         };
 
         texture

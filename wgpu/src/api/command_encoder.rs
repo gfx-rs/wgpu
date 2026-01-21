@@ -34,7 +34,7 @@ crate::cmp::impl_eq_ord_hash_proxy!(CommandEncoder => .inner);
 ///
 /// Corresponds to [WebGPU `GPUCommandEncoderDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpucommandencoderdescriptor).
-pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Label<'a>>;
+pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Label<'a>, &'a Queue>;
 static_assertions::assert_impl_all!(CommandEncoderDescriptor<'_>: Send, Sync);
 
 pub use wgt::TexelCopyBufferInfo as TexelCopyBufferInfoBase;
@@ -437,13 +437,11 @@ impl CommandEncoder {
             &mut buffer_transitions.map(|t| wgt::BufferTransition {
                 buffer: &t.buffer.inner,
                 state: t.state,
-                src_dst_queue_indices: t.src_dst_queue_indices,
             }),
             &mut texture_transitions.map(|t| wgt::TextureTransition {
                 texture: &t.texture.inner,
                 selector: t.selector,
                 state: t.state,
-                src_dst_queue_indices: t.src_dst_queue_indices,
             }),
         );
     }

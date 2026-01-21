@@ -1204,15 +1204,11 @@ impl CommandEncoder {
                     ArcCommand::TransitionResources {
                         buffer_transitions,
                         texture_transitions,
-                        blas_transitions,
-                        tlas_transitions,
                     } => {
                         transition_resources::transition_resources(
                             &mut state,
                             buffer_transitions,
                             texture_transitions,
-                            blas_transitions,
-                            tlas_transitions,
                         )?;
                     }
                     ArcCommand::RunComputePass { .. } | ArcCommand::RunRenderPass { .. } => {

@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, string::String, sync::Arc, vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec, vec::Vec};
 #[cfg(wgpu_core)]
 use core::ops::Deref;
 use core::{error, fmt, future::Future, marker::PhantomData};
@@ -54,7 +54,7 @@ impl Device {
     /// This is a convenience function which avoids the configuration, `async`, and fallibility
     /// aspects of constructing a device through `Instance`.
     #[cfg(feature = "noop")]
-    pub fn noop(desc: &DeviceDescriptor<'_>) -> (Device, Queue) {
+    pub fn noop(desc: &DeviceDescriptor<'_>) -> (Device, Vec<Queue>) {
         use core::future::Future as _;
         use core::pin::pin;
         use core::task;
@@ -299,6 +299,7 @@ impl Device {
             descriptor: TextureDescriptor {
                 label: None,
                 view_formats: &[],
+                initial_queue: desc.initial_queue,
                 ..desc.clone()
             },
         }
@@ -338,6 +339,7 @@ impl Device {
             descriptor: TextureDescriptor {
                 label: None,
                 view_formats: &[],
+                initial_queue: desc.initial_queue,
                 ..desc.clone()
             },
         }

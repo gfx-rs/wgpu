@@ -5,7 +5,7 @@ use alloc::{boxed::Box, vec::Vec};
 
 use wgt::{WasmNotSend, WasmNotSendSync};
 
-use crate::dispatch;
+use crate::{dispatch, Queue};
 use crate::{Buffer, Label};
 
 /// Descriptor for the size defining attributes of a triangle geometry, for a bottom level acceleration structure.
@@ -29,7 +29,7 @@ pub type AccelerationStructureUpdateMode = wgt::AccelerationStructureUpdateMode;
 static_assertions::assert_impl_all!(AccelerationStructureUpdateMode: Send, Sync);
 
 /// Descriptor to create bottom level acceleration structures.
-pub type CreateBlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>>;
+pub type CreateBlasDescriptor<'a> = wgt::CreateBlasDescriptor<Label<'a>, &'a Queue>;
 static_assertions::assert_impl_all!(CreateBlasDescriptor<'_>: Send, Sync);
 
 /// Safe instance for a [Tlas].

@@ -58,12 +58,22 @@ impl Adapter {
     pub fn request_device(
         &self,
         desc: &DeviceDescriptor<'_>,
-    ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + WasmNotSend {
+    ) -> impl Future<Output = Result<(Device, Vec<Queue>), RequestDeviceError>> + WasmNotSend {
         let device = self.inner.request_device(desc);
         async move {
-            device
-                .await
-                .map(|(device, queue)| (Device { inner: device }, Queue { inner: queue }))
+            device.await.map(|(device, queues)| {
+                (
+                    Device { inner: device },
+                    queues
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, inner)| Queue {
+                            inner,
+                            index: index as u32,
+                        })
+                        .collect(),
+                )
+            })
         }
     }
 
@@ -78,21 +88,27 @@ impl Adapter {
         &self,
         hal_device: hal::OpenDevice<A>,
         desc: &DeviceDescriptor<'_>,
-    ) -> Result<(Device, Queue), RequestDeviceError> {
+    ) -> Result<(Device, Vec<Queue>), RequestDeviceError> {
         let core_adapter = self.inner.as_core();
-        let (device, queue) = unsafe {
+        let (device, queues) = unsafe {
             core_adapter
                 .context
                 .create_device_from_hal(core_adapter, hal_device, desc)
         }?;
 
+        let queues = queues
+            .into_iter()
+            .enumerate()
+            .map(|(index, inner)| Queue {
+                inner: inner.into(),
+                index: index as u32,
+            })
+            .collect();
         Ok((
             Device {
                 inner: device.into(),
             },
-            Queue {
-                inner: queue.into(),
-            },
+            queues,
         ))
     }
 

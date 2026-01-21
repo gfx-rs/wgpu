@@ -109,8 +109,8 @@ impl ContextWgpuCore {
         adapter: &CoreAdapter,
         hal_device: hal::OpenDevice<A>,
         desc: &crate::DeviceDescriptor<'_>,
-    ) -> Result<(CoreDevice, CoreQueue), crate::RequestDeviceError> {
-        let (device_id, queue_id) = unsafe {
+    ) -> Result<(CoreDevice, Vec<CoreQueue>), crate::RequestDeviceError> {
+        let (device_id, queue_ids) = unsafe {
             self.0.create_device_from_hal(
                 adapter.id,
                 hal_device.into(),
@@ -126,12 +126,15 @@ impl ContextWgpuCore {
             error_sink: error_sink.clone(),
             features: desc.required_features,
         };
-        let queue = CoreQueue {
-            context: self.clone(),
-            id: queue_id,
-            error_sink,
-        };
-        Ok((device, queue))
+        let queues = queue_ids
+            .into_iter()
+            .map(|qid| CoreQueue {
+                context: self.clone(),
+                id: qid,
+                error_sink: error_sink.clone(),
+            })
+            .collect();
+        Ok((device, queues))
     }
 
     pub unsafe fn create_texture_from_hal<A: hal::Api>(
