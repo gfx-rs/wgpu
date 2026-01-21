@@ -174,7 +174,7 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
         if self.spirv.is_some() {
             "spv"
         } else if self.msl.is_some() {
-            "msl"
+            "metal"
         } else if self.dxil.is_some() {
             "dxil"
         } else {
