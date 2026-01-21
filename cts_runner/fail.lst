@@ -1,0 +1,214 @@
+// CTS test selectors that are not expected to pass.
+//
+// At present this only includes tests in the `api,validation` and
+// `shader,validation` hierarchies.
+//
+// Percentages in comments are the portion of tests that are passing. Some
+// failures that are intermittent or platform-dependent are marked with `***`.
+// Many populated by Claude and may be wrong.
+//
+// Linked issues may not cover all failures in the suite.
+//
+// The `cts_runner` integration test `lst_files_are_sorted` verifies that test selectors
+// appear in this file in order -- including ones in comments.
+webgpu:api,validation,buffer,mapping:*, // crash
+webgpu:api,validation,capability_checks,features,* // 21%
+webgpu:api,validation,capability_checks,limits,* // 60%
+webgpu:api,validation,compute_pipeline:limits,workgroup_storage_size:* // 0%
+webgpu:api,validation,compute_pipeline:overrides,identifier:* // 46%
+webgpu:api,validation,compute_pipeline:overrides,workgroup_size,limits,workgroup_storage_size:* // 0%
+webgpu:api,validation,compute_pipeline:overrides,workgroup_size,limits:* // 0%
+webgpu:api,validation,compute_pipeline:resource_compatibility:* // 84%
+webgpu:api,validation,compute_pipeline:storage_texture,format:* // 8%
+webgpu:api,validation,createBindGroup:buffer,resource_binding_size:* // 33%
+webgpu:api,validation,createBindGroup:buffer,resource_state:* // 0%
+webgpu:api,validation,createBindGroup:external_texture,* // 0%
+webgpu:api,validation,createBindGroup:texture,resource_state:* // crash, https://github.com/gfx-rs/wgpu/issues/7881
+webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:* // 0%
+webgpu:api,validation,createBindGroupLayout:storage_texture,formats:* // 12%
+webgpu:api,validation,createBindGroupLayout:visibility,VERTEX_shader_stage_buffer_type:* // 25%
+webgpu:api,validation,createBindGroupLayout:visibility,VERTEX_shader_stage_storage_texture_access:* // 25%
+webgpu:api,validation,createBindGroupLayout:visibility:* // 25%
+webgpu:api,validation,createPipelineLayout:* // 33%, https://github.com/gfx-rs/wgpu/issues/4738, and at least 1 more issue
+webgpu:api,validation,createView:texture_state:* // 0%
+webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_ranges:* // ***, https://github.com/gfx-rs/wgpu/issues/8118
+webgpu:api,validation,encoding,cmds,debug:* // 92%, https://github.com/gfx-rs/wgpu/issues/8039
+webgpu:api,validation,encoding,cmds,render,* // https://github.com/gfx-rs/wgpu/issues/7912
+webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="compute%20pass";state="destroyed";* // https://github.com/gfx-rs/wgpu/issues/7881
+webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="render%20bundle";state="destroyed";* // https://github.com/gfx-rs/wgpu/issues/7881
+webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="render%20pass";state="destroyed";* // https://github.com/gfx-rs/wgpu/issues/7881
+webgpu:api,validation,encoding,createRenderBundleEncoder:* // 26%
+webgpu:api,validation,encoding,encoder_open_state:* // https://github.com/gfx-rs/wgpu/issues/7857
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_binding_mismatch:* // 60%
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_resource_type_mismatch:* // 60%
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bgl_visibility_mismatch:* // 60%
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:bind_groups_and_pipeline_layout_mismatch:* // 60%
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:default_bind_group_layouts_never_match,compute_pass:* // 75%
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:default_bind_group_layouts_never_match,render_pass:* // 75%
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:empty_bind_group_layouts_never_requires_empty_bind_groups,compute_pass:* // 17%
+webgpu:api,validation,encoding,programmable,pipeline_bind_group_compat:empty_bind_group_layouts_never_requires_empty_bind_groups,render_pass:* // 17%
+webgpu:api,validation,encoding,queries,resolveQuerySet:* // 93%
+webgpu:api,validation,encoding,render_bundle:* // 81%
+webgpu:api,validation,error_scope:*
+webgpu:api,validation,getBindGroupLayout:* // 29%
+webgpu:api,validation,image_copy,buffer_texture_copies:* // https://github.com/gfx-rs/wgpu/issues/7946
+webgpu:api,validation,image_copy,layout_related:offset_alignment:* // fails on DX12 in CI
+webgpu:api,validation,layout_shader_compat:pipeline_layout_shader_exact_match:* // 99%
+webgpu:api,validation,non_filterable_texture:non_filterable_texture_with_filtering_sampler:* // 80%
+webgpu:api,validation,query_set,create:count:* // 0%
+webgpu:api,validation,queue,buffer_mapped:* // ***, vulkan
+webgpu:api,validation,queue,destroyed,* // 71%
+webgpu:api,validation,queue,writeBuffer:ranges:* // 0%
+webgpu:api,validation,render_pass,render_pass_descriptor:depth_stencil_attachment,depth_clear_value:* // 94%
+webgpu:api,validation,render_pass,render_pass_descriptor:depth_stencil_attachment,loadOp_storeOp_match_depthReadOnly_stencilReadOnly:* // 33%
+webgpu:api,validation,render_pass,render_pass_descriptor:occlusionQuerySet,query_set_type:* // 50%
+webgpu:api,validation,render_pipeline,depth_stencil_state:depth_write,frag_depth:* // 86%
+webgpu:api,validation,render_pipeline,depth_stencil_state:depthCompare_optional:*
+webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,color_target_count:* // weird assert in test?
+webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,use_blend_src:* // 62%
+webgpu:api,validation,render_pipeline,fragment_state:pipeline_output_targets,blend:* // 95%
+webgpu:api,validation,render_pipeline,fragment_state:pipeline_output_targets:* // 3%
+webgpu:api,validation,render_pipeline,fragment_state:targets_blend:* // 0%
+webgpu:api,validation,render_pipeline,fragment_state:targets_write_mask:* // 50%
+webgpu:api,validation,render_pipeline,inter_stage:* // 63%
+webgpu:api,validation,render_pipeline,misc:external_texture:* // 0%
+webgpu:api,validation,render_pipeline,misc:storage_texture,format:* // 8%
+webgpu:api,validation,render_pipeline,multisample_state:* // 60%, https://github.com/gfx-rs/wgpu/issues/8779
+webgpu:api,validation,render_pipeline,overrides:* // 83%
+webgpu:api,validation,render_pipeline,resource_compatibility:* // 90%
+webgpu:api,validation,render_pipeline,vertex_state:max_vertex_attribute_limit:* // 0%
+webgpu:api,validation,render_pipeline,vertex_state:max_vertex_buffer_limit:* // 0%
+webgpu:api,validation,resource_usages,texture,in_pass_encoder:subresources_and_binding_types_combination_for_color:* // 92%, https://github.com/gfx-rs/wgpu/issues/3126
+webgpu:api,validation,resource_usages,texture,in_render_common:subresources,depth_stencil_attachment_and_bind_group:* // 69%, https://github.com/gfx-rs/wgpu/issues/8705
+webgpu:api,validation,state,device_lost,destroy:* // crash
+webgpu:api,validation,texture,destroy:submit_a_destroyed_texture_as_attachment:* // 44%, https://github.com/gfx-rs/wgpu/issues/8714
+
+webgpu:shader,validation,const_assert,const_assert:constant_expression_logical_and_no_assert:* // 50%
+webgpu:shader,validation,const_assert,const_assert:constant_expression_logical_or_no_assert:* // 50%
+webgpu:shader,validation,decl,context_dependent_resolution:* // 92%
+webgpu:shader,validation,decl,override:* // 93%
+webgpu:shader,validation,decl,var:* // 97%
+webgpu:shader,validation,expression,access,array:* // 92%
+webgpu:shader,validation,expression,access,matrix:* // 90%
+webgpu:shader,validation,expression,access,vector:* // 52%
+webgpu:shader,validation,expression,binary,add_sub_mul:* // 95%
+webgpu:shader,validation,expression,binary,and_or_xor:* // 96%
+webgpu:shader,validation,expression,binary,bitwise_shift:* // 97%
+webgpu:shader,validation,expression,binary,comparison:* // 74%
+webgpu:shader,validation,expression,binary,div_rem:* // 86%
+webgpu:shader,validation,expression,binary,short_circuiting_and_or:* // 92%, https://github.com/gfx-rs/wgpu/issues/8440
+webgpu:shader,validation,expression,call,builtin,abs:* // 98%
+webgpu:shader,validation,expression,call,builtin,acos:* // 71%
+webgpu:shader,validation,expression,call,builtin,acosh:* // 56%
+webgpu:shader,validation,expression,call,builtin,asin:* // 71%
+webgpu:shader,validation,expression,call,builtin,asinh:* // 85%
+webgpu:shader,validation,expression,call,builtin,atanh:* // 72%
+webgpu:shader,validation,expression,call,builtin,atomics:* // 86%
+webgpu:shader,validation,expression,call,builtin,bitcast:* // 57%
+webgpu:shader,validation,expression,call,builtin,clamp:* // 71%
+webgpu:shader,validation,expression,call,builtin,cosh:* // 61%
+webgpu:shader,validation,expression,call,builtin,countLeadingZeros:* // 98%
+webgpu:shader,validation,expression,call,builtin,countOneBits:* // 98%
+webgpu:shader,validation,expression,call,builtin,countTrailingZeros:* // 98%
+webgpu:shader,validation,expression,call,builtin,cross:* // 86%
+webgpu:shader,validation,expression,call,builtin,degrees:* // 73%
+webgpu:shader,validation,expression,call,builtin,derivatives:* // 83%
+webgpu:shader,validation,expression,call,builtin,determinant:* // 71%
+webgpu:shader,validation,expression,call,builtin,distance:* // 66%
+webgpu:shader,validation,expression,call,builtin,dot:* // 79%
+webgpu:shader,validation,expression,call,builtin,dot4I8Packed:* // 0%
+webgpu:shader,validation,expression,call,builtin,dot4U8Packed:* // 0%
+webgpu:shader,validation,expression,call,builtin,exp:* // 61%
+webgpu:shader,validation,expression,call,builtin,exp2:* // 80%
+webgpu:shader,validation,expression,call,builtin,extractBits:* // 55%
+webgpu:shader,validation,expression,call,builtin,faceForward:* // 68%
+webgpu:shader,validation,expression,call,builtin,firstLeadingBit:* // 98%
+webgpu:shader,validation,expression,call,builtin,firstTrailingBit:* // 98%
+webgpu:shader,validation,expression,call,builtin,fma:* // 85%
+webgpu:shader,validation,expression,call,builtin,frexp:* // 39%
+webgpu:shader,validation,expression,call,builtin,insertBits:* // 73%
+webgpu:shader,validation,expression,call,builtin,inverseSqrt:* // 61%
+webgpu:shader,validation,expression,call,builtin,ldexp:* // 43%
+webgpu:shader,validation,expression,call,builtin,length:* // 74%
+webgpu:shader,validation,expression,call,builtin,log:* // 64%
+webgpu:shader,validation,expression,call,builtin,log2:* // 64%
+webgpu:shader,validation,expression,call,builtin,mix:* // 66%
+webgpu:shader,validation,expression,call,builtin,modf:* // 52%
+webgpu:shader,validation,expression,call,builtin,normalize:* // 63%
+webgpu:shader,validation,expression,call,builtin,pack2x16float:* // 80%
+webgpu:shader,validation,expression,call,builtin,pack2x16snorm:* // 88%
+webgpu:shader,validation,expression,call,builtin,pack2x16unorm:* // 88%
+webgpu:shader,validation,expression,call,builtin,pack4x8snorm:* // 88%
+webgpu:shader,validation,expression,call,builtin,pack4x8unorm:* // 88%
+webgpu:shader,validation,expression,call,builtin,pack4xI8:* // 21%
+webgpu:shader,validation,expression,call,builtin,pack4xI8Clamp:* // 21%
+webgpu:shader,validation,expression,call,builtin,pack4xU8:* // 21%
+webgpu:shader,validation,expression,call,builtin,pack4xU8Clamp:* // 21%
+webgpu:shader,validation,expression,call,builtin,pow:* // 63%
+webgpu:shader,validation,expression,call,builtin,quantizeToF16:* // 61%
+webgpu:shader,validation,expression,call,builtin,reflect:* // 39%
+webgpu:shader,validation,expression,call,builtin,refract:* // 73%
+webgpu:shader,validation,expression,call,builtin,reverseBits:* // 98%
+webgpu:shader,validation,expression,call,builtin,select:* // 75%, https://github.com/gfx-rs/wgpu/issues/4507, https://github.com/gfx-rs/wgpu/issues/5262
+webgpu:shader,validation,expression,call,builtin,sinh:* // 61%
+webgpu:shader,validation,expression,call,builtin,smoothstep:* // 51%
+webgpu:shader,validation,expression,call,builtin,sqrt:* // 64%
+webgpu:shader,validation,expression,call,builtin,textureDimensions:* // 100%
+webgpu:shader,validation,expression,call,builtin,textureGather:* // 99%
+webgpu:shader,validation,expression,call,builtin,textureGatherCompare:* // 99%
+webgpu:shader,validation,expression,call,builtin,textureLoad:* // 85%
+webgpu:shader,validation,expression,call,builtin,textureSample:* // 99%
+webgpu:shader,validation,expression,call,builtin,textureSampleBaseClampToEdge:* // 96%
+webgpu:shader,validation,expression,call,builtin,textureSampleBias:* // 99%
+webgpu:shader,validation,expression,call,builtin,textureSampleCompare:* // 99%
+webgpu:shader,validation,expression,call,builtin,textureSampleCompareLevel:* // 99%
+webgpu:shader,validation,expression,call,builtin,textureSampleGrad:* // 99%
+webgpu:shader,validation,expression,call,builtin,textureSampleLevel:* // 99%
+webgpu:shader,validation,expression,call,builtin,transpose:* // 86%
+webgpu:shader,validation,expression,call,builtin,unpack2x16float:* // 81%
+webgpu:shader,validation,expression,call,builtin,unpack2x16snorm:* // 81%
+webgpu:shader,validation,expression,call,builtin,unpack2x16unorm:* // 81%
+webgpu:shader,validation,expression,call,builtin,unpack4x8snorm:* // 81%
+webgpu:shader,validation,expression,call,builtin,unpack4x8unorm:* // 81%
+webgpu:shader,validation,expression,call,builtin,unpack4xI8:* // 75%
+webgpu:shader,validation,expression,call,builtin,unpack4xU8:* // 75%
+webgpu:shader,validation,expression,call,builtin,value_constructor:* // 92%
+webgpu:shader,validation,expression,early_evaluation:* // 67%
+webgpu:shader,validation,expression,matrix,* // 83%
+webgpu:shader,validation,expression,precedence:* // 76%, https://github.com/gfx-rs/wgpu/issues/4536
+webgpu:shader,validation,expression,unary,* // 74%
+webgpu:shader,validation,extension,dual_source_blending:blend_src_usage:* // 61%
+webgpu:shader,validation,extension,pointer_composite_access:* // 50%
+webgpu:shader,validation,extension,readonly_and_readwrite_storage_textures:* // 0%
+webgpu:shader,validation,functions,alias_analysis:* // 2%
+webgpu:shader,validation,functions,restrictions:* // 81%
+webgpu:shader,validation,parse,attribute:* // 93%
+webgpu:shader,validation,parse,blankspace:* // 95%
+webgpu:shader,validation,parse,comments:* // 93%
+webgpu:shader,validation,parse,diagnostic:* // 50%
+webgpu:shader,validation,parse,identifiers:* // 81%
+webgpu:shader,validation,parse,literal:* // 96%
+webgpu:shader,validation,parse,must_use:* // 97%
+webgpu:shader,validation,parse,requires:* // 14%
+webgpu:shader,validation,parse,shadow_builtins:* // 60%
+webgpu:shader,validation,shader_io,align:* // 98%
+webgpu:shader,validation,shader_io,binding:* // 95%
+webgpu:shader,validation,shader_io,builtins:* // 50%
+webgpu:shader,validation,shader_io,group_and_binding:* // 87%
+webgpu:shader,validation,shader_io,group:* // 95%
+webgpu:shader,validation,shader_io,id:* // 94%
+webgpu:shader,validation,shader_io,interpolate:* // 91%
+webgpu:shader,validation,shader_io,layout_constraints:* // 99%
+webgpu:shader,validation,shader_io,locations:* // 98%
+webgpu:shader,validation,shader_io,pipeline_stage:* // 92%
+webgpu:shader,validation,shader_io,size:* // 92%
+webgpu:shader,validation,shader_io,workgroup_size:* // 83%
+webgpu:shader,validation,statement,continue:* // 90%
+webgpu:shader,validation,statement,for:* // 93%
+webgpu:shader,validation,statement,increment_decrement:* // 97%
+webgpu:shader,validation,statement,loop:* // 92%
+webgpu:shader,validation,statement,phony:* // 90%
+webgpu:shader,validation,statement,statement_behavior:* // https://github.com/gfx-rs/wgpu/issues/7733
+webgpu:shader,validation,statement,switch:* // 99%
+webgpu:shader,validation,types,* // 86%
+webgpu:shader,validation,uniformity,* // 21%

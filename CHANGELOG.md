@@ -66,6 +66,10 @@ Bottom level categories:
 - The validator checks that override-sized arrays have a positive size, if overrides have been resolved. By @andyleiserson in [#8822](https://github.com/gfx-rs/wgpu/pull/8822).
 - Fix some cases where f16 constants were not working. By @andyleiserson in [#8816](https://github.com/gfx-rs/wgpu/pull/8816).
 
+#### Naga
+
+- Fix missing side effects from sequence expressions in GLSL. By @Vipitis in [#8787](https://github.com/gfx-rs/wgpu/pull/8787).
+
 #### GLES
 
 - `DisplayHandle` should now be passed to `InstanceDescriptor` for correct EGL initialization on Wayland. By @MarijnS95 in [#8012](https://github.com/gfx-rs/wgpu/pull/8012)

@@ -4535,3 +4535,62 @@ fn binding_array_requires_capability() {
         Capabilities::all()
     }
 }
+
+#[test]
+fn cooperative_matrix_enable_extension() {
+    for ty in ["coop_mat8x8", "coop_mat16x16"] {
+        let carets = "^".repeat(ty.len());
+
+        check_extension_validation!(
+            // Used in type declaration
+            Capabilities::COOPERATIVE_MATRIX,
+            &format!(
+                r#"fn foo() {{
+    var a: {ty}<f32, A>;
+}}
+"#
+            ),
+            &format!(
+                r#"error: the `wgpu_cooperative_matrix` enable extension is not enabled
+  ┌─ wgsl:2:12
+  │
+2 │     var a: {ty}<f32, A>;
+  │            {carets} the `wgpu_cooperative_matrix` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_cooperative_matrix;` at the top of the shader, before any other items.
+
+"#,
+            ),
+            Err(naga::valid::ValidationError::Type {
+                source: naga::valid::TypeError::MissingCapability(Capabilities::COOPERATIVE_MATRIX),
+                ..
+            })
+        );
+
+        // Used as constructor
+        check_extension_validation!(
+            Capabilities::COOPERATIVE_MATRIX,
+            &format!(
+                r#"fn foo() {{
+    let a = {ty}<f32, A>();
+}}
+"#,
+            ),
+            &format!(
+                r#"error: the `wgpu_cooperative_matrix` enable extension is not enabled
+  ┌─ wgsl:2:13
+  │
+2 │     let a = {ty}<f32, A>();
+  │             {carets} the `wgpu_cooperative_matrix` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_cooperative_matrix;` at the top of the shader, before any other items.
+
+"#,
+            ),
+            Err(naga::valid::ValidationError::Type {
+                source: naga::valid::TypeError::MissingCapability(Capabilities::COOPERATIVE_MATRIX),
+                ..
+            })
+        );
+    }
+}
