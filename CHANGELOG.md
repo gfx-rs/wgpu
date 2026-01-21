@@ -107,7 +107,7 @@ Bottom level categories:
 
 ### Changes
 
-### General
+#### General
 
 - Tracing now uses the `.metal` extension for metal source files, instead of `.msl`. By @inner-daemons in #8880.
 
