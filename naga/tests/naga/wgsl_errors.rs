@@ -4897,7 +4897,7 @@ fn check_ray_tracing_pipeline_payload_disallowed() {
                 "enable wgpu_ray_tracing_pipeline;
             @group(0) @binding(0) var acc_struct: acceleration_structure;
             var<ray_payload> payload: u32;
-            
+
             {stage} fn main() {output} {{_ = payload; {stmt}}}"
             ),
             Err(naga::valid::ValidationError::EntryPoint {
@@ -4907,4 +4907,130 @@ fn check_ray_tracing_pipeline_payload_disallowed() {
             Capabilities::RAY_TRACING_PIPELINE
         );
     }
+}
+
+#[track_caller]
+fn check_with_capabilities(input: &str, snapshot: &str, capabilities: Capabilities) {
+    let mut options = naga::front::wgsl::Options::new();
+    options.capabilities = capabilities;
+    let mut frontend = naga::front::wgsl::Frontend::new_with_options(options);
+    let output = match frontend.parse(input) {
+        Ok(_) => panic!("expected parser error, but parsing succeeded!"),
+        Err(err) => err.emit_to_string(input),
+    };
+    if output != snapshot {
+        for diff in diff::lines(snapshot, &output) {
+            match diff {
+                diff::Result::Left(l) => println!("-{l}"),
+                diff::Result::Both(l, _) => println!(" {l}"),
+                diff::Result::Right(r) => println!("+{r}"),
+            }
+        }
+        panic!("Error snapshot failed");
+    }
+}
+
+#[test]
+fn enable_f16_without_capability() {
+    check_with_capabilities(
+        "enable f16;",
+        r###"error: the `f16` extension is not supported in the current environment
+  ┌─ wgsl:1:8
+  │
+1 │ enable f16;
+  │        ^^^ unsupported enable-extension
+
+"###,
+        !Capabilities::SHADER_FLOAT16,
+    );
+}
+
+#[test]
+fn enable_dual_source_blending_without_capability() {
+    check_with_capabilities(
+        "enable dual_source_blending;",
+        r###"error: the `dual_source_blending` extension is not supported in the current environment
+  ┌─ wgsl:1:8
+  │
+1 │ enable dual_source_blending;
+  │        ^^^^^^^^^^^^^^^^^^^^ unsupported enable-extension
+
+"###,
+        !Capabilities::DUAL_SOURCE_BLENDING,
+    );
+}
+
+#[test]
+fn enable_clip_distances_without_capability() {
+    check_with_capabilities(
+        "enable clip_distances;",
+        r###"error: the `clip_distances` extension is not supported in the current environment
+  ┌─ wgsl:1:8
+  │
+1 │ enable clip_distances;
+  │        ^^^^^^^^^^^^^^ unsupported enable-extension
+
+"###,
+        !Capabilities::CLIP_DISTANCE,
+    );
+}
+
+#[test]
+fn enable_wgpu_mesh_shader_without_capability() {
+    check_with_capabilities(
+        "enable wgpu_mesh_shader;",
+        r###"error: the `wgpu_mesh_shader` extension is not supported in the current environment
+  ┌─ wgsl:1:8
+  │
+1 │ enable wgpu_mesh_shader;
+  │        ^^^^^^^^^^^^^^^^ unsupported enable-extension
+
+"###,
+        !Capabilities::MESH_SHADER,
+    );
+}
+
+#[test]
+fn enable_wgpu_ray_query_without_capability() {
+    check_with_capabilities(
+        "enable wgpu_ray_query;",
+        r###"error: the `wgpu_ray_query` extension is not supported in the current environment
+  ┌─ wgsl:1:8
+  │
+1 │ enable wgpu_ray_query;
+  │        ^^^^^^^^^^^^^^ unsupported enable-extension
+
+"###,
+        !Capabilities::RAY_QUERY,
+    );
+}
+
+#[test]
+fn enable_wgpu_ray_query_vertex_return_without_capability() {
+    check_with_capabilities(
+        "enable wgpu_ray_query_vertex_return;",
+        r###"error: the `wgpu_ray_query_vertex_return` extension is not supported in the current environment
+  ┌─ wgsl:1:8
+  │
+1 │ enable wgpu_ray_query_vertex_return;
+  │        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsupported enable-extension
+
+"###,
+        !Capabilities::RAY_HIT_VERTEX_POSITION,
+    );
+}
+
+#[test]
+fn enable_wgpu_cooperative_matrix_without_capability() {
+    check_with_capabilities(
+        "enable wgpu_cooperative_matrix;",
+        r###"error: the `wgpu_cooperative_matrix` extension is not supported in the current environment
+  ┌─ wgsl:1:8
+  │
+1 │ enable wgpu_cooperative_matrix;
+  │        ^^^^^^^^^^^^^^^^^^^^^^^ unsupported enable-extension
+
+"###,
+        !Capabilities::COOPERATIVE_MATRIX,
+    );
 }

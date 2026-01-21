@@ -115,6 +115,7 @@ Bottom level categories:
 
 #### naga
 
+- Naga and `wgpu` now reject shaders with an `enable` directive for functionality that is not available, even if that functionality is not used by the shader. By @andyleiserson in [#8913](https://github.com/gfx-rs/wgpu/pull/8913).
 - Prevent UB from incorrectly using ray queries on HLSL. By @Vecvec in [#8763](https://github.com/gfx-rs/wgpu/pull/8763).
 
 ### deno\_webgpu

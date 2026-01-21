@@ -275,13 +275,16 @@ impl<'a> BindingParser<'a> {
 pub struct Options {
     /// Controls whether the parser should parse doc comments.
     pub parse_doc_comments: bool,
+    /// Capabilities to enable during parsing.
+    pub capabilities: crate::valid::Capabilities,
 }
 
 impl Options {
-    /// Creates a new [`Options`] without doc comments parsing.
+    /// Creates a new default [`Options`].
     pub const fn new() -> Self {
         Options {
             parse_doc_comments: false,
+            capabilities: crate::valid::Capabilities::all(),
         }
     }
 }
@@ -2231,6 +2234,14 @@ impl Parser {
                                     }))
                                 }
                             };
+                            // Check if the required capability is supported
+                            let required_capability = extension.capability();
+                            if !options.capabilities.contains(required_capability) {
+                                return Err(Box::new(Error::EnableExtensionNotSupported {
+                                    kind,
+                                    span,
+                                }));
+                            }
                             enable_extensions.add(extension);
                             Ok(())
                         })?;

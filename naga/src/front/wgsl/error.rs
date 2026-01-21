@@ -387,6 +387,10 @@ pub(crate) enum Error<'a> {
         kind: EnableExtension,
         span: Span,
     },
+    EnableExtensionNotSupported {
+        kind: EnableExtension,
+        span: Span,
+    },
     LanguageExtensionNotYetImplemented {
         kind: UnimplementedLanguageExtension,
         span: Span,
@@ -1257,6 +1261,17 @@ impl<'a> Error<'a> {
                         ),
                     ]
                 },
+            },
+            Error::EnableExtensionNotSupported { kind, span } => ParseError {
+                message: format!(
+                    "the `{}` extension is not supported in the current environment",
+                    kind.to_ident()
+                ),
+                labels: vec![(
+                    span,
+                    "unsupported enable-extension".into(),
+                )],
+                notes: vec![],
             },
             Error::LanguageExtensionNotYetImplemented { kind, span } => ParseError {
                 message: format!(

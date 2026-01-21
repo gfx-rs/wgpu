@@ -187,6 +187,22 @@ pub enum ImplementedEnableExtension {
     WgpuCooperativeMatrix,
 }
 
+impl ImplementedEnableExtension {
+    /// Returns the capability required for this enable extension.
+    pub const fn capability(self) -> crate::valid::Capabilities {
+        use crate::valid::Capabilities as C;
+        match self {
+            Self::F16 => C::SHADER_FLOAT16,
+            Self::DualSourceBlending => C::DUAL_SOURCE_BLENDING,
+            Self::ClipDistances => C::CLIP_DISTANCE,
+            Self::WgpuMeshShader => C::MESH_SHADER,
+            Self::WgpuRayQuery => C::RAY_QUERY,
+            Self::WgpuRayQueryVertexReturn => C::RAY_HIT_VERTEX_POSITION,
+            Self::WgpuCooperativeMatrix => C::COOPERATIVE_MATRIX,
+        }
+    }
+}
+
 /// A variant of [`EnableExtension::Unimplemented`].
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub enum UnimplementedEnableExtension {
