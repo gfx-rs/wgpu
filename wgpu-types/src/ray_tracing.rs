@@ -68,15 +68,16 @@ pub struct CreateBlasDescriptor<L, Q> {
 
 impl<L, Q> CreateBlasDescriptor<L, Q> {
     /// Takes a closure and maps the label of the blas descriptor into another.
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CreateBlasDescriptor<K, Q>
-    where
-        Q: Clone,
-    {
+    pub fn map_label_and_queue<K, NQ>(
+        &self,
+        l_fun: impl FnOnce(&L) -> K,
+        q_fun: impl FnOnce(&Q) -> NQ,
+    ) -> CreateBlasDescriptor<K, NQ> {
         CreateBlasDescriptor {
-            label: fun(&self.label),
+            label: l_fun(&self.label),
             flags: self.flags,
             update_mode: self.update_mode,
-            initial_queue: self.initial_queue.clone(),
+            initial_queue: q_fun(&self.initial_queue),
         }
     }
 }
@@ -100,16 +101,17 @@ pub struct CreateTlasDescriptor<L, Q> {
 
 impl<L, Q> CreateTlasDescriptor<L, Q> {
     /// Takes a closure and maps the label of the blas descriptor into another.
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CreateTlasDescriptor<K, Q>
-    where
-        Q: Clone,
-    {
+    pub fn map_label_and_queue<K, NQ>(
+        &self,
+        l_fun: impl FnOnce(&L) -> K,
+        q_fun: impl FnOnce(&Q) -> NQ,
+    ) -> CreateTlasDescriptor<K, NQ> {
         CreateTlasDescriptor {
-            label: fun(&self.label),
+            label: l_fun(&self.label),
             flags: self.flags,
             update_mode: self.update_mode,
             max_instances: self.max_instances,
-            initial_queue: self.initial_queue.clone(),
+            initial_queue: q_fun(&self.initial_queue),
         }
     }
 }

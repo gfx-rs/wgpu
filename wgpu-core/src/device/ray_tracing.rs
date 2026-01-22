@@ -171,6 +171,7 @@ impl Device {
             tracking_data: TrackingData::new(self.tracker_indices.blas_s.clone()),
             compaction_buffer,
             compacted_state: Mutex::new(rank::BLAS_COMPACTION_STATE, BlasCompactState::Idle),
+            current_queue: blas_desc.initial_queue,
         }))
     }
 
@@ -257,6 +258,7 @@ impl Device {
             label: desc.label.to_string(),
             max_instance_count: desc.max_instances,
             tracking_data: TrackingData::new(self.tracker_indices.tlas_s.clone()),
+            _current_queue: desc.initial_queue,
         }))
     }
 }
@@ -372,7 +374,6 @@ impl Global {
         &self,
         blas_id: BlasId,
         callback: Option<BlasCompactCallback>,
-        queue_index: u32,
     ) -> Result<u64, BlasPrepareCompactError> {
         profiling::scope!("Blas::prepare_compact_async");
         api_log!("Blas::prepare_compact_async {blas_id:?}");
@@ -380,7 +381,7 @@ impl Global {
         let hub = &self.hub;
 
         let compact_result = match hub.blas_s.get(blas_id).get() {
-            Ok(blas) => blas.prepare_compact_async(callback, queue_index),
+            Ok(blas) => blas.prepare_compact_async(callback),
             Err(e) => Err((callback, e.into())),
         };
 

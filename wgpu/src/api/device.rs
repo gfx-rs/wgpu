@@ -93,7 +93,7 @@ impl Device {
     ///
     /// When running on WebGPU, this is a no-op. `Device`s are automatically polled.
     pub fn poll(&self, poll_type: PollType) -> Result<crate::PollStatus, crate::PollError> {
-        self.inner.poll(poll_type.map_index(|s| s.index))
+        self.inner.poll(poll_type.map_index(|s| (s.queue, s.index)))
     }
 
     /// The [features][Features] which can be used on this device.
@@ -299,7 +299,7 @@ impl Device {
             descriptor: wgt::TextureDescriptor {
                 label: None,
                 view_formats: (),
-                initial_queue: desc.initial_queue.index,
+                initial_queue: desc.initial_queue.map(|q| q.index).unwrap_or(0),
 
                 size: desc.size,
                 mip_level_count: desc.mip_level_count,
@@ -345,7 +345,7 @@ impl Device {
             descriptor: wgt::TextureDescriptor {
                 label: None,
                 view_formats: (),
-                initial_queue: desc.initial_queue.index,
+                initial_queue: desc.initial_queue.map(|q| q.index).unwrap_or(0),
 
                 size: desc.size,
                 mip_level_count: desc.mip_level_count,

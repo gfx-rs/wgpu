@@ -539,14 +539,14 @@ impl<L, V, Q: Clone> TextureDescriptor<L, V, Q> {
 
     /// Maps the label and view formats of the texture descriptor into another.
     #[must_use]
-    pub fn map_label_and_view_formats<K, M>(
+    pub fn map_label_and_view_formats_and_queue<K, M, NQ>(
         &self,
         l_fun: impl FnOnce(&L) -> K,
         v_fun: impl FnOnce(V) -> M,
-    ) -> TextureDescriptor<K, M, Q>
+        q_fun: impl FnOnce(&Q) -> NQ,
+    ) -> TextureDescriptor<K, M, NQ>
     where
         V: Clone,
-        Q: Clone,
     {
         TextureDescriptor {
             label: l_fun(&self.label),
@@ -557,7 +557,7 @@ impl<L, V, Q: Clone> TextureDescriptor<L, V, Q> {
             format: self.format,
             usage: self.usage,
             view_formats: v_fun(self.view_formats.clone()),
-            initial_queue: self.initial_queue.clone(),
+            initial_queue: q_fun(&self.initial_queue),
         }
     }
 

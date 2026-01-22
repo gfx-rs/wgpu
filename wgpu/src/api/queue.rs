@@ -45,6 +45,7 @@ impl Queue {
 /// There is no analogue in the WebGPU specification.
 #[derive(Debug, Clone)]
 pub struct SubmissionIndex {
+    pub(crate) queue: u32,
     pub(crate) index: u64,
 }
 #[cfg(send_sync)]
@@ -262,7 +263,10 @@ impl Queue {
         // Execute all deferred actions after submit.
         actions.execute(&self.inner);
 
-        SubmissionIndex { index }
+        SubmissionIndex {
+            queue: self.index,
+            index,
+        }
     }
 
     /// Gets the amount of nanoseconds each tick of a timestamp query represents.

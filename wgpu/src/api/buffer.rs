@@ -842,7 +842,7 @@ impl MapContext {
 ///
 /// Corresponds to [WebGPU `GPUBufferDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpubufferdescriptor).
-pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>, &'a Queue>;
+pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Label<'a>, Option<&'a Queue>>;
 static_assertions::assert_impl_all!(BufferDescriptor<'_>: Send, Sync);
 
 /// Error occurred when trying to async map a buffer.

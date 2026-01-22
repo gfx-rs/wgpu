@@ -55,11 +55,13 @@ impl DownloadBuffer {
             usage: super::BufferUsages::COPY_DST | super::BufferUsages::MAP_READ,
             mapped_at_creation: false,
             label: None,
-            initial_queue: queue,
+            initial_queue: Some(queue),
         });
 
-        let mut encoder =
-            device.create_command_encoder(&super::CommandEncoderDescriptor { label: None, queue });
+        let mut encoder = device.create_command_encoder(&super::CommandEncoderDescriptor {
+            label: None,
+            queue: Some(queue),
+        });
         encoder.copy_buffer_to_buffer(buffer.buffer, buffer.offset, &download, 0, size);
         let command_buffer: super::CommandBuffer = encoder.finish();
         queue.submit(Some(command_buffer));

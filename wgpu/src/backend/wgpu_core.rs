@@ -21,8 +21,8 @@ use hashbrown::HashMap;
 use arrayvec::ArrayVec;
 use smallvec::SmallVec;
 use wgc::{
-    command::bundle_ffi::*, error::ContextErrorSource, pipeline::CreateShaderModuleError,
-    resource::BlasPrepareCompactResult,
+    command::bundle_ffi::*, error::ContextErrorSource, id::QueueId,
+    pipeline::CreateShaderModuleError, resource::BlasPrepareCompactResult,
 };
 use wgt::{
     error::{ErrorType, WebGpuError},
@@ -125,12 +125,14 @@ impl ContextWgpuCore {
             id: device_id,
             error_sink: error_sink.clone(),
             features: desc.required_features,
+            queue_ids,
         };
-        let queues = queue_ids
-            .into_iter()
+        let queues = device
+            .queue_ids
+            .iter()
             .map(|qid| CoreQueue {
                 context: self.clone(),
-                id: qid,
+                id: *qid,
                 error_sink: error_sink.clone(),
             })
             .collect();
@@ -143,7 +145,11 @@ impl ContextWgpuCore {
         device: &CoreDevice,
         desc: &TextureDescriptor<'_>,
     ) -> CoreTexture {
-        let descriptor = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
+        let descriptor = desc.map_label_and_view_formats_and_queue(
+            |l| l.map(Borrowed),
+            |v| v.to_vec(),
+            |q| q.map(|q| q.index).unwrap_or(0),
+        );
         let (id, error) = unsafe {
             self.0
                 .create_texture_from_hal(Box::new(hal_texture), device.id, &descriptor, None)
@@ -179,7 +185,7 @@ impl ContextWgpuCore {
             self.0.create_buffer_from_hal::<A>(
                 hal_buffer,
                 device.id,
-                &desc.map_label(|l| l.map(Borrowed)),
+                &desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.map(|q| q.index).unwrap_or(0)),
                 None,
             )
         };
@@ -464,6 +470,7 @@ pub struct CoreDevice {
     id: wgc::id::DeviceId,
     error_sink: ErrorSink,
     features: Features,
+    queue_ids: Vec<QueueId>,
 }
 
 #[derive(Debug)]
@@ -940,13 +947,14 @@ impl dispatch::AdapterInterface for CoreAdapter {
             id: device_id,
             error_sink: error_sink.clone(),
             features: desc.required_features,
+            queue_ids,
         };
         let mut queues = Vec::new();
-        for queue_id in queue_ids {
+        for queue_id in &device.queue_ids {
             let queue = CoreQueue {
                 context: self.context.clone(),
-                id: queue_id,
-                error_sink,
+                id: *queue_id,
+                error_sink: error_sink.clone(),
             };
             queues.push(queue.into());
         }
@@ -1580,7 +1588,7 @@ impl dispatch::DeviceInterface for CoreDevice {
     fn create_buffer(&self, desc: &crate::BufferDescriptor<'_>) -> dispatch::DispatchBuffer {
         let (id, error) = self.context.0.device_create_buffer(
             self.id,
-            &desc.map_label(|l| l.map(Borrowed)),
+            &desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.map(|q| q.index).unwrap_or(0)),
             None,
         );
         if let Some(cause) = error {
@@ -1597,7 +1605,11 @@ impl dispatch::DeviceInterface for CoreDevice {
     }
 
     fn create_texture(&self, desc: &crate::TextureDescriptor<'_>) -> dispatch::DispatchTexture {
-        let wgt_desc = desc.map_label_and_view_formats(|l| l.map(Borrowed), |v| v.to_vec());
+        let wgt_desc = desc.map_label_and_view_formats_and_queue(
+            |l| l.map(Borrowed),
+            |v| v.to_vec(),
+            |q| q.map(|q| q.index).unwrap_or(0),
+        );
         let (id, error) = self
             .context
             .0
@@ -1655,8 +1667,12 @@ impl dispatch::DeviceInterface for CoreDevice {
         sizes: crate::BlasGeometrySizeDescriptors,
     ) -> (Option<u64>, dispatch::DispatchBlas) {
         let global = &self.context.0;
-        let (id, handle, error) =
-            global.device_create_blas(self.id, &desc.map_label(|l| l.map(Borrowed)), sizes, None);
+        let (id, handle, error) = global.device_create_blas(
+            self.id,
+            &desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.map(|q| q.index).unwrap_or(0)),
+            sizes,
+            None,
+        );
         if let Some(cause) = error {
             self.context
                 .handle_error(&self.error_sink, cause, desc.label, "Device::create_blas");
@@ -1674,8 +1690,11 @@ impl dispatch::DeviceInterface for CoreDevice {
 
     fn create_tlas(&self, desc: &crate::CreateTlasDescriptor<'_>) -> dispatch::DispatchTlas {
         let global = &self.context.0;
-        let (id, error) =
-            global.device_create_tlas(self.id, &desc.map_label(|l| l.map(Borrowed)), None);
+        let (id, error) = global.device_create_tlas(
+            self.id,
+            &desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.map(|q| q.index).unwrap_or(0)),
+            None,
+        );
         if let Some(cause) = error {
             self.context
                 .handle_error(&self.error_sink, cause, desc.label, "Device::create_tlas");
@@ -1746,9 +1765,12 @@ impl dispatch::DeviceInterface for CoreDevice {
         &self,
         desc: &crate::CommandEncoderDescriptor<'_>,
     ) -> dispatch::DispatchCommandEncoder {
+        let new_desc =
+            desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.map(|q| q.index).unwrap_or(0));
         let (id, error) = self.context.0.device_create_command_encoder(
             self.id,
-            &desc.map_label(|l| l.map(Borrowed)),
+            self.queue_ids[new_desc.queue as usize],
+            &new_desc,
             None,
         );
         if let Some(cause) = error {
@@ -1779,7 +1801,12 @@ impl dispatch::DeviceInterface for CoreDevice {
             sample_count: desc.sample_count,
             multiview: desc.multiview,
         };
-        let encoder = match wgc::command::RenderBundleEncoder::new(&descriptor, self.id) {
+        let queue_index = desc.queue.map(|q| q.index).unwrap_or(0);
+        let encoder = match wgc::command::RenderBundleEncoder::new(
+            &descriptor,
+            self.id,
+            self.queue_ids[queue_index as usize],
+        ) {
             Ok(encoder) => encoder,
             Err(e) => panic!("Error in Device::create_render_bundle_encoder: {e}"),
         };
@@ -1874,7 +1901,10 @@ impl dispatch::DeviceInterface for CoreDevice {
         };
     }
 
-    fn poll(&self, poll_type: wgt::PollType<u64>) -> Result<crate::PollStatus, crate::PollError> {
+    fn poll(
+        &self,
+        poll_type: wgt::PollType<(u32, u64)>,
+    ) -> Result<crate::PollStatus, crate::PollError> {
         match self.context.0.device_poll(self.id, poll_type) {
             Ok(status) => Ok(status),
             Err(err) => {
@@ -2078,7 +2108,7 @@ impl dispatch::QueueInterface for CoreQueue {
 
         drop(temp_command_buffers);
 
-        index
+        index.1
     }
 
     fn get_timestamp_period(&self) -> f32 {

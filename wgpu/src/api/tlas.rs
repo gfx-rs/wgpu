@@ -7,7 +7,7 @@ use core::ops::{Index, IndexMut, Range};
 use wgt::WasmNotSendSync;
 
 /// Descriptor to create top level acceleration structures.
-pub type CreateTlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>, &'a Queue>;
+pub type CreateTlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>, Option<&'a Queue>>;
 static_assertions::assert_impl_all!(CreateTlasDescriptor<'_>: Send, Sync);
 
 #[derive(Debug, Clone)]

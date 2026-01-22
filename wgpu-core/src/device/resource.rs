@@ -1107,16 +1107,6 @@ impl Device {
             indirect_validation_bind_groups.push(parking_lot::RwLock::new(None));
         }
 
-        let unique_queue = if !concurrent_usage
-            && desc
-                .usage
-                .intersects(wgt::BufferUsages::MAP_READ | wgt::BufferUsages::MAP_WRITE)
-        {
-            Some(desc.initial_queue)
-        } else {
-            None
-        };
-
         let buffer = Buffer {
             raw: Snatchable::new(buffer),
             device: self.clone(),
@@ -1132,7 +1122,7 @@ impl Device {
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
             timestamp_normalization_bind_groups,
             indirect_validation_bind_groups,
-            unique_queue,
+            current_queue: desc.initial_queue,
         };
 
         let buffer = Arc::new(buffer);
@@ -1322,7 +1312,7 @@ impl Device {
             bind_groups: Mutex::new(rank::BUFFER_BIND_GROUPS, WeakVec::new()),
             timestamp_normalization_bind_groups,
             indirect_validation_bind_groups,
-            unique_queue: Some(desc.initial_queue),
+            current_queue: desc.initial_queue,
         };
 
         let buffer = Arc::new(buffer);

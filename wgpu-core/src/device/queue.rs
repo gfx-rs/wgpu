@@ -1692,6 +1692,7 @@ impl Queue {
             tracking_data: TrackingData::new(blas.device.tracker_indices.blas_s.clone()),
             compaction_buffer: None,
             compacted_state: Mutex::new(rank::BLAS_COMPACTION_STATE, BlasCompactState::Compacted),
+            current_queue: blas.current_queue,
         });
 
         pending_writes.insert_blas(blas);

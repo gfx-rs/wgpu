@@ -365,13 +365,14 @@ pub struct CommandEncoderDescriptor<L, Q> {
 impl<L, Q> CommandEncoderDescriptor<L, Q> {
     /// Takes a closure and maps the label of the command encoder descriptor into another.
     #[must_use]
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CommandEncoderDescriptor<K, Q>
-    where
-        Q: Clone,
-    {
+    pub fn map_label_and_queue<K, NQ>(
+        &self,
+        l_fun: impl FnOnce(&L) -> K,
+        q_fun: impl FnOnce(&Q) -> NQ,
+    ) -> CommandEncoderDescriptor<K, NQ> {
         CommandEncoderDescriptor {
-            label: fun(&self.label),
-            queue: self.queue.clone(),
+            label: l_fun(&self.label),
+            queue: q_fun(&self.queue),
         }
     }
 }

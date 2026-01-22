@@ -36,16 +36,17 @@ pub struct BufferDescriptor<L, Q> {
 impl<L, Q> BufferDescriptor<L, Q> {
     /// Takes a closure and maps the label of the buffer descriptor into another.
     #[must_use]
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> BufferDescriptor<K, Q>
-    where
-        Q: Clone,
-    {
+    pub fn map_label_and_queue<K, NQ>(
+        &self,
+        l_fun: impl FnOnce(&L) -> K,
+        q_fun: impl FnOnce(&Q) -> NQ,
+    ) -> BufferDescriptor<K, NQ> {
         BufferDescriptor {
-            label: fun(&self.label),
+            label: l_fun(&self.label),
             size: self.size,
             usage: self.usage,
             mapped_at_creation: self.mapped_at_creation,
-            initial_queue: self.initial_queue.clone(),
+            initial_queue: q_fun(&self.initial_queue),
         }
     }
 }

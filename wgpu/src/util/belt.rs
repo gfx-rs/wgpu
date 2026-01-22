@@ -218,7 +218,7 @@ impl StagingBelt {
                         size: self.chunk_size.max(size.get()),
                         usage: self.buffer_usages,
                         mapped_at_creation: true,
-                        initial_queue: &self.queue,
+                        initial_queue: Some(&self.queue),
                     }),
                     offset: 0,
                 }

@@ -445,7 +445,7 @@ pub struct Buffer {
     /// Each queue has its own buffers that cannot be shared
     pub(crate) indirect_validation_bind_groups:
         PerQueueArray<parking_lot::RwLock<Option<BindGroups>>>,
-    pub unique_queue: Option<u32>,
+    pub(crate) current_queue: u32,
 }
 
 impl Drop for Buffer {
@@ -902,7 +902,7 @@ impl Buffer {
 
                 let staging_buffer = staging_buffer.flush();
 
-                if let Some(queue) = device.get_queue(self.unique_queue.unwrap()) {
+                if let Some(queue) = device.get_queue(self.current_queue) {
                     let region = wgt::BufferSize::new(self.size).map(|size| hal::BufferCopy {
                         src_offset: 0,
                         dst_offset: 0,
@@ -1362,6 +1362,7 @@ pub struct Texture {
     pub(crate) clear_mode: RwLock<TextureClearMode>,
     pub(crate) views: Mutex<WeakVec<TextureView>>,
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
+    pub(crate) _current_queue: u32,
 }
 
 impl Texture {
@@ -1397,6 +1398,7 @@ impl Texture {
             clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
+            _current_queue: desc.initial_queue,
         }
     }
 
@@ -2352,6 +2354,7 @@ pub struct Blas {
     pub(crate) tracking_data: TrackingData,
     pub(crate) compaction_buffer: Option<ManuallyDrop<Box<dyn hal::DynBuffer>>>,
     pub(crate) compacted_state: Mutex<BlasCompactState>,
+    pub(crate) current_queue: u32,
 }
 
 impl Drop for Blas {
@@ -2385,7 +2388,6 @@ impl Blas {
     pub(crate) fn prepare_compact_async(
         self: &Arc<Self>,
         op: Option<BlasCompactCallback>,
-        queue_idx: u32,
     ) -> Result<u64, (Option<BlasCompactCallback>, BlasPrepareCompactError)> {
         let device = &self.device;
         if let Err(e) = device.check_is_valid() {
@@ -2420,7 +2422,7 @@ impl Blas {
             }),
         };
 
-        let submit_index = if let Some(queue) = device.get_queue(queue_idx) {
+        let submit_index = if let Some(queue) = device.get_queue(self.current_queue) {
             queue.lock_life().prepare_compact(self).unwrap_or(0) // '0' means no wait is necessary
         } else {
             // We can safely unwrap below since we just set the `compacted_state` to `BlasCompactState::Waiting`.
@@ -2503,6 +2505,7 @@ pub struct Tlas {
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
     pub(crate) tracking_data: TrackingData,
+    pub(crate) _current_queue: u32,
 }
 
 impl Drop for Tlas {

@@ -80,7 +80,7 @@ impl Texture {
             descriptor: wgt::TextureDescriptor {
                 label: None,
                 view_formats: (),
-                initial_queue: desc.initial_queue.index,
+                initial_queue: desc.initial_queue.map(|q| q.index).unwrap_or(0),
 
                 size: desc.size,
                 mip_level_count: desc.mip_level_count,
@@ -191,5 +191,6 @@ impl Texture {
 ///
 /// Corresponds to [WebGPU `GPUTextureDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputexturedescriptor).
-pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, &'a [TextureFormat], &'a Queue>;
+pub type TextureDescriptor<'a> =
+    wgt::TextureDescriptor<Label<'a>, &'a [TextureFormat], Option<&'a Queue>>;
 static_assertions::assert_impl_all!(TextureDescriptor<'_>: Send, Sync);
