@@ -607,7 +607,7 @@ impl Resource {
             ResourceType::Texture {
                 dim,
                 arrayed,
-                class,
+                class: shader_class,
             } => {
                 let view_dimension = match entry.ty {
                     BindingType::Texture { view_dimension, .. }
@@ -648,64 +648,88 @@ impl Resource {
                         }
                     }
                 }
-                let expected_class = match entry.ty {
+                match entry.ty {
                     BindingType::Texture {
                         sample_type,
                         view_dimension: _,
                         multisampled: multi,
-                    } => match sample_type {
-                        wgt::TextureSampleType::Float { .. } => naga::ImageClass::Sampled {
-                            kind: naga::ScalarKind::Float,
-                            multi,
-                        },
-                        wgt::TextureSampleType::Sint => naga::ImageClass::Sampled {
-                            kind: naga::ScalarKind::Sint,
-                            multi,
-                        },
-                        wgt::TextureSampleType::Uint => naga::ImageClass::Sampled {
-                            kind: naga::ScalarKind::Uint,
-                            multi,
-                        },
-                        wgt::TextureSampleType::Depth => naga::ImageClass::Depth { multi },
-                    },
-                    BindingType::StorageTexture {
-                        access,
-                        format,
-                        view_dimension: _,
                     } => {
-                        let naga_format = map_storage_format_to_naga(format)
-                            .ok_or(BindingError::BadStorageFormat(format))?;
-                        let naga_access = match access {
-                            wgt::StorageTextureAccess::ReadOnly => naga::StorageAccess::LOAD,
-                            wgt::StorageTextureAccess::WriteOnly => naga::StorageAccess::STORE,
-                            wgt::StorageTextureAccess::ReadWrite => {
-                                naga::StorageAccess::LOAD | naga::StorageAccess::STORE
-                            }
-                            wgt::StorageTextureAccess::Atomic => {
-                                naga::StorageAccess::ATOMIC
-                                    | naga::StorageAccess::LOAD
-                                    | naga::StorageAccess::STORE
-                            }
+                        let binding_class = match sample_type {
+                            wgt::TextureSampleType::Float { .. } => naga::ImageClass::Sampled {
+                                kind: naga::ScalarKind::Float,
+                                multi,
+                            },
+                            wgt::TextureSampleType::Sint => naga::ImageClass::Sampled {
+                                kind: naga::ScalarKind::Sint,
+                                multi,
+                            },
+                            wgt::TextureSampleType::Uint => naga::ImageClass::Sampled {
+                                kind: naga::ScalarKind::Uint,
+                                multi,
+                            },
+                            wgt::TextureSampleType::Depth => naga::ImageClass::Depth { multi },
                         };
-                        naga::ImageClass::Storage {
-                            format: naga_format,
-                            access: naga_access,
+                        if shader_class == binding_class {
+                            Ok(())
+                        } else {
+                            Err(binding_class)
                         }
                     }
-                    BindingType::ExternalTexture => naga::ImageClass::External,
+                    BindingType::StorageTexture {
+                        access: wgt_binding_access,
+                        format: wgt_binding_format,
+                        view_dimension: _,
+                    } => {
+                        const LOAD_STORE: naga::StorageAccess =
+                            naga::StorageAccess::LOAD.union(naga::StorageAccess::STORE);
+                        let binding_format = map_storage_format_to_naga(wgt_binding_format)
+                            .ok_or(BindingError::BadStorageFormat(wgt_binding_format))?;
+                        let binding_access = match wgt_binding_access {
+                            wgt::StorageTextureAccess::ReadOnly => naga::StorageAccess::LOAD,
+                            wgt::StorageTextureAccess::WriteOnly => naga::StorageAccess::STORE,
+                            wgt::StorageTextureAccess::ReadWrite => LOAD_STORE,
+                            wgt::StorageTextureAccess::Atomic => {
+                                naga::StorageAccess::ATOMIC | LOAD_STORE
+                            }
+                        };
+                        match shader_class {
+                            // Formats must match exactly. A write-only shader (but not a
+                            // read-only shader) is compatible with a read-write binding.
+                            naga::ImageClass::Storage {
+                                format: shader_format,
+                                access: shader_access,
+                            } if shader_format == binding_format
+                                && (shader_access == binding_access
+                                    || shader_access == naga::StorageAccess::STORE
+                                        && binding_access == LOAD_STORE) =>
+                            {
+                                Ok(())
+                            }
+                            _ => Err(naga::ImageClass::Storage {
+                                format: binding_format,
+                                access: binding_access,
+                            }),
+                        }
+                    }
+                    BindingType::ExternalTexture => {
+                        let binding_class = naga::ImageClass::External;
+                        if shader_class == binding_class {
+                            Ok(())
+                        } else {
+                            Err(binding_class)
+                        }
+                    }
                     _ => {
                         return Err(BindingError::WrongType {
                             binding: (&entry.ty).into(),
                             shader: (&self.ty).into(),
                         })
                     }
-                };
-                if class != expected_class {
-                    return Err(BindingError::WrongTextureClass {
-                        binding: expected_class,
-                        shader: class,
-                    });
                 }
+                .map_err(|binding_class| BindingError::WrongTextureClass {
+                    binding: binding_class,
+                    shader: shader_class,
+                })?;
             }
             ResourceType::AccelerationStructure { vertex_return } => match entry.ty {
                 BindingType::AccelerationStructure {
