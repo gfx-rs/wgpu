@@ -240,6 +240,7 @@ async fn shader_input_output_test(
         });
 
     let input_buffer = ctx.device.create_buffer(&BufferDescriptor {
+        initial_queue: None,
         label: Some("input buffer"),
         size: MAX_BUFFER_SIZE,
         usage: BufferUsages::COPY_DST | BufferUsages::UNIFORM | BufferUsages::STORAGE,
@@ -247,6 +248,7 @@ async fn shader_input_output_test(
     });
 
     let output_buffer = ctx.device.create_buffer(&BufferDescriptor {
+        initial_queue: None,
         label: Some("output buffer"),
         size: MAX_BUFFER_SIZE,
         usage: BufferUsages::COPY_DST | BufferUsages::COPY_SRC | BufferUsages::STORAGE,
@@ -254,6 +256,7 @@ async fn shader_input_output_test(
     });
 
     let mapping_buffer = ctx.device.create_buffer(&BufferDescriptor {
+        initial_queue: None,
         label: Some("mapping buffer"),
         size: MAX_BUFFER_SIZE,
         usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
@@ -351,7 +354,10 @@ async fn shader_input_output_test(
 
         let mut encoder = ctx
             .device
-            .create_command_encoder(&CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&CommandEncoderDescriptor {
+                queue: None,
+                label: None,
+            });
 
         let mut cpass = encoder.begin_compute_pass(&ComputePassDescriptor {
             label: Some(&format!("cpass {test_name}")),

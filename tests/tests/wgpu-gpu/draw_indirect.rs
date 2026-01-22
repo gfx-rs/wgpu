@@ -122,6 +122,7 @@ async fn run_test(ctx: TestingContext, test_data: TestData, expect_noop: bool) {
         attributes: &vertex_attr_array![0 => Float32x2],
     });
     let vertex_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        initial_queue: None,
         label: None,
         contents: bytemuck::cast_slice(test_data.vertex_buffer_content()),
         usage: wgpu::BufferUsages::VERTEX,
@@ -133,6 +134,7 @@ async fn run_test(ctx: TestingContext, test_data: TestData, expect_noop: bool) {
             index_buffer_content,
             ..
         } => Some(ctx.device.create_buffer_init(&BufferInitDescriptor {
+            initial_queue: None,
             label: None,
             contents: bytemuck::cast_slice(index_buffer_content),
             usage: wgpu::BufferUsages::INDEX,
@@ -146,6 +148,7 @@ async fn run_test(ctx: TestingContext, test_data: TestData, expect_noop: bool) {
             attributes: &vertex_attr_array![1 => Float32x2],
         });
         ctx.device.create_buffer_init(&BufferInitDescriptor {
+            initial_queue: None,
             label: None,
             contents: bytemuck::cast_slice(instanced.instance_buffer_content),
             usage: wgpu::BufferUsages::VERTEX,
@@ -213,6 +216,7 @@ async fn run_test(ctx: TestingContext, test_data: TestData, expect_noop: bool) {
     let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
 
     let out_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        initial_queue: None,
         label: None,
         size: wgpu::Extent3d {
             width: 256,
@@ -229,6 +233,7 @@ async fn run_test(ctx: TestingContext, test_data: TestData, expect_noop: bool) {
     let out_texture_view = out_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: 256 * 256,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -245,12 +250,14 @@ async fn run_test(ctx: TestingContext, test_data: TestData, expect_noop: bool) {
         test_data.write_indirect_args(&mut indirect_bytes);
     }
     let indirect_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        initial_queue: None,
         label: None,
         contents: &indirect_bytes,
         usage: wgpu::BufferUsages::INDIRECT,
     });
     // Use a secondary indirect buffer to test multiple validation batches.
     let indirect_buffer2 = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        initial_queue: None,
         label: None,
         contents: &indirect_bytes,
         usage: wgpu::BufferUsages::INDIRECT,
@@ -636,11 +643,13 @@ async fn indirect_buffer_offsets(ctx: TestingContext) {
     ];
 
     let vertex_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        initial_queue: None,
         label: None,
         contents: bytemuck::cast_slice::<f32, u8>(&vertex_buffer_content),
         usage: wgpu::BufferUsages::VERTEX,
     });
     let instance_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        initial_queue: None,
         label: None,
         contents: bytemuck::cast_slice::<f32, u8>(&instance_buffer_content),
         usage: wgpu::BufferUsages::VERTEX,
@@ -704,6 +713,7 @@ async fn indirect_buffer_offsets(ctx: TestingContext) {
     let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
 
     let out_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        initial_queue: None,
         label: None,
         size: wgpu::Extent3d {
             width: 256,
@@ -720,6 +730,7 @@ async fn indirect_buffer_offsets(ctx: TestingContext) {
     let out_texture_view = out_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: 256 * 256,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -727,6 +738,7 @@ async fn indirect_buffer_offsets(ctx: TestingContext) {
     });
 
     let indirect_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        initial_queue: None,
         label: None,
         contents: bytemuck::cast_slice::<u32, u8>(&indirect_args),
         usage: wgpu::BufferUsages::INDIRECT,

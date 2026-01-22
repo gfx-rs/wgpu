@@ -217,8 +217,10 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> Self {
-        let mut init_encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut init_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
+            label: None,
+        });
 
         // Create the texture
         let size = 1 << MIP_PASS_COUNT;
@@ -229,6 +231,7 @@ impl crate::framework::Example for Example {
             depth_or_array_layers: 1,
         };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             size: texture_extent,
             mip_level_count: MIP_LEVEL_COUNT,
             sample_count: 1,
@@ -244,6 +247,7 @@ impl crate::framework::Example for Example {
         //Note: we could use queue.write_texture instead, and this is what other
         // examples do, but here we want to show another way to do this.
         let temp_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("Temporary Buffer"),
             contents: texels.as_slice(),
             usage: wgpu::BufferUsages::COPY_SRC,
@@ -275,6 +279,7 @@ impl crate::framework::Example for Example {
         let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("Uniform Buffer"),
             contents: bytemuck::cast_slice(mx_ref),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -361,6 +366,7 @@ impl crate::framework::Example for Example {
             let buffer_size = pipeline_statistics_offset()
                 + size_of::<PipelineStatisticsQueries>() as wgpu::BufferAddress;
             let data_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                initial_queue: None,
                 label: Some("query buffer"),
                 size: buffer_size,
                 usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
@@ -369,6 +375,7 @@ impl crate::framework::Example for Example {
 
             // Mapping buffer
             let mapping_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                initial_queue: None,
                 label: Some("query buffer"),
                 size: buffer_size,
                 usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -470,8 +477,10 @@ impl crate::framework::Example for Example {
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
+            label: None,
+        });
         {
             let clear_color = wgpu::Color {
                 r: 0.1,

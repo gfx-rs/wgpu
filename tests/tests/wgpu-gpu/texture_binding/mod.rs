@@ -25,6 +25,7 @@ static TEXTURE_BINDING: GpuTestConfiguration = GpuTestConfiguration::new()
 
 fn texture_binding(ctx: TestingContext) {
     let texture = ctx.device.create_texture(&TextureDescriptor {
+        initial_queue: None,
         label: None,
         size: Extent3d {
             width: 1,
@@ -81,6 +82,7 @@ static SINGLE_SCALAR_LOAD: GpuTestConfiguration = GpuTestConfiguration::new()
 
 fn single_scalar_load(ctx: TestingContext) {
     let texture_read = ctx.device.create_texture(&TextureDescriptor {
+        initial_queue: None,
         label: None,
         size: Extent3d {
             width: 1,
@@ -95,6 +97,7 @@ fn single_scalar_load(ctx: TestingContext) {
         view_formats: &[],
     });
     let texture_write = ctx.device.create_texture(&TextureDescriptor {
+        initial_queue: None,
         label: None,
         size: Extent3d {
             width: 1,
@@ -109,6 +112,7 @@ fn single_scalar_load(ctx: TestingContext) {
         view_formats: &[],
     });
     let buffer = ctx.device.create_buffer(&BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: size_of::<[f32; 4]>() as wgpu::BufferAddress,
         usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,

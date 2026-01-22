@@ -70,6 +70,7 @@ static RESOLVE_WITH_TRANSIENT: GpuTestConfiguration = GpuTestConfiguration::new(
         let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
 
         let transient_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             label: None,
             size: SIZE,
             mip_level_count: 1,
@@ -81,6 +82,7 @@ static RESOLVE_WITH_TRANSIENT: GpuTestConfiguration = GpuTestConfiguration::new(
         });
 
         let target_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             label: None,
             size: SIZE,
             mip_level_count: 1,
@@ -92,6 +94,7 @@ static RESOLVE_WITH_TRANSIENT: GpuTestConfiguration = GpuTestConfiguration::new(
         });
 
         let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            initial_queue: None,
             label: None,
             size: 256 * 256 * 4,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,

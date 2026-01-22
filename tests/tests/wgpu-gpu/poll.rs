@@ -27,6 +27,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 
 fn generate_dummy_work(ctx: &TestingContext) -> CommandBuffer {
     let buffer = ctx.device.create_buffer(&BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: 16,
         usage: BufferUsages::UNIFORM,

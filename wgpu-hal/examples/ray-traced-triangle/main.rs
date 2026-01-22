@@ -427,6 +427,7 @@ impl<A: hal::Api> Example<A> {
         let vertices_buffer = unsafe {
             let vertices_buffer = device
                 .create_buffer(&hal::BufferDescriptor {
+                    initial_queue: None,
                     label: Some("vertices buffer"),
                     size: vertices_size_in_bytes as u64,
                     usage: wgpu_types::BufferUses::MAP_WRITE
@@ -454,6 +455,7 @@ impl<A: hal::Api> Example<A> {
             unsafe {
                 let indices_buffer = device
                     .create_buffer(&hal::BufferDescriptor {
+                        initial_queue: None,
                         label: Some("indices buffer"),
                         size: indices_size_in_bytes as u64,
                         usage: wgpu_types::BufferUses::MAP_WRITE
@@ -567,6 +569,7 @@ impl<A: hal::Api> Example<A> {
         let uniform_buffer = unsafe {
             let uniform_buffer = device
                 .create_buffer(&hal::BufferDescriptor {
+                    initial_queue: None,
                     label: Some("uniform buffer"),
                     size: uniforms_size as u64,
                     usage: wgpu_types::BufferUses::MAP_WRITE | wgpu_types::BufferUses::UNIFORM,
@@ -589,6 +592,7 @@ impl<A: hal::Api> Example<A> {
         };
 
         let texture_desc = hal::TextureDescriptor {
+            initial_queue: None,
             label: None,
             size: wgpu_types::Extent3d {
                 width: 512,
@@ -660,6 +664,7 @@ impl<A: hal::Api> Example<A> {
         let scratch_buffer = unsafe {
             device
                 .create_buffer(&hal::BufferDescriptor {
+                    initial_queue: None,
                     label: Some("scratch buffer"),
                     size: blas_sizes
                         .build_scratch_size
@@ -715,6 +720,7 @@ impl<A: hal::Api> Example<A> {
         let instances_buffer = unsafe {
             let instances_buffer = device
                 .create_buffer(&hal::BufferDescriptor {
+                    initial_queue: None,
                     label: Some("instances_buffer"),
                     size: instances_buffer_size as u64,
                     usage: wgpu_types::BufferUses::MAP_WRITE
@@ -747,6 +753,7 @@ impl<A: hal::Api> Example<A> {
         }
 
         let cmd_encoder_desc = hal::CommandEncoderDescriptor {
+            queue: None,
             label: None,
             queue: &queue,
         };
@@ -1100,6 +1107,7 @@ impl<A: hal::Api> Example<A> {
         let old_fence_value = ctx.fence_value;
         if self.contexts.len() == 1 {
             let hal_desc = hal::CommandEncoderDescriptor {
+                queue: None,
                 label: None,
                 queue: &self.queue,
             };

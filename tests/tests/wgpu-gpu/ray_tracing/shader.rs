@@ -28,6 +28,7 @@ static ACCESS_ALL_STRUCT_MEMBERS: GpuTestConfiguration = GpuTestConfiguration::n
 
 fn access_all_struct_members(ctx: TestingContext) {
     let buf = ctx.device.create_buffer(&BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: STRUCT_SIZE,
         usage: BufferUsages::STORAGE,
@@ -46,6 +47,7 @@ fn access_all_struct_members(ctx: TestingContext) {
     let mut encoder_build = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
+            queue: None,
             label: Some("Build"),
         });
 
@@ -122,6 +124,7 @@ static PREVENT_INVALID_RAY_QUERY_CALLS: GpuTestConfiguration = GpuTestConfigurat
 
 fn prevent_invalid_ray_query_calls(ctx: TestingContext) {
     let invalid_values_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        initial_queue: None,
         label: Some("invalid values buffer"),
         contents: bytemuck::cast_slice(&[f32::NAN, f32::INFINITY]),
         usage: BufferUsages::STORAGE,
@@ -140,6 +143,7 @@ fn prevent_invalid_ray_query_calls(ctx: TestingContext) {
     let mut encoder_build = ctx
         .device
         .create_command_encoder(&CommandEncoderDescriptor {
+            queue: None,
             label: Some("Build"),
         });
 

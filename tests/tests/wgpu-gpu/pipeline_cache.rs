@@ -71,6 +71,7 @@ async fn pipeline_cache_test(ctx: TestingContext) {
         });
 
     let gpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: Some("gpu_buffer"),
         size: ARRAY_SIZE * 4,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
@@ -78,6 +79,7 @@ async fn pipeline_cache_test(ctx: TestingContext) {
     });
 
     let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: Some("cpu_buffer"),
         size: ARRAY_SIZE * 4,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -162,6 +164,7 @@ async fn validate_pipeline(
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
             label: Some("encoder"),
         });
 

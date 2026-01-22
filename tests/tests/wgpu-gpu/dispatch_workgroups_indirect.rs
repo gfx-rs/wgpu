@@ -82,6 +82,7 @@ static RESET_BIND_GROUPS: GpuTestConfiguration = GpuTestConfiguration::new()
         let test_resources = TestResources::new(&ctx);
 
         let indirect_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+initial_queue: None,
             label: None,
             size: 12,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::INDIRECT,
@@ -125,6 +126,7 @@ static ZERO_SIZED_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
         let test_resources = TestResources::new(&ctx);
 
         let indirect_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            initial_queue: None,
             label: None,
             size: 0,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::INDIRECT,
@@ -222,6 +224,7 @@ impl TestResources {
             });
 
         let out_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            initial_queue: None,
             label: None,
             size: 12,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
@@ -229,6 +232,7 @@ impl TestResources {
         });
 
         let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            initial_queue: None,
             label: None,
             size: 12,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -273,6 +277,7 @@ async fn run_test(ctx: &TestingContext, num_workgroups: &[u32; 3]) -> [u32; 3] {
         (256 + 12, 256 * 2 * 2 + 64),
     ] {
         let indirect_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            initial_queue: None,
             label: None,
             size: indirect_buffer_size,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::INDIRECT,

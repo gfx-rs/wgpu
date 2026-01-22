@@ -135,6 +135,7 @@ impl crate::framework::Example for Example {
         let vertex_size = size_of::<Vertex>();
         let vertex_data = create_vertices();
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertex_data),
             usage: wgpu::BufferUsages::VERTEX,
@@ -142,6 +143,7 @@ impl crate::framework::Example for Example {
 
         let index_data = create_indices();
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(&index_data),
             usage: wgpu::BufferUsages::INDEX,
@@ -151,6 +153,7 @@ impl crate::framework::Example for Example {
         texture_index_buffer_contents[0] = 0;
         texture_index_buffer_contents[64] = 1;
         let texture_index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(&texture_index_buffer_contents),
             usage: wgpu::BufferUsages::UNIFORM,
@@ -162,6 +165,7 @@ impl crate::framework::Example for Example {
         let white_texture_data = create_texture_data(Color::White);
 
         let texture_descriptor = wgpu::TextureDescriptor {
+            initial_queue: None,
             size: wgpu::Extent3d::default(),
             mip_level_count: 1,
             sample_count: 1,
@@ -172,21 +176,25 @@ impl crate::framework::Example for Example {
             view_formats: &[],
         };
         let red_texture = device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             label: Some("red"),
             view_formats: &[],
             ..texture_descriptor
         });
         let green_texture = device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             label: Some("green"),
             view_formats: &[],
             ..texture_descriptor
         });
         let blue_texture = device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             label: Some("blue"),
             view_formats: &[],
             ..texture_descriptor
         });
         let white_texture = device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             label: Some("white"),
             view_formats: &[],
             ..texture_descriptor
@@ -385,6 +393,7 @@ impl crate::framework::Example for Example {
     }
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
             label: Some("primary"),
         });
 

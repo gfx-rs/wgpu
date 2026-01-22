@@ -71,6 +71,7 @@ impl Example {
         device: &wgpu::Device,
     ) -> wgpu::TextureView {
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             size: wgpu::Extent3d {
                 width: config.width,
                 height: config.height,
@@ -124,6 +125,7 @@ impl crate::framework::Example for Example {
                         }
                     }
                     let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        initial_queue: None,
                         label: Some("Vertex"),
                         contents: bytemuck::cast_slice(&vertices),
                         usage: wgpu::BufferUsages::VERTEX,
@@ -179,6 +181,7 @@ impl crate::framework::Example for Example {
         };
         let raw_uniforms = camera.to_uniform_data();
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("Buffer"),
             contents: bytemuck::cast_slice(&raw_uniforms),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -324,6 +327,7 @@ impl crate::framework::Example for Example {
         let texture = device.create_texture_with_data(
             queue,
             &wgpu::TextureDescriptor {
+                initial_queue: None,
                 size,
                 mip_level_count: header.level_count,
                 sample_count: 1,
@@ -400,8 +404,10 @@ impl crate::framework::Example for Example {
     }
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
+            label: None,
+        });
 
         // update rotation
         let raw_uniforms = self.camera.to_uniform_data();

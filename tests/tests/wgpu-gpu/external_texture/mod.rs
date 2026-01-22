@@ -142,6 +142,7 @@ fn create_texture_and_view(
     data: Option<&[u8]>,
 ) -> wgpu::TextureView {
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        initial_queue: None,
         label: None,
         size,
         mip_level_count: 1,
@@ -183,12 +184,14 @@ fn get_dimensions(ctx: &TestingContext, texture_resource: wgpu::BindingResource)
         });
 
     let output_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: std::mem::size_of::<[u32; 2]>() as _,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
     });
     let download_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: output_buffer.size(),
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -211,7 +214,10 @@ fn get_dimensions(ctx: &TestingContext, texture_resource: wgpu::BindingResource)
     });
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
+            label: None,
+        });
     {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
         pass.set_pipeline(&pipeline);
@@ -254,6 +260,7 @@ fn get_loads(
         });
 
     let coords_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: std::mem::size_of_val(coords) as _,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
@@ -263,12 +270,14 @@ fn get_loads(
         .write_buffer(&coords_buffer, 0, bytemuck::cast_slice(coords));
 
     let output_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: (coords.len() * std::mem::size_of::<[f32; 4]>()) as _,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
     });
     let download_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: output_buffer.size(),
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -296,7 +305,10 @@ fn get_loads(
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
+            label: None,
+        });
     {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
         pass.set_pipeline(&pipeline);
@@ -339,6 +351,7 @@ fn get_samples(
         });
 
     let coords_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: std::mem::size_of_val(coords) as _,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
@@ -348,12 +361,14 @@ fn get_samples(
         .write_buffer(&coords_buffer, 0, bytemuck::cast_slice(coords));
 
     let output_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: (coords.len() * std::mem::size_of::<[f32; 4]>()) as _,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
     });
     let download_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: output_buffer.size(),
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -389,7 +404,10 @@ fn get_samples(
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
+            label: None,
+        });
     {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor::default());
         pass.set_pipeline(&pipeline);
@@ -439,6 +457,7 @@ static EXTERNAL_TEXTURE_DIMENSIONS: GpuTestConfiguration = GpuTestConfiguration:
         const EXTERNAL_TEXTURE_HEIGHT: u32 = 16;
         let external_texture = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: EXTERNAL_TEXTURE_WIDTH,
                 height: EXTERNAL_TEXTURE_HEIGHT,
@@ -490,6 +509,7 @@ static EXTERNAL_TEXTURE_LOAD: GpuTestConfiguration = GpuTestConfiguration::new()
 
         let external_texture = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: 2,
                 height: 2,
@@ -555,6 +575,7 @@ static EXTERNAL_TEXTURE_LOAD_YUV: GpuTestConfiguration = GpuTestConfiguration::n
 
         let external_texture = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: 4,
                 height: 4,
@@ -606,6 +627,7 @@ static EXTERNAL_TEXTURE_LOAD_TRANSFORM: GpuTestConfiguration = GpuTestConfigurat
 
         let flip_h_external_texture = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: 2,
                 height: 2,
@@ -628,6 +650,7 @@ static EXTERNAL_TEXTURE_LOAD_TRANSFORM: GpuTestConfiguration = GpuTestConfigurat
 
         let flip_v_external_texture = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: 2,
                 height: 2,
@@ -663,6 +686,7 @@ static EXTERNAL_TEXTURE_LOAD_TRANSFORM: GpuTestConfiguration = GpuTestConfigurat
 
         let rotate_90_external_texture = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: 1,
                 height: 4,
@@ -685,6 +709,7 @@ static EXTERNAL_TEXTURE_LOAD_TRANSFORM: GpuTestConfiguration = GpuTestConfigurat
 
         let rotate_180_external_texture = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: 4,
                 height: 1,
@@ -707,6 +732,7 @@ static EXTERNAL_TEXTURE_LOAD_TRANSFORM: GpuTestConfiguration = GpuTestConfigurat
 
         let rotate_270_external_texture = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: 1,
                 height: 4,
@@ -739,6 +765,7 @@ static EXTERNAL_TEXTURE_LOAD_TRANSFORM: GpuTestConfiguration = GpuTestConfigurat
         );
         let crop_tex = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: 2,
                 height: 2,
@@ -786,6 +813,7 @@ static EXTERNAL_TEXTURE_LOAD_INVALID_ADDRESS: GpuTestConfiguration = GpuTestConf
 
         let external_texture = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: 1,
                 height: 1,
@@ -846,6 +874,7 @@ static EXTERNAL_TEXTURE_SAMPLE: GpuTestConfiguration = GpuTestConfiguration::new
 
         let external_texture = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: 2,
                 height: 2,
@@ -911,6 +940,7 @@ static EXTERNAL_TEXTURE_SAMPLE_YUV: GpuTestConfiguration = GpuTestConfiguration:
 
         let external_texture = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: 4,
                 height: 4,
@@ -967,6 +997,7 @@ static EXTERNAL_TEXTURE_SAMPLE_TRANSFORM: GpuTestConfiguration = GpuTestConfigur
 
         let flip_h_external_texture = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: 2,
                 height: 2,
@@ -989,6 +1020,7 @@ static EXTERNAL_TEXTURE_SAMPLE_TRANSFORM: GpuTestConfiguration = GpuTestConfigur
 
         let flip_v_external_texture = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: 2,
                 height: 2,
@@ -1024,6 +1056,7 @@ static EXTERNAL_TEXTURE_SAMPLE_TRANSFORM: GpuTestConfiguration = GpuTestConfigur
 
         let rotate_90_external_texture = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: 1,
                 height: 4,
@@ -1046,6 +1079,7 @@ static EXTERNAL_TEXTURE_SAMPLE_TRANSFORM: GpuTestConfiguration = GpuTestConfigur
 
         let rotate_180_external_texture = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: 4,
                 height: 1,
@@ -1068,6 +1102,7 @@ static EXTERNAL_TEXTURE_SAMPLE_TRANSFORM: GpuTestConfiguration = GpuTestConfigur
 
         let rotate_270_external_texture = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: 1,
                 height: 4,
@@ -1100,6 +1135,7 @@ static EXTERNAL_TEXTURE_SAMPLE_TRANSFORM: GpuTestConfiguration = GpuTestConfigur
         );
         let crop_tex = ctx.device.create_external_texture(
             &wgpu::ExternalTextureDescriptor {
+                initial_queue: None,
                 label: None,
                 width: 2,
                 height: 2,

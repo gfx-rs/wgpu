@@ -93,6 +93,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
     let mut input_views = Vec::with_capacity(64);
     for data in image.pixels() {
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             label: None,
             size: Extent3d {
                 width: 1,
@@ -131,6 +132,7 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
     }
 
     let output_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        initial_queue: None,
         label: Some("Output Texture"),
         size: Extent3d {
             width: 4,
@@ -214,7 +216,10 @@ async fn binding_array_sampled_textures(ctx: TestingContext, partially_bound: bo
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&CommandEncoderDescriptor { label: None });
+        .create_command_encoder(&CommandEncoderDescriptor {
+            queue: None,
+            label: None,
+        });
     {
         let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
             label: Some("Render Pass"),

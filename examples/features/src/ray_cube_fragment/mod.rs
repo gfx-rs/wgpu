@@ -123,6 +123,7 @@ impl crate::framework::Example for Example {
         };
 
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("Uniform Buffer"),
             contents: bytemuck::cast_slice(&[uniforms]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -131,12 +132,14 @@ impl crate::framework::Example for Example {
         let (vertex_data, index_data) = create_vertices();
 
         let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertex_data),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::BLAS_INPUT,
         });
 
         let index_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(&index_data),
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::BLAS_INPUT,
@@ -215,8 +218,10 @@ impl crate::framework::Example for Example {
             ],
         });
 
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
+            label: None,
+        });
 
         encoder.build_acceleration_structures(
             iter::once(&wgpu::BlasBuildEntry {
@@ -311,8 +316,10 @@ impl crate::framework::Example for Example {
             }
         }
 
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
+            label: None,
+        });
 
         encoder.build_acceleration_structures(iter::empty(), iter::once(&self.tlas));
 

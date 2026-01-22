@@ -19,6 +19,7 @@ fn mix_apis_wgpu_then_hal() {
     let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
 
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: 256,
         usage: wgpu::BufferUsages::COPY_DST,
@@ -37,6 +38,7 @@ fn mix_apis_hal_then_wgpu() {
     let (device, _queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
 
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: 256,
         usage: wgpu::BufferUsages::COPY_DST,
@@ -55,6 +57,7 @@ fn mix_apis_hal_then_wgpu() {
 fn encoding_error_contains_label_of_encoder() {
     let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: Some("my buffer"),
         size: 1024,
         usage: wgpu::BufferUsages::MAP_READ,
@@ -62,6 +65,7 @@ fn encoding_error_contains_label_of_encoder() {
     });
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        queue: None,
         label: Some("my encoder"),
     });
     // This is erroneous because it is copying to the same buffer.

@@ -107,6 +107,7 @@ impl Example {
             depth_or_array_layers: 1,
         };
         let multisampled_frame_descriptor = &wgpu::TextureDescriptor {
+            initial_queue: None,
             size: multisampled_texture_extent,
             mip_level_count: 1,
             sample_count,
@@ -184,6 +185,7 @@ impl crate::framework::Example for Example {
         }
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertex_data),
             usage: wgpu::BufferUsages::VERTEX,
@@ -273,8 +275,10 @@ impl crate::framework::Example for Example {
             self.rebuild_bundle = false;
         }
 
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
+            label: None,
+        });
         {
             let rpass_color_attachment = if self.sample_count == 1 {
                 wgpu::RenderPassColorAttachment {

@@ -262,6 +262,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
         .create_texture_with_data(
             &ctx.queue,
             &wgpu::TextureDescriptor {
+                initial_queue: None,
                 label: Some("dummy"),
                 size: wgpu::Extent3d {
                     width: 1,
@@ -283,6 +284,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
     let mut failed = false;
     for test in tests {
         let buffer_input = ctx.device.create_buffer_init(&BufferInitDescriptor {
+            initial_queue: None,
             label: None,
             contents: bytemuck::cast_slice(test.input),
             usage: wgpu::BufferUsages::VERTEX,
@@ -323,6 +325,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
         let expected = test.checksums;
         let buffer_size = (size_of_val(&expected[0]) * expected.len()) as u64;
         let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            initial_queue: None,
             label: None,
             size: buffer_size,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -330,6 +333,7 @@ async fn vertex_formats_common(ctx: TestingContext, tests: &[Test<'_>]) {
         });
 
         let gpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            initial_queue: None,
             label: None,
             size: buffer_size,
             usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,

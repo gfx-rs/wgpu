@@ -20,6 +20,7 @@ static STENCIL_ONLY_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::
     .run_async(|ctx| async move {
         for format in [TextureFormat::Stencil8, TextureFormat::Depth24PlusStencil8] {
             let texture = ctx.device.create_texture(&TextureDescriptor {
+                initial_queue: None,
                 label: None,
                 size: Extent3d {
                     width: 256,
@@ -52,6 +53,7 @@ static DEPTH_ONLY_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::ne
             TextureFormat::Depth24PlusStencil8,
         ] {
             let texture = ctx.device.create_texture(&TextureDescriptor {
+                initial_queue: None,
                 label: None,
                 size: Extent3d {
                     width: 256,
@@ -86,6 +88,7 @@ static SHARED_USAGE_VIEW_CREATION: GpuTestConfiguration = GpuTestConfiguration::
             let (texture_format, view_format) =
                 (TextureFormat::Rgba8Unorm, TextureFormat::Rgba8UnormSrgb);
             let texture = ctx.device.create_texture(&TextureDescriptor {
+                initial_queue: None,
                 label: None,
                 size: Extent3d {
                     width: 256,

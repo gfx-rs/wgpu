@@ -19,6 +19,7 @@ impl Example {
     ) -> (wgpu::TextureView, wgpu::BindGroup) {
         let texture_view = device
             .create_texture(&wgpu::TextureDescriptor {
+                initial_queue: None,
                 label: Some("Low Resolution Target"),
                 size: wgpu::Extent3d {
                     width: (config.width / 16).max(1),
@@ -255,6 +256,7 @@ impl crate::framework::Example for Example {
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
             label: Some("primary"),
         });
 

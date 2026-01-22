@@ -23,12 +23,14 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
     let (vertex_data, index_data) = mesh_gen::create_vertices();
 
     let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        initial_queue: None,
         label: Some("Vertex Buffer"),
         contents: bytemuck::cast_slice(&vertex_data),
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::BLAS_INPUT,
     });
 
     let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        initial_queue: None,
         label: Some("Index Buffer"),
         contents: bytemuck::cast_slice(&index_data),
         usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::BLAS_INPUT,
@@ -79,8 +81,10 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
         ));
     }
 
-    let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        queue: None,
+        label: None,
+    });
 
     encoder.build_acceleration_structures(
         iter::once(&wgpu::BlasBuildEntry {

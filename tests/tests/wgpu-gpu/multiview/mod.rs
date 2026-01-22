@@ -105,6 +105,7 @@ async fn run_test(ctx: TestingContext, layer_mask: u32, sample_count: u32) {
     let pipeline = ctx.device.create_render_pipeline(&pipeline_desc);
 
     let texture_desc = wgpu::TextureDescriptor {
+        initial_queue: None,
         label: None,
         size: wgpu::Extent3d {
             width: TEXTURE_SIZE,
@@ -145,6 +146,7 @@ async fn run_test(ctx: TestingContext, layer_mask: u32, sample_count: u32) {
     };
 
     let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: TEXTURE_SIZE as u64 * TEXTURE_SIZE as u64 * num_layers as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,

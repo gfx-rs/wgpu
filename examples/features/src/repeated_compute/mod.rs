@@ -45,9 +45,13 @@ async fn compute(local_buffer: &mut [u32], context: &WgpuContext) {
     );
     log::info!("Wrote to buffer.");
 
-    let mut command_encoder = context
-        .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    let mut command_encoder =
+        context
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                queue: None,
+                label: None,
+            });
 
     {
         let mut compute_pass = command_encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -179,6 +183,7 @@ impl WgpuContext {
 
         // This is where the GPU will read from and write to.
         let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            initial_queue: None,
             label: None,
             size: buffer_size as wgpu::BufferAddress,
             usage: wgpu::BufferUsages::STORAGE
@@ -194,6 +199,7 @@ impl WgpuContext {
         // (which we will later) to copy the buffer modified by the GPU into a
         // mappable, CPU-accessible buffer which we'll create here.
         let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            initial_queue: None,
             label: None,
             size: buffer_size as wgpu::BufferAddress,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,

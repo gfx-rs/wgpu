@@ -119,6 +119,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                             .create_view(&wgpu::TextureViewDescriptor::default());
                         let mut encoder =
                             device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                                queue: None,
                                 label: None,
                             });
                         {

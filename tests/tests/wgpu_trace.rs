@@ -48,6 +48,7 @@ fn trace_test(test_type: TestType) {
     let (buffer_id, error) = global.device_create_buffer(
         device_id,
         &wgt::BufferDescriptor {
+            initial_queue: None,
             label: None,
             size: 1024,
             usage: wgt::BufferUsages::COPY_DST,

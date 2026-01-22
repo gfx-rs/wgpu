@@ -7,14 +7,17 @@
 fn destroyed_buffer() {
     let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: 1024,
         usage: wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
 
-    let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        queue: None,
+        label: None,
+    });
     encoder.clear_buffer(&buffer, 0, None);
 
     buffer.destroy();

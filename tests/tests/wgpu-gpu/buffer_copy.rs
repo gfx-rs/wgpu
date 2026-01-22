@@ -75,6 +75,7 @@ static COPY_ALIGNMENT: GpuTestConfiguration = GpuTestConfiguration::new()
 const BUFFER_SIZE: BufferAddress = 1234;
 
 const BUFFER_DESCRIPTOR: wgpu::BufferDescriptor = wgpu::BufferDescriptor {
+    initial_queue: None,
     label: None,
     size: BUFFER_SIZE,
     usage: wgpu::BufferUsages::COPY_SRC.union(wgpu::BufferUsages::COPY_DST),

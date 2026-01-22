@@ -28,6 +28,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration = GpuTestConfiguration::ne
 
         // We use two separate vertex buffers so we can delete one in between submissions
         let vertex_buffer1 = ctx.device.create_buffer(&BufferDescriptor {
+            initial_queue: None,
             label: Some("vertex buffer 1"),
             size: 3 * 16,
             usage: BufferUsages::VERTEX,
@@ -35,6 +36,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration = GpuTestConfiguration::ne
         });
 
         let vertex_buffer2 = ctx.device.create_buffer(&BufferDescriptor {
+            initial_queue: None,
             label: Some("vertex buffer 2"),
             size: 3 * 4,
             usage: BufferUsages::VERTEX,
@@ -123,6 +125,7 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration = GpuTestConfiguration::ne
         let view = ctx
             .device
             .create_texture(&TextureDescriptor {
+                initial_queue: None,
                 label: Some("Render texture"),
                 size: Extent3d {
                     width: 4,

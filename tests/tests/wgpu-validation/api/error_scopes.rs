@@ -9,6 +9,7 @@ use parking_lot::Mutex;
 const ERR: &str = "Buffer size 9223372036854775808 is greater than the maximum buffer size";
 fn raise_validation_error(device: &wgpu::Device) {
     let _buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: 1 << 63, // Too large!
         usage: wgpu::BufferUsages::COPY_SRC,

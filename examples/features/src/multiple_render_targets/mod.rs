@@ -37,6 +37,7 @@ impl MultiTargetRenderer {
         };
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             label: Some("data texture"),
             size,
             mip_level_count: 1,
@@ -387,6 +388,7 @@ impl TextureTargets {
         };
 
         let red_texture = device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             label: None,
             size,
             mip_level_count: 1,
@@ -399,6 +401,7 @@ impl TextureTargets {
             view_formats: &[format],
         });
         let green_texture = device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             label: None,
             size,
             mip_level_count: 1,
@@ -502,8 +505,10 @@ impl crate::framework::Example for Example {
     fn update(&mut self, _event: winit::event::WindowEvent) {}
 
     fn render(&mut self, view: &wgpu::TextureView, device: &wgpu::Device, queue: &wgpu::Queue) {
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
+            label: None,
+        });
 
         // draw to 2 textures at the same time:
         self.multi_target_renderer.draw(

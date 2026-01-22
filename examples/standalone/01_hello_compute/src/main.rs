@@ -89,6 +89,7 @@ fn main() {
     //
     // We use the `bytemuck` crate to cast the slice of f32 to a &[u8] to be uploaded to the GPU.
     let input_data_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        initial_queue: None,
         label: None,
         contents: bytemuck::cast_slice(&arguments),
         usage: wgpu::BufferUsages::STORAGE,
@@ -96,6 +97,7 @@ fn main() {
 
     // Now we create a buffer to store the output data.
     let output_data_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: input_data_buffer.size(),
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
@@ -106,6 +108,7 @@ fn main() {
     // the data. We need to use a separate buffer because we need to have a usage of `MAP_READ`,
     // and that usage can only be used with `COPY_DST`.
     let download_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: input_data_buffer.size(),
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -183,8 +186,10 @@ fn main() {
     });
 
     // The command encoder allows us to record commands that we will later submit to the GPU.
-    let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        queue: None,
+        label: None,
+    });
 
     // A compute pass is a single series of compute operations. While we are recording a compute
     // pass, we cannot record to the encoder.

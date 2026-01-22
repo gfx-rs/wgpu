@@ -149,6 +149,7 @@ async fn binding_array_buffers(
     let mut buffers = Vec::with_capacity(64);
     for data in image.pixels() {
         let buffer = ctx.device.create_buffer(&BufferDescriptor {
+            initial_queue: None,
             label: None,
             usage: match buffer_type {
                 BufferType::Storage => BufferUsages::STORAGE | BufferUsages::COPY_DST,
@@ -164,6 +165,7 @@ async fn binding_array_buffers(
     }
 
     let output_buffer = ctx.device.create_buffer(&BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: 4 * 4 * 4,
         usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
@@ -244,7 +246,10 @@ async fn binding_array_buffers(
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&CommandEncoderDescriptor { label: None });
+        .create_command_encoder(&CommandEncoderDescriptor {
+            queue: None,
+            label: None,
+        });
     {
         let mut render_pass = encoder.begin_compute_pass(&ComputePassDescriptor {
             label: None,
@@ -256,6 +261,7 @@ async fn binding_array_buffers(
     }
 
     let readback_buffer = ctx.device.create_buffer(&BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: 4 * 4 * 4,
         usage: BufferUsages::MAP_READ | BufferUsages::COPY_DST,

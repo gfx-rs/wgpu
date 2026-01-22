@@ -48,6 +48,7 @@ static TEXTURE_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let texture = ctx.device.create_texture(&TextureDescriptor {
+                initial_queue: None,
                 label: None,
                 size: Extent3d {
                     width: 2048,
@@ -87,6 +88,7 @@ static BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let buffer = ctx.device.create_buffer(&BufferDescriptor {
+                initial_queue: None,
                 label: None,
                 size: 256 * 1024 * 1024,
                 usage: BufferUsages::STORAGE,
@@ -118,6 +120,7 @@ static MAPPING_BUFFER_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new
         for _ in 0..LOOP_BOUND {
             let scope = ctx.device.push_error_scope(ErrorFilter::OutOfMemory);
             let buffer = ctx.device.create_buffer(&BufferDescriptor {
+                initial_queue: None,
                 label: None,
                 size: 256 * 1024 * 1024,
                 usage: BufferUsages::COPY_SRC | BufferUsages::MAP_WRITE,

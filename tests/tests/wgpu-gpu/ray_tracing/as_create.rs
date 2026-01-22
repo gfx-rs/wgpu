@@ -140,6 +140,7 @@ fn unsupported_acceleration_structure_resources(ctx: TestingContext) {
         &ctx.device,
         || {
             ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                initial_queue: None,
                 label: None,
                 size: 4,
                 usage: wgpu::BufferUsages::BLAS_INPUT,

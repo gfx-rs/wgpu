@@ -11,6 +11,7 @@ fn staging_belt_random_test() {
     let align = wgpu::COPY_BUFFER_ALIGNMENT;
     let mut belt = wgpu::util::StagingBelt::new(device.clone(), buffer_size / 2);
     let target_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: buffer_size,
         usage: wgpu::BufferUsages::COPY_DST,

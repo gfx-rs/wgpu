@@ -18,6 +18,7 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
         let size = 256;
 
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             label: None,
             dimension: wgpu::TextureDimension::D2,
             size: wgpu::Extent3d {
@@ -58,6 +59,7 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
         ctx.queue.submit(None);
 
         let read_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            initial_queue: None,
             label: None,
             size: (size * size) as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
@@ -66,7 +68,10 @@ static WRITE_TEXTURE_SUBSET_2D: GpuTestConfiguration =
 
         let mut encoder = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                queue: None,
+                label: None,
+            });
 
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
@@ -113,6 +118,7 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
         let size = 256;
         let depth = 4;
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             label: None,
             dimension: wgpu::TextureDimension::D3,
             size: wgpu::Extent3d {
@@ -153,6 +159,7 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
         ctx.queue.submit(None);
 
         let read_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            initial_queue: None,
             label: None,
             size: (size * size * depth) as u64,
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
@@ -161,7 +168,10 @@ static WRITE_TEXTURE_SUBSET_3D: GpuTestConfiguration =
 
         let mut encoder = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                queue: None,
+                label: None,
+            });
 
         encoder.copy_texture_to_buffer(
             wgpu::TexelCopyTextureInfo {
@@ -209,6 +219,7 @@ static WRITE_TEXTURE_NO_OOB: GpuTestConfiguration = GpuTestConfiguration::new()
         let size = 256;
 
         let tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             label: None,
             dimension: wgpu::TextureDimension::D2,
             size: wgpu::Extent3d {
@@ -254,6 +265,7 @@ static WRITE_TEXTURE_VIA_STAGING_BUFFER: GpuTestConfiguration = GpuTestConfigura
         let height = 17;
 
         let tex = ctx.device.create_texture(&TextureDescriptor {
+            initial_queue: None,
             label: None,
             dimension: TextureDimension::D2,
             size: Extent3d {
@@ -301,6 +313,7 @@ static WRITE_TEXTURE_VIA_STAGING_BUFFER: GpuTestConfiguration = GpuTestConfigura
 
         let read_bytes_per_row = wgt::COPY_BYTES_PER_ROW_ALIGNMENT;
         let read_buffer = ctx.device.create_buffer(&BufferDescriptor {
+            initial_queue: None,
             label: None,
             size: (height * read_bytes_per_row) as u64,
             usage: BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
@@ -309,7 +322,10 @@ static WRITE_TEXTURE_VIA_STAGING_BUFFER: GpuTestConfiguration = GpuTestConfigura
 
         let mut encoder = ctx
             .device
-            .create_command_encoder(&CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&CommandEncoderDescriptor {
+                queue: None,
+                label: None,
+            });
 
         encoder.copy_texture_to_buffer(
             TexelCopyTextureInfo {

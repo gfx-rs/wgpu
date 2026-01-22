@@ -525,6 +525,7 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
                     wgpu::TextureFormat::Rgba8Unorm
                 };
                 let dst_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+                    initial_queue: None,
                     label: Some("destination"),
                     size: wgpu::Extent3d {
                         width: params.width,
@@ -542,6 +543,7 @@ impl<E: Example + wgpu::WasmNotSendSync> From<ExampleTestParams<E>>
                 let dst_view = dst_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
                 let dst_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                    initial_queue: None,
                     label: Some("image map buffer"),
                     size: params.width as u64 * params.height as u64 * 4,
                     usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,

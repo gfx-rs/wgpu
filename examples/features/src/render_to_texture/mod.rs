@@ -30,6 +30,7 @@ async fn run(_path: Option<String>) {
     let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 
     let render_target = device.create_texture(&wgpu::TextureDescriptor {
+        initial_queue: None,
         label: None,
         size: wgpu::Extent3d {
             width: TEXTURE_DIMS.0 as u32,
@@ -44,6 +45,7 @@ async fn run(_path: Option<String>) {
         view_formats: &[wgpu::TextureFormat::Rgba8UnormSrgb],
     });
     let output_staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: texture_data.capacity() as u64,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,

@@ -54,6 +54,7 @@ async fn per_vertex(ctx: TestingContext) {
     let vertex_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: None,
             contents: bytemuck::cast_slice(&trianglestrip_xyz),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
@@ -63,6 +64,7 @@ async fn per_vertex(ctx: TestingContext) {
     let index_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: None,
             contents: bytemuck::cast_slice(&indices),
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
@@ -116,6 +118,7 @@ async fn per_vertex(ctx: TestingContext) {
         depth_or_array_layers: 1,
     };
     let color_texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        initial_queue: None,
         label: None,
         size: texture_size,
         mip_level_count: 1,

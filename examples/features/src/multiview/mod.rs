@@ -60,6 +60,7 @@ impl crate::framework::Example for Example {
             cache: None,
         });
         let texture = device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             label: None,
             size: wgpu::Extent3d {
                 width: TEXTURE_SIZE,

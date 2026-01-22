@@ -7,6 +7,7 @@ fn recursive_uncaptured_error() {
     use std::sync::Arc;
 
     const ERRONEOUS_TEXTURE_DESC: wgpu::TextureDescriptor = wgpu::TextureDescriptor {
+        initial_queue: None,
         label: None,
         size: wgpu::Extent3d {
             width: 1,

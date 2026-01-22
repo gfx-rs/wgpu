@@ -9,6 +9,7 @@ static TRANSITION_RESOURCES: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(TestParameters::default().enable_noop())
     .run_sync(|ctx| {
         let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             label: None,
             size: wgpu::Extent3d {
                 width: 32,
@@ -21,12 +22,12 @@ static TRANSITION_RESOURCES: GpuTestConfiguration = GpuTestConfiguration::new()
             format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
-            initial_queue: 0,
         });
 
         let mut encoder = ctx
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                queue: None,
                 label: None,
                 queue: 0,
             });

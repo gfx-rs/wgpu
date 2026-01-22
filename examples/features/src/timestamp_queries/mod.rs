@@ -124,12 +124,14 @@ impl Queries {
                 ty: wgpu::QueryType::Timestamp,
             }),
             resolve_buffer: device.create_buffer(&wgpu::BufferDescriptor {
+                initial_queue: None,
                 label: Some("query resolve buffer"),
                 size: size_of::<u64>() as u64 * num_queries,
                 usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::QUERY_RESOLVE,
                 mapped_at_creation: false,
             }),
             destination_buffer: device.create_buffer(&wgpu::BufferDescriptor {
+                initial_queue: None,
                 label: Some("query dest buffer"),
                 size: size_of::<u64>() as u64 * num_queries,
                 usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -241,8 +243,10 @@ fn submit_render_and_compute_pass_with_queries(
     device: &wgpu::Device,
     queue: &wgpu::Queue,
 ) -> Queries {
-    let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        queue: None,
+        label: None,
+    });
 
     let mut queries = Queries::new(device, QueryResults::NUM_QUERIES);
     let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
@@ -295,6 +299,7 @@ fn compute_pass(
     next_unused_query: &mut u32,
 ) {
     let storage_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        initial_queue: None,
         label: Some("Storage Buffer"),
         contents: bytemuck::cast_slice(&[42]),
         usage: wgpu::BufferUsages::STORAGE,
@@ -376,6 +381,7 @@ fn render_pass(
         cache: None,
     });
     let render_target = device.create_texture(&wgpu::TextureDescriptor {
+        initial_queue: None,
         label: Some("rendertarget"),
         size: wgpu::Extent3d {
             width: 512,

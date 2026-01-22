@@ -39,6 +39,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
             });
 
         let output_buffer = ctx.device.create_buffer(&BufferDescriptor {
+            initial_queue: None,
             label: Some("output buffer"),
             size: BUFFER_SIZE,
             usage: BufferUsages::COPY_DST | BufferUsages::COPY_SRC | BufferUsages::STORAGE,
@@ -46,6 +47,7 @@ static ZERO_INIT_WORKGROUP_MEMORY: GpuTestConfiguration = GpuTestConfiguration::
         });
 
         let mapping_buffer = ctx.device.create_buffer(&BufferDescriptor {
+            initial_queue: None,
             label: Some("mapping buffer"),
             size: BUFFER_SIZE,
             usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,

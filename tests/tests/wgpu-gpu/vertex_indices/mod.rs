@@ -204,6 +204,7 @@ impl Test {
 
 async fn vertex_index_common(ctx: TestingContext) {
     let identity_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        initial_queue: None,
         label: Some("identity buffer"),
         contents: bytemuck::cast_slice(&[0u32, 1, 2, 3, 4, 5, 6, 7, 8]),
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::INDEX,
@@ -284,6 +285,7 @@ async fn vertex_index_common(ctx: TestingContext) {
         .create_texture_with_data(
             &ctx.queue,
             &wgpu::TextureDescriptor {
+                initial_queue: None,
                 label: Some("dummy"),
                 size: wgpu::Extent3d {
                     width: 1,
@@ -327,6 +329,7 @@ async fn vertex_index_common(ctx: TestingContext) {
 
         let buffer_size = (size_of_val(&expected[0]) * expected.len()) as u64;
         let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            initial_queue: None,
             label: None,
             size: buffer_size,
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -334,6 +337,7 @@ async fn vertex_index_common(ctx: TestingContext) {
         });
 
         let gpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+            initial_queue: None,
             label: None,
             size: buffer_size,
             usage: wgpu::BufferUsages::COPY_SRC | wgpu::BufferUsages::STORAGE,
@@ -411,6 +415,7 @@ async fn vertex_index_common(ctx: TestingContext) {
                         draw.add_to_buffer(&mut indirect_bytes, features);
                     }
                     indirect_buffer = ctx.device.create_buffer_init(&BufferInitDescriptor {
+                        initial_queue: None,
                         label: Some("indirect"),
                         contents: &indirect_bytes,
                         usage: wgpu::BufferUsages::INDIRECT,

@@ -220,6 +220,7 @@ fn process_shader(ctx: TestingContext, inputs: &[u8], entry_point_src: &str) -> 
     let input_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("Input Buffer"),
             contents: inputs,
             usage: wgpu::BufferUsages::STORAGE,
@@ -228,6 +229,7 @@ fn process_shader(ctx: TestingContext, inputs: &[u8], entry_point_src: &str) -> 
     let output_size = (size_of::<Uint96>() * inputs.len()) as u64;
 
     let output_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: Some("Output Buffer"),
         size: output_size,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
@@ -235,6 +237,7 @@ fn process_shader(ctx: TestingContext, inputs: &[u8], entry_point_src: &str) -> 
     });
 
     let pulldown_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: Some("Pulldown Buffer"),
         size: output_size,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -261,6 +264,7 @@ fn process_shader(ctx: TestingContext, inputs: &[u8], entry_point_src: &str) -> 
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
             label: Some("Compute Encoder"),
         });
 

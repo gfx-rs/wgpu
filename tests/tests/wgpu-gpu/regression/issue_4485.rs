@@ -25,6 +25,7 @@ async fn test_impl(ctx: &TestingContext) {
     const BUFFER_SIZE: usize = (TEXTURE_WIDTH * TEXTURE_HEIGHT * 4) as usize;
 
     let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        initial_queue: None,
         label: Some("Offscreen texture"),
         size: wgpu::Extent3d {
             width: TEXTURE_WIDTH,
@@ -76,7 +77,10 @@ async fn test_impl(ctx: &TestingContext) {
     {
         let mut encoder = ctx
             .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                queue: None,
+                label: None,
+            });
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Renderpass"),

@@ -408,12 +408,14 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
     let gpu_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("gpu_buffer"),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             contents: bytemuck::bytes_of(&[1.0_f32, 2.0, 3.0, 4.0]),
         });
 
     let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: Some("cpu_buffer"),
         size: buffer_size,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -424,6 +426,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
     let indirect_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("gpu_buffer"),
             usage: wgpu::BufferUsages::INDIRECT,
             contents: wgpu::util::DrawIndirectArgs {
@@ -436,6 +439,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
         });
 
     let vertex_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: Some("vertex_buffer"),
         usage: wgpu::BufferUsages::VERTEX,
         size: size_of::<u32>() as u64 * vertex_count as u64,
@@ -445,6 +449,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
     let index_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("vertex_buffer"),
             usage: wgpu::BufferUsages::INDEX,
             contents: bytemuck::cast_slice(&[0_u32, 1, 2]),
@@ -476,6 +481,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
     let target_format = wgpu::TextureFormat::Bgra8UnormSrgb;
 
     let target_desc = wgpu::TextureDescriptor {
+        initial_queue: None,
         label: Some("target_tex"),
         size: target_size,
         mip_level_count: 1,
@@ -487,6 +493,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
     };
     let target_tex = ctx.device.create_texture(&target_desc);
     let target_tex_resolve = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        initial_queue: None,
         label: Some("target_resolve"),
         sample_count: 1,
         ..target_desc
@@ -498,6 +505,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
 
     let depth_stencil_format = wgpu::TextureFormat::Depth32Float;
     let depth_stencil = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        initial_queue: None,
         label: Some("depth_stencil"),
         format: depth_stencil_format,
         view_formats: &[depth_stencil_format],

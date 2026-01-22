@@ -90,6 +90,7 @@ fn timestamp_query(ctx: TestingContext) {
     let query_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("Query buffer"),
             contents: bytemuck::cast_slice(&init_data),
             usage: wgpu::BufferUsages::QUERY_RESOLVE | wgpu::BufferUsages::COPY_SRC,
@@ -109,6 +110,7 @@ fn timestamp_query(ctx: TestingContext) {
     }
 
     let mapping_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: Some("Mapping buffer"),
         size: query_buffer.size(),
         usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,

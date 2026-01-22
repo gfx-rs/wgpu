@@ -289,12 +289,14 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
     let gpu_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("gpu_buffer"),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             contents: bytemuck::bytes_of(&[1.0_f32, 2.0, 3.0, 4.0]),
         });
 
     let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: Some("cpu_buffer"),
         size: buffer_size,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -304,6 +306,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
     let indirect_buffer = ctx
         .device
         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("indirect_buffer"),
             usage: wgpu::BufferUsages::INDIRECT,
             contents: wgpu::util::DispatchIndirectArgs { x: 1, y: 1, z: 1 }.as_bytes(),

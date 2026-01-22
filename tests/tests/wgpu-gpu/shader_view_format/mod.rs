@@ -73,6 +73,7 @@ async fn reinterpret(
     let tex = ctx.device.create_texture_with_data(
         &ctx.queue,
         &wgpu::TextureDescriptor {
+            initial_queue: None,
             label: None,
             dimension: wgpu::TextureDimension::D2,
             size,
@@ -126,6 +127,7 @@ async fn reinterpret(
     });
 
     let target_tex = ctx.device.create_texture(&wgpu::TextureDescriptor {
+        initial_queue: None,
         label: None,
         size,
         mip_level_count: 1,
@@ -160,6 +162,7 @@ async fn reinterpret(
     ctx.queue.submit(Some(encoder.finish()));
 
     let read_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: None,
         size: wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as u64 * 2,
         usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
@@ -168,7 +171,10 @@ async fn reinterpret(
 
     let mut encoder = ctx
         .device
-        .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
+            label: None,
+        });
     encoder.copy_texture_to_buffer(
         wgpu::TexelCopyTextureInfo {
             texture: &target_tex,

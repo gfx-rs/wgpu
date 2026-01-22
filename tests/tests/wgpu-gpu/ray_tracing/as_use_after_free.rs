@@ -28,6 +28,7 @@ fn required_features() -> wgpu::Features {
 fn acceleration_structure_use_after_free(ctx: TestingContext) {
     // Dummy vertex buffer.
     let vertices = ctx.device.create_buffer_init(&BufferInitDescriptor {
+        initial_queue: None,
         label: None,
         contents: &[0; mem::size_of::<[[f32; 3]; 3]>()],
         usage: BufferUsages::BLAS_INPUT,

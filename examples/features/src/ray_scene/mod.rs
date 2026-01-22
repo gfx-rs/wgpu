@@ -175,6 +175,7 @@ fn upload_scene_components(
         .collect::<Vec<_>>();
 
     let vertices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        initial_queue: None,
         label: Some("Vertices"),
         contents: bytemuck::cast_slice(&scene.vertices),
         usage: wgpu::BufferUsages::VERTEX
@@ -182,6 +183,7 @@ fn upload_scene_components(
             | wgpu::BufferUsages::BLAS_INPUT,
     });
     let indices = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        initial_queue: None,
         label: Some("Indices"),
         contents: bytemuck::cast_slice(&scene.indices),
         usage: wgpu::BufferUsages::INDEX
@@ -189,11 +191,13 @@ fn upload_scene_components(
             | wgpu::BufferUsages::BLAS_INPUT,
     });
     let geometries = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        initial_queue: None,
         label: Some("Geometries"),
         contents: bytemuck::cast_slice(&geometry_buffer_content),
         usage: wgpu::BufferUsages::STORAGE,
     });
     let instances = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        initial_queue: None,
         label: Some("Instances"),
         contents: bytemuck::cast_slice(&instance_buffer_content),
         usage: wgpu::BufferUsages::STORAGE,
@@ -258,8 +262,10 @@ fn upload_scene_components(
         })
         .collect();
 
-    let mut encoder =
-        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        queue: None,
+        label: None,
+    });
 
     encoder.build_acceleration_structures(build_entries.iter(), iter::empty());
 
@@ -335,6 +341,7 @@ impl crate::framework::Example for Example {
         };
 
         let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("Uniform Buffer"),
             contents: bytemuck::cast_slice(&[uniforms]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -491,8 +498,10 @@ impl crate::framework::Example for Example {
             }
         }
 
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
+            label: None,
+        });
 
         encoder.build_acceleration_structures(iter::empty(), iter::once(&self.tlas));
 

@@ -114,12 +114,14 @@ impl crate::framework::Example for Example {
         let indices: [u32; 3] = [0, 1, 2];
 
         let vertex_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            initial_queue: None,
             label: Some("vertex buffer"),
             contents: bytemuck::cast_slice(&vertices),
             usage: BufferUsages::BLAS_INPUT,
         });
 
         let index_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            initial_queue: None,
             label: Some("vertex buffer"),
             contents: bytemuck::cast_slice(&indices),
             usage: BufferUsages::BLAS_INPUT,
@@ -208,6 +210,7 @@ impl crate::framework::Example for Example {
         };
 
         let uniform_buffer = device.create_buffer_init(&BufferInitDescriptor {
+            initial_queue: None,
             label: None,
             contents: bytemuck::cast_slice(&[uniforms]),
             usage: BufferUsages::UNIFORM,
@@ -236,6 +239,7 @@ impl crate::framework::Example for Example {
         queue.submit(Some(encoder.finish()));
 
         let storage_tex = device.create_texture(&wgpu::TextureDescriptor {
+            initial_queue: None,
             label: None,
             size: wgpu::Extent3d {
                 width: config.width,
@@ -380,8 +384,10 @@ impl crate::framework::Example for Example {
                 .try_into()
                 .unwrap();
 
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
+            label: None,
+        });
 
         encoder.build_acceleration_structures(None, Some(&self.tlas));
 

@@ -58,6 +58,7 @@ impl crate::framework::Example for Example {
         ]
         .to_vec();
         let sim_param_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("Simulation Parameter Buffer"),
             contents: bytemuck::cast_slice(&sim_param_data),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -167,6 +168,7 @@ impl crate::framework::Example for Example {
 
         let vertex_buffer_data = [-0.01f32, -0.02, 0.01, -0.02, 0.00, 0.02];
         let vertices_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            initial_queue: None,
             label: Some("Vertex Buffer"),
             contents: bytemuck::bytes_of(&vertex_buffer_data),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
@@ -192,6 +194,7 @@ impl crate::framework::Example for Example {
         for i in 0..2 {
             particle_buffers.push(
                 device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    initial_queue: None,
                     label: Some(&format!("Particle Buffer {i}")),
                     contents: bytemuck::cast_slice(&initial_particle_data),
                     usage: wgpu::BufferUsages::VERTEX
@@ -279,8 +282,10 @@ impl crate::framework::Example for Example {
         };
 
         // get command encoder
-        let mut command_encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut command_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
+            label: None,
+        });
 
         command_encoder.push_debug_group("compute boid movement");
         {

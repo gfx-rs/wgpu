@@ -72,6 +72,7 @@ async fn partial_update_test(ctx: TestingContext) {
         });
 
     let gpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: Some("gpu_buffer"),
         size: 32,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
@@ -79,6 +80,7 @@ async fn partial_update_test(ctx: TestingContext) {
     });
 
     let cpu_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: Some("cpu_buffer"),
         size: 32,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
@@ -116,6 +118,7 @@ async fn partial_update_test(ctx: TestingContext) {
     let mut encoder = ctx
         .device
         .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
             label: Some("encoder"),
         });
 
@@ -213,6 +216,7 @@ const SHADER2: &str = "
 
 async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
     let output_buffer = ctx.device.create_buffer(&BufferDescriptor {
+        initial_queue: None,
         label: Some("output buffer"),
         size: 8 * size_of::<u32>() as BufferAddress,
         usage: BufferUsages::STORAGE | BufferUsages::COPY_SRC,
@@ -220,6 +224,7 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
     });
 
     let cpu_buffer = ctx.device.create_buffer(&BufferDescriptor {
+        initial_queue: None,
         label: Some("cpu buffer"),
         size: output_buffer.size(),
         usage: BufferUsages::COPY_DST | BufferUsages::MAP_READ,
@@ -228,6 +233,7 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
 
     // We need an output texture, even though we're not ever going to look at it.
     let output_texture = ctx.device.create_texture(&TextureDescriptor {
+        initial_queue: None,
         size: Extent3d {
             width: 2,
             height: 2,

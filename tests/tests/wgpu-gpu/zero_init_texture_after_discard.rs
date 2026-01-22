@@ -127,6 +127,7 @@ impl<'ctx> TestCase<'ctx> {
         };
 
         let texture = ctx.device.create_texture(&TextureDescriptor {
+            initial_queue: None,
             label: Some("RenderTarget"),
             size: Extent3d {
                 width: COPY_BYTES_PER_ROW_ALIGNMENT,

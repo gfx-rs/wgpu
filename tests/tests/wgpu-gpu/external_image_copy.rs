@@ -248,6 +248,7 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
                 }
 
                 let texture = ctx.device.create_texture(&wgpu::TextureDescriptor {
+                    initial_queue: None,
                     label: Some("import dest"),
                     size: wgpu::Extent3d {
                         width: dest_width,
@@ -289,6 +290,7 @@ static IMAGE_BITMAP_IMPORT: GpuTestConfiguration =
                 );
 
                 let readback_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                    initial_queue: None,
                     label: Some("readback buffer"),
                     size: 4 * 64 * 3,
                     usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,

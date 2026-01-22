@@ -234,6 +234,7 @@ async fn execute(
 
     // Create buffers
     let buffer_a = device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: Some("Matrix A"),
         size: (num_elements_a * element_size) as u64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
@@ -241,6 +242,7 @@ async fn execute(
     });
 
     let buffer_b = device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: Some("Matrix B"),
         size: (num_elements_b * element_size) as u64,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
@@ -248,6 +250,7 @@ async fn execute(
     });
 
     let buffer_c = device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: Some("Matrix C"),
         size: (num_elements_c * element_size) as u64,
         usage: wgpu::BufferUsages::STORAGE
@@ -263,6 +266,7 @@ async fn execute(
         stride: N,
     };
     let buffer_dims = device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: Some("Dimensions"),
         size: std::mem::size_of::<Dimensions>() as u64,
         usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
@@ -270,6 +274,7 @@ async fn execute(
     });
 
     let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: Some("Staging Buffer"),
         size: (num_elements_c * element_size) as u64,
         usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
@@ -379,6 +384,7 @@ async fn execute(
 
     // Dispatch compute
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+        queue: None,
         label: Some("Cooperative Matrix Encoder"),
     });
 

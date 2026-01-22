@@ -11,6 +11,7 @@ pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
 
 fn create_texture_binding(device: &wgpu::Device, format: wgpu::TextureFormat, filterable: bool) {
     let texture = device.create_texture(&wgpu::TextureDescriptor {
+        initial_queue: None,
         label: None,
         size: wgpu::Extent3d {
             width: 256,

@@ -43,6 +43,7 @@ fn multiple_bindings_with_differing_sizes(ctx: TestingContext) {
     ];
 
     let buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
+        initial_queue: None,
         label: Some("buffer"),
         size: 8,
         usage: BufferUsages::UNIFORM | BufferUsages::COPY_SRC | BufferUsages::COPY_DST,

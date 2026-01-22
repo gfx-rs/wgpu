@@ -42,6 +42,7 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
         let device = &ctx.device;
 
         let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            initial_queue: None,
             label: None,
             size: THREAD_COUNT * size_of::<u64>() as u64,
             usage: wgpu::BufferUsages::STORAGE
@@ -90,8 +91,10 @@ static SUBGROUP_OPERATIONS: GpuTestConfiguration = GpuTestConfiguration::new()
             label: Some("bind group"),
         });
 
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            queue: None,
+            label: None,
+        });
         {
             let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: None,

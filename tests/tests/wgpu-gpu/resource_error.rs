@@ -14,6 +14,7 @@ static BAD_BUFFER: GpuTestConfiguration = GpuTestConfiguration::new()
             &ctx.device,
             || {
                 ctx.device.create_buffer(&wgpu::BufferDescriptor {
+                    initial_queue: None,
                     label: None,
                     size: 99999999,
                     usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::STORAGE,
@@ -45,6 +46,7 @@ static BAD_TEXTURE: GpuTestConfiguration = GpuTestConfiguration::new()
             &ctx.device,
             || {
                 ctx.device.create_texture(&wgpu::TextureDescriptor {
+                    initial_queue: None,
                     label: None,
                     size: wgpu::Extent3d {
                         width: 0,
