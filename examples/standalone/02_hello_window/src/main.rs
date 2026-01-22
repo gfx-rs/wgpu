@@ -25,10 +25,11 @@ impl State {
             .request_adapter(&wgpu::RequestAdapterOptions::default())
             .await
             .unwrap();
-        let (device, queue) = adapter
+        let (device, queues) = adapter
             .request_device(&wgpu::DeviceDescriptor::default())
             .await
             .unwrap();
+        let queue = queues.into_iter().next().unwrap();
 
         let size = window.inner_size();
 

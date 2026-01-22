@@ -224,6 +224,7 @@ impl crate::framework::Example for Example {
                 flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE
                     | wgpu::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
                 update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+                initial_queue: None,
             },
             wgpu::BlasGeometrySizeDescriptors::Triangles {
                 descriptors: vec![blas_geo_size_desc.clone()],
@@ -236,6 +237,7 @@ impl crate::framework::Example for Example {
                 | wgpu::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN,
             update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             max_instances: side_count * side_count,
+            initial_queue: None,
         });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {

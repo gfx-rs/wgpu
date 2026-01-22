@@ -75,7 +75,7 @@ impl AdapterInterface for CustomAdapter {
         assert_eq!(desc.label, Some("device"));
         let res: Result<_, wgpu::RequestDeviceError> = Ok((
             DispatchDevice::custom(CustomDevice(self.0.clone())),
-            DispatchQueue::custom(CustomQueue(self.0.clone())),
+            vec![DispatchQueue::custom(CustomQueue(self.0.clone()))],
         ));
         Box::pin(std::future::ready(res))
     }
@@ -277,7 +277,7 @@ impl DeviceInterface for CustomDevice {
 
     fn poll(
         &self,
-        _maintain: wgpu::wgt::PollType<u64>,
+        _maintain: wgpu::wgt::PollType<(u32, u64)>,
     ) -> Result<wgpu::PollStatus, wgpu::PollError> {
         unimplemented!()
     }

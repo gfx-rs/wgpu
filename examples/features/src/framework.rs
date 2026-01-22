@@ -280,7 +280,7 @@ impl ExampleContext {
         let info = adapter.get_info();
         log::info!("Selected adapter: {} ({:?})", info.name, info.backend);
 
-        let (device, queue) = adapter
+        let (device, queues) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: None,
                 required_features: (E::optional_features() & adapter.features())
@@ -292,9 +292,11 @@ impl ExampleContext {
                     Some(path) => wgpu::Trace::Directory(path.into()),
                     None => wgpu::Trace::Off,
                 },
+                queues: vec![],
             })
             .await
             .expect("Unable to find a suitable GPU adapter!");
+        let queue = queues.into_iter().next().unwrap();
 
         Self {
             instance,

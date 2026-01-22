@@ -69,7 +69,7 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Arc<Window>, wgpu::Color
         .expect("Failed to find an appropriate adapter");
 
     // Create the logical device and command queue
-    let (device, queue) = adapter
+    let (device, queues) = adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: None,
             required_features: wgpu::Features::empty(),
@@ -77,9 +77,11 @@ async fn run(event_loop: EventLoop<()>, viewports: Vec<(Arc<Window>, wgpu::Color
             experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Off,
+            queues: vec![],
         })
         .await
         .expect("Failed to create device");
+    let queue = queues.into_iter().next().unwrap();
 
     let mut viewports: HashMap<WindowId, Viewport> = viewports
         .into_iter()

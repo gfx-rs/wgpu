@@ -109,7 +109,7 @@ impl WgpuContext {
             })
             .await
             .unwrap();
-        let (device, queue) = adapter
+        let (device, queues) = adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: None,
                 required_features: wgpu::Features::empty(),
@@ -117,9 +117,11 @@ impl WgpuContext {
                 experimental_features: wgpu::ExperimentalFeatures::disabled(),
                 memory_hints: wgpu::MemoryHints::MemoryUsage,
                 trace: wgpu::Trace::Off,
+                queues: vec![],
             })
             .await
             .unwrap();
+        let queue = queues.into_iter().next().unwrap();
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("shader.wgsl"));
 

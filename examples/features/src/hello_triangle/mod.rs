@@ -32,7 +32,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let trace_dir = tempdir().expect("Failed to create temporary directory for trace");
 
     // Create the logical device and command queue
-    let (device, queue) = adapter
+    let (device, queues) = adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: None,
             required_features: wgpu::Features::empty(),
@@ -42,9 +42,11 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
             experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Directory(trace_dir.path().to_path_buf()),
+            queues: vec![],
         })
         .await
         .expect("Failed to create device");
+    let queue = queues.into_iter().next().unwrap();
 
     // Load the shaders from disk
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {

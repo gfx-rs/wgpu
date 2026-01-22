@@ -149,7 +149,7 @@ async fn run() {
     }
 
     // Request device with experimental features enabled
-    let (device, queue) = unsafe {
+    let (device, queues) = unsafe {
         adapter
             .request_device(&wgpu::DeviceDescriptor {
                 label: Some("Cooperative Matrix Device"),
@@ -158,10 +158,12 @@ async fn run() {
                 experimental_features: wgpu::ExperimentalFeatures::enabled(),
                 memory_hints: wgpu::MemoryHints::Performance,
                 trace: wgpu::Trace::Off,
+                queues: vec![],
             })
             .await
             .expect("Failed to create device")
     };
+    let queue = queues.into_iter().next().unwrap();
 
     let results = execute(&device, &queue, config).await;
 

@@ -19,7 +19,7 @@ pub async fn execute_gpu(numbers: &[f32]) -> Vec<f32> {
         .await
         .unwrap();
 
-    let (device, queue) = adapter
+    let (device, queues) = adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: None,
             // These features are required to use `binding_array` in your wgsl.
@@ -37,6 +37,7 @@ pub async fn execute_gpu(numbers: &[f32]) -> Vec<f32> {
         })
         .await
         .unwrap();
+    let queue = queues.into_iter().next().unwrap();
 
     execute_gpu_inner(&device, &queue, numbers).await
 }

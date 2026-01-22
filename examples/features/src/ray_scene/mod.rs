@@ -225,6 +225,7 @@ fn upload_scene_components(
                     label: None,
                     flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
                     update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+                    initial_queue: None,
                 },
                 wgpu::BlasGeometrySizeDescriptors::Triangles {
                     descriptors: size_desc.clone(),
@@ -352,6 +353,7 @@ impl crate::framework::Example for Example {
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
             update_mode: wgpu::AccelerationStructureUpdateMode::Build,
             max_instances: side_count * side_count,
+            initial_queue: None,
         });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {

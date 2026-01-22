@@ -141,6 +141,7 @@ impl crate::framework::Example for Example {
                 label: None,
                 flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                 update_mode: AccelerationStructureUpdateMode::Build,
+                initial_queue: None,
             },
             BlasGeometrySizeDescriptors::Triangles {
                 descriptors: vec![blas_size_desc.clone()],
@@ -152,6 +153,7 @@ impl crate::framework::Example for Example {
             max_instances: 3,
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
             update_mode: AccelerationStructureUpdateMode::Build,
+            initial_queue: None,
         });
 
         tlas[0] = Some(TlasInstance::new(

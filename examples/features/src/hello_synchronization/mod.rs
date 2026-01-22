@@ -11,7 +11,7 @@ async fn run() {
         .request_adapter(&wgpu::RequestAdapterOptions::default())
         .await
         .unwrap();
-    let (device, queue) = adapter
+    let (device, queues) = adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: None,
             required_features: wgpu::Features::empty(),
@@ -19,9 +19,11 @@ async fn run() {
             experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::Performance,
             trace: wgpu::Trace::Off,
+            queues: vec![],
         })
         .await
         .unwrap();
+    let queue = queues.into_iter().next().unwrap();
 
     let ExecuteResults {
         patient_workgroup_results,

@@ -221,7 +221,7 @@ async fn run() {
 
     // `request_device` instantiates the feature specific connection to the GPU, defining some parameters,
     //  `features` being the available features.
-    let (device, queue) = adapter
+    let (device, queues) = adapter
         .request_device(&wgpu::DeviceDescriptor {
             label: None,
             required_features: features,
@@ -229,9 +229,11 @@ async fn run() {
             experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Off,
+            queues: vec![],
         })
         .await
         .unwrap();
+    let queue = queues.into_iter().next().unwrap();
 
     let queries = submit_render_and_compute_pass_with_queries(&device, &queue);
     let raw_results = queries.wait_for_results(&device, false);
