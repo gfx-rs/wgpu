@@ -192,6 +192,7 @@ impl ComputepassState {
                 size: BUFFER_SIZE,
                 usage: wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
+                initial_queue: None,
             }));
         }
         random.shuffle(&mut storage_buffers);
@@ -389,10 +390,13 @@ impl ComputepassState {
         let dispatch_count = dispatch_count(ctx);
         let dispatch_per_pass = dispatch_count / total_passes;
 
-        let mut encoder = self
-            .device_state
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder =
+            self.device_state
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: None,
+                    queue: None,
+                });
 
         let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: None,
@@ -415,10 +419,13 @@ impl ComputepassState {
     fn run_bindless_pass(&self, dispatch_count_bindless: usize) -> wgpu::CommandBuffer {
         profiling::scope!("Bindless Computepass");
 
-        let mut encoder = self
-            .device_state
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder =
+            self.device_state
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: None,
+                    queue: None,
+                });
 
         let mut compute_pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: None,

@@ -492,7 +492,11 @@ impl Device {
         }
 
         let submission = queue0.submit(&[]).unwrap();
-        self.wait_for_submit(submission)?;
+        self.poll(wgt::PollType::Wait {
+            submission_index: Some(submission),
+            timeout: None,
+        })
+        .unwrap();
 
         Ok(())
     }
