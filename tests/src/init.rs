@@ -167,11 +167,12 @@ pub async fn initialize_device(
             experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
             memory_hints: wgpu::MemoryHints::MemoryUsage,
             trace: wgpu::Trace::Off,
+            queues: vec![],
         })
         .await;
 
     match bundle {
-        Ok(b) => b,
+        Ok(b) => (b.0, b.1.into_iter().next().unwrap()),
         Err(e) => panic!("Failed to initialize device: {e}"),
     }
 }
