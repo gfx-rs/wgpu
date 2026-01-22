@@ -107,6 +107,7 @@ impl RenderpassState {
                     format: wgpu::TextureFormat::Rgba8UnormSrgb,
                     usage: wgpu::TextureUsages::TEXTURE_BINDING,
                     view_formats: &[],
+                    initial_queue: None,
                 });
             texture_views.push(texture.create_view(&wgpu::TextureViewDescriptor {
                 label: Some(&format!("Texture View {i}")),
@@ -161,6 +162,7 @@ impl RenderpassState {
                 size: 3 * 16,
                 usage: wgpu::BufferUsages::VERTEX,
                 mapped_at_creation: false,
+                initial_queue: None,
             }));
         }
         random.shuffle(&mut vertex_buffers);
@@ -172,6 +174,7 @@ impl RenderpassState {
                 size: 3 * 4,
                 usage: wgpu::BufferUsages::INDEX,
                 mapped_at_creation: false,
+                initial_queue: None,
             }));
         }
         random.shuffle(&mut index_buffers);
@@ -242,6 +245,7 @@ impl RenderpassState {
                 format: wgpu::TextureFormat::Rgba8UnormSrgb,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
+                initial_queue: None,
             })
             .create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -350,10 +354,13 @@ impl RenderpassState {
 
         let draws_per_pass = draw_count / total_passes;
 
-        let mut encoder = self
-            .device_state
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder =
+            self.device_state
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: None,
+                    queue: None,
+                });
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -399,10 +406,13 @@ impl RenderpassState {
     fn run_bindless_pass(&self, draw_count: u32) -> wgpu::CommandBuffer {
         profiling::scope!("Bindless Renderpass");
 
-        let mut encoder = self
-            .device_state
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        let mut encoder =
+            self.device_state
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: None,
+                    queue: None,
+                });
 
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,

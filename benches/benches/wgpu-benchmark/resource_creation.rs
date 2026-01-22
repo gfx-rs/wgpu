@@ -39,6 +39,7 @@ pub fn run_bench(ctx: BenchmarkContext) -> anyhow::Result<Vec<SubBenchResult>> {
                                     size: 256 * 1024 * 1024,
                                     usage: wgpu::BufferUsages::COPY_DST,
                                     mapped_at_creation: false,
+                                    initial_queue: None,
                                 })
                             })
                             .collect::<Vec<_>>()

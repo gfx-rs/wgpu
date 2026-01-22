@@ -44,20 +44,21 @@ impl DeviceState {
             adapter_info.name, adapter_info.backend
         );
 
-        let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+        let (device, queues) = block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             required_features: adapter.features(),
             required_limits: adapter.limits(),
             memory_hints: wgpu::MemoryHints::Performance,
             experimental_features: unsafe { wgpu::ExperimentalFeatures::enabled() },
             label: None,
             trace: wgpu::Trace::Off,
+            queues: vec![],
         }))
         .unwrap();
 
         Self {
             adapter_info,
             device,
-            queue,
+            queue: queues.into_iter().next().unwrap(),
         }
     }
 }
