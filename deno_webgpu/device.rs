@@ -178,6 +178,7 @@ impl GPUDevice {
       size: descriptor.size,
       usage,
       mapped_at_creation: descriptor.mapped_at_creation,
+      initial_queue: 0,
     };
 
     let (id, err) =
@@ -228,6 +229,7 @@ impl GPUDevice {
         .into_iter()
         .map(Into::into)
         .collect(),
+      initial_queue: 0,
     };
 
     let (id, err) =
@@ -588,6 +590,7 @@ impl GPUDevice {
     let label = descriptor.map(|d| d.label).unwrap_or_default();
     let wgpu_descriptor = wgpu_types::CommandEncoderDescriptor {
       label: Some(Cow::Owned(label.clone())),
+      queue: 0,
     };
 
     #[cfg(target_vendor = "apple")]
@@ -595,6 +598,7 @@ impl GPUDevice {
 
     let (id, err) = self.instance.device_create_command_encoder(
       self.id,
+      self.queue,
       &wgpu_descriptor,
       None,
     );
@@ -663,12 +667,15 @@ impl GPUDevice {
       multiview: None,
     };
 
-    let res =
-      wgpu_core::command::RenderBundleEncoder::new(&wgpu_descriptor, self.id);
+    let res = wgpu_core::command::RenderBundleEncoder::new(
+      &wgpu_descriptor,
+      self.id,
+      self.queue,
+    );
     let (encoder, err) = match res {
       Ok(encoder) => (encoder, None),
       Err(e) => (
-        wgpu_core::command::RenderBundleEncoder::dummy(self.id),
+        wgpu_core::command::RenderBundleEncoder::dummy(self.id, self.queue),
         Some(e),
       ),
     };
