@@ -296,11 +296,17 @@ impl Device {
 
         Texture {
             inner: texture,
-            descriptor: TextureDescriptor {
+            descriptor: wgt::TextureDescriptor {
                 label: None,
-                view_formats: &[],
-                initial_queue: desc.initial_queue,
-                ..desc.clone()
+                view_formats: (),
+                initial_queue: desc.initial_queue.index,
+
+                size: desc.size,
+                mip_level_count: desc.mip_level_count,
+                sample_count: desc.sample_count,
+                dimension: desc.dimension,
+                format: desc.format,
+                usage: desc.usage,
             },
         }
     }
@@ -336,11 +342,17 @@ impl Device {
         };
         Texture {
             inner: texture.into(),
-            descriptor: TextureDescriptor {
+            descriptor: wgt::TextureDescriptor {
                 label: None,
-                view_formats: &[],
-                initial_queue: desc.initial_queue,
-                ..desc.clone()
+                view_formats: (),
+                initial_queue: desc.initial_queue.index,
+
+                size: desc.size,
+                mip_level_count: desc.mip_level_count,
+                sample_count: desc.sample_count,
+                dimension: desc.dimension,
+                format: desc.format,
+                usage: desc.usage,
             },
         }
     }

@@ -11,7 +11,7 @@ use crate::*;
 #[derive(Debug, Clone)]
 pub struct Texture {
     pub(crate) inner: dispatch::DispatchTexture,
-    pub(crate) descriptor: TextureDescriptor<'static>,
+    pub(crate) descriptor: wgt::TextureDescriptor<Label<'static>, (), u32>,
 }
 #[cfg(send_sync)]
 static_assertions::assert_impl_all!(Texture: Send, Sync);
@@ -77,11 +77,17 @@ impl Texture {
     ) -> Self {
         Self {
             inner: dispatch::DispatchTexture::custom(texture),
-            descriptor: TextureDescriptor {
+            descriptor: wgt::TextureDescriptor {
                 label: None,
-                view_formats: &[],
-                initial_queue: desc.initial_queue.clone(),
-                ..desc.clone()
+                view_formats: (),
+                initial_queue: desc.initial_queue.index,
+
+                size: desc.size,
+                mip_level_count: desc.mip_level_count,
+                sample_count: desc.sample_count,
+                dimension: desc.dimension,
+                format: desc.format,
+                usage: desc.usage,
             },
         }
     }
@@ -185,5 +191,5 @@ impl Texture {
 ///
 /// Corresponds to [WebGPU `GPUTextureDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gputexturedescriptor).
-pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, &'a [TextureFormat], Queue>;
+pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Label<'a>, &'a [TextureFormat], &'a Queue>;
 static_assertions::assert_impl_all!(TextureDescriptor<'_>: Send, Sync);

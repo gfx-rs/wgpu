@@ -131,7 +131,7 @@ impl Surface<'_> {
             .as_ref()
             .expect("This surface has not been configured yet.");
 
-        let descriptor = TextureDescriptor {
+        let descriptor = wgt::TextureDescriptor {
             label: None,
             size: Extent3d {
                 width: config.width,
@@ -143,8 +143,8 @@ impl Surface<'_> {
             mip_level_count: 1,
             sample_count: 1,
             dimension: TextureDimension::D2,
-            view_formats: &[],
-            initial_queue: 
+            view_formats: (),
+            initial_queue: 0,
         };
 
         texture
