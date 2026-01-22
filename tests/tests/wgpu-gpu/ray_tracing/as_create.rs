@@ -48,6 +48,7 @@ fn invalid_vertex_format_blas_create(ctx: TestingContext) {
                     label: Some("BLAS"),
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                     update_mode: AccelerationStructureUpdateMode::Build,
+                    initial_queue: None,
                 },
                 BlasGeometrySizeDescriptors::Triangles {
                     descriptors: vec![blas_size.clone()],
@@ -90,6 +91,7 @@ fn mismatched_index_blas_create(ctx: TestingContext) {
                     label: Some("BLAS1"),
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                     update_mode: AccelerationStructureUpdateMode::Build,
+                    initial_queue: None,
                 },
                 BlasGeometrySizeDescriptors::Triangles {
                     descriptors: vec![blas_size.clone()],
@@ -119,6 +121,7 @@ fn mismatched_index_blas_create(ctx: TestingContext) {
                     label: Some("BLAS2"),
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                     update_mode: AccelerationStructureUpdateMode::Build,
+                    initial_queue: None,
                 },
                 BlasGeometrySizeDescriptors::Triangles {
                     descriptors: vec![blas_size.clone()],

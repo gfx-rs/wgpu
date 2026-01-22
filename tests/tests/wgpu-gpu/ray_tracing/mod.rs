@@ -65,6 +65,7 @@ impl AsBuildContext {
                 label: Some("BLAS"),
                 flags: AccelerationStructureFlags::PREFER_FAST_TRACE | additional_blas_flags,
                 update_mode: AccelerationStructureUpdateMode::Build,
+                initial_queue: None,
             },
             BlasGeometrySizeDescriptors::Triangles {
                 descriptors: vec![blas_size.clone()],
@@ -76,6 +77,7 @@ impl AsBuildContext {
             max_instances: 1,
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE | additional_tlas_flags,
             update_mode: AccelerationStructureUpdateMode::Build,
+            initial_queue: None,
         });
 
         tlas[0] = Some(TlasInstance::new(

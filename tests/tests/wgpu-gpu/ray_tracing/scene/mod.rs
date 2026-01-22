@@ -52,6 +52,7 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
             label: None,
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
             update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+            initial_queue: None,
         },
         wgpu::BlasGeometrySizeDescriptors::Triangles {
             descriptors: vec![blas_geo_size_desc.clone()],
@@ -62,6 +63,7 @@ fn acceleration_structure_build(ctx: &TestingContext, use_index_buffer: bool) {
         label: None,
         flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
         update_mode: wgpu::AccelerationStructureUpdateMode::Build,
+        initial_queue: None,
         max_instances,
     });
 

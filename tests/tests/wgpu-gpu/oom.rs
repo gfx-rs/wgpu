@@ -188,6 +188,7 @@ static BLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
                     label: None,
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                     update_mode: AccelerationStructureUpdateMode::Build,
+                    initial_queue: None,
                 },
                 BlasGeometrySizeDescriptors::Triangles {
                     descriptors: vec![BlasTriangleGeometrySizeDescriptor {
@@ -230,6 +231,7 @@ static TLAS_OOM_TEST: GpuTestConfiguration = GpuTestConfiguration::new()
                 max_instances: 1024 * 1024,
                 flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                 update_mode: AccelerationStructureUpdateMode::Build,
+                initial_queue: None,
             });
             if let Some(err) = scope.pop().await {
                 match err {

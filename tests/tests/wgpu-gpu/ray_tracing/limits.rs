@@ -40,6 +40,7 @@ fn hit_limits(ctx: TestingContext) {
                     label: None,
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                     update_mode: AccelerationStructureUpdateMode::Build,
+                    initial_queue: None,
                 },
                 BlasGeometrySizeDescriptors::Triangles {
                     descriptors: vec![
@@ -65,6 +66,7 @@ fn hit_limits(ctx: TestingContext) {
                     label: None,
                     flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                     update_mode: AccelerationStructureUpdateMode::Build,
+                    initial_queue: None,
                 },
                 BlasGeometrySizeDescriptors::Triangles {
                     descriptors: vec![BlasTriangleGeometrySizeDescriptor {
@@ -87,6 +89,7 @@ fn hit_limits(ctx: TestingContext) {
                 max_instances: 2,
                 flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
                 update_mode: AccelerationStructureUpdateMode::Build,
+                initial_queue: None,
             });
         },
         None,

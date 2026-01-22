@@ -48,6 +48,7 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
             label: Some("blas use after free"),
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
             update_mode: AccelerationStructureUpdateMode::Build,
+            initial_queue: None,
         },
         BlasGeometrySizeDescriptors::Triangles {
             descriptors: vec![blas_size.clone()],
@@ -59,6 +60,7 @@ fn acceleration_structure_use_after_free(ctx: TestingContext) {
         max_instances: 1,
         flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
         update_mode: AccelerationStructureUpdateMode::Build,
+        initial_queue: None,
     });
 
     tlas[0] = Some(TlasInstance::new(

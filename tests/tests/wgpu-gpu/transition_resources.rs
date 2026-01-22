@@ -29,7 +29,6 @@ static TRANSITION_RESOURCES: GpuTestConfiguration = GpuTestConfiguration::new()
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 queue: None,
                 label: None,
-                queue: 0,
             });
 
         encoder.transition_resources(
@@ -38,7 +37,6 @@ static TRANSITION_RESOURCES: GpuTestConfiguration = GpuTestConfiguration::new()
                 texture: &texture,
                 selector: None,
                 state: wgpu::TextureUses::COLOR_TARGET,
-                src_dst_queue_indices: None,
             }]
             .into_iter(),
         );

@@ -551,6 +551,7 @@ fn build_with_transform(ctx: TestingContext) {
             flags: AccelerationStructureFlags::PREFER_FAST_TRACE
                 | AccelerationStructureFlags::USE_TRANSFORM,
             update_mode: AccelerationStructureUpdateMode::Build,
+            initial_queue: None,
         },
         BlasGeometrySizeDescriptors::Triangles {
             descriptors: vec![blas_size.clone()],
@@ -562,6 +563,7 @@ fn build_with_transform(ctx: TestingContext) {
         max_instances: 1,
         flags: AccelerationStructureFlags::PREFER_FAST_TRACE,
         update_mode: AccelerationStructureUpdateMode::Build,
+        initial_queue: None,
     });
     tlas[0] = Some(TlasInstance::new(
         &blas,
@@ -829,6 +831,7 @@ fn test_as_build_format_stride(
             label: Some("BLAS"),
             flags: wgpu::AccelerationStructureFlags::PREFER_FAST_TRACE,
             update_mode: AccelerationStructureUpdateMode::Build,
+            initial_queue: None,
         },
         BlasGeometrySizeDescriptors::Triangles {
             descriptors: vec![blas_size.clone()],
