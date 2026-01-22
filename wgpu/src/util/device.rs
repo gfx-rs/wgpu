@@ -14,7 +14,7 @@ pub struct BufferInitDescriptor<'a> {
     /// Usages of a buffer. If the buffer is used in any way that isn't specified here, the operation
     /// will panic.
     pub usage: wgt::BufferUsages,
-    /// The queue with ownership at resource creation time
+    /// The queue with ownership at resource creation time. None defaults to the first queue.
     pub initial_queue: Option<&'a Queue>,
 }
 

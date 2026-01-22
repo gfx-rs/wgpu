@@ -62,7 +62,7 @@ pub struct CreateBlasDescriptor<L, Q> {
     pub flags: AccelerationStructureFlags,
     /// Update mode for the bottom level acceleration structure.
     pub update_mode: AccelerationStructureUpdateMode,
-    /// The queue with ownership at resource creation time
+    /// The queue with ownership at resource creation time. None defaults to the first queue.The queue with ownership at resource creation time
     pub initial_queue: Q,
 }
 
@@ -95,7 +95,7 @@ pub struct CreateTlasDescriptor<L, Q> {
     pub flags: AccelerationStructureFlags,
     /// Update mode for the bottom level acceleration structure.
     pub update_mode: AccelerationStructureUpdateMode,
-    /// The queue with ownership at resource creation time
+    /// The queue with ownership at resource creation time. None defaults to the first queue.
     pub initial_queue: Q,
 }
 
