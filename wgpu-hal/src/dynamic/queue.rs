@@ -64,7 +64,7 @@ impl<Q: Queue + DynResource> DynQueue for Q {
                 command_buffers.push((**cb).expect_downcast_ref());
             }
             for st in submit.surface_textures {
-                command_buffers.push((**st).expect_downcast_ref());
+                surface_textures.push((**st).expect_downcast_ref());
             }
             for fence in submit.signal_fences.iter_mut() {
                 fences.push(((*fence.0).expect_downcast_mut(), fence.1));
