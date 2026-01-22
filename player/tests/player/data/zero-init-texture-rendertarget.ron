@@ -22,6 +22,7 @@
             format: "rgba8unorm",
             usage: "RENDER_ATTACHMENT | COPY_SRC",
             view_formats: [],
+            initial_queue: 0,
         )),
         CreateTextureView(
             id: PointerId(0x10),
@@ -35,10 +36,11 @@
                 size: 16384,
                 usage: "MAP_READ | COPY_DST",
                 mapped_at_creation: false,
+                initial_queue: 0,
             ),
         ),
 
-        Submit(1, [
+        Submit((0, 1), [
             RunRenderPass(
                 pass: (
                     commands: [],

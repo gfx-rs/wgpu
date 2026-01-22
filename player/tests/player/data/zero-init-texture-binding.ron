@@ -29,6 +29,7 @@
             format: "rgba8unorm",
             usage: "TEXTURE_BINDING | COPY_SRC",
             view_formats: [],
+            initial_queue: 0,
         )),
         CreateTextureView(
             id: PointerId(0x10),
@@ -42,6 +43,7 @@
                 size: 16384,
                 usage: "MAP_READ | COPY_DST",
                 mapped_at_creation: false,
+                initial_queue: 0,
             ),
         ),
         CreateTexture(PointerId(0x110), (
@@ -56,6 +58,7 @@
             format: "rgba8unorm",
             usage: "STORAGE_BINDING | COPY_SRC",
             view_formats: [],
+            initial_queue: 0,
         )),
         CreateTextureView(
             id: PointerId(0x110),
@@ -69,6 +72,7 @@
                 size: 16384,
                 usage: "MAP_READ | COPY_DST",
                 mapped_at_creation: false,
+                initial_queue: 0,
             ),
         ),
 
@@ -142,7 +146,7 @@
             ),
         ),
 
-        Submit(1, [
+        Submit((0, 1), [
             RunComputePass(
                 pass: (
                     commands: [

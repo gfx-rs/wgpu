@@ -45,6 +45,7 @@
                 size: 16,
                 usage: "STORAGE | MAP_READ | MAP_WRITE",
                 mapped_at_creation: false,
+                initial_queue: 0,
             ),
         ),
         CreateBuffer(
@@ -54,6 +55,7 @@
                 size: 16,
                 usage: "STORAGE | MAP_READ",
                 mapped_at_creation: false,
+                initial_queue: 0,
             ),
         ),
         CreateBuffer(
@@ -63,6 +65,7 @@
                 size: 24,
                 usage: "MAP_READ | COPY_DST",
                 mapped_at_creation: false,
+                initial_queue: 0,
             ),
         ),
         WriteBuffer(
@@ -87,6 +90,7 @@
             size: 16,
             usage: "STORAGE | MAP_READ",
             mapped_at_creation: false,
+            initial_queue: 0,
         )),
         CreateBindGroupLayout(PointerId(0x10), (
             label: None,
@@ -140,7 +144,7 @@
                 ),
             ),
         ),
-        Submit(1, [
+        Submit((0, 1), [
             RunComputePass(
                 pass: (
                     label: None,

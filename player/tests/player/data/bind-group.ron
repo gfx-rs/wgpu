@@ -7,6 +7,7 @@
             size: 16,
             usage: "UNIFORM",
             mapped_at_creation: false,
+            initial_queue: 0,
         )),
         CreateBindGroupLayout(PointerId(0x10), (
             label: None,
@@ -63,7 +64,7 @@
                 ),
             ),
         ),
-        Submit(1, [
+        Submit((0, 1), [
             RunComputePass(
                 pass: (
                     commands: [

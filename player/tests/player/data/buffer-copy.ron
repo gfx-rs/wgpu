@@ -16,6 +16,7 @@
                 size: 16,
                 usage: "MAP_READ | COPY_DST | VERTEX",
                 mapped_at_creation: false,
+                initial_queue: 0,
             ),
         ),
         WriteBuffer(
@@ -27,6 +28,6 @@
             ),
             queued: true,
         ),
-        Submit(1, []),
+        Submit((0, 1), []),
     ],
 )

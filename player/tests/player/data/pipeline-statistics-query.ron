@@ -51,9 +51,10 @@
                 size: 16,
                 usage: "COPY_DST | MAP_READ | QUERY_RESOLVE",
                 mapped_at_creation: false,
+                initial_queue: 0,
             ),
         ),
-        Submit(1, [
+        Submit((0, 1), [
             RunComputePass(
                 pass: (
                     commands: [

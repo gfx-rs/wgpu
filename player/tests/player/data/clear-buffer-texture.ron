@@ -32,6 +32,7 @@
             format: "rgba8unorm",
             usage: "COPY_SRC | COPY_DST | STORAGE_BINDING | RENDER_ATTACHMENT",
             view_formats: [],
+            initial_queue: 0,
         )),
         // First fill the texture to ensure it wasn't just zero initialized or "happened" to be zero.
         WriteTexture(
@@ -58,6 +59,7 @@
                 size: 16384,
                 usage: "MAP_READ | COPY_DST",
                 mapped_at_creation: false,
+                initial_queue: 0,
             ),
         ),
 
@@ -68,6 +70,7 @@
                 size: 16,
                 usage: "MAP_READ | COPY_DST | VERTEX",
                 mapped_at_creation: false,
+                initial_queue: 0,
             ),
         ),
         // Make sure there is something in the buffer, otherwise it might be just zero init!
@@ -80,7 +83,7 @@
             ),
             queued: true,
         ),
-        Submit(1, [
+        Submit((0, 1), [
             ClearTexture(
                 dst: PointerId(0x10),
                 subresource_range: ImageSubresourceRange(
