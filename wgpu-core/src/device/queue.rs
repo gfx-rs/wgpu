@@ -364,9 +364,6 @@ pub enum TempResource {
     ScratchBuffer(ScratchBuffer),
     DestroyedBuffer(DestroyedBuffer),
     DestroyedTexture(DestroyedTexture),
-    // Used for resources that might be in multiple queues
-    SharedDestroyedBuffer(Arc<DestroyedBuffer>),
-    SharedDestroyedTexture(Arc<DestroyedTexture>),
 }
 
 /// A series of raw [`CommandBuffer`]s that have been submitted to a

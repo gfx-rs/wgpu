@@ -1021,27 +1021,7 @@ impl Buffer {
         };
 
         // Prefer to avoid Arc
-        if device.queues.len() > 1 {
-            let temp = Arc::new(temp);
-            for i in 0..device.queues.len() as u32 {
-                if let Some(queue) = device.get_queue(i) {
-                    let mut pending_writes = queue.pending_writes.lock();
-                    if pending_writes.contains_buffer(self) {
-                        pending_writes
-                            .consume_temp(queue::TempResource::SharedDestroyedBuffer(temp.clone()));
-                    } else {
-                        let mut life_lock = queue.lock_life();
-                        let last_submit_index = life_lock.get_buffer_latest_submission_index(self);
-                        if let Some(last_submit_index) = last_submit_index {
-                            life_lock.schedule_resource_destruction(
-                                queue::TempResource::SharedDestroyedBuffer(temp.clone()),
-                                last_submit_index,
-                            );
-                        }
-                    }
-                }
-            }
-        } else if let Some(queue) = device.get_queue(0) {
+        if let Some(queue) = device.get_queue(self.current_queue) {
             let mut pending_writes = queue.pending_writes.lock();
             if pending_writes.contains_buffer(self) {
                 pending_writes.consume_temp(queue::TempResource::DestroyedBuffer(temp));
@@ -1362,7 +1342,7 @@ pub struct Texture {
     pub(crate) clear_mode: RwLock<TextureClearMode>,
     pub(crate) views: Mutex<WeakVec<TextureView>>,
     pub(crate) bind_groups: Mutex<WeakVec<BindGroup>>,
-    pub(crate) _current_queue: u32,
+    pub(crate) current_queue: u32,
 }
 
 impl Texture {
@@ -1398,7 +1378,7 @@ impl Texture {
             clear_mode: RwLock::new(rank::TEXTURE_CLEAR_MODE, clear_mode),
             views: Mutex::new(rank::TEXTURE_VIEWS, WeakVec::new()),
             bind_groups: Mutex::new(rank::TEXTURE_BIND_GROUPS, WeakVec::new()),
-            _current_queue: desc.initial_queue,
+            current_queue: desc.initial_queue,
         }
     }
 
@@ -1548,28 +1528,7 @@ impl Texture {
             }
         };
 
-        if device.queues.len() > 1 {
-            let temp = Arc::new(temp);
-            for i in 0..device.queues.len() as u32 {
-                if let Some(queue) = device.get_queue(i) {
-                    let mut pending_writes = queue.pending_writes.lock();
-                    if pending_writes.contains_texture(self) {
-                        pending_writes.consume_temp(queue::TempResource::SharedDestroyedTexture(
-                            temp.clone(),
-                        ));
-                    } else {
-                        let mut life_lock = queue.lock_life();
-                        let last_submit_index = life_lock.get_texture_latest_submission_index(self);
-                        if let Some(last_submit_index) = last_submit_index {
-                            life_lock.schedule_resource_destruction(
-                                queue::TempResource::SharedDestroyedTexture(temp.clone()),
-                                last_submit_index,
-                            );
-                        }
-                    }
-                }
-            }
-        } else if let Some(queue) = device.get_queue(0) {
+        if let Some(queue) = device.get_queue(self.current_queue) {
             let mut pending_writes = queue.pending_writes.lock();
             if pending_writes.contains_texture(self) {
                 pending_writes.consume_temp(queue::TempResource::DestroyedTexture(temp));
