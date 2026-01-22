@@ -7,7 +7,8 @@ use wgpu_test::{fail, valid};
 #[test]
 #[should_panic = "Texture with 'dst' label has been destroyed"]
 fn destroyed_texture() {
-    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let (device, queues) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let queue = queues.into_iter().next().unwrap();
     let size = wgpu::Extent3d {
         width: 256,
         height: 256,

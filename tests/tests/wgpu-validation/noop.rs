@@ -31,7 +31,8 @@ fn device_is_available_when_requested() {
 
 #[test]
 fn device_and_buffers() {
-    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let (device, queues) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let queue = queues.into_iter().next().unwrap();
 
     // Demonstrate that creating and *writing* to a buffer succeeds.
     // This also involves creation of a staging buffer.

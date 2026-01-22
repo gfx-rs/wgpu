@@ -595,10 +595,11 @@ fn external_texture_binding_texture_view() {
 /// whose plane textures have already been destroyed, results in an error.
 #[test]
 fn destroyed_external_texture_plane() {
-    let (device, queue) = wgpu::Device::noop(&DeviceDescriptor {
+    let (device, queues) = wgpu::Device::noop(&DeviceDescriptor {
         required_features: Features::EXTERNAL_TEXTURE,
         ..Default::default()
     });
+    let queue = queues.into_iter().next().unwrap();
 
     let target_texture = device.create_texture(&TextureDescriptor {
         initial_queue: None,
