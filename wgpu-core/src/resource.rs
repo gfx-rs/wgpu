@@ -482,6 +482,7 @@ impl Buffer {
     pub(crate) fn get_indirect_validation_bg<'a>(
         &'a self,
         queue: &Arc<Queue>,
+        snatch_guard: &SnatchGuard,
     ) -> parking_lot::RwLockReadGuard<'a, Option<BindGroups>> {
         // TODO: this validation sucks lmao
         let read = self.indirect_validation_bind_groups[queue.index as usize].read();
@@ -494,10 +495,9 @@ impl Buffer {
             drop(write);
             return self.indirect_validation_bind_groups[queue.index as usize].read();
         }
-        let global_read = queue.device.snatchable_lock.read();
         let bg = queue
             .create_indirect_validation_bind_groups(
-                &**self.raw.get(&global_read).unwrap(),
+                &**self.raw.get(snatch_guard).unwrap(),
                 self.size,
                 self.usage,
             )
@@ -510,6 +510,7 @@ impl Buffer {
     pub(crate) fn get_timestamp_normalization_bg<'a>(
         &'a self,
         queue: &Arc<Queue>,
+        snatch_guard: &SnatchGuard,
     ) -> parking_lot::RwLockReadGuard<'a, Option<TimestampNormalizationBindGroup>> {
         // TODO: this validation sucks lmao
         let read = self.timestamp_normalization_bind_groups[queue.index as usize].read();
@@ -522,7 +523,6 @@ impl Buffer {
             drop(write);
             return self.timestamp_normalization_bind_groups[queue.index as usize].read();
         }
-        let global_read = self.device.snatchable_lock.read();
         let bg = unsafe {
             // SAFETY: The size passed here must not overflow the buffer.
             queue
@@ -531,7 +531,7 @@ impl Buffer {
                 .unwrap()
                 .create_normalization_bind_group(
                     &self.device,
-                    &**self.raw.get(&global_read).unwrap(),
+                    &**self.raw.get(snatch_guard).unwrap(),
                     Some(&self.label),
                     wgt::BufferSize::new(self.size).unwrap(),
                     self.usage,

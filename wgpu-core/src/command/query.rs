@@ -11,6 +11,7 @@ use crate::{
         Buffer, DestroyedResourceError, InvalidResourceError, MissingBufferUsageError,
         ParentDevice, QuerySet, RawResourceAccess, Trackable,
     },
+    snatch::SnatchGuard,
     track::{StatelessTracker, TrackerIndex},
     FastHashMap,
 };
@@ -426,6 +427,7 @@ pub(super) fn resolve_query_set(
     query_count: u32,
     dst_buffer: Arc<Buffer>,
     destination_offset: BufferAddress,
+    snatch_guard: &SnatchGuard,
 ) -> Result<(), QueryError> {
     if destination_offset % wgt::QUERY_RESOLVE_BUFFER_ALIGNMENT != 0 {
         return Err(QueryError::Resolve(ResolveError::BufferOffsetAlignment));
@@ -516,7 +518,7 @@ pub(super) fn resolve_query_set(
                 state.raw_encoder,
                 &mut state.tracker.buffers,
                 dst_buffer
-                    .get_timestamp_normalization_bg(state.queue)
+                    .get_timestamp_normalization_bg(state.queue, snatch_guard)
                     .as_ref()
                     .unwrap(),
                 &dst_buffer,

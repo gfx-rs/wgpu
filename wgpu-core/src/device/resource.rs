@@ -205,7 +205,7 @@ impl ExternalTextureParams {
 pub struct Device {
     raw: Box<dyn hal::DynDevice>,
     pub(crate) adapter: Arc<Adapter>,
-    pub(crate) queues: Vec<OnceCellOrLock<Weak<Queue>>>,
+    pub(crate) queues: Vec<OnceCellOrLock<Arc<Queue>>>,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     /// The `label` from the descriptor used to create the resource.
     label: String,
@@ -239,6 +239,7 @@ pub struct Device {
     pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
     pub(crate) usage_scopes: UsageScopePool,
+    pub(crate) uses_indirect_validation: bool,
 
     /// Uniform buffer containing [`ExternalTextureParams`] with values such
     /// that a [`TextureView`] bound to a [`wgt::BindingType::ExternalTexture`]
@@ -433,6 +434,13 @@ impl Device {
         }
         .map_err(DeviceError::from_hal)?;
 
+        let uses_indirect_validation = instance_flags
+            .contains(wgt::InstanceFlags::VALIDATION_INDIRECT_CALL)
+            && adapter.downlevel_capabilities().flags.contains(
+                wgt::DownlevelFlags::INDIRECT_EXECUTION | wgt::DownlevelFlags::COMPUTE_SHADERS,
+            )
+            && adapter.limits().max_storage_buffers_per_shader_stage >= 2;
+
         Ok(Self {
             raw: raw_device,
             queues: vec![OnceCellOrLock::new(); num_queues as usize],
@@ -456,6 +464,7 @@ impl Device {
             default_external_texture_params_buffer: ManuallyDrop::new(
                 default_external_texture_params_buffer,
             ),
+            uses_indirect_validation,
         })
     }
 
@@ -749,13 +758,11 @@ impl Device {
 
     // MQ TODO: should we unwrap here?
     pub fn get_queue(&self, index: u32) -> Option<Arc<Queue>> {
-        self.queues[index as usize].get().as_ref()?.upgrade()
+        self.queues[index as usize].get().cloned()
     }
 
     pub fn set_queue(&self, queue: &Arc<Queue>, index: u32) {
-        assert!(self.queues[index as usize]
-            .set(Arc::downgrade(queue))
-            .is_ok());
+        assert!(self.queues[index as usize].set(queue.clone()).is_ok());
     }
 
     pub fn poll(
@@ -1686,6 +1693,7 @@ impl Device {
 
         for queue_idx in 0..self.queues.len() as u32 {
             let queue = self.get_queue(queue_idx).unwrap();
+
             let state = if queue_idx == desc.initial_queue {
                 wgt::TextureUses::UNINITIALIZED
             } else {
@@ -3627,7 +3635,7 @@ impl Device {
             .map(|bgl| bgl.raw())
             .collect::<ArrayVec<_, { hal::MAX_BIND_GROUPS }>>();
 
-        let additional_flags = if self.get_queue(0).unwrap().indirect_validation.is_some() {
+        let additional_flags = if self.uses_indirect_validation {
             hal::PipelineLayoutFlags::INDIRECT_BUILTIN_UPDATE
         } else {
             hal::PipelineLayoutFlags::empty()

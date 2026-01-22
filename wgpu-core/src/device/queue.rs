@@ -102,14 +102,7 @@ impl Queue {
 
         let command_allocator = CommandAllocator::new();
 
-        let enable_indirect_validation = instance_flags
-            .contains(wgt::InstanceFlags::VALIDATION_INDIRECT_CALL)
-            && device.downlevel.flags.contains(
-                wgt::DownlevelFlags::INDIRECT_EXECUTION | wgt::DownlevelFlags::COMPUTE_SHADERS,
-            )
-            && device.adapter.limits().max_storage_buffers_per_shader_stage >= 2;
-
-        let indirect_validation = if enable_indirect_validation {
+        let indirect_validation = if device.uses_indirect_validation {
             Some(crate::indirect_validation::IndirectValidation::new(
                 device.raw(),
                 &device.limits,
