@@ -80,7 +80,7 @@ impl Test<'_> {
         instance_flags: wgt::InstanceFlags,
         adapter: Arc<wgc::instance::Adapter>,
     ) {
-        let (device, queue) = adapter
+        let (device, queues) = adapter
             .create_device_and_queue(
                 &wgt::DeviceDescriptor {
                     label: None,
@@ -89,10 +89,12 @@ impl Test<'_> {
                     experimental_features: unsafe { wgt::ExperimentalFeatures::enabled() },
                     memory_hints: wgt::MemoryHints::default(),
                     trace: wgt::Trace::Off,
+                    queues: vec![],
                 },
                 instance_flags,
             )
             .unwrap();
+        let queue = queues.into_iter().next().unwrap();
 
         let mut player = Player::default();
 

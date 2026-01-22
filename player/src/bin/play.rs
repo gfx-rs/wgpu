@@ -117,9 +117,10 @@ fn main() {
     let info = adapter.get_info();
     log::info!("Using '{}'", info.name);
 
-    let (device, queue) = adapter
+    let (device, queues) = adapter
         .create_device_and_queue(&device_desc, instance_flags)
         .unwrap();
+    let queue = queues.into_iter().next().unwrap();
 
     let mut player = Player::default();
 

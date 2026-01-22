@@ -408,12 +408,13 @@ impl Player {
             Action::Submit(_index, ref commands) if commands.is_empty() => {
                 queue.submit(&[]).unwrap();
             }
-            Action::Submit(_index, commands) => {
+            Action::Submit(index, commands) => {
                 let resolved_commands: Vec<_> = commands
                     .into_iter()
                     .map(|cmd| self.resolve_command(cmd))
                     .collect();
-                let buffer = wgc::command::CommandBuffer::from_trace(device, resolved_commands);
+                let buffer =
+                    wgc::command::CommandBuffer::from_trace(device, index.0, resolved_commands);
                 queue.submit(&[buffer]).unwrap();
             }
             Action::FailedCommands {
