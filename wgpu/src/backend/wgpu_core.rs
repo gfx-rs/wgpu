@@ -1636,7 +1636,8 @@ impl dispatch::DeviceInterface for CoreDevice {
         desc: &crate::ExternalTextureDescriptor<'_>,
         planes: &[&crate::TextureView],
     ) -> dispatch::DispatchExternalTexture {
-        let wgt_desc = desc.map_label(|l| l.map(Borrowed));
+        let wgt_desc =
+            desc.map_label_and_queue(|l| l.map(Borrowed), |q| q.map(|q| q.index).unwrap_or(0));
         let planes = planes
             .iter()
             .map(|plane| plane.inner.as_core().id)

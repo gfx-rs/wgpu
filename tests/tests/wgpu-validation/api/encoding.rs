@@ -55,7 +55,8 @@ fn mix_apis_hal_then_wgpu() {
 #[test]
 #[should_panic = "In a CommandEncoder, label = 'my encoder'"]
 fn encoding_error_contains_label_of_encoder() {
-    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let (device, queues) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let queue = queues.into_iter().next().unwrap();
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
         initial_queue: None,
         label: Some("my buffer"),

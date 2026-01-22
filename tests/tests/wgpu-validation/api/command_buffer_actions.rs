@@ -15,7 +15,8 @@ fn make_read_buffer(device: &wgpu::Device, size: u64) -> wgpu::Buffer {
 /// map_buffer_on_submit defers mapping until submit, then invokes the callback after polling.
 #[test]
 fn encoder_map_buffer_on_submit_defers_until_submit() {
-    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let (device, queues) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let queue = queues.into_iter().next().unwrap();
     let buffer = make_read_buffer(&device, 16);
 
     let fired = Arc::new(AtomicBool::new(false));
@@ -63,7 +64,8 @@ fn encoder_map_buffer_on_submit_empty_range_panics_immediately() {
 #[test]
 #[should_panic = "is out of range for buffer of size"]
 fn encoder_map_buffer_on_submit_out_of_bounds_panics_on_submit() {
-    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let (device, queues) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let queue = queues.into_iter().next().unwrap();
     let buffer = make_read_buffer(&device, 16);
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -82,7 +84,8 @@ fn encoder_map_buffer_on_submit_out_of_bounds_panics_on_submit() {
 #[test]
 #[should_panic = "Buffer with 'read buffer' label is still mapped"]
 fn encoder_map_buffer_on_submit_panics_if_already_mapped_on_submit() {
-    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let (device, queues) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let queue = queues.into_iter().next().unwrap();
     let buffer = make_read_buffer(&device, 16);
 
     // Start a mapping now so the buffer is considered mapped.
@@ -103,7 +106,8 @@ fn encoder_map_buffer_on_submit_panics_if_already_mapped_on_submit() {
 /// on_submitted_work_done is deferred until submit.
 #[test]
 fn encoder_on_submitted_work_done_defers_until_submit() {
-    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let (device, queues) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let queue = queues.into_iter().next().unwrap();
 
     let fired = Arc::new(AtomicBool::new(false));
     let fired_cl = Arc::clone(&fired);
@@ -133,7 +137,8 @@ fn encoder_on_submitted_work_done_defers_until_submit() {
 /// Both kinds of deferred callbacks are enqueued and eventually invoked.
 #[test]
 fn encoder_both_callbacks_fire_after_submit() {
-    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let (device, queues) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let queue = queues.into_iter().next().unwrap();
     let buffer = make_read_buffer(&device, 16);
 
     let map_fired = Arc::new(AtomicBool::new(false));
@@ -163,7 +168,8 @@ fn encoder_both_callbacks_fire_after_submit() {
 /// Registering multiple deferred mappings works; all callbacks fire after submit.
 #[test]
 fn encoder_multiple_map_buffer_on_submit_callbacks_fire() {
-    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let (device, queues) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let queue = queues.into_iter().next().unwrap();
     let buffer1 = make_read_buffer(&device, 32);
     let buffer2 = make_read_buffer(&device, 32);
 
@@ -193,7 +199,8 @@ fn encoder_multiple_map_buffer_on_submit_callbacks_fire() {
 #[test]
 #[should_panic]
 fn encoder_map_buffer_on_submit_panics_if_usage_invalid_on_submit() {
-    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let (device, queues) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let queue = queues.into_iter().next().unwrap();
     let unmappable = device.create_buffer(&wgpu::BufferDescriptor {
         initial_queue: None,
         label: Some("unmappable buffer"),
@@ -219,7 +226,8 @@ fn encoder_map_buffer_on_submit_panics_if_usage_invalid_on_submit() {
 /// Deferred map callbacks run before on_submitted_work_done for the same submission.
 #[test]
 fn encoder_deferred_map_runs_before_on_submitted_work_done() {
-    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let (device, queues) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let queue = queues.into_iter().next().unwrap();
     let buffer = make_read_buffer(&device, 16);
 
     #[derive(Default)]
@@ -257,7 +265,8 @@ fn encoder_deferred_map_runs_before_on_submitted_work_done() {
 /// Multiple on_submitted_work_done callbacks registered on encoder all fire after submit.
 #[test]
 fn encoder_multiple_on_submitted_callbacks_fire() {
-    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let (device, queues) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let queue = queues.into_iter().next().unwrap();
     let buffer = make_read_buffer(&device, 4);
 
     let counter = Arc::new(AtomicU32::new(0));

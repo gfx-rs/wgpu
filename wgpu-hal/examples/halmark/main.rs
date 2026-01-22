@@ -294,7 +294,6 @@ impl<A: hal::Api> Example<A> {
         let texture_data = [0xFFu8; 4];
 
         let staging_buffer_desc = hal::BufferDescriptor {
-            initial_queue: None,
             label: Some("stage"),
             size: texture_data.len() as wgpu_types::BufferAddress,
             usage: wgpu_types::BufferUses::MAP_WRITE | wgpu_types::BufferUses::COPY_SRC,
@@ -316,7 +315,6 @@ impl<A: hal::Api> Example<A> {
         }
 
         let texture_desc = hal::TextureDescriptor {
-            initial_queue: None,
             label: None,
             size: wgpu_types::Extent3d {
                 width: 1,
@@ -335,7 +333,6 @@ impl<A: hal::Api> Example<A> {
         let texture = unsafe { device.create_texture(&texture_desc).unwrap() };
 
         let cmd_encoder_desc = hal::CommandEncoderDescriptor {
-            queue: None,
             label: None,
             queue: &queue,
         };
@@ -420,7 +417,6 @@ impl<A: hal::Api> Example<A> {
         };
 
         let global_buffer_desc = hal::BufferDescriptor {
-            initial_queue: None,
             label: Some("global"),
             size: size_of::<Globals>() as wgpu_types::BufferAddress,
             usage: wgpu_types::BufferUses::MAP_WRITE | wgpu_types::BufferUses::UNIFORM,
@@ -447,7 +443,6 @@ impl<A: hal::Api> Example<A> {
             capabilities.limits.min_uniform_buffer_offset_alignment,
         );
         let local_buffer_desc = hal::BufferDescriptor {
-            initial_queue: None,
             label: Some("local"),
             size: (MAX_BUNNIES as wgpu_types::BufferAddress)
                 * (local_alignment as wgpu_types::BufferAddress),
@@ -812,7 +807,6 @@ impl<A: hal::Api> Example<A> {
         let old_fence_value = ctx.fence_value;
         if self.contexts.len() == 1 {
             let hal_desc = hal::CommandEncoderDescriptor {
-                queue: None,
                 label: None,
                 queue: &self.queue,
             };

@@ -620,6 +620,7 @@ impl crate::framework::Example for Example {
         let terrain_bundle = {
             let mut encoder =
                 device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
+                    queue: None,
                     label: None,
                     color_formats: &[Some(config.view_formats[0])],
                     depth_stencil: Some(wgpu::RenderBundleDepthStencil {

@@ -170,7 +170,7 @@ pub struct ExternalTextureParams {
 }
 
 impl ExternalTextureParams {
-    pub fn from_desc<L>(desc: &wgt::ExternalTextureDescriptor<L>) -> Self {
+    pub fn from_desc<L>(desc: &wgt::ExternalTextureDescriptor<L, u32>) -> Self {
         let gamut_conversion_matrix = [
             desc.gamut_conversion_matrix[0],
             desc.gamut_conversion_matrix[1],

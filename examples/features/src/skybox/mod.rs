@@ -376,7 +376,7 @@ impl crate::framework::Example for Example {
             uniform_buf,
             entities,
             depth_view,
-            staging_belt: wgpu::util::StagingBelt::new(device.clone(), 0x100),
+            staging_belt: wgpu::util::StagingBelt::new(device.clone(), 0x100, &queue),
         }
     }
 

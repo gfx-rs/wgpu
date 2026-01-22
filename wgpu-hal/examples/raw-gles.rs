@@ -305,7 +305,6 @@ fn fill_screen(exposed: &hal::ExposedAdapter<hal::api::Gles>, width: u32, height
     let mut encoder = unsafe {
         od.device
             .create_command_encoder(&hal::CommandEncoderDescriptor {
-                queue: None,
                 label: None,
                 queue: &od.queues[0],
             })

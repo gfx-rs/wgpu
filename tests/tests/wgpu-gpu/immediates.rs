@@ -353,6 +353,7 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
             let mut render_bundle_encoder =
                 ctx.device
                     .create_render_bundle_encoder(&RenderBundleEncoderDescriptor {
+queue: None,
                         color_formats: &[Some(output_texture.format())],
                         sample_count: 1,
                         ..RenderBundleEncoderDescriptor::default()

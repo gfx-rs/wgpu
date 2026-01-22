@@ -5,7 +5,8 @@
 #[test]
 #[should_panic = "Buffer with '' label has been destroyed"]
 fn destroyed_buffer() {
-    let (device, queue) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let (device, queues) = wgpu::Device::noop(&wgpu::DeviceDescriptor::default());
+    let queue = queues.into_iter().next().unwrap();
     let buffer = device.create_buffer(&wgpu::BufferDescriptor {
         initial_queue: None,
         label: None,

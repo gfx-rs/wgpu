@@ -27,5 +27,6 @@ impl ExternalTexture {
 ///
 /// Corresponds to [WebGPU `GPUExternalTextureDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpuexternaltexturedescriptor).
-pub type ExternalTextureDescriptor<'a> = wgt::ExternalTextureDescriptor<Label<'a>>;
+pub type ExternalTextureDescriptor<'a> =
+    wgt::ExternalTextureDescriptor<Label<'a>, Option<&'a Queue>>;
 static_assertions::assert_impl_all!(ExternalTextureDescriptor<'_>: Send, Sync);

@@ -381,6 +381,7 @@ async fn vertex_index_common(ctx: TestingContext) {
                 EncoderKind::RenderPass => None,
                 EncoderKind::RenderBundle => Some(ctx.device.create_render_bundle_encoder(
                     &wgpu::RenderBundleEncoderDescriptor {
+queue: None,
                         label: Some("test renderbundle encoder"),
                         color_formats: &[Some(wgpu::TextureFormat::Rgba8Unorm)],
                         depth_stencil: None,
