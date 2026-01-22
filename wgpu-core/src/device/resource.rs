@@ -463,9 +463,9 @@ impl Device {
         self.init_default_external_texture_params_buffer()?;
 
         let queue0 = self.get_queue(0).unwrap();
-        let mut pending_writes = queue0.pending_writes.lock();
 
         unsafe {
+            let mut pending_writes = queue0.pending_writes.lock();
             pending_writes
                 .command_encoder
                 .transition_buffers(&[hal::BufferBarrier {

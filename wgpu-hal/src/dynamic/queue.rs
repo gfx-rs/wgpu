@@ -1,4 +1,5 @@
 use alloc::{boxed::Box, vec::Vec};
+use smallvec::SmallVec;
 
 use crate::{
     DeviceError, DynCommandBuffer, DynFence, DynResource, DynSurface, DynSurfaceTexture, Queue,
@@ -45,9 +46,12 @@ impl<Q: Queue + DynResource> DynQueue for Q {
             signal_count: usize,
             wait_count: usize,
         }
-        let mut command_buffers = Vec::new();
-        let mut surface_textures = Vec::new();
-        let mut fences: Vec<(&mut <Q::A as crate::Api>::Fence, u64)> = Vec::new();
+        let mut command_buffers =
+            SmallVec::<[&<<Q as Queue>::A as crate::Api>::CommandBuffer; 1]>::new();
+        let mut surface_textures =
+            SmallVec::<[&<<Q as Queue>::A as crate::Api>::SurfaceTexture; 1]>::new();
+        let mut fences = Vec::<(&mut <Q::A as crate::Api>::Fence, u64)>::new();
+
         let mut contexts = Vec::new();
         for submit in submits.iter_mut() {
             contexts.push(SubmitContext {
@@ -73,6 +77,8 @@ impl<Q: Queue + DynResource> DynQueue for Q {
         let mut current_cb_slice: &[&<Q::A as crate::Api>::CommandBuffer] = &command_buffers;
         let mut current_texture_slice: &[&<Q::A as crate::Api>::SurfaceTexture] =
             &mut surface_textures;
+        // Impossible to make the borrow checker happy with smallvec here without pointers & unsafe
+        // Thats because of following loops, mutable references to fences everywhere, etc
         let mut current_fence_slice: &mut [(&mut <Q::A as crate::Api>::Fence, u64)] = &mut fences;
         let mut out_submits = Vec::new();
 
