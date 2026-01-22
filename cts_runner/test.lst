@@ -217,6 +217,8 @@ webgpu:shader,validation,expression,access,array:early_eval_errors:case="overrid
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_zero_signed"
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_zero_unsigned"
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_in_bounds"
+webgpu:shader,validation,expression,binary,add_sub_mul:scalar_vector_out_of_range:lhs="i32";*
+webgpu:shader,validation,expression,binary,add_sub_mul:scalar_vector_out_of_range:lhs="u32";*
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:array_override:op="%26%26";a_val=1;b_val=1
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:invalid_types:*
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:scalar_vector:op="%26%26";lhs="bool";rhs="bool"

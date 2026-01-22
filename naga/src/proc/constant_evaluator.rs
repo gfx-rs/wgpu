@@ -2575,6 +2575,10 @@ impl<'a> ConstantEvaluator<'a> {
         let left = self.eval_zero_value_and_splat(left, span)?;
         let right = self.eval_zero_value_and_splat(right, span)?;
 
+        // Note: in most cases constant evaluation checks for overflow, but for
+        // i32/u32, it uses wrapping arithmetic. See
+        // <https://gpuweb.github.io/gpuweb/wgsl/#integer-types>.
+
         let expr = match (&self.expressions[left], &self.expressions[right]) {
             (&Expression::Literal(left_value), &Expression::Literal(right_value)) => {
                 let literal = match op {
@@ -2623,15 +2627,9 @@ impl<'a> ConstantEvaluator<'a> {
                             _ => return Err(ConstantEvaluatorError::InvalidBinaryOpArgs),
                         }),
                         (Literal::U32(a), Literal::U32(b)) => Literal::U32(match op {
-                            BinaryOperator::Add => a.checked_add(b).ok_or_else(|| {
-                                ConstantEvaluatorError::Overflow("addition".into())
-                            })?,
-                            BinaryOperator::Subtract => a.checked_sub(b).ok_or_else(|| {
-                                ConstantEvaluatorError::Overflow("subtraction".into())
-                            })?,
-                            BinaryOperator::Multiply => a.checked_mul(b).ok_or_else(|| {
-                                ConstantEvaluatorError::Overflow("multiplication".into())
-                            })?,
+                            BinaryOperator::Add => a.wrapping_add(b),
+                            BinaryOperator::Subtract => a.wrapping_sub(b),
+                            BinaryOperator::Multiply => a.wrapping_mul(b),
                             BinaryOperator::Divide => a
                                 .checked_div(b)
                                 .ok_or(ConstantEvaluatorError::DivisionByZero)?,
