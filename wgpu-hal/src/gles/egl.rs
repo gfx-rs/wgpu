@@ -14,9 +14,18 @@ const EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR: i32 = 0x0001;
 const EGL_CONTEXT_OPENGL_ROBUST_ACCESS_EXT: i32 = 0x30BF;
 const EGL_PLATFORM_WAYLAND_KHR: u32 = 0x31D8;
 const EGL_PLATFORM_X11_KHR: u32 = 0x31D5;
+
+// Angle attributes
 const EGL_PLATFORM_ANGLE_ANGLE: u32 = 0x3202;
 const EGL_PLATFORM_ANGLE_NATIVE_PLATFORM_TYPE_ANGLE: u32 = 0x348F;
 const EGL_PLATFORM_ANGLE_DEBUG_LAYERS_ENABLED: u32 = 0x3451;
+const EGL_PLATFORM_ANGLE_TYPE_ANGLE: i32 = 0x3203;
+#[cfg(windows)]
+const EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE: i32 = 0x3208;
+const EGL_PLATFORM_ANGLE_ENABLE_AUTOMATIC_TRIM_ANGLE: i32 = 0x320F;
+const EGL_EXPERIMENTAL_PRESENT_PATH_ANGLE: i32 = 0x33A4;
+const EGL_EXPERIMENTAL_PRESENT_PATH_FAST_ANGLE: i32 = 0x33A9;
+
 const EGL_PLATFORM_SURFACELESS_MESA: u32 = 0x31DD;
 const EGL_GL_COLORSPACE_KHR: u32 = 0x309D;
 const EGL_GL_COLORSPACE_SRGB_KHR: u32 = 0x3089;
@@ -667,6 +676,7 @@ enum WindowKind {
     Wayland,
     X11,
     AngleX11,
+    AngleWin32,
     Unknown,
 }
 
@@ -813,6 +823,29 @@ impl crate::Instance for Instance {
                 }
                 .map_err(instance_err("failed to get Angle display"))?;
                 (display, WindowKind::AngleX11)
+            }
+            (Some(Rdh::Windows(win32_display_handle)), Some(egl))
+                if client_ext_str.contains("EGL_ANGLE_platform_angle") =>
+            {
+                log::debug!("Using Angle platform with Win32");
+                let display_attributes = [
+                    EGL_PLATFORM_ANGLE_TYPE_ANGLE as khronos_egl::Attrib,
+                    EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE as khronos_egl::Attrib,
+                    EGL_PLATFORM_ANGLE_ENABLE_AUTOMATIC_TRIM_ANGLE as khronos_egl::Attrib,
+                    khronos_egl::TRUE as khronos_egl::Attrib,
+                    EGL_EXPERIMENTAL_PRESENT_PATH_ANGLE as khronos_egl::Attrib,
+                    EGL_EXPERIMENTAL_PRESENT_PATH_FAST_ANGLE as khronos_egl::Attrib,
+                    khronos_egl::ATTRIB_NONE,
+                ];
+                let display = unsafe {
+                    egl.get_platform_display(
+                        EGL_PLATFORM_ANGLE_ANGLE,
+                        khronos_egl::DEFAULT_DISPLAY,
+                        &display_attributes,
+                    )
+                }
+                .map_err(instance_err("failed to get Angle display"))?;
+                (display, WindowKind::AngleWin32)
             }
             (Some(Rdh::Xcb(_xcb_display_handle)), Some(_egl)) => todo!("xcb"),
             x if client_ext_str.contains("EGL_MESA_platform_surfaceless") => {
@@ -1054,6 +1087,7 @@ impl super::Device {
 #[derive(Debug)]
 pub struct Swapchain {
     surface: khronos_egl::Surface,
+    #[cfg(target_os = "linux")]
     wl_window: Option<*mut wayland_sys::egl::wl_egl_window>,
     framebuffer: glow::Framebuffer,
     renderbuffer: glow::Renderbuffer,
@@ -1162,16 +1196,20 @@ impl Surface {
     unsafe fn unconfigure_impl(
         &self,
         device: &super::Device,
-    ) -> Option<(
-        khronos_egl::Surface,
-        Option<*mut wayland_sys::egl::wl_egl_window>,
-    )> {
+    ) -> Option<(khronos_egl::Surface, Option<*mut ffi::c_void>)> {
         let gl = &device.shared.context.lock();
         match self.swapchain.write().take() {
             Some(sc) => {
                 unsafe { gl.delete_renderbuffer(sc.renderbuffer) };
                 unsafe { gl.delete_framebuffer(sc.framebuffer) };
-                Some((sc.surface, sc.wl_window))
+                #[cfg(target_os = "linux")]
+                {
+                    Some((sc.surface, sc.wl_window.map(|w| w.cast())))
+                }
+                #[cfg(not(target_os = "linux"))]
+                {
+                    Some((sc.surface, None))
+                }
             }
             None => None,
         }
@@ -1195,13 +1233,14 @@ impl crate::Surface for Surface {
     ) -> Result<(), crate::SurfaceError> {
         use raw_window_handle::RawWindowHandle as Rwh;
 
-        let (surface, wl_window) = match unsafe { self.unconfigure_impl(device) } {
+        let (surface, _wl_window) = match unsafe { self.unconfigure_impl(device) } {
             Some((sc, wl_window)) => {
+                #[cfg(target_os = "linux")]
                 if let Some(window) = wl_window {
                     wayland_sys::ffi_dispatch!(
                         wayland_sys::egl::wayland_egl_handle(),
                         wl_egl_window_resize,
-                        window,
+                        window.cast(),
                         config.extent.width as i32,
                         config.extent.height as i32,
                         0,
@@ -1212,6 +1251,7 @@ impl crate::Surface for Surface {
                 (sc, wl_window)
             }
             None => {
+                #[cfg(target_os = "linux")]
                 let mut wl_window = None;
                 let (mut temp_xlib_handle, mut temp_xcb_handle);
                 let native_window_ptr = match (self.wsi.kind, self.raw_window_handle) {
@@ -1231,7 +1271,7 @@ impl crate::Surface for Surface {
                         handle.a_native_window.as_ptr()
                     }
                     (WindowKind::Unknown, Rwh::OhosNdk(handle)) => handle.native_window.as_ptr(),
-                    #[cfg(unix)]
+                    #[cfg(target_os = "linux")]
                     (WindowKind::Wayland, Rwh::Wayland(handle)) => {
                         let window = wayland_sys::ffi_dispatch!(
                             wayland_sys::egl::wayland_egl_handle(),
@@ -1245,7 +1285,7 @@ impl crate::Surface for Surface {
                     }
                     #[cfg(Emscripten)]
                     (WindowKind::Unknown, Rwh::Web(handle)) => handle.id as *mut ffi::c_void,
-                    (WindowKind::Unknown, Rwh::Win32(handle)) => {
+                    (WindowKind::AngleWin32, Rwh::Win32(handle)) => {
                         handle.hwnd.get() as *mut ffi::c_void
                     }
                     (WindowKind::Unknown, Rwh::AppKit(handle)) => {
@@ -1336,7 +1376,10 @@ impl crate::Surface for Surface {
                 };
 
                 match raw_result {
+                    #[cfg(target_os = "linux")]
                     Ok(raw) => (raw, wl_window),
+                    #[cfg(not(target_os = "linux"))]
+                    Ok(raw) => (raw, None),
                     Err(e) => {
                         log::warn!("Error in create_window_surface: {e:?}");
                         return Err(crate::SurfaceError::Lost);
@@ -1379,7 +1422,8 @@ impl crate::Surface for Surface {
         let mut swapchain = self.swapchain.write();
         *swapchain = Some(Swapchain {
             surface,
-            wl_window,
+            #[cfg(target_os = "linux")]
+            wl_window: _wl_window,
             renderbuffer,
             framebuffer,
             extent: config.extent,
@@ -1392,12 +1436,13 @@ impl crate::Surface for Surface {
     }
 
     unsafe fn unconfigure(&self, device: &super::Device) {
-        if let Some((surface, wl_window)) = unsafe { self.unconfigure_impl(device) } {
+        if let Some((surface, _wl_window)) = unsafe { self.unconfigure_impl(device) } {
             self.egl
                 .instance
                 .destroy_surface(self.egl.display, surface)
                 .unwrap();
-            if let Some(window) = wl_window {
+            #[cfg(target_os = "linux")]
+            if let Some(window) = _wl_window {
                 wayland_sys::ffi_dispatch!(
                     wayland_sys::egl::wayland_egl_handle(),
                     wl_egl_window_destroy,

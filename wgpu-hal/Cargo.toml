@@ -60,7 +60,7 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 # exclude the Vulkan backend on MacOS unless a separate feature `vulkan-portability` is enabled. In response
 # to these features, it enables features of platform specific crates. For example, the `vulkan` feature in wgpu-core
 # enables the `vulkan` feature in `wgpu-core-deps-windows-linux-android` which in turn enables the
-# `vulkan` feature in `wgpu-hal` _only_ on those platforms. If you enable the `vulkan-portability` feature, it 
+# `vulkan` feature in `wgpu-hal` _only_ on those platforms. If you enable the `vulkan-portability` feature, it
 # will enable the `vulkan` feature in `wgpu-core-deps-apple`. The only way to do this is unfortunately to have
 # a separate crate for each platform category that participates in the feature unification.
 #
@@ -165,6 +165,8 @@ dx12 = [
 ### Misc Other Features ###
 ###########################
 
+angle = []
+
 static-dxc = ["dep:mach-dxcompiler-rs"]
 renderdoc = ["dep:libloading", "dep:renderdoc-sys", "dep:log"]
 fragile-send-sync-non-atomic-wasm = [
@@ -244,6 +246,7 @@ renderdoc-sys = { workspace = true, optional = true }
 # Backend: Vulkan
 libc = { workspace = true, optional = true }
 # backend: GLES
+[target.'cfg(target_os = "linux")'.dependencies]
 wayland-sys = { version = "0.31.3", features = [
     "client",
     "dlopen",

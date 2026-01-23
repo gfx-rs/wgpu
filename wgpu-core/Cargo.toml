@@ -143,7 +143,7 @@ gles = [
 ## WebGL backend, only available on Emscripten
 webgl = ["wgpu-core-deps-wasm/webgl", "wgpu-types/web"]
 ## OpenGL backend, on macOS only
-angle = ["wgpu-core-deps-apple/angle"]
+angle = ["wgpu-core-deps-apple/angle", "wgpu-core-deps-windows-linux-android/angle"]
 ## Vulkan portability backend, only available on macOS
 vulkan-portability = ["wgpu-core-deps-apple/vulkan-portability"]
 ## Renderdoc integration, only available on Windows, Linux, and Android

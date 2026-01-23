@@ -20,6 +20,7 @@ rust-version = "1.76"
 gles = ["wgpu-hal/gles"]
 vulkan = ["wgpu-hal/vulkan"]
 dx12 = ["wgpu-hal/dx12"]
+angle = ["wgpu-hal/angle"]
 renderdoc = ["wgpu-hal/renderdoc"]
 
 # Depend on wgpu-hal conditionally, so that the above features only apply to wgpu-hal on this set of platforms.
