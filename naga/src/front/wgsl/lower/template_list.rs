@@ -117,16 +117,16 @@ impl<'iter, 'source> TemplateListIter<'iter, 'source> {
         &mut self,
         ctx: &ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, Option<ir::AddressSpace>> {
-        if let Some(expr) = self.template_list.next() {
-            let (enumerant, span) = ctx.enumerant(*expr)?;
-            Ok(Some(conv::map_address_space(
-                enumerant,
-                span,
-                &ctx.enable_extensions,
-            )?))
-        } else {
-            Ok(None)
-        }
+        let Some(expr) = self.template_list.next() else {
+            return Ok(None);
+        };
+
+        let (enumerant, span) = ctx.enumerant(*expr)?;
+        Ok(Some(conv::map_address_space(
+            enumerant,
+            span,
+            &ctx.enable_extensions,
+        )?))
     }
 
     pub fn access_mode(
@@ -179,13 +179,13 @@ impl<'iter, 'source> TemplateListIter<'iter, 'source> {
         &mut self,
         ctx: &ExpressionContext<'source, '_, '_>,
     ) -> Result<'source, bool> {
-        if let Some(expr) = self.template_list.next() {
-            let (enumerant, span) = ctx.enumerant(*expr)?;
-            conv::map_ray_flag(&ctx.enable_extensions, enumerant, span)?;
-            Ok(true)
-        } else {
-            Ok(false)
-        }
+        let Some(expr) = self.template_list.next() else {
+            return Ok(false);
+        };
+
+        let (enumerant, span) = ctx.enumerant(*expr)?;
+        conv::map_ray_flag(&ctx.enable_extensions, enumerant, span)?;
+        Ok(true)
     }
 
     pub fn cooperative_role(
