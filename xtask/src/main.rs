@@ -22,6 +22,9 @@ Commands:
   cts [<options>] [<test selector...> | -f <test list file...> | -- <args...>]
     Check out, build, and run CTS tests
 
+    If no command-line arguments are specified, runs the default test list
+    in `cts_runner/test.lst`, with quiet mode enabled.
+
     --skip-checkout         Don't check out the pinned CTS version, use whatever
                             is already checked out.
     --release               Build and run in release mode
@@ -31,6 +34,8 @@ Commands:
     --filter <regex>        Filter tests by selector using a regex pattern.
                             Prefix with '!' to invert (exclude matching tests).
                             Applied after all tests are collected.
+    --quiet                 Only show test counts for suites without failures.
+    --verbose               Show full output when running the default test list.
 
   run-wasm
     Build and run web examples

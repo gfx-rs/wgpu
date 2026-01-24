@@ -64,6 +64,8 @@ pub fn run_cts(
     let skip_checkout = args.contains("--skip-checkout");
     let llvm_cov = args.contains("--llvm-cov");
     let release = args.contains("--release");
+    let mut quiet = args.contains("--quiet");
+    let verbose = args.contains("--verbose");
     let running_on_backend = args.opt_value_from_str::<_, String>("--backend")?;
     let mut filter_pattern = args.opt_value_from_str::<_, String>("--filter")?;
     let mut filter_invert = false;
@@ -109,6 +111,9 @@ pub fn run_cts(
         if passthrough_args.is_none() {
             log::info!("Reading default test list from {CTS_DEFAULT_TEST_LIST}");
             list_files.push(OsString::from(CTS_DEFAULT_TEST_LIST));
+
+            // Reduce output, unless `--verbose` was specified.
+            quiet = !verbose;
         }
     } else if passthrough_args.is_some() {
         bail!("Test(s) and test list(s) are incompatible with passthrough arguments.");
@@ -304,7 +309,10 @@ pub fn run_cts(
             }
         }
 
-        log::info!("Running {}", test.selector.to_string_lossy());
+        if !quiet {
+            log::info!("Running {}", test.selector.to_string_lossy());
+        }
+
         let mut cmd = shell
             .cmd("cargo")
             .args(run_flags)
@@ -316,10 +324,31 @@ pub fn run_cts(
             cmd = cmd.arg("--release")
         }
 
-        cmd.args(["--", "./tools/run_deno", "--verbose"])
-            .args([&test.selector])
-            .run()
-            .context("CTS failed")?;
+        cmd = cmd
+            .args(["--", "./tools/run_deno", "--verbose"])
+            .args([&test.selector]);
+
+        if quiet {
+            let output = cmd.ignore_status().output().context("Failed to run CTS")?;
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+
+            if output.status.success() {
+                if let Some((_, summary)) = stdout.split_once("** Summary **") {
+                    println!("\n== Summary for {} ==", test.selector.to_string_lossy());
+                    println!("{}", summary.trim());
+                } else {
+                    print!("{}", stdout);
+                    eprint!("{}", stderr);
+                }
+            } else {
+                print!("{}", stdout);
+                eprint!("{}", stderr);
+                bail!("CTS failed");
+            }
+        } else {
+            cmd.run().context("CTS failed")?;
+        }
     }
 
     if tests.len() > 1 {
