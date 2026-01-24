@@ -13,6 +13,7 @@ use deno_core::V8TaskSpawner;
 use deno_core::WebIDL;
 
 use super::device::GPUDevice;
+use super::device::DEVICE_EXTERNAL_MEMORY_SIZE;
 use super::queue::GPUQueue;
 use crate::error::GPUGenericError;
 use crate::webidl::features_to_feature_names;
@@ -161,6 +162,11 @@ impl GPUAdapter {
       None,
     )?;
 
+    // Associate external memory with the device to encourage V8 to garbage
+    // collect devices promptly.
+    scope
+      .adjust_amount_of_external_allocated_memory(DEVICE_EXTERNAL_MEMORY_SIZE);
+
     let spawner = state.borrow::<V8TaskSpawner>().clone();
     let lost_resolver = v8::PromiseResolver::new(scope).unwrap();
     let lost_promise = lost_resolver.get_promise(scope);
@@ -195,6 +201,7 @@ impl GPUAdapter {
       lost_promise: v8::Global::new(scope, lost_promise),
       limits: SameObject::new(),
       features: SameObject::new(),
+      weak: std::sync::OnceLock::new(),
     };
     let device = deno_core::cppgc::make_cppgc_object(scope, device);
     let weak_device = v8::Weak::new(scope, device);
@@ -207,13 +214,24 @@ impl GPUAdapter {
     let null = v8::null(scope);
     set_event_target_data.call(scope, null.into(), &[device.into()]);
 
+    let finalizer = v8::Weak::with_finalizer(
+      scope,
+      device,
+      Box::new(move |isolate| {
+        isolate.adjust_amount_of_external_allocated_memory(
+          -DEVICE_EXTERNAL_MEMORY_SIZE,
+        );
+      }),
+    );
+
     // Now that the device is fully constructed, give the error handler a
-    // weak reference to it.
+    // weak reference to it, and store the finalizer weak reference.
     let device = device.cast::<v8::Value>();
-    deno_core::cppgc::try_unwrap_cppgc_object::<GPUDevice>(scope, device)
-      .unwrap()
-      .error_handler
-      .set_device(weak_device);
+    let device_ref =
+      deno_core::cppgc::try_unwrap_cppgc_object::<GPUDevice>(scope, device)
+        .unwrap();
+    device_ref.error_handler.set_device(weak_device);
+    device_ref.weak.set(finalizer).unwrap();
 
     Ok(v8::Global::new(scope, device))
   }

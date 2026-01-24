@@ -37,6 +37,11 @@ use crate::shader::GPUCompilationInfo;
 use crate::webidl::features_to_feature_names;
 use crate::Instance;
 
+/// External memory associated with device and queue, to encourage V8 to garbage
+/// collect devices promptly. This seems to be particularly important on DX12
+/// in CI, where any smaller power of two results in OOM errors.
+pub(crate) const DEVICE_EXTERNAL_MEMORY_SIZE: i64 = 1 << 24; // 16 MB
+
 pub struct GPUDevice {
   pub instance: Instance,
   pub id: wgpu_core::id::DeviceId,
@@ -52,6 +57,9 @@ pub struct GPUDevice {
 
   pub error_handler: super::error::ErrorHandler,
   pub lost_promise: v8::Global<v8::Promise>,
+
+  // Weak reference to the JS object so we can attach a finalizer.
+  pub(crate) weak: std::sync::OnceLock<v8::Weak<v8::Object>>,
 }
 
 impl Drop for GPUDevice {
