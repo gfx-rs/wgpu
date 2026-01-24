@@ -42,14 +42,14 @@ impl<'iter, 'source> TemplateListIter<'iter, 'source> {
 
     fn expect_next(
         &mut self,
-        arg: &'static str,
+        description: &'static str,
     ) -> Result<'source, Handle<ast::Expression<'source>>> {
         if let Some(expr) = self.template_list.next() {
             Ok(*expr)
         } else {
             Err(Box::new(Error::MissingTemplateArg {
                 span: self.ident_span,
-                arg,
+                description,
             }))
         }
     }

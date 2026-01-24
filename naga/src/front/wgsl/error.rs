@@ -431,7 +431,7 @@ pub(crate) enum Error<'a> {
     UnexpectedTemplate(Span),
     MissingTemplateArg {
         span: Span,
-        arg: &'static str,
+        description: &'static str,
     },
     UnexpectedExprForTypeExpression(Span),
 }
@@ -1460,7 +1460,7 @@ impl<'a> Error<'a> {
             },
             Error::MissingTemplateArg {
                 span,
-                arg,
+                description: arg,
             } => ParseError {
                 message: format!(
                     "`{}` needs a template argument specified: {arg}",
