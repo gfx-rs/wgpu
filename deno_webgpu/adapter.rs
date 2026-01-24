@@ -13,6 +13,7 @@ use deno_core::V8TaskSpawner;
 use deno_core::WebIDL;
 
 use super::device::GPUDevice;
+use super::queue::GPUQueue;
 use crate::error::GPUGenericError;
 use crate::webidl::features_to_feature_names;
 use crate::webidl::GPUFeatureName;
@@ -163,17 +164,33 @@ impl GPUAdapter {
     let spawner = state.borrow::<V8TaskSpawner>().clone();
     let lost_resolver = v8::PromiseResolver::new(scope).unwrap();
     let lost_promise = lost_resolver.get_promise(scope);
+    let error_handler = Rc::new(super::error::DeviceErrorHandler::new(
+      v8::Global::new(scope, lost_resolver),
+      spawner,
+    ));
+
+    // Create the queue object eagerly so that the wgpu-core queue resource
+    // gets cleaned up when the device is garbage collected, even if JS code
+    // never accesses the queue property.
+    let queue_obj = deno_core::cppgc::make_cppgc_object(
+      scope,
+      GPUQueue {
+        instance: self.instance.clone(),
+        error_handler: error_handler.clone(),
+        label: descriptor.label.clone(),
+        id: queue,
+        device,
+      },
+    );
+    let queue_obj = v8::Global::new(scope, queue_obj);
+
     let device = GPUDevice {
       instance: self.instance.clone(),
       id: device,
-      queue,
       label: descriptor.label,
-      queue_obj: SameObject::new(),
+      queue_obj,
       adapter_info: self.info.clone(),
-      error_handler: Rc::new(super::error::DeviceErrorHandler::new(
-        v8::Global::new(scope, lost_resolver),
-        spawner,
-      )),
+      error_handler,
       adapter: self.id,
       lost_promise: v8::Global::new(scope, lost_promise),
       limits: SameObject::new(),
