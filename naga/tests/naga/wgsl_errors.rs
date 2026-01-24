@@ -4345,6 +4345,20 @@ fn source_with_control_char() {
 }
 
 #[test]
+fn enumerant_with_template_parameters() {
+    check(
+        r#"var<private<xlerb, 1+2>> x: u32;"#,
+        "error: unexpected template
+  ┌─ wgsl:1:5
+  │
+1 │ var<private<xlerb, 1+2>> x: u32;
+  │     ^^^^^^^^^^^^^^^^^^^ expected identifier
+
+",
+    );
+}
+
+#[test]
 fn ray_query_enable_extension() {
     check_extension_validation!(
         Capabilities::RAY_QUERY,

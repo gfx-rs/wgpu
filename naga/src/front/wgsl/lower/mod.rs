@@ -913,6 +913,16 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         self.as_global().ensure_type_exists(None, inner)
     }
 
+    /// Check that `expr` is an identifier resolving to a predeclared enumerant.
+    ///
+    /// The identifier must not have any template parameters.
+    ///
+    /// Return the name of the identifier, together with its span.
+    ///
+    /// Actually, this only checks that the identifier refers to some
+    /// predeclared object, not necessarily an enumerant. This should be good
+    /// enough, since the caller is going to compare the name against some list
+    /// of permitted enumerants anyway.
     fn enumerant(
         &self,
         expr: Handle<ast::Expression<'source>>,
@@ -920,23 +930,28 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         let span = self.ast_expressions.get_span(expr);
         let expr = &self.ast_expressions[expr];
 
-        match *expr {
-            ast::Expression::Ident(ast::TemplateElaboratedIdent {
-                ident: ast::IdentExpr::Local(_),
-                ..
-            }) => Err(Box::new(Error::UnexpectedIdentForEnumerant(span))),
-            ast::Expression::Ident(ast::TemplateElaboratedIdent {
-                ident: ast::IdentExpr::Unresolved(name),
-                ..
-            }) => {
-                if self.globals.get(name).is_some() {
-                    Err(Box::new(Error::UnexpectedIdentForEnumerant(span)))
-                } else {
-                    Ok((name, span))
-                }
-            }
-            _ => Err(Box::new(Error::UnexpectedExprForEnumerant(span))),
+        let ast::Expression::Ident(ref ident) = *expr else {
+            return Err(Box::new(Error::UnexpectedExprForEnumerant(span)));
+        };
+
+        let ast::TemplateElaboratedIdent {
+            ident: ast::IdentExpr::Unresolved(name),
+            ref template_list,
+            ..
+        } = *ident
+        else {
+            return Err(Box::new(Error::UnexpectedIdentForEnumerant(span)));
+        };
+
+        if self.globals.get(name).is_some() {
+            return Err(Box::new(Error::UnexpectedIdentForEnumerant(span)));
         }
+
+        if !template_list.is_empty() {
+            return Err(Box::new(Error::UnexpectedTemplate(span)));
+        }
+
+        Ok((name, span))
     }
 
     fn var_address_space(
