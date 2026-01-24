@@ -2705,8 +2705,10 @@ impl Device {
                                 error: e.into(),
                             })?;
                     }
-
-                    (None, WritableStorage::No)
+                    (
+                        Some(wgt::Features::ACCELERATION_STRUCTURE_BINDING_ARRAY),
+                        WritableStorage::No,
+                    )
                 }
                 Bt::ExternalTexture => {
                     self.require_features(wgt::Features::EXTERNAL_TEXTURE)
@@ -3347,6 +3349,26 @@ impl Device {
                     let res_index = hal_tlas_s.len();
                     hal_tlas_s.push(tlas);
                     (res_index, 1)
+                }
+                Br::AccelerationStructureArray(ref tlas_array) => {
+                    // Feature validation for TLAS binding arrays happens at bind group layout
+                    // creation time (mirroring other binding-array resource types). By the time we
+                    // get here, `decl.count` has already been validated against device features.
+                    let num_bindings = tlas_array.len();
+                    Self::check_array_binding(self.features, decl.count, num_bindings)?;
+
+                    let res_index = hal_tlas_s.len();
+                    for tlas in tlas_array.iter() {
+                        let tlas = self.create_tlas_binding(
+                            &mut used,
+                            binding,
+                            decl,
+                            tlas,
+                            &snatch_guard,
+                        )?;
+                        hal_tlas_s.push(tlas);
+                    }
+                    (res_index, num_bindings)
                 }
                 Br::ExternalTexture(ref et) => {
                     let et = self.create_external_texture_binding(

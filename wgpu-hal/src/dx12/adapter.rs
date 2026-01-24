@@ -615,9 +615,19 @@ impl super::Adapter {
             >= Direct3D12::D3D12_RAYTRACING_TIER_1_1.0
             && shader_model >= naga::back::hlsl::ShaderModel::V6_5
             && has_features5;
+
         features.set(
             wgt::Features::EXPERIMENTAL_RAY_QUERY
                 | wgt::Features::EXTENDED_ACCELERATION_STRUCTURE_VERTEX_FORMATS,
+            supports_ray_tracing,
+        );
+
+        // Binding arrays of TLAS are supported on D3D12 when ray tracing is supported.
+        //
+        // This flag is used for shader-side `binding_array<acceleration_structure>` as well as
+        // allowing `BindGroupLayoutEntry::count = Some(...)` for `BindingType::AccelerationStructure`.
+        features.set(
+            wgt::Features::ACCELERATION_STRUCTURE_BINDING_ARRAY,
             supports_ray_tracing,
         );
 

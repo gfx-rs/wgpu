@@ -208,6 +208,8 @@ bitflags::bitflags! {
         const RAY_TRACING_PIPELINE = 1 << 38;
         /// Support for draw index builtin
         const DRAW_INDEX = 1 << 39;
+        /// Support for binding arrays of acceleration structures.
+        const ACCELERATION_STRUCTURE_BINDING_ARRAY = 1 << 40;
     }
 }
 

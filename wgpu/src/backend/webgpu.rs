@@ -2102,6 +2102,9 @@ impl dispatch::DeviceInterface for WebDevice {
                     crate::BindingResource::AccelerationStructure(_) => {
                         unimplemented!("Raytracing not implemented for web")
                     }
+                    crate::BindingResource::AccelerationStructureArray(_) => {
+                        unimplemented!("Raytracing not implemented for web")
+                    }
                     crate::BindingResource::ExternalTexture(_) => {
                         unimplemented!("ExternalTexture not implemented for web")
                     }

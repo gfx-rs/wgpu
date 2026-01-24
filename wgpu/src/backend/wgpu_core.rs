@@ -1193,6 +1193,19 @@ impl dispatch::DeviceInterface for CoreDevice {
         }
         let mut remaining_arrayed_buffer_bindings = &arrayed_buffer_bindings[..];
 
+        // Gather all the TLAS IDs used by TLAS arrays first (same pattern as other arrayed resources).
+        //
+        // Note: there isn't currently a dedicated feature flag for TLAS binding arrays at the wgpu API
+        // layer; validation happens in wgpu-core against `BindGroupLayoutEntry::count`.
+        let mut arrayed_acceleration_structures = Vec::new();
+        for entry in desc.entries.iter() {
+            if let BindingResource::AccelerationStructureArray(array) = entry.resource {
+                arrayed_acceleration_structures
+                    .extend(array.iter().map(|tlas| tlas.inner.as_core().id));
+            }
+        }
+        let mut remaining_arrayed_acceleration_structures = &arrayed_acceleration_structures[..];
+
         let entries = desc
             .entries
             .iter()
@@ -1235,6 +1248,12 @@ impl dispatch::DeviceInterface for CoreDevice {
                         bm::BindingResource::AccelerationStructure(
                             acceleration_structure.inner.as_core().id,
                         )
+                    }
+                    BindingResource::AccelerationStructureArray(array) => {
+                        let slice = &remaining_arrayed_acceleration_structures[..array.len()];
+                        remaining_arrayed_acceleration_structures =
+                            &remaining_arrayed_acceleration_structures[array.len()..];
+                        bm::BindingResource::AccelerationStructureArray(Borrowed(slice))
                     }
                     BindingResource::ExternalTexture(external_texture) => {
                         bm::BindingResource::ExternalTexture(external_texture.inner.as_core().id)

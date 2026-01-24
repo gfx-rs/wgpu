@@ -962,7 +962,14 @@ impl super::Validator {
                             }
                         }
                         crate::TypeInner::AccelerationStructure { .. } => {
-                            return Err(GlobalVariableError::InvalidBindingArray(base));
+                            if !self
+                                .capabilities
+                                .contains(Capabilities::ACCELERATION_STRUCTURE_BINDING_ARRAY)
+                            {
+                                return Err(GlobalVariableError::UnsupportedCapability(
+                                    Capabilities::ACCELERATION_STRUCTURE_BINDING_ARRAY,
+                                ));
+                            }
                         }
                         crate::TypeInner::RayQuery { .. } => {
                             // This should have been rejected in `validate_type`.
