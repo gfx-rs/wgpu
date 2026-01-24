@@ -721,6 +721,22 @@ impl Adapter {
             caps.contains(Tfc::STORAGE_READ_WRITE),
         );
 
+        // Force storage write capability for common formats that modern GPUs support
+        // but DX12 may not correctly report via D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE.
+        // This is needed for Vello's compute shaders which use Rgba8Unorm storage textures.
+        // See: https://github.com/gfx-rs/wgpu/issues/8670
+        if matches!(
+            format,
+            wgt::TextureFormat::Rgba8Unorm
+                | wgt::TextureFormat::Rgba8Snorm
+                | wgt::TextureFormat::Bgra8Unorm
+        ) {
+            flags.set(wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY, true);
+            flags.set(wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY, true);
+            flags.set(wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE, true);
+            allowed_usages.set(wgt::TextureUsages::STORAGE_BINDING, true);
+        }
+
         flags.set(
             wgt::TextureFormatFeatureFlags::STORAGE_ATOMIC,
             caps.contains(Tfc::STORAGE_ATOMIC),
