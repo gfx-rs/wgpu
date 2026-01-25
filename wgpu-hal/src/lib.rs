@@ -786,6 +786,12 @@ pub trait Adapter: WasmNotSendSync {
     ///
     /// [`PresentationTimestamp`]: wgt::PresentationTimestamp
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
+
+    /// Returns the buffer uses that are guaranteed to be ordered.
+    fn get_buffer_ordered(&self) -> wgt::BufferUses;
+
+    /// Returns the texture uses that are guaranteed to be ordered.
+    fn get_texture_ordered(&self) -> wgt::TextureUses;
 }
 
 /// A connection to a GPU and a pool of resources to use with it.

@@ -559,7 +559,7 @@ pub(super) fn encode_compute_pass(
 
         immediates: Vec::new(),
 
-        intermediate_trackers: Tracker::new(),
+        intermediate_trackers: Tracker::new(device.buffer_ordered, device.texture_ordered),
     };
 
     let indices = &device.tracker_indices;

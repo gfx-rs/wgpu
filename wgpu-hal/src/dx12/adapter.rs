@@ -1221,6 +1221,17 @@ impl crate::Adapter for super::Adapter {
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         wgt::PresentationTimestamp(self.presentation_timer.get_timestamp_ns())
     }
+
+    fn get_buffer_ordered(&self) -> wgt::BufferUses {
+        wgt::BufferUses::INCLUSIVE | wgt::BufferUses::MAP_WRITE
+    }
+
+    fn get_texture_ordered(&self) -> wgt::TextureUses {
+        wgt::TextureUses::INCLUSIVE
+            | wgt::TextureUses::COLOR_TARGET
+            | wgt::TextureUses::DEPTH_STENCIL_WRITE
+            | wgt::TextureUses::STORAGE_READ_ONLY
+    }
 }
 
 fn get_adapter_pci_info(vendor_id: u32, device_id: u32) -> String {

@@ -894,7 +894,7 @@ impl CommandEncoder {
                         api: EncodingApi::Undecided,
                         label: label.to_string(),
                     },
-                    trackers: Tracker::new(),
+                    trackers: Tracker::new(device.buffer_ordered, device.texture_ordered),
                     buffer_memory_init_actions: Default::default(),
                     texture_memory_actions: Default::default(),
                     as_actions: Default::default(),

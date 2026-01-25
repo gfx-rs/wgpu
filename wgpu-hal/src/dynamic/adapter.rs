@@ -36,6 +36,10 @@ pub trait DynAdapter: DynResource {
     unsafe fn surface_capabilities(&self, surface: &dyn DynSurface) -> Option<SurfaceCapabilities>;
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp;
+
+    fn get_buffer_ordered(&self) -> wgt::BufferUses;
+
+    fn get_texture_ordered(&self) -> wgt::TextureUses;
 }
 
 impl<A: Adapter + DynResource> DynAdapter for A {
@@ -65,5 +69,13 @@ impl<A: Adapter + DynResource> DynAdapter for A {
 
     unsafe fn get_presentation_timestamp(&self) -> wgt::PresentationTimestamp {
         unsafe { A::get_presentation_timestamp(self) }
+    }
+
+    fn get_buffer_ordered(&self) -> wgt::BufferUses {
+        A::get_buffer_ordered(self)
+    }
+
+    fn get_texture_ordered(&self) -> wgt::TextureUses {
+        A::get_texture_ordered(self)
     }
 }

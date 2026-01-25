@@ -258,6 +258,8 @@ pub struct Device {
     pub(crate) limits: wgt::Limits,
     pub(crate) features: wgt::Features,
     pub(crate) downlevel: wgt::DownlevelCapabilities,
+    pub(crate) buffer_ordered: wgt::BufferUses,
+    pub(crate) texture_ordered: wgt::TextureUses,
     pub(crate) instance_flags: wgt::InstanceFlags,
     pub(crate) deferred_destroy: Mutex<Vec<DeferredDestroy>>,
     pub(crate) usage_scopes: UsageScopePool,
@@ -428,6 +430,9 @@ impl Device {
             }
         };
 
+        let buffer_ordered = adapter.raw.adapter.get_buffer_ordered();
+        let texture_ordered = adapter.raw.adapter.get_texture_ordered();
+
         let fence = unsafe { raw_device.create_fence() }.map_err(DeviceError::from_hal)?;
 
         let command_allocator = command::CommandAllocator::new();
@@ -511,7 +516,10 @@ impl Device {
             snatchable_lock: unsafe { SnatchLock::new(rank::DEVICE_SNATCHABLE_LOCK) },
             valid: AtomicBool::new(true),
             device_lost_closure: Mutex::new(rank::DEVICE_LOST_CLOSURE, None),
-            trackers: Mutex::new(rank::DEVICE_TRACKERS, DeviceTracker::new()),
+            trackers: Mutex::new(
+                rank::DEVICE_TRACKERS,
+                DeviceTracker::new(buffer_ordered, texture_ordered),
+            ),
             tracker_indices: TrackerIndexAllocators::new(),
             bgl_pool: ResourcePool::new(),
             #[cfg(feature = "trace")]
@@ -520,6 +528,8 @@ impl Device {
             limits: desc.required_limits.clone(),
             features: desc.required_features,
             downlevel,
+            buffer_ordered,
+            texture_ordered,
             instance_flags,
             deferred_destroy: Mutex::new(rank::DEVICE_DEFERRED_DESTROY, Vec::new()),
             usage_scopes: Mutex::new(rank::DEVICE_USAGE_SCOPES, Default::default()),
@@ -5125,7 +5135,12 @@ impl Device {
     }
 
     pub(crate) fn new_usage_scope(&self) -> UsageScope<'_> {
-        UsageScope::new_pooled(&self.usage_scopes, &self.tracker_indices)
+        UsageScope::new_pooled(
+            &self.usage_scopes,
+            &self.tracker_indices,
+            self.buffer_ordered,
+            self.texture_ordered,
+        )
     }
 
     pub fn get_hal_counters(&self) -> wgt::HalCounters {

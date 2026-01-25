@@ -2789,6 +2789,17 @@ impl crate::Adapter for super::Adapter {
             wgt::PresentationTimestamp::INVALID_TIMESTAMP
         }
     }
+
+    fn get_buffer_ordered(&self) -> wgt::BufferUses {
+        wgt::BufferUses::INCLUSIVE | wgt::BufferUses::MAP_WRITE
+    }
+
+    fn get_texture_ordered(&self) -> wgt::TextureUses {
+        wgt::TextureUses::INCLUSIVE
+            | wgt::TextureUses::COLOR_TARGET
+            | wgt::TextureUses::DEPTH_STENCIL_WRITE
+            | wgt::TextureUses::STORAGE_READ_ONLY
+    }
 }
 
 fn is_format_16bit_norm_supported(instance: &ash::Instance, phd: vk::PhysicalDevice) -> bool {
