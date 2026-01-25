@@ -2795,10 +2795,7 @@ impl crate::Adapter for super::Adapter {
     }
 
     fn get_texture_ordered(&self) -> wgt::TextureUses {
-        wgt::TextureUses::INCLUSIVE
-            | wgt::TextureUses::COLOR_TARGET
-            | wgt::TextureUses::DEPTH_STENCIL_WRITE
-            | wgt::TextureUses::STORAGE_READ_ONLY
+        wgt::TextureUses::INCLUSIVE | wgt::TextureUses::STORAGE_READ_ONLY
     }
 }
 
