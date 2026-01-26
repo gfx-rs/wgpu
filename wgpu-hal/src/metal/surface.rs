@@ -1,29 +1,22 @@
 #![allow(clippy::let_unit_value)] // `let () =` being used to constrain result type
 
 use alloc::borrow::ToOwned as _;
-use core::mem::ManuallyDrop;
-use core::ptr::NonNull;
 
 use core_graphics_types::{
     base::CGFloat,
     geometry::{CGRect, CGSize},
 };
-use metal::{foreign_types::ForeignType, MTLTextureType};
+use metal::MTLTextureType;
 use objc::{
     class, msg_send,
-    rc::{autoreleasepool, StrongPtr},
-    runtime::{Object, BOOL, NO, YES},
+    rc::autoreleasepool,
+    runtime::{BOOL, YES},
     sel, sel_impl,
 };
 use parking_lot::{Mutex, RwLock};
 
-use crate::metal::layer_observer::new_observer_layer;
-
-#[link(name = "QuartzCore", kind = "framework")]
-extern "C" {}
-
 impl super::Surface {
-    fn new(layer: metal::MetalLayer) -> Self {
+    pub fn new(layer: metal::MetalLayer) -> Self {
         Self {
             render_layer: Mutex::new(layer),
             swapchain_format: RwLock::new(None),
@@ -31,83 +24,15 @@ impl super::Surface {
         }
     }
 
-    /// If not called on the main thread, this will panic.
-    #[allow(clippy::transmute_ptr_to_ref)]
-    pub unsafe fn from_view(view: NonNull<Object>) -> Self {
-        let layer = unsafe { Self::get_metal_layer(view) };
-        let layer = ManuallyDrop::new(layer);
-        // SAFETY: The layer is an initialized instance of `CAMetalLayer`, and
-        // we transfer the retain count to `MetalLayer` using `ManuallyDrop`.
-        let layer = unsafe { metal::MetalLayer::from_ptr(layer.cast()) };
-        Self::new(layer)
-    }
-
-    pub unsafe fn from_layer(layer: &metal::MetalLayerRef) -> Self {
+    pub fn from_layer(layer: &metal::MetalLayerRef) -> Self {
         let class = class!(CAMetalLayer);
-        let proper_kind: BOOL = msg_send![layer, isKindOfClass: class];
+        let proper_kind: BOOL = unsafe { msg_send![layer, isKindOfClass: class] };
         assert_eq!(proper_kind, YES);
         Self::new(layer.to_owned())
     }
 
     pub fn render_layer(&self) -> &Mutex<metal::MetalLayer> {
         &self.render_layer
-    }
-
-    /// Get or create a new `CAMetalLayer` associated with the given `NSView`
-    /// or `UIView`.
-    ///
-    /// # Panics
-    ///
-    /// If called from a thread that is not the main thread, this will panic.
-    ///
-    /// # Safety
-    ///
-    /// The `view` must be a valid instance of `NSView` or `UIView`.
-    pub(crate) unsafe fn get_metal_layer(view: NonNull<Object>) -> StrongPtr {
-        let is_main_thread: BOOL = msg_send![class!(NSThread), isMainThread];
-        if is_main_thread == NO {
-            panic!("get_metal_layer cannot be called in non-ui thread.");
-        }
-
-        // Ensure that the view is layer-backed.
-        // Views are always layer-backed in UIKit.
-        #[cfg(target_os = "macos")]
-        let () = msg_send![view.as_ptr(), setWantsLayer: YES];
-
-        let root_layer: *mut Object = msg_send![view.as_ptr(), layer];
-        // `-[NSView layer]` can return `NULL`, while `-[UIView layer]` should
-        // always be available.
-        assert!(!root_layer.is_null(), "failed making the view layer-backed");
-
-        // NOTE: We explicitly do not touch properties such as
-        // `layerContentsPlacement`, `needsDisplayOnBoundsChange` and
-        // `contentsGravity` etc. on the root layer, both since we would like
-        // to give the user full control over them, and because the default
-        // values suit us pretty well (especially the contents placement being
-        // `NSViewLayerContentsRedrawDuringViewResize`, which allows the view
-        // to receive `drawRect:`/`updateLayer` calls).
-
-        let is_metal_layer: BOOL = msg_send![root_layer, isKindOfClass: class!(CAMetalLayer)];
-        if is_metal_layer == YES {
-            // The view has a `CAMetalLayer` as the root layer, which can
-            // happen for example if user overwrote `-[NSView layerClass]` or
-            // the view is `MTKView`.
-            //
-            // This is easily handled: We take "ownership" over the layer, and
-            // render directly into that; after all, the user passed a view
-            // with an explicit Metal layer to us, so this is very likely what
-            // they expect us to do.
-            unsafe { StrongPtr::retain(root_layer) }
-        } else {
-            // The view does not have a `CAMetalLayer` as the root layer (this
-            // is the default for most views).
-            //
-            // This case is trickier! We cannot use the existing layer with
-            // Metal, so we must do something else. There are a few options,
-            // we do the same as outlined in:
-            // https://docs.rs/raw-window-metal/1.1.0/raw_window_metal/#reasoning-behind-creating-a-sublayer
-            unsafe { new_observer_layer(root_layer) }
-        }
     }
 
     /// Gets the current dimensions of the `Surface`.
