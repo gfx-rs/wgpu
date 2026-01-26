@@ -1560,13 +1560,22 @@ impl Global {
                 Ok(pipeline) => pipeline,
                 Err(e) => break 'error e.into(),
             };
-            let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
-                Some(bg) => fid.assign(Fallible::Valid(bg.clone())),
-                None => {
-                    break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index)
+            match pipeline.get_bind_group_layout(index) {
+                Ok(bgl) => {
+                    #[cfg(feature = "trace")]
+                    if let Some(ref mut trace) = *pipeline.device.trace.lock() {
+                        trace.add(trace::Action::GetRenderPipelineBindGroupLayout {
+                            id: bgl.to_trace(),
+                            pipeline: pipeline.to_trace(),
+                            index,
+                        });
+                    }
+
+                    let id = fid.assign(Fallible::Valid(bgl.clone()));
+                    return (id, None);
                 }
+                Err(err) => break 'error err,
             };
-            return (id, None);
         };
 
         let id = fid.assign(Fallible::Invalid(Arc::new(String::new())));
@@ -1696,14 +1705,22 @@ impl Global {
                 Err(e) => break 'error e.into(),
             };
 
-            let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
-                Some(bg) => fid.assign(Fallible::Valid(bg.clone())),
-                None => {
-                    break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index)
-                }
-            };
+            match pipeline.get_bind_group_layout(index) {
+                Ok(bgl) => {
+                    #[cfg(feature = "trace")]
+                    if let Some(ref mut trace) = *pipeline.device.trace.lock() {
+                        trace.add(trace::Action::GetComputePipelineBindGroupLayout {
+                            id: bgl.to_trace(),
+                            pipeline: pipeline.to_trace(),
+                            index,
+                        });
+                    }
 
-            return (id, None);
+                    let id = fid.assign(Fallible::Valid(bgl.clone()));
+                    return (id, None);
+                }
+                Err(err) => break 'error err,
+            };
         };
 
         let id = fid.assign(Fallible::Invalid(Arc::new(String::new())));

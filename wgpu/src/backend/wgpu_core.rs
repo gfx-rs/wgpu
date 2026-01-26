@@ -791,7 +791,12 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                     .instance_create_surface(raw_display_handle, raw_window_handle, None)
             },
 
-            #[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
+            #[cfg(all(
+                unix,
+                not(target_vendor = "apple"),
+                not(target_family = "wasm"),
+                not(target_os = "netbsd")
+            ))]
             SurfaceTargetUnsafe::Drm {
                 fd,
                 plane,
@@ -815,6 +820,11 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
             SurfaceTargetUnsafe::CoreAnimationLayer(layer) => unsafe {
                 self.0.instance_create_surface_metal(layer, None)
             },
+
+            #[cfg(target_os = "netbsd")]
+            SurfaceTargetUnsafe::Drm { .. } => Err(
+                wgc::instance::CreateSurfaceError::BackendNotEnabled(wgt::Backend::Vulkan),
+            ),
 
             #[cfg(dx12)]
             SurfaceTargetUnsafe::CompositionVisual(visual) => unsafe {

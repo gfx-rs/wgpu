@@ -6,6 +6,7 @@ use std::ffi::c_void;
   target_os = "linux",
   target_os = "macos",
   target_os = "freebsd",
+  target_os = "netbsd",
   target_os = "openbsd"
 ))]
 use std::ptr::NonNull;
@@ -29,6 +30,7 @@ pub enum ByowError {
     target_os = "windows",
     target_os = "linux",
     target_os = "freebsd",
+    target_os = "netbsd",
     target_os = "openbsd",
   )))]
   #[class(type)]
@@ -56,6 +58,7 @@ pub enum ByowError {
   #[cfg(any(
     target_os = "linux",
     target_os = "freebsd",
+    target_os = "netbsd",
     target_os = "openbsd"
   ))]
   #[class(type)]
@@ -65,6 +68,7 @@ pub enum ByowError {
     target_os = "windows",
     target_os = "linux",
     target_os = "freebsd",
+    target_os = "netbsd",
     target_os = "openbsd"
   ))]
   #[class(type)]
@@ -73,6 +77,7 @@ pub enum ByowError {
   #[cfg(any(
     target_os = "linux",
     target_os = "freebsd",
+    target_os = "netbsd",
     target_os = "openbsd"
   ))]
   #[class(type)]
@@ -322,7 +327,12 @@ fn raw_window(
   Ok((win_handle, display_handle))
 }
 
-#[cfg(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd"))]
+#[cfg(any(
+  target_os = "linux",
+  target_os = "freebsd",
+  target_os = "netbsd",
+  target_os = "openbsd"
+))]
 fn raw_window(
   system: UnsafeWindowSurfaceSystem,
   window: *const c_void,
@@ -364,6 +374,7 @@ fn raw_window(
   target_os = "windows",
   target_os = "linux",
   target_os = "freebsd",
+  target_os = "netbsd",
   target_os = "openbsd",
 )))]
 fn raw_window(

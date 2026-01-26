@@ -1333,6 +1333,7 @@ impl<'a> Context<'a> {
                             }
                         }
                     }
+
                     _ => {
                         return Err(Error {
                             kind: ErrorKind::SemanticError(
@@ -1341,6 +1342,18 @@ impl<'a> Context<'a> {
                             meta,
                         });
                     }
+                }
+            }
+            HirExprKind::Sequence { ref exprs } if pos != ExprPos::Lhs => {
+                let mut last_handle = None;
+                for expr in exprs.iter() {
+                    let (handle, _) =
+                        self.lower_expect_inner(stmt, frontend, *expr, ExprPos::Rhs)?;
+                    last_handle = Some(handle);
+                }
+                match last_handle {
+                    Some(handle) => handle,
+                    None => unreachable!(),
                 }
             }
             _ => {

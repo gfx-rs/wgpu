@@ -22,7 +22,7 @@ Top level categories:
 - Performance
 - Documentation
 - Dependency Updates
-- deno-webgpu
+- deno_webgpu
 - Examples
 - Testing/Internal
 
@@ -67,6 +67,11 @@ Bottom level categories:
 
 - The validator checks that override-sized arrays have a positive size, if overrides have been resolved. By @andyleiserson in [#8822](https://github.com/gfx-rs/wgpu/pull/8822).
 - Fix some cases where f16 constants were not working. By @andyleiserson in [#8816](https://github.com/gfx-rs/wgpu/pull/8816).
+- Use wrapping arithmetic when evaluating constant expressions involving `u32`. By @andyleiserson in [#8912](https://github.com/gfx-rs/wgpu/pull/8912).
+
+#### Naga
+
+- Fix missing side effects from sequence expressions in GLSL. By @Vipitis in [#8787](https://github.com/gfx-rs/wgpu/pull/8787).
 
 #### GLES
 
@@ -90,6 +95,14 @@ Bottom level categories:
 #### Naga
 
 - Prevent UB from incorrectly using ray queries on HLSL. By @Vecvec in [#8763](https://github.com/gfx-rs/wgpu/pull/8763).
+
+### General
+
+- Tracing now uses the `.metal` extension for metal source files, instead of `.msl`. By @inner-daemons in #8880.
+
+### deno\_webgpu
+
+- Expose the `GPU.wgslLanguageFeatures` property. By @andyleiserson in [#8884](https://github.com/gfx-rs/wgpu/pull/8884).
 
 ## v28.0.0 (2025-12-17)
 
