@@ -246,12 +246,29 @@ impl BackendOptions {
 /// Configuration for the OpenGL/OpenGLES backend.
 ///
 /// Part of [`BackendOptions`].
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct GlBackendOptions {
     /// Which OpenGL ES 3 minor version to request, if using OpenGL ES.
     pub gles_minor_version: Gles3MinorVersion,
     /// Behavior of OpenGL fences. Affects how `on_completed_work_done` and `device.poll` behave.
     pub fence_behavior: GlFenceBehavior,
+    /// Whether to enable debug functions (`glPushDebugGroup`, `glPopDebugGroup`,
+    /// `glObjectLabel`, etc.) when supported by the driver.
+    ///
+    /// Defaults to `true`. Set to `false` to disable debug functions, which can
+    /// work around bugs in some OpenGL implementations (e.g., Mali GPUs crash
+    /// in `glPushDebugGroup`).
+    pub enable_debug_fns: bool,
+}
+
+impl Default for GlBackendOptions {
+    fn default() -> Self {
+        Self {
+            gles_minor_version: Gles3MinorVersion::default(),
+            fence_behavior: GlFenceBehavior::default(),
+            enable_debug_fns: true,
+        }
+    }
 }
 
 impl GlBackendOptions {
@@ -261,9 +278,11 @@ impl GlBackendOptions {
     #[must_use]
     pub fn from_env_or_default() -> Self {
         let gles_minor_version = Gles3MinorVersion::from_env().unwrap_or_default();
+        let enable_debug_fns = Self::enable_debug_fns_from_env().unwrap_or(true);
         Self {
             gles_minor_version,
             fence_behavior: GlFenceBehavior::Normal,
+            enable_debug_fns,
         }
     }
 
@@ -273,10 +292,27 @@ impl GlBackendOptions {
     #[must_use]
     pub fn with_env(self) -> Self {
         let gles_minor_version = self.gles_minor_version.with_env();
-        let short_circuit_fences = self.fence_behavior.with_env();
+        let fence_behavior = self.fence_behavior.with_env();
+        let enable_debug_fns = Self::enable_debug_fns_from_env().unwrap_or(self.enable_debug_fns);
         Self {
             gles_minor_version,
-            fence_behavior: short_circuit_fences,
+            fence_behavior,
+            enable_debug_fns,
+        }
+    }
+
+    /// Choose whether to enable debug functions from the environment variable `WGPU_GL_DEBUG_FNS`.
+    ///
+    /// Possible values are `true` or `false`. Case insensitive.
+    #[must_use]
+    pub fn enable_debug_fns_from_env() -> Option<bool> {
+        let value = crate::env::var("WGPU_GL_DEBUG_FNS")
+            .as_deref()?
+            .to_lowercase();
+        match value.as_str() {
+            "true" | "1" => Some(true),
+            "false" | "0" => Some(false),
+            _ => None,
         }
     }
 }
