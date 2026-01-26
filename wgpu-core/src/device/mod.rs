@@ -382,6 +382,8 @@ impl WebGpuError for MissingDownlevelFlags {
 /// Compute naga [`Capabilities`] corresponding to [`Features`] and [`DownlevelFlags`].
 ///
 /// [`Capabilities`]: naga::valid::Capabilities
+/// [`Features`]: wgt::Features
+/// [`DownlevelFlags`]: wgt::DownlevelFlags
 pub fn features_to_naga_capabilities(
     features: wgt::Features,
     downlevel: wgt::DownlevelFlags,
