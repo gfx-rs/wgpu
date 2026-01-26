@@ -79,7 +79,7 @@ Commands:
 
     --target-dir <dir>    The target directory to install WARP into.
     --profile <profile>   The cargo profile to install WARP for (default: debug)
-    
+
     Note: Cannot specify both --target-dir and --profile
 
 Options:
