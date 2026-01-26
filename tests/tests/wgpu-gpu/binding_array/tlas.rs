@@ -19,13 +19,11 @@ static BINDING_ARRAY_TLAS: GpuTestConfiguration = GpuTestConfiguration::new()
             .features(
                 Features::EXPERIMENTAL_RAY_QUERY | Features::ACCELERATION_STRUCTURE_BINDING_ARRAY,
             )
-            .limits({
-                let mut limits =
-                    Limits::default().using_minimum_supported_acceleration_structure_values();
-                // Keep this small; we only need a couple of array elements.
-                limits.max_binding_array_elements_per_shader_stage = 8;
-                limits.max_acceleration_structures_per_shader_stage = 8;
-                limits
+            .limits(Limits {
+                max_binding_array_elements_per_shader_stage: 8,
+                max_acceleration_structures_per_shader_stage: 8,
+                max_binding_array_acceleration_structure_elements_per_shader_stage: 8,
+                ..Limits::default().using_minimum_supported_acceleration_structure_values()
             })
             // As of writing, Metal's HAL does not implement binding acceleration structures.
             .skip(FailureCase::backend(Backends::METAL)),
@@ -163,9 +161,7 @@ async fn binding_array_tlas(ctx: TestingContext) {
                 transform_buffer_offset: None,
             }]),
         }),
-        std::iter::empty::<&wgpu::Tlas>()
-            .chain(std::iter::once(&tlas_a))
-            .chain(std::iter::once(&tlas_b)),
+        [&tlas_a, &tlas_b],
     );
 
     ctx.queue.submit(Some(encoder.finish()));

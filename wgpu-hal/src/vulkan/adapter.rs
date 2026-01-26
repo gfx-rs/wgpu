@@ -1478,6 +1478,14 @@ impl PhysicalDeviceProperties {
             max_uniform_buffers_per_shader_stage: limits.max_per_stage_descriptor_uniform_buffers,
             max_binding_array_elements_per_shader_stage: max_binding_array_elements,
             max_binding_array_sampler_elements_per_shader_stage: max_sampler_binding_array_elements,
+            max_binding_array_acceleration_structure_elements_per_shader_stage: if self
+                .descriptor_indexing
+                .is_some()
+            {
+                max_acceleration_structures_per_shader_stage
+            } else {
+                0
+            },
             max_uniform_buffer_binding_size: limits
                 .max_uniform_buffer_range
                 .min(crate::auxil::MAX_I32_BINDING_SIZE)

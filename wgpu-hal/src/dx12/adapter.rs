@@ -925,7 +925,12 @@ impl super::Adapter {
                     } else {
                         0
                     },
-
+                    max_binding_array_acceleration_structure_elements_per_shader_stage:
+                        if supports_ray_tracing {
+                            max_srv_count / 2
+                        } else {
+                            0
+                        },
                     max_multiview_view_count,
                 }),
                 alignments: crate::Alignments {

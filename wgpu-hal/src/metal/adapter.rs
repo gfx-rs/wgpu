@@ -1178,6 +1178,7 @@ impl super::PrivateCapabilities {
             max_binding_array_elements_per_shader_stage: self.max_binding_array_elements,
             max_binding_array_sampler_elements_per_shader_stage: self
                 .max_sampler_binding_array_elements,
+            max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
             // Note: any adjustment here will not be reflected in the stored `PrivateCapabilities`.
             max_uniform_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64),
             max_storage_buffer_binding_size: self.max_buffer_size.min(!0u32 as u64)

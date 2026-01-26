@@ -804,6 +804,7 @@ fn map_wgt_limits(limits: webgpu_sys::GpuSupportedLimits) -> wgt::Limits {
         max_uniform_buffers_per_shader_stage: limits.max_uniform_buffers_per_shader_stage(),
         max_binding_array_elements_per_shader_stage: 0,
         max_binding_array_sampler_elements_per_shader_stage: 0,
+        max_binding_array_acceleration_structure_elements_per_shader_stage: 0,
         max_uniform_buffer_binding_size: limits.max_uniform_buffer_binding_size() as u64,
         max_storage_buffer_binding_size: limits.max_storage_buffer_binding_size() as u64,
         max_vertex_buffers: limits.max_vertex_buffers(),

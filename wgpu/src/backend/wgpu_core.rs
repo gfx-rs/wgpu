@@ -1193,15 +1193,17 @@ impl dispatch::DeviceInterface for CoreDevice {
         }
         let mut remaining_arrayed_buffer_bindings = &arrayed_buffer_bindings[..];
 
-        // Gather all the TLAS IDs used by TLAS arrays first (same pattern as other arrayed resources).
-        //
-        // Note: there isn't currently a dedicated feature flag for TLAS binding arrays at the wgpu API
-        // layer; validation happens in wgpu-core against `BindGroupLayoutEntry::count`.
         let mut arrayed_acceleration_structures = Vec::new();
-        for entry in desc.entries.iter() {
-            if let BindingResource::AccelerationStructureArray(array) = entry.resource {
-                arrayed_acceleration_structures
-                    .extend(array.iter().map(|tlas| tlas.inner.as_core().id));
+        if self
+            .features
+            .contains(Features::ACCELERATION_STRUCTURE_BINDING_ARRAY)
+        {
+            // Gather all the TLAS IDs used by TLAS arrays first (same pattern as other arrayed resources).
+            for entry in desc.entries.iter() {
+                if let BindingResource::AccelerationStructureArray(array) = entry.resource {
+                    arrayed_acceleration_structures
+                        .extend(array.iter().map(|tlas| tlas.inner.as_core().id));
+                }
             }
         }
         let mut remaining_arrayed_acceleration_structures = &arrayed_acceleration_structures[..];
