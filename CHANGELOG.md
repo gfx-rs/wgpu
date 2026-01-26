@@ -53,10 +53,6 @@ Bottom level categories:
 
 - Allow parsing shaders which make use of `SPV_KHR_non_semantic_info` for debug info. Also removes `naga::front::spv::SUPPORTED_EXT_SETS`. By @inner-daemons in #8827.
 
-### General
-
-- Tracing now uses the `.metal` extension for metal source files, instead of `.msl`. By @inner-daemons in #8880.
-
 ### Bug Fixes
 
 #### General
@@ -97,6 +93,10 @@ Bottom level categories:
 #### Naga
 
 - Prevent UB from incorrectly using ray queries on HLSL. By @Vecvec in [#8763](https://github.com/gfx-rs/wgpu/pull/8763).
+
+### General
+
+- Tracing now uses the `.metal` extension for metal source files, instead of `.msl`. By @inner-daemons in #8880.
 
 ### deno\_webgpu
 
