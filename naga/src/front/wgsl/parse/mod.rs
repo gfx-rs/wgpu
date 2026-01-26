@@ -3025,7 +3025,7 @@ impl Parser {
                         ImplementedEnableExtension::WgpuRayTracingPipeline,
                         name_span,
                     )?;
-                    stage.set(ShaderStage::Task, name_span)?;
+                    stage.set(ShaderStage::RayGeneration, name_span)?;
                     shader_stage_error_span = name_span;
                 }
                 "any_hit" => {
