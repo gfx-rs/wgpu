@@ -635,7 +635,7 @@ impl super::Adapter {
         );
         private_caps.set(
             super::PrivateCapabilities::DEBUG_FNS,
-            gl.supports_debug() && backend_options.enable_debug_fns,
+            gl.supports_debug() && backend_options.debug_fns.is_enabled(),
         );
         private_caps.set(
             super::PrivateCapabilities::INVALIDATE_FRAMEBUFFER,

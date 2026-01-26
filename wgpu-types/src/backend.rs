@@ -246,29 +246,18 @@ impl BackendOptions {
 /// Configuration for the OpenGL/OpenGLES backend.
 ///
 /// Part of [`BackendOptions`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct GlBackendOptions {
     /// Which OpenGL ES 3 minor version to request, if using OpenGL ES.
     pub gles_minor_version: Gles3MinorVersion,
     /// Behavior of OpenGL fences. Affects how `on_completed_work_done` and `device.poll` behave.
     pub fence_behavior: GlFenceBehavior,
-    /// Whether to enable debug functions (`glPushDebugGroup`, `glPopDebugGroup`,
-    /// `glObjectLabel`, etc.) when supported by the driver.
+    /// Controls whether debug functions (`glPushDebugGroup`, `glPopDebugGroup`,
+    /// `glObjectLabel`, etc.) are enabled when supported by the driver.
     ///
-    /// Defaults to `true`. Set to `false` to disable debug functions, which can
-    /// work around bugs in some OpenGL implementations when debug functions are
-    /// not needed (e.g., Mali GPUs can crash in `glPushDebugGroup`).
-    pub enable_debug_fns: bool,
-}
-
-impl Default for GlBackendOptions {
-    fn default() -> Self {
-        Self {
-            gles_minor_version: Gles3MinorVersion::default(),
-            fence_behavior: GlFenceBehavior::default(),
-            enable_debug_fns: true,
-        }
-    }
+    /// Set to [`GlDebugFns::Disabled`] to work around bugs in some OpenGL
+    /// implementations (e.g., Mali GPUs can crash in `glPushDebugGroup`).
+    pub debug_fns: GlDebugFns,
 }
 
 impl GlBackendOptions {
@@ -278,11 +267,11 @@ impl GlBackendOptions {
     #[must_use]
     pub fn from_env_or_default() -> Self {
         let gles_minor_version = Gles3MinorVersion::from_env().unwrap_or_default();
-        let enable_debug_fns = Self::enable_debug_fns_from_env().unwrap_or(true);
+        let debug_fns = GlDebugFns::from_env().unwrap_or_default();
         Self {
             gles_minor_version,
             fence_behavior: GlFenceBehavior::Normal,
-            enable_debug_fns,
+            debug_fns,
         }
     }
 
@@ -293,26 +282,65 @@ impl GlBackendOptions {
     pub fn with_env(self) -> Self {
         let gles_minor_version = self.gles_minor_version.with_env();
         let fence_behavior = self.fence_behavior.with_env();
-        let enable_debug_fns = Self::enable_debug_fns_from_env().unwrap_or(self.enable_debug_fns);
+        let debug_fns = self.debug_fns.with_env();
         Self {
             gles_minor_version,
             fence_behavior,
-            enable_debug_fns,
+            debug_fns,
         }
     }
+}
 
-    /// Choose whether to enable debug functions from the environment variable `WGPU_GL_DEBUG_FNS`.
+/// Controls whether OpenGL debug functions are enabled.
+///
+/// Debug functions include `glPushDebugGroup`, `glPopDebugGroup`, `glObjectLabel`, etc.
+/// These are useful for debugging but can cause crashes on some buggy drivers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum GlDebugFns {
+    /// Automatically enable debug functions if supported by the driver.
     ///
-    /// Possible values are `true` or `false`. Case insensitive.
+    /// This is the default behavior.
+    #[default]
+    Auto,
+    /// Disable debug functions entirely.
+    ///
+    /// Use this as a workaround if you encounter crashes in debug functions
+    /// on certain drivers (e.g., Mali GPUs crashing in `glPushDebugGroup`).
+    Disabled,
+}
+
+impl GlDebugFns {
+    /// Returns `true` if debug functions should be enabled (i.e., not disabled).
+    pub fn is_enabled(&self) -> bool {
+        !matches!(self, Self::Disabled)
+    }
+
+    /// Choose debug functions setting from the environment variable `WGPU_GL_DEBUG_FNS`.
+    ///
+    /// Possible values are `Auto` or `Disabled`. Case insensitive.
+    ///
+    /// Use with `unwrap_or_default()` to get the default value if the environment variable is not set.
     #[must_use]
-    pub fn enable_debug_fns_from_env() -> Option<bool> {
+    pub fn from_env() -> Option<Self> {
         let value = crate::env::var("WGPU_GL_DEBUG_FNS")
             .as_deref()?
             .to_lowercase();
         match value.as_str() {
-            "true" | "1" => Some(true),
-            "false" | "0" => Some(false),
+            "auto" => Some(Self::Auto),
+            "disabled" => Some(Self::Disabled),
             _ => None,
+        }
+    }
+
+    /// Takes the given setting, modifies it based on the `WGPU_GL_DEBUG_FNS` environment variable, and returns the result.
+    ///
+    /// See `from_env` for more information.
+    #[must_use]
+    pub fn with_env(self) -> Self {
+        if let Some(debug_fns) = Self::from_env() {
+            debug_fns
+        } else {
+            self
         }
     }
 }
