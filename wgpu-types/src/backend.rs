@@ -256,8 +256,8 @@ pub struct GlBackendOptions {
     /// `glObjectLabel`, etc.) when supported by the driver.
     ///
     /// Defaults to `true`. Set to `false` to disable debug functions, which can
-    /// work around bugs in some OpenGL implementations (e.g., Mali GPUs crash
-    /// in `glPushDebugGroup`).
+    /// work around bugs in some OpenGL implementations when debug functions are
+    /// not needed (e.g., Mali GPUs can crash in `glPushDebugGroup`).
     pub enable_debug_fns: bool,
 }
 
