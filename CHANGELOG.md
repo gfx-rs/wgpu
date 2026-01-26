@@ -53,6 +53,10 @@ Bottom level categories:
 
 - Allow parsing shaders which make use of `SPV_KHR_non_semantic_info` for debug info. Also removes `naga::front::spv::SUPPORTED_EXT_SETS`. By @inner-daemons in #8827.
 
+#### GLES / OpenGL
+
+- Added `GlBackendOptions::robustness` field and `GlRobustness` enum to allow disabling EGL robustness context creation. This can work around context creation failures on some drivers. Set via `WGPU_GL_ROBUSTNESS=disabled` environment variable or programmatically with `GlRobustness::Disabled`.
+
 ### Bug Fixes
 
 #### General

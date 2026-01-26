@@ -252,6 +252,11 @@ pub struct GlBackendOptions {
     pub gles_minor_version: Gles3MinorVersion,
     /// Behavior of OpenGL fences. Affects how `on_completed_work_done` and `device.poll` behave.
     pub fence_behavior: GlFenceBehavior,
+    /// Controls whether EGL robustness features are enabled during context creation.
+    ///
+    /// Set to [`GlRobustness::Disabled`] to work around context creation failures
+    /// on some drivers or platforms.
+    pub robustness: GlRobustness,
 }
 
 impl GlBackendOptions {
@@ -261,9 +266,11 @@ impl GlBackendOptions {
     #[must_use]
     pub fn from_env_or_default() -> Self {
         let gles_minor_version = Gles3MinorVersion::from_env().unwrap_or_default();
+        let robustness = GlRobustness::from_env().unwrap_or_default();
         Self {
             gles_minor_version,
             fence_behavior: GlFenceBehavior::Normal,
+            robustness,
         }
     }
 
@@ -273,10 +280,12 @@ impl GlBackendOptions {
     #[must_use]
     pub fn with_env(self) -> Self {
         let gles_minor_version = self.gles_minor_version.with_env();
-        let short_circuit_fences = self.fence_behavior.with_env();
+        let fence_behavior = self.fence_behavior.with_env();
+        let robustness = self.robustness.with_env();
         Self {
             gles_minor_version,
-            fence_behavior: short_circuit_fences,
+            fence_behavior,
+            robustness,
         }
     }
 }
@@ -667,6 +676,58 @@ impl GlFenceBehavior {
     pub fn with_env(self) -> Self {
         if let Some(fence) = Self::from_env() {
             fence
+        } else {
+            self
+        }
+    }
+}
+
+/// Controls whether EGL robustness features are enabled during context creation.
+///
+/// EGL robustness (`EGL_EXT_create_context_robustness` or EGL 1.5 core) provides
+/// guarantees about out-of-bounds buffer access behavior. However, on some drivers
+/// or platforms, enabling robustness can cause context creation to fail.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum GlRobustness {
+    /// Automatically detect and use robustness if available.
+    ///
+    /// This is the default behavior. The backend will attempt to create a robust
+    /// context first, and fall back to a non-robust context if that fails.
+    #[default]
+    Auto,
+    /// Disable robustness entirely.
+    ///
+    /// Use this as a workaround if you encounter context creation failures on
+    /// certain drivers or platforms. When disabled, the context will be created
+    /// without requesting robust buffer access.
+    Disabled,
+}
+
+impl GlRobustness {
+    /// Choose robustness setting from the environment variable `WGPU_GL_ROBUSTNESS`.
+    ///
+    /// Possible values are `Auto` or `Disabled`. Case insensitive.
+    ///
+    /// Use with `unwrap_or_default()` to get the default value if the environment variable is not set.
+    #[must_use]
+    pub fn from_env() -> Option<Self> {
+        let value = crate::env::var("WGPU_GL_ROBUSTNESS")
+            .as_deref()?
+            .to_lowercase();
+        match value.as_str() {
+            "auto" => Some(Self::Auto),
+            "disabled" => Some(Self::Disabled),
+            _ => None,
+        }
+    }
+
+    /// Takes the given robustness setting, modifies it based on the `WGPU_GL_ROBUSTNESS` environment variable, and returns the result.
+    ///
+    /// See `from_env` for more information.
+    #[must_use]
+    pub fn with_env(self) -> Self {
+        if let Some(robustness) = Self::from_env() {
+            robustness
         } else {
             self
         }

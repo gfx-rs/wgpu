@@ -395,6 +395,7 @@ impl Inner {
         egl: Arc<EglInstance>,
         display: khronos_egl::Display,
         force_gles_minor_version: wgt::Gles3MinorVersion,
+        robustness_setting: wgt::GlRobustness,
     ) -> Result<Self, crate::InstanceError> {
         let version = initialize_display(&egl, display)
             .map_err(instance_err("failed to initialize EGL display connection"))?;
@@ -512,7 +513,10 @@ impl Inner {
                 Ext,
             }
 
-            let mut robustness = if version >= (1, 5) {
+            let mut robustness = if robustness_setting == wgt::GlRobustness::Disabled {
+                log::debug!("\tEGL context: robustness disabled by user");
+                None
+            } else if version >= (1, 5) {
                 Some(Robustness::Core)
             } else if display_extensions.contains("EGL_EXT_create_context_robustness") {
                 Some(Robustness::Ext)
@@ -878,6 +882,7 @@ impl crate::Instance for Instance {
             egl,
             display,
             desc.backend_options.gl.gles_minor_version,
+            desc.backend_options.gl.robustness,
         )?;
 
         Ok(Instance {
