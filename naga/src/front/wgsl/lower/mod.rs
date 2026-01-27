@@ -3028,6 +3028,39 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Ok(result)
             }
             None => {
+                let ty = conv::map_predeclared_type(
+                    &ctx.enable_extensions,
+                    function_span,
+                    function_name,
+                )?;
+                if let Some(ty) = ty {
+                    let empty_template_list = call_phrase.function.template_list.is_empty();
+                    let constructor_ty = match ty {
+                        conv::PredeclaredType::TypeGenerator(conv::TypeGenerator::Vector {
+                            size,
+                        }) if empty_template_list => Constructor::PartialVector { size },
+                        conv::PredeclaredType::TypeGenerator(conv::TypeGenerator::Matrix {
+                            columns,
+                            rows,
+                        }) if empty_template_list => Constructor::PartialMatrix { columns, rows },
+                        conv::PredeclaredType::TypeGenerator(conv::TypeGenerator::Array)
+                            if empty_template_list =>
+                        {
+                            Constructor::PartialArray
+                        }
+                        conv::PredeclaredType::TypeGenerator(
+                            conv::TypeGenerator::CooperativeMatrix { .. },
+                        ) if empty_template_list => {
+                            return Err(Box::new(Error::UnderspecifiedCooperativeMatrix));
+                        }
+                        _ => Constructor::Type(self.finalize_type(ctx, ty, &mut tl, None)?),
+                    };
+                    tl.finish(ctx)?;
+                    let handle =
+                        self.construct(span, constructor_ty, function_span, arguments, ctx)?;
+                    return Ok(Some(handle));
+                };
+
                 match function_name {
                     "bitcast" => {
                         let ty = tl.ty(self, ctx)?;
@@ -3110,39 +3143,6 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     }
                     _ => {}
                 }
-
-                let ty = conv::map_predeclared_type(
-                    &ctx.enable_extensions,
-                    function_span,
-                    function_name,
-                )?;
-                if let Some(ty) = ty {
-                    let empty_template_list = call_phrase.function.template_list.is_empty();
-                    let constructor_ty = match ty {
-                        conv::PredeclaredType::TypeGenerator(conv::TypeGenerator::Vector {
-                            size,
-                        }) if empty_template_list => Constructor::PartialVector { size },
-                        conv::PredeclaredType::TypeGenerator(conv::TypeGenerator::Matrix {
-                            columns,
-                            rows,
-                        }) if empty_template_list => Constructor::PartialMatrix { columns, rows },
-                        conv::PredeclaredType::TypeGenerator(conv::TypeGenerator::Array)
-                            if empty_template_list =>
-                        {
-                            Constructor::PartialArray
-                        }
-                        conv::PredeclaredType::TypeGenerator(
-                            conv::TypeGenerator::CooperativeMatrix { .. },
-                        ) if empty_template_list => {
-                            return Err(Box::new(Error::UnderspecifiedCooperativeMatrix));
-                        }
-                        _ => Constructor::Type(self.finalize_type(ctx, ty, &mut tl, None)?),
-                    };
-                    tl.finish(ctx)?;
-                    let handle =
-                        self.construct(span, constructor_ty, function_span, arguments, ctx)?;
-                    return Ok(Some(handle));
-                };
 
                 tl.finish(ctx)?;
 
