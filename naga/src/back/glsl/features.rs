@@ -64,7 +64,7 @@ bitflags::bitflags! {
 /// [`Module`](crate::Module)
 ///
 /// Provides helper methods to check for availability and writing required extensions
-pub struct FeaturesManager(Features);
+pub(crate) struct FeaturesManager(Features);
 
 impl FeaturesManager {
     /// Creates a new [`FeaturesManager`] instance
