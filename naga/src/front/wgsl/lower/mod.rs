@@ -2919,73 +2919,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         ctx: &mut ExpressionContext<'source, '_, '_>,
         is_statement: bool,
     ) -> Result<'source, Option<Handle<ir::Expression>>> {
-        let expr = if function_name == "bitcast" {
-            let ty = template_params.ty(self, ctx)?;
-
-            let mut args = ctx.prepare_args(arguments, 1, function_span);
-            let expr = self.expression(args.next()?, ctx)?;
-            args.finish()?;
-
-            let element_scalar = match ctx.module.types[ty].inner {
-                ir::TypeInner::Scalar(scalar) => scalar,
-                ir::TypeInner::Vector { scalar, .. } => scalar,
-                _ => {
-                    let ty_resolution = resolve!(ctx, expr);
-                    return Err(Box::new(Error::BadTypeCast {
-                        from_type: ctx.type_resolution_to_string(ty_resolution),
-                        span: function_span,
-                        to_type: ctx.type_to_string(ty),
-                    }));
-                }
-            };
-
-            ir::Expression::As {
-                expr,
-                kind: element_scalar.kind,
-                convert: None,
-            }
-        } else if function_name == "coopLoad" || function_name == "coopLoadT" {
-            let row_major = function_name.ends_with("T");
-            let (matrix_ty, matrix_span) = template_params.ty_with_span(self, ctx)?;
-
-            let mut args = ctx.prepare_args(arguments, 1, call_span);
-            let pointer = self.expression(args.next()?, ctx)?;
-            let (columns, rows, role) = match ctx.module.types[matrix_ty].inner {
-                ir::TypeInner::CooperativeMatrix {
-                    columns,
-                    rows,
-                    role,
-                    ..
-                } => (columns, rows, role),
-                _ => return Err(Box::new(Error::InvalidCooperativeLoadType(matrix_span))),
-            };
-            let stride = if args.total_args > 1 {
-                self.expression(args.next()?, ctx)?
-            } else {
-                // Infer the stride from the matrix type
-                let stride = if row_major {
-                    columns as u32
-                } else {
-                    rows as u32
-                };
-                ctx.append_expression(
-                    ir::Expression::Literal(ir::Literal::U32(stride)),
-                    Span::UNDEFINED,
-                )?
-            };
-            args.finish()?;
-
-            crate::Expression::CooperativeLoad {
-                columns,
-                rows,
-                role,
-                data: crate::CooperativeData {
-                    pointer,
-                    stride,
-                    row_major,
-                },
-            }
-        } else if let Some(fun) = conv::map_relational_fun(function_name) {
+        let expr = if let Some(fun) = conv::map_relational_fun(function_name) {
             let mut args = ctx.prepare_args(arguments, 1, function_span);
             let argument = self.expression(args.next()?, ctx)?;
             args.finish()?;
@@ -3038,6 +2972,74 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             return self.atomic_helper(function_span, fun, arguments, is_statement, ctx);
         } else {
             match function_name {
+                "bitcast" => {
+                    let ty = template_params.ty(self, ctx)?;
+
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+                    let expr = self.expression(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    let element_scalar = match ctx.module.types[ty].inner {
+                        ir::TypeInner::Scalar(scalar) => scalar,
+                        ir::TypeInner::Vector { scalar, .. } => scalar,
+                        _ => {
+                            let ty_resolution = resolve!(ctx, expr);
+                            return Err(Box::new(Error::BadTypeCast {
+                                from_type: ctx.type_resolution_to_string(ty_resolution),
+                                span: function_span,
+                                to_type: ctx.type_to_string(ty),
+                            }));
+                        }
+                    };
+
+                    ir::Expression::As {
+                        expr,
+                        kind: element_scalar.kind,
+                        convert: None,
+                    }
+                }
+                "coopLoad" | "coopLoadT" => {
+                    let row_major = function_name.ends_with("T");
+                    let (matrix_ty, matrix_span) = template_params.ty_with_span(self, ctx)?;
+
+                    let mut args = ctx.prepare_args(arguments, 1, call_span);
+                    let pointer = self.expression(args.next()?, ctx)?;
+                    let (columns, rows, role) = match ctx.module.types[matrix_ty].inner {
+                        ir::TypeInner::CooperativeMatrix {
+                            columns,
+                            rows,
+                            role,
+                            ..
+                        } => (columns, rows, role),
+                        _ => return Err(Box::new(Error::InvalidCooperativeLoadType(matrix_span))),
+                    };
+                    let stride = if args.total_args > 1 {
+                        self.expression(args.next()?, ctx)?
+                    } else {
+                        // Infer the stride from the matrix type
+                        let stride = if row_major {
+                            columns as u32
+                        } else {
+                            rows as u32
+                        };
+                        ctx.append_expression(
+                            ir::Expression::Literal(ir::Literal::U32(stride)),
+                            Span::UNDEFINED,
+                        )?
+                    };
+                    args.finish()?;
+
+                    crate::Expression::CooperativeLoad {
+                        columns,
+                        rows,
+                        role,
+                        data: crate::CooperativeData {
+                            pointer,
+                            stride,
+                            row_major,
+                        },
+                    }
+                }
                 "select" => {
                     let mut args = ctx.prepare_args(arguments, 3, function_span);
 
