@@ -68,8 +68,7 @@ fn downlevel_default_limits_less_than_default_limits() {
 
 #[derive(Default)]
 pub struct Instance {
-    #[allow(dead_code)]
-    name: String,
+    _name: String,
 
     /// List of instances per `wgpu-hal` backend.
     ///
@@ -105,7 +104,7 @@ impl Instance {
         telemetry: Option<hal::Telemetry>,
     ) -> Self {
         let mut this = Self {
-            name: name.to_owned(),
+            _name: name.to_owned(),
             instance_per_backend: Vec::new(),
             requested_backends: instance_desc.backends,
             supported_backends: Backends::empty(),
@@ -186,7 +185,7 @@ impl Instance {
         hal_instance: <A as hal::Api>::Instance,
     ) -> Self {
         Self {
-            name,
+            _name: name,
             instance_per_backend: vec![(A::VARIANT, Box::new(hal_instance))],
             requested_backends: A::VARIANT.into(),
             supported_backends: A::VARIANT.into(),
