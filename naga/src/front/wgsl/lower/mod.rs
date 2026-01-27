@@ -2907,6 +2907,792 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
         }
     }
 
+    /// Generate Naga IR for a call to a WGSL builtin function.
+    #[allow(clippy::too_many_arguments)]
+    fn call_builtin<'phrase>(
+        &mut self,
+        function_name: &'source str,
+        function_span: Span,
+        arguments: &[Handle<ast::Expression<'source>>],
+        template_params: &mut TemplateListIter<'phrase, 'source>,
+        call_span: Span,
+        ctx: &mut ExpressionContext<'source, '_, '_>,
+        is_statement: bool,
+    ) -> Result<'source, Option<Handle<ir::Expression>>> {
+        let expr = if function_name == "bitcast" {
+            let ty = template_params.ty(self, ctx)?;
+
+            let mut args = ctx.prepare_args(arguments, 1, function_span);
+            let expr = self.expression(args.next()?, ctx)?;
+            args.finish()?;
+
+            let element_scalar = match ctx.module.types[ty].inner {
+                ir::TypeInner::Scalar(scalar) => scalar,
+                ir::TypeInner::Vector { scalar, .. } => scalar,
+                _ => {
+                    let ty_resolution = resolve!(ctx, expr);
+                    return Err(Box::new(Error::BadTypeCast {
+                        from_type: ctx.type_resolution_to_string(ty_resolution),
+                        span: function_span,
+                        to_type: ctx.type_to_string(ty),
+                    }));
+                }
+            };
+
+            ir::Expression::As {
+                expr,
+                kind: element_scalar.kind,
+                convert: None,
+            }
+        } else if function_name == "coopLoad" || function_name == "coopLoadT" {
+            let row_major = function_name.ends_with("T");
+            let (matrix_ty, matrix_span) = template_params.ty_with_span(self, ctx)?;
+
+            let mut args = ctx.prepare_args(arguments, 1, call_span);
+            let pointer = self.expression(args.next()?, ctx)?;
+            let (columns, rows, role) = match ctx.module.types[matrix_ty].inner {
+                ir::TypeInner::CooperativeMatrix {
+                    columns,
+                    rows,
+                    role,
+                    ..
+                } => (columns, rows, role),
+                _ => return Err(Box::new(Error::InvalidCooperativeLoadType(matrix_span))),
+            };
+            let stride = if args.total_args > 1 {
+                self.expression(args.next()?, ctx)?
+            } else {
+                // Infer the stride from the matrix type
+                let stride = if row_major {
+                    columns as u32
+                } else {
+                    rows as u32
+                };
+                ctx.append_expression(
+                    ir::Expression::Literal(ir::Literal::U32(stride)),
+                    Span::UNDEFINED,
+                )?
+            };
+            args.finish()?;
+
+            crate::Expression::CooperativeLoad {
+                columns,
+                rows,
+                role,
+                data: crate::CooperativeData {
+                    pointer,
+                    stride,
+                    row_major,
+                },
+            }
+        } else if let Some(fun) = conv::map_relational_fun(function_name) {
+            let mut args = ctx.prepare_args(arguments, 1, function_span);
+            let argument = self.expression(args.next()?, ctx)?;
+            args.finish()?;
+
+            // Check for no-op all(bool) and any(bool):
+            let argument_unmodified = matches!(
+                fun,
+                ir::RelationalFunction::All | ir::RelationalFunction::Any
+            ) && {
+                matches!(
+                    resolve_inner!(ctx, argument),
+                    &ir::TypeInner::Scalar(ir::Scalar {
+                        kind: ir::ScalarKind::Bool,
+                        ..
+                    })
+                )
+            };
+
+            if argument_unmodified {
+                return Ok(Some(argument));
+            } else {
+                ir::Expression::Relational { fun, argument }
+            }
+        } else if let Some((axis, ctrl)) = conv::map_derivative(function_name) {
+            let mut args = ctx.prepare_args(arguments, 1, function_span);
+            let expr = self.expression(args.next()?, ctx)?;
+            args.finish()?;
+
+            ir::Expression::Derivative { axis, ctrl, expr }
+        } else if let Some(fun) = conv::map_standard_fun(function_name) {
+            self.math_function_helper(function_span, fun, arguments, ctx)?
+        } else if let Some(fun) = Texture::map(function_name) {
+            self.texture_sample_helper(fun, arguments, function_span, ctx)?
+        } else if let Some((op, cop)) = conv::map_subgroup_operation(function_name) {
+            return Ok(Some(self.subgroup_operation_helper(
+                function_span,
+                op,
+                cop,
+                arguments,
+                ctx,
+            )?));
+        } else if let Some(mode) = SubgroupGather::map(function_name) {
+            return Ok(Some(self.subgroup_gather_helper(
+                function_span,
+                mode,
+                arguments,
+                ctx,
+            )?));
+        } else if let Some(fun) = ir::AtomicFunction::map(function_name) {
+            return self.atomic_helper(function_span, fun, arguments, is_statement, ctx);
+        } else {
+            match function_name {
+                "select" => {
+                    let mut args = ctx.prepare_args(arguments, 3, function_span);
+
+                    let reject_orig = args.next()?;
+                    let accept_orig = args.next()?;
+                    let mut values = [
+                        self.expression_for_abstract(reject_orig, ctx)?,
+                        self.expression_for_abstract(accept_orig, ctx)?,
+                    ];
+                    let condition = self.expression(args.next()?, ctx)?;
+
+                    args.finish()?;
+
+                    let diagnostic_details =
+                        |ctx: &ExpressionContext<'_, '_, '_>,
+                         ty_res: &proc::TypeResolution,
+                         orig_expr| {
+                            (
+                                ctx.ast_expressions.get_span(orig_expr),
+                                format!("`{}`", ctx.as_diagnostic_display(ty_res)),
+                            )
+                        };
+                    for (&value, orig_value) in values.iter().zip([reject_orig, accept_orig]) {
+                        let value_ty_res = resolve!(ctx, value);
+                        if value_ty_res
+                            .inner_with(&ctx.module.types)
+                            .vector_size_and_scalar()
+                            .is_none()
+                        {
+                            let (arg_span, arg_type) =
+                                diagnostic_details(ctx, value_ty_res, orig_value);
+                            return Err(Box::new(Error::SelectUnexpectedArgumentType {
+                                arg_span,
+                                arg_type,
+                            }));
+                        }
+                    }
+                    let mut consensus_scalar = ctx
+                        .automatic_conversion_consensus(&values)
+                        .map_err(|_idx| {
+                            let [reject, accept] = values;
+                            let [(reject_span, reject_type), (accept_span, accept_type)] =
+                                [(reject_orig, reject), (accept_orig, accept)].map(
+                                    |(orig_expr, expr)| {
+                                        let ty_res = &ctx.typifier()[expr];
+                                        diagnostic_details(ctx, ty_res, orig_expr)
+                                    },
+                                );
+                            Error::SelectRejectAndAcceptHaveNoCommonType {
+                                reject_span,
+                                reject_type,
+                                accept_span,
+                                accept_type,
+                            }
+                        })?;
+                    if !ctx.is_const(condition) {
+                        consensus_scalar = consensus_scalar.concretize();
+                    }
+
+                    ctx.convert_slice_to_common_leaf_scalar(&mut values, consensus_scalar)?;
+
+                    let [reject, accept] = values;
+
+                    ir::Expression::Select {
+                        reject,
+                        accept,
+                        condition,
+                    }
+                }
+                "arrayLength" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+                    let expr = self.expression(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    ir::Expression::ArrayLength(expr)
+                }
+                "atomicLoad" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+                    let (pointer, _scalar) = self.atomic_pointer(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    ir::Expression::Load { pointer }
+                }
+                "atomicStore" => {
+                    let mut args = ctx.prepare_args(arguments, 2, function_span);
+                    let (pointer, scalar) = self.atomic_pointer(args.next()?, ctx)?;
+                    let value = self.expression_with_leaf_scalar(args.next()?, scalar, ctx)?;
+                    args.finish()?;
+
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block
+                        .extend(rctx.emitter.finish(&rctx.function.expressions));
+                    rctx.emitter.start(&rctx.function.expressions);
+                    rctx.block
+                        .push(ir::Statement::Store { pointer, value }, function_span);
+                    return Ok(None);
+                }
+                "atomicCompareExchangeWeak" => {
+                    let mut args = ctx.prepare_args(arguments, 3, function_span);
+
+                    let (pointer, scalar) = self.atomic_pointer(args.next()?, ctx)?;
+
+                    let compare = self.expression_with_leaf_scalar(args.next()?, scalar, ctx)?;
+
+                    let value = args.next()?;
+                    let value_span = ctx.ast_expressions.get_span(value);
+                    let value = self.expression_with_leaf_scalar(value, scalar, ctx)?;
+
+                    args.finish()?;
+
+                    let expression = match *resolve_inner!(ctx, value) {
+                        ir::TypeInner::Scalar(scalar) => ir::Expression::AtomicResult {
+                            ty: ctx.module.generate_predeclared_type(
+                                ir::PredeclaredType::AtomicCompareExchangeWeakResult(scalar),
+                            ),
+                            comparison: true,
+                        },
+                        _ => return Err(Box::new(Error::InvalidAtomicOperandType(value_span))),
+                    };
+
+                    let result = ctx.interrupt_emitter(expression, function_span)?;
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block.push(
+                        ir::Statement::Atomic {
+                            pointer,
+                            fun: ir::AtomicFunction::Exchange {
+                                compare: Some(compare),
+                            },
+                            value,
+                            result: Some(result),
+                        },
+                        function_span,
+                    );
+                    return Ok(Some(result));
+                }
+                "textureAtomicMin" | "textureAtomicMax" | "textureAtomicAdd"
+                | "textureAtomicAnd" | "textureAtomicOr" | "textureAtomicXor" => {
+                    let mut args = ctx.prepare_args(arguments, 3, function_span);
+
+                    let image = args.next()?;
+                    let image_span = ctx.ast_expressions.get_span(image);
+                    let image = self.expression(image, ctx)?;
+
+                    let coordinate = self.expression(args.next()?, ctx)?;
+
+                    let (_, arrayed) = ctx.image_data(image, image_span)?;
+                    let array_index = arrayed
+                        .then(|| {
+                            args.min_args += 1;
+                            self.expression(args.next()?, ctx)
+                        })
+                        .transpose()?;
+
+                    let value = self.expression(args.next()?, ctx)?;
+
+                    args.finish()?;
+
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block
+                        .extend(rctx.emitter.finish(&rctx.function.expressions));
+                    rctx.emitter.start(&rctx.function.expressions);
+                    let stmt = ir::Statement::ImageAtomic {
+                        image,
+                        coordinate,
+                        array_index,
+                        fun: match function_name {
+                            "textureAtomicMin" => ir::AtomicFunction::Min,
+                            "textureAtomicMax" => ir::AtomicFunction::Max,
+                            "textureAtomicAdd" => ir::AtomicFunction::Add,
+                            "textureAtomicAnd" => ir::AtomicFunction::And,
+                            "textureAtomicOr" => ir::AtomicFunction::InclusiveOr,
+                            "textureAtomicXor" => ir::AtomicFunction::ExclusiveOr,
+                            _ => unreachable!(),
+                        },
+                        value,
+                    };
+                    rctx.block.push(stmt, function_span);
+                    return Ok(None);
+                }
+                "storageBarrier" => {
+                    ctx.prepare_args(arguments, 0, function_span).finish()?;
+
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block.push(
+                        ir::Statement::ControlBarrier(ir::Barrier::STORAGE),
+                        function_span,
+                    );
+                    return Ok(None);
+                }
+                "workgroupBarrier" => {
+                    ctx.prepare_args(arguments, 0, function_span).finish()?;
+
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block.push(
+                        ir::Statement::ControlBarrier(ir::Barrier::WORK_GROUP),
+                        function_span,
+                    );
+                    return Ok(None);
+                }
+                "subgroupBarrier" => {
+                    ctx.prepare_args(arguments, 0, function_span).finish()?;
+
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block.push(
+                        ir::Statement::ControlBarrier(ir::Barrier::SUB_GROUP),
+                        function_span,
+                    );
+                    return Ok(None);
+                }
+                "textureBarrier" => {
+                    ctx.prepare_args(arguments, 0, function_span).finish()?;
+
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block.push(
+                        ir::Statement::ControlBarrier(ir::Barrier::TEXTURE),
+                        function_span,
+                    );
+                    return Ok(None);
+                }
+                "workgroupUniformLoad" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+                    let expr = args.next()?;
+                    args.finish()?;
+
+                    let pointer = self.expression(expr, ctx)?;
+                    let result_ty = match *resolve_inner!(ctx, pointer) {
+                        ir::TypeInner::Pointer {
+                            base,
+                            space: ir::AddressSpace::WorkGroup,
+                        } => match ctx.module.types[base].inner {
+                            // Match `Expression::Load` semantics:
+                            // loading through a pointer to `atomic<T>` produces a `T`.
+                            ir::TypeInner::Atomic(scalar) => ctx.module.types.insert(
+                                ir::Type {
+                                    name: None,
+                                    inner: ir::TypeInner::Scalar(scalar),
+                                },
+                                function_span,
+                            ),
+                            _ => base,
+                        },
+                        ir::TypeInner::ValuePointer {
+                            size,
+                            scalar,
+                            space: ir::AddressSpace::WorkGroup,
+                        } => ctx.module.types.insert(
+                            ir::Type {
+                                name: None,
+                                inner: match size {
+                                    Some(size) => ir::TypeInner::Vector { size, scalar },
+                                    None => ir::TypeInner::Scalar(scalar),
+                                },
+                            },
+                            function_span,
+                        ),
+                        _ => {
+                            let span = ctx.ast_expressions.get_span(expr);
+                            return Err(Box::new(Error::InvalidWorkGroupUniformLoad(span)));
+                        }
+                    };
+                    let result = ctx.interrupt_emitter(
+                        ir::Expression::WorkGroupUniformLoadResult { ty: result_ty },
+                        function_span,
+                    )?;
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block.push(
+                        ir::Statement::WorkGroupUniformLoad { pointer, result },
+                        function_span,
+                    );
+
+                    return Ok(Some(result));
+                }
+                "textureStore" => {
+                    let mut args = ctx.prepare_args(arguments, 3, function_span);
+
+                    let image = args.next()?;
+                    let image_span = ctx.ast_expressions.get_span(image);
+                    let image = self.expression(image, ctx)?;
+
+                    let coordinate = self.expression(args.next()?, ctx)?;
+
+                    let (class, arrayed) = ctx.image_data(image, image_span)?;
+                    let array_index = arrayed
+                        .then(|| {
+                            args.min_args += 1;
+                            self.expression(args.next()?, ctx)
+                        })
+                        .transpose()?;
+                    let scalar = if let ir::ImageClass::Storage { format, .. } = class {
+                        format.into()
+                    } else {
+                        return Err(Box::new(Error::NotStorageTexture(image_span)));
+                    };
+
+                    let value = self.expression_with_leaf_scalar(args.next()?, scalar, ctx)?;
+
+                    args.finish()?;
+
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block
+                        .extend(rctx.emitter.finish(&rctx.function.expressions));
+                    rctx.emitter.start(&rctx.function.expressions);
+                    let stmt = ir::Statement::ImageStore {
+                        image,
+                        coordinate,
+                        array_index,
+                        value,
+                    };
+                    rctx.block.push(stmt, function_span);
+                    return Ok(None);
+                }
+                "textureLoad" => {
+                    let mut args = ctx.prepare_args(arguments, 2, function_span);
+
+                    let image = args.next()?;
+                    let image_span = ctx.ast_expressions.get_span(image);
+                    let image = self.expression(image, ctx)?;
+
+                    let coordinate = self.expression(args.next()?, ctx)?;
+
+                    let (class, arrayed) = ctx.image_data(image, image_span)?;
+                    let array_index = arrayed
+                        .then(|| {
+                            args.min_args += 1;
+                            self.expression(args.next()?, ctx)
+                        })
+                        .transpose()?;
+
+                    let level = class
+                        .is_mipmapped()
+                        .then(|| {
+                            args.min_args += 1;
+                            self.expression(args.next()?, ctx)
+                        })
+                        .transpose()?;
+
+                    let sample = class
+                        .is_multisampled()
+                        .then(|| self.expression(args.next()?, ctx))
+                        .transpose()?;
+
+                    args.finish()?;
+
+                    ir::Expression::ImageLoad {
+                        image,
+                        coordinate,
+                        array_index,
+                        level,
+                        sample,
+                    }
+                }
+                "textureDimensions" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+                    let image = self.expression(args.next()?, ctx)?;
+                    let level = args
+                        .next()
+                        .map(|arg| self.expression(arg, ctx))
+                        .ok()
+                        .transpose()?;
+                    args.finish()?;
+
+                    ir::Expression::ImageQuery {
+                        image,
+                        query: ir::ImageQuery::Size { level },
+                    }
+                }
+                "textureNumLevels" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+                    let image = self.expression(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    ir::Expression::ImageQuery {
+                        image,
+                        query: ir::ImageQuery::NumLevels,
+                    }
+                }
+                "textureNumLayers" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+                    let image = self.expression(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    ir::Expression::ImageQuery {
+                        image,
+                        query: ir::ImageQuery::NumLayers,
+                    }
+                }
+                "textureNumSamples" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+                    let image = self.expression(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    ir::Expression::ImageQuery {
+                        image,
+                        query: ir::ImageQuery::NumSamples,
+                    }
+                }
+                "rayQueryInitialize" => {
+                    let mut args = ctx.prepare_args(arguments, 3, function_span);
+                    let query = self.ray_query_pointer(args.next()?, ctx)?;
+                    let acceleration_structure = self.expression(args.next()?, ctx)?;
+                    let descriptor = self.expression(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    let _ = ctx.module.generate_ray_desc_type();
+                    let fun = ir::RayQueryFunction::Initialize {
+                        acceleration_structure,
+                        descriptor,
+                    };
+
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block
+                        .extend(rctx.emitter.finish(&rctx.function.expressions));
+                    rctx.emitter.start(&rctx.function.expressions);
+                    rctx.block
+                        .push(ir::Statement::RayQuery { query, fun }, function_span);
+                    return Ok(None);
+                }
+                "getCommittedHitVertexPositions" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+                    let query = self.ray_query_pointer(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    let _ = ctx.module.generate_vertex_return_type();
+
+                    ir::Expression::RayQueryVertexPositions {
+                        query,
+                        committed: true,
+                    }
+                }
+                "getCandidateHitVertexPositions" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+                    let query = self.ray_query_pointer(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    let _ = ctx.module.generate_vertex_return_type();
+
+                    ir::Expression::RayQueryVertexPositions {
+                        query,
+                        committed: false,
+                    }
+                }
+                "rayQueryProceed" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+                    let query = self.ray_query_pointer(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    let result = ctx
+                        .interrupt_emitter(ir::Expression::RayQueryProceedResult, function_span)?;
+                    let fun = ir::RayQueryFunction::Proceed { result };
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block
+                        .push(ir::Statement::RayQuery { query, fun }, function_span);
+                    return Ok(Some(result));
+                }
+                "rayQueryGenerateIntersection" => {
+                    let mut args = ctx.prepare_args(arguments, 2, function_span);
+                    let query = self.ray_query_pointer(args.next()?, ctx)?;
+                    let hit_t = self.expression(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    let fun = ir::RayQueryFunction::GenerateIntersection { hit_t };
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block
+                        .push(ir::Statement::RayQuery { query, fun }, function_span);
+                    return Ok(None);
+                }
+                "rayQueryConfirmIntersection" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+                    let query = self.ray_query_pointer(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    let fun = ir::RayQueryFunction::ConfirmIntersection;
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block
+                        .push(ir::Statement::RayQuery { query, fun }, function_span);
+                    return Ok(None);
+                }
+                "rayQueryTerminate" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+                    let query = self.ray_query_pointer(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    let fun = ir::RayQueryFunction::Terminate;
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block
+                        .push(ir::Statement::RayQuery { query, fun }, function_span);
+                    return Ok(None);
+                }
+                "rayQueryGetCommittedIntersection" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+                    let query = self.ray_query_pointer(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    let _ = ctx.module.generate_ray_intersection_type();
+                    ir::Expression::RayQueryGetIntersection {
+                        query,
+                        committed: true,
+                    }
+                }
+                "rayQueryGetCandidateIntersection" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+                    let query = self.ray_query_pointer(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    let _ = ctx.module.generate_ray_intersection_type();
+                    ir::Expression::RayQueryGetIntersection {
+                        query,
+                        committed: false,
+                    }
+                }
+                "subgroupBallot" => {
+                    let mut args = ctx.prepare_args(arguments, 0, function_span);
+                    let predicate = if arguments.len() == 1 {
+                        Some(self.expression(args.next()?, ctx)?)
+                    } else {
+                        None
+                    };
+                    args.finish()?;
+
+                    let result =
+                        ctx.interrupt_emitter(ir::Expression::SubgroupBallotResult, function_span)?;
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block.push(
+                        ir::Statement::SubgroupBallot { result, predicate },
+                        function_span,
+                    );
+                    return Ok(Some(result));
+                }
+                "quadSwapX" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+
+                    let argument = self.expression(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    let ty = ctx.register_type(argument)?;
+
+                    let result = ctx.interrupt_emitter(
+                        crate::Expression::SubgroupOperationResult { ty },
+                        function_span,
+                    )?;
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block.push(
+                        crate::Statement::SubgroupGather {
+                            mode: crate::GatherMode::QuadSwap(crate::Direction::X),
+                            argument,
+                            result,
+                        },
+                        function_span,
+                    );
+                    return Ok(Some(result));
+                }
+                "quadSwapY" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+
+                    let argument = self.expression(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    let ty = ctx.register_type(argument)?;
+
+                    let result = ctx.interrupt_emitter(
+                        crate::Expression::SubgroupOperationResult { ty },
+                        function_span,
+                    )?;
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block.push(
+                        crate::Statement::SubgroupGather {
+                            mode: crate::GatherMode::QuadSwap(crate::Direction::Y),
+                            argument,
+                            result,
+                        },
+                        function_span,
+                    );
+                    return Ok(Some(result));
+                }
+                "quadSwapDiagonal" => {
+                    let mut args = ctx.prepare_args(arguments, 1, function_span);
+
+                    let argument = self.expression(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    let ty = ctx.register_type(argument)?;
+
+                    let result = ctx.interrupt_emitter(
+                        crate::Expression::SubgroupOperationResult { ty },
+                        function_span,
+                    )?;
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block.push(
+                        crate::Statement::SubgroupGather {
+                            mode: crate::GatherMode::QuadSwap(crate::Direction::Diagonal),
+                            argument,
+                            result,
+                        },
+                        function_span,
+                    );
+                    return Ok(Some(result));
+                }
+                "coopStore" | "coopStoreT" => {
+                    let row_major = function_name.ends_with("T");
+
+                    let mut args = ctx.prepare_args(arguments, 2, function_span);
+                    let target = self.expression(args.next()?, ctx)?;
+                    let pointer = self.expression(args.next()?, ctx)?;
+                    let stride = if args.total_args > 2 {
+                        self.expression(args.next()?, ctx)?
+                    } else {
+                        // Infer the stride from the matrix type
+                        let stride = match *resolve_inner!(ctx, target) {
+                            ir::TypeInner::CooperativeMatrix { columns, rows, .. } => {
+                                if row_major {
+                                    columns as u32
+                                } else {
+                                    rows as u32
+                                }
+                            }
+                            _ => 0,
+                        };
+                        ctx.append_expression(
+                            ir::Expression::Literal(ir::Literal::U32(stride)),
+                            Span::UNDEFINED,
+                        )?
+                    };
+                    args.finish()?;
+
+                    let rctx = ctx.runtime_expression_ctx(function_span)?;
+                    rctx.block.push(
+                        crate::Statement::CooperativeStore {
+                            target,
+                            data: crate::CooperativeData {
+                                pointer,
+                                stride,
+                                row_major,
+                            },
+                        },
+                        function_span,
+                    );
+                    return Ok(None);
+                }
+                "coopMultiplyAdd" => {
+                    let mut args = ctx.prepare_args(arguments, 3, function_span);
+                    let a = self.expression(args.next()?, ctx)?;
+                    let b = self.expression(args.next()?, ctx)?;
+                    let c = self.expression(args.next()?, ctx)?;
+                    args.finish()?;
+
+                    ir::Expression::CooperativeMultiplyAdd { a, b, c }
+                }
+                _ => return Err(Box::new(Error::UnknownIdent(function_span, function_name))),
+            }
+        };
+
+        let expr = ctx.append_expression(expr, function_span)?;
+        Ok(Some(expr))
+    }
+
     /// Generate Naga IR for call expressions and statements, and type
     /// constructor expressions.
     ///
@@ -3028,6 +3814,7 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                 Ok(result)
             }
             None => {
+                // If the name refers to a predeclared type, this is a construction expression.
                 let ty = conv::map_predeclared_type(
                     &ctx.enable_extensions,
                     function_span,
@@ -3061,794 +3848,20 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                     return Ok(Some(handle));
                 };
 
-                match function_name {
-                    "bitcast" => {
-                        let ty = tl.ty(self, ctx)?;
-                        tl.finish(ctx)?;
-
-                        let mut args = ctx.prepare_args(arguments, 1, function_span);
-                        let expr = self.expression(args.next()?, ctx)?;
-                        args.finish()?;
-
-                        let element_scalar = match ctx.module.types[ty].inner {
-                            ir::TypeInner::Scalar(scalar) => scalar,
-                            ir::TypeInner::Vector { scalar, .. } => scalar,
-                            _ => {
-                                let ty_resolution = resolve!(ctx, expr);
-                                return Err(Box::new(Error::BadTypeCast {
-                                    from_type: ctx.type_resolution_to_string(ty_resolution),
-                                    span: function_span,
-                                    to_type: ctx.type_to_string(ty),
-                                }));
-                            }
-                        };
-
-                        let expr = ir::Expression::As {
-                            expr,
-                            kind: element_scalar.kind,
-                            convert: None,
-                        };
-
-                        let expr = ctx.append_expression(expr, function_span)?;
-                        return Ok(Some(expr));
-                    }
-                    "coopLoad" | "coopLoadT" => {
-                        let row_major = function_name.ends_with("T");
-                        let (matrix_ty, matrix_span) = tl.ty_with_span(self, ctx)?;
-                        tl.finish(ctx)?;
-
-                        let mut args = ctx.prepare_args(arguments, 1, span);
-                        let pointer = self.expression(args.next()?, ctx)?;
-                        let (columns, rows, role) = match ctx.module.types[matrix_ty].inner {
-                            ir::TypeInner::CooperativeMatrix {
-                                columns,
-                                rows,
-                                role,
-                                ..
-                            } => (columns, rows, role),
-                            _ => {
-                                return Err(Box::new(Error::InvalidCooperativeLoadType(
-                                    matrix_span,
-                                )))
-                            }
-                        };
-                        let stride = if args.total_args > 1 {
-                            self.expression(args.next()?, ctx)?
-                        } else {
-                            // Infer the stride from the matrix type
-                            let stride = if row_major {
-                                columns as u32
-                            } else {
-                                rows as u32
-                            };
-                            ctx.append_expression(
-                                ir::Expression::Literal(ir::Literal::U32(stride)),
-                                Span::UNDEFINED,
-                            )?
-                        };
-                        args.finish()?;
-
-                        let expr = crate::Expression::CooperativeLoad {
-                            columns,
-                            rows,
-                            role,
-                            data: crate::CooperativeData {
-                                pointer,
-                                stride,
-                                row_major,
-                            },
-                        };
-                        let expr = ctx.append_expression(expr, function_span)?;
-                        return Ok(Some(expr));
-                    }
-                    _ => {}
-                }
+                // Otherwise, it must be a call to a builtin function.
+                let expr = self.call_builtin(
+                    function_name,
+                    function_span,
+                    arguments,
+                    &mut tl,
+                    span,
+                    ctx,
+                    is_statement,
+                )?;
 
                 tl.finish(ctx)?;
 
-                let span = function_span;
-                let expr = if let Some(fun) = conv::map_relational_fun(function_name) {
-                    let mut args = ctx.prepare_args(arguments, 1, span);
-                    let argument = self.expression(args.next()?, ctx)?;
-                    args.finish()?;
-
-                    // Check for no-op all(bool) and any(bool):
-                    let argument_unmodified = matches!(
-                        fun,
-                        ir::RelationalFunction::All | ir::RelationalFunction::Any
-                    ) && {
-                        matches!(
-                            resolve_inner!(ctx, argument),
-                            &ir::TypeInner::Scalar(ir::Scalar {
-                                kind: ir::ScalarKind::Bool,
-                                ..
-                            })
-                        )
-                    };
-
-                    if argument_unmodified {
-                        return Ok(Some(argument));
-                    } else {
-                        ir::Expression::Relational { fun, argument }
-                    }
-                } else if let Some((axis, ctrl)) = conv::map_derivative(function_name) {
-                    let mut args = ctx.prepare_args(arguments, 1, span);
-                    let expr = self.expression(args.next()?, ctx)?;
-                    args.finish()?;
-
-                    ir::Expression::Derivative { axis, ctrl, expr }
-                } else if let Some(fun) = conv::map_standard_fun(function_name) {
-                    self.math_function_helper(span, fun, arguments, ctx)?
-                } else if let Some(fun) = Texture::map(function_name) {
-                    self.texture_sample_helper(fun, arguments, span, ctx)?
-                } else if let Some((op, cop)) = conv::map_subgroup_operation(function_name) {
-                    return Ok(Some(
-                        self.subgroup_operation_helper(span, op, cop, arguments, ctx)?,
-                    ));
-                } else if let Some(mode) = SubgroupGather::map(function_name) {
-                    return Ok(Some(
-                        self.subgroup_gather_helper(span, mode, arguments, ctx)?,
-                    ));
-                } else if let Some(fun) = ir::AtomicFunction::map(function_name) {
-                    return self.atomic_helper(span, fun, arguments, is_statement, ctx);
-                } else {
-                    match function_name {
-                        "select" => {
-                            let mut args = ctx.prepare_args(arguments, 3, span);
-
-                            let reject_orig = args.next()?;
-                            let accept_orig = args.next()?;
-                            let mut values = [
-                                self.expression_for_abstract(reject_orig, ctx)?,
-                                self.expression_for_abstract(accept_orig, ctx)?,
-                            ];
-                            let condition = self.expression(args.next()?, ctx)?;
-
-                            args.finish()?;
-
-                            let diagnostic_details =
-                                |ctx: &ExpressionContext<'_, '_, '_>,
-                                 ty_res: &proc::TypeResolution,
-                                 orig_expr| {
-                                    (
-                                        ctx.ast_expressions.get_span(orig_expr),
-                                        format!("`{}`", ctx.as_diagnostic_display(ty_res)),
-                                    )
-                                };
-                            for (&value, orig_value) in
-                                values.iter().zip([reject_orig, accept_orig])
-                            {
-                                let value_ty_res = resolve!(ctx, value);
-                                if value_ty_res
-                                    .inner_with(&ctx.module.types)
-                                    .vector_size_and_scalar()
-                                    .is_none()
-                                {
-                                    let (arg_span, arg_type) =
-                                        diagnostic_details(ctx, value_ty_res, orig_value);
-                                    return Err(Box::new(Error::SelectUnexpectedArgumentType {
-                                        arg_span,
-                                        arg_type,
-                                    }));
-                                }
-                            }
-                            let mut consensus_scalar = ctx
-                                .automatic_conversion_consensus(&values)
-                                .map_err(|_idx| {
-                                    let [reject, accept] = values;
-                                    let [(reject_span, reject_type), (accept_span, accept_type)] =
-                                        [(reject_orig, reject), (accept_orig, accept)].map(
-                                            |(orig_expr, expr)| {
-                                                let ty_res = &ctx.typifier()[expr];
-                                                diagnostic_details(ctx, ty_res, orig_expr)
-                                            },
-                                        );
-                                    Error::SelectRejectAndAcceptHaveNoCommonType {
-                                        reject_span,
-                                        reject_type,
-                                        accept_span,
-                                        accept_type,
-                                    }
-                                })?;
-                            if !ctx.is_const(condition) {
-                                consensus_scalar = consensus_scalar.concretize();
-                            }
-
-                            ctx.convert_slice_to_common_leaf_scalar(&mut values, consensus_scalar)?;
-
-                            let [reject, accept] = values;
-
-                            ir::Expression::Select {
-                                reject,
-                                accept,
-                                condition,
-                            }
-                        }
-                        "arrayLength" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-                            let expr = self.expression(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            ir::Expression::ArrayLength(expr)
-                        }
-                        "atomicLoad" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-                            let (pointer, _scalar) = self.atomic_pointer(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            ir::Expression::Load { pointer }
-                        }
-                        "atomicStore" => {
-                            let mut args = ctx.prepare_args(arguments, 2, span);
-                            let (pointer, scalar) = self.atomic_pointer(args.next()?, ctx)?;
-                            let value =
-                                self.expression_with_leaf_scalar(args.next()?, scalar, ctx)?;
-                            args.finish()?;
-
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block
-                                .extend(rctx.emitter.finish(&rctx.function.expressions));
-                            rctx.emitter.start(&rctx.function.expressions);
-                            rctx.block
-                                .push(ir::Statement::Store { pointer, value }, span);
-                            return Ok(None);
-                        }
-                        "atomicCompareExchangeWeak" => {
-                            let mut args = ctx.prepare_args(arguments, 3, span);
-
-                            let (pointer, scalar) = self.atomic_pointer(args.next()?, ctx)?;
-
-                            let compare =
-                                self.expression_with_leaf_scalar(args.next()?, scalar, ctx)?;
-
-                            let value = args.next()?;
-                            let value_span = ctx.ast_expressions.get_span(value);
-                            let value = self.expression_with_leaf_scalar(value, scalar, ctx)?;
-
-                            args.finish()?;
-
-                            let expression = match *resolve_inner!(ctx, value) {
-                                ir::TypeInner::Scalar(scalar) => ir::Expression::AtomicResult {
-                                    ty: ctx.module.generate_predeclared_type(
-                                        ir::PredeclaredType::AtomicCompareExchangeWeakResult(
-                                            scalar,
-                                        ),
-                                    ),
-                                    comparison: true,
-                                },
-                                _ => {
-                                    return Err(Box::new(Error::InvalidAtomicOperandType(
-                                        value_span,
-                                    )))
-                                }
-                            };
-
-                            let result = ctx.interrupt_emitter(expression, span)?;
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block.push(
-                                ir::Statement::Atomic {
-                                    pointer,
-                                    fun: ir::AtomicFunction::Exchange {
-                                        compare: Some(compare),
-                                    },
-                                    value,
-                                    result: Some(result),
-                                },
-                                span,
-                            );
-                            return Ok(Some(result));
-                        }
-                        "textureAtomicMin" | "textureAtomicMax" | "textureAtomicAdd"
-                        | "textureAtomicAnd" | "textureAtomicOr" | "textureAtomicXor" => {
-                            let mut args = ctx.prepare_args(arguments, 3, span);
-
-                            let image = args.next()?;
-                            let image_span = ctx.ast_expressions.get_span(image);
-                            let image = self.expression(image, ctx)?;
-
-                            let coordinate = self.expression(args.next()?, ctx)?;
-
-                            let (_, arrayed) = ctx.image_data(image, image_span)?;
-                            let array_index = arrayed
-                                .then(|| {
-                                    args.min_args += 1;
-                                    self.expression(args.next()?, ctx)
-                                })
-                                .transpose()?;
-
-                            let value = self.expression(args.next()?, ctx)?;
-
-                            args.finish()?;
-
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block
-                                .extend(rctx.emitter.finish(&rctx.function.expressions));
-                            rctx.emitter.start(&rctx.function.expressions);
-                            let stmt = ir::Statement::ImageAtomic {
-                                image,
-                                coordinate,
-                                array_index,
-                                fun: match function_name {
-                                    "textureAtomicMin" => ir::AtomicFunction::Min,
-                                    "textureAtomicMax" => ir::AtomicFunction::Max,
-                                    "textureAtomicAdd" => ir::AtomicFunction::Add,
-                                    "textureAtomicAnd" => ir::AtomicFunction::And,
-                                    "textureAtomicOr" => ir::AtomicFunction::InclusiveOr,
-                                    "textureAtomicXor" => ir::AtomicFunction::ExclusiveOr,
-                                    _ => unreachable!(),
-                                },
-                                value,
-                            };
-                            rctx.block.push(stmt, span);
-                            return Ok(None);
-                        }
-                        "storageBarrier" => {
-                            ctx.prepare_args(arguments, 0, span).finish()?;
-
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block
-                                .push(ir::Statement::ControlBarrier(ir::Barrier::STORAGE), span);
-                            return Ok(None);
-                        }
-                        "workgroupBarrier" => {
-                            ctx.prepare_args(arguments, 0, span).finish()?;
-
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block
-                                .push(ir::Statement::ControlBarrier(ir::Barrier::WORK_GROUP), span);
-                            return Ok(None);
-                        }
-                        "subgroupBarrier" => {
-                            ctx.prepare_args(arguments, 0, span).finish()?;
-
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block
-                                .push(ir::Statement::ControlBarrier(ir::Barrier::SUB_GROUP), span);
-                            return Ok(None);
-                        }
-                        "textureBarrier" => {
-                            ctx.prepare_args(arguments, 0, span).finish()?;
-
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block
-                                .push(ir::Statement::ControlBarrier(ir::Barrier::TEXTURE), span);
-                            return Ok(None);
-                        }
-                        "workgroupUniformLoad" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-                            let expr = args.next()?;
-                            args.finish()?;
-
-                            let pointer = self.expression(expr, ctx)?;
-                            let result_ty = match *resolve_inner!(ctx, pointer) {
-                                ir::TypeInner::Pointer {
-                                    base,
-                                    space: ir::AddressSpace::WorkGroup,
-                                } => match ctx.module.types[base].inner {
-                                    // Match `Expression::Load` semantics:
-                                    // loading through a pointer to `atomic<T>` produces a `T`.
-                                    ir::TypeInner::Atomic(scalar) => ctx.module.types.insert(
-                                        ir::Type {
-                                            name: None,
-                                            inner: ir::TypeInner::Scalar(scalar),
-                                        },
-                                        span,
-                                    ),
-                                    _ => base,
-                                },
-                                ir::TypeInner::ValuePointer {
-                                    size,
-                                    scalar,
-                                    space: ir::AddressSpace::WorkGroup,
-                                } => ctx.module.types.insert(
-                                    ir::Type {
-                                        name: None,
-                                        inner: match size {
-                                            Some(size) => ir::TypeInner::Vector { size, scalar },
-                                            None => ir::TypeInner::Scalar(scalar),
-                                        },
-                                    },
-                                    span,
-                                ),
-                                _ => {
-                                    let span = ctx.ast_expressions.get_span(expr);
-                                    return Err(Box::new(Error::InvalidWorkGroupUniformLoad(span)));
-                                }
-                            };
-                            let result = ctx.interrupt_emitter(
-                                ir::Expression::WorkGroupUniformLoadResult { ty: result_ty },
-                                span,
-                            )?;
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block.push(
-                                ir::Statement::WorkGroupUniformLoad { pointer, result },
-                                span,
-                            );
-
-                            return Ok(Some(result));
-                        }
-                        "textureStore" => {
-                            let mut args = ctx.prepare_args(arguments, 3, span);
-
-                            let image = args.next()?;
-                            let image_span = ctx.ast_expressions.get_span(image);
-                            let image = self.expression(image, ctx)?;
-
-                            let coordinate = self.expression(args.next()?, ctx)?;
-
-                            let (class, arrayed) = ctx.image_data(image, image_span)?;
-                            let array_index = arrayed
-                                .then(|| {
-                                    args.min_args += 1;
-                                    self.expression(args.next()?, ctx)
-                                })
-                                .transpose()?;
-                            let scalar = if let ir::ImageClass::Storage { format, .. } = class {
-                                format.into()
-                            } else {
-                                return Err(Box::new(Error::NotStorageTexture(image_span)));
-                            };
-
-                            let value =
-                                self.expression_with_leaf_scalar(args.next()?, scalar, ctx)?;
-
-                            args.finish()?;
-
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block
-                                .extend(rctx.emitter.finish(&rctx.function.expressions));
-                            rctx.emitter.start(&rctx.function.expressions);
-                            let stmt = ir::Statement::ImageStore {
-                                image,
-                                coordinate,
-                                array_index,
-                                value,
-                            };
-                            rctx.block.push(stmt, span);
-                            return Ok(None);
-                        }
-                        "textureLoad" => {
-                            let mut args = ctx.prepare_args(arguments, 2, span);
-
-                            let image = args.next()?;
-                            let image_span = ctx.ast_expressions.get_span(image);
-                            let image = self.expression(image, ctx)?;
-
-                            let coordinate = self.expression(args.next()?, ctx)?;
-
-                            let (class, arrayed) = ctx.image_data(image, image_span)?;
-                            let array_index = arrayed
-                                .then(|| {
-                                    args.min_args += 1;
-                                    self.expression(args.next()?, ctx)
-                                })
-                                .transpose()?;
-
-                            let level = class
-                                .is_mipmapped()
-                                .then(|| {
-                                    args.min_args += 1;
-                                    self.expression(args.next()?, ctx)
-                                })
-                                .transpose()?;
-
-                            let sample = class
-                                .is_multisampled()
-                                .then(|| self.expression(args.next()?, ctx))
-                                .transpose()?;
-
-                            args.finish()?;
-
-                            ir::Expression::ImageLoad {
-                                image,
-                                coordinate,
-                                array_index,
-                                level,
-                                sample,
-                            }
-                        }
-                        "textureDimensions" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-                            let image = self.expression(args.next()?, ctx)?;
-                            let level = args
-                                .next()
-                                .map(|arg| self.expression(arg, ctx))
-                                .ok()
-                                .transpose()?;
-                            args.finish()?;
-
-                            ir::Expression::ImageQuery {
-                                image,
-                                query: ir::ImageQuery::Size { level },
-                            }
-                        }
-                        "textureNumLevels" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-                            let image = self.expression(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            ir::Expression::ImageQuery {
-                                image,
-                                query: ir::ImageQuery::NumLevels,
-                            }
-                        }
-                        "textureNumLayers" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-                            let image = self.expression(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            ir::Expression::ImageQuery {
-                                image,
-                                query: ir::ImageQuery::NumLayers,
-                            }
-                        }
-                        "textureNumSamples" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-                            let image = self.expression(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            ir::Expression::ImageQuery {
-                                image,
-                                query: ir::ImageQuery::NumSamples,
-                            }
-                        }
-                        "rayQueryInitialize" => {
-                            let mut args = ctx.prepare_args(arguments, 3, span);
-                            let query = self.ray_query_pointer(args.next()?, ctx)?;
-                            let acceleration_structure = self.expression(args.next()?, ctx)?;
-                            let descriptor = self.expression(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            let _ = ctx.module.generate_ray_desc_type();
-                            let fun = ir::RayQueryFunction::Initialize {
-                                acceleration_structure,
-                                descriptor,
-                            };
-
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block
-                                .extend(rctx.emitter.finish(&rctx.function.expressions));
-                            rctx.emitter.start(&rctx.function.expressions);
-                            rctx.block
-                                .push(ir::Statement::RayQuery { query, fun }, span);
-                            return Ok(None);
-                        }
-                        "getCommittedHitVertexPositions" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-                            let query = self.ray_query_pointer(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            let _ = ctx.module.generate_vertex_return_type();
-
-                            ir::Expression::RayQueryVertexPositions {
-                                query,
-                                committed: true,
-                            }
-                        }
-                        "getCandidateHitVertexPositions" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-                            let query = self.ray_query_pointer(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            let _ = ctx.module.generate_vertex_return_type();
-
-                            ir::Expression::RayQueryVertexPositions {
-                                query,
-                                committed: false,
-                            }
-                        }
-                        "rayQueryProceed" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-                            let query = self.ray_query_pointer(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            let result =
-                                ctx.interrupt_emitter(ir::Expression::RayQueryProceedResult, span)?;
-                            let fun = ir::RayQueryFunction::Proceed { result };
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block
-                                .push(ir::Statement::RayQuery { query, fun }, span);
-                            return Ok(Some(result));
-                        }
-                        "rayQueryGenerateIntersection" => {
-                            let mut args = ctx.prepare_args(arguments, 2, span);
-                            let query = self.ray_query_pointer(args.next()?, ctx)?;
-                            let hit_t = self.expression(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            let fun = ir::RayQueryFunction::GenerateIntersection { hit_t };
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block
-                                .push(ir::Statement::RayQuery { query, fun }, span);
-                            return Ok(None);
-                        }
-                        "rayQueryConfirmIntersection" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-                            let query = self.ray_query_pointer(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            let fun = ir::RayQueryFunction::ConfirmIntersection;
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block
-                                .push(ir::Statement::RayQuery { query, fun }, span);
-                            return Ok(None);
-                        }
-                        "rayQueryTerminate" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-                            let query = self.ray_query_pointer(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            let fun = ir::RayQueryFunction::Terminate;
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block
-                                .push(ir::Statement::RayQuery { query, fun }, span);
-                            return Ok(None);
-                        }
-                        "rayQueryGetCommittedIntersection" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-                            let query = self.ray_query_pointer(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            let _ = ctx.module.generate_ray_intersection_type();
-                            ir::Expression::RayQueryGetIntersection {
-                                query,
-                                committed: true,
-                            }
-                        }
-                        "rayQueryGetCandidateIntersection" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-                            let query = self.ray_query_pointer(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            let _ = ctx.module.generate_ray_intersection_type();
-                            ir::Expression::RayQueryGetIntersection {
-                                query,
-                                committed: false,
-                            }
-                        }
-                        "subgroupBallot" => {
-                            let mut args = ctx.prepare_args(arguments, 0, span);
-                            let predicate = if arguments.len() == 1 {
-                                Some(self.expression(args.next()?, ctx)?)
-                            } else {
-                                None
-                            };
-                            args.finish()?;
-
-                            let result =
-                                ctx.interrupt_emitter(ir::Expression::SubgroupBallotResult, span)?;
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block
-                                .push(ir::Statement::SubgroupBallot { result, predicate }, span);
-                            return Ok(Some(result));
-                        }
-                        "quadSwapX" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-
-                            let argument = self.expression(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            let ty = ctx.register_type(argument)?;
-
-                            let result = ctx.interrupt_emitter(
-                                crate::Expression::SubgroupOperationResult { ty },
-                                span,
-                            )?;
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block.push(
-                                crate::Statement::SubgroupGather {
-                                    mode: crate::GatherMode::QuadSwap(crate::Direction::X),
-                                    argument,
-                                    result,
-                                },
-                                span,
-                            );
-                            return Ok(Some(result));
-                        }
-                        "quadSwapY" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-
-                            let argument = self.expression(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            let ty = ctx.register_type(argument)?;
-
-                            let result = ctx.interrupt_emitter(
-                                crate::Expression::SubgroupOperationResult { ty },
-                                span,
-                            )?;
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block.push(
-                                crate::Statement::SubgroupGather {
-                                    mode: crate::GatherMode::QuadSwap(crate::Direction::Y),
-                                    argument,
-                                    result,
-                                },
-                                span,
-                            );
-                            return Ok(Some(result));
-                        }
-                        "quadSwapDiagonal" => {
-                            let mut args = ctx.prepare_args(arguments, 1, span);
-
-                            let argument = self.expression(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            let ty = ctx.register_type(argument)?;
-
-                            let result = ctx.interrupt_emitter(
-                                crate::Expression::SubgroupOperationResult { ty },
-                                span,
-                            )?;
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block.push(
-                                crate::Statement::SubgroupGather {
-                                    mode: crate::GatherMode::QuadSwap(crate::Direction::Diagonal),
-                                    argument,
-                                    result,
-                                },
-                                span,
-                            );
-                            return Ok(Some(result));
-                        }
-                        "coopStore" | "coopStoreT" => {
-                            let row_major = function_name.ends_with("T");
-
-                            let mut args = ctx.prepare_args(arguments, 2, span);
-                            let target = self.expression(args.next()?, ctx)?;
-                            let pointer = self.expression(args.next()?, ctx)?;
-                            let stride = if args.total_args > 2 {
-                                self.expression(args.next()?, ctx)?
-                            } else {
-                                // Infer the stride from the matrix type
-                                let stride = match *resolve_inner!(ctx, target) {
-                                    ir::TypeInner::CooperativeMatrix { columns, rows, .. } => {
-                                        if row_major {
-                                            columns as u32
-                                        } else {
-                                            rows as u32
-                                        }
-                                    }
-                                    _ => 0,
-                                };
-                                ctx.append_expression(
-                                    ir::Expression::Literal(ir::Literal::U32(stride)),
-                                    Span::UNDEFINED,
-                                )?
-                            };
-                            args.finish()?;
-
-                            let rctx = ctx.runtime_expression_ctx(span)?;
-                            rctx.block.push(
-                                crate::Statement::CooperativeStore {
-                                    target,
-                                    data: crate::CooperativeData {
-                                        pointer,
-                                        stride,
-                                        row_major,
-                                    },
-                                },
-                                span,
-                            );
-                            return Ok(None);
-                        }
-                        "coopMultiplyAdd" => {
-                            let mut args = ctx.prepare_args(arguments, 3, span);
-                            let a = self.expression(args.next()?, ctx)?;
-                            let b = self.expression(args.next()?, ctx)?;
-                            let c = self.expression(args.next()?, ctx)?;
-                            args.finish()?;
-
-                            ir::Expression::CooperativeMultiplyAdd { a, b, c }
-                        }
-                        _ => {
-                            return Err(Box::new(Error::UnknownIdent(function_span, function_name)))
-                        }
-                    }
-                };
-
-                let expr = ctx.append_expression(expr, span)?;
-                Ok(Some(expr))
+                Ok(expr)
             }
         }
     }
