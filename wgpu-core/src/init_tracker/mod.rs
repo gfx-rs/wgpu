@@ -248,7 +248,6 @@ where
 
 impl InitTracker<u32> {
     // Makes a single entry uninitialized if not already uninitialized
-    #[allow(dead_code)]
     pub(crate) fn discard(&mut self, pos: u32) {
         // first range where end>=idx
         let r_idx = self.uninitialized_ranges.partition_point(|r| r.end < pos);

@@ -105,7 +105,7 @@ pub struct GlobalContext<'source, 'temp, 'out> {
 }
 
 impl<'source> GlobalContext<'source, '_, '_> {
-    fn as_const(&mut self) -> ExpressionContext<'source, '_, '_> {
+    const fn as_const(&mut self) -> ExpressionContext<'source, '_, '_> {
         ExpressionContext {
             ast_expressions: self.ast_expressions,
             globals: self.globals,
@@ -118,7 +118,7 @@ impl<'source> GlobalContext<'source, '_, '_> {
         }
     }
 
-    fn as_override(&mut self) -> ExpressionContext<'source, '_, '_> {
+    const fn as_override(&mut self) -> ExpressionContext<'source, '_, '_> {
         ExpressionContext {
             ast_expressions: self.ast_expressions,
             globals: self.globals,
@@ -202,7 +202,7 @@ pub struct StatementContext<'source, 'temp, 'out> {
 }
 
 impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
-    fn as_const<'t>(
+    const fn as_const<'t>(
         &'t mut self,
         block: &'t mut ir::Block,
         emitter: &'t mut proc::Emitter,
@@ -229,7 +229,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
         }
     }
 
-    fn as_expression<'t>(
+    const fn as_expression<'t>(
         &'t mut self,
         block: &'t mut ir::Block,
         emitter: &'t mut proc::Emitter,
@@ -257,7 +257,7 @@ impl<'a, 'temp> StatementContext<'a, 'temp, '_> {
     }
 
     #[allow(dead_code)]
-    fn as_global(&mut self) -> GlobalContext<'a, '_, '_> {
+    const fn as_global(&mut self) -> GlobalContext<'a, '_, '_> {
         GlobalContext {
             ast_expressions: self.ast_expressions,
             globals: self.globals,
@@ -434,7 +434,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     }
 
     #[allow(dead_code)]
-    fn as_const(&mut self) -> ExpressionContext<'source, '_, '_> {
+    const fn as_const(&mut self) -> ExpressionContext<'source, '_, '_> {
         ExpressionContext {
             globals: self.globals,
             types: self.types,
@@ -461,7 +461,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         }
     }
 
-    fn as_global(&mut self) -> GlobalContext<'source, '_, '_> {
+    const fn as_global(&mut self) -> GlobalContext<'source, '_, '_> {
         GlobalContext {
             ast_expressions: self.ast_expressions,
             globals: self.globals,
@@ -473,7 +473,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         }
     }
 
-    fn as_const_evaluator(&mut self) -> proc::ConstantEvaluator<'_> {
+    const fn as_const_evaluator(&mut self) -> proc::ConstantEvaluator<'_> {
         match self.expr_type {
             ExpressionContextType::Runtime(ref mut rctx) => {
                 proc::ConstantEvaluator::for_wgsl_function(
@@ -517,7 +517,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
     /// Return a wrapper around `value` that implements
     /// [`core::fmt::Display`] in a form suitable for use in
     /// diagnostic messages.
-    fn as_diagnostic_display<T>(
+    const fn as_diagnostic_display<T>(
         &self,
         value: T,
     ) -> crate::common::DiagnosticDisplay<(T, proc::GlobalCtx<'_>)> {
@@ -585,7 +585,7 @@ impl<'source, 'temp, 'out> ExpressionContext<'source, 'temp, 'out> {
         }
     }
 
-    fn typifier(&self) -> &Typifier {
+    const fn typifier(&self) -> &Typifier {
         match self.expr_type {
             ExpressionContextType::Runtime(ref ctx)
             | ExpressionContextType::Constant(Some(ref ctx)) => ctx.typifier,

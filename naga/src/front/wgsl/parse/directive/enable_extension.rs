@@ -34,7 +34,7 @@ impl EnableExtensions {
     }
 
     /// Add an enable-extension to the set requested by a module.
-    pub(crate) fn add(&mut self, ext: ImplementedEnableExtension) {
+    pub(crate) const fn add(&mut self, ext: ImplementedEnableExtension) {
         let field = match ext {
             ImplementedEnableExtension::WgpuMeshShader => &mut self.wgpu_mesh_shader,
             ImplementedEnableExtension::WgpuRayQuery => &mut self.wgpu_ray_query,

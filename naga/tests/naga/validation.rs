@@ -545,7 +545,6 @@ fn main(input: VertexOutput) {{
     }
 }
 
-#[allow(dead_code)]
 struct BindingArrayFixture {
     module: Module,
     span: naga::Span,

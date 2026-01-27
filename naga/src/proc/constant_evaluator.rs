@@ -979,7 +979,7 @@ impl<'a> ConstantEvaluator<'a> {
     /// constant expression arena.
     ///
     /// Report errors according to WGSL's rules for constant evaluation.
-    pub fn for_wgsl_module(
+    pub const fn for_wgsl_module(
         module: &'a mut crate::Module,
         global_expression_kind_tracker: &'a mut ExpressionKindTracker,
         layouter: &'a mut crate::proc::Layouter,
@@ -1001,7 +1001,7 @@ impl<'a> ConstantEvaluator<'a> {
     /// constant expression arena.
     ///
     /// Report errors according to GLSL's rules for constant evaluation.
-    pub fn for_glsl_module(
+    pub const fn for_glsl_module(
         module: &'a mut crate::Module,
         global_expression_kind_tracker: &'a mut ExpressionKindTracker,
         layouter: &'a mut crate::proc::Layouter,
@@ -1014,7 +1014,7 @@ impl<'a> ConstantEvaluator<'a> {
         )
     }
 
-    fn for_module(
+    const fn for_module(
         behavior: Behavior<'a>,
         module: &'a mut crate::Module,
         global_expression_kind_tracker: &'a mut ExpressionKindTracker,
@@ -1035,7 +1035,7 @@ impl<'a> ConstantEvaluator<'a> {
     /// expression arena.
     ///
     /// Report errors according to WGSL's rules for constant evaluation.
-    pub fn for_wgsl_function(
+    pub const fn for_wgsl_function(
         module: &'a mut crate::Module,
         expressions: &'a mut Arena<Expression>,
         local_expression_kind_tracker: &'a mut ExpressionKindTracker,
@@ -1068,7 +1068,7 @@ impl<'a> ConstantEvaluator<'a> {
     /// expression arena.
     ///
     /// Report errors according to GLSL's rules for constant evaluation.
-    pub fn for_glsl_function(
+    pub const fn for_glsl_function(
         module: &'a mut crate::Module,
         expressions: &'a mut Arena<Expression>,
         local_expression_kind_tracker: &'a mut ExpressionKindTracker,
@@ -1091,7 +1091,7 @@ impl<'a> ConstantEvaluator<'a> {
         }
     }
 
-    pub fn to_ctx(&self) -> crate::proc::GlobalCtx<'_> {
+    pub const fn to_ctx(&self) -> crate::proc::GlobalCtx<'_> {
         crate::proc::GlobalCtx {
             types: self.types,
             constants: self.constants,

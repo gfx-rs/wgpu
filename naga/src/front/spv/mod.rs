@@ -231,7 +231,7 @@ struct Decoration {
 }
 
 impl Decoration {
-    fn debug_name(&self) -> &str {
+    const fn debug_name(&self) -> &str {
         match self.name {
             Some(ref name) => name.as_str(),
             None => "?",
@@ -1493,10 +1493,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         overrides: &Arena<crate::Override>,
     ) -> Arena<crate::Expression> {
         let mut expressions = Arena::new();
-        #[allow(clippy::panic)]
-        {
-            assert!(self.lookup_expression.is_empty());
-        }
+        assert!(self.lookup_expression.is_empty());
         // register global variables
         for (&id, var) in self.lookup_variable.iter() {
             let span = globals.get_span(var.handle);
@@ -3176,7 +3173,7 @@ fn resolve_constant(gctx: crate::proc::GlobalCtx, constant: &Constant) -> Option
 }
 
 pub fn parse_u8_slice(data: &[u8], options: &Options) -> Result<crate::Module, Error> {
-    if data.len() % 4 != 0 {
+    if !data.len().is_multiple_of(4) {
         return Err(Error::IncompleteData);
     }
 

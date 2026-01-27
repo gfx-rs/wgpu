@@ -335,7 +335,6 @@ struct Inner {
     /// Note: the context contains a dummy pbuffer (1x1).
     /// Required for `eglMakeCurrent` on platforms that doesn't supports `EGL_KHR_surfaceless_context`.
     egl: EglContext,
-    #[allow(unused)]
     version: (i32, i32),
     supports_native_window: bool,
     config: khronos_egl::Config,
@@ -888,7 +887,6 @@ impl crate::Instance for Instance {
         })
     }
 
-    #[cfg_attr(target_os = "macos", allow(unused, unused_mut, unreachable_code))]
     unsafe fn create_surface(
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,

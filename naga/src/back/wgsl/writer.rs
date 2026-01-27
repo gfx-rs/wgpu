@@ -1955,7 +1955,6 @@ impl<W: Write> Writer<W> {
     }
 
     // See https://github.com/rust-lang/rust-clippy/issues/4979.
-    #[allow(clippy::missing_const_for_fn)]
     pub fn finish(self) -> W {
         self.out
     }
