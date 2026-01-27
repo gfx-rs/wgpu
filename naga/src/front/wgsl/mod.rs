@@ -46,6 +46,7 @@ impl Frontend {
             options: Options::new(),
         }
     }
+
     pub const fn new_with_options(options: Options) -> Self {
         Self {
             parser: Parser::new(),
