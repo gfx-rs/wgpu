@@ -142,15 +142,15 @@ impl Writer {
 
     /// Reset `Writer` to its initial state, retaining any allocations.
     ///
-    /// Why not just implement `Recyclable` for `Writer`? By design,
-    /// `Recyclable::recycle` requires ownership of the value, not just
+    /// Why not just implement `Reclaimable` for `Writer`? By design,
+    /// `Reclaimable::reclaim` requires ownership of the value, not just
     /// `&mut`; see the trait documentation. But we need to use this method
     /// from functions like `Writer::write`, which only have `&mut Writer`.
     /// Workarounds include unsafe code (`core::ptr::read`, then `write`, ugh)
     /// or something like a `Default` impl that returns an oddly-initialized
     /// `Writer`, which is worse.
     fn reset(&mut self) {
-        use super::recyclable::Recyclable;
+        use super::reclaimable::Reclaimable;
         use core::mem::take;
 
         let mut id_gen = IdGenerator::default();
@@ -176,26 +176,26 @@ impl Writer {
             void_type,
             gl450_ext_inst_id,
 
-            // Recycled:
-            capabilities_used: take(&mut self.capabilities_used).recycle(),
-            extensions_used: take(&mut self.extensions_used).recycle(),
-            physical_layout: self.physical_layout.clone().recycle(),
-            logical_layout: take(&mut self.logical_layout).recycle(),
-            debug_strings: take(&mut self.debug_strings).recycle(),
-            debugs: take(&mut self.debugs).recycle(),
-            annotations: take(&mut self.annotations).recycle(),
-            lookup_type: take(&mut self.lookup_type).recycle(),
-            lookup_function: take(&mut self.lookup_function).recycle(),
-            lookup_function_type: take(&mut self.lookup_function_type).recycle(),
-            wrapped_functions: take(&mut self.wrapped_functions).recycle(),
-            constant_ids: take(&mut self.constant_ids).recycle(),
-            cached_constants: take(&mut self.cached_constants).recycle(),
-            global_variables: take(&mut self.global_variables).recycle(),
-            std140_compat_uniform_types: take(&mut self.std140_compat_uniform_types).recycle(),
-            saved_cached: take(&mut self.saved_cached).recycle(),
-            temp_list: take(&mut self.temp_list).recycle(),
-            ray_query_functions: take(&mut self.ray_query_functions).recycle(),
-            io_f16_polyfills: take(&mut self.io_f16_polyfills).recycle(),
+            // Reclaimed:
+            capabilities_used: take(&mut self.capabilities_used).reclaim(),
+            extensions_used: take(&mut self.extensions_used).reclaim(),
+            physical_layout: self.physical_layout.clone().reclaim(),
+            logical_layout: take(&mut self.logical_layout).reclaim(),
+            debug_strings: take(&mut self.debug_strings).reclaim(),
+            debugs: take(&mut self.debugs).reclaim(),
+            annotations: take(&mut self.annotations).reclaim(),
+            lookup_type: take(&mut self.lookup_type).reclaim(),
+            lookup_function: take(&mut self.lookup_function).reclaim(),
+            lookup_function_type: take(&mut self.lookup_function_type).reclaim(),
+            wrapped_functions: take(&mut self.wrapped_functions).reclaim(),
+            constant_ids: take(&mut self.constant_ids).reclaim(),
+            cached_constants: take(&mut self.cached_constants).reclaim(),
+            global_variables: take(&mut self.global_variables).reclaim(),
+            std140_compat_uniform_types: take(&mut self.std140_compat_uniform_types).reclaim(),
+            saved_cached: take(&mut self.saved_cached).reclaim(),
+            temp_list: take(&mut self.temp_list).reclaim(),
+            ray_query_functions: take(&mut self.ray_query_functions).reclaim(),
+            io_f16_polyfills: take(&mut self.io_f16_polyfills).reclaim(),
             debug_printf: None,
         };
 
