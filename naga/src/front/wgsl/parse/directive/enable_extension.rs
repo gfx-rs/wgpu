@@ -9,7 +9,7 @@ use alloc::boxed::Box;
 
 /// Tracks the status of every enable-extension known to Naga.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct EnableExtensions {
+pub(crate) struct EnableExtensions {
     wgpu_mesh_shader: bool,
     wgpu_ray_query: bool,
     wgpu_ray_query_vertex_return: bool,
