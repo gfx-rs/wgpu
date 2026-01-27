@@ -1669,7 +1669,9 @@ impl<'a> ConstantEvaluator<'a> {
 
             // computational
             crate::MathFunction::Sign => {
-                component_wise_signed!(self, span, [arg], |e| { Ok([e.signum()]) })
+                component_wise_signed!(self, span, [arg], |e| {
+                    Ok([if e.is_zero() { Zero::zero() } else { e.signum() }])
+                })
             }
             crate::MathFunction::Fma => {
                 component_wise_float!(
