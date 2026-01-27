@@ -645,18 +645,28 @@ impl VaryingContext<'_> {
 
                 if !self.blend_src_mask.is_empty() {
                     let span_context = self.types.get_span_context(ty);
+                    let location_members = members
+                        .as_slice()
+                        .iter()
+                        .filter(|m| {
+                            m.binding
+                                .as_ref()
+                                .is_some_and(|b| matches!(b, crate::Binding::Location { .. }))
+                        })
+                        .collect::<Vec<_>>();
 
-                    // If there's any blend_src usage, it must apply to all members of which there must be exactly 2.
-                    if members.len() != 2 || self.blend_src_mask.len() != 2 {
+                    // If there's any blend_src usage, it must apply to all members with a `location` attribute, of which there must be exactly 2.
+                    if location_members.len() != 2 || self.blend_src_mask.len() != 2 {
                         return Err(
                             VaryingError::IncompleteBlendSrcUsage.with_span_context(span_context)
                         );
                     }
-                    // Also, all members must have the same type.
-                    if members[0].ty != members[1].ty {
+
+                    // Also, all of them must have the same type.
+                    if location_members[0].ty != location_members[1].ty {
                         return Err(VaryingError::BlendSrcOutputTypeMismatch {
-                            blend_src_0_type: members[0].ty,
-                            blend_src_1_type: members[1].ty,
+                            blend_src_0_type: location_members[0].ty,
+                            blend_src_1_type: location_members[1].ty,
                         }
                         .with_span_context(span_context));
                     }
