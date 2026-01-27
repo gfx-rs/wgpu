@@ -225,11 +225,9 @@ impl<W: Write> Writer<W> {
                         Attribute::MeshStage(mesh_output_name),
                         Attribute::WorkGroupSize(ep.workgroup_size),
                     ];
-                    if ep.task_payload.is_some() {
-                        let payload_name = module.global_variables[ep.task_payload.unwrap()]
-                            .name
-                            .clone()
-                            .unwrap();
+                    if let Some(task_payload) = ep.task_payload {
+                        let payload_name =
+                            module.global_variables[task_payload].name.clone().unwrap();
                         mesh_attrs.push(Attribute::TaskPayload(payload_name));
                     }
                     mesh_attrs

@@ -137,13 +137,13 @@ impl Instruction {
         assert_eq!(wc, words.len() as u16);
         assert_eq!(op, self.op as u16);
 
-        if self.type_id.is_some() {
-            assert_eq!(words[inst_index], self.type_id.unwrap());
+        if let Some(type_id) = self.type_id {
+            assert_eq!(words[inst_index], type_id);
             inst_index += 1;
         }
 
-        if self.result_id.is_some() {
-            assert_eq!(words[inst_index], self.result_id.unwrap());
+        if let Some(result_id) = self.result_id {
+            assert_eq!(words[inst_index], result_id);
             inst_index += 1;
         }
 
