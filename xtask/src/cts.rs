@@ -37,7 +37,7 @@ use regex_lite::{Regex, RegexBuilder};
 use std::{ffi::OsString, sync::LazyLock};
 use xshell::Shell;
 
-use crate::util::git_version_at_least;
+use crate::util::{git_version_at_least, parse_binary_from_cargo_json};
 
 /// Path within the repository where the CTS will be checked out.
 const CTS_CHECKOUT_PATH: &str = "cts";
@@ -306,29 +306,63 @@ pub fn run_cts(
         log::info!("Skipping CTS checkout because --skip-checkout was specified");
     }
 
-    let run_flags = if llvm_cov {
-        &["llvm-cov", "--no-cfg-coverage", "--no-report", "run"][..]
+    let mut cargo_opts: Vec<OsString> = vec![
+        "--manifest-path".into(),
+        wgpu_cargo_toml.into(),
+        "-p".into(),
+        "cts_runner".into(),
+        "--bin".into(),
+        "cts_runner".into(),
+    ];
+    if release {
+        cargo_opts.push("--release".into());
+    }
+
+    let cts_bin = &["./tools/run_deno", "--verbose"];
+
+    let env_vars = if llvm_cov {
+        shell
+            .cmd("cargo")
+            .args(&["llvm-cov", "--no-cfg-coverage", "show-env"])
+            .read()
+            .context("Failed to get llvm-cov environment variables")?
+            .lines()
+            .filter_map(|line| {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    None
+                } else {
+                    line.split_once('=')
+                }
+            })
+            .map(|(key, value)| {
+                let value = value.trim_matches('"').trim_matches('\'');
+                (key.to_string(), value.to_string())
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
     } else {
-        &["run"][..]
+        vec![].into_iter()
     };
 
+    let build_output = shell
+        .cmd("cargo")
+        .envs(env_vars.clone())
+        .args(["build", "--message-format", "json-render-diagnostics"])
+        .args(&cargo_opts)
+        .read()
+        .context("Failed to build cts_runner")?;
+
+    let bin = parse_binary_from_cargo_json(&build_output)
+        .context("Failed to identify executable from cargo build output")?;
+
     if let Some(passthrough_args) = passthrough_args {
-        let mut cmd = shell
-            .cmd("cargo")
-            .args(run_flags)
-            .args(["--manifest-path".as_ref(), wgpu_cargo_toml.as_os_str()])
-            .args(["-p", "cts_runner"])
-            .args(["--bin", "cts_runner"]);
-
-        if release {
-            cmd = cmd.arg("--release")
-        }
-
-        cmd.args(["--", "./tools/run_deno", "--verbose"])
+        return Ok(shell
+            .cmd(bin)
+            .envs(env_vars)
+            .args(cts_bin)
             .args(&passthrough_args)
-            .run()?;
-
-        return Ok(());
+            .run()?);
     }
 
     log::info!("Running CTS");
@@ -348,19 +382,10 @@ pub fn run_cts(
             log::info!("Running {}", test.selector.to_string_lossy());
         }
 
-        let mut cmd = shell
-            .cmd("cargo")
-            .args(run_flags)
-            .args(["--manifest-path".as_ref(), wgpu_cargo_toml.as_os_str()])
-            .args(["-p", "cts_runner"])
-            .args(["--bin", "cts_runner"]);
-
-        if release {
-            cmd = cmd.arg("--release")
-        }
-
-        cmd = cmd
-            .args(["--", "./tools/run_deno", "--verbose"])
+        let cmd = shell
+            .cmd(&bin)
+            .envs(env_vars.clone())
+            .args(cts_bin)
             .args([&test.selector]);
 
         match output_filter {

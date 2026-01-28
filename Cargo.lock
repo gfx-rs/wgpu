@@ -5013,6 +5013,7 @@ dependencies = [
  "log",
  "pico-args",
  "regex-lite",
+ "serde_json",
  "xshell",
 ]
 
