@@ -9,14 +9,14 @@
         ),
         (
             name: None,
-            inner: Atomic((
+            inner: Scalar((
                 kind: Uint,
                 width: 4,
             )),
         ),
         (
             name: None,
-            inner: Scalar((
+            inner: Atomic((
                 kind: Uint,
                 width: 4,
             )),
@@ -34,7 +34,7 @@
                 members: [
                     (
                         name: Some("old_value"),
-                        ty: 2,
+                        ty: 1,
                         binding: None,
                         offset: 0,
                     ),
@@ -76,7 +76,7 @@
             name: Some("a"),
             space: WorkGroup,
             binding: None,
-            ty: 1,
+            ty: 2,
             init: None,
         ),
     ],

@@ -82,6 +82,7 @@ impl<'a, W: Write> Writer<'a, W> {
         namer.reset(
             module,
             &keywords::RESERVED_KEYWORD_SET,
+            proc::KeywordSet::empty(),
             proc::CaseInsensitiveKeywordSet::empty(),
             &[
                 "gl_",                  // all GL built-in variables

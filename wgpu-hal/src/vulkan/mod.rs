@@ -1044,7 +1044,6 @@ pub struct CommandBuffer {
 impl crate::DynCommandBuffer for CommandBuffer {}
 
 #[derive(Debug)]
-#[allow(clippy::large_enum_variant)]
 pub enum ShaderModule {
     Raw(vk::ShaderModule),
     Intermediate {

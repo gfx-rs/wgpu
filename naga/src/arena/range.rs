@@ -106,7 +106,7 @@ impl<T> Range<T> {
     ///
     /// If `self` is an empty range, there are no handles included, so
     /// return `None`.
-    pub fn first_and_last(&self) -> Option<(Handle<T>, Handle<T>)> {
+    pub const fn first_and_last(&self) -> Option<(Handle<T>, Handle<T>)> {
         if self.inner.start < self.inner.end {
             Some((
                 // `Range::new_from_bounds` expects a start- and end-inclusive

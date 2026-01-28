@@ -238,7 +238,7 @@ const requestDevice = webgpu.GPUAdapter.prototype.requestDevice;
 webgpu.GPUAdapter.prototype.requestDevice = function(desc) {
     return requestDevice.call(this, desc).then((device) => {
         device.onuncapturederror = (event) => {
-            core.print("cts_runner caught WebGPU error:" + event.error.message, true);
+            core.print("cts_runner caught WebGPU error: " + event.error.message + "\n", true);
         };
         return device;
     })

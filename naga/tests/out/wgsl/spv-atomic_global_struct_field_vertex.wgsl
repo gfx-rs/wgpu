@@ -12,7 +12,7 @@ struct type_6 {
 var<storage, read_write> global: type_6;
 var<private> global_1: vec4<f32> = vec4<f32>(0f, 0f, 0f, 1f);
 
-fn function() {
+fn function_() {
     let _e7 = global.member.member;
     let _e8 = atomicAdd((&global.member.member_2), _e7);
     let _e9 = f32(_e8);
@@ -23,7 +23,7 @@ fn function() {
 
 @vertex 
 fn global_field_vertex() -> @builtin(position) vec4<f32> {
-    function();
+    function_();
     let _e1 = global_1;
     return _e1;
 }

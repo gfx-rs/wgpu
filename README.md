@@ -103,7 +103,7 @@ TL;DR: If you're using `wgpu`, our MSRV is **1.92**.
 
 Due to complex dependants, we have two MSRV policies:
 
-- `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.82**.
+- `naga`, `wgpu-core`, `wgpu-hal`, and `wgpu-types`'s MSRV is **1.90**.
 - The rest of the workspace has an MSRV of **1.92**.
 
 It is enforced on CI (in "/.github/workflows/ci.yml") with the `CORE_MSRV` and `REPO_MSRV` variables.
