@@ -205,7 +205,7 @@ impl ExternalTextureParams {
 pub struct Device {
     raw: Box<dyn hal::DynDevice>,
     pub(crate) adapter: Arc<Adapter>,
-    pub(crate) queues: Vec<OnceCellOrLock<Arc<Queue>>>,
+    pub(crate) queues: Vec<OnceCellOrLock<Weak<Queue>>>,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     /// The `label` from the descriptor used to create the resource.
     label: String,
@@ -758,11 +758,13 @@ impl Device {
 
     // MQ TODO: should we unwrap here?
     pub fn get_queue(&self, index: u32) -> Option<Arc<Queue>> {
-        self.queues[index as usize].get().cloned()
+        self.queues[index as usize].get()?.upgrade()
     }
 
     pub fn set_queue(&self, queue: &Arc<Queue>, index: u32) {
-        assert!(self.queues[index as usize].set(queue.clone()).is_ok());
+        assert!(self.queues[index as usize]
+            .set(Arc::downgrade(queue))
+            .is_ok());
     }
 
     pub fn poll(

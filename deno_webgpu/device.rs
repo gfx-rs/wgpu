@@ -46,6 +46,7 @@ pub(crate) const DEVICE_EXTERNAL_MEMORY_SIZE: i64 = 1 << 24; // 16 MB
 pub struct GPUDevice {
   pub instance: Instance,
   pub id: wgpu_core::id::DeviceId,
+  pub queue: wgpu_core::id::QueueId,
   pub adapter: wgpu_core::id::AdapterId,
 
   pub label: String,

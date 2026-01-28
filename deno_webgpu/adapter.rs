@@ -192,6 +192,7 @@ impl GPUAdapter {
     let device = GPUDevice {
       instance: self.instance.clone(),
       id: device,
+      queue,
       label: descriptor.label,
       queue_obj,
       adapter_info: self.info.clone(),
