@@ -43,7 +43,6 @@ impl<T: Clone> ResourceMetadata<T> {
     /// sanity checks of the presence of a refcount.
     ///
     /// In release mode this function is completely empty and is removed.
-    #[cfg_attr(not(feature = "strict_asserts"), allow(unused_variables))]
     pub(super) fn tracker_assert_in_bounds(&self, index: usize) {
         strict_assert!(index < self.owned.len());
         strict_assert!(index < self.resources.len());

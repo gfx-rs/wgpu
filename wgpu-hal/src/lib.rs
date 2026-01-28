@@ -2043,7 +2043,7 @@ impl TextureDescriptor<'_> {
 
     pub fn is_cube_compatible(&self) -> bool {
         self.dimension == wgt::TextureDimension::D2
-            && self.size.depth_or_array_layers % 6 == 0
+            && self.size.depth_or_array_layers.is_multiple_of(6)
             && self.sample_count == 1
             && self.size.width == self.size.height
     }
@@ -2348,7 +2348,6 @@ impl fmt::Debug for NagaShader {
 }
 
 /// Shader input.
-#[allow(clippy::large_enum_variant)]
 pub enum ShaderInput<'a> {
     Naga(NagaShader),
     Msl {

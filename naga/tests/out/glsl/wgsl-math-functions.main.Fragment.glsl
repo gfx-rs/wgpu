@@ -64,6 +64,7 @@ void main() {
     vec4 g = refract(v, v, 1.0);
     ivec4 sign_b = ivec4(-1, -1, -1, -1);
     vec4 sign_d = vec4(-1.0, -1.0, -1.0, -1.0);
+    vec4 sign_e = vec4(0.0, 0.0, 0.0, 0.0);
     ivec2 flb_b = ivec2(-1, -1);
     uvec2 flb_c = uvec2(0u, 0u);
     ivec2 ftb_c = ivec2(0, 0);
@@ -87,12 +88,12 @@ void main() {
     int frexp_c = naga_frexp(1.5).exp_;
     int frexp_d = naga_frexp(vec4(1.5, 1.5, 1.5, 1.5)).exp_.x;
     float quantizeToF16_a = unpackHalf2x16(packHalf2x16(vec2(1.0))).x;
-    vec2 _e118 = vec2(1.0, 1.0);
-    vec2 quantizeToF16_b = unpackHalf2x16(packHalf2x16(_e118));
-    vec3 _e123 = vec3(1.0, 1.0, 1.0);
-    vec3 quantizeToF16_c = vec3(unpackHalf2x16(packHalf2x16(_e123.xy)), unpackHalf2x16(packHalf2x16(_e123.zz)).x);
-    vec4 _e129 = vec4(1.0, 1.0, 1.0, 1.0);
-    vec4 quantizeToF16_d = vec4(unpackHalf2x16(packHalf2x16(_e129.xy)), unpackHalf2x16(packHalf2x16(_e129.zw)));
+    vec2 _e123 = vec2(1.0, 1.0);
+    vec2 quantizeToF16_b = unpackHalf2x16(packHalf2x16(_e123));
+    vec3 _e128 = vec3(1.0, 1.0, 1.0);
+    vec3 quantizeToF16_c = vec3(unpackHalf2x16(packHalf2x16(_e128.xy)), unpackHalf2x16(packHalf2x16(_e128.zz)).x);
+    vec4 _e134 = vec4(1.0, 1.0, 1.0, 1.0);
+    vec4 quantizeToF16_d = vec4(unpackHalf2x16(packHalf2x16(_e134.xy)), unpackHalf2x16(packHalf2x16(_e134.zw)));
     return;
 }
 

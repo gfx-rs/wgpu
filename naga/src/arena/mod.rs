@@ -78,18 +78,17 @@ impl<T> Arena<T> {
     }
 
     /// Extracts the inner vector.
-    #[allow(clippy::missing_const_for_fn)] // ignore due to requirement of #![feature(const_precise_live_drops)]
     pub fn into_inner(self) -> Vec<T> {
         self.data
     }
 
     /// Returns the current number of items stored in this arena.
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.data.len()
     }
 
     /// Returns `true` if the arena contains no elements.
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 

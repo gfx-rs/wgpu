@@ -105,7 +105,7 @@ mod instructions;
 mod layout;
 mod mesh_shader;
 mod ray;
-mod recyclable;
+mod reclaimable;
 mod selection;
 mod subgroup;
 mod writer;
@@ -183,7 +183,7 @@ pub enum Error {
 struct IdGenerator(Word);
 
 impl IdGenerator {
-    fn next(&mut self) -> Word {
+    const fn next(&mut self) -> Word {
         self.0 += 1;
         self.0
     }
@@ -655,10 +655,10 @@ impl ops::IndexMut<Handle<crate::Expression>> for CachedExpressions {
         id
     }
 }
-impl recyclable::Recyclable for CachedExpressions {
-    fn recycle(self) -> Self {
+impl reclaimable::Reclaimable for CachedExpressions {
+    fn reclaim(self) -> Self {
         CachedExpressions {
-            ids: self.ids.recycle(),
+            ids: self.ids.reclaim(),
         }
     }
 }
@@ -763,7 +763,7 @@ impl GlobalVariable {
     }
 
     /// Prepare `self` for use within a single function.
-    fn reset_for_function(&mut self) {
+    const fn reset_for_function(&mut self) {
         self.handle_id = 0;
         self.access_id = 0;
     }
@@ -857,7 +857,7 @@ struct RayQueryTrackers {
 }
 
 impl BlockContext<'_> {
-    fn gen_id(&mut self) -> Word {
+    const fn gen_id(&mut self) -> Word {
         self.writer.id_gen.next()
     }
 

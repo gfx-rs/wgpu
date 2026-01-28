@@ -545,7 +545,6 @@ fn main(input: VertexOutput) {{
     }
 }
 
-#[allow(dead_code)]
 struct BindingArrayFixture {
     module: Module,
     span: naga::Span,
@@ -671,11 +670,14 @@ fn validation_error_messages() {
         "\
 error: Function [1] 'main' is invalid
   ┌─ wgsl:7:17
-  │  \n7 │ ╭                 fn main() {
+  │\x20\x20
+7 │ ╭                 fn main() {
 8 │ │                     foo();
-  │ │                     ^^^^ invalid function call
-  │ ╰──────────────────────────^ naga::ir::Function [1]
-  │  \n  = Call to [0] is invalid
+  │ │                     ^^^^^ invalid function call
+9 │ │                 }
+  │ ╰─────────────────^ naga::ir::Function [1]
+  │\x20\x20
+  = Call to [0] is invalid
   = Requires 1 arguments, but 0 are provided
 
 ",

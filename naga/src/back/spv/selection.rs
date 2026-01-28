@@ -102,7 +102,7 @@ impl<'b, M: MergeTuple> Selection<'b, M> {
     /// fresh `Selection`.)
     ///
     /// [`finish`]: Selection::finish
-    pub(super) fn start(block: &'b mut Block, merge_types: M) -> Self {
+    pub(super) const fn start(block: &'b mut Block, merge_types: M) -> Self {
         Selection {
             block,
             merge_label: None,
@@ -111,7 +111,7 @@ impl<'b, M: MergeTuple> Selection<'b, M> {
         }
     }
 
-    pub(super) fn block(&mut self) -> &mut Block {
+    pub(super) const fn block(&mut self) -> &mut Block {
         self.block
     }
 

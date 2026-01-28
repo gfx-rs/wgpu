@@ -56,7 +56,7 @@ ref_as_ptr = "warn"
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.92"
+rust-version = "1.93"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
@@ -202,10 +202,60 @@ which = "8"
 xshell = "0.2.2"
 
 # Metal dependencies
-metal = "0.33"
-block = "0.1.6"
-core-graphics-types = "0.2"
-objc = "0.2.5"
+block2 = "0.6.2"
+objc2 = "0.6.3"
+objc2-core-foundation = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "CFCGTypes",
+] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "NSError",
+    "NSProcessInfo",
+    "NSRange",
+    "NSString",
+] }
+objc2-metal = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "block2",
+    "MTLAllocation",
+    "MTLBlitCommandEncoder",
+    "MTLBlitPass",
+    "MTLBuffer",
+    "MTLCaptureManager",
+    "MTLCaptureScope",
+    "MTLCommandBuffer",
+    "MTLCommandEncoder",
+    "MTLCommandQueue",
+    "MTLComputeCommandEncoder",
+    "MTLComputePass",
+    "MTLComputePipeline",
+    "MTLCounters",
+    "MTLDepthStencil",
+    "MTLDevice",
+    "MTLDrawable",
+    "MTLEvent",
+    "MTLLibrary",
+    "MTLPipeline",
+    "MTLPixelFormat",
+    "MTLRenderCommandEncoder",
+    "MTLRenderPass",
+    "MTLRenderPipeline",
+    "MTLResource",
+    "MTLSampler",
+    "MTLStageInputOutputDescriptor",
+    "MTLTexture",
+    "MTLTypes",
+    "MTLVertexDescriptor",
+] }
+objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "objc2-core-foundation",
+    "CALayer",
+    "CAMetalLayer",
+    "objc2-metal",
+] }
+raw-window-metal = "1.0"
 
 # Vulkan dependencies
 android_system_properties = "0.1.1"

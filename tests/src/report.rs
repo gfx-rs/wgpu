@@ -45,7 +45,6 @@ pub struct AdapterReport {
     pub features: Features,
     pub limits: Limits,
     pub downlevel_caps: DownlevelCapabilities,
-    #[allow(unused)]
     pub texture_format_features: HashMap<TextureFormat, TextureFormatFeatures>,
 }
 

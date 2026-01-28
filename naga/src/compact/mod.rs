@@ -529,7 +529,7 @@ impl<'module> ModuleTracer<'module> {
         }
     }
 
-    fn as_type(&mut self) -> types::TypeTracer<'_> {
+    const fn as_type(&mut self) -> types::TypeTracer<'_> {
         types::TypeTracer {
             overrides: &self.module.overrides,
             types_used: &mut self.types_used,
@@ -538,7 +538,7 @@ impl<'module> ModuleTracer<'module> {
         }
     }
 
-    fn as_const_expression(&mut self) -> expressions::ExpressionTracer<'_> {
+    const fn as_const_expression(&mut self) -> expressions::ExpressionTracer<'_> {
         expressions::ExpressionTracer {
             constants: &self.module.constants,
             overrides: &self.module.overrides,

@@ -1059,7 +1059,6 @@ impl Global {
         (id, Some(error))
     }
 
-    #[allow(unused_unsafe)]
     /// # Safety
     ///
     /// This function passes source code or binary to the backend as-is and can potentially result in a

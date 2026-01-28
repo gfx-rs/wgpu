@@ -617,7 +617,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
 }
 
 impl BlockContext<'_> {
-    pub(super) fn gctx(&self) -> crate::proc::GlobalCtx<'_> {
+    pub(super) const fn gctx(&self) -> crate::proc::GlobalCtx<'_> {
         crate::proc::GlobalCtx {
             types: &self.module.types,
             constants: &self.module.constants,

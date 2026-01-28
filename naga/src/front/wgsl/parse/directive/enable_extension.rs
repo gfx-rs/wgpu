@@ -8,8 +8,8 @@ use crate::Span;
 use alloc::boxed::Box;
 
 /// Tracks the status of every enable-extension known to Naga.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct EnableExtensions {
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct EnableExtensions {
     wgpu_mesh_shader: bool,
     wgpu_ray_query: bool,
     wgpu_ray_query_vertex_return: bool,
@@ -34,7 +34,7 @@ impl EnableExtensions {
     }
 
     /// Add an enable-extension to the set requested by a module.
-    pub(crate) fn add(&mut self, ext: ImplementedEnableExtension) {
+    pub(crate) const fn add(&mut self, ext: ImplementedEnableExtension) {
         let field = match ext {
             ImplementedEnableExtension::WgpuMeshShader => &mut self.wgpu_mesh_shader,
             ImplementedEnableExtension::WgpuRayQuery => &mut self.wgpu_ray_query,

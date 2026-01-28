@@ -345,7 +345,7 @@ fn parse_texture_load() {
     .unwrap();
     parse_str(
         "
-        var t: texture_multisampled_2d_array<i32>;
+        var t: texture_2d_array<i32>;
         fn foo() {
             let r: vec4<i32> = textureLoad(t, vec2<i32>(10, 20), 2, 3);
         }
@@ -354,9 +354,9 @@ fn parse_texture_load() {
     .unwrap();
     parse_str(
         "
-        var t: texture_storage_1d_array<r32float,read>;
+        var t: texture_storage_1d<r32float,read>;
         fn foo() {
-            let r: vec4<f32> = textureLoad(t, 10, 2);
+            let r: vec4<f32> = textureLoad(t, 10);
         }
     ",
     )
@@ -380,12 +380,21 @@ fn parse_texture_store() {
 fn parse_texture_query() {
     parse_str(
         "
-        var t: texture_multisampled_2d_array<f32>;
+        var t: texture_multisampled_2d<f32>;
         fn foo() {
-            var dim: vec2<u32> = textureDimensions(t);
-            dim = textureDimensions(t, 0);
-            let layers: u32 = textureNumLayers(t);
-            let samples: u32 = textureNumSamples(t);
+            let dim = textureDimensions(t);
+            let samples = textureNumSamples(t);
+        }
+    ",
+    )
+    .unwrap();
+    parse_str(
+        "
+        var t: texture_2d_array<f32>;
+        fn foo() {
+            let dim = textureDimensions(t);
+            let levels = textureNumLevels(t);
+            let layers = textureNumLayers(t);
         }
     ",
     )
@@ -415,7 +424,7 @@ fn parse_postfix() {
 fn parse_expressions() {
     parse_str("fn foo() {
         let x: f32 = select(0.0, 1.0, true);
-        let y: vec2<f32> = select(vec2<f32>(1.0, 1.0), vec2<f32>(x, x), vec2<bool>(x < 0.5, x > 0.5));
+        let y: vec2<f32> = select(vec2<f32>(1.0, 1.0), vec2<f32>(x, x), vec2<bool>((x < 0.5), (x > 0.5)));
         let z: bool = !(0.0 == 1.0);
     }").unwrap();
 }
@@ -652,6 +661,36 @@ fn parse_alias() {
     parse_str(
         "
         alias Vec4 = vec4<f32>;
+        ",
+    )
+    .unwrap();
+}
+
+#[test]
+fn shadowing_predeclared_types() {
+    parse_str(
+        "
+        fn test(f32: vec2f) -> vec2f { return f32; }
+        ",
+    )
+    .unwrap();
+    parse_str(
+        "
+        fn test(vec2: vec2f) -> vec2f { return vec2; }
+        ",
+    )
+    .unwrap();
+    parse_str(
+        "
+        alias vec2f = vec2u;
+        fn test(v: vec2f) -> vec2u { return v; }
+        ",
+    )
+    .unwrap();
+    parse_str(
+        "
+        struct vec2f { inner: vec2<f32> };
+        fn test(v: vec2f) -> vec2<f32> { return v.inner; }
         ",
     )
     .unwrap();
@@ -898,5 +937,179 @@ error: found conflicting `diagnostic(…)` rule(s)
 
 ");
         }
+    }
+}
+
+mod template {
+    use crate::front::wgsl::assert_parse_err;
+
+    #[test]
+    fn missing_template_end() {
+        assert_parse_err(
+            "
+fn storage() {}
+var<storage
+",
+            "\
+error: expected identifier, found \"<\"
+  ┌─ wgsl:3:4
+  │
+3 │ var<storage
+  │    ^ expected identifier
+
+",
+        );
+    }
+
+    #[test]
+    fn enumerant_shadowing() {
+        assert_parse_err(
+            "
+fn storage() {}
+var<storage> s: u32;
+",
+            "\
+error: identifier `storage` resolves to a declaration
+  ┌─ wgsl:3:5
+  │
+3 │ var<storage> s: u32;
+  │     ^^^^^^^ needs to resolve to a predeclared enumerant
+
+",
+        );
+    }
+
+    #[test]
+    fn unexpected_expr_as_enumerant() {
+        assert_parse_err(
+            "
+var<1 + 1> s: u32;
+",
+            "\
+error: unexpected expression
+  ┌─ wgsl:2:5
+  │
+2 │ var<1 + 1> s: u32;
+  │     ^^^^^ needs to be an identifier resolving to a predeclared enumerant
+
+",
+        );
+    }
+
+    #[test]
+    fn unused_exprs_for_template() {
+        assert_parse_err(
+            "
+var<storage, read_write, extra0, extra1> s: u32;
+",
+            "\
+error: unused expressions for template
+  ┌─ wgsl:2:26
+  │
+2 │ var<storage, read_write, extra0, extra1> s: u32;
+  │                          ^^^^^^  ^^^^^^ unused
+  │                          │\x20\x20\x20\x20\x20\x20\x20\x20
+  │                          unused
+
+",
+        );
+    }
+
+    #[test]
+    fn unused_template_list_for_fn() {
+        assert_parse_err(
+            "
+fn inner_test() {}
+fn test() {
+    inner_test<unused_template_arg>();
+}
+",
+            "\
+error: unused expressions for template
+  ┌─ wgsl:4:16
+  │
+4 │     inner_test<unused_template_arg>();
+  │                ^^^^^^^^^^^^^^^^^^^ unused
+
+",
+        );
+    }
+
+    #[test]
+    fn unused_template_list_for_struct() {
+        assert_parse_err(
+            "
+struct test_struct {}
+fn test() {
+    _ = test_struct<unused_template_arg>();
+}
+",
+            "\
+error: unused expressions for template
+  ┌─ wgsl:4:21
+  │
+4 │     _ = test_struct<unused_template_arg>();
+  │                     ^^^^^^^^^^^^^^^^^^^ unused
+
+",
+        );
+    }
+
+    #[test]
+    fn unused_template_list_for_alias() {
+        assert_parse_err(
+            "
+alias test_alias = f32;
+fn test() {
+    _ = test_alias<unused_template_arg>();
+}
+",
+            "\
+error: unused expressions for template
+  ┌─ wgsl:4:20
+  │
+4 │     _ = test_alias<unused_template_arg>();
+  │                    ^^^^^^^^^^^^^^^^^^^ unused
+
+",
+        );
+    }
+
+    #[test]
+    fn unexpected_template() {
+        assert_parse_err(
+            "
+fn vertex() -> vec4<f32> {
+    return vec4<f32>;
+}
+",
+            "\
+error: unexpected template
+  ┌─ wgsl:3:12
+  │
+3 │     return vec4<f32>;
+  │            ^^^^^^^^^ expected identifier
+
+",
+        );
+    }
+
+    #[test]
+    fn expected_template_arg() {
+        assert_parse_err(
+            "
+fn test() {
+    bitcast(8);
+}
+",
+            "\
+error: `bitcast` needs a template argument specified: `T`, a type
+  ┌─ wgsl:3:5
+  │
+3 │     bitcast(8);
+  │     ^^^^^^^ is missing a template argument
+
+",
+        );
     }
 }

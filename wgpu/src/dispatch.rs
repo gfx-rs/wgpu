@@ -375,7 +375,7 @@ pub trait CommandEncoderInterface: CommonTraits {
         texture_transitions: &mut dyn Iterator<Item = wgt::TextureTransition<&'a DispatchTexture>>,
     );
 }
-pub trait ComputePassInterface: CommonTraits {
+pub trait ComputePassInterface: CommonTraits + Drop {
     fn set_pipeline(&mut self, pipeline: &DispatchComputePipeline);
     fn set_bind_group(
         &mut self,
@@ -399,9 +399,8 @@ pub trait ComputePassInterface: CommonTraits {
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
     );
-    fn end(&mut self);
 }
-pub trait RenderPassInterface: CommonTraits {
+pub trait RenderPassInterface: CommonTraits + Drop {
     fn set_pipeline(&mut self, pipeline: &DispatchRenderPipeline);
     fn set_bind_group(
         &mut self,
@@ -510,8 +509,6 @@ pub trait RenderPassInterface: CommonTraits {
     fn end_pipeline_statistics_query(&mut self);
 
     fn execute_bundles(&mut self, render_bundles: &mut dyn Iterator<Item = &DispatchRenderBundle>);
-
-    fn end(&mut self);
 }
 
 pub trait RenderBundleEncoderInterface: CommonTraits {

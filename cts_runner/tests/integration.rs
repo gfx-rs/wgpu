@@ -84,12 +84,12 @@ fn uncaptured_error() {
             const device = await adapter.requestDevice();
             device.createShaderModule({ code })
         "#,
-        "cts_runner caught WebGPU error:
+        "cts_runner caught WebGPU error:\x20
 Shader '' parsing error: the type of `val` is expected to be `u32`, but got `{AbstractFloat}`
   ┌─ wgsl:1:7
   │
 1 │ const val: u32 = 1.1;
-  │       ^^^ definition of `val`\n\n",
+  │       ^^^ definition of `val`\n\n\n",
     );
 }
 

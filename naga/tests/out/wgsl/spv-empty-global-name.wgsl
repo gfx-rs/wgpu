@@ -5,7 +5,7 @@ struct type_1 {
 @group(0) @binding(0) 
 var<storage, read_write> unnamed: type_1;
 
-fn function() {
+fn function_() {
     let _e3 = unnamed.member;
     unnamed.member = (_e3 + 1i);
     return;
@@ -13,5 +13,5 @@ fn function() {
 
 @compute @workgroup_size(1, 1, 1) 
 fn main() {
-    function();
+    function_();
 }
