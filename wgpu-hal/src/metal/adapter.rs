@@ -9,7 +9,7 @@ use wgt::{AstcBlock, AstcChannel};
 
 use alloc::{string::ToString as _, sync::Arc, vec::Vec};
 
-use super::TimestampQuerySupport;
+use super::{OsFeatures, TimestampQuerySupport};
 
 /// Maximum number of command buffers for `MTLCommandQueue`s that we create.
 ///
@@ -375,19 +375,24 @@ impl crate::Adapter for super::Adapter {
             formats.push(wgt::TextureFormat::Rgb10a2Unorm);
         }
 
-        let pc = &self.shared.private_caps;
         Some(crate::SurfaceCapabilities {
             formats,
             // We use this here to govern the maximum number of drawables + 1.
-            // See https://developer.apple.com/documentation/quartzcore/cametallayer/2938720-maximumdrawablecount
-            maximum_frame_latency: if pc.can_set_maximum_drawables_count {
+            // See https://developer.apple.com/documentation/quartzcore/cametallayer/maximumdrawablecount
+            maximum_frame_latency: if available!(
+                macos = 10.13.2,
+                ios = 11.2,
+                tvos = 11.2,
+                visionos = 1.0
+            ) {
                 1..=2
             } else {
                 // 3 is the default value for maximum drawables in `CAMetalLayer` documentation
                 // iOS 10.3 was tested to use 3 on iphone5s
                 2..=2
             },
-            present_modes: if pc.can_set_display_sync {
+            // We enable Immediate mode using `-[CAMetalLayer setDisplaySyncEnabled: false]`.
+            present_modes: if OsFeatures::display_sync() {
                 vec![wgt::PresentMode::Fifo, wgt::PresentMode::Immediate]
             } else {
                 vec![wgt::PresentMode::Fifo]
@@ -883,29 +888,6 @@ impl super::PrivateCapabilities {
                 && (metal3
                     || device.supportsFamily(MTLGPUFamily::Apple3)
                     || device.supportsFamily(MTLGPUFamily::Mac2)),
-            // https://developer.apple.com/documentation/metal/mtlcapturemanager
-            supports_capture_manager: available!(
-                macos = 10.13,
-                ios = 11.0,
-                tvos = 11.0,
-                visionos = 1.0
-            ),
-            // https://developer.apple.com/documentation/quartzcore/cametallayer/maximumdrawablecount
-            can_set_maximum_drawables_count: available!(
-                macos = 10.14,
-                ios = 11.2,
-                tvos = 11.2,
-                visionos = 1.0
-            ),
-            // https://developer.apple.com/documentation/quartzcore/cametallayer/displaysyncenabled
-            can_set_display_sync: available!(macos = 10.13) || cfg!(target_env = "macabi"),
-            // https://developer.apple.com/documentation/quartzcore/cametallayer/allowsnextdrawabletimeout
-            can_set_next_drawable_timeout: available!(
-                macos = 10.13,
-                ios = 11.0,
-                tvos = 11.0,
-                visionos = 1.0
-            ),
             // This is just trusted blindly since docs referencing supports_any have been removed
             // but we don't want to remove feature support.
             supports_arrays_of_textures: Self::supports_any(
@@ -921,18 +903,9 @@ impl super::PrivateCapabilities {
                 && (metal3
                     || device.supportsFamily(MTLGPUFamily::Apple6)
                     || device.supportsFamily(MTLGPUFamily::Mac2)),
-            // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
-            supports_mutability: available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0),
             // Depth clipping is supported on all macOS GPU families and iOS family 4 and later
             supports_depth_clip_control: os_type == super::OsType::Macos
                 || device.supportsFeatureSet(MTLFeatureSet::iOS_GPUFamily4_v1),
-            // https://developer.apple.com/documentation/metal/mtlcompileoptions/preserveinvariance
-            supports_preserve_invariance: available!(
-                macos = 11.0,
-                ios = 13.0,
-                tvos = 14.0,
-                visionos = 1.0
-            ),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             supports_shader_primitive_index: family_check
                 && (metal3
@@ -966,13 +939,6 @@ impl super::PrivateCapabilities {
                 && (metal3
                     || device.supportsFamily(MTLGPUFamily::Apple7)
                     || device.supportsFamily(MTLGPUFamily::Mac2)),
-            // https://developer.apple.com/documentation/metal/mtlsharedevent
-            supports_shared_event: available!(
-                macos = 10.14,
-                ios = 12.0,
-                tvos = 12.0,
-                visionos = 1.0
-            ),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=5 (footnote)
             // Supported on some Metal4, Apple7, Mac2, and some other platforms can be queried with device.supportsShaderBarycentricCoordinates().
             shader_barycentrics: metal4
