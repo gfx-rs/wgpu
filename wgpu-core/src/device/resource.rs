@@ -287,7 +287,9 @@ impl Drop for Device {
             // The per-queue data is only owned in 2 places: the device and the queue. The queue additionally
             // keeps the device alive. So if this destructor is being run, this should be the last reference
             // and we can safely take ownership.
-            let mut shared = Arc::into_inner(self.per_queue_data[i].take().unwrap()).unwrap();
+            assert!(self.get_queue(i as u32).is_none());
+            let shared = self.per_queue_data[i].take().unwrap();
+            let mut shared = Arc::into_inner(shared).unwrap();
 
             // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
             let fence = unsafe { ManuallyDrop::take(&mut shared.fence.write()) };
