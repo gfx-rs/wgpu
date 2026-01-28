@@ -73,15 +73,10 @@ impl Dispatch {
         );
 
         // SAFETY: The value we are passing to `new_unchecked` is not zero, so this is safe.
-        const SRC_BUFFER_SIZE: NonZeroU64 =
-            unsafe { NonZeroU64::new_unchecked(size_of::<u32>() as u64 * 3) };
+        const SRC_BUFFER_SIZE: NonZeroU64 = NonZeroU64::new(size_of::<u32>() as u64 * 3).unwrap();
 
         // SAFETY: The value we are passing to `new_unchecked` is not zero, so this is safe.
-        const DST_BUFFER_SIZE: NonZeroU64 = unsafe {
-            NonZeroU64::new_unchecked(
-                SRC_BUFFER_SIZE.get() * 2, // From above: `dst: array<u32, 6>`
-            )
-        };
+        const DST_BUFFER_SIZE: NonZeroU64 = NonZeroU64::new(SRC_BUFFER_SIZE.get() * 2).unwrap();
 
         #[cfg(feature = "wgsl")]
         let module = naga::front::wgsl::parse_str(&src).map_err(|inner| {

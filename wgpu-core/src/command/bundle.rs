@@ -624,7 +624,7 @@ fn set_index_buffer(
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::INDEX)?;
 
-    if offset % u64::try_from(index_format.byte_size()).unwrap() != 0 {
+    if !offset.is_multiple_of(u64::try_from(index_format.byte_size()).unwrap()) {
         return Err(RenderCommandError::UnalignedIndexBuffer {
             offset,
             alignment: index_format.byte_size(),
@@ -672,7 +672,7 @@ fn set_vertex_buffer(
     buffer.same_device(&state.device)?;
     buffer.check_usage(wgt::BufferUsages::VERTEX)?;
 
-    if offset % wgt::VERTEX_ALIGNMENT != 0 {
+    if !offset.is_multiple_of(wgt::VERTEX_ALIGNMENT) {
         return Err(RenderCommandError::UnalignedVertexBuffer { slot, offset }.into());
     }
     let end = offset + buffer.resolve_binding_size(offset, size)?;

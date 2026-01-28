@@ -1,10 +1,15 @@
 #version 460 core
 
+// WGSL doesn't have 1D array textures.
+#define HAS_1D_ARRAY_TEXTURES 0
+
 layout(rgba8, binding = 0) uniform image1D img1D;
 layout(rgba8, binding = 1) uniform image2D img2D;
 layout(rgba8, binding = 2) uniform image3D img3D;
 // layout(rgba8, binding = 3) uniform imageCube imgCube;
+#if HAS_1D_ARRAY_TEXTURES
 layout(rgba8, binding = 4) uniform image1DArray img1DArray;
+#endif
 layout(rgba8, binding = 5) uniform image2DArray img2DArray;
 // layout(rgba8, binding = 6) uniform imageCubeArray imgCubeArray;
 
@@ -18,11 +23,13 @@ void testImg1D(in int coord) {
     vec4 c = imageLoad(img1D, coord);
 }
 
+#if HAS_1D_ARRAY_TEXTURES
 void testImg1DArray(in ivec2 coord) {
     vec2 size = imageSize(img1DArray);
     vec4 c = imageLoad(img1DArray, coord);
     imageStore(img1DArray, coord, vec4(2));
 }
+#endif
 
 void testImg2D(in ivec2 coord) {
     vec2 size = imageSize(img2D);
@@ -72,7 +79,9 @@ void testImgWriteReadOnly(in ivec2 coord) {
 
 void main() {
     testImg1D(1);
+#if HAS_1D_ARRAY_TEXTURES
     testImg1DArray(ivec2(0));
+#endif
     testImg2D(ivec2(0));
     testImg2DArray(ivec3(0));
     testImg3D(ivec3(0));

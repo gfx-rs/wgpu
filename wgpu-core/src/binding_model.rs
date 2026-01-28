@@ -733,7 +733,6 @@ pub struct BindGroupLayout {
     /// (derived BGLs) must not be removed.
     pub(crate) origin: bgl::Origin,
     pub(crate) exclusive_pipeline: crate::OnceCellOrLock<ExclusivePipeline>,
-    #[allow(unused)]
     pub(crate) binding_count_validator: BindingTypeMaxCountValidator,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -902,7 +901,7 @@ impl PipelineLayout {
         // as immediate data ranges are already validated to be within bounds,
         // and we validate that they are within the ranges.
 
-        if offset % wgt::IMMEDIATE_DATA_ALIGNMENT != 0 {
+        if !offset.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
             return Err(ImmediateUploadError::Unaligned(offset));
         }
 
@@ -1163,7 +1162,7 @@ impl BindGroup {
         {
             let (alignment, limit_name) =
                 buffer_binding_type_alignment(&self.device.limits, info.binding_type);
-            if offset as wgt::BufferAddress % alignment as u64 != 0 {
+            if !(offset as wgt::BufferAddress).is_multiple_of(alignment as u64) {
                 return Err(BindError::UnalignedDynamicBinding {
                     bind_group: self.error_ident(),
                     group: bind_group_index,

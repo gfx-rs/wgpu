@@ -132,8 +132,6 @@ pub struct InlineSampler {
 
 impl Eq for InlineSampler {}
 
-#[allow(renamed_and_removed_lints)]
-#[allow(clippy::derive_hash_xor_eq)]
 impl core::hash::Hash for InlineSampler {
     fn hash<H: core::hash::Hasher>(&self, hasher: &mut H) {
         self.coord.hash(hasher);

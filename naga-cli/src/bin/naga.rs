@@ -1,6 +1,4 @@
-#![allow(clippy::manual_strip)]
 use anyhow::{anyhow, Context as _};
-#[allow(unused_imports)]
 use std::fs;
 use std::{error::Error, fmt, io::Read, path::Path, str::FromStr};
 
@@ -260,10 +258,10 @@ impl FromStr for GlslProfileArg {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         use naga::back::glsl::Version;
-        Ok(Self(if s.starts_with("core") {
-            Version::Desktop(s[4..].parse().unwrap_or(330))
-        } else if s.starts_with("es") {
-            Version::new_gles(s[2..].parse().unwrap_or(310))
+        Ok(Self(if let Some(s) = s.strip_prefix("core") {
+            Version::Desktop(s.parse().unwrap_or(330))
+        } else if let Some(s) = s.strip_prefix("es") {
+            Version::new_gles(s.parse().unwrap_or(310))
         } else {
             return Err(format!("Unknown profile: {s}"));
         }))

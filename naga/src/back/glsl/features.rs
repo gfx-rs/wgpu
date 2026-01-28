@@ -78,7 +78,7 @@ impl FeaturesManager {
     }
 
     /// Checks if the list of features [`Features`] contains the specified [`Features`]
-    pub fn contains(&mut self, features: Features) -> bool {
+    pub const fn contains(&mut self, features: Features) -> bool {
         self.0.contains(features)
     }
 

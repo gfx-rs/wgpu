@@ -1015,7 +1015,7 @@ impl Device {
         }
 
         if desc.mapped_at_creation {
-            if desc.size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            if !desc.size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
                 return Err(resource::CreateBufferError::UnalignedSize);
             }
             if !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
@@ -1362,7 +1362,7 @@ impl Device {
         if desc.format.is_compressed() {
             let (block_width, block_height) = desc.format.block_dimensions();
 
-            if desc.size.width % block_width != 0 {
+            if !desc.size.width.is_multiple_of(block_width) {
                 return Err(CreateTextureError::InvalidDimension(
                     TextureDimensionError::NotMultipleOfBlockWidth {
                         width: desc.size.width,
@@ -1372,7 +1372,7 @@ impl Device {
                 ));
             }
 
-            if desc.size.height % block_height != 0 {
+            if !desc.size.height.is_multiple_of(block_height) {
                 return Err(CreateTextureError::InvalidDimension(
                     TextureDimensionError::NotMultipleOfBlockHeight {
                         height: desc.size.height,
@@ -1419,7 +1419,7 @@ impl Device {
                 height_multiple <<= desc.mip_level_count.saturating_sub(1);
             }
 
-            if desc.size.width % width_multiple != 0 {
+            if !desc.size.width.is_multiple_of(width_multiple) {
                 return Err(CreateTextureError::InvalidDimension(
                     TextureDimensionError::WidthNotMultipleOf {
                         width: desc.size.width,
@@ -1429,7 +1429,7 @@ impl Device {
                 ));
             }
 
-            if desc.size.height % height_multiple != 0 {
+            if !desc.size.height.is_multiple_of(height_multiple) {
                 return Err(CreateTextureError::InvalidDimension(
                     TextureDimensionError::HeightNotMultipleOf {
                         height: desc.size.height,
@@ -1822,7 +1822,7 @@ impl Device {
                 }
             }
             TextureViewDimension::CubeArray => {
-                if resolved_array_layer_count % 6 != 0 {
+                if !resolved_array_layer_count.is_multiple_of(6) {
                     return Err(
                         resource::CreateTextureViewError::InvalidCubemapArrayTextureDepth {
                             depth: resolved_array_layer_count,
@@ -2826,7 +2826,7 @@ impl Device {
 
         let (align, align_limit_name) =
             binding_model::buffer_binding_type_alignment(&self.limits, binding_ty);
-        if bb.offset % align as u64 != 0 {
+        if !bb.offset.is_multiple_of(align as u64) {
             return Err(Error::UnalignedBufferOffset(
                 bb.offset,
                 align_limit_name,
@@ -3610,7 +3610,10 @@ impl Device {
                 max: self.limits.max_immediate_size,
             });
         }
-        if desc.immediate_size % wgt::IMMEDIATE_DATA_ALIGNMENT != 0 {
+        if !desc
+            .immediate_size
+            .is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT)
+        {
             return Err(Error::MisalignedImmediateSize {
                 size: desc.immediate_size,
             });

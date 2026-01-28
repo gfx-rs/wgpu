@@ -356,7 +356,7 @@ impl crate::TypeInner {
         }
     }
 
-    pub fn components(&self) -> Option<u32> {
+    pub const fn components(&self) -> Option<u32> {
         Some(match *self {
             Self::Vector { size, .. } => size as u32,
             Self::Matrix { columns, .. } => columns as u32,

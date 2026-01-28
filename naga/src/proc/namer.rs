@@ -91,6 +91,7 @@ pub struct Namer {
     /// The last numeric suffix used for each base name. Zero means "no suffix".
     unique: FastHashMap<String, u32>,
     keywords: &'static KeywordSet,
+    builtin_identifiers: &'static KeywordSet,
     keywords_case_insensitive: &'static CaseInsensitiveKeywordSet,
     reserved_prefixes: Vec<&'static str>,
 }
@@ -197,6 +198,7 @@ impl Namer {
                 if base.ends_with(char::is_numeric)
                     || self.keywords.contains(base.as_ref())
                     || self.keywords_case_insensitive.contains(base.as_ref())
+                    || self.builtin_identifiers.contains(base.as_ref())
                 {
                     suffixed.push(SEPARATOR);
                 }
@@ -222,16 +224,19 @@ impl Namer {
     /// globally. This function temporarily establishes a fresh, empty naming
     /// context for the duration of the call to `body`.
     fn namespace(&mut self, capacity: usize, body: impl FnOnce(&mut Self)) {
-        let fresh = FastHashMap::with_capacity_and_hasher(capacity, Default::default());
-        let outer = core::mem::replace(&mut self.unique, fresh);
+        let empty_unique = FastHashMap::with_capacity_and_hasher(capacity, Default::default());
+        let saved_unique = core::mem::replace(&mut self.unique, empty_unique);
+        let saved_builtin_identifiers = core::mem::take(&mut self.builtin_identifiers);
         body(self);
-        self.unique = outer;
+        self.unique = saved_unique;
+        self.builtin_identifiers = saved_builtin_identifiers;
     }
 
     pub fn reset(
         &mut self,
         module: &crate::Module,
         reserved_keywords: &'static KeywordSet,
+        builtin_identifiers: &'static KeywordSet,
         reserved_keywords_case_insensitive: &'static CaseInsensitiveKeywordSet,
         reserved_prefixes: &[&'static str],
         output: &mut FastHashMap<NameKey, String>,
@@ -241,6 +246,7 @@ impl Namer {
 
         self.unique.clear();
         self.keywords = reserved_keywords;
+        self.builtin_identifiers = builtin_identifiers;
         self.keywords_case_insensitive = reserved_keywords_case_insensitive;
 
         // Choose fallback names for anonymous entry point return types.
