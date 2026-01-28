@@ -2302,7 +2302,7 @@ pub(super) fn encode_render_pass(
             parent_state.snatch_guard,
         );
 
-        if let Some(ref indirect_validation) = queue.indirect_validation {
+        if let Some(ref indirect_validation) = queue.shared.indirect_validation {
             indirect_validation
                 .draw
                 .inject_validation_pass(
@@ -2828,7 +2828,7 @@ fn multi_draw_indirect(
         }
     }
 
-    if state.pass.base.queue.indirect_validation.is_some() {
+    if state.pass.base.queue.shared.indirect_validation.is_some() {
         state
             .pass
             .scope

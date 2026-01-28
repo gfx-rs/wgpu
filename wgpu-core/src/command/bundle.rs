@@ -870,7 +870,7 @@ fn multi_draw_indirect(
     };
     let instance_limit = vertex_limits.instance_limit;
 
-    let buffer_uses = if state.queue.indirect_validation.is_some() {
+    let buffer_uses = if state.queue.shared.indirect_validation.is_some() {
         wgt::BufferUses::STORAGE_READ_ONLY
     } else {
         wgt::BufferUses::INDIRECT
@@ -1120,7 +1120,7 @@ impl RenderBundle {
                     vertex_or_index_limit,
                     instance_limit,
                 } => {
-                    let (buffer, offset) = if self.queue.indirect_validation.is_some() {
+                    let (buffer, offset) = if self.queue.shared.indirect_validation.is_some() {
                         let (dst_resource_index, offset) = indirect_draw_validation_batcher.add(
                             indirect_draw_validation_resources,
                             &self.device,

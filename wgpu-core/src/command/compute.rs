@@ -912,7 +912,7 @@ fn dispatch_indirect(
         ),
     );
 
-    if let Some(ref indirect_validation) = state.pass.base.queue.indirect_validation {
+    if let Some(ref indirect_validation) = state.pass.base.queue.shared.indirect_validation {
         let params = indirect_validation.dispatch.params(
             &state.pass.base.device.limits,
             offset,

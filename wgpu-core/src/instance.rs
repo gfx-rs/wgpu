@@ -834,8 +834,9 @@ impl Adapter {
 
         let mut queues = Vec::new();
         for (i, raw) in hal_device.queues.into_iter().enumerate() {
-            let queue = Arc::new(Queue::new(device.clone(), raw, instance_flags, i as u32)?);
-            device.set_queue(&queue, i as u32);
+            let (queue, pqd) = Queue::new(device.clone(), raw, instance_flags, i as u32)?;
+            let queue = Arc::new(queue);
+            device.set_queue(i as u32, &queue, pqd);
             queues.push(queue);
         }
         device.late_init_resources_with_queue()?;

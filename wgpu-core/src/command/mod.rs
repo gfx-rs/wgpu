@@ -796,7 +796,7 @@ impl Drop for InnerCommandEncoder {
         }
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
         let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
-        self.queue.command_allocator.release_encoder(raw);
+        self.queue.shared.command_allocator.release_encoder(raw);
     }
 }
 

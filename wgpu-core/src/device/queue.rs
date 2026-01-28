@@ -52,20 +52,8 @@ use crate::{
 };
 use crate::{device::resource::CommandIndices, resource::RawResourceAccess};
 
-pub struct PerQueueData {}
-
-pub struct Queue {
-    raw: Box<dyn hal::DynQueue>,
-    pub(crate) pending_writes: Mutex<PendingWrites>,
-    life_tracker: Mutex<LifetimeTracker>,
-    // The device needs to be dropped last (`Device.zero_buffer` might be referenced by the encoder in pending writes).
-    pub(crate) device: Arc<Device>,
-    pub(crate) index: u32,
-
-    /// Stores the state of buffers and textures.
-    pub(crate) trackers: Mutex<QueueTracker>,
-    pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
-
+/// Data that is per-queue but should be destroyed with the device (may outlive the owning queue)
+pub struct PerQueueData {
     pub(crate) command_allocator: CommandAllocator,
 
     pub(crate) command_indices: RwLock<CommandIndices>,
@@ -84,8 +72,24 @@ pub struct Queue {
     // NOTE: if both are needed, the `snatchable_lock` must be consistently acquired before the
     // `fence` lock to avoid deadlocks.
     pub(crate) fence: RwLock<ManuallyDrop<Box<dyn hal::DynFence>>>,
+
+    /// Stores the state of buffers and textures.
+    pub(crate) trackers: Mutex<QueueTracker>,
+
+    pub(crate) indirect_validation: Option<crate::indirect_validation::IndirectValidation>,
+
     // Optional so that we can destroy this.
     pub(crate) timestamp_normalizer: Option<crate::timestamp_normalization::TimestampNormalizer>,
+}
+
+pub struct Queue {
+    raw: Box<dyn hal::DynQueue>,
+    pub(crate) pending_writes: Mutex<PendingWrites>,
+    life_tracker: Mutex<LifetimeTracker>,
+    // The device needs to be dropped last (`Device.zero_buffer` might be referenced by the encoder in pending writes).
+    pub(crate) device: Arc<Device>,
+    pub(crate) index: u32,
+    pub(crate) shared: Arc<PerQueueData>,
 }
 impl core::fmt::Debug for Queue {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
@@ -99,7 +103,7 @@ impl Queue {
         raw: Box<dyn hal::DynQueue>,
         instance_flags: wgt::InstanceFlags,
         index: u32,
-    ) -> Result<Self, RequestDeviceError> {
+    ) -> Result<(Self, Arc<PerQueueData>), RequestDeviceError> {
         let fence = unsafe { device.raw().create_fence() }.map_err(DeviceError::from_hal)?;
 
         let command_allocator = CommandAllocator::new();
@@ -136,15 +140,7 @@ impl Queue {
                 raw.get_timestamp_period()
             })?;
 
-        Ok(Queue {
-            raw,
-            device,
-            pending_writes: Mutex::new(rank::QUEUE_PENDING_WRITES, pending_writes),
-            life_tracker: Mutex::new(rank::QUEUE_LIFE_TRACKER, LifetimeTracker::new()),
-            index,
-            indirect_validation,
-            trackers: Mutex::new(rank::DEVICE_TRACKERS, QueueTracker::new()),
-
+        let shared = Arc::new(PerQueueData {
             command_allocator,
             command_indices: RwLock::new(
                 rank::DEVICE_COMMAND_INDICES,
@@ -156,8 +152,22 @@ impl Queue {
             ),
             last_successful_submission_index: AtomicU64::new(0),
             fence: RwLock::new(rank::DEVICE_FENCE, ManuallyDrop::new(fence)),
+            trackers: Mutex::new(rank::DEVICE_TRACKERS, QueueTracker::new()),
+            indirect_validation,
             timestamp_normalizer: Some(timestamp_normalizer),
-        })
+        });
+
+        Ok((
+            Queue {
+                raw,
+                device,
+                pending_writes: Mutex::new(rank::QUEUE_PENDING_WRITES, pending_writes),
+                life_tracker: Mutex::new(rank::QUEUE_LIFE_TRACKER, LifetimeTracker::new()),
+                index,
+                shared: shared.clone(),
+            },
+            shared,
+        ))
     }
 
     pub(crate) fn create_indirect_validation_bind_groups(
@@ -170,7 +180,7 @@ impl Queue {
             return None;
         }
 
-        let indirect_validation = self.indirect_validation.as_ref()?;
+        let indirect_validation = self.shared.indirect_validation.as_ref()?;
 
         crate::indirect_validation::BindGroups::new(
             indirect_validation,
@@ -233,10 +243,11 @@ impl Drop for Queue {
         resource_log!("Drop {}", self.error_ident());
 
         let last_successful_submission_index = self
+            .shared
             .last_successful_submission_index
             .load(Ordering::Acquire);
 
-        let fence = self.fence.read();
+        let fence = self.shared.fence.read();
 
         // Try waiting on the last submission using the following sequence of timeouts
         let timeouts_in_ms = [100, 200, 400, 800, 1600, 3200];
@@ -321,19 +332,6 @@ impl Drop for Queue {
         };
 
         closures.fire();
-
-        if let Some(indirect_validation) = self.indirect_validation.take() {
-            indirect_validation.dispose(self.device.raw());
-        }
-
-        // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
-        let fence = unsafe { ManuallyDrop::take(&mut self.fence.write()) };
-        unsafe {
-            self.device.raw().destroy_fence(fence);
-        }
-        if let Some(timestamp_normalizer) = self.timestamp_normalizer.take() {
-            timestamp_normalizer.dispose(self.device.raw());
-        }
     }
 }
 
@@ -773,7 +771,7 @@ impl Queue {
         self.device.check_is_valid()?;
 
         let transition = {
-            let mut trackers = self.trackers.lock();
+            let mut trackers = self.shared.trackers.lock();
             trackers
                 .buffers
                 .set_single(&buffer, wgt::BufferUses::COPY_DST)
@@ -915,7 +913,7 @@ impl Queue {
                     .drain(init_layer_range)
                     .collect::<Vec<core::ops::Range<u32>>>()
                 {
-                    let mut trackers = self.trackers.lock();
+                    let mut trackers = self.shared.trackers.lock();
                     crate::command::clear_texture(
                         &dst,
                         TextureInitRange {
@@ -1024,7 +1022,7 @@ impl Queue {
                 src_dst_queue_index: None,
             };
 
-            let mut trackers = self.trackers.lock();
+            let mut trackers = self.shared.trackers.lock();
             let transition =
                 trackers
                     .textures
@@ -1289,9 +1287,9 @@ impl Queue {
             let snatch_guard = self.device.snatchable_lock.read();
 
             // Fence lock must be acquired after the snatch lock everywhere to avoid deadlocks.
-            let mut fence = self.fence.write();
+            let mut fence = self.shared.fence.write();
 
-            let mut command_index_guard = self.command_indices.write();
+            let mut command_index_guard = self.shared.command_indices.write();
             command_index_guard.active_submission_index += 1;
             submit_index = command_index_guard.active_submission_index;
 
@@ -1390,7 +1388,7 @@ impl Queue {
                         }
 
                         //Note: locking the trackers has to be done after the storages
-                        let mut trackers = self.trackers.lock();
+                        let mut trackers = self.shared.trackers.lock();
                         if let Err(e) = baked.initialize_buffer_memory(&mut trackers, &snatch_guard)
                         {
                             break 'error Err(e.into());
@@ -1488,7 +1486,7 @@ impl Queue {
                 }
 
                 if !used_surface_textures.is_empty() {
-                    let mut trackers = self.trackers.lock();
+                    let mut trackers = self.shared.trackers.lock();
 
                     let texture_barriers = trackers
                         .textures
@@ -1505,7 +1503,7 @@ impl Queue {
                 }
             }
 
-            match pending_writes.pre_submit(&self.command_allocator, &self.device, self) {
+            match pending_writes.pre_submit(&self.shared.command_allocator, &self.device, self) {
                 Ok(Some(pending_execution)) => {
                     active_executions.insert(0, pending_execution);
                 }
@@ -1547,7 +1545,8 @@ impl Queue {
                 drop(command_index_guard);
 
                 // Advance the successful submission index.
-                self.last_successful_submission_index
+                self.shared
+                    .last_successful_submission_index
                     .fetch_max(submit_index, Ordering::SeqCst);
             }
 
@@ -1664,7 +1663,7 @@ impl Queue {
 
         drop(snatch_guard);
 
-        let mut command_indices_lock = self.command_indices.write();
+        let mut command_indices_lock = self.shared.command_indices.write();
         command_indices_lock.next_acceleration_structure_build_command_index += 1;
         let built_index =
             NonZeroU64::new(command_indices_lock.next_acceleration_structure_build_command_index)
@@ -1831,7 +1830,13 @@ impl Global {
     pub fn queue_get_timestamp_period(&self, queue_id: QueueId) -> f32 {
         let queue = self.hub.queues.get(queue_id);
 
-        if queue.timestamp_normalizer.as_ref().unwrap().enabled() {
+        if queue
+            .shared
+            .timestamp_normalizer
+            .as_ref()
+            .unwrap()
+            .enabled()
+        {
             return 1.0;
         }
 

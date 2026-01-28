@@ -165,7 +165,7 @@ impl Surface {
         };
         let queue = device.get_queue(SURFACE_QUEUE_ID).unwrap();
 
-        let fence = queue.fence.read();
+        let fence = queue.shared.fence.read();
 
         let suf = self.raw(device.backend()).unwrap();
         let (texture, status) = match unsafe {
@@ -241,6 +241,7 @@ impl Surface {
                 device
                     .get_queue(SURFACE_QUEUE_ID)
                     .unwrap()
+                    .shared
                     .trackers
                     .lock()
                     .textures

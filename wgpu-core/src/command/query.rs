@@ -510,6 +510,7 @@ pub(super) fn resolve_query_set(
         // Timestamp normalization is only needed for timestamps.
         state
             .queue
+            .shared
             .timestamp_normalizer
             .as_ref()
             .unwrap()

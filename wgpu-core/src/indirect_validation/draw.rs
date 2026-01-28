@@ -733,7 +733,7 @@ pub(crate) struct DrawResources {
 
 impl Drop for DrawResources {
     fn drop(&mut self) {
-        if let Some(ref indirect_validation) = self.queue.indirect_validation {
+        if let Some(ref indirect_validation) = self.queue.shared.indirect_validation {
             let indirect_draw_validation = &indirect_validation.draw;
             indirect_draw_validation.release_dst_entries(self.dst_entries.drain(..));
             indirect_draw_validation.release_metadata_entries(self.metadata_entries.drain(..));
@@ -776,7 +776,8 @@ impl DrawResources {
         size: u64,
         current_entry: &mut Option<CurrentEntry>,
     ) -> Result<(usize, u64), DeviceError> {
-        let indirect_draw_validation = &self.queue.indirect_validation.as_ref().unwrap().draw;
+        let indirect_draw_validation =
+            &self.queue.shared.indirect_validation.as_ref().unwrap().draw;
         let ensure_entry = |index: usize| {
             if self.dst_entries.len() <= index {
                 let entry = indirect_draw_validation.acquire_dst_entry(self.device.raw())?;
@@ -793,7 +794,8 @@ impl DrawResources {
         size: u64,
         current_entry: &mut Option<CurrentEntry>,
     ) -> Result<(usize, u64), DeviceError> {
-        let indirect_draw_validation = &self.queue.indirect_validation.as_ref().unwrap().draw;
+        let indirect_draw_validation =
+            &self.queue.shared.indirect_validation.as_ref().unwrap().draw;
         let ensure_entry = |index: usize| {
             if self.metadata_entries.len() <= index {
                 let entry = indirect_draw_validation.acquire_metadata_entry(self.device.raw())?;

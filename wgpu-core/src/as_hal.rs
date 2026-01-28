@@ -171,7 +171,7 @@ where
     /// - The device's fence is not of the expected Hal type.
     pub fn new(queue: Arc<Queue>) -> Option<Self> {
         // Grab the fence lock.
-        let fence_guard = queue.fence.read();
+        let fence_guard = queue.shared.fence.read();
 
         // Get the raw fence and downcast it to the expected Hal type, coercing it to a pointer
         // to get rid of the lifetime connecting us to the fence guard.
@@ -213,7 +213,7 @@ impl<Fence> Drop for FenceGuard<Fence> {
         // - The fence lock is being held because this type was not created
         //   until after the fence lock was forgotten.
         unsafe {
-            self.queue.fence.force_unlock_read(data);
+            self.queue.shared.fence.force_unlock_read(data);
         };
     }
 }

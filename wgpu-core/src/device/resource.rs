@@ -33,9 +33,9 @@ use crate::{
     },
     command, conv,
     device::{
-        bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
-        DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures, RenderPassContext,
-        ZERO_BUFFER_SIZE,
+        bgl, create_validator, life::WaitIdleError, map_buffer, queue::PerQueueData,
+        AttachmentData, DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures,
+        RenderPassContext, ZERO_BUFFER_SIZE,
     },
     hal_label,
     init_tracker::{
@@ -206,6 +206,7 @@ pub struct Device {
     raw: Box<dyn hal::DynDevice>,
     pub(crate) adapter: Arc<Adapter>,
     pub(crate) queues: Vec<OnceCellOrLock<Weak<Queue>>>,
+    pub(crate) per_queue_data: Vec<OnceCellOrLock<Arc<PerQueueData>>>,
     pub(crate) zero_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     /// The `label` from the descriptor used to create the resource.
     label: String,
@@ -271,16 +272,36 @@ impl Drop for Device {
     fn drop(&mut self) {
         resource_log!("Drop {}", self.error_ident());
 
+        // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this point.
+        let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
         // SAFETY: We are in the Drop impl and we don't use
         // self.default_external_texture_params_buffer anymore after this point.
         let default_external_texture_params_buffer =
             unsafe { ManuallyDrop::take(&mut self.default_external_texture_params_buffer) };
-        // SAFETY: We are in the Drop impl and we don't use self.zero_buffer anymore after this point.
-        let zero_buffer = unsafe { ManuallyDrop::take(&mut self.zero_buffer) };
         unsafe {
             self.raw
                 .destroy_buffer(default_external_texture_params_buffer);
             self.raw.destroy_buffer(zero_buffer);
+        }
+        for i in 0..self.queues.len() {
+            // The per-queue data is only owned in 2 places: the device and the queue. The queue additionally
+            // keeps the device alive. So if this destructor is being run, this should be the last reference
+            // and we can safely take ownership.
+            let mut shared = Arc::into_inner(self.per_queue_data[i].take().unwrap()).unwrap();
+
+            // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
+            let fence = unsafe { ManuallyDrop::take(&mut shared.fence.write()) };
+
+            if let Some(indirect_validation) = shared.indirect_validation.take() {
+                indirect_validation.dispose(self.raw());
+            }
+            if let Some(timestamp_normalizer) = shared.timestamp_normalizer.take() {
+                timestamp_normalizer.dispose(self.raw());
+            }
+
+            unsafe {
+                self.raw.destroy_fence(fence);
+            }
         }
     }
 }
@@ -444,6 +465,7 @@ impl Device {
         Ok(Self {
             raw: raw_device,
             queues: vec![OnceCellOrLock::new(); num_queues as usize],
+            per_queue_data: vec![OnceCellOrLock::new(); num_queues as usize],
             zero_buffer: ManuallyDrop::new(zero_buffer),
             adapter: adapter.clone(),
             label: desc.label.to_string(),
@@ -756,14 +778,20 @@ impl Device {
         }
     }
 
-    // MQ TODO: should we unwrap here?
     pub fn get_queue(&self, index: u32) -> Option<Arc<Queue>> {
         self.queues[index as usize].get()?.upgrade()
     }
 
-    pub fn set_queue(&self, queue: &Arc<Queue>, index: u32) {
+    pub fn get_queue_shared(&self, index: u32) -> Arc<PerQueueData> {
+        self.per_queue_data[index as usize].get().unwrap().clone()
+    }
+
+    pub fn set_queue(&self, index: u32, queue: &Arc<Queue>, per_queue_data: Arc<PerQueueData>) {
         assert!(self.queues[index as usize]
             .set(Arc::downgrade(queue))
+            .is_ok());
+        assert!(self.per_queue_data[index as usize]
+            .set(per_queue_data)
             .is_ok());
     }
 
@@ -835,6 +863,7 @@ impl Device {
                     return (UserClosures::default(), Ok(wgt::PollStatus::WaitSucceeded));
                 };
                 let last_successful_submission_index = queue
+                    .shared
                     .last_successful_submission_index
                     .load(Ordering::Acquire);
 
@@ -855,7 +884,7 @@ impl Device {
             } => {
                 let mut out = PerQueueArray::new();
                 for i in 0..self.queues.len() as u32 {
-                    let queue = self.get_queue(i).unwrap();
+                    let queue = self.get_queue_shared(i);
                     out.push((
                         i,
                         queue
@@ -871,7 +900,7 @@ impl Device {
         let mut current_duration = Duration::ZERO;
         // Wait for the submission index if requested.
         for &(queue_id, target_submission_index) in &wait_submission_indices {
-            let queue = self.get_queue(queue_id).unwrap();
+            let queue = self.get_queue_shared(queue_id);
             log::trace!("Device::maintain: waiting for submission index ({queue_id}, {target_submission_index})");
 
             let wait_timeout = match poll_type {
@@ -911,7 +940,7 @@ impl Device {
         for queue_i in 0..self.queues.len() as u32 {
             let queue = self.get_queue(queue_i).unwrap();
 
-            let fence = queue.fence.read();
+            let fence = queue.shared.fence.read();
 
             // Get the currently finished submission index. This may be higher than the requested
             // wait, or it may be less than the requested wait if the wait failed.
@@ -1182,8 +1211,7 @@ impl Device {
             } else {
                 wgt::BufferUses::UNOWNED
             };
-            self.get_queue(queue_id)
-                .unwrap()
+            self.get_queue_shared(queue_id)
                 .trackers
                 .lock()
                 .buffers
@@ -1279,8 +1307,7 @@ impl Device {
             } else {
                 wgt::TextureUses::UNOWNED
             };
-            self.get_queue(i)
-                .unwrap()
+            self.get_queue_shared(i)
                 .trackers
                 .lock()
                 .textures
@@ -1336,8 +1363,7 @@ impl Device {
             } else {
                 wgt::BufferUses::UNOWNED
             };
-            self.get_queue(i)
-                .unwrap()
+            self.get_queue_shared(i)
                 .trackers
                 .lock()
                 .buffers
@@ -1694,7 +1720,7 @@ impl Device {
         let texture = Arc::new(texture);
 
         for queue_idx in 0..self.queues.len() as u32 {
-            let queue = self.get_queue(queue_idx).unwrap();
+            let queue = self.get_queue_shared(queue_idx);
 
             let state = if queue_idx == desc.initial_queue {
                 wgt::TextureUses::UNINITIALIZED
@@ -2487,6 +2513,7 @@ impl Device {
         let queue = self.get_queue(queue_idx).unwrap();
 
         let encoder = queue
+            .shared
             .command_allocator
             .acquire_encoder(self.raw(), queue.raw())
             .map_err(|e| self.handle_hal_error(e))?;
@@ -4746,7 +4773,7 @@ impl Device {
         submission_index: crate::SubmissionIndex,
     ) -> Result<(), DeviceError> {
         let queue = self.get_queue(submission_index.0).unwrap();
-        let fence = queue.fence.read();
+        let fence = queue.shared.fence.read();
         let last_done_index = unsafe { self.raw().get_fence_value(fence.as_ref()) }
             .map_err(|e| self.handle_hal_error(e))?;
         if last_done_index < submission_index.1 {
@@ -5108,8 +5135,8 @@ impl Device {
 
         // During these iterations, we discard all errors. We don't care!
         for q_idx in 0..self.queues.len() {
-            let queue = self.get_queue(q_idx as u32).unwrap();
-            let trackers = queue.trackers.lock();
+            let queue_shared = self.get_queue_shared(q_idx as u32);
+            let trackers = queue_shared.trackers.lock();
             for buffer in trackers.buffers.used_resources() {
                 if let Some(buffer) = Weak::upgrade(buffer) {
                     buffer.destroy();

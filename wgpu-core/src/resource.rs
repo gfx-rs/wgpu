@@ -526,6 +526,7 @@ impl Buffer {
         let bg = unsafe {
             // SAFETY: The size passed here must not overflow the buffer.
             queue
+                .shared
                 .timestamp_normalizer
                 .as_ref()
                 .unwrap()
@@ -735,7 +736,12 @@ impl Buffer {
             let submit_index = if let Some(queue) = self.device.get_queue(i as u32) {
                 // TODO: we are ignoring the transition here, I think we need to add a barrier
                 // at the end of the submission
-                queue.trackers.lock().buffers.set_single(self, internal_use);
+                queue
+                    .shared
+                    .trackers
+                    .lock()
+                    .buffers
+                    .set_single(self, internal_use);
                 queue.lock_life().map(self).unwrap_or(0) // '0' means no wait is necessary
             } else {
                 // We can safely unwrap below since we just set the `map_state` to `BufferMapState::Waiting`.
