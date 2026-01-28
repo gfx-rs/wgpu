@@ -3488,7 +3488,7 @@ impl Writer {
         }
     }
 
-    fn write_physical_layout(&mut self) {
+    const fn write_physical_layout(&mut self) {
         self.physical_layout.bound = self.id_gen.0 + 1;
     }
 

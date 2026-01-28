@@ -349,7 +349,6 @@ pub struct Validator {
     location_mask: BitSet,
     blend_src_mask: BitSet,
     ep_resource_bindings: FastHashSet<crate::ResourceBinding>,
-    #[allow(dead_code)]
     switch_values: FastHashSet<crate::SwitchValue>,
     valid_expression_list: Vec<Handle<crate::Expression>>,
     valid_expression_set: HandleSet<crate::Expression>,
@@ -581,13 +580,13 @@ impl Validator {
     }
 
     // TODO(https://github.com/gfx-rs/wgpu/issues/8207): Consider removing this
-    pub fn subgroup_stages(&mut self, stages: ShaderStages) -> &mut Self {
+    pub const fn subgroup_stages(&mut self, stages: ShaderStages) -> &mut Self {
         self.subgroup_stages = stages;
         self
     }
 
     // TODO(https://github.com/gfx-rs/wgpu/issues/8207): Consider removing this
-    pub fn subgroup_operations(&mut self, operations: SubgroupOperationSet) -> &mut Self {
+    pub const fn subgroup_operations(&mut self, operations: SubgroupOperationSet) -> &mut Self {
         self.subgroup_operations = operations;
         self
     }

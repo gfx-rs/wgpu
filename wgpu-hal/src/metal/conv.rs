@@ -1,9 +1,10 @@
-use metal::{
+use objc2_foundation::NSRange;
+use objc2_metal::{
     MTLBlendFactor, MTLBlendOperation, MTLBlitOption, MTLClearColor, MTLColorWriteMask,
     MTLCompareFunction, MTLCullMode, MTLOrigin, MTLPrimitiveTopologyClass, MTLPrimitiveType,
     MTLRenderStages, MTLResourceUsage, MTLSamplerAddressMode, MTLSamplerBorderColor,
     MTLSamplerMinMagFilter, MTLSize, MTLStencilOperation, MTLStoreAction, MTLTextureType,
-    MTLTextureUsage, MTLVertexFormat, MTLVertexStepFunction, MTLWinding, NSRange,
+    MTLTextureUsage, MTLVertexFormat, MTLVertexStepFunction, MTLWinding,
 };
 
 pub fn map_texture_usage(format: wgt::TextureFormat, usage: wgt::TextureUses) -> MTLTextureUsage {
@@ -44,12 +45,12 @@ pub fn map_texture_view_dimension(dim: wgt::TextureViewDimension) -> MTLTextureT
     use wgt::TextureViewDimension as Tvd;
     use MTLTextureType as MTL;
     match dim {
-        Tvd::D1 => MTL::D1,
-        Tvd::D2 => MTL::D2,
-        Tvd::D2Array => MTL::D2Array,
-        Tvd::D3 => MTL::D3,
-        Tvd::Cube => MTL::Cube,
-        Tvd::CubeArray => MTL::CubeArray,
+        Tvd::D1 => MTL::Type1D,
+        Tvd::D2 => MTL::Type2D,
+        Tvd::D2Array => MTL::Type2DArray,
+        Tvd::D3 => MTL::Type3D,
+        Tvd::Cube => MTL::TypeCube,
+        Tvd::CubeArray => MTL::TypeCubeArray,
     }
 }
 
@@ -274,24 +275,24 @@ pub fn map_cull_mode(face: Option<wgt::Face>) -> MTLCullMode {
 
 pub fn map_range(range: &crate::MemoryRange) -> NSRange {
     NSRange {
-        location: range.start,
-        length: range.end - range.start,
+        location: range.start as usize,
+        length: (range.end - range.start) as usize,
     }
 }
 
 pub fn map_copy_extent(extent: &crate::CopyExtent) -> MTLSize {
     MTLSize {
-        width: extent.width as u64,
-        height: extent.height as u64,
-        depth: extent.depth as u64,
+        width: extent.width as usize,
+        height: extent.height as usize,
+        depth: extent.depth as usize,
     }
 }
 
 pub fn map_origin(origin: &wgt::Origin3d) -> MTLOrigin {
     MTLOrigin {
-        x: origin.x as u64,
-        y: origin.y as u64,
-        z: origin.z as u64,
+        x: origin.x as usize,
+        y: origin.y as usize,
+        z: origin.z as usize,
     }
 }
 
@@ -341,6 +342,7 @@ pub fn map_render_stages(stage: wgt::ShaderStages) -> MTLRenderStages {
 
 pub fn map_resource_usage(ty: &wgt::BindingType) -> MTLResourceUsage {
     match ty {
+        #[allow(deprecated)]
         wgt::BindingType::Texture { .. } => MTLResourceUsage::Sample,
         wgt::BindingType::StorageTexture { access, .. } => match access {
             wgt::StorageTextureAccess::WriteOnly => MTLResourceUsage::Write,

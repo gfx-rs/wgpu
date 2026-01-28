@@ -4,12 +4,12 @@
 
 using metal::uint;
 
-struct type_2 {
+struct type_4 {
     metal::atomic_int inner[2];
 };
 struct AtomicStruct {
     metal::atomic_uint atomic_scalar;
-    type_2 atomic_arr;
+    type_4 atomic_arr;
 };
 
 struct test_atomic_workgroup_uniform_loadInput {

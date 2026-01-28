@@ -17,7 +17,6 @@ fails-if(vulkan) webgpu:api,operation,command_buffer,copyTextureToTexture:copy_d
 fails-if(vulkan) webgpu:api,operation,command_buffer,copyTextureToTexture:copy_depth_stencil:format="depth32float"
 fails-if(vulkan) webgpu:api,operation,command_buffer,copyTextureToTexture:copy_depth_stencil:format="depth32float-stencil8"
 webgpu:api,operation,command_buffer,copyTextureToTexture:copy_depth_stencil:format="stencil8"
-// Fails with OOM in CI.
 fails-if(dx12) webgpu:api,operation,command_buffer,image_copy:offsets_and_sizes:*
 webgpu:api,operation,command_buffer,image_copy:undefined_params:initMethod="CopyB2T";checkMethod="FullCopyT2B";dimension="1d"
 webgpu:api,operation,command_buffer,image_copy:undefined_params:initMethod="CopyB2T";checkMethod="FullCopyT2B";dimension="2d"
@@ -54,12 +53,12 @@ webgpu:api,operation,vertex_state,correctness:setVertexBuffer_offset_and_attribu
 
 webgpu:api,validation,buffer,create:*
 webgpu:api,validation,buffer,destroy:*
-// Limit tests fail with OOM in CI.
-fails-if(dx12) webgpu:api,validation,capability_checks,limits,maxBindGroups:setBindGroup,*
+webgpu:api,validation,capability_checks,limits,maxBindGroups:setBindGroup,*
 //FAIL: other `maxInterStageShaderVariables` cases w/ limitTest ∈ [underDefault, overMaximum]
-fails-if(dx12) webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";*
-fails-if(dx12) webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atMaximum";*
-fails-if(dx12) webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="betweenDefaultAndMaximum";*
+// https://github.com/gfx-rs/wgpu/issues/8945
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";*
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atMaximum";*
+webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="betweenDefaultAndMaximum";*
 webgpu:api,validation,createBindGroup:binding_must_contain_resource_defined_in_layout:*
 webgpu:api,validation,createBindGroup:buffer_offset_and_size_for_bind_groups_match:*
 webgpu:api,validation,createBindGroup:buffer,effective_buffer_binding_size:*
@@ -150,8 +149,7 @@ fails-if(dx12) webgpu:api,validation,image_copy,buffer_texture_copies:offset_and
 webgpu:api,validation,image_copy,buffer_texture_copies:sample_count:*
 webgpu:api,validation,image_copy,buffer_texture_copies:texture_buffer_usages:*
 webgpu:api,validation,image_copy,layout_related:copy_end_overflows_u64:*
-// Fails with OOM in CI.
-fails-if(dx12) webgpu:api,validation,image_copy,layout_related:offset_alignment:*
+webgpu:api,validation,image_copy,layout_related:offset_alignment:*
 webgpu:api,validation,image_copy,texture_related:*
 webgpu:api,validation,queue,buffer_mapped:copyBufferToBuffer:*
 webgpu:api,validation,queue,buffer_mapped:copyBufferToTexture:*

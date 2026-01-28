@@ -454,7 +454,7 @@ struct IdGenerator(u32);
 
 impl IdGenerator {
     /// Generates a number that's guaranteed to be unique for this `IdGenerator`
-    fn generate(&mut self) -> u32 {
+    const fn generate(&mut self) -> u32 {
         // It's just an increasing number but it does the job
         let ret = self.0;
         self.0 += 1;

@@ -158,6 +158,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.namer.reset(
             module,
             &super::keywords::RESERVED_SET,
+            proc::KeywordSet::empty(),
             &super::keywords::RESERVED_CASE_INSENSITIVE_SET,
             super::keywords::RESERVED_PREFIXES,
             &mut self.names,

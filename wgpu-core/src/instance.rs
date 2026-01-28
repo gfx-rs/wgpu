@@ -815,7 +815,6 @@ impl Adapter {
         }
     }
 
-    #[allow(clippy::type_complexity)]
     fn create_device_and_queue_from_hal(
         self: &Arc<Self>,
         hal_device: hal::DynOpenDevice,

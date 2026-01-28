@@ -1336,7 +1336,7 @@ impl crate::Device for super::Device {
             // This is the last time we use this, but lets increment
             // it so if we add more later, the value behaves correctly.
 
-            // This is an allow as it doesn't trigger on 1.82, hal's MSRV.
+            // This is an allow as it doesn't trigger on 1.90, hal's MSRV.
             #[allow(unused_assignments)]
             {
                 bind_cbv.register += 1;

@@ -435,7 +435,6 @@ fn convert_snapshots_spv() {
 // While we _can_ run this test under miri, it is extremely slow (>5 minutes),
 // and naga isn't the primary target for miri testing, so we disable it.
 #[cfg_attr(miri, ignore)]
-#[allow(unused_variables)]
 #[test]
 fn convert_snapshots_glsl() {
     let _ = env_logger::try_init();

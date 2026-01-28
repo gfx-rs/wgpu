@@ -74,6 +74,7 @@ void main()
     float4 g = refract(v, v, 1.0);
     int4 sign_b = int4(int(-1), int(-1), int(-1), int(-1));
     float4 sign_d = float4(-1.0, -1.0, -1.0, -1.0);
+    float4 sign_e = float4(0.0, 0.0, 0.0, 0.0);
     int2 flb_b = int2(int(-1), int(-1));
     uint2 flb_c = uint2(0u, 0u);
     int2 ftb_c = int2(int(0), int(0));

@@ -1,12 +1,13 @@
-use metal::{
-    MTLArgumentBuffersTier, MTLCounterSamplingPoint, MTLFeatureSet, MTLGPUFamily,
-    MTLLanguageVersion, MTLPixelFormat, MTLReadWriteTextureTier, NSInteger,
+use objc2::runtime::ProtocolObject;
+use objc2_foundation::{NSOperatingSystemVersion, NSProcessInfo};
+use objc2_metal::{
+    MTLArgumentBuffersTier, MTLCounterSamplingPoint, MTLDevice, MTLFeatureSet, MTLGPUFamily,
+    MTLLanguageVersion, MTLPixelFormat, MTLReadWriteTextureTier,
 };
-use objc::{class, msg_send, sel, sel_impl};
 use parking_lot::Mutex;
 use wgt::{AstcBlock, AstcChannel};
 
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{string::ToString as _, sync::Arc, vec::Vec};
 
 use super::TimestampQuerySupport;
 
@@ -27,7 +28,7 @@ use super::TimestampQuerySupport;
 /// <https://bugzilla.mozilla.org/show_bug.cgi?id=1971452>.
 ///
 /// [new command buffer]: https://developer.apple.com/documentation/metal/mtlcommandqueue/makecommandbuffer()?language=objc
-const MAX_COMMAND_BUFFERS: u64 = 4096;
+const MAX_COMMAND_BUFFERS: usize = 4096;
 
 unsafe impl Send for super::Adapter {}
 unsafe impl Sync for super::Adapter {}
@@ -50,7 +51,8 @@ impl crate::Adapter for super::Adapter {
         let queue = self
             .shared
             .device
-            .new_command_queue_with_max_command_buffer_count(MAX_COMMAND_BUFFERS);
+            .newCommandQueueWithMaxCommandBufferCount(MAX_COMMAND_BUFFERS)
+            .unwrap();
 
         // Acquiring the meaning of timestamp ticks is hard with Metal!
         // The only thing there is a method correlating cpu & gpu timestamps (`device.sample_timestamps`).
@@ -71,7 +73,7 @@ impl crate::Adapter for super::Adapter {
         // Based on:
         // * https://github.com/gfx-rs/wgpu/pull/2528
         // * https://github.com/gpuweb/gpuweb/issues/1325#issuecomment-761041326
-        let timestamp_period = if self.shared.device.name().starts_with("Intel") {
+        let timestamp_period = if self.shared.device.name().to_string().starts_with("Intel") {
             83.333
         } else {
             // Known for Apple Silicon (at least M1 & M2, iPad Pro 2018) and AMD GPUs.
@@ -106,6 +108,8 @@ impl crate::Adapter for super::Adapter {
             MTLReadWriteTextureTier::TierNone => (Tfc::empty(), Tfc::empty()),
             MTLReadWriteTextureTier::Tier1 => (Tfc::STORAGE_READ_WRITE, Tfc::empty()),
             MTLReadWriteTextureTier::Tier2 => (Tfc::STORAGE_READ_WRITE, Tfc::STORAGE_READ_WRITE),
+            // Unknown levels of support are likely higher than Tier 2.
+            _ => (Tfc::STORAGE_READ_WRITE, Tfc::STORAGE_READ_WRITE),
         };
         let msaa_count = pc.sample_count_mask;
 
@@ -128,7 +132,7 @@ impl crate::Adapter for super::Adapter {
             ],
         );
 
-        let image_atomic_if = if pc.msl_version >= MTLLanguageVersion::V3_1 {
+        let image_atomic_if = if pc.msl_version >= MTLLanguageVersion::Version3_1 {
             Tfc::STORAGE_ATOMIC
         } else {
             Tfc::empty()
@@ -515,40 +519,36 @@ const DEPTH_CLIP_MODE: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily1_v1,
 ];
 
-const OS_NOT_SUPPORT: (usize, usize) = (10000, 0);
+const OS_NOT_SUPPORT: (isize, isize) = (10000, 0);
 
 impl super::PrivateCapabilities {
-    fn supports_any(raw: &metal::DeviceRef, features_sets: &[MTLFeatureSet]) -> bool {
+    fn supports_any(raw: &ProtocolObject<dyn MTLDevice>, features_sets: &[MTLFeatureSet]) -> bool {
         features_sets
             .iter()
             .cloned()
-            .any(|x| raw.supports_feature_set(x))
+            .any(|x| raw.supportsFeatureSet(x))
     }
 
-    pub fn new(device: &metal::Device) -> Self {
-        let version: NSOperatingSystemVersion = unsafe {
-            let process_info: *mut objc::runtime::Object =
-                msg_send![class!(NSProcessInfo), processInfo];
-            msg_send![process_info, operatingSystemVersion]
-        };
+    pub fn new(device: &ProtocolObject<dyn MTLDevice>) -> Self {
+        let version = NSProcessInfo::processInfo().operatingSystemVersion();
 
         let os_type = super::OsType::new(version, device);
         let family_check = version.at_least((10, 15), (13, 0), (13, 0), (1, 0), os_type);
-        let metal3 = family_check && device.supports_family(MTLGPUFamily::Metal3);
-        let metal4 = family_check && device.supports_family(MTLGPUFamily::Metal4);
+        let metal3 = family_check && device.supportsFamily(MTLGPUFamily::Metal3);
+        let metal4 = family_check && device.supportsFamily(MTLGPUFamily::Metal4);
         let mut sample_count_mask = crate::TextureFormatCapabilities::MULTISAMPLE_X4; // 1 and 4 samples are supported on all devices
-        if device.supports_texture_sample_count(2) {
+        if device.supportsTextureSampleCount(2) {
             sample_count_mask |= crate::TextureFormatCapabilities::MULTISAMPLE_X2;
         }
-        if device.supports_texture_sample_count(8) {
+        if device.supportsTextureSampleCount(8) {
             sample_count_mask |= crate::TextureFormatCapabilities::MULTISAMPLE_X8;
         }
-        if device.supports_texture_sample_count(16) {
+        if device.supportsTextureSampleCount(16) {
             sample_count_mask |= crate::TextureFormatCapabilities::MULTISAMPLE_X16;
         }
 
         let rw_texture_tier = if version.at_least((10, 13), (11, 0), (11, 0), (1, 0), os_type) {
-            device.read_write_texture_support()
+            device.readWriteTextureSupport()
         } else if version.at_least(
             (10, 12),
             OS_NOT_SUPPORT,
@@ -567,18 +567,18 @@ impl super::PrivateCapabilities {
 
         let mut timestamp_query_support = TimestampQuerySupport::empty();
         if version.at_least((11, 0), (14, 0), (14, 0), (1, 0), os_type)
-            && device.supports_counter_sampling(MTLCounterSamplingPoint::AtStageBoundary)
+            && device.supportsCounterSampling(MTLCounterSamplingPoint::AtStageBoundary)
         {
             // If we don't support at stage boundary, don't support anything else.
             timestamp_query_support.insert(TimestampQuerySupport::STAGE_BOUNDARIES);
 
-            if device.supports_counter_sampling(MTLCounterSamplingPoint::AtDrawBoundary) {
+            if device.supportsCounterSampling(MTLCounterSamplingPoint::AtDrawBoundary) {
                 timestamp_query_support.insert(TimestampQuerySupport::ON_RENDER_ENCODER);
             }
-            if device.supports_counter_sampling(MTLCounterSamplingPoint::AtDispatchBoundary) {
+            if device.supportsCounterSampling(MTLCounterSamplingPoint::AtDispatchBoundary) {
                 timestamp_query_support.insert(TimestampQuerySupport::ON_COMPUTE_ENCODER);
             }
-            if device.supports_counter_sampling(MTLCounterSamplingPoint::AtBlitBoundary) {
+            if device.supportsCounterSampling(MTLCounterSamplingPoint::AtBlitBoundary) {
                 timestamp_query_support.insert(TimestampQuerySupport::ON_BLIT_ENCODER);
             }
             // `TimestampQuerySupport::INSIDE_WGPU_PASSES` emerges from the other flags.
@@ -586,37 +586,37 @@ impl super::PrivateCapabilities {
 
         let argument_buffers = version
             .at_least((10, 13), (11, 0), (11, 0), (1, 0), os_type)
-            .then(|| device.argument_buffers_support());
+            .then(|| device.argumentBuffersSupport());
 
-        let is_virtual = device.name().to_lowercase().contains("virtual");
+        let is_virtual = device.name().to_string().to_lowercase().contains("virtual");
 
         let mesh_shaders = family_check
-                && (device.supports_family(MTLGPUFamily::Metal3)
-                    || device.supports_family(MTLGPUFamily::Apple7)
-                    || device.supports_family(MTLGPUFamily::Mac2))
+                && (device.supportsFamily(MTLGPUFamily::Metal3)
+                    || device.supportsFamily(MTLGPUFamily::Apple7)
+                    || device.supportsFamily(MTLGPUFamily::Mac2))
                     // Mesh shaders don't work on virtual devices even if they should be supported. CI thing
                 && !is_virtual;
 
         let msl_version = if version.at_least((14, 0), (17, 0), (17, 0), (1, 0), os_type) {
-            MTLLanguageVersion::V3_1
+            MTLLanguageVersion::Version3_1
         } else if version.at_least((13, 0), (16, 0), (16, 0), (1, 0), os_type) {
-            MTLLanguageVersion::V3_0
+            MTLLanguageVersion::Version3_0
         } else if version.at_least((12, 0), (15, 0), (15, 0), (1, 0), os_type) {
-            MTLLanguageVersion::V2_4
+            MTLLanguageVersion::Version2_4
         } else if version.at_least((11, 0), (14, 0), (14, 0), (1, 0), os_type) {
-            MTLLanguageVersion::V2_3
+            MTLLanguageVersion::Version2_3
         } else if version.at_least((10, 15), (13, 0), (13, 0), (1, 0), os_type) {
-            MTLLanguageVersion::V2_2
+            MTLLanguageVersion::Version2_2
         } else if version.at_least((10, 14), (12, 0), (12, 0), (1, 0), os_type) {
-            MTLLanguageVersion::V2_1
+            MTLLanguageVersion::Version2_1
         } else if version.at_least((10, 13), (11, 0), (11, 0), (1, 0), os_type) {
-            MTLLanguageVersion::V2_0
+            MTLLanguageVersion::Version2_0
         } else if version.at_least((10, 12), (10, 0), (10, 0), (1, 0), os_type) {
-            MTLLanguageVersion::V1_2
+            MTLLanguageVersion::Version1_2
         } else if version.at_least((10, 11), (9, 0), (9, 0), (1, 0), os_type) {
-            MTLLanguageVersion::V1_1
+            MTLLanguageVersion::Version1_1
         } else {
-            MTLLanguageVersion::V1_0
+            MTLLanguageVersion::Version1_0
         };
 
         // The `PrivateCapabilities` we are constructing here duplicates many of the limits
@@ -630,9 +630,9 @@ impl super::PrivateCapabilities {
             fragment_rw_storage: version.at_least((10, 12), (8, 0), (8, 0), (1, 0), os_type),
             read_write_texture_tier: rw_texture_tier,
             msaa_desktop: os_type == super::OsType::Macos,
-            msaa_apple3: (family_check && device.supports_family(MTLGPUFamily::Apple3))
-                || device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily3_v4),
-            msaa_apple7: family_check && device.supports_family(MTLGPUFamily::Apple7),
+            msaa_apple3: (family_check && device.supportsFamily(MTLGPUFamily::Apple3))
+                || device.supportsFeatureSet(MTLFeatureSet::iOS_GPUFamily3_v4),
+            msaa_apple7: family_check && device.supportsFamily(MTLGPUFamily::Apple7),
             resource_heaps: Self::supports_any(device, RESOURCE_HEAP_SUPPORT),
             argument_buffers,
             mutable_comparison_samplers: Self::supports_any(
@@ -646,16 +646,17 @@ impl super::PrivateCapabilities {
                 BASE_VERTEX_FIRST_INSTANCE_SUPPORT,
             ),
             dual_source_blending: Self::supports_any(device, DUAL_SOURCE_BLEND_SUPPORT),
-            low_power: os_type != super::OsType::Macos || device.is_low_power(),
-            headless: os_type == super::OsType::Macos && device.is_headless(),
+            low_power: os_type != super::OsType::Macos || device.isLowPower(),
+            headless: os_type == super::OsType::Macos && device.isHeadless(),
             layered_rendering: Self::supports_any(device, LAYERED_RENDERING_SUPPORT),
             function_specialization: Self::supports_any(device, FUNCTION_SPECIALIZATION_SUPPORT),
             depth_clip_mode: Self::supports_any(device, DEPTH_CLIP_MODE),
             texture_cube_array: Self::supports_any(device, TEXTURE_CUBE_ARRAY_SUPPORT),
             supports_float_filtering: os_type == super::OsType::Macos
                 || (version.at_least((11, 0), (14, 0), (16, 0), (1, 0), os_type)
-                    && device.supports_32bit_float_filtering()),
-            format_depth24_stencil8: os_type == super::OsType::Macos && device.d24_s8_supported(),
+                    && device.supports32BitFloatFiltering()),
+            format_depth24_stencil8: os_type == super::OsType::Macos
+                && device.isDepth24Stencil8PixelFormatSupported(),
             format_depth32_stencil8_filter: os_type == super::OsType::Macos,
             format_depth32_stencil8_none: os_type != super::OsType::Macos,
             format_min_srgb_channels: if os_type == super::OsType::Macos {
@@ -667,14 +668,14 @@ impl super::PrivateCapabilities {
             format_bc: os_type == super::OsType::Macos,
             format_eac_etc: os_type != super::OsType::Macos
                 // M1 in macOS supports EAC/ETC2
-                || (family_check && device.supports_family(MTLGPUFamily::Apple7)),
+                || (family_check && device.supportsFamily(MTLGPUFamily::Apple7)),
             // A8(Apple2) and later always support ASTC pixel formats
-            format_astc: (family_check && device.supports_family(MTLGPUFamily::Apple2))
+            format_astc: (family_check && device.supportsFamily(MTLGPUFamily::Apple2))
                 || Self::supports_any(device, ASTC_PIXEL_FORMAT_FEATURES),
             // A13(Apple6) M1(Apple7) and later always support HDR ASTC pixel formats
-            format_astc_hdr: family_check && device.supports_family(MTLGPUFamily::Apple6),
+            format_astc_hdr: family_check && device.supportsFamily(MTLGPUFamily::Apple6),
             // Apple3 and later supports compressed volume texture formats including ASTC Sliced 3D
-            format_astc_3d: family_check && device.supports_family(MTLGPUFamily::Apple3),
+            format_astc_3d: family_check && device.supportsFamily(MTLGPUFamily::Apple3),
             format_any8_unorm_srgb_all: Self::supports_any(device, ANY8_UNORM_SRGB_ALL),
             format_any8_unorm_srgb_no_write: !Self::supports_any(device, ANY8_UNORM_SRGB_ALL)
                 && os_type != super::OsType::Macos,
@@ -721,8 +722,8 @@ impl super::PrivateCapabilities {
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=12
             format_depth16unorm_filter: family_check
                 && (metal3
-                    || device.supports_family(MTLGPUFamily::Apple3)
-                    || device.supports_family(MTLGPUFamily::Mac2)),
+                    || device.supportsFamily(MTLGPUFamily::Apple3)
+                    || device.supportsFamily(MTLGPUFamily::Mac2)),
             format_depth32float_filter: os_type == super::OsType::Macos,
             format_depth32float_none: os_type != super::OsType::Macos,
             format_bgr10a2_all: Self::supports_any(device, BGR10A2_ALL),
@@ -730,10 +731,10 @@ impl super::PrivateCapabilities {
             max_buffers_per_stage: 31,
             max_vertex_buffers: 31.min(crate::MAX_VERTEX_BUFFERS as u32), // duplicative of `apply_hal_limits`
             max_textures_per_stage: if os_type == super::OsType::Macos
-                || (family_check && device.supports_family(MTLGPUFamily::Apple6))
+                || (family_check && device.supportsFamily(MTLGPUFamily::Apple6))
             {
                 128
-            } else if family_check && device.supports_family(MTLGPUFamily::Apple4) {
+            } else if family_check && device.supportsFamily(MTLGPUFamily::Apple4) {
                 96
             } else {
                 31
@@ -741,22 +742,22 @@ impl super::PrivateCapabilities {
             max_samplers_per_stage: 16,
             max_binding_array_elements: if argument_buffers == Some(MTLArgumentBuffersTier::Tier2) {
                 1_000_000
-            } else if family_check && device.supports_family(MTLGPUFamily::Apple4) {
+            } else if family_check && device.supportsFamily(MTLGPUFamily::Apple4) {
                 96
             } else {
                 31
             },
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=7
             max_sampler_binding_array_elements: if family_check
-                && device.supports_family(MTLGPUFamily::Apple9)
+                && device.supportsFamily(MTLGPUFamily::Apple9)
             {
                 500_000
             } else if family_check
-                && (device.supports_family(MTLGPUFamily::Apple7)
-                    || device.supports_family(MTLGPUFamily::Mac2))
+                && (device.supportsFamily(MTLGPUFamily::Apple7)
+                    || device.supportsFamily(MTLGPUFamily::Mac2))
             {
                 1024
-            } else if family_check && device.supports_family(MTLGPUFamily::Apple6) {
+            } else if family_check && device.supportsFamily(MTLGPUFamily::Apple6) {
                 128
             } else {
                 16
@@ -767,8 +768,7 @@ impl super::PrivateCapabilities {
                 64
             },
             max_buffer_size: if version.at_least((10, 14), (12, 0), (12, 0), (1, 0), os_type) {
-                let buffer_size: NSInteger = unsafe { msg_send![device.as_ref(), maxBufferLength] };
-                buffer_size as _
+                device.maxBufferLength() as u64
             } else if os_type == super::OsType::Macos {
                 1 << 30 // 1GB on macOS 10.11 and up
             } else {
@@ -789,7 +789,7 @@ impl super::PrivateCapabilities {
             max_texture_3d_size: 2048,
             max_texture_layers: 2048,
             max_fragment_input_components: if os_type == super::OsType::Macos
-                || device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1)
+                || device.supportsFeatureSet(MTLFeatureSet::iOS_GPUFamily4_v1)
             {
                 124
             } else {
@@ -811,16 +811,15 @@ impl super::PrivateCapabilities {
             },
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=7
             max_color_attachment_bytes_per_sample: if family_check
-                && device.supports_family(MTLGPUFamily::Apple7)
+                && device.supportsFamily(MTLGPUFamily::Apple7)
             {
                 128
-            } else if family_check && device.supports_family(MTLGPUFamily::Apple4) {
+            } else if family_check && device.supportsFamily(MTLGPUFamily::Apple4) {
                 64
             } else {
                 32
             },
-            max_varying_components: if device
-                .supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1)
+            max_varying_components: if device.supportsFeatureSet(MTLFeatureSet::macOS_GPUFamily1_v1)
             {
                 124
             } else {
@@ -866,8 +865,8 @@ impl super::PrivateCapabilities {
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             supports_binary_archives: family_check
                 && (metal3
-                    || device.supports_family(MTLGPUFamily::Apple3)
-                    || device.supports_family(MTLGPUFamily::Mac2)),
+                    || device.supportsFamily(MTLGPUFamily::Apple3)
+                    || device.supportsFamily(MTLGPUFamily::Mac2)),
             // https://developer.apple.com/documentation/metal/mtlcapturemanager
             supports_capture_manager: version.at_least((10, 13), (11, 0), (11, 0), (1, 0), os_type),
             // https://developer.apple.com/documentation/quartzcore/cametallayer/maximumdrawablecount
@@ -907,13 +906,13 @@ impl super::PrivateCapabilities {
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             supports_arrays_of_textures_write: family_check
                 && (metal3
-                    || device.supports_family(MTLGPUFamily::Apple6)
-                    || device.supports_family(MTLGPUFamily::Mac2)),
+                    || device.supportsFamily(MTLGPUFamily::Apple6)
+                    || device.supportsFamily(MTLGPUFamily::Mac2)),
             // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
             supports_mutability: version.at_least((10, 13), (11, 0), (11, 0), (1, 0), os_type),
             // Depth clipping is supported on all macOS GPU families and iOS family 4 and later
             supports_depth_clip_control: os_type == super::OsType::Macos
-                || device.supports_feature_set(MTLFeatureSet::iOS_GPUFamily4_v1),
+                || device.supportsFeatureSet(MTLFeatureSet::iOS_GPUFamily4_v1),
             // https://developer.apple.com/documentation/metal/mtlcompileoptions/preserveinvariance
             supports_preserve_invariance: version.at_least(
                 (11, 0),
@@ -925,11 +924,11 @@ impl super::PrivateCapabilities {
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             supports_shader_primitive_index: family_check
                 && (metal3
-                    || device.supports_family(MTLGPUFamily::Apple7)
-                    || device.supports_family(MTLGPUFamily::Mac2)),
+                    || device.supportsFamily(MTLGPUFamily::Apple7)
+                    || device.supportsFamily(MTLGPUFamily::Mac2)),
             // https://developer.apple.com/documentation/metal/mtldevice/hasunifiedmemory
             has_unified_memory: if version.at_least((10, 15), (13, 0), (13, 0), (1, 0), os_type) {
-                Some(device.has_unified_memory())
+                Some(device.hasUnifiedMemory())
             } else {
                 None
             },
@@ -937,39 +936,39 @@ impl super::PrivateCapabilities {
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             supports_simd_scoped_operations: family_check
                 && (metal3
-                    || device.supports_family(MTLGPUFamily::Mac2)
-                    || device.supports_family(MTLGPUFamily::Apple7)),
+                    || device.supportsFamily(MTLGPUFamily::Mac2)
+                    || device.supportsFamily(MTLGPUFamily::Apple7)),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
-            int64: family_check && (metal3 || device.supports_family(MTLGPUFamily::Apple3)),
+            int64: family_check && (metal3 || device.supportsFamily(MTLGPUFamily::Apple3)),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             // There is also a footnote that says
             // "Some GPU devices in the Apple8 family support 64-bit atomic minimum and maximum..."
             int64_atomics_min_max: family_check
-                && (device.supports_family(MTLGPUFamily::Apple9)
-                    || (device.supports_family(MTLGPUFamily::Apple8)
-                        && device.supports_family(MTLGPUFamily::Mac2))),
-            int64_atomics: family_check && device.supports_family(MTLGPUFamily::Apple9),
+                && (device.supportsFamily(MTLGPUFamily::Apple9)
+                    || (device.supportsFamily(MTLGPUFamily::Apple8)
+                        && device.supportsFamily(MTLGPUFamily::Mac2))),
+            int64_atomics: family_check && device.supportsFamily(MTLGPUFamily::Apple9),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=4
             float_atomics: family_check
                 && (metal3
-                    || device.supports_family(MTLGPUFamily::Apple7)
-                    || device.supports_family(MTLGPUFamily::Mac2)),
+                    || device.supportsFamily(MTLGPUFamily::Apple7)
+                    || device.supportsFamily(MTLGPUFamily::Mac2)),
             // https://developer.apple.com/documentation/metal/mtlsharedevent
             supports_shared_event: version.at_least((10, 14), (12, 0), (12, 0), (1, 0), os_type),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=5 (footnote)
             // Supported on some Metal4, Apple7, Mac2, and some other platforms can be queried with device.supportsShaderBarycentricCoordinates().
             shader_barycentrics: metal4
                 || (family_check
-                    && (device.supports_family(MTLGPUFamily::Apple7)
-                        || device.supports_family(MTLGPUFamily::Mac2)))
+                    && (device.supportsFamily(MTLGPUFamily::Apple7)
+                        || device.supportsFamily(MTLGPUFamily::Mac2)))
                 || (version.at_least((10, 15), (14, 0), (16, 0), (1, 0), os_type)
-                    && device.supports_shader_barycentric_coordinates()),
+                    && device.supportsShaderBarycentricCoordinates()),
             // https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=3
             // See https://github.com/gfx-rs/wgpu/pull/8725 for more details
             supports_memoryless_storage: metal4
                 || if family_check {
                     // Apple A7 (MTLGPUFamily::Apple1) has been tested to have support.
-                    device.supports_family(MTLGPUFamily::Apple1)
+                    device.supportsFamily(MTLGPUFamily::Apple1)
                 } else {
                     // macOS: Always rely on family check
                     // iOS/tvOS: API added in 10.0
@@ -991,7 +990,7 @@ impl super::PrivateCapabilities {
                         (1, 0),
                         os_type,
                     )
-                    && device.supports_vertex_amplification_count(factor * 2)
+                    && device.supportsVertexAmplificationCount(factor * 2)
                 {
                     factor *= 2
                 }
@@ -1002,8 +1001,8 @@ impl super::PrivateCapabilities {
             max_mesh_task_workgroup_count: if mesh_shaders { 1024 } else { 0 },
             max_task_payload_size: if mesh_shaders { 16384 - 32 } else { 0 },
             supports_cooperative_matrix: family_check
-                && (device.supports_family(MTLGPUFamily::Apple7)
-                    || device.supports_family(MTLGPUFamily::Mac2)),
+                && (device.supportsFamily(MTLGPUFamily::Apple7)
+                    || device.supportsFamily(MTLGPUFamily::Mac2)),
         }
     }
 
@@ -1046,7 +1045,7 @@ impl super::PrivateCapabilities {
         );
         features.set(
             F::DUAL_SOURCE_BLENDING,
-            self.msl_version >= MTLLanguageVersion::V1_2 && self.dual_source_blending,
+            self.msl_version >= MTLLanguageVersion::Version1_2 && self.dual_source_blending,
         );
         features.set(F::TEXTURE_COMPRESSION_ASTC, self.format_astc);
         features.set(F::TEXTURE_COMPRESSION_ASTC_HDR, self.format_astc_hdr);
@@ -1066,42 +1065,42 @@ impl super::PrivateCapabilities {
                 | F::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
                 | F::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
                 | F::PARTIALLY_BOUND_BINDING_ARRAY,
-            self.msl_version >= MTLLanguageVersion::V3_0
+            self.msl_version >= MTLLanguageVersion::Version3_0
                 && self.supports_arrays_of_textures
                 && self
                     .argument_buffers
-                    .unwrap_or(MTLArgumentBuffersTier::Tier1) as u64
-                    >= MTLArgumentBuffersTier::Tier2 as u64,
+                    .unwrap_or(MTLArgumentBuffersTier::Tier1)
+                    >= MTLArgumentBuffersTier::Tier2,
         );
         features.set(
             F::STORAGE_RESOURCE_BINDING_ARRAY,
-            self.msl_version >= MTLLanguageVersion::V3_0
+            self.msl_version >= MTLLanguageVersion::Version3_0
                 && self.supports_arrays_of_textures
                 && self.supports_arrays_of_textures_write
                 && self
                     .argument_buffers
-                    .unwrap_or(MTLArgumentBuffersTier::Tier1) as u64
-                    >= MTLArgumentBuffersTier::Tier2 as u64,
+                    .unwrap_or(MTLArgumentBuffersTier::Tier1)
+                    >= MTLArgumentBuffersTier::Tier2,
         );
         features.set(
             F::SHADER_INT64,
-            self.int64 && self.msl_version >= MTLLanguageVersion::V2_3,
+            self.int64 && self.msl_version >= MTLLanguageVersion::Version2_3,
         );
         features.set(
             F::SHADER_INT64_ATOMIC_MIN_MAX,
-            self.int64_atomics_min_max && self.msl_version >= MTLLanguageVersion::V2_4,
+            self.int64_atomics_min_max && self.msl_version >= MTLLanguageVersion::Version2_4,
         );
         features.set(
             F::TEXTURE_INT64_ATOMIC,
-            self.int64_atomics && self.msl_version >= MTLLanguageVersion::V3_1,
+            self.int64_atomics && self.msl_version >= MTLLanguageVersion::Version3_1,
         );
         features.set(
             F::TEXTURE_ATOMIC,
-            self.msl_version >= MTLLanguageVersion::V3_1,
+            self.msl_version >= MTLLanguageVersion::Version3_1,
         );
         features.set(
             F::SHADER_FLOAT32_ATOMIC,
-            self.float_atomics && self.msl_version >= MTLLanguageVersion::V3_0,
+            self.float_atomics && self.msl_version >= MTLLanguageVersion::Version3_0,
         );
 
         features.set(
@@ -1114,7 +1113,7 @@ impl super::PrivateCapabilities {
 
         features.set(
             F::SHADER_BARYCENTRICS,
-            self.shader_barycentrics && self.msl_version >= MTLLanguageVersion::V2_2,
+            self.shader_barycentrics && self.msl_version >= MTLLanguageVersion::Version2_2,
         );
 
         if self.supports_simd_scoped_operations {
@@ -1126,7 +1125,7 @@ impl super::PrivateCapabilities {
         // Cooperative matrix (simdgroup matrix) requires MSL 2.3+
         features.set(
             F::EXPERIMENTAL_COOPERATIVE_MATRIX,
-            self.supports_cooperative_matrix && self.msl_version >= MTLLanguageVersion::V2_3,
+            self.supports_cooperative_matrix && self.msl_version >= MTLLanguageVersion::Version2_3,
         );
 
         if self.supported_vertex_amplification_factor > 1 {
@@ -1275,7 +1274,7 @@ impl super::PrivateCapabilities {
     ///
     /// Metal's simdgroup_matrix supports 8x8 tiles with f16 and f32 element types.
     fn cooperative_matrix_properties(&self) -> Vec<wgt::CooperativeMatrixProperties> {
-        if !self.supports_cooperative_matrix || self.msl_version < MTLLanguageVersion::V2_3 {
+        if !self.supports_cooperative_matrix || self.msl_version < MTLLanguageVersion::Version2_3 {
             return Vec::new();
         }
 
@@ -1482,25 +1481,25 @@ impl super::PrivateCapabilities {
 }
 
 impl super::PrivateDisabilities {
-    pub fn new(device: &metal::Device) -> Self {
-        let is_intel = device.name().starts_with("Intel");
+    pub fn new(device: &ProtocolObject<dyn MTLDevice>) -> Self {
+        let is_intel = device.name().to_string().starts_with("Intel");
         Self {
             broken_viewport_near_depth: is_intel
-                && !device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v4),
+                && !device.supportsFeatureSet(MTLFeatureSet::macOS_GPUFamily1_v4),
             broken_layered_clear_image: is_intel,
         }
     }
 }
 
 impl super::OsType {
-    fn new(version: NSOperatingSystemVersion, device: &metal::Device) -> Self {
+    fn new(version: NSOperatingSystemVersion, device: &ProtocolObject<dyn MTLDevice>) -> Self {
         // Metal was first introduced in OS X 10.11 and iOS 8. The current version number of visionOS is 1.0.0. Additionally,
         // on the Simulator, Apple only provides the Apple2 GPU capability, and the Apple2+ GPU capability covers the capabilities of Apple2.
         // Therefore, the following conditions can be used to determine if it is visionOS.
         // https://developer.apple.com/documentation/metal/developing_metal_apps_that_run_in_simulator
-        let os_is_vision = version.major < 8 && device.supports_family(MTLGPUFamily::Apple2);
-        let os_is_mac = device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1);
-        let os_is_tvos = device.supports_feature_set(MTLFeatureSet::tvOS_GPUFamily1_v1);
+        let os_is_vision = version.majorVersion < 8 && device.supportsFamily(MTLGPUFamily::Apple2);
+        let os_is_mac = device.supportsFeatureSet(MTLFeatureSet::macOS_GPUFamily1_v1);
+        let os_is_tvos = device.supportsFeatureSet(MTLFeatureSet::tvOS_GPUFamily1_v1);
         if os_is_vision {
             Self::VisionOs
         } else if os_is_mac {
@@ -1513,22 +1512,24 @@ impl super::OsType {
     }
 }
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-#[allow(clippy::upper_case_acronyms)]
-struct NSOperatingSystemVersion {
-    major: usize,
-    minor: usize,
-    patch: usize,
-}
-
-impl NSOperatingSystemVersion {
+trait AtLeast {
     fn at_least(
         &self,
-        mac_version: (usize, usize),
-        ios_version: (usize, usize),
-        tvos_version: (usize, usize),
-        visionos_version: (usize, usize),
+        mac_version: (isize, isize),
+        ios_version: (isize, isize),
+        tvos_version: (isize, isize),
+        visionos_version: (isize, isize),
+        os_type: super::OsType,
+    ) -> bool;
+}
+
+impl AtLeast for NSOperatingSystemVersion {
+    fn at_least(
+        &self,
+        mac_version: (isize, isize),
+        ios_version: (isize, isize),
+        tvos_version: (isize, isize),
+        visionos_version: (isize, isize),
         os_type: super::OsType,
     ) -> bool {
         let required = match os_type {
@@ -1537,6 +1538,6 @@ impl NSOperatingSystemVersion {
             super::OsType::Tvos => tvos_version,
             super::OsType::VisionOs => visionos_version,
         };
-        (self.major, self.minor) >= required
+        (self.majorVersion, self.minorVersion) >= required
     }
 }

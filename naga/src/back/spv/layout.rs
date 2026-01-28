@@ -96,14 +96,12 @@ impl Instruction {
         }
     }
 
-    #[allow(clippy::panic)]
     pub(super) fn set_type(&mut self, id: Word) {
         assert!(self.type_id.is_none(), "Type can only be set once");
         self.type_id = Some(id);
         self.wc += 1;
     }
 
-    #[allow(clippy::panic)]
     pub(super) fn set_result(&mut self, id: Word) {
         assert!(self.result_id.is_none(), "Result can only be set once");
         self.result_id = Some(id);

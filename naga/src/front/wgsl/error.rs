@@ -135,6 +135,8 @@ pub enum ExpectedToken<'a> {
     Identifier,
     AfterIdentListComma,
     AfterIdentListArg,
+    /// LHS expression (identifier component_or_swizzle_specifier?, (`lhs_expression`) component_or_swizzle_specifier?, &`lhs_expression`, *`lhs_expression`)
+    LhsExpression,
     /// Expected: constant, parenthesized expression, identifier
     PrimaryExpression,
     /// Expected: assignment, increment/decrement expression
@@ -145,14 +147,18 @@ pub enum ExpectedToken<'a> {
     WorkgroupSizeSeparator,
     /// Expected: 'struct', 'let', 'var', 'type', ';', 'fn', eof
     GlobalItem,
-    /// Expected a type.
-    Type,
     /// Access of `var`, `let`, `const`.
     Variable,
     /// Access of a function
     Function,
     /// The `diagnostic` identifier of the `@diagnostic(…)` attribute.
     DiagnosticAttribute,
+    /// statement
+    Statement,
+    /// for loop init statement (variable_or_value_statement, variable_updating_statement, func_call_statement)
+    ForInit,
+    /// for loop update statement (variable_updating_statement, func_call_statement)
+    ForUpdate,
 }
 
 #[derive(Clone, Copy, Debug, Error, PartialEq)]
@@ -191,7 +197,6 @@ pub(crate) enum Error<'a> {
     },
     BadIncrDecrReferenceType(Span),
     InvalidResolve(ResolveError),
-    InvalidForInitializer(Span),
     /// A break if appeared outside of a continuing block
     InvalidBreakIf(Span),
     InvalidGatherComponent(Span),
@@ -200,13 +205,13 @@ pub(crate) enum Error<'a> {
     ReservedIdentifierPrefix(Span),
     UnknownAddressSpace(Span),
     InvalidLocalVariableAddressSpace(Span),
+    UnknownRayFlag(Span),
     RepeatedAttribute(Span),
     UnknownAttribute(Span),
     UnknownBuiltin(Span),
     UnknownAccess(Span),
     UnknownIdent(Span, &'a str),
     UnknownScalarType(Span),
-    UnknownType(Span),
     UnknownStorageFormat(Span),
     UnknownConservativeDepth(Span),
     UnknownEnableExtension(Span, &'a str),
@@ -276,6 +281,7 @@ pub(crate) enum Error<'a> {
         span: Span,
     },
     CalledEntryPoint(Span),
+    CalledLocalDecl(Span),
     WrongArgumentCount {
         span: Span,
         expected: Range<u32>,
@@ -419,6 +425,15 @@ pub(crate) enum Error<'a> {
     UnderspecifiedCooperativeMatrix,
     InvalidCooperativeLoadType(Span),
     UnsupportedCooperativeScalar(Span),
+    UnexpectedIdentForEnumerant(Span),
+    UnexpectedExprForEnumerant(Span),
+    UnusedArgsForTemplate(Vec<Span>),
+    UnexpectedTemplate(Span),
+    MissingTemplateArg {
+        span: Span,
+        description: &'static str,
+    },
+    UnexpectedExprForTypeExpression(Span),
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -487,6 +502,8 @@ impl<'a> Error<'a> {
                         Token::IncrementOperation => "increment operation".to_string(),
                         Token::DecrementOperation => "decrement operation".to_string(),
                         Token::Arrow => "->".to_string(),
+                        Token::TemplateArgsStart => "template args start".to_string(),
+                        Token::TemplateArgsEnd => "template args end".to_string(),
                         Token::Unknown(c) => format!("unknown (`{c}`)"),
                         Token::Trivia => "trivia".to_string(),
                         Token::DocComment(s) => format!("doc comment ('{s}')"),
@@ -494,6 +511,7 @@ impl<'a> Error<'a> {
                         Token::End => "end".to_string(),
                     },
                     ExpectedToken::Identifier => "identifier".to_string(),
+                    ExpectedToken::LhsExpression => "LHS expression (identifier component_or_swizzle_specifier?, (`lhs_expression`) component_or_swizzle_specifier?, &`lhs_expression`, *`lhs_expression`)".to_string(),
                     ExpectedToken::PrimaryExpression => "expression".to_string(),
                     ExpectedToken::Assignment => "assignment or increment/decrement".to_string(),
                     ExpectedToken::SwitchItem => concat!(
@@ -510,7 +528,6 @@ impl<'a> Error<'a> {
                         "or the end of the file"
                     )
                     .to_string(),
-                    ExpectedToken::Type => "type".to_string(),
                     ExpectedToken::Variable => "variable access".to_string(),
                     ExpectedToken::Function => "function name".to_string(),
                     ExpectedToken::AfterIdentListArg => {
@@ -522,6 +539,9 @@ impl<'a> Error<'a> {
                     ExpectedToken::DiagnosticAttribute => {
                         "the `diagnostic` attribute identifier".to_string()
                     }
+                    ExpectedToken::Statement => "statement".to_string(),
+                    ExpectedToken::ForInit => "for loop initializer statement (`var`/`let`/`const` declaration, assignment, `i++`/`i--` statement, function call)".to_string(),
+                    ExpectedToken::ForUpdate => "for loop update statement (assignment, `i++`/`i--` statement, function call)".to_string(),
                 };
                 ParseError {
                     message: format!(
@@ -617,14 +637,6 @@ impl<'a> Error<'a> {
                 labels: vec![],
                 notes: vec![],
             },
-            Error::InvalidForInitializer(bad_span) => ParseError {
-                message: format!(
-                    "for(;;) initializer is not an assignment or a function call: `{}`",
-                    &source[bad_span]
-                ),
-                labels: vec![(bad_span, "not an assignment or function call".into())],
-                notes: vec![],
-            },
             Error::InvalidBreakIf(bad_span) => ParseError {
                 message: "A break if is only allowed in a continuing block".to_string(),
                 labels: vec![(bad_span, "not in a continuing block".into())],
@@ -669,6 +681,11 @@ impl<'a> Error<'a> {
                 labels: vec![(bad_span, "local variables can only use 'function' address space".into())],
                 notes: vec![],
             },
+            Error::UnknownRayFlag(bad_span) => ParseError {
+                message: format!("unknown ray flag: `{}`", &source[bad_span]),
+                labels: vec![(bad_span, "unknown ray flag".into())],
+                notes: vec![],
+            },
             Error::RepeatedAttribute(bad_span) => ParseError {
                 message: format!("repeated attribute: `{}`", &source[bad_span]),
                 labels: vec![(bad_span, "repeated attribute".into())],
@@ -697,11 +714,6 @@ impl<'a> Error<'a> {
             Error::UnknownConservativeDepth(bad_span) => ParseError {
                 message: format!("unknown conservative depth: `{}`", &source[bad_span]),
                 labels: vec![(bad_span, "unknown conservative depth".into())],
-                notes: vec![],
-            },
-            Error::UnknownType(bad_span) => ParseError {
-                message: format!("unknown type: `{}`", &source[bad_span]),
-                labels: vec![(bad_span, "unknown type".into())],
                 notes: vec![],
             },
             Error::UnknownEnableExtension(span, word) => ParseError {
@@ -926,6 +938,11 @@ impl<'a> Error<'a> {
             Error::CalledEntryPoint(span) => ParseError {
                 message: "entry point cannot be called".to_string(),
                 labels: vec![(span, "entry point cannot be called".into())],
+                notes: vec![],
+            },
+            Error::CalledLocalDecl(span) => ParseError {
+                message: "local declaration cannot be called".to_string(),
+                labels: vec![(span, "local declaration cannot be called".into())],
                 notes: vec![],
             },
             Error::WrongArgumentCount {
@@ -1418,6 +1435,45 @@ impl<'a> Error<'a> {
                 labels: vec![(span, "type needs the scalar type specified".into())],
                 notes: vec![format!("must be F32")],
             },
+            Error::UnexpectedIdentForEnumerant(ident_span) => ParseError {
+                message: format!(
+                    "identifier `{}` resolves to a declaration",
+                    &source[ident_span]
+                ),
+                labels: vec![(ident_span, "needs to resolve to a predeclared enumerant".into())],
+                notes: vec![],
+            },
+            Error::UnexpectedExprForEnumerant(expr_span) => ParseError {
+                message: "unexpected expression".to_string(),
+                labels: vec![(expr_span, "needs to be an identifier resolving to a predeclared enumerant".into())],
+                notes: vec![],
+            },
+            Error::UnusedArgsForTemplate(ref expr_spans) => ParseError {
+                message: "unused expressions for template".to_string(),
+                labels: expr_spans.iter().cloned().map(|span| -> (_, _){ (span, "unused".into()) }).collect(),
+                notes: vec![],
+            },
+            Error::UnexpectedTemplate(span) => ParseError {
+                message: "unexpected template".to_string(),
+                labels: vec![(span, "expected identifier".into())],
+                notes: vec![],
+            },
+            Error::MissingTemplateArg {
+                span,
+                description: arg,
+            } => ParseError {
+                message: format!(
+                    "`{}` needs a template argument specified: {arg}",
+                    &source[span]
+                ),
+                labels: vec![(span, "is missing a template argument".into())],
+                notes: vec![],
+            },
+            Error::UnexpectedExprForTypeExpression(expr_span) => ParseError {
+                message: "unexpected expression".to_string(),
+                labels: vec![(expr_span, "needs to be an identifier resolving to a type declaration (alias or struct) or predeclared type(-generator)".into())],
+                notes: vec![],
+            }
         }
     }
 }

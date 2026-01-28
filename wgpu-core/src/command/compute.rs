@@ -882,7 +882,7 @@ fn dispatch_indirect(
 
     buffer.check_usage(wgt::BufferUsages::INDIRECT)?;
 
-    if offset % 4 != 0 {
+    if !offset.is_multiple_of(4) {
         return Err(ComputePassErrorInner::UnalignedIndirectBufferOffset(offset));
     }
 
