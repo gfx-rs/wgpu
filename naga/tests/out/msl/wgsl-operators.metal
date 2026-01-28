@@ -2,7 +2,7 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-using metal::uint;
+using namespace metal;
 
 constant metal::float4 v_f32_one = metal::float4(1.0, 1.0, 1.0, 1.0);
 constant metal::float4 v_f32_zero = metal::float4(0.0, 0.0, 0.0, 0.0);

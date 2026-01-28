@@ -2,7 +2,7 @@
 #include <metal_stdlib>
 #include <simd/simd.h>
 
-using metal::uint;
+using namespace metal;
 
 constant metal::float2 ic0_ = metal::float2(2.0, 2.0);
 
