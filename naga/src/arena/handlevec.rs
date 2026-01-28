@@ -50,7 +50,7 @@ impl<T, U> HandleVec<T, U> {
         }
     }
 
-    pub(crate) fn len(&self) -> usize {
+    pub(crate) const fn len(&self) -> usize {
         self.inner.len()
     }
 

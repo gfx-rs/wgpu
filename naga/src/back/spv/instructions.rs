@@ -309,7 +309,6 @@ impl super::Instruction {
         instruction
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn type_image(
         id: Word,
         sampled_type_id: Word,

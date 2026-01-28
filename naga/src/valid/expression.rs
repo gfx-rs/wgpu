@@ -1318,7 +1318,7 @@ impl super::Validator {
     }
 }
 
-pub fn check_literal_value(literal: crate::Literal) -> Result<(), LiteralError> {
+pub const fn check_literal_value(literal: crate::Literal) -> Result<(), LiteralError> {
     let is_nan = match literal {
         crate::Literal::F64(v) => v.is_nan(),
         crate::Literal::F32(v) => v.is_nan(),

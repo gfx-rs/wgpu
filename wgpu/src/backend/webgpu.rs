@@ -3424,14 +3424,10 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
         self.inner
             .dispatch_workgroups_indirect_with_f64(&indirect_buffer.inner, indirect_offset as f64);
     }
-
-    fn end(&mut self) {
-        self.inner.end();
-    }
 }
 impl Drop for WebComputePassEncoder {
     fn drop(&mut self) {
-        dispatch::ComputePassInterface::end(self);
+        self.inner.end();
     }
 }
 
@@ -3724,14 +3720,10 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
             .collect::<js_sys::Array>();
         self.inner.execute_bundles(&mapped);
     }
-
-    fn end(&mut self) {
-        self.inner.end();
-    }
 }
 impl Drop for WebRenderPassEncoder {
     fn drop(&mut self) {
-        dispatch::RenderPassInterface::end(self);
+        self.inner.end();
     }
 }
 

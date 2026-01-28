@@ -121,12 +121,12 @@ fn invalid_float() {
 #[test]
 fn invalid_texture_sample_type() {
     check(
-        "const x: texture_2d<bool>;",
+        "var x: texture_2d<bool>;",
         r###"error: texture sample type must be one of f32, i32 or u32, but found bool
-  ┌─ wgsl:1:21
+  ┌─ wgsl:1:19
   │
-1 │ const x: texture_2d<bool>;
-  │                     ^^^^ must be one of f32, i32 or u32
+1 │ var x: texture_2d<bool>;
+  │                   ^^^^ must be one of f32, i32 or u32
 
 "###,
     );
@@ -248,11 +248,11 @@ fn type_not_constructible() {
                 _ = atomic<i32>(0);
             }
         "#,
-        r#"error: type `atomic` is not constructible
+        r#"error: type `atomic<i32>` is not constructible
   ┌─ wgsl:3:21
   │
 3 │                 _ = atomic<i32>(0);
-  │                     ^^^^^^ type is not constructible
+  │                     ^^^^^^^^^^^ type is not constructible
 
 "#,
     );
@@ -417,11 +417,11 @@ fn bad_for_initializer() {
                 for ({};;) {}
             }
         "#,
-        r#"error: for(;;) initializer is not an assignment or a function call: `{}`
+        r#"error: expected for loop initializer statement (`var`/`let`/`const` declaration, assignment, `i++`/`i--` statement, function call), found "{"
   ┌─ wgsl:3:22
   │
 3 │                 for ({};;) {}
-  │                      ^^ not an assignment or function call
+  │                      ^ expected for loop initializer statement (`var`/`let`/`const` declaration, assignment, `i++`/`i--` statement, function call)
 
 "#,
     );
@@ -534,11 +534,11 @@ fn unknown_type() {
         r#"
             const a: Vec = 10;
         "#,
-        r#"error: unknown type: `Vec`
+        r#"error: no definition in scope for identifier: `Vec`
   ┌─ wgsl:2:22
   │
 2 │             const a: Vec = 10;
-  │                      ^^^ unknown type
+  │                      ^^^ unknown identifier
 
 "#,
     );
@@ -548,13 +548,13 @@ fn unknown_type() {
 fn unknown_storage_format() {
     check(
         r#"
-            const storage1: texture_storage_1d<rgba>;
+            var storage1: texture_storage_1d<rgba>;
         "#,
         r#"error: unknown storage format: `rgba`
-  ┌─ wgsl:2:48
+  ┌─ wgsl:2:46
   │
-2 │             const storage1: texture_storage_1d<rgba>;
-  │                                                ^^^^ unknown storage format
+2 │             var storage1: texture_storage_1d<rgba>;
+  │                                              ^^^^ unknown storage format
 
 "#,
     );
@@ -736,13 +736,13 @@ fn reserved_keyword() {
     // global var
     check(
         r#"
-            var bool: bool = true;
+            var case: bool = true;
         "#,
-        r###"error: name `bool` is a reserved keyword
+        r###"error: name `case` is a reserved keyword
   ┌─ wgsl:2:17
   │
-2 │             var bool: bool = true;
-  │                 ^^^^ definition of `bool`
+2 │             var case: bool = true;
+  │                 ^^^^ definition of `case`
 
 "###,
     );
@@ -768,14 +768,14 @@ fn reserved_keyword() {
     check(
         r#"
             fn foo() {
-                let atomic: f32 = 1.0;
+                let enable: f32 = 1.0;
             }
         "#,
-        r###"error: name `atomic` is a reserved keyword
+        r###"error: name `enable` is a reserved keyword
   ┌─ wgsl:3:21
   │
-3 │                 let atomic: f32 = 1.0;
-  │                     ^^^^^^ definition of `atomic`
+3 │                 let enable: f32 = 1.0;
+  │                     ^^^^^^ definition of `enable`
 
 "###,
     );
@@ -784,14 +784,14 @@ fn reserved_keyword() {
     check(
         r#"
             fn foo() {
-                var sampler: f32 = 1.0;
+                var default: f32 = 1.0;
             }
         "#,
-        r###"error: name `sampler` is a reserved keyword
+        r###"error: name `default` is a reserved keyword
   ┌─ wgsl:3:21
   │
-3 │                 var sampler: f32 = 1.0;
-  │                     ^^^^^^^ definition of `sampler`
+3 │                 var default: f32 = 1.0;
+  │                     ^^^^^^^ definition of `default`
 
 "###,
     );
@@ -813,13 +813,13 @@ fn reserved_keyword() {
     // struct
     check(
         r#"
-            struct array {}
+            struct override {}
         "#,
-        r###"error: name `array` is a reserved keyword
+        r###"error: name `override` is a reserved keyword
   ┌─ wgsl:2:20
   │
-2 │             struct array {}
-  │                    ^^^^^ definition of `array`
+2 │             struct override {}
+  │                    ^^^^^^^^ definition of `override`
 
 "###,
     );
@@ -827,13 +827,13 @@ fn reserved_keyword() {
     // struct member
     check(
         r#"
-            struct Foo { sampler: f32 }
+            struct Foo { switch: f32 }
         "#,
-        r###"error: name `sampler` is a reserved keyword
+        r###"error: name `switch` is a reserved keyword
   ┌─ wgsl:2:26
   │
-2 │             struct Foo { sampler: f32 }
-  │                          ^^^^^^^ definition of `sampler`
+2 │             struct Foo { switch: f32 }
+  │                          ^^^^^^ definition of `switch`
 
 "###,
     );
@@ -2615,11 +2615,11 @@ fn binary_statement() {
             3 + 5;
         }
     ",
-        r###"error: expected assignment or increment/decrement, found "+"
-  ┌─ wgsl:3:15
+        r###"error: expected statement, found "3"
+  ┌─ wgsl:3:13
   │
 3 │             3 + 5;
-  │               ^ expected assignment or increment/decrement
+  │             ^ expected statement
 
 "###,
     );
@@ -2633,11 +2633,11 @@ fn assign_to_expr() {
             3 + 5 = 10;
         }
         ",
-        r###"error: expected assignment or increment/decrement, found "+"
-  ┌─ wgsl:3:15
+        r###"error: expected statement, found "3"
+  ┌─ wgsl:3:13
   │
 3 │             3 + 5 = 10;
-  │               ^ expected assignment or increment/decrement
+  │             ^ expected statement
 
 "###,
     );
@@ -2883,7 +2883,7 @@ fn function_returns_void() {
   ┌─ wgsl:7:18
   │
 7 │             let a = x();
-  │                     ^
+  │                     ^^^
   │
   = note: perhaps you meant to call the function in a separate statement?
 
@@ -2933,7 +2933,7 @@ fn use_me(a: i32) {
 2 │ @must_use
   │  ^^^^^^^^
 3 │ fn use_me(a: i32) {
-  │    ^^^^^^^^^^^^^
+  │    ^^^^^^^^^^^^^^
   │
   = note: declare a return type or remove the attribute
 
@@ -3753,7 +3753,7 @@ fn inconsistent_type() {
   ┌─ wgsl:2:20
   │
 2 │             return dot(vec4<f32>(), vec3<f32>());
-  │                    ^^^ ^^^^^^^^^^   ^^^^^^^^^^ argument #2 has type vec3<f32>
+  │                    ^^^ ^^^^^^^^^^^  ^^^^^^^^^^^ argument #2 has type vec3<f32>
   │                        │\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20
   │                        this argument has type vec4<f32>, which constrains subsequent arguments
   │
@@ -4301,7 +4301,8 @@ fn max_type_size_two_arrays_in_struct() {
 2 │ ╭             struct TwoArrays {
 3 │ │                 arr1: array<u32, 1 << 27>,
 4 │ │                 arr2: array<u32, (1 << 27) + 1>,
-  │ ╰───────────────────────────────────────────────^ this type exceeds the maximum size
+5 │ │             }
+  │ ╰─────────────^ this type exceeds the maximum size
   │\x20\x20
   = note: the maximum size is 1073741824 bytes
 
@@ -4338,6 +4339,20 @@ fn source_with_control_char() {
   │
 1 │ �
   │ ^ expected global item (`struct`, `const`, `var`, `alias`, `fn`, `diagnostic`, `enable`, `requires`, `;`) or the end of the file
+
+",
+    );
+}
+
+#[test]
+fn enumerant_with_template_parameters() {
+    check(
+        r#"var<private<xlerb, 1+2>> x: u32;"#,
+        "error: unexpected template
+  ┌─ wgsl:1:5
+  │
+1 │ var<private<xlerb, 1+2>> x: u32;
+  │     ^^^^^^^^^^^^^^^^^^^ expected identifier
 
 ",
     );
@@ -4398,10 +4413,10 @@ fn ray_query_vertex_return_enable_extension() {
         }
         "#,
         r#"error: the `wgpu_ray_query_vertex_return` enable extension is not enabled
-  ┌─ wgsl:4:20
+  ┌─ wgsl:4:30
   │
 4 │             var a: ray_query<vertex_return>;
-  │                    ^^^^^^^^^ the `wgpu_ray_query_vertex_return` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │                              ^^^^^^^^^^^^^ the `wgpu_ray_query_vertex_return` "Enable Extension" is needed for this functionality, but it is not currently enabled.
   │
   = note: You can enable this extension by adding `enable wgpu_ray_query_vertex_return;` at the top of the shader, before any other items.
 
@@ -4422,10 +4437,10 @@ fn ray_query_vertex_return_enable_extension() {
         var acc_struct: acceleration_structure<vertex_return>;
         "#,
         r#"error: the `wgpu_ray_query_vertex_return` enable extension is not enabled
-  ┌─ wgsl:4:25
+  ┌─ wgsl:4:48
   │
 4 │         var acc_struct: acceleration_structure<vertex_return>;
-  │                         ^^^^^^^^^^^^^^^^^^^^^^ the `wgpu_ray_query_vertex_return` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │                                                ^^^^^^^^^^^^^ the `wgpu_ray_query_vertex_return` "Enable Extension" is needed for this functionality, but it is not currently enabled.
   │
   = note: You can enable this extension by adding `enable wgpu_ray_query_vertex_return;` at the top of the shader, before any other items.
 
@@ -4533,5 +4548,64 @@ fn binding_array_requires_capability() {
             ..
         }),
         Capabilities::all()
+    }
+}
+
+#[test]
+fn cooperative_matrix_enable_extension() {
+    for ty in ["coop_mat8x8", "coop_mat16x16"] {
+        let carets = "^".repeat(ty.len());
+
+        check_extension_validation!(
+            // Used in type declaration
+            Capabilities::COOPERATIVE_MATRIX,
+            &format!(
+                r#"fn foo() {{
+    var a: {ty}<f32, A>;
+}}
+"#
+            ),
+            &format!(
+                r#"error: the `wgpu_cooperative_matrix` enable extension is not enabled
+  ┌─ wgsl:2:12
+  │
+2 │     var a: {ty}<f32, A>;
+  │            {carets} the `wgpu_cooperative_matrix` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_cooperative_matrix;` at the top of the shader, before any other items.
+
+"#,
+            ),
+            Err(naga::valid::ValidationError::Type {
+                source: naga::valid::TypeError::MissingCapability(Capabilities::COOPERATIVE_MATRIX),
+                ..
+            })
+        );
+
+        // Used as constructor
+        check_extension_validation!(
+            Capabilities::COOPERATIVE_MATRIX,
+            &format!(
+                r#"fn foo() {{
+    let a = {ty}<f32, A>();
+}}
+"#,
+            ),
+            &format!(
+                r#"error: the `wgpu_cooperative_matrix` enable extension is not enabled
+  ┌─ wgsl:2:13
+  │
+2 │     let a = {ty}<f32, A>();
+  │             {carets}^^^^^^^^ the `wgpu_cooperative_matrix` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_cooperative_matrix;` at the top of the shader, before any other items.
+
+"#,
+            ),
+            Err(naga::valid::ValidationError::Type {
+                source: naga::valid::TypeError::MissingCapability(Capabilities::COOPERATIVE_MATRIX),
+                ..
+            })
+        );
     }
 }

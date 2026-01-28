@@ -36,6 +36,7 @@ import {
   GPUTexture,
   GPUTextureView,
   GPUExternalTexture,
+  WGSLLanguageFeatures,
   op_create_gpu,
   op_webgpu_device_start_capture,
   op_webgpu_device_stop_capture,
@@ -229,6 +230,21 @@ ObjectDefineProperty(GPUSupportedFeaturesPrototype, privateCustomInspect, {
   __proto__: null,
   value(inspect, inspectOptions) {
     if (ObjectPrototypeIsPrototypeOf(GPUSupportedFeaturesPrototype, this)) {
+      return `${this.constructor.name} ${
+        // deno-lint-ignore prefer-primordials
+        inspect([...this], inspectOptions)}`;
+    } else {
+      return `${this.constructor.name} ${inspect({}, inspectOptions)}`;
+    }
+  },
+});
+
+const WGSLLanguageFeaturesPrototype = WGSLLanguageFeatures.prototype;
+webidl.setlikeObjectWrap(WGSLLanguageFeaturesPrototype, true);
+ObjectDefineProperty(WGSLLanguageFeaturesPrototype, privateCustomInspect, {
+  __proto__: null,
+  value(inspect, inspectOptions) {
+    if (ObjectPrototypeIsPrototypeOf(WGSLLanguageFeaturesPrototype, this)) {
       return `${this.constructor.name} ${
         // deno-lint-ignore prefer-primordials
         inspect([...this], inspectOptions)}`;
@@ -919,6 +935,7 @@ export {
   GPUInternalError,
   GPUMapMode,
   GPUOutOfMemoryError,
+  GPUPipelineError,
   GPUPipelineLayout,
   GPUQuerySet,
   GPUQueue,
@@ -937,5 +954,6 @@ export {
   GPUExternalTexture,
   GPUUncapturedErrorEvent,
   GPUValidationError,
+  WGSLLanguageFeatures,
   initGPU,
 };

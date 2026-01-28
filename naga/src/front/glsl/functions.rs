@@ -355,7 +355,6 @@ impl Frontend {
         ctx.add_expression(Expression::Compose { ty, components }, meta)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn vector_constructor(
         &mut self,
         ctx: &mut Context,
@@ -513,7 +512,6 @@ impl Frontend {
         ctx.add_expression(Expression::Compose { ty, components }, meta)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn function_call(
         &mut self,
         ctx: &mut Context,
