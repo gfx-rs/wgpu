@@ -97,6 +97,10 @@ Bottom level categories:
 - `DisplayHandle` should now be passed to `InstanceDescriptor` for correct EGL initialization on Wayland. By @MarijnS95 in [#8012](https://github.com/gfx-rs/wgpu/pull/8012)
   Note that the existing workaround to create surfaces before the adapter is no longer valid.
 
+#### Vulkan
+
+- Remove incorrect ordered texture uses. By @NiklasEi in [#8924](https://github.com/gfx-rs/wgpu/pull/8924).
+
 ### Documentation
 
 #### General
@@ -116,6 +120,10 @@ Bottom level categories:
 ### deno\_webgpu
 
 - Expose the `GPU.wgslLanguageFeatures` property. By @andyleiserson in [#8884](https://github.com/gfx-rs/wgpu/pull/8884).
+
+#### Hal
+
+- Make ordered texture and buffer uses hal specific. By @NiklasEi in [#8924](https://github.com/gfx-rs/wgpu/pull/8924).
 
 ## v28.0.0 (2025-12-17)
 
