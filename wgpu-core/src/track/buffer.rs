@@ -85,7 +85,7 @@ impl Default for BufferUsageScope {
         Self {
             state: Vec::new(),
             metadata: ResourceMetadata::new(),
-            ordered_mask: BufferUses::INCLUSIVE | BufferUses::MAP_WRITE,
+            ordered_mask: BufferUses::empty(),
         }
     }
 }

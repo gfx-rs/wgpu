@@ -267,10 +267,7 @@ impl Default for TextureUsageScope {
         Self {
             set: TextureStateSet::new(),
             metadata: ResourceMetadata::new(),
-            ordered_mask: TextureUses::INCLUSIVE
-                | TextureUses::COLOR_TARGET
-                | TextureUses::DEPTH_STENCIL_WRITE
-                | TextureUses::STORAGE_READ_ONLY,
+            ordered_mask: TextureUses::empty(),
         }
     }
 }
