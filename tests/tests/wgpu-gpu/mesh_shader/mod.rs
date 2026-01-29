@@ -80,20 +80,20 @@ fn compile_msl(device: &wgpu::Device) -> wgpu::ShaderModule {
         })
     }
 }
-
+struct Shaders {
+    ts: Option<wgpu::ShaderModule>,
+    ms: wgpu::ShaderModule,
+    fs: Option<wgpu::ShaderModule>,
+    ts_name: &'static str,
+    ms_name: &'static str,
+    fs_name: &'static str,
+}
 fn get_shaders(
     device: &wgpu::Device,
     backend: wgpu::Backend,
     test_name: &str,
     info: &MeshPipelineTestInfo,
-) -> (
-    Option<wgpu::ShaderModule>,
-    wgpu::ShaderModule,
-    Option<wgpu::ShaderModule>,
-    &'static str,
-    &'static str,
-    &'static str,
-) {
+) -> Shaders {
     if info.divergent && info.use_task {
         unreachable!();
     }
@@ -102,50 +102,52 @@ fn get_shaders(
     match backend {
         wgpu::Backend::Vulkan => {
             let compiled = compile_wgsl(device);
-            (
-                info.use_task.then_some(compiled.clone()),
-                compiled.clone(),
-                info.use_frag.then_some(compiled),
-                "ts_main",
-                if info.divergent {
+            Shaders {
+                ts: info.use_task.then_some(compiled.clone()),
+                ms: compiled.clone(),
+                fs: info.use_frag.then_some(compiled),
+                ts_name: "ts_main",
+                ms_name: if info.divergent {
                     "ms_divergent"
                 } else if info.use_task {
                     "ms_main"
                 } else {
                     "ms_no_ts"
                 },
-                "fs_main",
-            )
+                fs_name: "fs_main",
+            }
         }
-        wgpu::Backend::Dx12 => (
-            info.use_task
+        wgpu::Backend::Dx12 => Shaders {
+            ts: info
+                .use_task
                 .then(|| compile_hlsl(device, "Task", "as", test_name)),
-            compile_hlsl(
+            ms: compile_hlsl(
                 device,
                 if info.use_task { "Mesh" } else { "MeshNoTask" },
                 "ms",
                 test_name,
             ),
-            info.use_frag
+            fs: info
+                .use_frag
                 .then(|| compile_hlsl(device, "Frag", "ps", test_name)),
-            "main",
-            "main",
-            "main",
-        ),
+            ts_name: "main",
+            ms_name: "main",
+            fs_name: "main",
+        },
         wgpu::Backend::Metal => {
             let compiled = compile_msl(device);
-            (
-                info.use_task.then_some(compiled.clone()),
-                compiled.clone(),
-                info.use_frag.then_some(compiled),
-                "taskShader",
-                if info.use_task {
+            Shaders {
+                ts: info.use_task.then_some(compiled.clone()),
+                ms: compiled.clone(),
+                fs: info.use_frag.then_some(compiled),
+                ts_name: "taskShader",
+                ms_name: if info.use_task {
                     "meshShader"
                 } else {
                     "meshNoTaskShader"
                 },
-                "fragShader",
-            )
+                fs_name: "fragShader",
+            }
         }
         _ => unreachable!(),
     }
@@ -199,8 +201,14 @@ fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
     let (_depth_image, depth_view, depth_state) = create_depth(device);
 
     let test_hash = hash_testing_context(ctx).to_string();
-    let (task, mesh, frag, ts_name, ms_name, fs_name) =
-        get_shaders(device, backend, &test_hash, &info);
+    let Shaders {
+        ts,
+        ms,
+        fs,
+        ts_name,
+        ms_name,
+        fs_name,
+    } = get_shaders(device, backend, &test_hash, &info);
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
@@ -209,17 +217,17 @@ fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
     let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
         label: None,
         layout: Some(&layout),
-        task: task.as_ref().map(|task| wgpu::TaskState {
+        task: ts.as_ref().map(|task| wgpu::TaskState {
             module: task,
             entry_point: Some(ts_name),
             compilation_options: Default::default(),
         }),
         mesh: wgpu::MeshState {
-            module: &mesh,
+            module: &ms,
             entry_point: Some(ms_name),
             compilation_options: Default::default(),
         },
-        fragment: frag.as_ref().map(|frag| wgpu::FragmentState {
+        fragment: fs.as_ref().map(|frag| wgpu::FragmentState {
             module: frag,
             entry_point: Some(fs_name),
             targets: &[],
@@ -278,9 +286,15 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestIn
     let (_depth_image, depth_view, depth_state) = create_depth(device);
     let test_hash = hash_testing_context(ctx).to_string();
 
-    let (task, mesh, frag, ts_name, ms_name, fs_name) =
-        get_shaders(device, backend, &test_hash, &info);
-    let frag = frag.unwrap();
+    let Shaders {
+        ts,
+        ms,
+        fs,
+        ts_name,
+        ms_name,
+        fs_name,
+    } = get_shaders(device, backend, &test_hash, &info);
+    let frag = fs.unwrap();
     let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[],
@@ -289,13 +303,13 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestIn
     let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
         label: None,
         layout: Some(&layout),
-        task: task.as_ref().map(|task| wgpu::TaskState {
+        task: ts.as_ref().map(|task| wgpu::TaskState {
             module: task,
             entry_point: Some(ts_name),
             compilation_options: Default::default(),
         }),
         mesh: wgpu::MeshState {
-            module: &mesh,
+            module: &ms,
             entry_point: Some(ms_name),
             compilation_options: Default::default(),
         },
