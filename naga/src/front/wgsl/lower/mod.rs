@@ -2956,9 +2956,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
             };
 
             if argument_unmodified {
-                return Ok(Some((argument, MustUse::No)));
+                return Ok(Some((argument, MustUse::Yes)));
             } else {
-                (ir::Expression::Relational { fun, argument }, MustUse::No)
+                (ir::Expression::Relational { fun, argument }, MustUse::Yes)
             }
         } else if let Some((axis, ctrl)) = conv::map_derivative(function_name) {
             let mut args = ctx.prepare_args(arguments, 1, function_span);
