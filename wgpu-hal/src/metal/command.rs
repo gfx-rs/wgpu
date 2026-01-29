@@ -201,6 +201,7 @@ impl super::CommandEncoder {
                 self.state.blit = Some(cmd_buf.blitCommandEncoder().unwrap());
             });
 
+            #[expect(clippy::panicking_unwrap, reason = "false positive")]
             let encoder = self.state.blit.as_ref().unwrap();
 
             // UNTESTED:

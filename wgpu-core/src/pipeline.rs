@@ -202,6 +202,8 @@ pub enum ImplicitLayoutError {
     BindGroup(#[from] CreateBindGroupLayoutError),
     #[error(transparent)]
     Pipeline(#[from] CreatePipelineLayoutError),
+    #[error("Unable to create implicit pipeline layout from passthrough shader stage: {0:?}")]
+    Passthrough(wgt::ShaderStages),
 }
 
 impl WebGpuError for ImplicitLayoutError {
@@ -210,6 +212,7 @@ impl WebGpuError for ImplicitLayoutError {
             Self::ReflectionError(_) => return ErrorType::Validation,
             Self::BindGroup(e) => e,
             Self::Pipeline(e) => e,
+            Self::Passthrough(_) => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
