@@ -357,6 +357,9 @@ impl<W: Write> Writer<W> {
                 TypeInner::CooperativeMatrix { .. } => {
                     needed.cooperative_matrix = true;
                 }
+                TypeInner::AccelerationStructure { .. } => {
+                    needed.ray_tracing_pipeline = true;
+                }
                 _ => {}
             }
         }
