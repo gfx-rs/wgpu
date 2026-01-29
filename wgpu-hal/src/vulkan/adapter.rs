@@ -928,6 +928,11 @@ impl PhysicalDeviceFeatures {
             is_float32_filterable_supported(instance, phd),
         );
 
+        features.set(
+            F::FLOAT32_BLENDABLE,
+            is_float32_blendable_supported(instance, phd),
+        );
+
         if let Some(ref _sampler_ycbcr_conversion) = self.sampler_ycbcr_conversion {
             features.set(
                 F::TEXTURE_FORMAT_NV12,
@@ -2822,6 +2827,21 @@ fn is_format_16bit_norm_supported(instance: &ash::Instance, phd: vk::PhysicalDev
 fn is_float32_filterable_supported(instance: &ash::Instance, phd: vk::PhysicalDevice) -> bool {
     let tiling = vk::ImageTiling::OPTIMAL;
     let features = vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR;
+    let r_float = supports_format(instance, phd, vk::Format::R32_SFLOAT, tiling, features);
+    let rg_float = supports_format(instance, phd, vk::Format::R32G32_SFLOAT, tiling, features);
+    let rgba_float = supports_format(
+        instance,
+        phd,
+        vk::Format::R32G32B32A32_SFLOAT,
+        tiling,
+        features,
+    );
+    r_float && rg_float && rgba_float
+}
+
+fn is_float32_blendable_supported(instance: &ash::Instance, phd: vk::PhysicalDevice) -> bool {
+    let tiling = vk::ImageTiling::OPTIMAL;
+    let features = vk::FormatFeatureFlags::COLOR_ATTACHMENT_BLEND;
     let r_float = supports_format(instance, phd, vk::Format::R32_SFLOAT, tiling, features);
     let rg_float = supports_format(instance, phd, vk::Format::R32G32_SFLOAT, tiling, features);
     let rgba_float = supports_format(
