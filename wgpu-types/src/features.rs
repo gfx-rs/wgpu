@@ -58,16 +58,16 @@ mod webgpu_impl {
     pub const WEBGPU_FEATURE_FLOAT32_FILTERABLE: u64 = 1 << 12;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_DUAL_SOURCE_BLENDING: u64 = 1 << 13;
+    pub const WEBGPU_FEATURE_FLOAT32_BLENDABLE: u64 = 1 << 13;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_CLIP_DISTANCES: u64 = 1 << 14;
+    pub const WEBGPU_FEATURE_DUAL_SOURCE_BLENDING: u64 = 1 << 14;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_IMMEDIATES: u64 = 1 << 15;
+    pub const WEBGPU_FEATURE_CLIP_DISTANCES: u64 = 1 << 15;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_FLOAT32_BLENDABLE: u64 = 1 << 16;
+    pub const WEBGPU_FEATURE_IMMEDIATES: u64 = 1 << 16;
 }
 
 macro_rules! bitflags_array_impl {
