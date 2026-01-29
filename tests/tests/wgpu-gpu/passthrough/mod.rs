@@ -1,4 +1,7 @@
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    hash::{DefaultHasher, Hash, Hasher},
+};
 
 use wgpu::{
     Backends, ColorTargetState, ColorWrites, Features, FragmentState, MultisampleState,
@@ -20,6 +23,13 @@ pub fn all_tests(tests: &mut Vec<GpuTestInitializer>) {
     tests.push(ALL_PASSTHROUGH_SHADERS_BINARY);
     tests.push(ALL_PASSTHROUGH_SHADERS_SOURCE);
     tests.push(PASSTHROUGH_SHADERS_EXPLICIT_LAYOUT_VALIDATION);
+}
+
+fn test_hash(ctx: &TestingContext, name: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    ctx.hash(&mut hasher);
+    name.hash(&mut hasher);
+    hasher.finish()
 }
 
 fn test_with_module(ctx: TestingContext, vertex: wgpu::ShaderModule, fragment: wgpu::ShaderModule) {
@@ -86,7 +96,7 @@ static METAL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::ne
     .run_sync(metal_test);
 
 #[cfg(target_vendor = "apple")]
-fn metallib_source() -> Cow<'static, [u8]> {
+fn metallib_source(test_hash: u64) -> Cow<'static, [u8]> {
     let metal_compiler = std::process::Command::new("xcrun")
         .args(["--find", "metal"])
         .status()
@@ -99,11 +109,11 @@ fn metallib_source() -> Cow<'static, [u8]> {
         panic!("Metal compiler or metallib linker not present. Most users can safely ignore this.");
     }
     let air_name = format!(
-        "{}/tests/wgpu-gpu/passthrough/shader.air",
+        "{}/tests/wgpu-gpu/passthrough/shader{test_hash}.air",
         env!("CARGO_MANIFEST_DIR")
     );
     let output_name = format!(
-        "{}/tests/wgpu-gpu/passthrough/shader.metallib",
+        "{}/tests/wgpu-gpu/passthrough/shader{test_hash}.metallib",
         env!("CARGO_MANIFEST_DIR")
     );
 
@@ -149,7 +159,8 @@ fn metallib_source() -> Cow<'static, [u8]> {
 }
 
 fn metallib_test(ctx: TestingContext) {
-    let source = metallib_source();
+    let test_hash = test_hash(&ctx, "metallib_test");
+    let source = metallib_source(test_hash);
     let module = unsafe {
         ctx.device
             .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
@@ -196,9 +207,9 @@ static HLSL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new
     .run_sync(hlsl_test);
 
 #[cfg_attr(not(target_os = "windows"), expect(dead_code))]
-fn compile_dxil(entry: &str, stage_str: &str) -> Cow<'static, [u8]> {
+fn compile_dxil(entry: &str, stage_str: &str, test_hash: u64) -> Cow<'static, [u8]> {
     let out_path = format!(
-        "{}/tests/wgpu-gpu/passthrough/shader.{stage_str}.cso",
+        "{}/tests/wgpu-gpu/passthrough/shader{test_hash}.{stage_str}.cso",
         env!("CARGO_MANIFEST_DIR")
     );
     let cmd = std::process::Command::new("dxc")
@@ -227,25 +238,26 @@ fn compile_dxil(entry: &str, stage_str: &str) -> Cow<'static, [u8]> {
 }
 
 #[cfg(target_os = "windows")]
-fn dxil_vertex_source() -> Cow<'static, [u8]> {
-    compile_dxil("vertex_main", "vs")
+fn dxil_vertex_source(test_hash: u64) -> Cow<'static, [u8]> {
+    compile_dxil("vertex_main", "vs", test_hash)
 }
 #[cfg(not(target_os = "windows"))]
-fn dxil_vertex_source() -> Cow<'static, [u8]> {
+fn dxil_vertex_source(_test_hash: u64) -> Cow<'static, [u8]> {
     Cow::Borrowed(&[])
 }
 
 #[cfg(target_os = "windows")]
-fn dxil_fragment_source() -> Cow<'static, [u8]> {
-    compile_dxil("vertex_main", "ps")
+fn dxil_fragment_source(test_hash: u64) -> Cow<'static, [u8]> {
+    compile_dxil("fragment_main", "ps", test_hash)
 }
 #[cfg(not(target_os = "windows"))]
-fn dxil_fragment_source() -> Cow<'static, [u8]> {
+fn dxil_fragment_source(_test_hash: u64) -> Cow<'static, [u8]> {
     Cow::Borrowed(&[])
 }
 
 fn dxil_test(ctx: TestingContext) {
-    let vertex_source = dxil_vertex_source();
+    let test_hash = test_hash(&ctx, "dxil_test");
+    let vertex_source = dxil_vertex_source(test_hash);
     let vertex = unsafe {
         ctx.device
             .create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
@@ -255,7 +267,7 @@ fn dxil_test(ctx: TestingContext) {
                 ..Default::default()
             })
     };
-    let fragment_source = dxil_fragment_source();
+    let fragment_source = dxil_fragment_source(test_hash);
     let fragment = unsafe {
         ctx.device
             .create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
@@ -277,9 +289,9 @@ static DXIL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new
     )
     .run_sync(dxil_test);
 
-fn spirv_source() -> Cow<'static, [u32]> {
+fn spirv_source(test_hash: u64) -> Cow<'static, [u32]> {
     let out_path = format!(
-        "{}/tests/wgpu-gpu/passthrough/shader.spv",
+        "{}/tests/wgpu-gpu/passthrough/shade{test_hash}.spv",
         env!("CARGO_MANIFEST_DIR")
     );
     let cmd = std::process::Command::new("dxc")
@@ -312,10 +324,11 @@ fn spirv_source() -> Cow<'static, [u32]> {
 }
 
 fn spirv_test(ctx: TestingContext) {
+    let test_hash = test_hash(&ctx, "spirv_test");
     let module = unsafe {
         ctx.device
             .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
-                spirv: Some(spirv_source()),
+                spirv: Some(spirv_source(test_hash)),
                 ..Default::default()
             })
     };
@@ -391,15 +404,16 @@ static WGSL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new
     .run_sync(wgsl_test);
 
 fn all_passthrough_shaders_binary(ctx: TestingContext) {
+    let test_hash = test_hash(&ctx, "all_passthrough_binary");
     let vertex = unsafe {
         ctx.device
             .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
                 label: None,
                 num_workgroups: (0, 0, 0),
-                spirv: Some(spirv_source()),
-                dxil: Some(dxil_vertex_source()),
+                spirv: Some(spirv_source(test_hash)),
+                dxil: Some(dxil_vertex_source(test_hash)),
                 hlsl: None,
-                metallib: Some(metallib_source()),
+                metallib: Some(metallib_source(test_hash)),
                 msl: None,
                 glsl: Some(glsl_vertex_source()),
                 wgsl: Some(wgsl_source()),
@@ -410,10 +424,10 @@ fn all_passthrough_shaders_binary(ctx: TestingContext) {
             .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
                 label: None,
                 num_workgroups: (0, 0, 0),
-                spirv: Some(spirv_source()),
-                dxil: Some(dxil_fragment_source()),
+                spirv: Some(spirv_source(test_hash)),
+                dxil: Some(dxil_fragment_source(test_hash)),
                 hlsl: None,
-                metallib: Some(metallib_source()),
+                metallib: Some(metallib_source(test_hash)),
                 msl: None,
                 glsl: Some(glsl_fragment_source()),
                 wgsl: Some(wgsl_source()),
@@ -428,12 +442,13 @@ static ALL_PASSTHROUGH_SHADERS_BINARY: GpuTestConfiguration = GpuTestConfigurati
     .run_sync(all_passthrough_shaders_binary);
 
 fn all_passthrough_shader_source(ctx: TestingContext) {
+    let test_hash = test_hash(&ctx, "all_passthrough_source");
     let vertex = unsafe {
         ctx.device
             .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
                 label: None,
                 num_workgroups: (0, 0, 0),
-                spirv: Some(spirv_source()),
+                spirv: Some(spirv_source(test_hash)),
                 dxil: None,
                 hlsl: Some(hlsl_source()),
                 metallib: None,
@@ -447,7 +462,7 @@ fn all_passthrough_shader_source(ctx: TestingContext) {
             .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
                 label: None,
                 num_workgroups: (0, 0, 0),
-                spirv: Some(spirv_source()),
+                spirv: Some(spirv_source(test_hash)),
                 dxil: None,
                 hlsl: Some(hlsl_source()),
                 metallib: None,
@@ -465,12 +480,13 @@ static ALL_PASSTHROUGH_SHADERS_SOURCE: GpuTestConfiguration = GpuTestConfigurati
     .run_sync(all_passthrough_shader_source);
 
 fn explicit_layout_validation(ctx: TestingContext) {
+    let test_hash = test_hash(&ctx, "explicit_layout_validation");
     let vertex = unsafe {
         ctx.device
             .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
                 label: None,
                 num_workgroups: (0, 0, 0),
-                spirv: Some(spirv_source()),
+                spirv: Some(spirv_source(test_hash)),
                 dxil: None,
                 hlsl: Some(hlsl_source()),
                 metallib: None,
@@ -484,7 +500,7 @@ fn explicit_layout_validation(ctx: TestingContext) {
             .create_shader_module_passthrough(CreateShaderModuleDescriptorPassthrough {
                 label: None,
                 num_workgroups: (0, 0, 0),
-                spirv: Some(spirv_source()),
+                spirv: Some(spirv_source(test_hash)),
                 dxil: None,
                 hlsl: Some(hlsl_source()),
                 metallib: None,
