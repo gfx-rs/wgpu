@@ -1,4 +1,4 @@
-use std::{borrow::Cow, process::Command};
+use std::borrow::Cow;
 
 use wgpu::{
     Backends, ColorTargetState, ColorWrites, Features, FragmentState, MultisampleState,
@@ -87,11 +87,11 @@ static METAL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::ne
 
 #[cfg(target_vendor = "apple")]
 fn metallib_source() -> Cow<'static, [u8]> {
-    let metal_compiler = Command::new("xcrun")
+    let metal_compiler = std::process::Command::new("xcrun")
         .args(["--find", "metal"])
         .status()
         .is_ok_and(|a| a.success());
-    let metallib_linker = Command::new("xcrun")
+    let metallib_linker = std::process::Command::new("xcrun")
         .args(["--find", "metallib"])
         .status()
         .is_ok_and(|a| a.success());
@@ -108,7 +108,7 @@ fn metallib_source() -> Cow<'static, [u8]> {
     );
 
     {
-        let output = Command::new("xcrun")
+        let output = std::process::Command::new("xcrun")
             .args([
                 "metal",
                 "-c",
@@ -129,7 +129,7 @@ fn metallib_source() -> Cow<'static, [u8]> {
         }
     }
     {
-        let output = Command::new("xcrun")
+        let output = std::process::Command::new("xcrun")
             .args(["metallib", &air_name, "-o", &output_name])
             .output()
             .unwrap();
