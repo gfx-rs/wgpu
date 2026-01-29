@@ -572,6 +572,7 @@ impl<'a> BufferSlice<'a> {
         assert_eq!(mc.mapped_range, 0..0, "Buffer is already mapped");
         let end = self.offset + self.size.get();
         mc.mapped_range = self.offset..end;
+        drop(mc); // release the lock of map_context as callback can call lock it again
 
         self.buffer
             .inner
