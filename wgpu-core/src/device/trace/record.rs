@@ -864,6 +864,24 @@ fn action_to_owned(action: Action<'_, PointerReferences>) -> Action<'static, Poi
         A::Present(surface) => A::Present(surface),
         A::DiscardSurfaceTexture(surface) => A::DiscardSurfaceTexture(surface),
         A::DestroyBindGroupLayout(layout) => A::DestroyBindGroupLayout(layout),
+        A::GetRenderPipelineBindGroupLayout {
+            id,
+            pipeline,
+            index,
+        } => A::GetRenderPipelineBindGroupLayout {
+            id,
+            pipeline,
+            index,
+        },
+        A::GetComputePipelineBindGroupLayout {
+            id,
+            pipeline,
+            index,
+        } => A::GetComputePipelineBindGroupLayout {
+            id,
+            pipeline,
+            index,
+        },
         A::DestroyPipelineLayout(layout) => A::DestroyPipelineLayout(layout),
         A::DestroyBindGroup(bind_group) => A::DestroyBindGroup(bind_group),
         A::DestroyShaderModule(shader_module) => A::DestroyShaderModule(shader_module),

@@ -1,11 +1,11 @@
 const constant: i32 = 10i;
 
-fn function() -> f32 {
+fn function_() -> f32 {
     return 0f;
 }
 
 fn main_1() {
-    let _e0 = function();
+    let _e0 = function_();
     return;
 }
 

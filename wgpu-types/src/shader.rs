@@ -180,7 +180,7 @@ impl<'a, L> CreateShaderModuleDescriptorPassthrough<'a, L> {
         } else if self.metallib.is_some() {
             "metallib"
         } else if self.msl.is_some() {
-            "msl"
+            "metal"
         } else if self.dxil.is_some() {
             "dxil"
         } else if self.hlsl.is_some() {

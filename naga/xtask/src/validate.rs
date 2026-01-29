@@ -83,7 +83,7 @@ fn collect_validation_jobs(jobs: &mut Vec<Job>, cmd: ValidateSubcommand) -> anyh
         ValidateSubcommand::Metal => {
             let xcrun = "xcrun";
             which(xcrun)?;
-            push_job_for_each_file(snapshots_base_out, "msl/*.msl", jobs, |path| {
+            push_job_for_each_file(snapshots_base_out, "msl/*.metal", jobs, |path| {
                 validate_metal(&path, xcrun)
             });
         }

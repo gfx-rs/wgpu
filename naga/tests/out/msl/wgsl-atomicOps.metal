@@ -4,12 +4,12 @@
 
 using metal::uint;
 
-struct type_2 {
+struct type_4 {
     metal::atomic_int inner[2];
 };
 struct Struct {
     metal::atomic_uint atomic_scalar;
-    type_2 atomic_arr;
+    type_4 atomic_arr;
 };
 struct _atomic_compare_exchange_result_Uint_4_ {
     uint old_value;
@@ -77,10 +77,10 @@ struct cs_mainInput {
 kernel void cs_main(
   metal::uint3 id [[thread_position_in_threadgroup]]
 , device metal::atomic_uint& storage_atomic_scalar [[user(fake0)]]
-, device type_2& storage_atomic_arr [[user(fake0)]]
+, device type_4& storage_atomic_arr [[user(fake0)]]
 , device Struct& storage_struct [[user(fake0)]]
 , threadgroup metal::atomic_uint& workgroup_atomic_scalar
-, threadgroup type_2& workgroup_atomic_arr
+, threadgroup type_4& workgroup_atomic_arr
 , threadgroup Struct& workgroup_struct
 ) {
     if (metal::all(id == metal::uint3(0u))) {

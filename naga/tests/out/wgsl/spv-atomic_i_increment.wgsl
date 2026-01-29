@@ -11,7 +11,7 @@ var<storage, read_write> global: type_4;
 @group(0) @binding(1) 
 var<storage> global_1: type_2;
 
-fn function() {
+fn function_() {
     var phi_21_: u32;
     var phi_22_: u32;
 
@@ -38,5 +38,5 @@ fn function() {
 
 @compute @workgroup_size(32, 1, 1) 
 fn stage_test_atomic_i_increment() {
-    function();
+    function_();
 }

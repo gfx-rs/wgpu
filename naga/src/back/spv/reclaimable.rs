@@ -22,54 +22,54 @@ use alloc::vec::Vec;
 /// that a field is missing from the literal. This trait's `recycle` method
 /// takes `self` by value, and returns `Self` by value, encouraging the use of
 /// struct literal expressions in its implementation.
-pub trait Recyclable {
+pub trait Reclaimable {
     /// Clear `self`, retaining its current memory allocations.
     ///
     /// Shrink the buffer if it's currently much larger than was actually used.
     /// This prevents a module with exceptionally large allocations from causing
     /// the `Writer` to retain more memory than it needs indefinitely.
-    fn recycle(self) -> Self;
+    fn reclaim(self) -> Self;
 }
 
 // Stock values for various collections.
 
-impl<T> Recyclable for Vec<T> {
-    fn recycle(mut self) -> Self {
+impl<T> Reclaimable for Vec<T> {
+    fn reclaim(mut self) -> Self {
         self.clear();
         self
     }
 }
 
-impl<K, V, S: Clone> Recyclable for hashbrown::HashMap<K, V, S> {
-    fn recycle(mut self) -> Self {
+impl<K, V, S: Clone> Reclaimable for hashbrown::HashMap<K, V, S> {
+    fn reclaim(mut self) -> Self {
         self.clear();
         self
     }
 }
 
-impl<K, S: Clone> Recyclable for hashbrown::HashSet<K, S> {
-    fn recycle(mut self) -> Self {
+impl<K, S: Clone> Reclaimable for hashbrown::HashSet<K, S> {
+    fn reclaim(mut self) -> Self {
         self.clear();
         self
     }
 }
 
-impl<K, S: Clone> Recyclable for indexmap::IndexSet<K, S> {
-    fn recycle(mut self) -> Self {
+impl<K, S: Clone> Reclaimable for indexmap::IndexSet<K, S> {
+    fn reclaim(mut self) -> Self {
         self.clear();
         self
     }
 }
 
-impl<K: Ord, V> Recyclable for alloc::collections::BTreeMap<K, V> {
-    fn recycle(mut self) -> Self {
+impl<K: Ord, V> Reclaimable for alloc::collections::BTreeMap<K, V> {
+    fn reclaim(mut self) -> Self {
         self.clear();
         self
     }
 }
 
-impl<K, V> Recyclable for crate::arena::HandleVec<K, V> {
-    fn recycle(mut self) -> Self {
+impl<K, V> Reclaimable for crate::arena::HandleVec<K, V> {
+    fn reclaim(mut self) -> Self {
         self.clear();
         self
     }

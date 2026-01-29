@@ -242,7 +242,6 @@ where
 pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindTarget>;
 
 /// A HLSL shader model version.
-#[allow(non_snake_case, non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]

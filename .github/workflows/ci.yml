@@ -19,10 +19,10 @@ env:
   #
 
   # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.92"
+  REPO_MSRV: "1.93"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
   # to ensure that they can be used with firefox.
-  CORE_MSRV: "1.82.0"
+  CORE_MSRV: "1.90.0"
 
   #
   # Environment variables
@@ -131,6 +131,13 @@ jobs:
           - name: FreeBSD x86_64
             os: ubuntu-24.04
             target: x86_64-unknown-freebsd
+            tier: 2
+            kind: wgpu-only
+
+          # NetBSD
+          - name: NetBSD x86_64
+            os: ubuntu-24.04
+            target: x86_64-unknown-netbsd
             tier: 2
             kind: wgpu-only
 
@@ -691,7 +698,7 @@ jobs:
         run: taplo format --check --diff
 
       - name: Check for typos
-        uses: crate-ci/typos@v1.42.0
+        uses: crate-ci/typos@v1.42.2
 
   check-cts-runner:
     # runtime is normally 2 minutes

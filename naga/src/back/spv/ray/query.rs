@@ -4,9 +4,9 @@ Generating SPIR-V for ray query operations.
 
 use alloc::{vec, vec::Vec};
 
-use super::{
-    Block, BlockContext, Function, FunctionArgument, Instruction, LookupFunctionType,
-    LookupRayQueryFunction, NumericType, Writer,
+use super::super::{
+    Block, BlockContext, Function, FunctionArgument, Instruction, LocalType, LookupFunctionType,
+    LookupRayQueryFunction, NumericType, Writer, WriterFlags,
 };
 use crate::{arena::Handle, back::RayQueryPoint};
 
@@ -106,7 +106,7 @@ impl Writer {
         (func_id, function, arg_ids)
     }
 
-    pub(super) fn write_ray_query_get_intersection_function(
+    pub(in super::super) fn write_ray_query_get_intersection_function(
         &mut self,
         is_committed: bool,
         ir_module: &crate::Module,
@@ -603,7 +603,7 @@ impl Writer {
 
         let ray_query_type_id = self.get_ray_query_pointer_id();
         let acceleration_structure_type_id =
-            self.get_localtype_id(super::LocalType::AccelerationStructure);
+            self.get_localtype_id(LocalType::AccelerationStructure);
         let ray_desc_type_id = self.get_handle_type_id(
             ir_module
                 .special_types
@@ -1008,7 +1008,7 @@ impl Writer {
 
         if self
             .flags
-            .contains(super::WriterFlags::PRINT_ON_RAY_QUERY_INITIALIZATION_FAIL)
+            .contains(WriterFlags::PRINT_ON_RAY_QUERY_INITIALIZATION_FAIL)
         {
             self.write_debug_printf(
                 &mut invalid_block,
@@ -1873,7 +1873,7 @@ impl Writer {
 }
 
 impl BlockContext<'_> {
-    pub(super) fn write_ray_query_function(
+    pub(in super::super) fn write_ray_query_function(
         &mut self,
         query: Handle<crate::Expression>,
         function: &crate::RayQueryFunction,
@@ -1966,7 +1966,7 @@ impl BlockContext<'_> {
         }
     }
 
-    pub(super) fn write_ray_query_return_vertex_position(
+    pub(in super::super) fn write_ray_query_return_vertex_position(
         &mut self,
         query: Handle<crate::Expression>,
         block: &mut Block,
