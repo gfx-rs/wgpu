@@ -4609,3 +4609,133 @@ fn cooperative_matrix_enable_extension() {
         );
     }
 }
+
+/// Tests for mesh shader extension validation via WGSL parsing.
+///
+/// Some mesh shader features can only be tested at parse-level in WGSL due to
+/// parse-order limitations (e.g., mesh builtins in structs fail before mesh-specific
+/// attributes are checked). For IR-level validation tests that directly test the
+/// validator capability checks, see `validation::mesh_shader_capability`.
+#[test]
+fn mesh_shader_enable_extension() {
+    // @task stage attribute
+    check_extension_validation!(
+        Capabilities::MESH_SHADER,
+        r#"@task @workgroup_size(1)
+        fn main() -> @builtin(mesh_task_size) vec3<u32> {
+            return vec3(1u, 1u, 1u);
+        }
+        "#,
+        r#"error: the `wgpu_mesh_shader` enable extension is not enabled
+  ┌─ wgsl:1:2
+  │
+1 │ @task @workgroup_size(1)
+  │  ^^^^ the `wgpu_mesh_shader` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_mesh_shader;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::UnsupportedCapability(Capabilities::MESH_SHADER),
+            ..
+        })
+    );
+
+    // @mesh stage attribute
+    check_extension_validation!(
+        Capabilities::MESH_SHADER,
+        r#"struct MeshOutput { dummy: u32 }
+        var<workgroup> mesh_output: MeshOutput;
+        @mesh(mesh_output) @workgroup_size(1)
+        fn main() {}
+        "#,
+        r#"error: the `wgpu_mesh_shader` enable extension is not enabled
+  ┌─ wgsl:3:10
+  │
+3 │         @mesh(mesh_output) @workgroup_size(1)
+  │          ^^^^ the `wgpu_mesh_shader` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_mesh_shader;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::UnsupportedCapability(Capabilities::MESH_SHADER),
+            ..
+        })
+    );
+
+    // @per_primitive attribute
+    check_extension_validation!(
+        Capabilities::MESH_SHADER,
+        r#"struct FragInput {
+            @location(0) @per_primitive value: f32,
+        }
+        @fragment
+        fn main(input: FragInput) {}
+        "#,
+        r#"error: the `wgpu_mesh_shader` enable extension is not enabled
+  ┌─ wgsl:2:27
+  │
+2 │             @location(0) @per_primitive value: f32,
+  │                           ^^^^^^^^^^^^^ the `wgpu_mesh_shader` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_mesh_shader;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Argument(
+                _,
+                naga::valid::VaryingError::UnsupportedCapability(Capabilities::MESH_SHADER)
+            ),
+            ..
+        })
+    );
+
+    // `@payload`` attribute. It is not possible for this attribute to reach the validator
+    // without the extension enabled, because the attribute is only allowed on mesh and task
+    // stages, and those stages are rejected (with or without the `@payload` attribute) when
+    // the mesh shader extension is not enabled.
+    //
+    // There is a direct-to-validator test case for `@payload` in `validation.rs`.
+    check(
+        r#"@compute @workgroup_size(1) @payload(foo)
+        fn main() {}
+        "#,
+        r#"error: the `wgpu_mesh_shader` enable extension is not enabled
+  ┌─ wgsl:1:30
+  │
+1 │ @compute @workgroup_size(1) @payload(foo)
+  │                              ^^^^^^^ the `wgpu_mesh_shader` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_mesh_shader;` at the top of the shader, before any other items.
+
+"#,
+    );
+
+    // `task_payload` address space
+    check_extension_validation!(
+        Capabilities::MESH_SHADER,
+        r#"struct Payload { dummy: u32 }
+        var<task_payload> taskPayload: Payload;
+        @compute @workgroup_size(1)
+        fn main() {
+            taskPayload.dummy = 1u;
+        }
+        "#,
+        r#"error: the `wgpu_mesh_shader` enable extension is not enabled
+  ┌─ wgsl:2:13
+  │
+2 │         var<task_payload> taskPayload: Payload;
+  │             ^^^^^^^^^^^^ the `wgpu_mesh_shader` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_mesh_shader;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::MESH_SHADER
+            ),
+            ..
+        })
+    );
+}
