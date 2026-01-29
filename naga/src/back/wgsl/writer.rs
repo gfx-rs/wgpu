@@ -245,9 +245,7 @@ impl<W: Write> Writer<W> {
                     ]
                 }
                 ShaderStage::RayGeneration => vec![Attribute::Stage(ShaderStage::RayGeneration)],
-                ShaderStage::AnyHit
-                | ShaderStage::ClosestHit
-                | ShaderStage::Miss => {
+                ShaderStage::AnyHit | ShaderStage::ClosestHit | ShaderStage::Miss => {
                     let payload_name = module.global_variables[ep.incoming_ray_payload.unwrap()]
                         .name
                         .clone()
@@ -256,7 +254,7 @@ impl<W: Write> Writer<W> {
                         Attribute::Stage(ep.stage),
                         Attribute::IncomingRayPayload(payload_name),
                     ]
-                },
+                }
             };
             self.write_attributes(&attributes)?;
             // Add a newline after attribute
@@ -1117,7 +1115,11 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, ");")?
             }
             Statement::RayPipelineFunction(fun) => match fun {
-                crate::RayPipelineFunction::TraceRay { acceleration_structure, descriptor, payload } => {
+                crate::RayPipelineFunction::TraceRay {
+                    acceleration_structure,
+                    descriptor,
+                    payload,
+                } => {
                     write!(self.out, "{level}traceRay(")?;
                     self.write_expr(module, acceleration_structure, func_ctx)?;
                     write!(self.out, ", ")?;
@@ -1125,7 +1127,7 @@ impl<W: Write> Writer<W> {
                     write!(self.out, ", ")?;
                     self.write_expr(module, payload, func_ctx)?;
                     writeln!(self.out, ");")?
-                },
+                }
             },
         }
 
