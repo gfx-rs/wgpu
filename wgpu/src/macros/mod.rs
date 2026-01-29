@@ -82,7 +82,6 @@ fn test_vertex_attr_array() {
 macro_rules! include_spirv_source {
     ($($token:tt)*) => {
         {
-            // FIXME(MSRV): when bumping to 1.89, use [u8; _] here
             const SPIRV_SOURCE: [
                 u8;
                 $crate::__macro_helpers::include_bytes!($($token)*).len()
@@ -190,8 +189,6 @@ macro_rules! include_wgsl {
 // so cannot have more than one line, so cannot use internal cfgs.
 
 /// Helper macro to generate the documentation for dx12 hal methods, referencing the hal type.
-#[macro_export]
-#[doc(hidden)]
 #[cfg(dx12)]
 macro_rules! hal_type_dx12 {
     ($ty: literal) => {
@@ -199,18 +196,15 @@ macro_rules! hal_type_dx12 {
     };
 }
 /// Helper macro to generate the documentation for dx12 hal methods, referencing the hal type.
-#[macro_export]
-#[doc(hidden)]
 #[cfg(not(dx12))]
 macro_rules! hal_type_dx12 {
     ($ty: literal) => {
         concat!("- `hal::api::Dx12` uses `hal::dx12::", $ty, "`")
     };
 }
+pub(crate) use hal_type_dx12;
 
 /// Helper macro to generate the documentation for metal hal methods, referencing the hal type.
-#[macro_export]
-#[doc(hidden)]
 #[cfg(metal)]
 macro_rules! hal_type_metal {
     ($ty: literal) => {
@@ -218,18 +212,15 @@ macro_rules! hal_type_metal {
     };
 }
 /// Helper macro to generate the documentation for metal hal methods, referencing the hal type.
-#[macro_export]
-#[doc(hidden)]
 #[cfg(not(metal))]
 macro_rules! hal_type_metal {
     ($ty: literal) => {
         concat!("- `hal::api::Metal` uses `hal::metal::", $ty, "`")
     };
 }
+pub(crate) use hal_type_metal;
 
 /// Helper macro to generate the documentation for vulkan hal methods, referencing the hal type.
-#[macro_export]
-#[doc(hidden)]
 #[cfg(vulkan)]
 macro_rules! hal_type_vulkan {
     ($ty: literal) => {
@@ -237,18 +228,15 @@ macro_rules! hal_type_vulkan {
     };
 }
 /// Helper macro to generate the documentation for vulkan hal methods, referencing the hal type.
-#[macro_export]
-#[doc(hidden)]
 #[cfg(not(vulkan))]
 macro_rules! hal_type_vulkan {
     ($ty: literal) => {
         concat!("- `hal::api::Vulkan` uses `hal::vulkan::", $ty, "`")
     };
 }
+pub(crate) use hal_type_vulkan;
 
 /// Helper macro to generate the documentation for gles hal methods, referencing the hal type.
-#[macro_export]
-#[doc(hidden)]
 #[cfg(gles)]
 macro_rules! hal_type_gles {
     ($ty: literal) => {
@@ -256,14 +244,13 @@ macro_rules! hal_type_gles {
     };
 }
 /// Helper macro to generate the documentation for gles hal methods, referencing the hal type.
-#[macro_export]
-#[doc(hidden)]
 #[cfg(not(gles))]
 macro_rules! hal_type_gles {
     ($ty: literal) => {
         concat!("- `hal::api::Gles` uses `hal::gles::", $ty, "`")
     };
 }
+pub(crate) use hal_type_gles;
 
 #[doc(hidden)]
 pub mod helpers {

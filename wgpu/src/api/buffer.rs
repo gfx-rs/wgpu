@@ -257,10 +257,10 @@ impl Buffer {
     ///
     /// The returned type depends on the backend:
     ///
-    #[doc = crate::hal_type_vulkan!("Buffer")]
-    #[doc = crate::hal_type_metal!("Buffer")]
-    #[doc = crate::hal_type_dx12!("Buffer")]
-    #[doc = crate::hal_type_gles!("Buffer")]
+    #[doc = crate::macros::hal_type_vulkan!("Buffer")]
+    #[doc = crate::macros::hal_type_metal!("Buffer")]
+    #[doc = crate::macros::hal_type_dx12!("Buffer")]
+    #[doc = crate::macros::hal_type_gles!("Buffer")]
     ///
     /// # Deadlocks
     ///
