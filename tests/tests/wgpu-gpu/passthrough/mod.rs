@@ -62,7 +62,6 @@ fn metal_test(ctx: TestingContext) {
             multiview_mask: None,
             cache: None,
         });
-    // TODO
 }
 
 const METAL_SOURCE: &str = include_str!("shader.metal");
