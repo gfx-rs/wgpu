@@ -255,8 +255,10 @@ pub struct GlBackendOptions {
     /// Controls whether debug functions (`glPushDebugGroup`, `glPopDebugGroup`,
     /// `glObjectLabel`, etc.) are enabled when supported by the driver.
     ///
-    /// Set to [`GlDebugFns::Disabled`] to work around bugs in some OpenGL
-    /// implementations (e.g., Mali GPUs can crash in `glPushDebugGroup`).
+    /// By default ([`GlDebugFns::Auto`]), debug functions are automatically
+    /// disabled on devices with known bugs (e.g., Mali GPUs can crash in
+    /// `glPushDebugGroup`). Use [`GlDebugFns::ForceEnabled`] to override this
+    /// behavior, or [`GlDebugFns::Disabled`] to disable debug functions entirely.
     pub debug_fns: GlDebugFns,
 }
 
@@ -297,27 +299,33 @@ impl GlBackendOptions {
 /// These are useful for debugging but can cause crashes on some buggy drivers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum GlDebugFns {
-    /// Automatically enable debug functions if supported by the driver.
+    /// Automatically decide whether to enable debug functions.
+    ///
+    /// Debug functions will be enabled if supported by the driver, unless
+    /// running on a device known to have buggy debug function implementations
+    /// (e.g., Mali GPUs which can crash in `glPushDebugGroup`).
     ///
     /// This is the default behavior.
     #[default]
     Auto,
+    /// Force enable debug functions if supported by the driver.
+    ///
+    /// This ignores any device-specific workarounds and enables debug functions
+    /// on all devices that support them, including those with known bugs.
+    ForceEnabled,
     /// Disable debug functions entirely.
     ///
-    /// Use this as a workaround if you encounter crashes in debug functions
-    /// on certain drivers (e.g., Mali GPUs crashing in `glPushDebugGroup`).
+    /// Debug functions will not be used even if supported by the driver.
     Disabled,
 }
 
 impl GlDebugFns {
-    /// Returns `true` if debug functions should be enabled (i.e., not disabled).
-    pub fn is_enabled(&self) -> bool {
-        !matches!(self, Self::Disabled)
-    }
-
     /// Choose debug functions setting from the environment variable `WGPU_GL_DEBUG_FNS`.
     ///
-    /// Possible values are `Auto` or `Disabled`. Case insensitive.
+    /// Possible values (case insensitive):
+    /// - `auto` - automatically decide based on device
+    /// - `forceenabled`, `force_enabled`, or `enabled` - force enable
+    /// - `disabled` - disable entirely
     ///
     /// Use with `unwrap_or_default()` to get the default value if the environment variable is not set.
     #[must_use]
@@ -327,6 +335,7 @@ impl GlDebugFns {
             .to_lowercase();
         match value.as_str() {
             "auto" => Some(Self::Auto),
+            "forceenabled" | "force_enabled" | "enabled" => Some(Self::ForceEnabled),
             "disabled" => Some(Self::Disabled),
             _ => None,
         }
