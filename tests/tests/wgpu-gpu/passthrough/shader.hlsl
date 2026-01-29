@@ -5,7 +5,9 @@ struct VSOut
     float4 position : SV_POSITION;
 };
 
+#ifdef SPIRV
 [shader("vertex")]
+#endif
 VSOut vertex_main(uint vid: SV_VertexID)
 {
     VSOut output;
@@ -20,7 +22,9 @@ VSOut vertex_main(uint vid: SV_VertexID)
     return output;
 }
 
+#ifdef SPIRV
 [shader("pixel")]
+#endif
 float4 fragment_main(VSOut input) : SV_TARGET
 {
     return float4(1.0, 1.0, 1.0, 1.0);

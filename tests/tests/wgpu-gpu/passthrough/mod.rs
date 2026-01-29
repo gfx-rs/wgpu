@@ -85,6 +85,7 @@ static METAL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::ne
     )
     .run_sync(metal_test);
 
+#[cfg(target_vendor = "apple")]
 fn metallib_source() -> Cow<'static, [u8]> {
     let metal_compiler = Command::new("xcrun")
         .args(["--find", "metal"])
@@ -142,6 +143,10 @@ fn metallib_source() -> Cow<'static, [u8]> {
     let source = std::fs::read(&output_name).unwrap();
     Cow::Owned(source)
 }
+#[cfg(not(target_vendor = "apple"))]
+fn metallib_source() -> Cow<'static, [u8]> {
+    Cow::Borrowed(&[])
+}
 
 fn metallib_test(ctx: TestingContext) {
     let source = metallib_source();
@@ -190,6 +195,7 @@ static HLSL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new
     )
     .run_sync(hlsl_test);
 
+#[cfg_attr(not(target_os = "windows"), expect(dead_code))]
 fn compile_dxil(entry: &str, stage_str: &str) -> Cow<'static, [u8]> {
     let out_path = format!(
         "{}/tests/wgpu-gpu/passthrough/shader.{stage_str}.cso",
@@ -220,12 +226,22 @@ fn compile_dxil(entry: &str, stage_str: &str) -> Cow<'static, [u8]> {
     Cow::Owned(file)
 }
 
+#[cfg(target_os = "windows")]
 fn dxil_vertex_source() -> Cow<'static, [u8]> {
     compile_dxil("vertex_main", "vs")
 }
+#[cfg(not(target_os = "windows"))]
+fn dxil_vertex_source() -> Cow<'static, [u8]> {
+    Cow::Borrowed(&[])
+}
 
+#[cfg(target_os = "windows")]
 fn dxil_fragment_source() -> Cow<'static, [u8]> {
     compile_dxil("vertex_main", "ps")
+}
+#[cfg(not(target_os = "windows"))]
+fn dxil_fragment_source() -> Cow<'static, [u8]> {
+    Cow::Borrowed(&[])
 }
 
 fn dxil_test(ctx: TestingContext) {
@@ -272,6 +288,9 @@ fn spirv_source() -> Cow<'static, [u32]> {
             "-T",
             "lib_6_3",
             "-fspv-target-env=vulkan1.0",
+            // We need to tell it to compile for SPIRV which requires different info
+            "-D",
+            "SPIRV",
             &format!(
                 "{}/tests/wgpu-gpu/passthrough/shader.hlsl",
                 env!("CARGO_MANIFEST_DIR")
@@ -466,10 +485,10 @@ fn explicit_layout_validation(ctx: TestingContext) {
                 label: None,
                 num_workgroups: (0, 0, 0),
                 spirv: Some(spirv_source()),
-                dxil: Some(dxil_fragment_source()),
-                hlsl: None,
-                metallib: Some(metallib_source()),
-                msl: None,
+                dxil: None,
+                hlsl: Some(hlsl_source()),
+                metallib: None,
+                msl: Some(metal_source()),
                 glsl: Some(glsl_fragment_source()),
                 wgsl: Some(wgsl_source()),
             })
