@@ -154,7 +154,7 @@ fn metallib_source(test_hash: u64) -> Cow<'static, [u8]> {
     Cow::Owned(source)
 }
 #[cfg(not(target_vendor = "apple"))]
-fn metallib_source() -> Cow<'static, [u8]> {
+fn metallib_source(_test_hash: u64) -> Cow<'static, [u8]> {
     Cow::Borrowed(&[])
 }
 
