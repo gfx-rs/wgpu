@@ -29,6 +29,7 @@ fn compile_wgsl(device: &wgpu::Device) -> wgpu::ShaderModule {
         source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
     })
 }
+
 fn compile_hlsl(
     device: &wgpu::Device,
     entry: &str,
