@@ -295,6 +295,7 @@ impl<W: Write> Writer<W> {
             primitive_index: bool,
             cooperative_matrix: bool,
             draw_index: bool,
+            ray_tracing_pipeline: bool,
         }
         let mut needed = RequiredEnabled {
             mesh_shaders: module.uses_mesh_shaders(),
@@ -321,6 +322,22 @@ impl<W: Write> Writer<W> {
                 needed.mesh_shaders = true;
             }
             crate::Binding::BuiltIn(crate::BuiltIn::DrawIndex) => needed.draw_index = true,
+            crate::Binding::BuiltIn(
+                crate::BuiltIn::RayInvocationId
+                | crate::BuiltIn::NumRayInvocations
+                | crate::BuiltIn::InstanceCustomData
+                | crate::BuiltIn::GeometryIndex
+                | crate::BuiltIn::WorldRayOrigin
+                | crate::BuiltIn::WorldRayDirection
+                | crate::BuiltIn::ObjectRayOrigin
+                | crate::BuiltIn::ObjectRayDirection
+                | crate::BuiltIn::RayTmin
+                | crate::BuiltIn::RayTCurrentMax
+                | crate::BuiltIn::ObjectToWorld
+                | crate::BuiltIn::WorldToObject,
+            ) => {
+                needed.ray_tracing_pipeline = true;
+            }
             _ => {}
         };
 
@@ -358,6 +375,44 @@ impl<W: Write> Writer<W> {
             }
         }
 
+        if module.global_variables.iter().any(|gv| {
+            gv.1.space == crate::AddressSpace::IncomingRayPayload
+                || gv.1.space == crate::AddressSpace::RayPayload
+        }) {
+            needed.ray_tracing_pipeline = true;
+        }
+
+        if module.entry_points.iter().any(|ep| {
+            matches!(
+                ep.stage,
+                ShaderStage::RayGeneration
+                    | ShaderStage::AnyHit
+                    | ShaderStage::ClosestHit
+                    | ShaderStage::Miss
+            )
+        }) {
+            needed.ray_tracing_pipeline = true;
+        }
+
+        if module.global_variables.iter().any(|gv| {
+            gv.1.space == crate::AddressSpace::IncomingRayPayload
+                || gv.1.space == crate::AddressSpace::RayPayload
+        }) {
+            needed.ray_tracing_pipeline = true;
+        }
+
+        if module.entry_points.iter().any(|ep| {
+            matches!(
+                ep.stage,
+                ShaderStage::RayGeneration
+                    | ShaderStage::AnyHit
+                    | ShaderStage::ClosestHit
+                    | ShaderStage::Miss
+            )
+        }) {
+            needed.ray_tracing_pipeline = true;
+        }
+
         // Write required declarations
         let mut any_written = false;
         if needed.f16 {
@@ -386,6 +441,10 @@ impl<W: Write> Writer<W> {
         }
         if needed.cooperative_matrix {
             writeln!(self.out, "enable wgpu_cooperative_matrix;")?;
+            any_written = true;
+        }
+        if needed.ray_tracing_pipeline {
+            writeln!(self.out, "enable wgpu_ray_tracing_pipeline;")?;
             any_written = true;
         }
         if any_written {

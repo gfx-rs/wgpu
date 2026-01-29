@@ -1,3 +1,5 @@
+enable wgpu_ray_tracing_pipeline;
+
 struct HitCounters {
     hit_num: u32,
     selected_hit: u32,
