@@ -95,8 +95,10 @@ static METAL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::ne
     )
     .run_sync(metal_test);
 
-#[cfg(target_vendor = "apple")]
 fn metallib_source(test_hash: u64) -> Cow<'static, [u8]> {
+    if cfg!(not(target_vendor = "apple")) {
+        return Cow::Borrowed(&[]);
+    }
     let metal_compiler = std::process::Command::new("xcrun")
         .args(["--find", "metal"])
         .status()
@@ -153,10 +155,6 @@ fn metallib_source(test_hash: u64) -> Cow<'static, [u8]> {
     let source = std::fs::read(&output_name).unwrap();
     Cow::Owned(source)
 }
-#[cfg(not(target_vendor = "apple"))]
-fn metallib_source(_test_hash: u64) -> Cow<'static, [u8]> {
-    Cow::Borrowed(&[])
-}
 
 fn metallib_test(ctx: TestingContext) {
     let test_hash = test_hash(&ctx, "metallib_test");
@@ -206,7 +204,6 @@ static HLSL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new
     )
     .run_sync(hlsl_test);
 
-#[cfg_attr(not(target_os = "windows"), expect(dead_code))]
 fn compile_dxil(entry: &str, stage_str: &str, test_hash: u64) -> Cow<'static, [u8]> {
     let out_path = format!(
         "{}/tests/wgpu-gpu/passthrough/shader{test_hash}.{stage_str}.cso",
@@ -237,22 +234,20 @@ fn compile_dxil(entry: &str, stage_str: &str, test_hash: u64) -> Cow<'static, [u
     Cow::Owned(file)
 }
 
-#[cfg(target_os = "windows")]
 fn dxil_vertex_source(test_hash: u64) -> Cow<'static, [u8]> {
-    compile_dxil("vertex_main", "vs", test_hash)
-}
-#[cfg(not(target_os = "windows"))]
-fn dxil_vertex_source(_test_hash: u64) -> Cow<'static, [u8]> {
-    Cow::Borrowed(&[])
+    if cfg!(target_os = "windows") {
+        compile_dxil("vertex_main", "vs", test_hash)
+    } else {
+        Cow::Borrowed(&[])
+    }
 }
 
-#[cfg(target_os = "windows")]
 fn dxil_fragment_source(test_hash: u64) -> Cow<'static, [u8]> {
-    compile_dxil("fragment_main", "ps", test_hash)
-}
-#[cfg(not(target_os = "windows"))]
-fn dxil_fragment_source(_test_hash: u64) -> Cow<'static, [u8]> {
-    Cow::Borrowed(&[])
+    if cfg!(target_os = "windows") {
+        compile_dxil("fragment_main", "ps", test_hash)
+    } else {
+        Cow::Borrowed(&[])
+    }
 }
 
 fn dxil_test(ctx: TestingContext) {
