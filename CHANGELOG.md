@@ -85,6 +85,7 @@ Bottom level categories:
 - Tracing support has been restored. By @andyleiserson in [#8429](https://github.com/gfx-rs/wgpu/pull/8429).
 - Pipelines using passthrough shaders now correctly require explicit pipeline layout. By @inner-daemons in #8881.
 - Allow using a shader that defines I/O for dual-source blending in a pipeline that does not make use of it. By @andyleiserson in [#8856](https://github.com/gfx-rs/wgpu/pull/8856).
+- Validate `strip_index_format` isn't None and equals index buffer format for indexed drawing with strip topology. By @beicause in [#8850](https://github.com/gfx-rs/wgpu/pull/8850).
 
 #### naga
 

@@ -4632,6 +4632,7 @@ impl Device {
             pass_context,
             _shader_modules: shader_modules,
             flags,
+            topology: desc.primitive.topology,
             strip_index_format: desc.primitive.strip_index_format,
             vertex_steps,
             late_sized_buffer_groups,
