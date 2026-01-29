@@ -289,7 +289,13 @@ impl Drop for Device {
             // and we can safely take ownership.
             assert!(self.get_queue(i as u32).is_none());
             let shared = self.per_queue_data[i].take().unwrap();
-            let mut shared = Arc::into_inner(shared).unwrap();
+            let mut shared = match Arc::try_unwrap(shared) {
+                Ok(shared) => shared,
+                Err(a) => panic!(
+                    "Failed to unwrap arc in device creation: still held in {} places",
+                    Arc::strong_count(&a)
+                ),
+            };
 
             // SAFETY: We are in the Drop impl and we don't use self.fence anymore after this point.
             let fence = unsafe { ManuallyDrop::take(&mut shared.fence.write()) };
