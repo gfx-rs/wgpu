@@ -156,6 +156,7 @@ impl EnableExtension {
 
 /// A variant of [`EnableExtension::Implemented`].
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(test, derive(strum::VariantArray))]
 pub enum ImplementedEnableExtension {
     /// Enables `f16`/`half` primitive support in all shader languages.
     ///
@@ -188,6 +189,23 @@ pub enum ImplementedEnableExtension {
 }
 
 impl ImplementedEnableExtension {
+    /// A slice of all variants of [`ImplementedEnableExtension`].
+    pub const VARIANTS: &'static [Self] = &[
+        Self::F16,
+        Self::DualSourceBlending,
+        Self::ClipDistances,
+        Self::WgpuMeshShader,
+        Self::WgpuRayQuery,
+        Self::WgpuRayQueryVertexReturn,
+        Self::WgpuRayTracingPipeline,
+        Self::WgpuCooperativeMatrix,
+    ];
+
+    /// Returns slice of all variants of [`ImplementedEnableExtension`].
+    pub const fn all() -> &'static [Self] {
+        Self::VARIANTS
+    }
+
     /// Returns the capability required for this enable extension.
     pub const fn capability(self) -> crate::valid::Capabilities {
         use crate::valid::Capabilities as C;
@@ -199,8 +217,19 @@ impl ImplementedEnableExtension {
             Self::WgpuRayQuery => C::RAY_QUERY,
             Self::WgpuRayQueryVertexReturn => C::RAY_HIT_VERTEX_POSITION,
             Self::WgpuCooperativeMatrix => C::COOPERATIVE_MATRIX,
+            Self::WgpuRayTracingPipeline => C::RAY_TRACING_PIPELINE,
         }
     }
+}
+
+#[test]
+/// Asserts that the manual implementation of VARIANTS is the same as the derived strum version would be
+/// while still allowing strum to be a dev-only dependency
+fn test_manual_variants_array_is_correct() {
+    assert_eq!(
+        <ImplementedEnableExtension as strum::VariantArray>::VARIANTS,
+        ImplementedEnableExtension::VARIANTS
+    );
 }
 
 /// A variant of [`EnableExtension::Unimplemented`].

@@ -13,6 +13,7 @@
 
 use naga::{
     compact::KeepUnused,
+    front::wgsl::{EnableExtension, ImplementedEnableExtension},
     valid::{self, Capabilities},
 };
 
@@ -4931,106 +4932,22 @@ fn check_with_capabilities(input: &str, snapshot: &str, capabilities: Capabiliti
 }
 
 #[test]
-fn enable_f16_without_capability() {
-    check_with_capabilities(
-        "enable f16;",
-        r###"error: the `f16` extension is not supported in the current environment
+fn enable_without_capability() {
+    for extension in ImplementedEnableExtension::all() {
+        let ident = EnableExtension::from(*extension).to_ident();
+        let carets = "^".repeat(ident.len());
+        check_with_capabilities(
+            &format!("enable {ident};"),
+            &format!(
+                "error: the `{ident}` extension is not supported in the current environment
   ┌─ wgsl:1:8
   │
-1 │ enable f16;
-  │        ^^^ unsupported enable-extension
+1 │ enable {ident};
+  │        {carets} unsupported enable-extension
 
-"###,
-        !Capabilities::SHADER_FLOAT16,
-    );
-}
-
-#[test]
-fn enable_dual_source_blending_without_capability() {
-    check_with_capabilities(
-        "enable dual_source_blending;",
-        r###"error: the `dual_source_blending` extension is not supported in the current environment
-  ┌─ wgsl:1:8
-  │
-1 │ enable dual_source_blending;
-  │        ^^^^^^^^^^^^^^^^^^^^ unsupported enable-extension
-
-"###,
-        !Capabilities::DUAL_SOURCE_BLENDING,
-    );
-}
-
-#[test]
-fn enable_clip_distances_without_capability() {
-    check_with_capabilities(
-        "enable clip_distances;",
-        r###"error: the `clip_distances` extension is not supported in the current environment
-  ┌─ wgsl:1:8
-  │
-1 │ enable clip_distances;
-  │        ^^^^^^^^^^^^^^ unsupported enable-extension
-
-"###,
-        !Capabilities::CLIP_DISTANCE,
-    );
-}
-
-#[test]
-fn enable_wgpu_mesh_shader_without_capability() {
-    check_with_capabilities(
-        "enable wgpu_mesh_shader;",
-        r###"error: the `wgpu_mesh_shader` extension is not supported in the current environment
-  ┌─ wgsl:1:8
-  │
-1 │ enable wgpu_mesh_shader;
-  │        ^^^^^^^^^^^^^^^^ unsupported enable-extension
-
-"###,
-        !Capabilities::MESH_SHADER,
-    );
-}
-
-#[test]
-fn enable_wgpu_ray_query_without_capability() {
-    check_with_capabilities(
-        "enable wgpu_ray_query;",
-        r###"error: the `wgpu_ray_query` extension is not supported in the current environment
-  ┌─ wgsl:1:8
-  │
-1 │ enable wgpu_ray_query;
-  │        ^^^^^^^^^^^^^^ unsupported enable-extension
-
-"###,
-        !Capabilities::RAY_QUERY,
-    );
-}
-
-#[test]
-fn enable_wgpu_ray_query_vertex_return_without_capability() {
-    check_with_capabilities(
-        "enable wgpu_ray_query_vertex_return;",
-        r###"error: the `wgpu_ray_query_vertex_return` extension is not supported in the current environment
-  ┌─ wgsl:1:8
-  │
-1 │ enable wgpu_ray_query_vertex_return;
-  │        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unsupported enable-extension
-
-"###,
-        !Capabilities::RAY_HIT_VERTEX_POSITION,
-    );
-}
-
-#[test]
-fn enable_wgpu_cooperative_matrix_without_capability() {
-    check_with_capabilities(
-        "enable wgpu_cooperative_matrix;",
-        r###"error: the `wgpu_cooperative_matrix` extension is not supported in the current environment
-  ┌─ wgsl:1:8
-  │
-1 │ enable wgpu_cooperative_matrix;
-  │        ^^^^^^^^^^^^^^^^^^^^^^^ unsupported enable-extension
-
-"###,
-        !Capabilities::COOPERATIVE_MATRIX,
-    );
+"
+            ),
+            !extension.capability(),
+        );
+    }
 }
