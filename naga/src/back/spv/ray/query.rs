@@ -4,11 +4,11 @@ Generating SPIR-V for ray query operations.
 
 use alloc::{vec, vec::Vec};
 
-use super::{
-    Block, BlockContext, Function, FunctionArgument, Instruction, LookupFunctionType, NumericType,
-    Writer,
+use super::super::{
+    Block, BlockContext, Function, FunctionArgument, Instruction, LocalType, LookupFunctionType,
+    LookupRayQueryFunction, NumericType, Writer, WriterFlags,
 };
-use crate::{arena::Handle, back::spv::LookupRayQueryFunction};
+use crate::{arena::Handle, back::RayQueryPoint};
 
 /// helper function to check if a particular flag is set in a u32.
 fn write_ray_flags_contains_flags(
@@ -106,7 +106,7 @@ impl Writer {
         (func_id, function, arg_ids)
     }
 
-    pub(super) fn write_ray_query_get_intersection_function(
+    pub(in super::super) fn write_ray_query_get_intersection_function(
         &mut self,
         is_committed: bool,
         ir_module: &crate::Module,
@@ -190,13 +190,13 @@ impl Writer {
             self,
             &mut block,
             loaded_ray_query_tracker_id,
-            super::RayQueryPoint::PROCEED.bits(),
+            RayQueryPoint::PROCEED.bits(),
         );
         let finished_proceed_id = write_ray_flags_contains_flags(
             self,
             &mut block,
             loaded_ray_query_tracker_id,
-            super::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+            RayQueryPoint::FINISHED_TRAVERSAL.bits(),
         );
         let proceed_finished_correct_id = if is_committed {
             finished_proceed_id
@@ -603,7 +603,7 @@ impl Writer {
 
         let ray_query_type_id = self.get_ray_query_pointer_id();
         let acceleration_structure_type_id =
-            self.get_localtype_id(super::LocalType::AccelerationStructure);
+            self.get_localtype_id(LocalType::AccelerationStructure);
         let ray_desc_type_id = self.get_handle_type_id(
             ir_module
                 .special_types
@@ -998,9 +998,8 @@ impl Writer {
             tmax_id,
         ));
 
-        let const_initialized = self.get_constant_scalar(crate::Literal::U32(
-            super::RayQueryPoint::INITIALIZED.bits(),
-        ));
+        let const_initialized =
+            self.get_constant_scalar(crate::Literal::U32(RayQueryPoint::INITIALIZED.bits()));
         valid_block
             .body
             .push(Instruction::store(init_tracker_id, const_initialized, None));
@@ -1009,7 +1008,7 @@ impl Writer {
 
         if self
             .flags
-            .contains(super::WriterFlags::PRINT_ON_RAY_QUERY_INITIALIZATION_FAIL)
+            .contains(WriterFlags::PRINT_ON_RAY_QUERY_INITIALIZATION_FAIL)
         {
             self.write_debug_printf(
                 &mut invalid_block,
@@ -1089,7 +1088,7 @@ impl Writer {
                 self,
                 &mut block,
                 initialized_tracker_id,
-                super::RayQueryPoint::INITIALIZED.bits(),
+                RayQueryPoint::INITIALIZED.bits(),
             );
 
             block.body.push(Instruction::selection_merge(
@@ -1116,10 +1115,10 @@ impl Writer {
             .push(Instruction::store(proceeded_id, has_proceeded, None));
 
         let add_flag_finished = self.get_constant_scalar(crate::Literal::U32(
-            (super::RayQueryPoint::PROCEED | super::RayQueryPoint::FINISHED_TRAVERSAL).bits(),
+            (RayQueryPoint::PROCEED | RayQueryPoint::FINISHED_TRAVERSAL).bits(),
         ));
         let add_flag_continuing =
-            self.get_constant_scalar(crate::Literal::U32(super::RayQueryPoint::PROCEED.bits()));
+            self.get_constant_scalar(crate::Literal::U32(RayQueryPoint::PROCEED.bits()));
 
         let add_flags_id = self.id_gen.next();
         valid_block.body.push(Instruction::select(
@@ -1226,13 +1225,13 @@ impl Writer {
                 self,
                 &mut block,
                 initialized_tracker_id,
-                super::RayQueryPoint::PROCEED.bits(),
+                RayQueryPoint::PROCEED.bits(),
             );
             let finished_proceed_id = write_ray_flags_contains_flags(
                 self,
                 &mut block,
                 initialized_tracker_id,
-                super::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+                RayQueryPoint::FINISHED_TRAVERSAL.bits(),
             );
 
             // Can't find anything to suggest double calling this function is invalid.
@@ -1501,13 +1500,13 @@ impl Writer {
                 self,
                 &mut block,
                 initialized_tracker_id,
-                super::RayQueryPoint::PROCEED.bits(),
+                RayQueryPoint::PROCEED.bits(),
             );
             let finished_proceed_id = write_ray_flags_contains_flags(
                 self,
                 &mut block,
                 initialized_tracker_id,
-                super::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+                RayQueryPoint::FINISHED_TRAVERSAL.bits(),
             );
             // Although it seems strange to call this twice, I (Vecvec) can't find anything to suggest double calling this function is invalid.
             let not_finished_id = self.id_gen.next();
@@ -1673,13 +1672,13 @@ impl Writer {
                 self,
                 &mut block,
                 initialized_tracker_id,
-                super::RayQueryPoint::PROCEED.bits(),
+                RayQueryPoint::PROCEED.bits(),
             );
             let finished_proceed_id = write_ray_flags_contains_flags(
                 self,
                 &mut block,
                 initialized_tracker_id,
-                super::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+                RayQueryPoint::FINISHED_TRAVERSAL.bits(),
             );
 
             let correct_finish_id = if is_committed {
@@ -1825,14 +1824,14 @@ impl Writer {
                 self,
                 &mut block,
                 initialized_tracker_id,
-                super::RayQueryPoint::PROCEED.bits(),
+                RayQueryPoint::PROCEED.bits(),
             );
 
             let finished_proceed_id = write_ray_flags_contains_flags(
                 self,
                 &mut block,
                 initialized_tracker_id,
-                super::RayQueryPoint::FINISHED_TRAVERSAL.bits(),
+                RayQueryPoint::FINISHED_TRAVERSAL.bits(),
             );
 
             let not_finished_id = self.id_gen.next();
@@ -1874,7 +1873,7 @@ impl Writer {
 }
 
 impl BlockContext<'_> {
-    pub(super) fn write_ray_query_function(
+    pub(in super::super) fn write_ray_query_function(
         &mut self,
         query: Handle<crate::Expression>,
         function: &crate::RayQueryFunction,
@@ -1967,7 +1966,7 @@ impl BlockContext<'_> {
         }
     }
 
-    pub(super) fn write_ray_query_return_vertex_position(
+    pub(in super::super) fn write_ray_query_return_vertex_position(
         &mut self,
         query: Handle<crate::Expression>,
         block: &mut Block,

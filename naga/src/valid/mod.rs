@@ -203,6 +203,10 @@ bitflags::bitflags! {
         const STORAGE_BUFFER_BINDING_ARRAY_NON_UNIFORM_INDEXING = 1 << 35;
         /// Support for cooperative matrix types and operations
         const COOPERATIVE_MATRIX = 1 << 36;
+        /// Support for per-vertex fragment input.
+        const PER_VERTEX = 1 << 37;
+        /// Support for ray generation, any hit, closest hit, and miss shaders.
+        const RAY_TRACING_PIPELINE = 1 << 38;
     }
 }
 
@@ -222,6 +226,8 @@ impl Capabilities {
             Self::MESH_SHADER => Some(Ext::WgpuMeshShader),
             Self::RAY_QUERY => Some(Ext::WgpuRayQuery),
             Self::RAY_HIT_VERTEX_POSITION => Some(Ext::WgpuRayQueryVertexReturn),
+            Self::COOPERATIVE_MATRIX => Some(Ext::WgpuCooperativeMatrix),
+            Self::RAY_TRACING_PIPELINE => Some(Ext::WgpuRayTracingPipeline),
             _ => None,
         }
     }
@@ -294,12 +300,16 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
     #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub struct ShaderStages: u8 {
+    pub struct ShaderStages: u16 {
         const VERTEX = 0x1;
         const FRAGMENT = 0x2;
         const COMPUTE = 0x4;
         const MESH = 0x8;
         const TASK = 0x10;
+        const RAY_GENERATION = 0x20;
+        const ANY_HIT = 0x40;
+        const CLOSEST_HIT = 0x80;
+        const MISS = 0x100;
         const COMPUTE_LIKE = Self::COMPUTE.bits() | Self::TASK.bits() | Self::MESH.bits();
     }
 }
@@ -346,7 +356,6 @@ pub struct Validator {
     location_mask: BitSet,
     blend_src_mask: BitSet,
     ep_resource_bindings: FastHashSet<crate::ResourceBinding>,
-    #[allow(dead_code)]
     switch_values: FastHashSet<crate::SwitchValue>,
     valid_expression_list: Vec<Handle<crate::Expression>>,
     valid_expression_set: HandleSet<crate::Expression>,
@@ -375,6 +384,32 @@ pub struct Validator {
     /// [`Expression`]: crate::Expression
     /// [`Statement`]: crate::Statement
     needs_visit: HandleSet<crate::Expression>,
+
+    /// Whether any trace rays call is called, and whether all have vertex return.
+    /// If one call doesn't use vertex ruturn, builtins for triangle vertex positions
+    /// (not yet implemented) are not allowed.
+    trace_rays_vertex_return: TraceRayVertexReturnState,
+
+    /// The type of the ray payload, this must always be the same type in a particular
+    /// entrypoint
+    trace_rays_payload_type: Option<Handle<crate::Type>>,
+}
+
+#[derive(Debug)]
+enum TraceRayVertexReturnState {
+    /// No trace ray calls yet have been found.
+    NoTraceRays,
+    /// Trace ray calls have been found, at least
+    /// one uses an acceleration structure that
+    /// does not have the flag enabling vertex return.
+    // Don't yet have vertex return builtins to return.
+    // this error for.
+    #[expect(unused)]
+    NoVertexReturn(crate::Span),
+    /// Trace ray calls have been found, all
+    /// acceleration structures have the flag enabling
+    /// vertex return.
+    VertexReturn,
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -574,17 +609,19 @@ impl Validator {
             override_ids: FastHashSet::default(),
             overrides_resolved: false,
             needs_visit: HandleSet::new(),
+            trace_rays_vertex_return: TraceRayVertexReturnState::NoTraceRays,
+            trace_rays_payload_type: None,
         }
     }
 
     // TODO(https://github.com/gfx-rs/wgpu/issues/8207): Consider removing this
-    pub fn subgroup_stages(&mut self, stages: ShaderStages) -> &mut Self {
+    pub const fn subgroup_stages(&mut self, stages: ShaderStages) -> &mut Self {
         self.subgroup_stages = stages;
         self
     }
 
     // TODO(https://github.com/gfx-rs/wgpu/issues/8207): Consider removing this
-    pub fn subgroup_operations(&mut self, operations: SubgroupOperationSet) -> &mut Self {
+    pub const fn subgroup_operations(&mut self, operations: SubgroupOperationSet) -> &mut Self {
         self.subgroup_operations = operations;
         self
     }

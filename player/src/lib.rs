@@ -186,6 +186,28 @@ impl Player {
                     .expect("create_bind_group_layout error");
                 self.bind_group_layouts.insert(id, bind_group_layout);
             }
+            Action::GetRenderPipelineBindGroupLayout {
+                id,
+                pipeline,
+                index,
+            } => {
+                let pipeline = self.resolve_render_pipeline_id(pipeline);
+                let bgl = pipeline
+                    .get_bind_group_layout(index)
+                    .expect("invalid render pipeline");
+                self.bind_group_layouts.insert(id, bgl);
+            }
+            Action::GetComputePipelineBindGroupLayout {
+                id,
+                pipeline,
+                index,
+            } => {
+                let pipeline = self.resolve_compute_pipeline_id(pipeline);
+                let bgl = pipeline
+                    .get_bind_group_layout(index)
+                    .expect("invalid compute pipeline");
+                self.bind_group_layouts.insert(id, bgl);
+            }
             Action::DestroyBindGroupLayout(id) => {
                 self.bind_group_layouts
                     .remove(&id)
@@ -246,10 +268,8 @@ impl Player {
             Action::CreateShaderModulePassthrough {
                 id,
                 data,
-                entry_point,
                 label,
                 num_workgroups,
-                runtime_checks,
             } => {
                 let spirv = data.iter().find_map(|a| {
                     if a.kind() == DataKind::Spv {
@@ -267,6 +287,9 @@ impl Player {
                 let hlsl = data
                     .iter()
                     .find_map(|a| (a.kind() == DataKind::Hlsl).then(|| loader.load_utf8(a)));
+                let metallib = data
+                    .iter()
+                    .find_map(|a| (a.kind() == DataKind::MetalLib).then(|| loader.load(a)));
                 let msl = data
                     .iter()
                     .find_map(|a| (a.kind() == DataKind::Msl).then(|| loader.load_utf8(a)));
@@ -277,14 +300,13 @@ impl Player {
                     .iter()
                     .find_map(|a| (a.kind() == DataKind::Wgsl).then(|| loader.load_utf8(a)));
                 let desc = wgt::CreateShaderModuleDescriptorPassthrough {
-                    entry_point,
                     label,
                     num_workgroups,
-                    runtime_checks,
 
                     spirv,
                     dxil,
                     hlsl,
+                    metallib,
                     msl,
                     glsl,
                     wgsl,

@@ -4175,6 +4175,7 @@ impl BlockContext<'_> {
                         }
                     };
                 }
+                Statement::RayPipelineFunction(_) => unreachable!(),
             }
         }
 

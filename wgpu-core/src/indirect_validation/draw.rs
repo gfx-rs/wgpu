@@ -33,7 +33,7 @@ use wgt::Limits;
 ///
 /// - 65535 [`wgt::DrawIndirectArgs`] / [`MetadataEntry`]
 /// - 52428 [`wgt::DrawIndexedIndirectArgs`]
-const BUFFER_SIZE: wgt::BufferSize = unsafe { wgt::BufferSize::new_unchecked(1_048_560) };
+const BUFFER_SIZE: wgt::BufferSize = wgt::BufferSize::new(1_048_560).unwrap();
 
 /// Holds all device-level resources that are needed to validate indirect draws.
 ///

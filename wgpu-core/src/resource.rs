@@ -585,7 +585,7 @@ impl Buffer {
             self.size.saturating_sub(offset)
         };
 
-        if offset % wgt::MAP_ALIGNMENT != 0 {
+        if !offset.is_multiple_of(wgt::MAP_ALIGNMENT) {
             return Err((op, BufferAccessError::UnalignedOffset { offset }));
         }
         if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
@@ -693,7 +693,7 @@ impl Buffer {
             self.size.saturating_sub(offset)
         };
 
-        if offset % wgt::MAP_ALIGNMENT != 0 {
+        if !offset.is_multiple_of(wgt::MAP_ALIGNMENT) {
             return Err(BufferAccessError::UnalignedOffset { offset });
         }
         if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
@@ -2327,7 +2327,7 @@ impl Blas {
                             // Clippy complains about this because it might not be intended, but
                             // this is intentional.
                             #[expect(clippy::single_range_in_vec_init)]
-                            self.device.raw().flush_mapped_ranges(
+                            self.device.raw().invalidate_mapped_ranges(
                                 compaction_buffer,
                                 &[0..size_of::<wgpu_types::BufferAddress>() as wgt::BufferAddress],
                             );

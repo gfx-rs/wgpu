@@ -628,6 +628,7 @@ impl crate::AddressSpace {
             | Self::Handle
             | Self::TaskPayload => true,
             Self::Function => false,
+            Self::RayPayload | Self::IncomingRayPayload => unreachable!(),
         }
     }
 
@@ -639,7 +640,7 @@ impl crate::AddressSpace {
             // may end up with "const" even if the binding is read-write,
             // and that should be OK.
             Self::Storage { .. } => true,
-            Self::TaskPayload => unimplemented!(),
+            Self::TaskPayload | Self::RayPayload | Self::IncomingRayPayload => unimplemented!(),
             // These should always be read-write.
             Self::Private | Self::WorkGroup => false,
             // These translate to `constant` address space, no need for qualifiers.
@@ -654,9 +655,13 @@ impl crate::AddressSpace {
             Self::Handle => None,
             Self::Uniform | Self::Immediate => Some("constant"),
             Self::Storage { .. } => Some("device"),
-            Self::Private | Self::Function => Some("thread"),
+            // note for `RayPayload`, this probably needs to be emulated as a
+            // private variable, as metal has essentially an inout input
+            // for where it is passed.
+            Self::Private | Self::Function | Self::RayPayload => Some("thread"),
             Self::WorkGroup => Some("threadgroup"),
             Self::TaskPayload => Some("object_data"),
+            Self::IncomingRayPayload => Some("ray_data"),
         }
     }
 }
@@ -864,7 +869,6 @@ impl<W: Write> Writer<W> {
 
     /// Finishes writing and returns the output.
     // See https://github.com/rust-lang/rust-clippy/issues/4979.
-    #[allow(clippy::missing_const_for_fn)]
     pub fn finish(self) -> W {
         self.out
     }
@@ -3035,7 +3039,6 @@ impl<W: Write> Writer<W> {
     /// [`ReadZeroSkipWrite`]: index::BoundsCheckPolicy::ReadZeroSkipWrite
     /// [`Store`]: crate::Statement::Store
     /// [`Load`]: crate::Expression::Load
-    #[allow(unused_variables)]
     fn put_bounds_checks(
         &mut self,
         chain: Handle<crate::Expression>,
@@ -4281,6 +4284,7 @@ impl<W: Write> Writer<W> {
                     }
                     writeln!(self.out, ");")?;
                 }
+                crate::Statement::RayPipelineFunction(_) => unreachable!(),
             }
         }
 
@@ -4361,6 +4365,7 @@ impl<W: Write> Writer<W> {
         self.namer.reset(
             module,
             &super::keywords::RESERVED_SET,
+            proc::KeywordSet::empty(),
             proc::CaseInsensitiveKeywordSet::empty(),
             &[CLAMPED_LOD_LOAD_PREFIX],
             &mut self.names,
@@ -6876,6 +6881,10 @@ template <typename A>
                     false,
                 ),
                 crate::ShaderStage::Task | crate::ShaderStage::Mesh => unimplemented!(),
+                crate::ShaderStage::RayGeneration
+                | crate::ShaderStage::AnyHit
+                | crate::ShaderStage::ClosestHit
+                | crate::ShaderStage::Miss => unimplemented!(),
             };
 
             // Should this entry point be modified to do vertex pulling?
@@ -6948,6 +6957,8 @@ template <typename A>
                         crate::AddressSpace::Function
                         | crate::AddressSpace::Private
                         | crate::AddressSpace::WorkGroup => {}
+                        crate::AddressSpace::RayPayload
+                        | crate::AddressSpace::IncomingRayPayload => unimplemented!(),
                     }
                 }
                 if needs_buffer_sizes {
@@ -7024,11 +7035,8 @@ template <typename A>
                     writeln!(self.out, "struct {stage_in_name} {{")?;
                 }
                 for &(ref name_key, ty, binding) in flattened_arguments.iter() {
-                    let (binding, location) = match binding {
-                        Some(ref binding @ &crate::Binding::Location { location, .. }) => {
-                            (binding, location)
-                        }
-                        _ => continue,
+                    let Some(binding) = binding else {
+                        continue;
                     };
                     let name = match *name_key {
                         NameKey::StructMember(..) => &flattened_member_names[name_key],
@@ -7042,7 +7050,15 @@ template <typename A>
                         first_time: false,
                     };
                     let resolved = options.resolve_local_binding(binding, in_mode)?;
+                    let location = match *binding {
+                        crate::Binding::Location { location, .. } => Some(location),
+                        crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. }) => None,
+                        crate::Binding::BuiltIn(_) => continue,
+                    };
                     if do_vertex_pulling {
+                        let Some(location) = location else {
+                            continue;
+                        };
                         // Update our attribute mapping.
                         am_resolved.insert(
                             location,
@@ -7190,6 +7206,7 @@ template <typename A>
             // struct.
             for &(ref name_key, ty, binding) in flattened_arguments.iter() {
                 let binding = match binding {
+                    Some(&crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. })) => continue,
                     Some(binding @ &crate::Binding::BuiltIn { .. }) => binding,
                     _ => continue,
                 };
@@ -7774,8 +7791,9 @@ template <typename A>
                         }
                         writeln!(self.out, " }};")?;
                     }
-                    _ => {
-                        if let Some(crate::Binding::Location { .. }) = arg.binding {
+                    _ => match arg.binding {
+                        Some(crate::Binding::Location { .. })
+                        | Some(crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. })) => {
                             if has_varyings {
                                 writeln!(
                                     self.out,
@@ -7787,7 +7805,8 @@ template <typename A>
                                 )?;
                             }
                         }
-                    }
+                        _ => {}
+                    },
                 }
             }
 

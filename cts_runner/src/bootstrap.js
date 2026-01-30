@@ -199,6 +199,7 @@ const windowOrWorkerGlobalScope = {
   GPUExternalTexture: util.nonEnumerable(webgpu.GPUExternalTexture),
   GPUSampler: util.nonEnumerable(webgpu.GPUSampler),
   GPUBindGroupLayout: util.nonEnumerable(webgpu.GPUBindGroupLayout),
+  GPUPipelineError: util.nonEnumerable(webgpu.GPUPipelineError),
   GPUPipelineLayout: util.nonEnumerable(webgpu.GPUPipelineLayout),
   GPUBindGroup: util.nonEnumerable(webgpu.GPUBindGroup),
   GPUCompilationInfo: util.nonEnumerable(webgpu.GPUCompilationInfo),
@@ -237,7 +238,7 @@ const requestDevice = webgpu.GPUAdapter.prototype.requestDevice;
 webgpu.GPUAdapter.prototype.requestDevice = function(desc) {
     return requestDevice.call(this, desc).then((device) => {
         device.onuncapturederror = (event) => {
-            core.print("cts_runner caught WebGPU error:" + event.error.message, true);
+            core.print("cts_runner caught WebGPU error: " + event.error.message + "\n", true);
         };
         return device;
     })

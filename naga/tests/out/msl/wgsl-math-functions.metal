@@ -66,6 +66,7 @@ fragment void main_(
     metal::float4 g = metal::refract(v, v, 1.0);
     metal::int4 sign_b = metal::int4(-1, -1, -1, -1);
     metal::float4 sign_d = metal::float4(-1.0, -1.0, -1.0, -1.0);
+    metal::float4 sign_e = metal::float4(0.0, 0.0, 0.0, 0.0);
     metal::int2 flb_b = metal::int2(-1, -1);
     metal::uint2 flb_c = metal::uint2(0u, 0u);
     metal::int2 ftb_c = metal::int2(0, 0);

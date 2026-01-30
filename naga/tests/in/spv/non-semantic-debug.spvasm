@@ -1,0 +1,44 @@
+; SPIR-V
+; Version: 1.0
+; Generator: Google spiregg; 0
+; Bound: 28
+; Schema: 0
+               OpCapability Shader
+               OpExtension "SPV_KHR_non_semantic_info"
+          %1 = OpExtInstImport "NonSemantic.Shader.DebugInfo.100"
+               OpMemoryModel Logical GLSL450
+               OpEntryPoint GLCompute %main "main"
+               OpExecutionMode %main LocalSize 1 1 1
+          %3 = OpString "thing.hlsl"
+          %4 = OpString "[numthreads(1, 1, 1)]
+void main()
+{
+}
+"
+          %5 = OpString "main"
+          %6 = OpString ""
+          %7 = OpString "__dxc_setup"
+          %8 = OpString "3f85295c"
+          %9 = OpString " -E main -T cs_6_0 -spirv -fspv-debug=vulkan-with-source -Fo out.spirv -Qembed_debug"
+               OpName %main "main"
+       %void = OpTypeVoid
+       %uint = OpTypeInt 32 0
+     %uint_3 = OpConstant %uint 3
+     %uint_1 = OpConstant %uint 1
+     %uint_4 = OpConstant %uint 4
+     %uint_5 = OpConstant %uint 5
+     %uint_2 = OpConstant %uint 2
+         %22 = OpTypeFunction %void
+         %11 = OpExtInst %void %1 DebugTypeFunction %uint_3 %void
+         %13 = OpExtInst %void %1 DebugSource %3 %4
+         %14 = OpExtInst %void %1 DebugCompilationUnit %uint_1 %uint_4 %13 %uint_5
+         %18 = OpExtInst %void %1 DebugFunction %7 %11 %13 %uint_2 %uint_1 %14 %6 %uint_3 %uint_3
+         %20 = OpExtInst %void %1 DebugEntryPoint %18 %14 %8 %9
+       %main = OpFunction %void None %22
+         %23 = OpLabel
+         %26 = OpExtInst %void %1 DebugScope %18
+         %24 = OpExtInst %void %1 DebugFunctionDefinition %18 %main
+         %25 = OpExtInst %void %1 DebugLine %13 %uint_4 %uint_4 %uint_1 %uint_1
+               OpReturn
+         %27 = OpExtInst %void %1 DebugNoScope
+               OpFunctionEnd

@@ -145,15 +145,15 @@ impl Writer {
 
     /// Reset `Writer` to its initial state, retaining any allocations.
     ///
-    /// Why not just implement `Recyclable` for `Writer`? By design,
-    /// `Recyclable::recycle` requires ownership of the value, not just
+    /// Why not just implement `Reclaimable` for `Writer`? By design,
+    /// `Reclaimable::reclaim` requires ownership of the value, not just
     /// `&mut`; see the trait documentation. But we need to use this method
     /// from functions like `Writer::write`, which only have `&mut Writer`.
     /// Workarounds include unsafe code (`core::ptr::read`, then `write`, ugh)
     /// or something like a `Default` impl that returns an oddly-initialized
     /// `Writer`, which is worse.
     fn reset(&mut self) {
-        use super::recyclable::Recyclable;
+        use super::reclaimable::Reclaimable;
         use core::mem::take;
 
         let mut id_gen = IdGenerator::default();
@@ -181,26 +181,26 @@ impl Writer {
             double_u32_ty_id: None,
             gl450_ext_inst_id,
 
-            // Recycled:
-            capabilities_used: take(&mut self.capabilities_used).recycle(),
-            extensions_used: take(&mut self.extensions_used).recycle(),
-            physical_layout: self.physical_layout.clone().recycle(),
-            logical_layout: take(&mut self.logical_layout).recycle(),
-            debug_strings: take(&mut self.debug_strings).recycle(),
-            debugs: take(&mut self.debugs).recycle(),
-            annotations: take(&mut self.annotations).recycle(),
-            lookup_type: take(&mut self.lookup_type).recycle(),
-            lookup_function: take(&mut self.lookup_function).recycle(),
-            lookup_function_type: take(&mut self.lookup_function_type).recycle(),
-            wrapped_functions: take(&mut self.wrapped_functions).recycle(),
-            constant_ids: take(&mut self.constant_ids).recycle(),
-            cached_constants: take(&mut self.cached_constants).recycle(),
-            global_variables: take(&mut self.global_variables).recycle(),
-            std140_compat_uniform_types: take(&mut self.std140_compat_uniform_types).recycle(),
-            saved_cached: take(&mut self.saved_cached).recycle(),
-            temp_list: take(&mut self.temp_list).recycle(),
-            ray_query_functions: take(&mut self.ray_query_functions).recycle(),
-            io_f16_polyfills: take(&mut self.io_f16_polyfills).recycle(),
+            // Reclaimed:
+            capabilities_used: take(&mut self.capabilities_used).reclaim(),
+            extensions_used: take(&mut self.extensions_used).reclaim(),
+            physical_layout: self.physical_layout.clone().reclaim(),
+            logical_layout: take(&mut self.logical_layout).reclaim(),
+            debug_strings: take(&mut self.debug_strings).reclaim(),
+            debugs: take(&mut self.debugs).reclaim(),
+            annotations: take(&mut self.annotations).reclaim(),
+            lookup_type: take(&mut self.lookup_type).reclaim(),
+            lookup_function: take(&mut self.lookup_function).reclaim(),
+            lookup_function_type: take(&mut self.lookup_function_type).reclaim(),
+            wrapped_functions: take(&mut self.wrapped_functions).reclaim(),
+            constant_ids: take(&mut self.constant_ids).reclaim(),
+            cached_constants: take(&mut self.cached_constants).reclaim(),
+            global_variables: take(&mut self.global_variables).reclaim(),
+            std140_compat_uniform_types: take(&mut self.std140_compat_uniform_types).reclaim(),
+            saved_cached: take(&mut self.saved_cached).reclaim(),
+            temp_list: take(&mut self.temp_list).reclaim(),
+            ray_query_functions: take(&mut self.ray_query_functions).reclaim(),
+            io_f16_polyfills: take(&mut self.io_f16_polyfills).reclaim(),
             debug_printf: None,
         };
 
@@ -1575,9 +1575,9 @@ impl Writer {
                     .writer
                     .get_pointer_type_id(u32_type_id, spirv::StorageClass::Function);
                 let tracker_id = context.gen_id();
-                let tracker_init_id = context
-                    .writer
-                    .get_constant_scalar(crate::Literal::U32(super::RayQueryPoint::empty().bits()));
+                let tracker_init_id = context.writer.get_constant_scalar(crate::Literal::U32(
+                    crate::back::RayQueryPoint::empty().bits(),
+                ));
                 let tracker_instruction = Instruction::variable(
                     ptr_u32_type_id,
                     tracker_id,
@@ -1839,6 +1839,10 @@ impl Writer {
                 .to_words(&mut self.logical_layout.execution_modes);
                 spirv::ExecutionModel::MeshEXT
             }
+            crate::ShaderStage::RayGeneration
+            | crate::ShaderStage::AnyHit
+            | crate::ShaderStage::ClosestHit
+            | crate::ShaderStage::Miss => unreachable!(),
         };
         //self.check(exec_model.required_capabilities())?;
 
@@ -2999,6 +3003,14 @@ impl Writer {
                         Some(crate::Interpolation::Linear) => {
                             others.push(Decoration::NoPerspective);
                         }
+                        Some(crate::Interpolation::PerVertex) => {
+                            others.push(Decoration::PerVertexKHR);
+                            self.require_any(
+                                "`per_vertex` interpolation",
+                                &[spirv::Capability::FragmentBarycentricKHR],
+                            )?;
+                            self.use_extension("SPV_KHR_fragment_shader_barycentric");
+                        }
                     }
                     match sampling {
                         // Center sampling is the default in SPIR-V.
@@ -3084,13 +3096,17 @@ impl Writer {
                         }
                         BuiltIn::PrimitiveId
                     }
-                    Bi::Barycentric => {
+                    Bi::Barycentric { perspective } => {
                         self.require_any(
                             "`barycentric` built-in",
                             &[spirv::Capability::FragmentBarycentricKHR],
                         )?;
                         self.use_extension("SPV_KHR_fragment_shader_barycentric");
-                        BuiltIn::BaryCoordKHR
+                        if perspective {
+                            BuiltIn::BaryCoordKHR
+                        } else {
+                            BuiltIn::BaryCoordNoPerspKHR
+                        }
                     }
                     Bi::SampleIndex => {
                         self.require_any(
@@ -3156,6 +3172,19 @@ impl Writer {
                     Bi::VertexCount | Bi::Vertices | Bi::PrimitiveCount | Bi::Primitives => {
                         unreachable!()
                     }
+                    Bi::RayInvocationId
+                    | Bi::NumRayInvocations
+                    | Bi::InstanceCustomData
+                    | Bi::GeometryIndex
+                    | Bi::WorldRayOrigin
+                    | Bi::WorldRayDirection
+                    | Bi::ObjectRayOrigin
+                    | Bi::ObjectRayDirection
+                    | Bi::RayTmin
+                    | Bi::RayTCurrentMax
+                    | Bi::ObjectToWorld
+                    | Bi::WorldToObject
+                    | Bi::HitKind => unreachable!(),
                 };
 
                 use crate::ScalarKind as Sk;
@@ -3470,7 +3499,7 @@ impl Writer {
         }
     }
 
-    fn write_physical_layout(&mut self) {
+    const fn write_physical_layout(&mut self) {
         self.physical_layout.bound = self.id_gen.0 + 1;
     }
 

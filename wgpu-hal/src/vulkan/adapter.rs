@@ -563,7 +563,9 @@ impl PhysicalDeviceFeatures {
             shader_barycentrics: if enabled_extensions
                 .contains(&khr::fragment_shader_barycentric::NAME)
             {
-                let needed = requested_features.intersects(wgt::Features::SHADER_BARYCENTRICS);
+                let needed = requested_features.intersects(
+                    wgt::Features::SHADER_BARYCENTRICS | wgt::Features::SHADER_PER_VERTEX,
+                );
                 Some(
                     vk::PhysicalDeviceFragmentShaderBarycentricFeaturesKHR::default()
                         .fragment_shader_barycentric(needed),
@@ -745,7 +747,7 @@ impl PhysicalDeviceFeatures {
 
         if let Some(ref shader_barycentrics) = self.shader_barycentrics {
             features.set(
-                F::SHADER_BARYCENTRICS,
+                F::SHADER_BARYCENTRICS | F::SHADER_PER_VERTEX,
                 shader_barycentrics.fragment_shader_barycentric != 0,
             );
         }
@@ -924,6 +926,11 @@ impl PhysicalDeviceFeatures {
         features.set(
             F::FLOAT32_FILTERABLE,
             is_float32_filterable_supported(instance, phd),
+        );
+
+        features.set(
+            F::FLOAT32_BLENDABLE,
+            is_float32_blendable_supported(instance, phd),
         );
 
         if let Some(ref _sampler_ycbcr_conversion) = self.sampler_ycbcr_conversion {
@@ -1292,8 +1299,11 @@ impl PhysicalDeviceProperties {
             extensions.push(ext::mesh_shader::NAME);
         }
 
-        // Require `VK_KHR_fragment_shader_barycentric` if the associated feature was requested
-        if requested_features.intersects(wgt::Features::SHADER_BARYCENTRICS) {
+        // Require `VK_KHR_fragment_shader_barycentric` if an associated feature was requested
+        // Vulkan bundles both barycentrics and per-vertex attributes under the same feature.
+        if requested_features
+            .intersects(wgt::Features::SHADER_BARYCENTRICS | wgt::Features::SHADER_PER_VERTEX)
+        {
             extensions.push(khr::fragment_shader_barycentric::NAME);
         }
 
@@ -2342,7 +2352,10 @@ impl super::Adapter {
                 capabilities.push(spv::Capability::ClipDistance);
             }
 
-            if features.intersects(wgt::Features::SHADER_BARYCENTRICS) {
+            // Vulkan bundles both barycentrics and per-vertex attributes under the same feature.
+            if features
+                .intersects(wgt::Features::SHADER_BARYCENTRICS | wgt::Features::SHADER_PER_VERTEX)
+            {
                 capabilities.push(spv::Capability::FragmentBarycentricKHR);
             }
 
@@ -2821,6 +2834,21 @@ fn is_format_16bit_norm_supported(instance: &ash::Instance, phd: vk::PhysicalDev
 fn is_float32_filterable_supported(instance: &ash::Instance, phd: vk::PhysicalDevice) -> bool {
     let tiling = vk::ImageTiling::OPTIMAL;
     let features = vk::FormatFeatureFlags::SAMPLED_IMAGE_FILTER_LINEAR;
+    let r_float = supports_format(instance, phd, vk::Format::R32_SFLOAT, tiling, features);
+    let rg_float = supports_format(instance, phd, vk::Format::R32G32_SFLOAT, tiling, features);
+    let rgba_float = supports_format(
+        instance,
+        phd,
+        vk::Format::R32G32B32A32_SFLOAT,
+        tiling,
+        features,
+    );
+    r_float && rg_float && rgba_float
+}
+
+fn is_float32_blendable_supported(instance: &ash::Instance, phd: vk::PhysicalDevice) -> bool {
+    let tiling = vk::ImageTiling::OPTIMAL;
+    let features = vk::FormatFeatureFlags::COLOR_ATTACHMENT_BLEND;
     let r_float = supports_format(instance, phd, vk::Format::R32_SFLOAT, tiling, features);
     let rg_float = supports_format(instance, phd, vk::Format::R32G32_SFLOAT, tiling, features);
     let rgba_float = supports_format(
