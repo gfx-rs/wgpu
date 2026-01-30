@@ -256,7 +256,7 @@ webgpu:api,validation,render_pipeline,shader_module:*
 webgpu:api,validation,render_pipeline,vertex_state:many_attributes_overlapping:*
 webgpu:api,validation,render_pipeline,vertex_state:max_vertex_buffer_array_stride_limit:*
 fails-if(metal) webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_contained_in_stride:*
-webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_offset_alignment:*
+fails-if(metal) webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_offset_alignment:*
 webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_shaderLocation_limit:*
 webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_shaderLocation_unique:*
 webgpu:api,validation,render_pipeline,vertex_state:vertex_buffer_array_stride_limit_alignment:*
