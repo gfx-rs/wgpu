@@ -12,11 +12,13 @@ use naga::{
     valid::{self, Capabilities, ModuleInfo, ValidationFlags},
 };
 
-fn test_span_generator() -> impl FnMut() -> naga::Span {
-    let mut index = 0;
-    move || {
-        let span = naga::Span::new(index, index + 1);
-        index += 1;
+#[derive(Default)]
+struct TestSpanGenerator(u32);
+
+impl TestSpanGenerator {
+    fn next(&mut self) -> naga::Span {
+        let span = naga::Span::new(self.0, self.0 + 1);
+        self.0 += 1;
         span
     }
 }
@@ -1241,7 +1243,7 @@ fn main() {
 
 #[test]
 fn unexpected_task_payload() {
-    let mut make_test_span = test_span_generator();
+    let mut test_spans = TestSpanGenerator::default();
     let mut module = Module::default();
 
     let ty_payload = module.types.insert(
@@ -1249,10 +1251,10 @@ fn unexpected_task_payload() {
             name: Some("u32".into()),
             inner: ir::TypeInner::Scalar(naga::Scalar::U32),
         },
-        make_test_span(),
+        test_spans.next(),
     );
 
-    let err_span = make_test_span();
+    let err_span = test_spans.next();
     let payload_handle = module.global_variables.append(
         ir::GlobalVariable {
             name: Some("task_payload".into()),
