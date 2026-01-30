@@ -673,7 +673,7 @@ impl super::ShaderStage {
     pub const fn mesh_like(self) -> bool {
         match self {
             Self::Task | Self::Mesh => true,
-            Self::Vertex | Self::Fragment | Self::Compute => false,
+            _ => false,
         }
     }
 }
