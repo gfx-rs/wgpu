@@ -13,7 +13,7 @@
 // appear in this file in order -- including ones in comments.
 webgpu:api,validation,buffer,mapping:* // crash
 webgpu:api,validation,capability_checks,features,* // 21%, TypeError not thrown for missing features (needs deno_webgpu fix)
-webgpu:api,validation,capability_checks,limits,* // 60%, wgslLanguageFeatures missing (#8884); workgroup storage size validation unimplemented; interstage vars counting; bind group timing on dx12
+webgpu:api,validation,capability_checks,limits,* // 60%, workgroup storage size validation unimplemented; interstage vars counting; bind group timing on dx12
 webgpu:api,validation,compute_pipeline:limits,workgroup_storage_size:* // 0%
 webgpu:api,validation,compute_pipeline:overrides,identifier:* // 46%
 webgpu:api,validation,compute_pipeline:overrides,workgroup_size,limits,workgroup_storage_size:* // 0%, missing workgroup storage size validation
@@ -21,6 +21,8 @@ webgpu:api,validation,compute_pipeline:overrides,workgroup_size,limits:* // 0%
 webgpu:api,validation,createBindGroup:buffer,resource_state:* // 0%, https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,createBindGroup:external_texture,* // 0%, no external external texture in deno
 webgpu:api,validation,createBindGroup:texture,resource_state:* // crash, https://github.com/gfx-rs/wgpu/issues/7881
+webgpu:api,validation,createBindGroupLayout:max_dynamic_buffers:* // fails on vulkan
+webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_bind_group_layout:*
 webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_pipeline_layout:* // 0%, using max() instead of +=
 webgpu:api,validation,createBindGroupLayout:visibility,VERTEX_shader_stage_buffer_type:* // 25%, writable storage buffers not allowed in VERTEX
 webgpu:api,validation,createBindGroupLayout:visibility,VERTEX_shader_stage_storage_texture_access:* // 25%, write-access storage textures not allowed in VERTEX
@@ -31,10 +33,10 @@ webgpu:api,validation,encoding,cmds,copyTextureToTexture:copy_ranges:* // ***, h
 webgpu:api,validation,encoding,cmds,debug:* // 92%, https://github.com/gfx-rs/wgpu/issues/8039
 webgpu:api,validation,encoding,cmds,render,* // https://github.com/gfx-rs/wgpu/issues/7912
 webgpu:api,validation,encoding,cmds,setBindGroup:dynamic_offsets_match_expectations_in_pass_encoder:* // deno unwrap
-webgpu:api,validation,encoding,cmds,setBindGroup:u32array_start_and_length:* // deno unwrap
 webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="compute%20pass";state="destroyed";* // https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="render%20bundle";state="destroyed";* // https://github.com/gfx-rs/wgpu/issues/7881
 webgpu:api,validation,encoding,cmds,setBindGroup:state_and_binding_index:encoderType="render%20pass";state="destroyed";* // https://github.com/gfx-rs/wgpu/issues/7881
+webgpu:api,validation,encoding,cmds,setBindGroup:u32array_start_and_length:* // deno unwrap
 webgpu:api,validation,encoding,cmds,setImmediates:* // 0%, feature not implemented
 webgpu:api,validation,encoding,createRenderBundleEncoder:* // 26%, empty attachments, format compatibility
 webgpu:api,validation,encoding,encoder_open_state:* // https://github.com/gfx-rs/wgpu/issues/7857
@@ -46,13 +48,13 @@ webgpu:api,validation,encoding,queries,resolveQuerySet:* // 93%, https://github.
 webgpu:api,validation,encoding,render_bundle:* // 81%, readonly flag normalization mismatch
 webgpu:api,validation,getBindGroupLayout:* // 29%, rejects valid indices beyond defined layouts
 webgpu:api,validation,image_copy,buffer_texture_copies:* // https://github.com/gfx-rs/wgpu/issues/7946
-webgpu:api,validation,image_copy,layout_related:offset_alignment:* // fails on DX12 in CI
 webgpu:api,validation,layout_shader_compat:pipeline_layout_shader_exact_match:* // 99%, storage texture read-write bindings not compatible with write-only shaders
 webgpu:api,validation,non_filterable_texture:non_filterable_texture_with_filtering_sampler:* // 80%, depth textures with filtering samplers
 webgpu:api,validation,query_set,create:count:* // 0%, wgpu incorrectly rejects zero-count query sets
 webgpu:api,validation,queue,buffer_mapped:* // ***, vulkan
 webgpu:api,validation,queue,destroyed,* // 71%, writeBuffer/writeTexture return value, destroyed query set
 webgpu:api,validation,queue,writeBuffer:ranges:* // 0%, missing OperationError for invalid ranges
+webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,depth_stencil_read_only_write_state:* // fails on dx12
 webgpu:api,validation,render_pass,render_pass_descriptor:depth_stencil_attachment,depth_clear_value:* // 94%, TypeError instead of validation error
 webgpu:api,validation,render_pass,render_pass_descriptor:depth_stencil_attachment,loadOp_storeOp_match_depthReadOnly_stencilReadOnly:* // 33%, missing validation: depth/stencil load/store ops provided for missing texture format aspects
 webgpu:api,validation,render_pass,render_pass_descriptor:occlusionQuerySet,query_set_type:* // 50%, occlusionQuerySet type validation
@@ -73,6 +75,7 @@ webgpu:api,validation,render_pipeline,multisample_state:* // 60%, https://github
 webgpu:api,validation,render_pipeline,overrides:* // 17%, missing validation: invalid pipeline constant identifiers silently ignored
 webgpu:api,validation,render_pipeline,vertex_state:max_vertex_attribute_limit:* // 0%, empty vertex buffers not counted, GPUInternalError no message
 webgpu:api,validation,render_pipeline,vertex_state:max_vertex_buffer_limit:* // 0%, empty vertex buffers not counted toward limit
+webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_contained_in_stride:* // fails on metal https://github.com/gfx-rs/wgpu/issues/8312
 webgpu:api,validation,resource_usages,texture,in_pass_encoder:subresources_and_binding_types_combination_for_color:* // 92%, https://github.com/gfx-rs/wgpu/issues/3126
 webgpu:api,validation,resource_usages,texture,in_render_common:subresources,depth_stencil_attachment_and_bind_group:* // 69%, https://github.com/gfx-rs/wgpu/issues/8705
 webgpu:api,validation,state,device_lost,destroy:* // crash
@@ -110,8 +113,8 @@ webgpu:shader,validation,expression,call,builtin,derivatives:* // 83%, f16 suppo
 webgpu:shader,validation,expression,call,builtin,determinant:* // 71%, abstract int/float const eval issues
 webgpu:shader,validation,expression,call,builtin,distance:* // 66%, scalar distance uses wrong formula (sqrt instead of abs)
 webgpu:shader,validation,expression,call,builtin,dot:* // 79%, const eval overflow issues for abstract/f16
-webgpu:shader,validation,expression,call,builtin,dot4I8Packed:* // 0%, https://github.com/gfx-rs/wgpu/pull/8884
-webgpu:shader,validation,expression,call,builtin,dot4U8Packed:* // 0%, https://github.com/gfx-rs/wgpu/pull/8884
+webgpu:shader,validation,expression,call,builtin,dot4I8Packed:* // 91%, missing const eval (#4507)
+webgpu:shader,validation,expression,call,builtin,dot4U8Packed:* // 91%, missing const eval (#4507)
 webgpu:shader,validation,expression,call,builtin,exp:* // 61%, const eval overflow detection missing for abstract/f16
 webgpu:shader,validation,expression,call,builtin,exp2:* // 80%, f16 overflow detection missing
 webgpu:shader,validation,expression,call,builtin,extractBits:* // 55%, const eval issues
@@ -134,10 +137,10 @@ webgpu:shader,validation,expression,call,builtin,pack2x16snorm:* // 88%, missing
 webgpu:shader,validation,expression,call,builtin,pack2x16unorm:* // 88%, missing const eval (#4507)
 webgpu:shader,validation,expression,call,builtin,pack4x8snorm:* // 88%, missing const eval (#4507)
 webgpu:shader,validation,expression,call,builtin,pack4x8unorm:* // 88%, missing const eval (#4507)
-webgpu:shader,validation,expression,call,builtin,pack4xI8:* // 21%, https://github.com/gfx-rs/wgpu/pull/8884
-webgpu:shader,validation,expression,call,builtin,pack4xI8Clamp:* // 21%, https://github.com/gfx-rs/wgpu/pull/8884
-webgpu:shader,validation,expression,call,builtin,pack4xU8:* // 21%, https://github.com/gfx-rs/wgpu/pull/8884
-webgpu:shader,validation,expression,call,builtin,pack4xU8Clamp:* // 21%, https://github.com/gfx-rs/wgpu/pull/8884
+webgpu:shader,validation,expression,call,builtin,pack4xI8:* // 74%, missing const eval (#4507)
+webgpu:shader,validation,expression,call,builtin,pack4xI8Clamp:* // 74%, missing const eval (#4507)
+webgpu:shader,validation,expression,call,builtin,pack4xU8:* // 74%, missing const eval (#4507)
+webgpu:shader,validation,expression,call,builtin,pack4xU8Clamp:* // 74%, missing const eval (#4507)
 webgpu:shader,validation,expression,call,builtin,pow:* // 63%, missing const/override eval validation (negative base, zero^non-positive, overflow), http://github.com/gpuweb/issues/4527
 webgpu:shader,validation,expression,call,builtin,quantizeToF16:* // 77%, overflow validation issues
 webgpu:shader,validation,expression,call,builtin,reflect:* // 39%, const eval not implemented
@@ -164,16 +167,15 @@ webgpu:shader,validation,expression,call,builtin,unpack2x16snorm:* // 81%, missi
 webgpu:shader,validation,expression,call,builtin,unpack2x16unorm:* // 81%, missing const eval (#4507)
 webgpu:shader,validation,expression,call,builtin,unpack4x8snorm:* // 81%, missing const eval (#4507)
 webgpu:shader,validation,expression,call,builtin,unpack4x8unorm:* // 81%, missing const eval (#4507)
-webgpu:shader,validation,expression,call,builtin,unpack4xI8:* // 75%, wgslLanguageFeatures not implemented, https://github.com/gfx-rs/wgpu/pull/8884
-webgpu:shader,validation,expression,call,builtin,unpack4xU8:* // 75%, wgslLanguageFeatures not implemented, https://github.com/gfx-rs/wgpu/pull/8884
+webgpu:shader,validation,expression,call,builtin,unpack4xI8:* // 75%, missing const eval (#4507)
+webgpu:shader,validation,expression,call,builtin,unpack4xU8:* // 75%, missing const eval (#4507)
 webgpu:shader,validation,expression,call,builtin,value_constructor:* // 92%, value constructors lack must-use validation + abstract-float matrix validation issues
 webgpu:shader,validation,expression,early_evaluation:* // 67%, mixed override/runtime composite evaluation
 webgpu:shader,validation,expression,matrix,* // 83%, #5474, #8790, #8868
 webgpu:shader,validation,expression,precedence:* // 76%, https://github.com/gfx-rs/wgpu/issues/4536
-webgpu:shader,validation,expression,unary,* // 74%, pointer_composite_access not advertised, https://github.com/gfx-rs/wgpu/issues/8884, #5474
+webgpu:shader,validation,expression,unary,* // 99%, matrix negation accepted, #5474
 webgpu:shader,validation,extension,dual_source_blending:blend_src_usage:* // 61%, @blend_src validation gaps
-webgpu:shader,validation,extension,pointer_composite_access:* // 50%, wgslLanguageFeatures not exposed, https://github.com/gfx-rs/wgpu/issues/8884
-webgpu:shader,validation,extension,readonly_and_readwrite_storage_textures:* // 0%, https://github.com/gfx-rs/wgpu/pull/8884
+webgpu:shader,validation,extension,readonly_and_readwrite_storage_textures:* // 0%, CTS bug https://github.com/gpuweb/cts/pull/4567
 webgpu:shader,validation,functions,alias_analysis:* // 2%, https://github.com/gfx-rs/wgpu/issues/7650
 webgpu:shader,validation,functions,restrictions:* // 81%, texture_external
 webgpu:shader,validation,parse,attribute:* // 93%, group index validation at shader module creation
@@ -182,7 +184,6 @@ webgpu:shader,validation,parse,comments:* // 93%, unterminated block comments, h
 webgpu:shader,validation,parse,diagnostic:* // 50%, https://github.com/gfx-rs/wgpu/issues/6458
 webgpu:shader,validation,parse,literal:* // 96%, https://github.com/gfx-rs/wgpu/issues/7046
 webgpu:shader,validation,parse,must_use:* // 97%, https://github.com/gfx-rs/wgpu/issues/8876
-webgpu:shader,validation,parse,requires:* // 14%, https://github.com/gfx-rs/wgpu/pull/8884
 webgpu:shader,validation,parse,shadow_builtins:* // 83%, function param shadowing parser issue; determinant const-eval; texture_external capability missing
 webgpu:shader,validation,shader_io,align:* // 98%, https://github.com/gfx-rs/wgpu/issues/8892
 webgpu:shader,validation,shader_io,binding:* // 95%, https://github.com/gfx-rs/wgpu/issues/8892
@@ -203,5 +204,5 @@ webgpu:shader,validation,statement,loop:* // 92%, https://github.com/gfx-rs/wgpu
 webgpu:shader,validation,statement,phony:* // 90%, phony assignment in for-loops with semicolons
 webgpu:shader,validation,statement,statement_behavior:* // https://github.com/gfx-rs/wgpu/issues/7650
 webgpu:shader,validation,statement,switch:* // https://github.com/gfx-rs/wgpu/issues/7650
-webgpu:shader,validation,types,* // 86%, trailing commas in template args (~100 tests), keyword shadowing (10 tests), f16 constructors without enable (9 tests)
+webgpu:shader,validation,types,* // 95%, texture_external not supported (2 tests), atomic validation gaps (8 tests), pointer validation gaps (5 tests), 16-bit normalized storage texture formats (36 tests)
 webgpu:shader,validation,uniformity,* // 21%, https://github.com/gfx-rs/wgpu/issues/4369

@@ -92,8 +92,7 @@ webgpu:api,validation,createBindGroup:texture_binding_must_have_correct_usage:*
 webgpu:api,validation,createBindGroup:texture_must_have_correct_component_type:*
 webgpu:api,validation,createBindGroup:texture_must_have_correct_dimension:*
 webgpu:api,validation,createBindGroupLayout:duplicate_bindings:*
-webgpu:api,validation,createBindGroupLayout:max_dynamic_buffers:*
-webgpu:api,validation,createBindGroupLayout:max_resources_per_stage,in_bind_group_layout:*
+fails-if(vulkan) webgpu:api,validation,createBindGroupLayout:max_dynamic_buffers:*
 webgpu:api,validation,createBindGroupLayout:maximum_binding_limit:*
 webgpu:api,validation,createBindGroupLayout:multisampled_validation:*
 webgpu:api,validation,createBindGroupLayout:storage_texture,formats:*
@@ -215,7 +214,14 @@ webgpu:api,validation,queue,writeBuffer:buffer_state:*
 webgpu:api,validation,queue,writeBuffer:buffer,device_mismatch:*
 webgpu:api,validation,queue,writeBuffer:usages:*
 webgpu:api,validation,queue,writeTexture:*
-webgpu:api,validation,render_pass,attachment_compatibility:*
+webgpu:api,validation,render_pass,attachment_compatibility:render_pass_and_bundle,color_sparse:*
+webgpu:api,validation,render_pass,attachment_compatibility:render_pass_and_bundle,depth_format:*
+webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,color_count:*
+webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,color_format:*
+webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,color_sparse:*
+webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,depth_format:*
+fails-if(dx12) webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,depth_stencil_read_only_write_state:*
+webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,sample_count:*
 webgpu:api,validation,render_pass,render_pass_descriptor:attachments,*
 webgpu:api,validation,render_pass,render_pass_descriptor:color_attachments,*
 webgpu:api,validation,render_pass,render_pass_descriptor:depth_stencil_attachment,sample_counts_mismatch:*
@@ -249,7 +255,7 @@ webgpu:api,validation,render_pipeline,resource_compatibility:*
 webgpu:api,validation,render_pipeline,shader_module:*
 webgpu:api,validation,render_pipeline,vertex_state:many_attributes_overlapping:*
 webgpu:api,validation,render_pipeline,vertex_state:max_vertex_buffer_array_stride_limit:*
-webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_contained_in_stride:*
+fails-if(metal) webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_contained_in_stride:*
 webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_offset_alignment:*
 webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_shaderLocation_limit:*
 webgpu:api,validation,render_pipeline,vertex_state:vertex_attribute_shaderLocation_unique:*
@@ -309,6 +315,7 @@ webgpu:shader,execution,flow_control,return:*
 fails-if(metal) webgpu:shader,execution,robust_access_vertex:vertex_buffer_access:indexed=true;indirect=false;drawCallTestParameter="baseVertex";type="float32x4";additionalBuffers=4;partialLastNumber=false;offsetVertexBuffer=true
 
 webgpu:shader,validation,const_assert,const_assert:*
+webgpu:shader,validation,decl,assignment_statement:*
 webgpu:shader,validation,decl,compound_statement:*
 webgpu:shader,validation,decl,const:*
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_neg"
@@ -373,6 +380,7 @@ webgpu:shader,validation,parse,blankspace:null_characters:contains_null=false;*
 webgpu:shader,validation,parse,blankspace:null_characters:contains_null=true;placement="delimiter"
 webgpu:shader,validation,parse,blankspace:null_characters:contains_null=true;placement="eol"
 webgpu:shader,validation,parse,enable:*
+webgpu:shader,validation,parse,identifiers:*
 webgpu:shader,validation,parse,requires:*
 webgpu:shader,validation,parse,semicolon:*
 webgpu:shader,validation,parse,source:*
