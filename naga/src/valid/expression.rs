@@ -148,6 +148,11 @@ pub enum ExpressionError {
     UnsupportedWidth(crate::MathFunction, crate::ScalarKind, crate::Bytes),
     #[error("Invalid operand for cooperative op")]
     InvalidCooperativeOperand(Handle<crate::Expression>),
+    #[error("Shift amount exceeds the bit width of {lhs_type:?}")]
+    ShiftAmountTooLarge {
+        lhs_type: crate::TypeInner,
+        rhs_expr: Handle<crate::Expression>,
+    },
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
@@ -241,6 +246,74 @@ impl super::Validator {
         }
 
         Ok(())
+    }
+
+    /// Return an error if a constant shift amount in `right` exceeds the bit
+    /// width of `left_ty`.
+    ///
+    /// This function promises to return an error in cases where (1) the
+    /// expression is well-typed, (2) `left_ty` is a concrete integer, and
+    /// (3) the shift will overflow. It does not return an error in cases where
+    /// the expression is not well-typed (e.g. vector dimension mismatch),
+    /// because those will be rejected elsewhere.
+    fn validate_constant_shift_amounts(
+        left_ty: &crate::TypeInner,
+        right: Handle<crate::Expression>,
+        module: &crate::Module,
+        function: &crate::Function,
+    ) -> Result<(), ExpressionError> {
+        fn is_overflowing_shift(
+            left_ty: &crate::TypeInner,
+            right: Handle<crate::Expression>,
+            module: &crate::Module,
+            function: &crate::Function,
+        ) -> bool {
+            let Some((vec_size, scalar)) = left_ty.vector_size_and_scalar() else {
+                return false;
+            };
+            if !matches!(
+                scalar.kind,
+                crate::ScalarKind::Sint | crate::ScalarKind::Uint
+            ) {
+                return false;
+            }
+            let lhs_bits = u32::from(8 * scalar.width);
+            if vec_size.is_none() {
+                let shift_amount = module
+                    .to_ctx()
+                    .get_const_val_from::<u32, _>(right, &function.expressions);
+                shift_amount.ok().is_some_and(|s| s >= lhs_bits)
+            } else {
+                match function.expressions[right] {
+                    crate::Expression::ZeroValue(_) => false, // zero shift does not overflow
+                    crate::Expression::Splat { value, .. } => module
+                        .to_ctx()
+                        .get_const_val_from::<u32, _>(value, &function.expressions)
+                        .ok()
+                        .is_some_and(|s| s >= lhs_bits),
+                    crate::Expression::Compose {
+                        ty: _,
+                        ref components,
+                    } => components.iter().any(|comp| {
+                        module
+                            .to_ctx()
+                            .get_const_val_from::<u32, _>(*comp, &function.expressions)
+                            .ok()
+                            .is_some_and(|s| s >= lhs_bits)
+                    }),
+                    _ => false,
+                }
+            }
+        }
+
+        if is_overflowing_shift(left_ty, right, module, function) {
+            Err(ExpressionError::ShiftAmountTooLarge {
+                lhs_type: left_ty.clone(),
+                rhs_expr: right,
+            })
+        } else {
+            Ok(())
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -983,6 +1056,10 @@ impl super::Validator {
                         rhs_expr: right,
                         rhs_type: right_inner.clone(),
                     });
+                }
+                // For shift operations, check if the constant shift amount exceeds the bit width
+                if matches!(op, Bo::ShiftLeft | Bo::ShiftRight) {
+                    Self::validate_constant_shift_amounts(left_inner, right, module, function)?;
                 }
                 ShaderStages::all()
             }

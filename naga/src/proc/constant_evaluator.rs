@@ -3040,6 +3040,10 @@ impl<'a> ConstantEvaluator<'a> {
         h
     }
 
+    /// Resolve the type of `expr` if it is a constant expression.
+    ///
+    /// If `expr` was evaluated to a constant, returns its type.
+    /// Otherwise, returns an error.
     fn resolve_type(
         &self,
         expr: Handle<Expression>,

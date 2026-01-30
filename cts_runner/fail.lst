@@ -91,7 +91,7 @@ webgpu:shader,validation,expression,access,matrix:* // 93%, runtime OOB matrix a
 webgpu:shader,validation,expression,access,vector:* // 52%, https://github.com/gfx-rs/wgpu/issues/4390, and missing swizzle validation
 webgpu:shader,validation,expression,binary,add_sub_mul:* // 95%, u32 const-eval overflow incorrectly rejected, f16 const-eval overflow not rejected, atomics #5474
 webgpu:shader,validation,expression,binary,and_or_xor:* // 96%, https://github.com/gfx-rs/wgpu/issues/5474
-webgpu:shader,validation,expression,binary,bitwise_shift:* // 97%, atomics https://github.com/gfx-rs/wgpu/issues/5474, partial eval errors
+webgpu:shader,validation,expression,binary,bitwise_shift:invalid_types:* // 93%, atomics #5474
 webgpu:shader,validation,expression,binary,comparison:* // 74%, https://github.com/gfx-rs/wgpu/issues/5474
 webgpu:shader,validation,expression,binary,div_rem:* // 86%, https://github.com/gfx-rs/wgpu/issues/5474
 webgpu:shader,validation,expression,binary,short_circuiting_and_or:* // 92%, https://github.com/gfx-rs/wgpu/issues/8440
