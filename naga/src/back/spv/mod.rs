@@ -971,6 +971,7 @@ pub struct Writer {
     pub(crate) ray_query_initialization_tracking: bool,
 
     task_runtime_limits: Option<TaskRuntimeLimits>,
+    mesh_shader_primitive_indices_clamp: bool,
 }
 
 bitflags::bitflags! {
@@ -1077,6 +1078,8 @@ pub struct Options<'a> {
     pub debug_info: Option<DebugInfo<'a>>,
 
     pub task_runtime_limits: Option<TaskRuntimeLimits>,
+
+    pub mesh_shader_primitive_indices_clamp: bool,
 }
 
 impl Default for Options<'_> {
@@ -1100,6 +1103,7 @@ impl Default for Options<'_> {
             use_storage_input_output_16: true,
             debug_info: None,
             task_runtime_limits: None,
+            mesh_shader_primitive_indices_clamp: true,
         }
     }
 }

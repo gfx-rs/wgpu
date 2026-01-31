@@ -2455,6 +2455,7 @@ impl super::Adapter {
                     max_mesh_workgroups_per_dim: limits.max_task_mesh_workgroups_per_dimension,
                     max_mesh_workgroups_total: limits.max_task_mesh_workgroup_total_count,
                 }),
+                mesh_shader_primitive_indices_clamp: true,
             }
         };
 

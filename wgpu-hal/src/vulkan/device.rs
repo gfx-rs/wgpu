@@ -654,7 +654,9 @@ impl super::Device {
                     || !binding_map.is_empty()
                     || naga_shader.debug_source.is_some()
                     || !stage.zero_initialize_workgroup_memory
-                    || !runtime_checks.task_shader_dispatch_tracking;
+                    || !runtime_checks.task_shader_dispatch_tracking
+                    || !runtime_checks.mesh_shader_primitive_indices_clamp;
+
                 let mut temp_options;
                 let options = if needs_temp_options {
                     temp_options = self.naga_options.clone();
@@ -690,6 +692,8 @@ impl super::Device {
                     if !runtime_checks.task_shader_dispatch_tracking {
                         temp_options.task_runtime_limits = None;
                     }
+                    temp_options.mesh_shader_primitive_indices_clamp =
+                        runtime_checks.mesh_shader_primitive_indices_clamp;
 
                     &temp_options
                 } else {
