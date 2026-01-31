@@ -77,6 +77,14 @@ where
 
 #[derive(Default, serde::Deserialize)]
 #[serde(default)]
+pub struct WriterSharedOptions {
+    pub mesh_output_validation: bool,
+    pub task_limits: Option<naga::back::TaskRuntimeLimits>,
+    pub bounds_checks_policies: naga::proc::BoundsCheckPolicies,
+}
+
+#[derive(Default, serde::Deserialize)]
+#[serde(default)]
 pub struct WgslInParameters {
     pub parse_doc_comments: bool,
 }
@@ -117,8 +125,6 @@ pub struct SpirvOutParameters {
     pub binding_map: naga::back::spv::BindingMap,
     pub ray_query_initialization_tracking: bool,
     pub use_storage_input_output_16: bool,
-    pub task_validation: bool,
-    pub mesh_validation: bool,
 }
 impl Default for SpirvOutParameters {
     fn default() -> Self {
@@ -133,15 +139,13 @@ impl Default for SpirvOutParameters {
             ray_query_initialization_tracking: true,
             use_storage_input_output_16: true,
             binding_map: naga::back::spv::BindingMap::default(),
-            task_validation: true,
-            mesh_validation: true,
         }
     }
 }
 impl SpirvOutParameters {
     pub fn to_options<'a>(
         &'a self,
-        bounds_check_policies: naga::proc::BoundsCheckPolicies,
+        shared_info: &WriterSharedOptions,
         debug_info: Option<naga::back::spv::DebugInfo<'a>>,
     ) -> naga::back::spv::Options<'a> {
         use naga::back::spv;
@@ -161,7 +165,7 @@ impl SpirvOutParameters {
             } else {
                 Some(self.capabilities.clone())
             },
-            bounds_check_policies,
+            bounds_check_policies: shared_info.bounds_checks_policies,
             fake_missing_bindings: true,
             binding_map: self.binding_map.clone(),
             zero_initialize_workgroup_memory: spv::ZeroInitializeWorkgroupMemoryMode::Polyfill,
@@ -169,13 +173,8 @@ impl SpirvOutParameters {
             ray_query_initialization_tracking: true,
             debug_info,
             use_storage_input_output_16: self.use_storage_input_output_16,
-            task_runtime_limits: self
-                .task_validation
-                .then_some(naga::back::TaskRuntimeLimits {
-                    max_mesh_workgroups_per_dim: 256,
-                    max_mesh_workgroups_total: 1024,
-                }),
-            mesh_shader_primitive_indices_clamp: self.mesh_validation,
+            task_runtime_limits: shared_info.task_limits,
+            mesh_shader_primitive_indices_clamp: shared_info.mesh_output_validation,
         }
     }
 }
@@ -246,6 +245,17 @@ pub struct Parameters {
 
     pub bounds_check_policies: naga::proc::BoundsCheckPolicies,
     pub pipeline_constants: naga::back::PipelineConstants,
+
+    pub mesh_output_validation: bool,
+    #[serde(default = "default_task_limits")]
+    pub task_limits: Option<naga::back::TaskRuntimeLimits>,
+}
+
+fn default_task_limits() -> Option<naga::back::TaskRuntimeLimits> {
+    Some(naga::back::TaskRuntimeLimits {
+        max_mesh_workgroups_per_dim: 256,
+        max_mesh_workgroups_total: 1024,
+    })
 }
 
 /// Information about a shader input file.
