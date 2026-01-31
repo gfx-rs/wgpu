@@ -389,6 +389,7 @@ impl<W: Write> Writer<W> {
         }
         if needed.primitive_index {
             writeln!(self.out, "enable primitive_index;")?;
+            any_written = true;
         }
         if needed.cooperative_matrix {
             writeln!(self.out, "enable wgpu_cooperative_matrix;")?;

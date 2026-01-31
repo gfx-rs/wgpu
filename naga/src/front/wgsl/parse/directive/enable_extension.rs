@@ -222,6 +222,7 @@ impl ImplementedEnableExtension {
         Self::WgpuRayQueryVertexReturn,
         Self::WgpuRayTracingPipeline,
         Self::WgpuCooperativeMatrix,
+        Self::PrimitiveIndex,
     ];
 
     /// Returns slice of all variants of [`ImplementedEnableExtension`].
@@ -241,6 +242,7 @@ impl ImplementedEnableExtension {
             Self::WgpuRayQueryVertexReturn => C::RAY_HIT_VERTEX_POSITION,
             Self::WgpuCooperativeMatrix => C::COOPERATIVE_MATRIX,
             Self::WgpuRayTracingPipeline => C::RAY_TRACING_PIPELINE,
+            Self::PrimitiveIndex => C::PRIMITIVE_INDEX,
         }
     }
 }
