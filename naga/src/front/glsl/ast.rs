@@ -116,6 +116,10 @@ pub struct HirExpr {
 
 #[derive(Debug, Clone)]
 pub enum HirExprKind {
+    /// Represents a sequence of expressions. It returns the type and value of the last (i.e. right-most) expression.
+    Sequence {
+        exprs: Vec<Handle<HirExpr>>,
+    },
     Access {
         base: Handle<HirExpr>,
         index: Handle<HirExpr>,

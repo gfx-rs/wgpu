@@ -253,7 +253,7 @@ fn write_output_msl(
         }
     }
 
-    input.write_output_file("msl", "msl", string, DIR_OUT);
+    input.write_output_file("msl", "metal", string, DIR_OUT);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -335,7 +335,12 @@ fn write_output_hlsl(
             naga::ShaderStage::Vertex => &mut config.vertex,
             naga::ShaderStage::Fragment => &mut config.fragment,
             naga::ShaderStage::Compute => &mut config.compute,
-            naga::ShaderStage::Task | naga::ShaderStage::Mesh => unreachable!(),
+            naga::ShaderStage::Task
+            | naga::ShaderStage::Mesh
+            | naga::ShaderStage::RayGeneration
+            | naga::ShaderStage::AnyHit
+            | naga::ShaderStage::ClosestHit
+            | naga::ShaderStage::Miss => unreachable!(),
         }
         .push(hlsl_snapshots::ConfigItem {
             entry_point: name.clone(),
@@ -435,7 +440,6 @@ fn convert_snapshots_spv() {
 // While we _can_ run this test under miri, it is extremely slow (>5 minutes),
 // and naga isn't the primary target for miri testing, so we disable it.
 #[cfg_attr(miri, ignore)]
-#[allow(unused_variables)]
 #[test]
 fn convert_snapshots_glsl() {
     let _ = env_logger::try_init();

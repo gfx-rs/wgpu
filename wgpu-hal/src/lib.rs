@@ -2031,7 +2031,7 @@ impl TextureDescriptor<'_> {
 
     pub fn is_cube_compatible(&self) -> bool {
         self.dimension == wgt::TextureDimension::D2
-            && self.size.depth_or_array_layers % 6 == 0
+            && self.size.depth_or_array_layers.is_multiple_of(6)
             && self.sample_count == 1
             && self.size.width == self.size.height
     }
@@ -2336,28 +2336,27 @@ impl fmt::Debug for NagaShader {
 }
 
 /// Shader input.
-#[allow(clippy::large_enum_variant)]
 pub enum ShaderInput<'a> {
     Naga(NagaShader),
+    MetalLib {
+        file: &'a [u8],
+        num_workgroups: (u32, u32, u32),
+    },
     Msl {
         shader: &'a str,
-        entry_point: String,
         num_workgroups: (u32, u32, u32),
     },
     SpirV(&'a [u32]),
     Dxil {
         shader: &'a [u8],
-        entry_point: String,
         num_workgroups: (u32, u32, u32),
     },
     Hlsl {
         shader: &'a str,
-        entry_point: String,
         num_workgroups: (u32, u32, u32),
     },
     Glsl {
         shader: &'a str,
-        entry_point: String,
         num_workgroups: (u32, u32, u32),
     },
 }

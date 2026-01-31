@@ -809,7 +809,8 @@ pub struct TexelCopyBufferLayout {
     ///
     /// Must be a multiple of 256 for [`CommandEncoder::copy_buffer_to_texture`][CEcbtt]
     /// and [`CommandEncoder::copy_texture_to_buffer`][CEcttb]. You must manually pad the
-    /// image such that this is a multiple of 256. It will not affect the image data.
+    /// buffer as if the image width is a multiple of 256. An image of size (500, 500) can be
+    /// written to a buffer of size (512, 500) with `bytes_per_row` of 512,
     ///
     /// [`Queue::write_texture`][Qwt] does not have this requirement.
     ///

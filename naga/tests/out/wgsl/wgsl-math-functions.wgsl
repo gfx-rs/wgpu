@@ -9,6 +9,7 @@ fn main() {
     let g = refract(v, v, 1f);
     let sign_b = vec4<i32>(-1i, -1i, -1i, -1i);
     let sign_d = vec4<f32>(-1f, -1f, -1f, -1f);
+    let sign_e = vec4<f32>(0f, 0f, 0f, 0f);
     let flb_b = vec2<i32>(-1i, -1i);
     let flb_c = vec2<u32>(0u, 0u);
     let ftb_c = vec2<i32>(0i, 0i);

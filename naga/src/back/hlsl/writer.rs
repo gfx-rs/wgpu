@@ -158,6 +158,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
         self.namer.reset(
             module,
             &super::keywords::RESERVED_SET,
+            proc::KeywordSet::empty(),
             &super::keywords::RESERVED_CASE_INSENSITIVE_SET,
             super::keywords::RESERVED_PREFIXES,
             &mut self.names,
@@ -1013,6 +1014,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 // The type of the immediates will be wrapped in `ConstantBuffer`
                 write!(self.out, "ConstantBuffer<")?;
                 "b"
+            }
+            crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload => {
+                unimplemented!()
             }
         };
 
@@ -2801,6 +2805,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 writeln!(self.out, ");")?;
             }
             Statement::CooperativeStore { .. } => unimplemented!(),
+            Statement::RayPipelineFunction(_) => unreachable!(),
         }
 
         Ok(())
@@ -3131,7 +3136,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 | crate::AddressSpace::Private
                                 | crate::AddressSpace::WorkGroup
                                 | crate::AddressSpace::Immediate
-                                | crate::AddressSpace::TaskPayload,
+                                | crate::AddressSpace::TaskPayload
+                                | crate::AddressSpace::RayPayload
+                                | crate::AddressSpace::IncomingRayPayload,
                             )
                             | None => true,
                             Some(crate::AddressSpace::Uniform) => {

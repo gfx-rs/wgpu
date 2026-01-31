@@ -791,7 +791,12 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                     .instance_create_surface(raw_display_handle, raw_window_handle, None)
             },
 
-            #[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
+            #[cfg(all(
+                unix,
+                not(target_vendor = "apple"),
+                not(target_family = "wasm"),
+                not(target_os = "netbsd")
+            ))]
             SurfaceTargetUnsafe::Drm {
                 fd,
                 plane,
@@ -815,6 +820,11 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
             SurfaceTargetUnsafe::CoreAnimationLayer(layer) => unsafe {
                 self.0.instance_create_surface_metal(layer, None)
             },
+
+            #[cfg(target_os = "netbsd")]
+            SurfaceTargetUnsafe::Drm { .. } => Err(
+                wgc::instance::CreateSurfaceError::BackendNotEnabled(wgt::Backend::Vulkan),
+            ),
 
             #[cfg(dx12)]
             SurfaceTargetUnsafe::CompositionVisual(visual) => unsafe {
@@ -3068,8 +3078,10 @@ impl dispatch::ComputePassInterface for CoreComputePass {
             );
         }
     }
+}
 
-    fn end(&mut self) {
+impl Drop for CoreComputePass {
+    fn drop(&mut self) {
         if let Err(cause) = self.context.0.compute_pass_end(&mut self.pass) {
             self.context.handle_error(
                 &self.error_sink,
@@ -3078,12 +3090,6 @@ impl dispatch::ComputePassInterface for CoreComputePass {
                 "ComputePass::end",
             );
         }
-    }
-}
-
-impl Drop for CoreComputePass {
-    fn drop(&mut self) {
-        dispatch::ComputePassInterface::end(self);
     }
 }
 
@@ -3683,8 +3689,10 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
             );
         }
     }
+}
 
-    fn end(&mut self) {
+impl Drop for CoreRenderPass {
+    fn drop(&mut self) {
         if let Err(cause) = self.context.0.render_pass_end(&mut self.pass) {
             self.context.handle_error(
                 &self.error_sink,
@@ -3693,12 +3701,6 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
                 "RenderPass::end",
             );
         }
-    }
-}
-
-impl Drop for CoreRenderPass {
-    fn drop(&mut self) {
-        dispatch::RenderPassInterface::end(self);
     }
 }
 

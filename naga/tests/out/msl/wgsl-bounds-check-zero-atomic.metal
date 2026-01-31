@@ -14,14 +14,14 @@ struct _mslBufferSizes {
     uint size0;
 };
 
-struct type_1 {
+struct type_2 {
     metal::atomic_uint inner[10];
 };
-typedef metal::atomic_uint type_2[1];
+typedef metal::atomic_uint type_3[1];
 struct Globals {
     metal::atomic_uint a;
-    type_1 b;
-    type_2 c;
+    type_2 b;
+    type_3 c;
 };
 
 uint fetch_add_atomic(

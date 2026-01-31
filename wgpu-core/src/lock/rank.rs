@@ -133,7 +133,6 @@ define_lock_ranks! {
     rank DEVICE_COMMAND_INDICES "Device::command_indices" followed by {}
     rank DEVICE_DEFERRED_DESTROY "Device::deferred_destroy" followed by {}
     rank DEVICE_FENCE "Device::fence" followed by { }
-    #[allow(dead_code)]
     rank DEVICE_TRACE "Device::trace" followed by { }
     rank DEVICE_TRACKERS "Device::trackers" followed by { }
     rank DEVICE_LOST_CLOSURE "Device::device_lost_closure" followed by { }
