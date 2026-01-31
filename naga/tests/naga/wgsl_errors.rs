@@ -6,10 +6,6 @@
 //! for the validator tests to be in the `validation` test suite.
 
 #![cfg(feature = "wgsl-in")]
-#![allow(
-    // We need to investigate these.
-    clippy::result_large_err
-)]
 
 use naga::{
     compact::KeepUnused,
