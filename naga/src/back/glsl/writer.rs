@@ -729,6 +729,10 @@ impl<'a, W: Write> Writer<'a, W> {
             crate::AddressSpace::Function => unreachable!(),
             // Textures and samplers are handled directly in `Writer::write`.
             crate::AddressSpace::Handle => unreachable!(),
+            // ray tracing pipelines unsupported
+            crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload => {
+                unreachable!()
+            }
         }
 
         Ok(())
@@ -1095,7 +1099,12 @@ impl<'a, W: Write> Writer<'a, W> {
             ShaderStage::Vertex => output,
             ShaderStage::Fragment => !output,
             ShaderStage::Compute => false,
-            ShaderStage::Task | ShaderStage::Mesh => unreachable!(),
+            ShaderStage::Task
+            | ShaderStage::Mesh
+            | ShaderStage::RayGeneration
+            | ShaderStage::AnyHit
+            | ShaderStage::ClosestHit
+            | ShaderStage::Miss => unreachable!(),
         };
 
         // Write the I/O locations, if allowed
@@ -2231,6 +2240,7 @@ impl<'a, W: Write> Writer<'a, W> {
                 writeln!(self.out, ");")?;
             }
             Statement::CooperativeStore { .. } => unimplemented!(),
+            Statement::RayPipelineFunction(_) => unimplemented!(),
         }
 
         Ok(())

@@ -212,6 +212,9 @@ impl super::AddressSpace {
             // TaskPayload isn't always writable, but this is checked for elsewhere,
             // when not using multiple payloads and matching the entry payload is checked.
             crate::AddressSpace::TaskPayload => Sa::LOAD | Sa::STORE,
+            crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload => {
+                Sa::LOAD | Sa::STORE
+            }
         }
     }
 }
@@ -662,6 +665,7 @@ impl super::ShaderStage {
         match self {
             Self::Vertex | Self::Fragment => false,
             Self::Compute | Self::Task | Self::Mesh => true,
+            Self::RayGeneration | Self::AnyHit | Self::ClosestHit | Self::Miss => false,
         }
     }
 }

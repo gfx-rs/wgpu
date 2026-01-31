@@ -46,6 +46,7 @@ pub enum DataKind {
     Spv,
     Dxil,
     Hlsl,
+    MetalLib,
     Msl,
     Glsl,
 }
@@ -59,6 +60,7 @@ impl core::fmt::Display for DataKind {
             DataKind::Spv => "spv",
             DataKind::Dxil => "dxil",
             DataKind::Hlsl => "hlsl",
+            DataKind::MetalLib => "metallib",
             DataKind::Msl => "metal",
             DataKind::Glsl => "glsl",
         };
@@ -73,7 +75,7 @@ impl DataKind {
             DataKind::Wgsl | DataKind::Ron | DataKind::Hlsl | DataKind::Msl | DataKind::Glsl => {
                 true
             }
-            DataKind::Bin | DataKind::Spv | DataKind::Dxil => false,
+            DataKind::Bin | DataKind::Spv | DataKind::Dxil | DataKind::MetalLib => false,
         }
     }
 }
@@ -94,6 +96,8 @@ impl Data {
                     DataKind::Dxil
                 } else if file.ends_with(".hlsl") {
                     DataKind::Hlsl
+                } else if file.ends_with(".metallib") {
+                    DataKind::MetalLib
                 } else if file.ends_with(".metal") {
                     DataKind::Msl
                 } else if file.ends_with(".glsl") {
@@ -184,10 +188,8 @@ pub enum Action<'a, R: ReferenceType> {
         id: PointerId<markers::ShaderModule>,
         data: Vec<Data>,
 
-        entry_point: String,
         label: crate::Label<'a>,
         num_workgroups: (u32, u32, u32),
-        runtime_checks: wgt::ShaderRuntimeChecks,
     },
     DestroyShaderModule(PointerId<markers::ShaderModule>),
     CreateComputePipeline {

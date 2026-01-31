@@ -882,6 +882,17 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
             adjust(&mut data.pointer);
             adjust(&mut data.stride);
         }
+        Statement::RayPipelineFunction(ref mut func) => match *func {
+            crate::RayPipelineFunction::TraceRay {
+                ref mut acceleration_structure,
+                ref mut descriptor,
+                ref mut payload,
+            } => {
+                adjust(acceleration_structure);
+                adjust(descriptor);
+                adjust(payload);
+            }
+        },
         Statement::Break
         | Statement::Continue
         | Statement::Kill

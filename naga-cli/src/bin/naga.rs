@@ -144,6 +144,14 @@ struct Args {
     /// defines to be passed to the parser (only glsl is supported)
     #[argh(option, short = 'D')]
     defines: Vec<Defines>,
+
+    /// capabilities for parsing and validation.
+    ///
+    /// Can be a comma-separated list of capability names (e.g.,
+    /// "shader_float16,dual_source_blending"), a numeric bitflags value (e.g.,
+    /// "67108864"), the string "none", or the string "all".
+    #[argh(option, default = "CapabilitiesArg(naga::valid::Capabilities::all())")]
+    capabilities: CapabilitiesArg,
 }
 
 /// Newtype so we can implement [`FromStr`] for `BoundsCheckPolicy`.
@@ -334,6 +342,37 @@ impl FromStr for Defines {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+struct CapabilitiesArg(naga::valid::Capabilities);
+
+impl FromStr for CapabilitiesArg {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use naga::valid::Capabilities;
+
+        let s = s.to_uppercase();
+
+        if s == "NONE" {
+            Ok(Self(Capabilities::empty()))
+        } else if s == "ALL" {
+            Ok(Self(Capabilities::all()))
+        } else if let Ok(bits) = s.parse::<u64>() {
+            Capabilities::from_bits(bits)
+                .map(Self)
+                .ok_or_else(|| format!("Invalid capabilities bitflags value: {bits}"))
+        } else {
+            s.split(',')
+                .try_fold(Capabilities::empty(), |acc, s| {
+                    Capabilities::from_name(s.trim())
+                        .map(|cap| acc | cap)
+                        .ok_or(format!("Unknown capability {}", s.trim()))
+                })
+                .map(Self)
+        }
+    }
+}
+
 #[derive(Default)]
 struct Parameters<'a> {
     validation_flags: naga::valid::ValidationFlags,
@@ -350,6 +389,7 @@ struct Parameters<'a> {
     input_kind: Option<InputKind>,
     shader_stage: Option<ShaderStage>,
     defines: FastHashMap<String, String>,
+    capabilities: naga::valid::Capabilities,
 
     /// We use this copy of `args.compact` to know whether we should pass the
     /// entrypoint to `process_overrides`, which will result in removal from
@@ -503,6 +543,7 @@ fn run() -> anyhow::Result<()> {
     );
 
     params.compact = args.compact;
+    params.capabilities = args.capabilities.0;
 
     if args.bulk_validate {
         return bulk_validate(&args, &params);
@@ -680,7 +721,12 @@ fn parse_input(input_path: &Path, input: Vec<u8>, params: &Parameters) -> anyhow
         },
         InputKind::Wgsl => {
             let input = String::from_utf8(input)?;
-            let result = naga::front::wgsl::parse_str(&input);
+            let options = naga::front::wgsl::Options {
+                parse_doc_comments: false,
+                capabilities: params.capabilities,
+            };
+            let mut frontend = naga::front::wgsl::Frontend::new_with_options(options);
+            let result = frontend.parse(&input);
             match result {
                 Ok(v) => Parsed {
                     module: v,
@@ -959,7 +1005,7 @@ fn bulk_validate(args: &Args, params: &Parameters) -> anyhow::Result<()> {
         };
 
         let mut validator =
-            naga::valid::Validator::new(params.validation_flags, naga::valid::Capabilities::all());
+            naga::valid::Validator::new(params.validation_flags, params.capabilities);
         validator.subgroup_stages(naga::valid::ShaderStages::all());
         validator.subgroup_operations(naga::valid::SubgroupOperationSet::all());
 

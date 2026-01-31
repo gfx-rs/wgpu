@@ -262,7 +262,12 @@ impl Namer {
                         crate::ShaderStage::Vertex => "VertexOutput",
                         crate::ShaderStage::Fragment => "FragmentOutput",
                         crate::ShaderStage::Compute => "ComputeOutput",
-                        crate::ShaderStage::Task | crate::ShaderStage::Mesh => unreachable!(),
+                        crate::ShaderStage::Task
+                        | crate::ShaderStage::Mesh
+                        | crate::ShaderStage::RayGeneration
+                        | crate::ShaderStage::ClosestHit
+                        | crate::ShaderStage::AnyHit
+                        | crate::ShaderStage::Miss => unreachable!(),
                     };
                     entrypoint_type_fallbacks.insert(result.ty, label);
                 }

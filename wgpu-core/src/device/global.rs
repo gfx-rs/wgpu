@@ -1099,6 +1099,7 @@ impl Global {
                     ),
                     (desc.dxil.as_deref(), DataKind::Dxil),
                     (desc.hlsl.as_ref().map(|a| a.as_bytes()), DataKind::Hlsl),
+                    (desc.metallib.as_deref(), DataKind::MetalLib),
                     (desc.msl.as_ref().map(|a| a.as_bytes()), DataKind::Msl),
                     (desc.glsl.as_ref().map(|a| a.as_bytes()), DataKind::Glsl),
                     (desc.wgsl.as_ref().map(|a| a.as_bytes()), DataKind::Wgsl),
@@ -1110,11 +1111,8 @@ impl Global {
                 trace.add(trace::Action::CreateShaderModulePassthrough {
                     id: shader.to_trace(),
                     data: file_names,
-
-                    entry_point: desc.entry_point.clone(),
                     label: desc.label.clone(),
                     num_workgroups: desc.num_workgroups,
-                    runtime_checks: desc.runtime_checks,
                 });
             };
 
@@ -1392,6 +1390,7 @@ impl Global {
                 Ok(cache) => cache,
                 Err(e) => break 'error e.into(),
             };
+            let mut passthrough_stages = wgt::ShaderStages::empty();
 
             let vertex = match desc.vertex {
                 RenderPipelineVertexProcessor::Vertex(ref vertex) => {
@@ -1407,6 +1406,9 @@ impl Global {
                         Ok(module) => module,
                         Err(e) => break 'error e,
                     };
+                    if module.interface.is_none() {
+                        passthrough_stages |= wgt::ShaderStages::VERTEX;
+                    }
                     let stage = ResolvedProgrammableStageDescriptor {
                         module,
                         entry_point: vertex.stage.entry_point.clone(),
@@ -1434,6 +1436,9 @@ impl Global {
                             Ok(module) => module,
                             Err(e) => break 'error e,
                         };
+                        if module.interface.is_none() {
+                            passthrough_stages |= wgt::ShaderStages::TASK;
+                        }
                         let state = ResolvedProgrammableStageDescriptor {
                             module,
                             entry_point: task.stage.entry_point.clone(),
@@ -1458,6 +1463,9 @@ impl Global {
                         Ok(module) => module,
                         Err(e) => break 'error e,
                     };
+                    if mesh_module.interface.is_none() {
+                        passthrough_stages |= wgt::ShaderStages::VERTEX;
+                    }
                     let mesh_stage = ResolvedProgrammableStageDescriptor {
                         module: mesh_module,
                         entry_point: mesh.stage.entry_point.clone(),
@@ -1486,6 +1494,9 @@ impl Global {
                     Ok(module) => module,
                     Err(e) => break 'error e,
                 };
+                if module.interface.is_none() {
+                    passthrough_stages |= wgt::ShaderStages::FRAGMENT;
+                }
                 let stage = ResolvedProgrammableStageDescriptor {
                     module,
                     entry_point: state.stage.entry_point.clone(),
@@ -1499,6 +1510,12 @@ impl Global {
             } else {
                 None
             };
+
+            if !passthrough_stages.is_empty() && layout.is_none() {
+                break 'error pipeline::CreateRenderPipelineError::Implicit(
+                    pipeline::ImplicitLayoutError::Passthrough(passthrough_stages),
+                );
+            }
 
             let desc = ResolvedGeneralRenderPipelineDescriptor {
                 label: desc.label.clone(),
@@ -1642,6 +1659,11 @@ impl Global {
                 Ok(module) => module,
                 Err(e) => break 'error e.into(),
             };
+            if module.interface.is_none() && layout.is_none() {
+                break 'error pipeline::CreateComputePipelineError::Implicit(
+                    pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::COMPUTE),
+                );
+            }
             let stage = ResolvedProgrammableStageDescriptor {
                 module,
                 entry_point: desc.stage.entry_point.clone(),

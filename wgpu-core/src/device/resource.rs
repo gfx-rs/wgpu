@@ -30,8 +30,9 @@ use crate::{
     },
     command, conv,
     device::{
-        bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
-        DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures, RenderPassContext,
+        bgl, create_validator, features_to_naga_capabilities, life::WaitIdleError, map_buffer,
+        AttachmentData, DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures,
+        RenderPassContext,
     },
     hal_label,
     init_tracker::{
@@ -2233,8 +2234,13 @@ impl Device {
         let (module, source) = match source {
             #[cfg(feature = "wgsl")]
             pipeline::ShaderModuleSource::Wgsl(code) => {
-                profiling::scope!("naga::front::wgsl::parse_str");
-                let module = naga::front::wgsl::parse_str(&code).map_err(|inner| {
+                profiling::scope!("naga::front::wgsl::parse");
+                let capabilities =
+                    features_to_naga_capabilities(self.features, self.downlevel.flags);
+                let mut options = naga::front::wgsl::Options::new();
+                options.capabilities = capabilities;
+                let mut frontend = naga::front::wgsl::Frontend::new_with_options(options);
+                let module = frontend.parse(&code).map_err(|inner| {
                     pipeline::CreateShaderModuleError::Parsing(naga::error::ShaderError {
                         source: code.to_string(),
                         label: desc.label.as_ref().map(|l| l.to_string()),
@@ -2372,33 +2378,37 @@ impl Device {
                 if let Some(dxil) = &descriptor.dxil {
                     hal::ShaderInput::Dxil {
                         shader: dxil,
-                        entry_point: descriptor.entry_point.clone(),
                         num_workgroups: descriptor.num_workgroups,
                     }
                 } else if let Some(hlsl) = &descriptor.hlsl {
                     hal::ShaderInput::Hlsl {
                         shader: hlsl,
-                        entry_point: descriptor.entry_point.clone(),
                         num_workgroups: descriptor.num_workgroups,
                     }
                 } else {
                     return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend);
                 }
             }
-            wgt::Backend::Metal => hal::ShaderInput::Msl {
-                shader: descriptor
-                    .msl
-                    .as_ref()
-                    .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
-                entry_point: descriptor.entry_point.clone(),
-                num_workgroups: descriptor.num_workgroups,
-            },
+            wgt::Backend::Metal => {
+                if let Some(metallib) = &descriptor.metallib {
+                    hal::ShaderInput::MetalLib {
+                        file: metallib,
+                        num_workgroups: descriptor.num_workgroups,
+                    }
+                } else if let Some(msl) = &descriptor.msl {
+                    hal::ShaderInput::Msl {
+                        shader: msl,
+                        num_workgroups: descriptor.num_workgroups,
+                    }
+                } else {
+                    return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend);
+                }
+            }
             wgt::Backend::Gl => hal::ShaderInput::Glsl {
                 shader: descriptor
                     .glsl
                     .as_ref()
                     .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
-                entry_point: descriptor.entry_point.clone(),
                 num_workgroups: descriptor.num_workgroups,
             },
             wgt::Backend::Noop => {
@@ -3909,14 +3919,12 @@ impl Device {
         let mut vertex_steps;
         let mut vertex_buffers;
         let mut total_attributes;
-        let mut shader_expects_dual_source_blending = false;
-        let mut pipeline_expects_dual_source_blending = false;
+        let mut dual_source_blending = false;
+        let mut has_depth_attachment = false;
         if let pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) = desc.vertex {
             vertex_steps = Vec::with_capacity(vertex.buffers.len());
             vertex_buffers = Vec::with_capacity(vertex.buffers.len());
             total_attributes = 0;
-            shader_expects_dual_source_blending = false;
-            pipeline_expects_dual_source_blending = false;
             for (i, vb_state) in vertex.buffers.iter().enumerate() {
                 // https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-gpuvertexbufferlayout
 
@@ -4136,7 +4144,7 @@ impl Device {
                             if factor.ref_second_blend_source() {
                                 self.require_features(wgt::Features::DUAL_SOURCE_BLENDING)?;
                                 if i == 0 {
-                                    pipeline_expects_dual_source_blending = true;
+                                    dual_source_blending = true;
                                     break;
                                 } else {
                                     return Err(pipeline::CreateRenderPipelineError
@@ -4182,7 +4190,9 @@ impl Device {
                 }
 
                 let aspect = hal::FormatAspects::from(ds.format);
-                if ds.is_depth_enabled() && !aspect.contains(hal::FormatAspects::DEPTH) {
+                if aspect.contains(hal::FormatAspects::DEPTH) {
+                    has_depth_attachment = true;
+                } else if ds.is_depth_enabled() {
                     break 'error Some(pipeline::DepthStencilStateError::FormatNotDepth(ds.format));
                 }
                 if ds.stencil.is_enabled() && !aspect.contains(hal::FormatAspects::STENCIL) {
@@ -4217,6 +4227,16 @@ impl Device {
 
             if ds.bias.clamp != 0.0 {
                 self.require_downlevel_flags(wgt::DownlevelFlags::DEPTH_BIAS_CLAMP)?;
+            }
+
+            if (ds.bias.is_enabled() || ds.bias.clamp != 0.0)
+                && !desc.primitive.topology.is_triangles()
+            {
+                return Err(pipeline::CreateRenderPipelineError::DepthStencilState(
+                    pipeline::DepthStencilStateError::DepthBiasWithIncompatibleTopology(
+                        desc.primitive.topology,
+                    ),
+                ));
             }
         }
 
@@ -4391,7 +4411,10 @@ impl Device {
         let fragment_entry_point_name;
         let fragment_stage = match desc.fragment {
             Some(ref fragment_state) => {
-                let stage = validation::ShaderStageForValidation::Fragment;
+                let stage = validation::ShaderStageForValidation::Fragment {
+                    dual_source_blending,
+                    has_depth_attachment,
+                };
                 let stage_bit = stage.to_wgt_bit();
 
                 let shader_module = &fragment_state.stage.module;
@@ -4426,15 +4449,6 @@ impl Device {
                     validated_stages |= stage_bit;
                 }
 
-                if let Some(ref interface) = shader_module.interface {
-                    shader_expects_dual_source_blending = interface
-                        .fragment_uses_dual_source_blending(&fragment_entry_point_name)
-                        .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
-                            stage: stage_bit,
-                            error,
-                        })?;
-                }
-
                 Some(hal::ProgrammableStage {
                     module: shader_module.raw(),
                     entry_point: &fragment_entry_point_name,
@@ -4446,17 +4460,6 @@ impl Device {
             }
             None => None,
         };
-
-        if !pipeline_expects_dual_source_blending && shader_expects_dual_source_blending {
-            return Err(
-                pipeline::CreateRenderPipelineError::ShaderExpectsPipelineToUseDualSourceBlending,
-            );
-        }
-        if pipeline_expects_dual_source_blending && !shader_expects_dual_source_blending {
-            return Err(
-                pipeline::CreateRenderPipelineError::PipelineExpectsShaderToUseDualSourceBlending,
-            );
-        }
 
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
             for (i, output) in io.varyings.iter() {

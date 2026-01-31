@@ -105,7 +105,7 @@ mod instructions;
 mod layout;
 mod mesh_shader;
 mod ray;
-mod recyclable;
+mod reclaimable;
 mod selection;
 mod subgroup;
 mod writer;
@@ -655,10 +655,10 @@ impl ops::IndexMut<Handle<crate::Expression>> for CachedExpressions {
         id
     }
 }
-impl recyclable::Recyclable for CachedExpressions {
-    fn recycle(self) -> Self {
+impl reclaimable::Reclaimable for CachedExpressions {
+    fn reclaim(self) -> Self {
         CachedExpressions {
-            ids: self.ids.recycle(),
+            ids: self.ids.reclaim(),
         }
     }
 }

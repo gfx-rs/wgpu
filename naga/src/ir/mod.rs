@@ -335,6 +335,18 @@ pub enum ShaderStage {
 
     /// Compute pipeline shader.
     Compute,
+
+    /// A ray generation shader, in a ray tracing pipeline.
+    RayGeneration,
+
+    /// A miss shader, in a ray tracing pipeline.
+    Miss,
+
+    /// A any hit shader, in a ray tracing pipeline.
+    AnyHit,
+
+    /// A closest hit shader, in a ray tracing pipeline.
+    ClosestHit,
 }
 
 /// Addressing space of variables.
@@ -373,6 +385,14 @@ pub enum AddressSpace {
     Immediate,
     /// Task shader to mesh shader payload
     TaskPayload,
+
+    /// Ray tracing payload, for inputting in TraceRays
+    RayPayload,
+    /// Ray tracing payload, for entrypoints invoked by a TraceRays call
+    ///
+    /// Each entrypoint may reference only one variable in this scope, as
+    /// only one may be passed as a payload.
+    IncomingRayPayload,
 }
 
 /// Built-in inputs and outputs.
@@ -394,7 +414,7 @@ pub enum BuiltIn {
     ClipDistance,
     /// Written in vertex & mesh shaders
     CullDistance,
-    /// Read in vertex shaders
+    /// Read in vertex, any- and closest-hit shaders
     InstanceIndex,
     /// Written in vertex & mesh shaders
     PointSize,
@@ -409,7 +429,7 @@ pub enum BuiltIn {
     PointCoord,
     /// Read in fragment shaders
     FrontFacing,
-    /// Read in fragment shaders, written in mesh shaders
+    /// Read in fragment shaders, written in mesh shaders, read in any and closest hit shaders.
     PrimitiveIndex,
     /// Read in fragment shaders
     Barycentric { perspective: bool },
@@ -459,6 +479,46 @@ pub enum BuiltIn {
     PrimitiveCount,
     /// Written to a workgroup variable in mesh shaders
     Primitives,
+
+    /// Read in all ray tracing pipeline shaders, the id within the number of
+    /// rays that this current ray is.
+    RayInvocationId,
+    /// Read in all ray tracing pipeline shaders, the number of rays created.
+    NumRayInvocations,
+    /// Read in closest hit and any hit shaders, the custom data in the tlas
+    /// instance
+    InstanceCustomData,
+    /// Read in closest hit and any hit shaders, the index of the geometry in
+    /// the blas.
+    GeometryIndex,
+    /// Read in closest hit, any hit, and miss shaders, the origin of the ray.
+    WorldRayOrigin,
+    /// Read in closest hit, any hit, and miss shaders, the direction of the
+    /// ray.
+    WorldRayDirection,
+    /// Read in closest hit and any hit shaders, the direction of the ray in
+    /// object space.
+    ObjectRayOrigin,
+    /// Read in closest hit and any hit shaders, the direction of the ray in
+    /// object space.
+    ObjectRayDirection,
+    /// Read in closest hit, any hit, and miss shaders, the t min provided by
+    /// in the ray desc.
+    RayTmin,
+    /// Read in closest hit, any hit, and miss shaders, the final bounds at which
+    /// a hit is accepted (the closest committed hit if there is one otherwise, t
+    /// max provided in the ray desc).
+    RayTCurrentMax,
+    /// Read in closest hit and any hit shaders, the matrix for converting from
+    /// object space to world space
+    ObjectToWorld,
+    /// Read in closest hit and any hit shaders, the matrix for converting from
+    /// world space to object space
+    WorldToObject,
+    /// Read in closest hit and any hit shaders, the type of hit as provided by
+    /// the intersection function if any, otherwise this is 254 (0xFE) for a
+    /// front facing triangle and 255 (0xFF) for a back facing triangle
+    HitKind,
 }
 
 /// Number of bytes per scalar.
@@ -2278,6 +2338,8 @@ pub enum Statement {
         /// The specific operation we're performing on `query`.
         fun: RayQueryFunction,
     },
+    /// A ray tracing pipeline shader intrinsic.
+    RayPipelineFunction(RayPipelineFunction),
     /// Calculate a bitmask using a boolean from each active thread in the subgroup
     SubgroupBallot {
         /// The [`SubgroupBallotResult`] expression representing this load's result.
@@ -2462,6 +2524,9 @@ pub struct EntryPoint {
     pub mesh_info: Option<MeshStageInfo>,
     /// The unique global variable used as a task payload from task shader to mesh shader
     pub task_payload: Option<Handle<GlobalVariable>>,
+    /// The unique global variable used as an incoming ray payload going into any hit, closest hit and miss shaders.
+    /// Unlike the outgoing ray payload, an incoming ray payload must be unique
+    pub incoming_ray_payload: Option<Handle<GlobalVariable>>,
 }
 
 /// Return types predeclared for the frexp, modf, and atomicCompareExchangeWeak built-in functions.
@@ -2675,6 +2740,36 @@ pub struct MeshStageInfo {
     pub primitive_output_type: Handle<Type>,
     /// The global variable holding the outputted vertices, primitives, and counts
     pub output_variable: Handle<GlobalVariable>,
+}
+
+/// Ray tracing pipeline intrinsics
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
+pub enum RayPipelineFunction {
+    /// Traces a ray through the given acceleration structure
+    TraceRay {
+        /// The acceleration structure within which this ray should search for hits.
+        ///
+        /// The expression must be an [`AccelerationStructure`].
+        ///
+        /// [`AccelerationStructure`]: TypeInner::AccelerationStructure
+        acceleration_structure: Handle<Expression>,
+
+        #[allow(rustdoc::private_intra_doc_links)]
+        /// A struct of detailed parameters for the ray query.
+        ///
+        /// This expression should have the struct type given in
+        /// [`SpecialTypes::ray_desc`]. This is available in the WGSL
+        /// front end as the `RayDesc` type.
+        descriptor: Handle<Expression>,
+
+        /// A pointer in the ray_payload or incoming_ray_payload address spaces
+        payload: Handle<Expression>,
+        // Do we want miss index? What about sbt offset and sbt stride (could be hard to validate)?
+        // https://github.com/gfx-rs/wgpu/issues/8894
+    },
 }
 
 /// Shader module.

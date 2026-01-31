@@ -18,7 +18,6 @@ webgpu:api,validation,compute_pipeline:limits,workgroup_storage_size:* // 0%
 webgpu:api,validation,compute_pipeline:overrides,identifier:* // 46%
 webgpu:api,validation,compute_pipeline:overrides,workgroup_size,limits,workgroup_storage_size:* // 0%
 webgpu:api,validation,compute_pipeline:overrides,workgroup_size,limits:* // 0%
-webgpu:api,validation,compute_pipeline:resource_compatibility:* // 84%
 webgpu:api,validation,compute_pipeline:storage_texture,format:* // 8%
 webgpu:api,validation,createBindGroup:buffer,resource_binding_size:* // 33%
 webgpu:api,validation,createBindGroup:buffer,resource_state:* // 0%
@@ -75,7 +74,6 @@ webgpu:api,validation,render_pipeline,misc:external_texture:* // 0%
 webgpu:api,validation,render_pipeline,misc:storage_texture,format:* // 8%
 webgpu:api,validation,render_pipeline,multisample_state:* // 60%, https://github.com/gfx-rs/wgpu/issues/8779
 webgpu:api,validation,render_pipeline,overrides:* // 83%
-webgpu:api,validation,render_pipeline,resource_compatibility:* // 90%
 webgpu:api,validation,render_pipeline,vertex_state:max_vertex_attribute_limit:* // 0%
 webgpu:api,validation,render_pipeline,vertex_state:max_vertex_buffer_limit:* // 0%
 webgpu:api,validation,resource_usages,texture,in_pass_encoder:subresources_and_binding_types_combination_for_color:* // 92%, https://github.com/gfx-rs/wgpu/issues/3126
