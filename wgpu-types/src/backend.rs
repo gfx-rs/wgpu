@@ -525,6 +525,7 @@ impl Dx12Compiler {
             "dxc" | "dynamicdxc" => Some(Self::default_dynamic_dxc()),
             "staticdxc" => Some(Self::StaticDxc),
             "fxc" => Some(Self::Fxc),
+            "auto" => Some(Self::Auto),
             _ => None,
         }
     }
