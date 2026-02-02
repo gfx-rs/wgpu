@@ -183,8 +183,6 @@ pub enum ImplementedEnableExtension {
     ///
     /// [`enable clip_distances;`]: https://www.w3.org/TR/WGSL/#extension-clip_distances
     ClipDistances,
-    /// Enables the `draw_index` builtin. Not currently part of the WGSL spec but probably will be at some point.
-    DrawIndex,
     /// Enables the `wgpu_mesh_shader` extension, native only
     WgpuMeshShader,
     /// Enables the `wgpu_ray_query` extension, native only.
@@ -195,6 +193,8 @@ pub enum ImplementedEnableExtension {
     WgpuRayTracingPipeline,
     /// Enables the `wgpu_cooperative_matrix` extension, native only.
     WgpuCooperativeMatrix,
+    /// Enables the `draw_index` builtin. Not currently part of the WGSL spec but probably will be at some point.
+    DrawIndex,
 }
 
 impl ImplementedEnableExtension {
