@@ -86,10 +86,10 @@ pub struct Queue {
     raw: Box<dyn hal::DynQueue>,
     pub(crate) pending_writes: Mutex<PendingWrites>,
     life_tracker: Mutex<LifetimeTracker>,
-    // The device needs to be dropped last (`Device.zero_buffer` might be referenced by the encoder in pending writes).
-    pub(crate) device: Arc<Device>,
     pub(crate) index: u32,
     pub(crate) shared: Arc<PerQueueData>,
+    // The device needs to be dropped last so it can take ownership of the PerQueueData
+    pub(crate) device: Arc<Device>,
 }
 impl core::fmt::Debug for Queue {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
