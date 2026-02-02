@@ -323,8 +323,6 @@ pub fn run_cts(
         cargo_opts.push("--release".into());
     }
 
-    let cts_bin = &["./tools/run_deno", "--verbose"];
-
     let env_vars = if llvm_cov {
         shell
             .cmd("cargo")
@@ -360,6 +358,8 @@ pub fn run_cts(
 
     let bin = parse_binary_from_cargo_json(&build_output)
         .context("Failed to identify executable from cargo build output")?;
+
+    let cts_bin = &["./tools/run_deno", "--verbose"];
 
     if let Some(passthrough_args) = passthrough_args {
         return Ok(shell
