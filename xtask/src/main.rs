@@ -23,7 +23,7 @@ Commands:
     Check out, build, and run CTS tests
 
     If no command-line arguments are specified, runs as if `cts
-    cts_runner/test.lst --print-output-when=test-fails` were
+    -f cts_runner/test.lst --print-output-when=test-fails` were
     specified.
 
     --skip-checkout         Don't check out the pinned CTS version, use whatever
