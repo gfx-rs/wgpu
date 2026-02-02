@@ -374,6 +374,7 @@ webgpu:shader,validation,extension,dual_source_blending:blend_src_stage_input_ou
 webgpu:shader,validation,extension,dual_source_blending:blend_src_syntax_validation:*
 webgpu:shader,validation,extension,dual_source_blending:use_blend_src_requires_extension_enabled:*
 webgpu:shader,validation,extension,pointer_composite_access:*
+webgpu:shader,validation,functions,restrictions:param_type_can_be_alias:*
 webgpu:shader,validation,parse,blankspace:blankspace:*
 webgpu:shader,validation,parse,blankspace:bom:*
 webgpu:shader,validation,parse,blankspace:null_characters:contains_null=false;*
@@ -383,6 +384,7 @@ webgpu:shader,validation,parse,enable:*
 webgpu:shader,validation,parse,identifiers:*
 webgpu:shader,validation,parse,requires:*
 webgpu:shader,validation,parse,semicolon:*
+webgpu:shader,validation,parse,shadow_builtins:function_param:*
 webgpu:shader,validation,parse,source:*
 webgpu:shader,validation,shader_io,entry_point:*
 webgpu:shader,validation,shader_io,invariant:*

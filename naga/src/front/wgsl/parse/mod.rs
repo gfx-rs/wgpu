@@ -1712,6 +1712,9 @@ impl Parser {
 
         // start a scope that contains arguments as well as the function body
         ctx.local_table.push_scope();
+        // Reduce lookup scope to parse the parameter list and return type
+        // avoiding identifier lookup to match newly declared param names.
+        ctx.local_table.reduce_lookup_scope();
 
         // read parameter list
         let mut arguments = Vec::new();
@@ -1758,6 +1761,8 @@ impl Parser {
         } else {
             None
         };
+
+        ctx.local_table.reset_lookup_scope();
 
         // do not use `self.block` here, since we must not push a new scope
         lexer.expect(Token::Paren('{'))?;
