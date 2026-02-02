@@ -58,6 +58,7 @@ Bottom level categories:
         - `front::wgsl::Frontend::set_options`
         - `ir::Block::is_empty`
         - `ir::Block::len`
+- Added `Dx12BackendOptions::force_shader_model` to allow using advanced features in passthrough shaders without bundling DXC. By @inner-daemons in [#8984](https://github.com/gfx-rs/wgpu/pull/8984).
 
 #### naga
 
