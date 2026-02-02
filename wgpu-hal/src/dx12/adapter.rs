@@ -364,7 +364,12 @@ impl super::Adapter {
             }
         };
 
-        let shader_model = if let Some(max_shader_model) = compiler_container.max_shader_model() {
+        let wgt_shader_model = backend_options
+            .force_shader_model
+            .get()
+            .or(compiler_container.max_shader_model());
+
+        let shader_model = if let Some(max_shader_model) = wgt_shader_model {
             let max_dxc_shader_model = match max_shader_model {
                 wgt::DxcShaderModel::V6_0 => ShaderModel::_6_0,
                 wgt::DxcShaderModel::V6_1 => ShaderModel::_6_1,

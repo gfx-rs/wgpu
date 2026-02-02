@@ -281,6 +281,28 @@ impl GlBackendOptions {
     }
 }
 
+/// Used to force wgpu to expose certain features on passthrough shaders even when
+/// those features aren't present on runtime-compiled shaders
+#[derive(Default, Clone, Debug)]
+pub struct ForceShaderModelToken {
+    inner: Option<DxcShaderModel>,
+}
+impl ForceShaderModelToken {
+    /// Creates an unsafe token, opting you in to seeing features that you may not necessarily use
+    /// on standard runtime-compiled shaders.
+    /// # Safety
+    /// Do not make use in runtime-compiled shaders of any features that may not be supported by the FXC or DXC
+    /// version you use.
+    pub unsafe fn with_shader_model(sm: DxcShaderModel) -> Self {
+        Self { inner: Some(sm) }
+    }
+
+    /// Returns the shader model version, if any, in this token.
+    pub fn get(&self) -> Option<DxcShaderModel> {
+        self.inner.clone()
+    }
+}
+
 /// Configuration for the DX12 backend.
 ///
 /// Part of [`BackendOptions`].
@@ -294,7 +316,7 @@ pub struct Dx12BackendOptions {
     pub latency_waitable_object: Dx12UseFrameLatencyWaitableObject,
     /// For use with passthrough shaders. Expose features as if this shader model is present, even if you do not
     /// intend to ship DXC with your app.
-    pub force_shader_model: Dx12Compiler,
+    pub force_shader_model: ForceShaderModelToken,
 }
 
 impl Dx12BackendOptions {
@@ -311,6 +333,7 @@ impl Dx12BackendOptions {
             shader_compiler: compiler,
             presentation_system,
             latency_waitable_object,
+            force_shader_model: ForceShaderModelToken::default(),
         }
     }
 
@@ -326,6 +349,7 @@ impl Dx12BackendOptions {
             shader_compiler,
             presentation_system,
             latency_waitable_object,
+            force_shader_model: ForceShaderModelToken::default(),
         }
     }
 }
