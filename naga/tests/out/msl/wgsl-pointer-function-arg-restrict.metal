@@ -3,12 +3,6 @@
 #include <simd/simd.h>
 
 using metal::uint;
-struct DefaultConstructible {
-    template<typename T>
-    operator T() && {
-        return T {};
-    }
-};
 
 struct type_2 {
     int inner[4];
@@ -53,9 +47,8 @@ void takes_mat_ptr(
 void local_var(
     uint i
 ) {
-    type_2 arr = type_2 {1, 2, 3, 4};
-    int oob = {};
-    takes_ptr(uint(i) < 4 ? arr.inner[i] : oob);
+    type_2 arr = type_2 {{1, 2, 3, 4}};
+    takes_ptr(arr.inner[metal::min(unsigned(i), 3u)]);
     takes_array_ptr(arr);
     return;
 }
@@ -65,10 +58,8 @@ void mat_vec_ptrs(
     thread type_11& pm,
     uint i_1
 ) {
-    metal::int2 oob_1 = {};
-    metal::float2x2 oob_2 = {};
-    takes_vec_ptr(uint(i_1) < 4 ? pv.inner[i_1] : oob_1);
-    takes_mat_ptr(uint(i_1) < 4 ? pm.inner[i_1] : oob_2);
+    takes_vec_ptr(pv.inner[metal::min(unsigned(i_1), 3u)]);
+    takes_mat_ptr(pm.inner[metal::min(unsigned(i_1), 3u)]);
     return;
 }
 
@@ -76,8 +67,7 @@ void argument(
     thread type_2& v,
     uint i_2
 ) {
-    int oob_3 = {};
-    takes_ptr(uint(i_2) < 4 ? v.inner[i_2] : oob_3);
+    takes_ptr(v.inner[metal::min(unsigned(i_2), 3u)]);
     return;
 }
 
@@ -86,12 +76,10 @@ void argument_nested_x2_(
     uint i_3,
     uint j
 ) {
-    int oob_4 = {};
-    type_2 oob_5 = {};
-    takes_ptr(uint(j) < 4 && uint(i_3) < 4 ? v_1.inner[i_3].inner[j] : oob_4);
-    takes_ptr(uint(i_3) < 4 ? v_1.inner[i_3].inner[0] : oob_4);
-    takes_ptr(uint(j) < 4 ? v_1.inner[0].inner[j] : oob_4);
-    takes_array_ptr(uint(i_3) < 4 ? v_1.inner[i_3] : oob_5);
+    takes_ptr(v_1.inner[metal::min(unsigned(i_3), 3u)].inner[metal::min(unsigned(j), 3u)]);
+    takes_ptr(v_1.inner[metal::min(unsigned(i_3), 3u)].inner[0]);
+    takes_ptr(v_1.inner[0].inner[metal::min(unsigned(j), 3u)]);
+    takes_array_ptr(v_1.inner[metal::min(unsigned(i_3), 3u)]);
     return;
 }
 
@@ -100,10 +88,9 @@ void argument_nested_x3_(
     uint i_4,
     uint j_1
 ) {
-    int oob_6 = {};
-    takes_ptr(uint(j_1) < 4 && uint(i_4) < 4 ? v_2.inner[i_4].inner[0].inner[j_1] : oob_6);
-    takes_ptr(uint(j_1) < 4 && uint(i_4) < 4 ? v_2.inner[i_4].inner[j_1].inner[0] : oob_6);
-    takes_ptr(uint(j_1) < 4 && uint(i_4) < 4 ? v_2.inner[0].inner[i_4].inner[j_1] : oob_6);
+    takes_ptr(v_2.inner[metal::min(unsigned(i_4), 3u)].inner[0].inner[metal::min(unsigned(j_1), 3u)]);
+    takes_ptr(v_2.inner[metal::min(unsigned(i_4), 3u)].inner[metal::min(unsigned(j_1), 3u)].inner[0]);
+    takes_ptr(v_2.inner[0].inner[metal::min(unsigned(i_4), 3u)].inner[metal::min(unsigned(j_1), 3u)]);
     return;
 }
 
@@ -111,9 +98,8 @@ void index_from_self(
     thread type_2& v_3,
     uint i_5
 ) {
-    int oob_7 = {};
-    int _e3 = uint(i_5) < 4 ? v_3.inner[i_5] : DefaultConstructible();
-    takes_ptr(uint(_e3) < 4 ? v_3.inner[_e3] : oob_7);
+    int _e3 = v_3.inner[metal::min(unsigned(i_5), 3u)];
+    takes_ptr(v_3.inner[metal::min(unsigned(_e3), 3u)]);
     return;
 }
 
@@ -122,9 +108,8 @@ void local_var_from_arg(
     uint i_6
 ) {
     type_2 b = {};
-    int oob_8 = {};
     b = a;
-    takes_ptr(uint(i_6) < 4 ? b.inner[i_6] : oob_8);
+    takes_ptr(b.inner[metal::min(unsigned(i_6), 3u)]);
     return;
 }
 
@@ -132,8 +117,7 @@ void let_binding(
     thread type_2& a_1,
     uint i_7
 ) {
-    int oob_9 = {};
-    takes_ptr(uint(i_7) < 4 ? a_1.inner[i_7] : oob_9);
+    takes_ptr(a_1.inner[metal::min(unsigned(i_7), 3u)]);
     takes_ptr(a_1.inner[0]);
     return;
 }
@@ -151,7 +135,7 @@ kernel void main_(
     argument_nested_x2_(arr2d, 1u, 2u);
     argument_nested_x3_(arr3d, 1u, 2u);
     index_from_self(arr1d, 1u);
-    local_var_from_arg(type_2 {1, 2, 3, 4}, 5u);
+    local_var_from_arg(type_2 {{1, 2, 3, 4}}, 5u);
     let_binding(arr1d, 1u);
     return;
 }

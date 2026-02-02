@@ -47,7 +47,7 @@ void takes_mat_ptr(
 void local_var(
     uint i
 ) {
-    type_2 arr = type_2 {1, 2, 3, 4};
+    type_2 arr = type_2 {{1, 2, 3, 4}};
     takes_ptr(arr.inner[i]);
     takes_array_ptr(arr);
     return;
@@ -135,7 +135,7 @@ kernel void main_(
     argument_nested_x2_(arr2d, 1u, 2u);
     argument_nested_x3_(arr3d, 1u, 2u);
     index_from_self(arr1d, 1u);
-    local_var_from_arg(type_2 {1, 2, 3, 4}, 5u);
+    local_var_from_arg(type_2 {{1, 2, 3, 4}}, 5u);
     let_binding(arr1d, 1u);
     return;
 }

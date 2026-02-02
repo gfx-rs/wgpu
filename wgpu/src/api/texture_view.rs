@@ -43,10 +43,10 @@ impl TextureView {
     ///
     /// The returned type depends on the backend:
     ///
-    #[doc = crate::hal_type_vulkan!("TextureView")]
-    #[doc = crate::hal_type_metal!("TextureView")]
-    #[doc = crate::hal_type_dx12!("TextureView")]
-    #[doc = crate::hal_type_gles!("TextureView")]
+    #[doc = crate::macros::hal_type_vulkan!("TextureView")]
+    #[doc = crate::macros::hal_type_metal!("TextureView")]
+    #[doc = crate::macros::hal_type_dx12!("TextureView")]
+    #[doc = crate::macros::hal_type_gles!("TextureView")]
     ///
     /// # Deadlocks
     ///

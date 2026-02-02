@@ -126,7 +126,20 @@ pub(in crate::back::glsl) const fn glsl_built_in(
         | Bi::VertexCount
         | Bi::PrimitiveCount
         | Bi::Vertices
-        | Bi::Primitives => {
+        | Bi::Primitives
+        | Bi::RayInvocationId
+        | Bi::NumRayInvocations
+        | Bi::InstanceCustomData
+        | Bi::GeometryIndex
+        | Bi::WorldRayOrigin
+        | Bi::WorldRayDirection
+        | Bi::ObjectRayOrigin
+        | Bi::ObjectRayDirection
+        | Bi::RayTmin
+        | Bi::RayTCurrentMax
+        | Bi::ObjectToWorld
+        | Bi::WorldToObject
+        | Bi::HitKind => {
             unimplemented!()
         }
     }
@@ -146,7 +159,7 @@ pub(in crate::back::glsl) const fn glsl_storage_qualifier(
         As::Handle => Some("uniform"),
         As::WorkGroup => Some("shared"),
         As::Immediate => Some("uniform"),
-        As::TaskPayload => unreachable!(),
+        As::TaskPayload | As::RayPayload | As::IncomingRayPayload => unreachable!(),
     }
 }
 

@@ -920,7 +920,9 @@ impl TextureFormat {
 
         // Features that enable filtering don't affect blendability
         let sample_type2 = self.sample_type(None, None);
-        let is_blendable = sample_type2 == Some(TextureSampleType::Float { filterable: true });
+        let is_blendable = sample_type2 == Some(TextureSampleType::Float { filterable: true })
+            || device_features.contains(Features::FLOAT32_BLENDABLE)
+                && matches!(self, Self::R32Float | Self::Rg32Float | Self::Rgba32Float);
 
         flags.set(TextureFormatFeatureFlags::FILTERABLE, is_filterable);
         flags.set(TextureFormatFeatureFlags::BLENDABLE, is_blendable);

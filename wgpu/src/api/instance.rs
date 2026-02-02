@@ -309,10 +309,10 @@ impl Instance {
     ///
     /// The type of `A::Instance` depends on the backend:
     ///
-    #[doc = crate::hal_type_vulkan!("Instance")]
-    #[doc = crate::hal_type_metal!("Instance")]
-    #[doc = crate::hal_type_dx12!("Instance")]
-    #[doc = crate::hal_type_gles!("Instance")]
+    #[doc = crate::macros::hal_type_vulkan!("Instance")]
+    #[doc = crate::macros::hal_type_metal!("Instance")]
+    #[doc = crate::macros::hal_type_dx12!("Instance")]
+    #[doc = crate::macros::hal_type_gles!("Instance")]
     ///
     /// # Safety
     ///
@@ -337,10 +337,10 @@ impl Instance {
     ///
     /// # Types
     ///
-    #[doc = crate::hal_type_vulkan!("Instance")]
-    #[doc = crate::hal_type_metal!("Instance")]
-    #[doc = crate::hal_type_dx12!("Instance")]
-    #[doc = crate::hal_type_gles!("Instance")]
+    #[doc = crate::macros::hal_type_vulkan!("Instance")]
+    #[doc = crate::macros::hal_type_metal!("Instance")]
+    #[doc = crate::macros::hal_type_dx12!("Instance")]
+    #[doc = crate::macros::hal_type_gles!("Instance")]
     ///
     /// # Errors
     ///
@@ -368,10 +368,10 @@ impl Instance {
     ///
     /// The type of `hal_adapter.adapter` depends on the backend:
     ///
-    #[doc = crate::hal_type_vulkan!("Adapter")]
-    #[doc = crate::hal_type_metal!("Adapter")]
-    #[doc = crate::hal_type_dx12!("Adapter")]
-    #[doc = crate::hal_type_gles!("Adapter")]
+    #[doc = crate::macros::hal_type_vulkan!("Adapter")]
+    #[doc = crate::macros::hal_type_metal!("Adapter")]
+    #[doc = crate::macros::hal_type_dx12!("Adapter")]
+    #[doc = crate::macros::hal_type_gles!("Adapter")]
     ///
     /// # Safety
     ///

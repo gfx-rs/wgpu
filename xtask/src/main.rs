@@ -22,6 +22,10 @@ Commands:
   cts [<options>] [<test selector...> | -f <test list file...> | -- <args...>]
     Check out, build, and run CTS tests
 
+    If no command-line arguments are specified, runs as if `cts
+    -f cts_runner/test.lst --print-output-when=test-fails` were
+    specified.
+
     --skip-checkout         Don't check out the pinned CTS version, use whatever
                             is already checked out.
     --release               Build and run in release mode
@@ -29,7 +33,12 @@ Commands:
     --backend <backend>     Specify the backend (metal, dx12, or vulkan). Used
                             to evaluate `fails-if` conditions in the test list.
     --filter <regex>        Filter tests by selector using a regex pattern.
+                            Prefix with '!' to invert (exclude matching tests).
                             Applied after all tests are collected.
+    --print-output-when     One of `test-fails` or `always`. When no `test
+                            selector`, `test list file`, or `args` are
+                            specified, this defaults to `test-fails`. Otherwise,
+                            this defaults to `always`.
 
   run-wasm
     Build and run web examples
@@ -79,7 +88,7 @@ Commands:
 
     --target-dir <dir>    The target directory to install WARP into.
     --profile <profile>   The cargo profile to install WARP for (default: debug)
-    
+
     Note: Cannot specify both --target-dir and --profile
 
 Options:

@@ -13,7 +13,7 @@ struct type_2 {
 
 type_1 ret_array(
 ) {
-    return type_1 {1.0, 2.0};
+    return type_1 {{1.0, 2.0}};
 }
 
 type_2 ret_array_array(
@@ -21,7 +21,7 @@ type_2 ret_array_array(
     type_1 _e0 = ret_array();
     type_1 _e1 = ret_array();
     type_1 _e2 = ret_array();
-    return type_2 {_e0, _e1, _e2};
+    return type_2 {{_e0, _e1, _e2}};
 }
 
 struct main_Output {

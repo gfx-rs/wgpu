@@ -30,7 +30,8 @@
 //! Lines starting with `//` or `#` in the test list are treated as comments and
 //! ignored.
 
-use anyhow::{bail, Context};
+use anyhow::{anyhow, bail, Context};
+use core::fmt;
 use pico_args::Arguments;
 use regex_lite::{Regex, RegexBuilder};
 use std::{ffi::OsString, sync::LazyLock};
@@ -56,6 +57,12 @@ struct TestLine {
     pub fails_if: Vec<String>,
 }
 
+#[derive(Clone, Copy, Debug)]
+enum PrintOutputWhen {
+    TestFails,
+    Always,
+}
+
 pub fn run_cts(
     shell: Shell,
     mut args: Arguments,
@@ -64,6 +71,31 @@ pub fn run_cts(
     let skip_checkout = args.contains("--skip-checkout");
     let llvm_cov = args.contains("--llvm-cov");
     let release = args.contains("--release");
+
+    let output_filter = args
+        .opt_value_from_str::<_, String>("--print-output-when")?
+        .map(|f| {
+            let values = [
+                ("test-fails", PrintOutputWhen::TestFails),
+                ("always", PrintOutputWhen::Always),
+            ];
+            let lowered = f.to_ascii_lowercase();
+            values
+                .iter()
+                .find_map(|(cli_str, enum_value)| (&*lowered == *cli_str).then_some(*enum_value))
+                .ok_or_else(|| {
+                    anyhow!(
+                        "`{f}` is not a valid `--print-output-when` value; expected one of {}",
+                        fmt::from_fn(|f| {
+                            f.debug_list()
+                                .entries(values.iter().map(|(cli, _enum)| cli))
+                                .finish()
+                        })
+                    )
+                })
+        })
+        .transpose()?;
+
     let running_on_backend = args.opt_value_from_str::<_, String>("--backend")?;
     let mut filter_pattern = args.opt_value_from_str::<_, String>("--filter")?;
     let mut filter_invert = false;
@@ -105,14 +137,20 @@ pub fn run_cts(
         })
         .collect::<Vec<_>>();
 
+    let mut default_output_filter = PrintOutputWhen::Always;
+
     if tests.is_empty() && list_files.is_empty() {
         if passthrough_args.is_none() {
             log::info!("Reading default test list from {CTS_DEFAULT_TEST_LIST}");
             list_files.push(OsString::from(CTS_DEFAULT_TEST_LIST));
+
+            default_output_filter = PrintOutputWhen::TestFails;
         }
     } else if passthrough_args.is_some() {
         bail!("Test(s) and test list(s) are incompatible with passthrough arguments.");
     }
+
+    let output_filter = output_filter.unwrap_or(default_output_filter);
 
     for file in list_files {
         tests.extend(shell.read_file(file)?.lines().filter_map(|line| {
@@ -197,6 +235,8 @@ pub fn run_cts(
             cmd = cmd.args([
                 "-c",
                 "remote.origin.fetch=+refs/heads/gh-pages:refs/remotes/origin/gh-pages",
+                "-c",
+                "advice.detachedHead=false",
             ]);
         } else {
             log::info!("Cloning full checkout of CTS with revision {cts_revision}");
@@ -304,7 +344,10 @@ pub fn run_cts(
             }
         }
 
-        log::info!("Running {}", test.selector.to_string_lossy());
+        if let PrintOutputWhen::Always = output_filter {
+            log::info!("Running {}", test.selector.to_string_lossy());
+        }
+
         let mut cmd = shell
             .cmd("cargo")
             .args(run_flags)
@@ -316,10 +359,34 @@ pub fn run_cts(
             cmd = cmd.arg("--release")
         }
 
-        cmd.args(["--", "./tools/run_deno", "--verbose"])
-            .args([&test.selector])
-            .run()
-            .context("CTS failed")?;
+        cmd = cmd
+            .args(["--", "./tools/run_deno", "--verbose"])
+            .args([&test.selector]);
+
+        match output_filter {
+            PrintOutputWhen::TestFails => {
+                let output = cmd.ignore_status().output().context("Failed to run CTS")?;
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+
+                if output.status.success() {
+                    if let Some((_, summary)) = stdout.split_once("** Summary **") {
+                        println!("\n== Summary for {} ==", test.selector.to_string_lossy());
+                        println!("{}", summary.trim());
+                    } else {
+                        print!("{}", stdout);
+                        eprint!("{}", stderr);
+                    }
+                } else {
+                    print!("{}", stdout);
+                    eprint!("{}", stderr);
+                    bail!("CTS failed");
+                }
+            }
+            PrintOutputWhen::Always => {
+                cmd.run().context("CTS failed")?;
+            }
+        }
     }
 
     if tests.len() > 1 {

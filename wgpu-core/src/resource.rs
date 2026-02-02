@@ -585,7 +585,7 @@ impl Buffer {
             self.size.saturating_sub(offset)
         };
 
-        if offset % wgt::MAP_ALIGNMENT != 0 {
+        if !offset.is_multiple_of(wgt::MAP_ALIGNMENT) {
             return Err((op, BufferAccessError::UnalignedOffset { offset }));
         }
         if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
@@ -693,7 +693,7 @@ impl Buffer {
             self.size.saturating_sub(offset)
         };
 
-        if offset % wgt::MAP_ALIGNMENT != 0 {
+        if !offset.is_multiple_of(wgt::MAP_ALIGNMENT) {
             return Err(BufferAccessError::UnalignedOffset { offset });
         }
         if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {

@@ -1,9 +1,14 @@
 use wgpu::include_wgsl;
 
-use wgpu_test::{gpu_test, GpuTestConfiguration, GpuTestInitializer, TestParameters};
+use wgpu_test::{fail, gpu_test, valid, GpuTestConfiguration, GpuTestInitializer, TestParameters};
 
 pub fn all_tests(vec: &mut Vec<GpuTestInitializer>) {
-    vec.extend([SHADER_COMPILE_SUCCESS, SHADER_COMPILE_ERROR]);
+    vec.extend([
+        SHADER_COMPILE_SUCCESS,
+        SHADER_COMPILE_ERROR,
+        ENABLE_EXTENSION_AVAILABLE,
+        ENABLE_EXTENSION_UNAVAILABLE,
+    ]);
 }
 
 #[gpu_test]
@@ -49,5 +54,57 @@ static SHADER_COMPILE_ERROR: GpuTestConfiguration = GpuTestConfiguration::new()
         assert_eq!(
             span.line_position, 33,
             "Expected the column number to be 33, because we're counting lines from 1"
+        );
+    });
+
+const ENABLE_EXTENSION_SHADER_SOURCE: &str = r#"
+    enable f16;
+
+    @compute @workgroup_size(1)
+    fn main() {}
+"#;
+
+#[gpu_test]
+static ENABLE_EXTENSION_AVAILABLE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            .features(wgpu::Features::SHADER_F16)
+            .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
+            .limits(wgpu::Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| async move {
+        valid(&ctx.device, || {
+            let _ = ctx
+                .device
+                .create_shader_module(wgpu::ShaderModuleDescriptor {
+                    label: Some("shader declaring enable extension"),
+                    source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
+                        ENABLE_EXTENSION_SHADER_SOURCE,
+                    )),
+                });
+        });
+    });
+
+#[gpu_test]
+static ENABLE_EXTENSION_UNAVAILABLE: GpuTestConfiguration = GpuTestConfiguration::new()
+    .parameters(
+        TestParameters::default()
+            // SHADER_F16 feature not requested
+            .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
+            .limits(wgpu::Limits::downlevel_defaults()),
+    )
+    .run_async(|ctx| async move {
+        fail(
+            &ctx.device,
+            || {
+                ctx.device
+                    .create_shader_module(wgpu::ShaderModuleDescriptor {
+                        label: Some("shader declaring enable extension"),
+                        source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
+                            ENABLE_EXTENSION_SHADER_SOURCE,
+                        )),
+                    })
+            },
+            Some("the `f16` extension is not supported in the current environment"),
         );
     });

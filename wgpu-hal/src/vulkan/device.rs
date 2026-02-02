@@ -1747,7 +1747,8 @@ impl crate::Device for super::Device {
             crate::ShaderInput::SpirV(data) => {
                 super::ShaderModule::Raw(self.create_shader_module_impl(data, &desc.label)?)
             }
-            crate::ShaderInput::Msl { .. }
+            crate::ShaderInput::MetalLib { .. }
+            | crate::ShaderInput::Msl { .. }
             | crate::ShaderInput::Dxil { .. }
             | crate::ShaderInput::Hlsl { .. }
             | crate::ShaderInput::Glsl { .. } => unreachable!(),

@@ -65,11 +65,9 @@ impl MaxFragmentShaderInputDeduction {
             BuiltIn::PrimitiveIndex => InterStageBuiltIn::PrimitiveIndex,
             BuiltIn::SubgroupSize => InterStageBuiltIn::SubgroupSize,
             BuiltIn::SubgroupInvocationId => InterStageBuiltIn::SubgroupInvocationId,
-
             BuiltIn::PointCoord => InterStageBuiltIn::PointCoord,
             BuiltIn::Barycentric { .. } => InterStageBuiltIn::Barycentric,
             BuiltIn::ViewIndex => InterStageBuiltIn::ViewIndex,
-
             BuiltIn::BaseInstance
             | BuiltIn::BaseVertex
             | BuiltIn::ClipDistance
@@ -95,7 +93,20 @@ impl MaxFragmentShaderInputDeduction {
             | BuiltIn::VertexCount
             | BuiltIn::Vertices
             | BuiltIn::PrimitiveCount
-            | BuiltIn::Primitives => return None,
+            | BuiltIn::Primitives
+            | BuiltIn::RayInvocationId
+            | BuiltIn::NumRayInvocations
+            | BuiltIn::InstanceCustomData
+            | BuiltIn::GeometryIndex
+            | BuiltIn::WorldRayOrigin
+            | BuiltIn::WorldRayDirection
+            | BuiltIn::ObjectRayOrigin
+            | BuiltIn::ObjectRayDirection
+            | BuiltIn::RayTmin
+            | BuiltIn::RayTCurrentMax
+            | BuiltIn::ObjectToWorld
+            | BuiltIn::WorldToObject
+            | BuiltIn::HitKind => return None,
         }))
     }
 }

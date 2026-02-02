@@ -335,7 +335,6 @@ struct Inner {
     /// Note: the context contains a dummy pbuffer (1x1).
     /// Required for `eglMakeCurrent` on platforms that doesn't supports `EGL_KHR_surfaceless_context`.
     egl: EglContext,
-    #[allow(unused)]
     version: (i32, i32),
     supports_native_window: bool,
     config: khronos_egl::Config,
@@ -888,7 +887,6 @@ impl crate::Instance for Instance {
         })
     }
 
-    #[cfg_attr(target_os = "macos", allow(unused, unused_mut, unreachable_code))]
     unsafe fn create_surface(
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
@@ -1253,10 +1251,11 @@ impl crate::Surface for Surface {
                         let window_ptr = handle.ns_view.as_ptr();
                         #[cfg(target_os = "macos")]
                         let window_ptr = {
-                            use objc::{msg_send, runtime::Object, sel, sel_impl};
+                            use objc2::msg_send;
+                            use objc2::runtime::AnyObject;
                             // ns_view always have a layer and don't need to verify that it exists.
-                            let layer: *mut Object =
-                                msg_send![handle.ns_view.as_ptr().cast::<Object>(), layer];
+                            let layer: *mut AnyObject =
+                                msg_send![handle.ns_view.as_ptr().cast::<AnyObject>(), layer];
                             layer.cast::<ffi::c_void>()
                         };
                         window_ptr

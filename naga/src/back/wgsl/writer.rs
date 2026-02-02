@@ -103,6 +103,7 @@ impl<W: Write> Writer<W> {
         self.namer.reset(
             module,
             &crate::keywords::wgsl::RESERVED_SET,
+            &crate::keywords::wgsl::BUILTIN_IDENTIFIER_SET,
             // an identifier must not start with two underscore
             proc::CaseInsensitiveKeywordSet::empty(),
             &["__", "_naga"],
@@ -224,11 +225,9 @@ impl<W: Write> Writer<W> {
                         Attribute::MeshStage(mesh_output_name),
                         Attribute::WorkGroupSize(ep.workgroup_size),
                     ];
-                    if ep.task_payload.is_some() {
-                        let payload_name = module.global_variables[ep.task_payload.unwrap()]
-                            .name
-                            .clone()
-                            .unwrap();
+                    if let Some(task_payload) = ep.task_payload {
+                        let payload_name =
+                            module.global_variables[task_payload].name.clone().unwrap();
                         mesh_attrs.push(Attribute::TaskPayload(payload_name));
                     }
                     mesh_attrs
@@ -244,6 +243,10 @@ impl<W: Write> Writer<W> {
                         Attribute::WorkGroupSize(ep.workgroup_size),
                     ]
                 }
+                ShaderStage::RayGeneration
+                | ShaderStage::AnyHit
+                | ShaderStage::ClosestHit
+                | ShaderStage::Miss => unreachable!(),
             };
             self.write_attributes(&attributes)?;
             // Add a newline after attribute
@@ -280,6 +283,7 @@ impl<W: Write> Writer<W> {
         let mut needs_clip_distances = false;
         let mut needs_mesh_shaders = false;
         let mut needs_draw_index = false;
+        let mut needs_cooperative_matrix = false;
 
         // Determine which `enable` declarations are needed
         for (_, ty) in module.types.iter() {
@@ -326,6 +330,9 @@ impl<W: Write> Writer<W> {
                         }
                     }
                 }
+                TypeInner::CooperativeMatrix { .. } => {
+                    needs_cooperative_matrix = true;
+                }
                 _ => {}
             }
         }
@@ -366,6 +373,10 @@ impl<W: Write> Writer<W> {
         }
         if needs_draw_index {
             writeln!(self.out, "enable draw_index;")?;
+            any_written = true;
+        }
+        if needs_cooperative_matrix {
+            writeln!(self.out, "enable wgpu_cooperative_matrix;")?;
             any_written = true;
         }
         if any_written {
@@ -489,6 +500,10 @@ impl<W: Write> Writer<W> {
                         ShaderStage::Task => "task",
                         //Handled by another variant in the Attribute enum, so this code should never be hit.
                         ShaderStage::Mesh => unreachable!(),
+                        ShaderStage::RayGeneration
+                        | ShaderStage::AnyHit
+                        | ShaderStage::ClosestHit
+                        | ShaderStage::Miss => unreachable!(),
                     };
 
                     write!(self.out, "@{stage_str} ")?;
@@ -1087,6 +1102,7 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, data.stride, func_ctx)?;
                 writeln!(self.out, ");")?
             }
+            Statement::RayPipelineFunction(_) => unreachable!(),
         }
 
         Ok(())
@@ -1955,7 +1971,6 @@ impl<W: Write> Writer<W> {
     }
 
     // See https://github.com/rust-lang/rust-clippy/issues/4979.
-    #[allow(clippy::missing_const_for_fn)]
     pub fn finish(self) -> W {
         self.out
     }

@@ -2,16 +2,65 @@
 //!
 //! There are also some validation tests in [`wgsl_errors`](super::wgsl_errors).
 
-#![allow(
-    // We need to investigate these.
-    clippy::result_large_err
-)]
-
 use naga::{
-    ir,
-    valid::{self, ModuleInfo},
-    Expression, Function, Module, Scalar,
+    ir::{self, Expression, Function, Module, Scalar},
+    valid::{self, Capabilities, ModuleInfo, ValidationFlags},
 };
+
+#[derive(Default)]
+struct TestSpanGenerator(u32);
+
+impl TestSpanGenerator {
+    fn next(&mut self) -> naga::Span {
+        let span = naga::Span::new(self.0, self.0 + 1);
+        self.0 += 1;
+        span
+    }
+}
+
+#[track_caller]
+fn expect_validation_error_impl<I: IntoIterator<Item = naga::Span>>(
+    module: &Module,
+    validation_flags: valid::ValidationFlags,
+    capabilities: valid::Capabilities,
+    spans: Option<I>,
+) -> naga::valid::ValidationError {
+    let err = valid::Validator::new(validation_flags, capabilities)
+        .validate(module)
+        .expect_err("module should be invalid");
+
+    if let Some(expected_spans_iter) = spans {
+        let actual_spans = err.spans().map(|sctx| sctx.0).collect::<Vec<_>>();
+        let expected_spans = expected_spans_iter.into_iter().collect::<Vec<_>>();
+        assert_eq!(
+            actual_spans, expected_spans,
+            "expected error spans to be {expected_spans:?}, got {actual_spans:?}",
+        );
+    }
+
+    err.into_inner()
+}
+
+/// Validate `module` with the given `validation_flags` and `capabilities`.
+///
+/// Panics if validation succeeds or fails with an error not associated with
+/// `span`. Otherwise, returns the validation error.
+///
+/// Note that only the span is checked, not the associated context string.
+#[track_caller]
+fn expect_validation_error_with_span(
+    module: &Module,
+    validation_flags: valid::ValidationFlags,
+    capabilities: valid::Capabilities,
+    span: naga::Span,
+) -> naga::valid::ValidationError {
+    expect_validation_error_impl(
+        module,
+        validation_flags,
+        capabilities,
+        Some(core::iter::once(span)),
+    )
+}
 
 /// Validation should fail if `AtomicResult` expressions are not
 /// populated by `Atomic` statements.
@@ -545,7 +594,6 @@ fn main(input: VertexOutput) {{
     }
 }
 
-#[allow(dead_code)]
 struct BindingArrayFixture {
     module: Module,
     span: naga::Span,
@@ -671,11 +719,14 @@ fn validation_error_messages() {
         "\
 error: Function [1] 'main' is invalid
   ┌─ wgsl:7:17
-  │  \n7 │ ╭                 fn main() {
+  │\x20\x20
+7 │ ╭                 fn main() {
 8 │ │                     foo();
-  │ │                     ^^^^ invalid function call
-  │ ╰──────────────────────────^ naga::ir::Function [1]
-  │  \n  = Call to [0] is invalid
+  │ │                     ^^^^^ invalid function call
+9 │ │                 }
+  │ ╰─────────────────^ naga::ir::Function [1]
+  │\x20\x20
+  = Call to [0] is invalid
   = Requires 1 arguments, but 0 are provided
 
 ",
@@ -1183,4 +1234,58 @@ fn main() {
 
 "#,
     );
+}
+
+#[test]
+fn unexpected_task_payload() {
+    let mut test_spans = TestSpanGenerator::default();
+    let mut module = Module::default();
+
+    let ty_payload = module.types.insert(
+        ir::Type {
+            name: Some("u32".into()),
+            inner: ir::TypeInner::Scalar(naga::Scalar::U32),
+        },
+        test_spans.next(),
+    );
+
+    let err_span = test_spans.next();
+    let payload_handle = module.global_variables.append(
+        ir::GlobalVariable {
+            name: Some("task_payload".into()),
+            space: ir::AddressSpace::TaskPayload,
+            binding: None,
+            ty: ty_payload,
+            init: None,
+        },
+        err_span,
+    );
+
+    let entry_point = ir::EntryPoint {
+        name: "main".into(),
+        stage: ir::ShaderStage::Compute,
+        early_depth_test: None,
+        workgroup_size: [1, 1, 1],
+        workgroup_size_overrides: None,
+        function: ir::Function::default(),
+        mesh_info: None,
+        task_payload: Some(payload_handle), // invalid for compute stage
+        incoming_ray_payload: None,
+    };
+    module.entry_points.push(entry_point);
+
+    let err = expect_validation_error_with_span(
+        &module,
+        ValidationFlags::default(),
+        Capabilities::MESH_SHADER,
+        err_span,
+    );
+
+    assert!(matches!(
+        err,
+        valid::ValidationError::EntryPoint {
+            source: valid::EntryPointError::UnexpectedTaskPayload,
+            ..
+        }
+    ));
 }

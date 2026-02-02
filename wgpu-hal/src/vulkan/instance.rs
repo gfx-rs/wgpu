@@ -516,10 +516,10 @@ impl super::Instance {
         Ok(self.create_surface_from_vk_surface_khr(surface))
     }
 
-    #[cfg(metal)]
-    fn create_surface_from_view(
+    #[cfg(target_vendor = "apple")]
+    fn create_surface_from_layer(
         &self,
-        view: core::ptr::NonNull<c_void>,
+        layer: raw_window_metal::Layer,
     ) -> Result<super::Surface, crate::InstanceError> {
         if !self.shared.extensions.contains(&ext::metal_surface::NAME) {
             return Err(crate::InstanceError::new(String::from(
@@ -527,17 +527,14 @@ impl super::Instance {
             )));
         }
 
-        let layer = unsafe { crate::metal::Surface::get_metal_layer(view.cast()) };
         // NOTE: The layer is retained by Vulkan's `vkCreateMetalSurfaceEXT`,
         // so no need to retain it beyond the scope of this function.
-        let layer_ptr = (*layer).cast();
-
         let surface = {
             let metal_loader =
                 ext::metal_surface::Instance::new(&self.shared.entry, &self.shared.raw);
             let vk_info = vk::MetalSurfaceCreateInfoEXT::default()
                 .flags(vk::MetalSurfaceCreateFlagsEXT::empty())
-                .layer(layer_ptr);
+                .layer(layer.as_ptr().as_ptr());
 
             unsafe { metal_loader.create_metal_surface(&vk_info, None).unwrap() }
         };
@@ -906,17 +903,19 @@ impl crate::Instance for super::Instance {
                 })?;
                 self.create_surface_from_hwnd(hinstance.get(), handle.hwnd.get())
             }
-            #[cfg(all(target_os = "macos", feature = "metal"))]
+            #[cfg(target_vendor = "apple")]
             (Rwh::AppKit(handle), _)
                 if self.shared.extensions.contains(&ext::metal_surface::NAME) =>
             {
-                self.create_surface_from_view(handle.ns_view)
+                let layer = unsafe { raw_window_metal::Layer::from_ns_view(handle.ns_view) };
+                self.create_surface_from_layer(layer)
             }
-            #[cfg(all(any(target_os = "ios", target_os = "visionos"), feature = "metal"))]
+            #[cfg(target_vendor = "apple")]
             (Rwh::UiKit(handle), _)
                 if self.shared.extensions.contains(&ext::metal_surface::NAME) =>
             {
-                self.create_surface_from_view(handle.ui_view)
+                let layer = unsafe { raw_window_metal::Layer::from_ui_view(handle.ui_view) };
+                self.create_surface_from_layer(layer)
             }
             (_, _) => Err(crate::InstanceError::new(format!(
                 "window handle {window_handle:?} is not a Vulkan-compatible handle"

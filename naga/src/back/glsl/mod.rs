@@ -146,6 +146,10 @@ impl crate::AddressSpace {
             | crate::AddressSpace::Handle
             | crate::AddressSpace::Immediate
             | crate::AddressSpace::TaskPayload => false,
+
+            crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload => {
+                unreachable!()
+            }
         }
     }
 }
@@ -454,7 +458,7 @@ struct IdGenerator(u32);
 
 impl IdGenerator {
     /// Generates a number that's guaranteed to be unique for this `IdGenerator`
-    fn generate(&mut self) -> u32 {
+    const fn generate(&mut self) -> u32 {
         // It's just an increasing number but it does the job
         let ret = self.0;
         self.0 += 1;
@@ -509,7 +513,15 @@ impl fmt::Display for VaryingName<'_> {
                     (ShaderStage::Vertex, true) | (ShaderStage::Fragment, false) => "vs2fs",
                     // fragment to pipeline
                     (ShaderStage::Fragment, true) => "fs2p",
-                    (ShaderStage::Task | ShaderStage::Mesh, _) => unreachable!(),
+                    (
+                        ShaderStage::Task
+                        | ShaderStage::Mesh
+                        | ShaderStage::RayGeneration
+                        | ShaderStage::AnyHit
+                        | ShaderStage::ClosestHit
+                        | ShaderStage::Miss,
+                        _,
+                    ) => unreachable!(),
                 };
                 write!(f, "_{prefix}_location{location}",)
             }
@@ -526,7 +538,12 @@ impl ShaderStage {
             ShaderStage::Compute => "cs",
             ShaderStage::Fragment => "fs",
             ShaderStage::Vertex => "vs",
-            ShaderStage::Task | ShaderStage::Mesh => unreachable!(),
+            ShaderStage::Task
+            | ShaderStage::Mesh
+            | ShaderStage::RayGeneration
+            | ShaderStage::AnyHit
+            | ShaderStage::ClosestHit
+            | ShaderStage::Miss => unreachable!(),
         }
     }
 }

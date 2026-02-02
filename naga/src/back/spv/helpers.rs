@@ -20,7 +20,7 @@ pub(super) fn string_to_words(input: &str) -> Vec<Word> {
 
 pub(super) fn str_bytes_to_words(bytes: &[u8]) -> Vec<Word> {
     let mut words = bytes_to_words(bytes);
-    if bytes.len() % 4 == 0 {
+    if bytes.len().is_multiple_of(4) {
         // nul-termination
         words.push(0x0u32);
     }
@@ -56,6 +56,7 @@ pub(super) const fn map_storage_class(space: crate::AddressSpace) -> spirv::Stor
         crate::AddressSpace::WorkGroup => spirv::StorageClass::Workgroup,
         crate::AddressSpace::Immediate => spirv::StorageClass::PushConstant,
         crate::AddressSpace::TaskPayload => spirv::StorageClass::TaskPayloadWorkgroupEXT,
+        crate::AddressSpace::IncomingRayPayload | crate::AddressSpace::RayPayload => unreachable!(),
     }
 }
 
