@@ -56,6 +56,7 @@ webgpu:api,operation,vertex_state,correctness:setVertexBuffer_offset_and_attribu
 webgpu:api,validation,buffer,create:*
 webgpu:api,validation,buffer,destroy:*
 webgpu:api,validation,capability_checks,limits,maxBindGroups:setBindGroup,*
+webgpu:api,validation,capability_checks,limits,maxBufferSize:*
 //FAIL: other `maxInterStageShaderVariables` cases w/ limitTest ∈ [underDefault, overMaximum]
 // https://github.com/gfx-rs/wgpu/issues/8945
 webgpu:api,validation,capability_checks,limits,maxInterStageShaderVariables:createRenderPipeline,at_over:limitTest="atDefault";*

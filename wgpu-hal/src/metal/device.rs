@@ -418,7 +418,7 @@ impl crate::Device for super::Device {
                 .shared
                 .device
                 .newBufferWithLength_options(desc.size as usize, options)
-                .unwrap();
+                .ok_or(crate::DeviceError::OutOfMemory)?;
             if let Some(label) = desc.label {
                 raw.setLabel(Some(&NSString::from_str(label)));
             }
