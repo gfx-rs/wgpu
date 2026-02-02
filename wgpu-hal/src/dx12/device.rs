@@ -383,11 +383,10 @@ impl super::Device {
             }
             super::ShaderModuleSource::HlslPassthrough(passthrough) => ShaderCacheKey {
                 source: passthrough.shader.clone(),
-                entry_point: passthrough.entry_point.clone(),
+                entry_point: stage.entry_point.to_string(),
                 stage: naga_stage,
                 shader_model: naga_options.shader_model,
             },
-
             super::ShaderModuleSource::DxilPassthrough(passthrough) => {
                 return Ok(super::CompiledShader::Precompiled(
                     passthrough.shader.clone(),
@@ -1831,12 +1830,10 @@ impl crate::Device for super::Device {
             }),
             crate::ShaderInput::Dxil {
                 shader,
-                entry_point,
                 num_workgroups,
             } => Ok(super::ShaderModule {
                 source: super::ShaderModuleSource::DxilPassthrough(super::DxilPassthroughShader {
                     shader: shader.to_vec(),
-                    entry_point,
                     num_workgroups,
                 }),
                 raw_name,
@@ -1844,18 +1841,17 @@ impl crate::Device for super::Device {
             }),
             crate::ShaderInput::Hlsl {
                 shader,
-                entry_point,
                 num_workgroups,
             } => Ok(super::ShaderModule {
                 source: super::ShaderModuleSource::HlslPassthrough(super::HlslPassthroughShader {
                     shader: shader.to_owned(),
-                    entry_point,
                     num_workgroups,
                 }),
                 raw_name,
                 runtime_checks: desc.runtime_checks,
             }),
             crate::ShaderInput::SpirV(_)
+            | crate::ShaderInput::MetalLib { .. }
             | crate::ShaderInput::Msl { .. }
             | crate::ShaderInput::Glsl { .. } => {
                 unreachable!()

@@ -31,10 +31,10 @@ impl Texture {
     ///
     /// The returned type depends on the backend:
     ///
-    #[doc = crate::hal_type_vulkan!("Texture")]
-    #[doc = crate::hal_type_metal!("Texture")]
-    #[doc = crate::hal_type_dx12!("Texture")]
-    #[doc = crate::hal_type_gles!("Texture")]
+    #[doc = crate::macros::hal_type_vulkan!("Texture")]
+    #[doc = crate::macros::hal_type_metal!("Texture")]
+    #[doc = crate::macros::hal_type_dx12!("Texture")]
+    #[doc = crate::macros::hal_type_gles!("Texture")]
     ///
     /// # Deadlocks
     ///

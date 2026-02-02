@@ -1,6 +1,10 @@
-# NOTE: Other global Clippy config is in top-level Cargo.toml.
+# NOTE: Other global Clippy config (severity overrides) is in top-level Cargo.toml.
 
 disallowed-types = [
     { path = "std::collections::HashMap", reason = "use hashbrown::HashMap instead" },
     { path = "std::collections::HashSet", reason = "use hashbrown::HashSet instead" },
 ]
+
+# The default large-error-threshold is 128. We have a bunch of complex error
+# types that are slightly larger than that.
+large-error-threshold = 192

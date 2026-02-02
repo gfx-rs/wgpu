@@ -220,6 +220,7 @@ pub struct EntryPoint<'a> {
     pub workgroup_size: Option<[Option<Handle<Expression<'a>>>; 3]>,
     pub mesh_output_variable: Option<(&'a str, Span)>,
     pub task_payload: Option<(&'a str, Span)>,
+    pub ray_incoming_payload: Option<(&'a str, Span)>,
 }
 
 #[cfg(doc)]

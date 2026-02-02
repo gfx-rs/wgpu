@@ -1819,6 +1819,10 @@ impl Writer {
                 .to_words(&mut self.logical_layout.execution_modes);
                 spirv::ExecutionModel::MeshEXT
             }
+            crate::ShaderStage::RayGeneration
+            | crate::ShaderStage::AnyHit
+            | crate::ShaderStage::ClosestHit
+            | crate::ShaderStage::Miss => unreachable!(),
         };
         //self.check(exec_model.required_capabilities())?;
 
@@ -3174,6 +3178,19 @@ impl Writer {
                     Bi::VertexCount | Bi::Vertices | Bi::PrimitiveCount | Bi::Primitives => {
                         unreachable!()
                     }
+                    Bi::RayInvocationId
+                    | Bi::NumRayInvocations
+                    | Bi::InstanceCustomData
+                    | Bi::GeometryIndex
+                    | Bi::WorldRayOrigin
+                    | Bi::WorldRayDirection
+                    | Bi::ObjectRayOrigin
+                    | Bi::ObjectRayDirection
+                    | Bi::RayTmin
+                    | Bi::RayTCurrentMax
+                    | Bi::ObjectToWorld
+                    | Bi::WorldToObject
+                    | Bi::HitKind => unreachable!(),
                 };
 
                 use crate::ScalarKind as Sk;

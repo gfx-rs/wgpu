@@ -37,8 +37,6 @@
     clippy::pattern_type_mismatch,
     // `wgpu-core` isn't entirely user-facing, so it's useful to document internal items.
     rustdoc::private_intra_doc_links,
-    // We should investigate these.
-    clippy::result_large_err
 )]
 #![warn(
     clippy::alloc_instead_of_core,

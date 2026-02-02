@@ -200,7 +200,20 @@ impl TryToWgsl for crate::BuiltIn {
             | Bi::PointSize
             | Bi::DrawID
             | Bi::PointCoord
-            | Bi::WorkGroupSize => return None,
+            | Bi::WorkGroupSize
+            | Bi::RayInvocationId
+            | Bi::NumRayInvocations
+            | Bi::InstanceCustomData
+            | Bi::GeometryIndex
+            | Bi::WorldRayOrigin
+            | Bi::WorldRayDirection
+            | Bi::ObjectRayOrigin
+            | Bi::ObjectRayDirection
+            | Bi::RayTmin
+            | Bi::RayTCurrentMax
+            | Bi::ObjectToWorld
+            | Bi::WorldToObject
+            | Bi::HitKind => return None,
         })
     }
 }
@@ -374,6 +387,7 @@ pub const fn address_space_str(
             As::Handle => return (None, None),
             As::Function => "function",
             As::TaskPayload => "task_payload",
+            As::IncomingRayPayload | As::RayPayload => return (None, None),
         }),
         None,
     )

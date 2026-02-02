@@ -1,5 +1,10 @@
 use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
-use core::{ptr::NonNull, sync::atomic};
+use core::{
+    ffi::c_void,
+    ptr::{self, NonNull},
+    sync::atomic,
+};
+use dispatch2::DispatchData;
 use std::{thread, time};
 
 use objc2::{
@@ -320,7 +325,10 @@ impl super::Device {
             }
             ShaderModuleSource::Passthrough(ref shader) => Ok(CompiledShader {
                 library: shader.library.clone(),
-                function: shader.function.clone(),
+                function: shader
+                    .library
+                    .newFunctionWithName(&NSString::from_str(stage.entry_point))
+                    .ok_or(crate::PipelineError::EntryPoint(naga_stage))?,
                 wg_size: MTLSize {
                     width: shader.num_workgroups.0 as usize,
                     height: shader.num_workgroups.1 as usize,
@@ -1089,9 +1097,36 @@ impl crate::Device for super::Device {
                 source: ShaderModuleSource::Naga(naga),
                 bounds_checks: desc.runtime_checks,
             }),
+            crate::ShaderInput::MetalLib {
+                file,
+                num_workgroups,
+            } => {
+                // SAFETY: this creates a reference to `file` that is dropped before `file` is dropped.
+                let data = unsafe {
+                    DispatchData::new(
+                        NonNull::new(file.as_ptr() as *mut c_void).unwrap(),
+                        file.len(),
+                        None,
+                        ptr::null_mut(),
+                    )
+                };
+                let library = self
+                    .shared
+                    .device
+                    .newLibraryWithData_error(&data)
+                    .map_err(|e| crate::ShaderError::Compilation(format!("Metallib: {e:?}")))?;
+                drop(data);
+                Ok(super::ShaderModule {
+                    source: ShaderModuleSource::Passthrough(PassthroughShader {
+                        library,
+                        num_workgroups,
+                    }),
+                    // This goes unused for passthrough shaders
+                    bounds_checks: wgt::ShaderRuntimeChecks::unchecked(),
+                })
+            }
             crate::ShaderInput::Msl {
                 shader: source,
-                entry_point,
                 num_workgroups,
             } => {
                 let options = MTLCompileOptions::new();
@@ -1100,22 +1135,14 @@ impl crate::Device for super::Device {
                 let library = device
                     .newLibraryWithSource_options_error(&NSString::from_str(source), Some(&options))
                     .map_err(|e| crate::ShaderError::Compilation(format!("MSL: {e:?}")))?;
-                let function = library
-                    .newFunctionWithName(&NSString::from_str(&entry_point))
-                    .ok_or_else(|| {
-                        crate::ShaderError::Compilation(format!(
-                            "Entry point '{entry_point}' not found"
-                        ))
-                    })?;
 
                 Ok(super::ShaderModule {
                     source: ShaderModuleSource::Passthrough(PassthroughShader {
                         library,
-                        function,
-                        entry_point,
                         num_workgroups,
                     }),
-                    bounds_checks: desc.runtime_checks,
+                    // This goes unused for passthrough shaders
+                    bounds_checks: wgt::ShaderRuntimeChecks::unchecked(),
                 })
             }
             crate::ShaderInput::SpirV(_)
@@ -1603,14 +1630,17 @@ impl crate::Device for super::Device {
             let descriptor = MTLComputePipelineDescriptor::new();
 
             let module = desc.stage.module;
-            let cs = if let ShaderModuleSource::Passthrough(desc) = &module.source {
+            let cs = if let ShaderModuleSource::Passthrough(passthrough_desc) = &module.source {
                 CompiledShader {
-                    library: desc.library.clone(),
-                    function: desc.function.clone(),
+                    library: passthrough_desc.library.clone(),
+                    function: passthrough_desc
+                        .library
+                        .newFunctionWithName(&NSString::from_str(desc.stage.entry_point))
+                        .ok_or(crate::PipelineError::EntryPoint(naga::ShaderStage::Compute))?,
                     wg_size: MTLSize {
-                        width: desc.num_workgroups.0 as usize,
-                        height: desc.num_workgroups.1 as usize,
-                        depth: desc.num_workgroups.2 as usize,
+                        width: passthrough_desc.num_workgroups.0 as usize,
+                        height: passthrough_desc.num_workgroups.1 as usize,
+                        depth: passthrough_desc.num_workgroups.2 as usize,
                     },
                     wg_memory_sizes: vec![],
                     sized_bindings: vec![],

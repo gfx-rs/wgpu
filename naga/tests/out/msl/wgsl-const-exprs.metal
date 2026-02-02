@@ -147,7 +147,7 @@ void abstract_access(
     uint b_1 = 1u;
     int c_1 = {};
     int d = {};
-    c_1 = type_9 {1, 2, 3, 4, 5, 6, 7, 8, 9}.inner[i];
+    c_1 = type_9 {{1, 2, 3, 4, 5, 6, 7, 8, 9}}.inner[i];
     d = metal::int4(1, 2, 3, 4)[i];
     return;
 }

@@ -628,6 +628,7 @@ impl crate::AddressSpace {
             | Self::Handle
             | Self::TaskPayload => true,
             Self::Function => false,
+            Self::RayPayload | Self::IncomingRayPayload => unreachable!(),
         }
     }
 
@@ -639,7 +640,7 @@ impl crate::AddressSpace {
             // may end up with "const" even if the binding is read-write,
             // and that should be OK.
             Self::Storage { .. } => true,
-            Self::TaskPayload => unimplemented!(),
+            Self::TaskPayload | Self::RayPayload | Self::IncomingRayPayload => unimplemented!(),
             // These should always be read-write.
             Self::Private | Self::WorkGroup => false,
             // These translate to `constant` address space, no need for qualifiers.
@@ -654,9 +655,13 @@ impl crate::AddressSpace {
             Self::Handle => None,
             Self::Uniform | Self::Immediate => Some("constant"),
             Self::Storage { .. } => Some("device"),
-            Self::Private | Self::Function => Some("thread"),
+            // note for `RayPayload`, this probably needs to be emulated as a
+            // private variable, as metal has essentially an inout input
+            // for where it is passed.
+            Self::Private | Self::Function | Self::RayPayload => Some("thread"),
             Self::WorkGroup => Some("threadgroup"),
             Self::TaskPayload => Some("object_data"),
+            Self::IncomingRayPayload => Some("ray_data"),
         }
     }
 }
@@ -1838,7 +1843,19 @@ impl<W: Write> Writer<W> {
                             put_expression,
                         )?;
                     }
-                    crate::TypeInner::Array { .. } | crate::TypeInner::Struct { .. } => {
+                    crate::TypeInner::Array { .. } => {
+                        // Naga Arrays are Metal arrays wrapped in structs, so
+                        // we need two levels of braces.
+                        write!(self.out, " {{{{")?;
+                        for (index, &component) in components.iter().enumerate() {
+                            if index != 0 {
+                                write!(self.out, ", ")?;
+                            }
+                            put_expression(self, ctx, component)?;
+                        }
+                        write!(self.out, "}}}}")?;
+                    }
+                    crate::TypeInner::Struct { .. } => {
                         write!(self.out, " {{")?;
                         for (index, &component) in components.iter().enumerate() {
                             if index != 0 {
@@ -4279,6 +4296,7 @@ impl<W: Write> Writer<W> {
                     }
                     writeln!(self.out, ");")?;
                 }
+                crate::Statement::RayPipelineFunction(_) => unreachable!(),
             }
         }
 
@@ -6875,6 +6893,10 @@ template <typename A>
                     false,
                 ),
                 crate::ShaderStage::Task | crate::ShaderStage::Mesh => unimplemented!(),
+                crate::ShaderStage::RayGeneration
+                | crate::ShaderStage::AnyHit
+                | crate::ShaderStage::ClosestHit
+                | crate::ShaderStage::Miss => unimplemented!(),
             };
 
             // Should this entry point be modified to do vertex pulling?
@@ -6947,6 +6969,8 @@ template <typename A>
                         crate::AddressSpace::Function
                         | crate::AddressSpace::Private
                         | crate::AddressSpace::WorkGroup => {}
+                        crate::AddressSpace::RayPayload
+                        | crate::AddressSpace::IncomingRayPayload => unimplemented!(),
                     }
                 }
                 if needs_buffer_sizes {

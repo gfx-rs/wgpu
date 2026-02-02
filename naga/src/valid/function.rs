@@ -228,6 +228,12 @@ pub enum FunctionError {
     ConflictingTaskPayloadVariables(Handle<crate::Expression>, Handle<crate::Expression>),
     #[error("Mesh shader output at {0:?} is not a user-defined struct")]
     InvalidMeshShaderOutputType(Handle<crate::Expression>),
+    #[error("The payload type passed to `traceRay` must be a pointer")]
+    InvalidPayloadType,
+    #[error("The payload type passed to `traceRay` must be a pointer with an address space of `ray_payload` or `incoming_ray_payload`, instead got {0:?}")]
+    InvalidPayloadAddressSpace(crate::AddressSpace),
+    #[error("The payload type ({0:?}) passed to `traceRay` does not match the previous one {1:?}")]
+    MismatchedPayloadType(Handle<crate::Type>, Handle<crate::Type>),
 }
 
 bitflags::bitflags! {
@@ -1678,6 +1684,81 @@ impl super::Validator {
                             ));
                     }
                 }
+                S::RayPipelineFunction(ref fun) => match *fun {
+                    crate::RayPipelineFunction::TraceRay {
+                        acceleration_structure,
+                        descriptor,
+                        payload,
+                    } => {
+                        match *context.resolve_type_inner(
+                            acceleration_structure,
+                            &self.valid_expression_set,
+                        )? {
+                            crate::TypeInner::AccelerationStructure { vertex_return } => {
+                                if !vertex_return {
+                                    self.trace_rays_vertex_return =
+                                        super::TraceRayVertexReturnState::NoVertexReturn(span);
+                                } else if let super::TraceRayVertexReturnState::NoTraceRays =
+                                    self.trace_rays_vertex_return
+                                {
+                                    self.trace_rays_vertex_return =
+                                        super::TraceRayVertexReturnState::VertexReturn;
+                                }
+                            }
+                            _ => {
+                                return Err(FunctionError::InvalidAccelerationStructure(
+                                    acceleration_structure,
+                                )
+                                .with_span_handle(acceleration_structure, context.expressions))
+                            }
+                        }
+
+                        let current_payload_ty = match *context
+                            .resolve_type_inner(payload, &self.valid_expression_set)?
+                        {
+                            crate::TypeInner::Pointer { base, space } => {
+                                match space {
+                                    AddressSpace::RayPayload | AddressSpace::IncomingRayPayload => {
+                                    }
+                                    space => {
+                                        return Err(FunctionError::InvalidPayloadAddressSpace(
+                                            space,
+                                        )
+                                        .with_span_handle(payload, context.expressions))
+                                    }
+                                }
+                                base
+                            }
+                            _ => {
+                                return Err(FunctionError::InvalidPayloadType
+                                    .with_span_handle(payload, context.expressions))
+                            }
+                        };
+
+                        let ty = *self
+                            .trace_rays_payload_type
+                            .get_or_insert(current_payload_ty);
+
+                        if ty != current_payload_ty {
+                            return Err(FunctionError::MismatchedPayloadType(
+                                current_payload_ty,
+                                ty,
+                            )
+                            .with_span_handle(ty, context.types));
+                        }
+
+                        let desc_ty_given =
+                            context.resolve_type_inner(descriptor, &self.valid_expression_set)?;
+                        let desc_ty_expected = context
+                            .special_types
+                            .ray_desc
+                            .map(|handle| &context.types[handle].inner);
+                        if Some(desc_ty_given) != desc_ty_expected {
+                            return Err(FunctionError::InvalidRayDescriptor(descriptor)
+                                .with_span_static(span, "invalid ray descriptor"));
+                        }
+                    }
+                },
             }
         }
         Ok(BlockInfo { stages })

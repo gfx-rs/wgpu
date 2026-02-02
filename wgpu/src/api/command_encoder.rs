@@ -262,10 +262,10 @@ impl CommandEncoder {
     ///
     /// The callback argument depends on the backend:
     ///
-    #[doc = crate::hal_type_vulkan!("CommandEncoder")]
-    #[doc = crate::hal_type_metal!("CommandEncoder")]
-    #[doc = crate::hal_type_dx12!("CommandEncoder")]
-    #[doc = crate::hal_type_gles!("CommandEncoder")]
+    #[doc = crate::macros::hal_type_vulkan!("CommandEncoder")]
+    #[doc = crate::macros::hal_type_metal!("CommandEncoder")]
+    #[doc = crate::macros::hal_type_dx12!("CommandEncoder")]
+    #[doc = crate::macros::hal_type_gles!("CommandEncoder")]
     ///
     /// # Safety
     ///

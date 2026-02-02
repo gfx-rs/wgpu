@@ -1015,6 +1015,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 write!(self.out, "ConstantBuffer<")?;
                 "b"
             }
+            crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload => {
+                unimplemented!()
+            }
         };
 
         // If the global is a immediate data write the type now because it will be a
@@ -2802,6 +2805,7 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                 writeln!(self.out, ");")?;
             }
             Statement::CooperativeStore { .. } => unimplemented!(),
+            Statement::RayPipelineFunction(_) => unreachable!(),
         }
 
         Ok(())
@@ -3132,7 +3136,9 @@ impl<'a, W: fmt::Write> super::Writer<'a, W> {
                                 | crate::AddressSpace::Private
                                 | crate::AddressSpace::WorkGroup
                                 | crate::AddressSpace::Immediate
-                                | crate::AddressSpace::TaskPayload,
+                                | crate::AddressSpace::TaskPayload
+                                | crate::AddressSpace::RayPayload
+                                | crate::AddressSpace::IncomingRayPayload,
                             )
                             | None => true,
                             Some(crate::AddressSpace::Uniform) => {

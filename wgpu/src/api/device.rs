@@ -317,10 +317,10 @@ impl Device {
     ///
     /// The type of `A::Texture` depends on the backend:
     ///
-    #[doc = crate::hal_type_vulkan!("Texture")]
-    #[doc = crate::hal_type_metal!("Texture")]
-    #[doc = crate::hal_type_dx12!("Texture")]
-    #[doc = crate::hal_type_gles!("Texture")]
+    #[doc = crate::macros::hal_type_vulkan!("Texture")]
+    #[doc = crate::macros::hal_type_metal!("Texture")]
+    #[doc = crate::macros::hal_type_dx12!("Texture")]
+    #[doc = crate::macros::hal_type_gles!("Texture")]
     ///
     /// # Safety
     ///
@@ -377,10 +377,10 @@ impl Device {
     ///
     /// The type of `A::Buffer` depends on the backend:
     ///
-    #[doc = crate::hal_type_vulkan!("Buffer")]
-    #[doc = crate::hal_type_metal!("Buffer")]
-    #[doc = crate::hal_type_dx12!("Buffer")]
-    #[doc = crate::hal_type_gles!("Buffer")]
+    #[doc = crate::macros::hal_type_vulkan!("Buffer")]
+    #[doc = crate::macros::hal_type_metal!("Buffer")]
+    #[doc = crate::macros::hal_type_dx12!("Buffer")]
+    #[doc = crate::macros::hal_type_gles!("Buffer")]
     ///
     /// # Safety
     ///
@@ -569,10 +569,10 @@ impl Device {
     ///
     /// The returned type depends on the backend:
     ///
-    #[doc = crate::hal_type_vulkan!("Device")]
-    #[doc = crate::hal_type_metal!("Device")]
-    #[doc = crate::hal_type_dx12!("Device")]
-    #[doc = crate::hal_type_gles!("Device")]
+    #[doc = crate::macros::hal_type_vulkan!("Device")]
+    #[doc = crate::macros::hal_type_metal!("Device")]
+    #[doc = crate::macros::hal_type_dx12!("Device")]
+    #[doc = crate::macros::hal_type_gles!("Device")]
     ///
     /// # Errors
     ///

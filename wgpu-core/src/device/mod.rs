@@ -379,24 +379,15 @@ impl WebGpuError for MissingDownlevelFlags {
     }
 }
 
-/// Create a validator for Naga [`Module`]s.
+/// Compute naga [`Capabilities`] corresponding to [`Features`] and [`DownlevelFlags`].
 ///
-/// Create a Naga [`Validator`] that ensures that each [`naga::Module`]
-/// presented to it is valid, and uses no features not included in
-/// `features` and `downlevel`.
-///
-/// The validator can only catch invalid modules and feature misuse
-/// reliably when the `flags` argument includes all the flags in
-/// [`ValidationFlags::default()`].
-///
-/// [`Validator`]: naga::valid::Validator
-/// [`Module`]: naga::Module
-/// [`ValidationFlags::default()`]: naga::valid::ValidationFlags::default
-pub fn create_validator(
+/// [`Capabilities`]: naga::valid::Capabilities
+/// [`Features`]: wgt::Features
+/// [`DownlevelFlags`]: wgt::DownlevelFlags
+pub fn features_to_naga_capabilities(
     features: wgt::Features,
     downlevel: wgt::DownlevelFlags,
-    flags: naga::valid::ValidationFlags,
-) -> naga::valid::Validator {
+) -> naga::valid::Capabilities {
     use naga::valid::Capabilities as Caps;
     let mut caps = Caps::empty();
     caps.set(
@@ -548,5 +539,27 @@ pub fn create_validator(
         features.intersects(wgt::Features::SHADER_PER_VERTEX),
     );
 
+    caps
+}
+
+/// Create a validator for Naga [`Module`]s.
+///
+/// Create a Naga [`Validator`] that ensures that each [`naga::Module`]
+/// presented to it is valid, and uses no features not included in
+/// `features` and `downlevel`.
+///
+/// The validator can only catch invalid modules and feature misuse
+/// reliably when the `flags` argument includes all the flags in
+/// [`ValidationFlags::default()`].
+///
+/// [`Validator`]: naga::valid::Validator
+/// [`Module`]: naga::Module
+/// [`ValidationFlags::default()`]: naga::valid::ValidationFlags::default
+pub fn create_validator(
+    features: wgt::Features,
+    downlevel: wgt::DownlevelFlags,
+    flags: naga::valid::ValidationFlags,
+) -> naga::valid::Validator {
+    let caps = features_to_naga_capabilities(features, downlevel);
     naga::valid::Validator::new(flags, caps)
 }

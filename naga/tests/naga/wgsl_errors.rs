@@ -6,13 +6,10 @@
 //! for the validator tests to be in the `validation` test suite.
 
 #![cfg(feature = "wgsl-in")]
-#![allow(
-    // We need to investigate these.
-    clippy::result_large_err
-)]
 
 use naga::{
     compact::KeepUnused,
+    front::wgsl::{EnableExtension, ImplementedEnableExtension},
     valid::{self, Capabilities},
 };
 
@@ -1049,8 +1046,17 @@ macro_rules! check_one_validation {
 ///
 /// NOTE: The only reason we don't use a function for this is because we need to syntactically
 /// re-use `$val_err_pat`.
+///
+/// The optional $other_caps argument at the end specifies capabilities that
+/// allow, the shader or would change the error message if enabled, but do not
+/// get enabled by the specified enable extension. This is only currently the
+/// case for `acceleration_structures` which are enabled by both ray queries
+/// and ray tracing pipelines.
 macro_rules! check_extension_validation {
-    ( $caps:expr, $source:expr, $parse_err:expr, $val_err_pat:pat ) => {
+    ( $caps:expr, $source:expr, $parse_err:expr, $val_err_pat:pat $(, $other_caps:expr)? ) => {
+        #[allow(unused_mut, unused_assignments)]
+        let mut other_caps = naga::valid::Capabilities::empty();
+        $(other_caps = $other_caps;)?
         let caps = $caps;
         let source = $source;
         let mut ext = None;
@@ -1102,7 +1108,9 @@ macro_rules! check_extension_validation {
         };
 
         // Second check, for the expected validation error when the capability is not present
-        let error = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), !caps)
+        // Don't check with explicitly allowed caps, as certain things (currently just
+        // `acceleration_structure`s) can be enabled by multiple extensions
+        let error = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), !(caps | other_caps))
             .validate(&module)
             .map_err(|e| e.into_inner()); // TODO(https://github.com/gfx-rs/wgpu/issues/8153): Add tests for spans
         #[allow(clippy::redundant_pattern_matching)]
@@ -3923,7 +3931,7 @@ fn subgroup_capability() {
             &format!("
                 {stage_attr}
                 fn main() {{
-                    subgroupBallot();
+                    _ = subgroupBallot();
                 }}
             "),
             Err(naga::valid::ValidationError::EntryPoint {
@@ -3948,7 +3956,7 @@ fn subgroup_capability() {
                 "
                 {stage_attr}
                 fn main() {{
-                    subgroupBallot();
+                    _ = subgroupBallot();
                 }}
             "
             ),
@@ -3965,7 +3973,7 @@ fn subgroup_capability() {
             "
                 @vertex
                 fn main() -> @builtin(position) vec4<f32> {{
-                    subgroupBallot();
+                    _ = subgroupBallot();
                     return vec4();
                 }}
             ":
@@ -3977,7 +3985,7 @@ fn subgroup_capability() {
         "
             @vertex
             fn main() -> @builtin(position) vec4<f32> {{
-                subgroupBallot();
+                _ = subgroupBallot();
                 return vec4();
             }}
         ",
@@ -4074,7 +4082,7 @@ fn subgroup_invalid_broadcast() {
     check_validation! {
         r#"
             fn main(id: u32) {
-                subgroupBroadcast(123, id);
+                _ = subgroupBroadcast(123, id);
             }
         "#:
         Err(naga::valid::ValidationError::Function {
@@ -4088,7 +4096,7 @@ fn subgroup_invalid_broadcast() {
     check_validation! {
         r#"
             fn main(id: u32) {
-                quadBroadcast(123, id);
+                _ = quadBroadcast(123, id);
             }
         "#:
         Err(naga::valid::ValidationError::Function {
@@ -4359,7 +4367,7 @@ fn enumerant_with_template_parameters() {
 }
 
 #[test]
-fn ray_query_enable_extension() {
+fn ray_types_enable_extension() {
     check_extension_validation!(
         Capabilities::RAY_QUERY,
         r#"fn foo() {
@@ -4381,6 +4389,7 @@ fn ray_query_enable_extension() {
         })
     );
 
+    // can be enabled by either of these extensions
     check_extension_validation!(
         Capabilities::RAY_QUERY,
         r#"@group(0) @binding(0)
@@ -4398,7 +4407,28 @@ fn ray_query_enable_extension() {
         Err(naga::valid::ValidationError::Type {
             source: naga::valid::TypeError::MissingCapability(Capabilities::RAY_QUERY),
             ..
-        })
+        }),
+        Capabilities::RAY_TRACING_PIPELINE
+    );
+    check_extension_validation!(
+        Capabilities::RAY_TRACING_PIPELINE,
+        r#"@group(0) @binding(0)
+        var acc_struct: acceleration_structure;
+        "#,
+        r#"error: the `wgpu_ray_query` enable extension is not enabled
+  ┌─ wgsl:2:25
+  │
+2 │         var acc_struct: acceleration_structure;
+  │                         ^^^^^^^^^^^^^^^^^^^^^^ the `wgpu_ray_query` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_query;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::Type {
+            source: naga::valid::TypeError::MissingCapability(Capabilities::RAY_QUERY),
+            ..
+        }),
+        Capabilities::RAY_QUERY
     );
 }
 
@@ -4606,6 +4636,314 @@ fn cooperative_matrix_enable_extension() {
                 source: naga::valid::TypeError::MissingCapability(Capabilities::COOPERATIVE_MATRIX),
                 ..
             })
+        );
+    }
+}
+
+/// Tests for mesh shader extension validation via WGSL parsing.
+///
+/// Some mesh shader features can only be tested at parse-level in WGSL due to
+/// parse-order limitations (e.g., mesh builtins in structs fail before mesh-specific
+/// attributes are checked). For IR-level validation tests that directly test the
+/// validator capability checks, see `validation::mesh_shader_capability`.
+#[test]
+fn mesh_shader_enable_extension() {
+    // @task stage attribute
+    check_extension_validation!(
+        Capabilities::MESH_SHADER,
+        r#"@task @workgroup_size(1)
+        fn main() -> @builtin(mesh_task_size) vec3<u32> {
+            return vec3(1u, 1u, 1u);
+        }
+        "#,
+        r#"error: the `wgpu_mesh_shader` enable extension is not enabled
+  ┌─ wgsl:1:2
+  │
+1 │ @task @workgroup_size(1)
+  │  ^^^^ the `wgpu_mesh_shader` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_mesh_shader;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::UnsupportedCapability(Capabilities::MESH_SHADER),
+            ..
+        })
+    );
+
+    // @mesh stage attribute
+    check_extension_validation!(
+        Capabilities::MESH_SHADER,
+        r#"struct MeshOutput { dummy: u32 }
+        var<workgroup> mesh_output: MeshOutput;
+        @mesh(mesh_output) @workgroup_size(1)
+        fn main() {}
+        "#,
+        r#"error: the `wgpu_mesh_shader` enable extension is not enabled
+  ┌─ wgsl:3:10
+  │
+3 │         @mesh(mesh_output) @workgroup_size(1)
+  │          ^^^^ the `wgpu_mesh_shader` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_mesh_shader;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::UnsupportedCapability(Capabilities::MESH_SHADER),
+            ..
+        })
+    );
+
+    // @per_primitive attribute
+    check_extension_validation!(
+        Capabilities::MESH_SHADER,
+        r#"struct FragInput {
+            @location(0) @per_primitive value: f32,
+        }
+        @fragment
+        fn main(input: FragInput) {}
+        "#,
+        r#"error: the `wgpu_mesh_shader` enable extension is not enabled
+  ┌─ wgsl:2:27
+  │
+2 │             @location(0) @per_primitive value: f32,
+  │                           ^^^^^^^^^^^^^ the `wgpu_mesh_shader` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_mesh_shader;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::EntryPoint {
+            source: naga::valid::EntryPointError::Argument(
+                _,
+                naga::valid::VaryingError::UnsupportedCapability(Capabilities::MESH_SHADER)
+            ),
+            ..
+        })
+    );
+
+    // `@payload`` attribute. It is not possible for this attribute to reach the validator
+    // without the extension enabled, because the attribute is only allowed on mesh and task
+    // stages, and those stages are rejected (with or without the `@payload` attribute) when
+    // the mesh shader extension is not enabled.
+    //
+    // There is a direct-to-validator test case for `@payload` in `validation.rs`.
+    check(
+        r#"@compute @workgroup_size(1) @payload(foo)
+        fn main() {}
+        "#,
+        r#"error: the `wgpu_mesh_shader` enable extension is not enabled
+  ┌─ wgsl:1:30
+  │
+1 │ @compute @workgroup_size(1) @payload(foo)
+  │                              ^^^^^^^ the `wgpu_mesh_shader` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_mesh_shader;` at the top of the shader, before any other items.
+
+"#,
+    );
+
+    // `task_payload` address space
+    check_extension_validation!(
+        Capabilities::MESH_SHADER,
+        r#"struct Payload { dummy: u32 }
+        var<task_payload> taskPayload: Payload;
+        @compute @workgroup_size(1)
+        fn main() {
+            taskPayload.dummy = 1u;
+        }
+        "#,
+        r#"error: the `wgpu_mesh_shader` enable extension is not enabled
+  ┌─ wgsl:2:13
+  │
+2 │         var<task_payload> taskPayload: Payload;
+  │             ^^^^^^^^^^^^ the `wgpu_mesh_shader` "Enable Extension" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_mesh_shader;` at the top of the shader, before any other items.
+
+"#,
+        Err(naga::valid::ValidationError::GlobalVariable {
+            source: naga::valid::GlobalVariableError::UnsupportedCapability(
+                Capabilities::MESH_SHADER
+            ),
+            ..
+        })
+    );
+}
+
+/// Checks that every ray tracing pipeline binding in naga is invalid in other stages.
+#[test]
+fn check_ray_tracing_pipeline_bindings() {
+    for (builtin, ty) in [
+        ("ray_invocation_id", "vec3<u32>"),
+        ("num_ray_invocations", "vec3<u32>"),
+        ("instance_custom_data", "u32"),
+        ("geometry_index", "u32"),
+        ("world_ray_origin", "vec3<f32>"),
+        ("world_ray_direction", "vec3<f32>"),
+        ("object_ray_origin", "vec3<f32>"),
+        ("object_ray_direction", "vec3<f32>"),
+        ("ray_t_min", "f32"),
+        ("ray_t_current_max", "f32"),
+        ("object_to_world", "mat4x3<f32>"),
+        ("world_to_object", "mat4x3<f32>"),
+        ("hit_kind", "u32"),
+    ] {
+        for stage in ["@compute @workgroup_size(1)", " @vertex", "@fragment"] {
+            check_one_validation!(
+                &format!(
+                    "{stage}
+            fn main(@builtin({builtin}) v: {ty}) {{}}
+            "
+                ),
+                Err(naga::valid::ValidationError::EntryPoint {
+                    source: naga::valid::EntryPointError::Argument(
+                        0,
+                        naga::valid::VaryingError::InvalidBuiltInStage(_),
+                    ),
+                    ..
+                },)
+            );
+        }
+    }
+}
+
+/// Checks ray generation stage is invalid without enable extension (other stages require `@incoming_payload` which forces a ray payload which is checked in [`check_ray_tracing_pipeline_payload`])
+#[test]
+fn check_ray_tracing_pipeline_ray_generation() {
+    check_extension_validation!(
+            Capabilities::RAY_TRACING_PIPELINE,
+            "@ray_generation
+                fn main() {{}}",
+            "error: the `wgpu_ray_tracing_pipeline` enable extension is not enabled
+  ┌─ wgsl:1:2
+  │
+1 │ @ray_generation
+  │  ^^^^^^^^^^^^^^ the `wgpu_ray_tracing_pipeline` \"Enable Extension\" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_tracing_pipeline;` at the top of the shader, before any other items.
+
+",
+            Err(naga::valid::ValidationError::EntryPoint {
+                source: naga::valid::EntryPointError::UnsupportedCapability(naga::valid::Capabilities::RAY_TRACING_PIPELINE),
+                ..
+            },)
+        );
+}
+
+#[test]
+fn check_ray_tracing_pipeline_payload() {
+    for space in ["ray_payload", "incoming_ray_payload"] {
+        // ascii is a byte per char so length is fine
+        let space_arrows = "^".to_string().repeat(space.len());
+        check_extension_validation!(
+            Capabilities::RAY_TRACING_PIPELINE,
+            &format!("var<{space}> payload: u32;"),
+            &format!("error: the `wgpu_ray_tracing_pipeline` enable extension is not enabled
+  ┌─ wgsl:1:5
+  │
+1 │ var<{space}> payload: u32;
+  │     {space_arrows} the `wgpu_ray_tracing_pipeline` \"Enable Extension\" is needed for this functionality, but it is not currently enabled.
+  │
+  = note: You can enable this extension by adding `enable wgpu_ray_tracing_pipeline;` at the top of the shader, before any other items.
+
+"),
+            Err(naga::valid::ValidationError::GlobalVariable {
+                source: naga::valid::GlobalVariableError::UnsupportedCapability(naga::valid::Capabilities::RAY_TRACING_PIPELINE),
+                ..
+            },)
+        );
+    }
+}
+
+#[test]
+fn check_ray_tracing_pipeline_incoming_payload_required() {
+    for stage in ["any_hit", "closest_hit", "miss"] {
+        // ascii is a byte per char so length is fine
+        let stage_arrows = "^".to_string().repeat(stage.len());
+        check(
+            &format!("enable wgpu_ray_tracing_pipeline; @{stage} fn main() {{}}"),
+            &format!("error: incoming payload is missing on a `closest_hit`, `any_hit` or `miss` shader entry point
+  ┌─ wgsl:1:36
+  │
+1 │ enable wgpu_ray_tracing_pipeline; @{stage} fn main() {{}}
+  │                                    {stage_arrows} must be paired with a `@incoming_payload` attribute
+
+"),
+        );
+    }
+}
+
+#[test]
+fn check_ray_tracing_pipeline_payload_disallowed() {
+    for (stage, output, stmt) in [
+        (
+            "var<incoming_ray_payload> incoming: u32; @any_hit @incoming_payload(incoming)",
+            "",
+            "",
+        ),
+        ("@compute @workgroup_size(1)", "", ""),
+        (
+            "@vertex",
+            " -> @builtin(position) vec4<f32>",
+            "return vec4();",
+        ),
+        ("@fragment", "", ""),
+    ] {
+        check_one_validation!(
+            &format!(
+                "enable wgpu_ray_tracing_pipeline;
+            @group(0) @binding(0) var acc_struct: acceleration_structure;
+            var<ray_payload> payload: u32;
+
+            {stage} fn main() {output} {{_ = payload; {stmt}}}"
+            ),
+            Err(naga::valid::ValidationError::EntryPoint {
+                source: naga::valid::EntryPointError::RayPayloadInInvalidStage(_),
+                ..
+            },),
+            Capabilities::RAY_TRACING_PIPELINE
+        );
+    }
+}
+
+#[track_caller]
+fn check_with_capabilities(input: &str, snapshot: &str, capabilities: Capabilities) {
+    let mut options = naga::front::wgsl::Options::new();
+    options.capabilities = capabilities;
+    let mut frontend = naga::front::wgsl::Frontend::new_with_options(options);
+    let output = match frontend.parse(input) {
+        Ok(_) => panic!("expected parser error, but parsing succeeded!"),
+        Err(err) => err.emit_to_string(input),
+    };
+    if output != snapshot {
+        for diff in diff::lines(snapshot, &output) {
+            match diff {
+                diff::Result::Left(l) => println!("-{l}"),
+                diff::Result::Both(l, _) => println!(" {l}"),
+                diff::Result::Right(r) => println!("+{r}"),
+            }
+        }
+        panic!("Error snapshot failed");
+    }
+}
+
+#[test]
+fn enable_without_capability() {
+    for extension in ImplementedEnableExtension::all() {
+        let ident = EnableExtension::from(*extension).to_ident();
+        let carets = "^".repeat(ident.len());
+        check_with_capabilities(
+            &format!("enable {ident};"),
+            &format!(
+                "error: the `{ident}` extension is not supported in the current environment
+  ┌─ wgsl:1:8
+  │
+1 │ enable {ident};
+  │        {carets} unsupported enable-extension
+
+"
+            ),
+            !extension.capability(),
         );
     }
 }

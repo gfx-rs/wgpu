@@ -45,7 +45,7 @@ use objc2_metal::{
     MTLArgumentBuffersTier, MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer,
     MTLCommandBufferStatus, MTLCommandQueue, MTLComputeCommandEncoder, MTLComputePipelineState,
     MTLCounterSampleBuffer, MTLCullMode, MTLDepthClipMode, MTLDepthStencilState, MTLDevice,
-    MTLDrawable, MTLFunction, MTLIndexType, MTLLanguageVersion, MTLLibrary, MTLPrimitiveType,
+    MTLDrawable, MTLIndexType, MTLLanguageVersion, MTLLibrary, MTLPrimitiveType,
     MTLReadWriteTextureTier, MTLRenderCommandEncoder, MTLRenderPipelineState, MTLRenderStages,
     MTLResource, MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize, MTLTexture,
     MTLTextureType, MTLTriangleFillMode, MTLWinding,
@@ -715,6 +715,10 @@ impl<T> ops::Index<naga::ShaderStage> for MultiStageData<T> {
             naga::ShaderStage::Compute => &self.cs,
             naga::ShaderStage::Task => &self.ts,
             naga::ShaderStage::Mesh => &self.ms,
+            naga::ShaderStage::RayGeneration
+            | naga::ShaderStage::AnyHit
+            | naga::ShaderStage::ClosestHit
+            | naga::ShaderStage::Miss => unimplemented!(),
         }
     }
 }
@@ -840,8 +844,6 @@ pub enum ShaderModuleSource {
 #[derive(Debug)]
 pub struct PassthroughShader {
     pub library: Retained<ProtocolObject<dyn MTLLibrary>>,
-    pub function: Retained<ProtocolObject<dyn MTLFunction>>,
-    pub entry_point: String,
     pub num_workgroups: (u32, u32, u32),
 }
 

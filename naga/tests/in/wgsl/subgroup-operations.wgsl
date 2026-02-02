@@ -11,32 +11,32 @@ fn main(
 ) {
     subgroupBarrier();
 
-    subgroupBallot((subgroup_invocation_id & 1u) == 1u);
-    subgroupBallot();
+    _ = subgroupBallot((subgroup_invocation_id & 1u) == 1u);
+    _ = subgroupBallot();
 
-    subgroupAll(subgroup_invocation_id != 0u);
-    subgroupAny(subgroup_invocation_id == 0u);
-    subgroupAdd(subgroup_invocation_id);
-    subgroupMul(subgroup_invocation_id);
-    subgroupMin(subgroup_invocation_id);
-    subgroupMax(subgroup_invocation_id);
-    subgroupAnd(subgroup_invocation_id);
-    subgroupOr(subgroup_invocation_id);
-    subgroupXor(subgroup_invocation_id);
-    subgroupExclusiveAdd(subgroup_invocation_id);
-    subgroupExclusiveMul(subgroup_invocation_id);
-    subgroupInclusiveAdd(subgroup_invocation_id);
-    subgroupInclusiveMul(subgroup_invocation_id);
+    _ = subgroupAll(subgroup_invocation_id != 0u);
+    _ = subgroupAny(subgroup_invocation_id == 0u);
+    _ = subgroupAdd(subgroup_invocation_id);
+    _ = subgroupMul(subgroup_invocation_id);
+    _ = subgroupMin(subgroup_invocation_id);
+    _ = subgroupMax(subgroup_invocation_id);
+    _ = subgroupAnd(subgroup_invocation_id);
+    _ = subgroupOr(subgroup_invocation_id);
+    _ = subgroupXor(subgroup_invocation_id);
+    _ = subgroupExclusiveAdd(subgroup_invocation_id);
+    _ = subgroupExclusiveMul(subgroup_invocation_id);
+    _ = subgroupInclusiveAdd(subgroup_invocation_id);
+    _ = subgroupInclusiveMul(subgroup_invocation_id);
 
-    subgroupBroadcastFirst(subgroup_invocation_id);
-    subgroupBroadcast(subgroup_invocation_id, 4u);
-    subgroupShuffle(subgroup_invocation_id, sizes.subgroup_size - 1u - subgroup_invocation_id);
-    subgroupShuffleDown(subgroup_invocation_id, 1u);
-    subgroupShuffleUp(subgroup_invocation_id, 1u);
-    subgroupShuffleXor(subgroup_invocation_id, sizes.subgroup_size - 1u);
+    _ = subgroupBroadcastFirst(subgroup_invocation_id);
+    _ = subgroupBroadcast(subgroup_invocation_id, 4u);
+    _ = subgroupShuffle(subgroup_invocation_id, sizes.subgroup_size - 1u - subgroup_invocation_id);
+    _ = subgroupShuffleDown(subgroup_invocation_id, 1u);
+    _ = subgroupShuffleUp(subgroup_invocation_id, 1u);
+    _ = subgroupShuffleXor(subgroup_invocation_id, sizes.subgroup_size - 1u);
 
-    quadBroadcast(subgroup_invocation_id, 4u);
-    quadSwapX(subgroup_invocation_id);
-    quadSwapY(subgroup_invocation_id);
-    quadSwapDiagonal(subgroup_invocation_id);
+    _ = quadBroadcast(subgroup_invocation_id, 4u);
+    _ = quadSwapX(subgroup_invocation_id);
+    _ = quadSwapY(subgroup_invocation_id);
+    _ = quadSwapDiagonal(subgroup_invocation_id);
 }
