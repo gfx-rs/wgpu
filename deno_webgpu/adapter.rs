@@ -499,7 +499,12 @@ impl GPUAdapterInfo {
   #[getter]
   #[string]
   fn description(&self) -> String {
-    self.info.name.clone()
+    let name = if self.info.name.is_empty() {
+      "Unknown Adapter"
+    } else {
+      &self.info.name
+    };
+    format!("{name} ({:?})", self.info.backend)
   }
 
   #[getter]

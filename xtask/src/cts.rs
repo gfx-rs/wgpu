@@ -375,8 +375,8 @@ pub fn run_cts(
                         println!("{}", summary.trim());
                     } else {
                         print!("{}", stdout);
-                        eprint!("{}", stderr);
                     }
+                    eprint!("{}", stderr);
                 } else {
                     print!("{}", stdout);
                     eprint!("{}", stderr);

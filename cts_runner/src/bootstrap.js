@@ -236,6 +236,7 @@ windowOrWorkerGlobalScope.console.enumerable = false;
 // Note that catching an error here _does not_ result in a non-zero exit status.
 const requestDevice = webgpu.GPUAdapter.prototype.requestDevice;
 webgpu.GPUAdapter.prototype.requestDevice = function(desc) {
+    core.print("Using " + this.info.description + "\n", true);
     return requestDevice.call(this, desc).then((device) => {
         device.onuncapturederror = (event) => {
             core.print("cts_runner caught WebGPU error: " + event.error.message + "\n", true);
