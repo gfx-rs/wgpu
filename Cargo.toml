@@ -290,7 +290,7 @@ console_error_panic_hook = "0.1.5"
 console_log = "1"
 js-sys = { version = "0.3.77", default-features = false }
 wasm-bindgen = { version = "0.2.100", default-features = false }
-wasm-bindgen-futures = { version = "0.4.43", default-features = false }
+wasm-bindgen-futures = { version = "0.4.58", default-features = false }
 wasm-bindgen-test = "0.3"
 web-sys = { version = "0.3.77", default-features = false }
 web-time = "1.1.0"
