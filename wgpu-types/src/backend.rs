@@ -292,6 +292,9 @@ pub struct Dx12BackendOptions {
     pub presentation_system: Dx12SwapchainKind,
     /// Whether to wait for the latency waitable object before acquiring the next swapchain image.
     pub latency_waitable_object: Dx12UseFrameLatencyWaitableObject,
+    /// For use with passthrough shaders. Expose features as if this shader model is present, even if you do not
+    /// intend to ship DXC with your app.
+    pub force_shader_model: Dx12Compiler,
 }
 
 impl Dx12BackendOptions {
