@@ -316,6 +316,8 @@ pub struct Dx12BackendOptions {
     pub latency_waitable_object: Dx12UseFrameLatencyWaitableObject,
     /// For use with passthrough shaders. Expose features as if this shader model is present, even if you do not
     /// intend to ship DXC with your app.
+    ///
+    /// This does not override the device's shader model version, only the external shader compiler's version.
     pub force_shader_model: ForceShaderModelToken,
 }
 
