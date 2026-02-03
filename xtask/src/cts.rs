@@ -337,16 +337,12 @@ pub fn run_cts(
             .map(|(key, value)| {
                 let value = value.trim_matches('"').trim_matches('\'');
 
-                let key = if key == "CARGO_LLVM_COV_TARGET_DIR" {
+                if key == "CARGO_LLVM_COV_TARGET_DIR" {
                     // TODO comment here
-                    let key = Path::new(key).join("llvm-cov-target").into_os_string().into_string().unwrap();
-                    dir = Some(key.clone());
-                    key
-                } else {
-                    key.to_string()
-                };
+                    dir = Some(Path::new(value).join("llvm-cov-target").into_os_string().into_string().unwrap());
+                }
 
-                (key, value.to_string())
+                (key.to_string(), value.to_string())
             })
             .collect::<Vec<_>>();
 
