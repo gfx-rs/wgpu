@@ -50,21 +50,31 @@ jobs:
             os: windows-2022
             target: x86_64-pc-windows-msvc
             backend: dx12
+            shell: bash
 
           # Mac
+          # Need to use `zsh` for `source <(cmd)` because it doesn't work in
+          # ancient MacOS bash. `zsh` is a non-standard shell in GitHub
+          # actions, so must be specified as a command string.
           - platform: Mac aarch64
             os: macos-14
             target: x86_64-apple-darwin
             backend: metal
+            shell: zsh {0}
 
           # Linux
           - platform: Linux x86_64
             os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             backend: vulkan
+            shell: bash
 
     name: ${{ matrix.suite }} ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
 
     steps:
       - name: checkout repo
@@ -130,7 +140,6 @@ jobs:
 
       - name: Generate coverage report
         id: coverage
-        shell: bash
         continue-on-error: true
         run: |
           set -e
