@@ -105,6 +105,7 @@ Bottom level categories:
 - Fixed validation of the texture format in GPUDepthStencilState when neither depth nor stencil is actually enabled. By @andyleiserson in [#8766](https://github.com/gfx-rs/wgpu/pull/8766).
 - Check that depth bias is not used with non-triangle topologies. By @andyleiserson in [#8856](https://github.com/gfx-rs/wgpu/pull/8856).
 - Check that if the shader outputs `frag_depth`, then the pipeline must have a depth attachment. By @andyleiserson in [#8856](https://github.com/gfx-rs/wgpu/pull/8856).
+- Fix incorrect acceptance of some swizzle selectors that are not valid for their operand, e.g. `const v = vec2<i32>(); let r = v.xyz`. By @andyleiserson in [#8949](https://github.com/gfx-rs/wgpu/pull/8949).
 
 #### GLES
 
