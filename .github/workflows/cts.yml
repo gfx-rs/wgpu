@@ -113,6 +113,7 @@ jobs:
       - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'
         uses: ./.github/actions/install-mesa
+        with:
           target-dir: "target/debug"
 
       # Mixing --llvm-cov with deno (rusty_v8) has linking problems.
