@@ -3083,8 +3083,7 @@ impl Writer {
                     Bi::PointCoord => BuiltIn::PointCoord,
                     Bi::FrontFacing => BuiltIn::FrontFacing,
                     Bi::PrimitiveIndex => {
-                        // Prefer tesselation/geometry. If neither is supported try to enable mesh shaders
-                        // which also requires an extension
+                        // Geometry shader capability is required for primitive index
                         self.require_any(
                             "`primitive_index` built-in",
                             &[spirv::Capability::Geometry],
