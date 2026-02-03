@@ -73,7 +73,7 @@ pub(crate) struct CommandIndices {
     /// submission failed. If you need to wait for everything running on a
     /// `Queue` to complete, wait for [`last_successful_submission_index`].
     ///
-    /// [`last_successful_submission_index`]: Device::last_successful_submission_index
+    /// [`last_successful_submission_index`]: PerQueueData::last_successful_submission_index
     pub(crate) active_submission_index: hal::FenceValue,
     pub(crate) next_acceleration_structure_build_command_index: u64,
 }
