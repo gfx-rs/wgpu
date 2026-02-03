@@ -319,7 +319,7 @@ pub fn run_cts(
     }
 
     let env_vars = if llvm_cov {
-        let mut dir = None;
+        let mut target_dir = None;
         let mut vec = shell
             .cmd("cargo")
             .args(&["llvm-cov", "--no-cfg-coverage", "show-env"])
@@ -339,8 +339,8 @@ pub fn run_cts(
 
                 if key == "CARGO_LLVM_COV_TARGET_DIR" {
                     // TODO comment here
-                    let value = Path::new(value).join("llvm-cov-target").into_os_string().into_string().unwrap();
-                    dir = Some(value.clone());
+                    target_dir = Some(Path::new(value).join("llvm-cov-target"));
+                    let value = target_dir.as_ref().unwrap().to_str().unwrap().to_owned();
                     (key.to_string(), value)
                 } else {
                     (key.to_string(), value.to_string())
@@ -348,8 +348,12 @@ pub fn run_cts(
             })
             .collect::<Vec<_>>();
 
-        vec.push(("CARGO_TARGET_DIR".into(), dir.clone().unwrap()));
-        vec.push(("CARGO_LLVM_COV_BUILD_DIR".into(), dir.take().unwrap()));
+        let Some(dir) = target_dir else {
+            bail!("`llvm-cov show-env` did not output CARGO_LLVM_COV_TARGET_DIR");
+        };
+        vec.push(("CARGO_LLVM_COV_BUILD_DIR".into(), dir.to_str().unwrap().to_owned()));
+        vec.push(("CARGO_TARGET_DIR".into(), dir.to_str().unwrap().to_owned()));
+        vec.push(("LLVM_PROFILE_FILE".into(), dir.join("wgpu-%p-%m.profraw").to_str().unwrap().to_owned()));
 
         let env = vec
             .into_iter();
