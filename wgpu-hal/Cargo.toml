@@ -210,6 +210,7 @@ cfg-if.workspace = true
 raw-window-handle.workspace = true
 parking_lot = { workspace = true, optional = true }
 thiserror.workspace = true
+smallvec = { workspace = true, features = ["union"] }
 
 # Target agnostic dependencies used only in backends.
 arrayvec = { workspace = true, optional = true }
@@ -232,7 +233,6 @@ gpu-allocator = { workspace = true, optional = true }
 # Backend: Vulkan
 ash = { workspace = true, optional = true }
 gpu-descriptor = { workspace = true, optional = true }
-smallvec = { workspace = true, features = ["union"] }
 # Backend: GLES
 khronos-egl = { workspace = true, features = ["dynamic"], optional = true }
 libloading = { workspace = true, optional = true }
