@@ -6,10 +6,6 @@
 //! for the validator tests to be in the `validation` test suite.
 
 #![cfg(feature = "wgsl-in")]
-#![allow(
-    // We need to investigate these.
-    clippy::result_large_err
-)]
 
 use naga::{
     compact::KeepUnused,
@@ -32,6 +28,18 @@ fn check(input: &str, snapshot: &str) {
             }
         }
         panic!("Error snapshot failed");
+    }
+}
+
+#[track_caller]
+fn check_error_matches(input: &str, expected_substring: &str) {
+    let result = naga::front::wgsl::parse_str(input);
+    let Err(ref err) = result else {
+        panic!("expected ParseError, got {result:#?}");
+    };
+    let message = err.message();
+    if !message.contains(expected_substring) {
+        panic!("expected error containing '{expected_substring}', got '{message}'",);
     }
 }
 
@@ -3504,6 +3512,45 @@ fn only_one_swizzle_type() {
 }
 
 #[test]
+fn swizzle_oob() {
+    // 3-component swizzle from const vec2
+    check(
+        "
+        @compute @workgroup_size(1)
+        fn main() {
+            const v = vec2<i32>();
+            let r : vec3<i32> = v.xyz;
+        }
+        ",
+        r###"error: invalid field accessor `xyz`
+  ┌─ wgsl:5:35
+  │
+5 │             let r : vec3<i32> = v.xyz;
+  │                                   ^^^ invalid accessor
+
+"###,
+    );
+
+    // 4-component swizzle from non-const vec3
+    check(
+        "
+        @compute @workgroup_size(1)
+        fn main() {
+            var v = vec3<i32>();
+            let r : vec4<i32> = v.xyzw;
+        }
+        ",
+        r###"error: invalid field accessor `xyzw`
+  ┌─ wgsl:5:35
+  │
+5 │             let r : vec4<i32> = v.xyzw;
+  │                                   ^^^^ invalid accessor
+
+"###,
+    );
+}
+
+#[test]
 fn const_assert_must_be_const() {
     check(
         "
@@ -3781,18 +3828,10 @@ fn inconsistent_type() {
 fn more_inconsistent_type() {
     #[track_caller]
     fn variant(call: &str) {
-        let input = format!(
-            r#"
-            fn f() {{ var x = {call}; }}
-        "#
+        check_error_matches(
+            &format!("fn f() {{ var x = {call}; }}"),
+            "inconsistent type",
         );
-        let result = naga::front::wgsl::parse_str(&input);
-        let Err(ref err) = result else {
-            panic!("expected ParseError, got {result:#?}");
-        };
-        if !err.message().contains("inconsistent type") {
-            panic!("expected 'inconsistent type' error, got {result:#?}");
-        }
     }
 
     variant("min(1.0, 1i)");
@@ -4935,5 +4974,73 @@ fn enable_without_capability() {
             ),
             !extension.capability(),
         );
+    }
+}
+
+#[test]
+fn bitwise_shift_errors() {
+    // 32-bit const by const >= bitwidth
+    check_error_matches(
+        "const N: u32 = 1u >> 32;",
+        "RHS of shift operation is greater than or equal to 32",
+    );
+    check_error_matches(
+        "const N: i32 = 1i >> 32;",
+        "RHS of shift operation is greater than or equal to 32",
+    );
+
+    // 32-bit const by const overflow
+    check_error_matches("const N: u32 = 0xFFFFFFFFu << 1;", "overflowed");
+    check_error_matches("const N: i32 = 1i << 31;", "overflowed");
+
+    // 32-bit const by const negative shift
+    check_error_matches("const N: u32 = 1u << -1;", "cannot represent");
+    check_error_matches("const N: i32 = 1i << -1;", "cannot represent");
+
+    // 32-bit runtime by const < bitwidth
+    check_success("fn foo() { var x: u32; var n = x << 31; }");
+    check_success("fn foo() { var x: i32; var n = x << 31; }");
+    check_success("fn foo() { var x: u32; var n = x >> 31; }");
+    check_success("fn foo() { var x: i32; var n = x >> 31; }");
+
+    // 32-bit runtime by const >= bitwidth
+    check_validation! {
+        "fn foo() { var x: u32; var n = x >> 32; }",
+        "fn foo() { var x: i32; var n = x >> 32; }",
+        "fn foo() { var x: u32; var n = x << 32; }",
+        "fn foo() { var x: i32; var n = x << 32; }":
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::Expression {
+                source: naga::valid::ExpressionError::ShiftAmountTooLarge { .. },
+                ..
+            },
+            ..
+        })
+    }
+
+    // (CTS has more 32-bit test cases)
+
+    // Const evaluation of `i64` and `u64` is not implemented, https://github.com/gfx-rs/wgpu/issues/8972
+
+    // 64-bit runtime by const < bitwidth
+    check_success("fn foo() { var x: u64; var n = x << 63; }");
+    check_success("fn foo() { var x: i64; var n = x << 63; }");
+    check_success("fn foo() { var x: u64; var n = x >> 63; }");
+    check_success("fn foo() { var x: i64; var n = x >> 63; }");
+
+    // 64-bit runtime by const >= bitwidth
+    check_validation! {
+        "fn foo() { var x: u64; var n = x << 64; }",
+        "fn foo() { var x: i64; var n = x << 64; }",
+        "fn foo() { var x: u64; var n = x >> 64; }",
+        "fn foo() { var x: i64; var n = x >> 64; }":
+        Err(naga::valid::ValidationError::Function {
+            source: naga::valid::FunctionError::Expression {
+                source: naga::valid::ExpressionError::ShiftAmountTooLarge { .. },
+                ..
+            },
+            ..
+        }),
+        naga::valid::Capabilities::SHADER_INT64
     }
 }

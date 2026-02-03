@@ -176,14 +176,14 @@ void assign_through_ptr_fn(
 void assign_array_through_ptr_fn(
     thread type_22& foo_2
 ) {
-    foo_2 = type_22 {metal::float4(1.0), metal::float4(2.0)};
+    foo_2 = type_22 {{metal::float4(1.0), metal::float4(2.0)}};
     return;
 }
 
 void assign_through_ptr(
 ) {
     uint val = 33u;
-    type_22 arr = type_22 {metal::float4(6.0), metal::float4(7.0)};
+    type_22 arr = type_22 {{metal::float4(6.0), metal::float4(7.0)}};
     assign_through_ptr_fn(val);
     assign_array_through_ptr_fn(arr);
     return;
@@ -232,7 +232,7 @@ bool index_ptr(
     bool value
 ) {
     type_28 a_1 = {};
-    a_1 = type_28 {value};
+    a_1 = type_28 {{value}};
     bool _e4 = a_1.inner[0];
     return _e4;
 }
@@ -301,7 +301,7 @@ vertex foo_vertOutput foo_vert(
     int a_2 = bar.data[(1 + (_buffer_sizes.size1 - 160 - 8) / 8) - 2u].value;
     metal::int2 c = qux;
     float _e35 = read_from_private(foo);
-    c2_ = type_20 {a_2, naga_f2i32(b), 3, 4, 5};
+    c2_ = type_20 {{a_2, naga_f2i32(b), 3, 4, 5}};
     c2_.inner[vi + 1u] = 42;
     int value_1 = c2_.inner[vi];
     float _e49 = test_arr_as_arg(type_18 {});
@@ -319,7 +319,7 @@ fragment foo_fragOutput foo_frag(
 ) {
     bar._matrix[1].z = 1.0;
     bar._matrix = metal::float4x3(metal::float3(0.0), metal::float3(1.0), metal::float3(2.0), metal::float3(3.0));
-    bar.arr = type_10 {metal::uint2(0u), metal::uint2(1u)};
+    bar.arr = type_10 {{metal::uint2(0u), metal::uint2(1u)}};
     bar.data[1].value = 1;
     qux = metal::int2 {};
     return foo_fragOutput { metal::float4(0.0) };

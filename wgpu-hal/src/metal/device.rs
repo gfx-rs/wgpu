@@ -8,7 +8,7 @@ use dispatch2::DispatchData;
 use std::{thread, time};
 
 use objc2::{
-    msg_send,
+    available, msg_send,
     rc::{autoreleasepool, Retained},
     runtime::ProtocolObject,
 };
@@ -226,7 +226,8 @@ impl super::Device {
                 let options = MTLCompileOptions::new();
                 options.setLanguageVersion(self.shared.private_caps.msl_version);
 
-                if self.shared.private_caps.supports_preserve_invariance {
+                // https://developer.apple.com/documentation/metal/mtlcompileoptions/preserveinvariance
+                if available!(macos = 11.0, ios = 13.0, tvos = 14.0, visionos = 1.0) {
                     options.setPreserveInvariance(true);
                 }
 
@@ -1210,6 +1211,10 @@ impl crate::Device for super::Device {
                 }
             }
 
+            // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
+            let supports_mutability =
+                available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0);
+
             let (primitive_class, raw_primitive_type) =
                 conv::map_primitive_topology(desc.primitive.topology);
 
@@ -1280,7 +1285,8 @@ impl crate::Device for super::Device {
                         )?;
 
                         descriptor.setVertexFunction(Some(&vs.function));
-                        if self.shared.private_caps.supports_mutability {
+
+                        if supports_mutability {
                             Self::set_buffers_mutability(
                                 &descriptor.vertexBuffers(),
                                 vs.immutable_buffer_mask,
@@ -1384,7 +1390,7 @@ impl crate::Device for super::Device {
                             naga::ShaderStage::Task,
                         )?;
                         unsafe { descriptor.setObjectFunction(Some(&ts.function)) };
-                        if self.shared.private_caps.supports_mutability {
+                        if supports_mutability {
                             Self::set_buffers_mutability(
                                 &descriptor.meshBuffers(),
                                 ts.immutable_buffer_mask,
@@ -1413,7 +1419,7 @@ impl crate::Device for super::Device {
                             naga::ShaderStage::Mesh,
                         )?;
                         unsafe { descriptor.setMeshFunction(Some(&ms.function)) };
-                        if self.shared.private_caps.supports_mutability {
+                        if supports_mutability {
                             Self::set_buffers_mutability(
                                 &descriptor.meshBuffers(),
                                 ms.immutable_buffer_mask,
@@ -1455,7 +1461,7 @@ impl crate::Device for super::Device {
                     )?;
 
                     unsafe { descriptor.setFragmentFunction(Some(&fs.function)) };
-                    if self.shared.private_caps.supports_mutability {
+                    if supports_mutability {
                         Self::set_buffers_mutability(
                             &descriptor.fragmentBuffers(),
                             fs.immutable_buffer_mask,
@@ -1658,7 +1664,8 @@ impl crate::Device for super::Device {
 
             descriptor.setComputeFunction(Some(&cs.function));
 
-            if self.shared.private_caps.supports_mutability {
+            // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
+            if available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0) {
                 Self::set_buffers_mutability(&descriptor.buffers(), cs.immutable_buffer_mask);
             }
 
@@ -1791,7 +1798,8 @@ impl crate::Device for super::Device {
 
     unsafe fn create_fence(&self) -> DeviceResult<super::Fence> {
         self.counters.fences.add(1);
-        let shared_event = if self.shared.private_caps.supports_shared_event {
+        // https://developer.apple.com/documentation/metal/mtlsharedevent
+        let shared_event = if available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0) {
             Some(self.shared.device.newSharedEvent().unwrap())
         } else {
             None
@@ -1853,7 +1861,8 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn start_graphics_debugger_capture(&self) -> bool {
-        if !self.shared.private_caps.supports_capture_manager {
+        // https://developer.apple.com/documentation/metal/mtlcapturemanager
+        if !available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0) {
             return false;
         }
         let device = &self.shared.device;
