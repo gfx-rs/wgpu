@@ -135,6 +135,7 @@ jobs:
         run: |
           set -e
 
+          source <(cargo llvm-cov --no-cfg-coverage show-env --sh)
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov
