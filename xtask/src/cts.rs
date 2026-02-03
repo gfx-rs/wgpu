@@ -319,7 +319,8 @@ pub fn run_cts(
     }
 
     let env_vars = if llvm_cov {
-        let env = shell
+        let mut dir = None;
+        let mut vec = shell
             .cmd("cargo")
             .args(&["llvm-cov", "--no-cfg-coverage", "show-env"])
             .read()
@@ -338,14 +339,20 @@ pub fn run_cts(
 
                 let key = if key == "CARGO_LLVM_COV_TARGET_DIR" {
                     // TODO comment here
-                    Path::new(key).join("llvm-cov-target").into_os_string().into_string().unwrap()
+                    let key = Path::new(key).join("llvm-cov-target").into_os_string().into_string().unwrap();
+                    dir = Some(key.clone());
+                    key
                 } else {
                     key.to_string()
                 };
 
                 (key, value.to_string())
             })
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>();
+
+        vec.push(("CARGO_LLVM_COV_BUILD_DIR".into(), dir.take().unwrap()));
+
+        let env = vec
             .into_iter();
 
         // The cargo-llvm-cov docs specify to clean after setting the

@@ -76,6 +76,11 @@ jobs:
           rustup override set ${{ env.MSRV }}
           cargo -V
 
+      - name: Install `cargo-llvm-cov`
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
       - name: caching
         uses: Swatinem/rust-cache@v2
         with:
@@ -100,6 +105,8 @@ jobs:
       - name: (Windows) Install WARP
         if: matrix.os == 'windows-2022'
         uses: ./.github/actions/install-warp
+        with:
+          target-dir: "target/llvm-cov-target/debug"
 
       - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'
@@ -115,5 +122,5 @@ jobs:
 
       - name: Run CTS
         shell: bash
-        run: cargo --locked xtask cts --backend ${{ matrix.backend }} --filter '${{matrix.filter }}'
+        run: cargo --locked xtask cts --llvm-cov --backend ${{ matrix.backend }} --filter '${{matrix.filter }}'
 
