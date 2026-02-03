@@ -2753,26 +2753,36 @@ impl<'a> ConstantEvaluator<'a> {
                     ty,
                 },
                 &Expression::Literal(_),
-            ) => {
-                let mut components = src_components.clone();
-                for component in &mut components {
-                    *component = self.binary_op(op, *component, right, span)?;
+            ) => match op {
+                BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight => {
+                    return Err(ConstantEvaluatorError::InvalidBinaryOpArgs);
                 }
-                Expression::Compose { ty, components }
-            }
+                _ => {
+                    let mut components = src_components.clone();
+                    for component in &mut components {
+                        *component = self.binary_op(op, *component, right, span)?;
+                    }
+                    Expression::Compose { ty, components }
+                }
+            },
             (
                 &Expression::Literal(_),
                 &Expression::Compose {
                     components: ref src_components,
                     ty,
                 },
-            ) => {
-                let mut components = src_components.clone();
-                for component in &mut components {
-                    *component = self.binary_op(op, left, *component, span)?;
+            ) => match op {
+                BinaryOperator::ShiftLeft | BinaryOperator::ShiftRight => {
+                    return Err(ConstantEvaluatorError::InvalidBinaryOpArgs);
                 }
-                Expression::Compose { ty, components }
-            }
+                _ => {
+                    let mut components = src_components.clone();
+                    for component in &mut components {
+                        *component = self.binary_op(op, left, *component, span)?;
+                    }
+                    Expression::Compose { ty, components }
+                }
+            },
             (
                 &Expression::Compose {
                     components: ref left_components,
@@ -3030,6 +3040,10 @@ impl<'a> ConstantEvaluator<'a> {
         h
     }
 
+    /// Resolve the type of `expr` if it is a constant expression.
+    ///
+    /// If `expr` was evaluated to a constant, returns its type.
+    /// Otherwise, returns an error.
     fn resolve_type(
         &self,
         expr: Handle<Expression>,

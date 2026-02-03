@@ -475,7 +475,12 @@ pub struct GlobalCtx<'a> {
 }
 
 impl GlobalCtx<'_> {
-    /// Try to evaluate the expression in `self.global_expressions` using its `handle` and return it as a `u32`.
+    /// Try to evaluate the expression in `self.global_expressions` using its `handle`
+    /// and return it as a `T: TryFrom<ir::Literal>`.
+    ///
+    /// This currently only evaluates scalar expressions. If adding support for vectors,
+    /// consider changing `valid::expression::validate_constant_shift_amounts` to use that
+    /// support.
     #[cfg_attr(
         not(any(
             feature = "glsl-in",
