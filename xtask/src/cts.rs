@@ -354,7 +354,7 @@ pub fn run_cts(
             .into_iter();
 
         // Avoid conflicts between coverage and non-coverage build artifacts.
-        // This is recommended by the cargo-llvm-cov docs.
+        // This is recommended by the `cargo-llvm-cov` docs.
         shell
             .cmd("cargo")
             .envs(env.clone())
