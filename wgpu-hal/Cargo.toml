@@ -86,7 +86,6 @@ metal = [
     "dep:objc2-quartz-core",
     "dep:parking_lot",
     "dep:profiling",
-    "dep:smallvec",
     "dep:raw-window-metal",
 ]
 vulkan = [
@@ -104,7 +103,6 @@ vulkan = [
     "dep:parking_lot",
     "dep:profiling",
     "dep:raw-window-metal",
-    "dep:smallvec",
     "dep:windows",
     "gpu-allocator/vulkan",
     "windows/Win32",
@@ -234,7 +232,7 @@ gpu-allocator = { workspace = true, optional = true }
 # Backend: Vulkan
 ash = { workspace = true, optional = true }
 gpu-descriptor = { workspace = true, optional = true }
-smallvec = { workspace = true, optional = true, features = ["union"] }
+smallvec = { workspace = true, features = ["union"] }
 # Backend: GLES
 khronos-egl = { workspace = true, features = ["dynamic"], optional = true }
 libloading = { workspace = true, optional = true }
