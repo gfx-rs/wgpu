@@ -408,11 +408,22 @@ pub fn run_cts(
             log::info!("Running {}", test.selector.to_string_lossy());
         }
 
-        let cmd = shell
-            .cmd(&bin)
-            .envs(env_vars.clone())
-            .args(cts_bin)
-            .args([&test.selector]);
+        let cmd = if test.selector != "webgpu:shader,execution,expression,call,builtin,textureSample:sampled_1d_coords:*" {
+            shell
+                .cmd(&bin)
+                .envs(env_vars.clone())
+                .args(cts_bin)
+                .args([&test.selector])
+
+        } else {
+            shell
+                .cmd("cargo")
+                .args(&["llvm-cov", "--no-cfg-coverage", "--no-report", "run"])
+                .args(&cargo_opts)
+                .arg("--")
+                .args(cts_bin)
+                .arg(&test.selector)
+        };
 
         match output_filter {
             PrintOutputWhen::TestFails => {

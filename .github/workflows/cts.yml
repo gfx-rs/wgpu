@@ -112,15 +112,6 @@ jobs:
         if: matrix.os == 'ubuntu-24.04'
         uses: ./.github/actions/install-mesa
 
-      # Mixing --llvm-cov with deno (rusty_v8) has linking problems.
-      # Explicitly set the backend to avoid EGL messages in output,
-      # because these tests check stdout.
-      - name: Test cts_runner
-        if: matrix.suite == 'other'
-        shell: bash
-        run: DENO_WEBGPU_BACKEND=${{ matrix.backend }} cargo --locked test -p cts_runner
-
       - name: Run CTS
         shell: bash
-        run: cargo --locked xtask cts --llvm-cov --backend ${{ matrix.backend }} --filter '${{matrix.filter }}'
-
+        run: cargo --locked xtask cts --print-output-when=always --llvm-cov --backend ${{ matrix.backend }} --filter '${{matrix.filter }}'
