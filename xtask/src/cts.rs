@@ -339,13 +339,16 @@ pub fn run_cts(
 
                 if key == "CARGO_LLVM_COV_TARGET_DIR" {
                     // TODO comment here
-                    dir = Some(Path::new(value).join("llvm-cov-target").into_os_string().into_string().unwrap());
+                    let value = Path::new(value).join("llvm-cov-target").into_os_string().into_string().unwrap();
+                    dir = Some(value.clone());
+                    (key.to_string(), value)
+                } else {
+                    (key.to_string(), value.to_string())
                 }
-
-                (key.to_string(), value.to_string())
             })
             .collect::<Vec<_>>();
 
+        vec.push(("CARGO_TARGET_DIR".into(), dir.clone().unwrap()));
         vec.push(("CARGO_LLVM_COV_BUILD_DIR".into(), dir.take().unwrap()));
 
         let env = vec
