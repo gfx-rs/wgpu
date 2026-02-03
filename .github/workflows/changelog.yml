@@ -1,0 +1,50 @@
+name: changelog
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/changelog.yml"
+      - "CHANGELOG.md"
+      - "xtask/**/*"
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - labeled
+      - unlabeled
+
+env:
+  #
+  # Dependency versioning
+  #
+
+  # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
+  REPO_MSRV: "1.93"
+
+  #
+  # Environment variables
+  #
+
+  CARGO_INCREMENTAL: false
+  CARGO_TERM_COLOR: always
+  RUST_LOG: info
+  RUST_BACKTRACE: "1"
+  CACHE_SUFFIX: c # cache busting
+
+jobs:
+  changelog:
+    timeout-minutes: 2
+
+    name: Check changelog for errors
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # NOTE: Keep label name(s) in sync. with `xtask`'s implementation.
+      - name: Run `cargo xtask changelog …`
+        run: |
+          cargo xtask changelog "origin/${{ github.event.pull_request.base.ref }}" ${{ contains(github.event.pull_request.labels.*.name, 'changelog: released entry changed') && '--allow-released-changes' || ''  }}

@@ -1,0 +1,775 @@
+name: CI
+
+on:
+  push:
+    branches-ignore: [
+        # Renovate branches are always PRs, so they will be covered
+        # by the pull_request event.
+        "renovate/**",
+        # Branches with the `gh-readonly-queue` prefix are used by the
+        # merge queue, so they are already covered by the `merge_group` event.
+        "gh-readonly-queue/**",
+      ]
+  pull_request:
+  merge_group:
+
+env:
+  #
+  # Dependency versioning
+  #
+
+  # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
+  REPO_MSRV: "1.93"
+  # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
+  # to ensure that they can be used with firefox.
+  CORE_MSRV: "1.90.0"
+
+  #
+  # Environment variables
+  #
+
+  CARGO_INCREMENTAL: false
+  CARGO_TERM_COLOR: always
+  WGPU_DX12_COMPILER: dxc
+  RUST_LOG: debug,wasm_bindgen_wasm_interpreter=warn,wasm_bindgen_cli_support=warn,walrus=warn,naga=info
+  RUST_BACKTRACE: full
+  PKG_CONFIG_ALLOW_CROSS: 1 # allow android to work
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+  WASM_BINDGEN_TEST_TIMEOUT: 300 # 5 minutes
+  CACHE_SUFFIX: e # cache busting
+  WGPU_CI: true
+
+# Every time a PR is pushed to, cancel any previous jobs. This
+# makes us behave nicer to github and get faster turnaround times
+# on PRs that are pushed to multiple times in rapid succession.
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+  cancel-in-progress: ${{github.event_name == 'pull_request'}}
+
+# We distinguish the following kinds of builds:
+# - native: build for the same target as we compile on
+# - web: build for the Web
+# - em: build for the Emscripten
+
+# For build time and size optimization we disable debug symbols
+# entirely on clippy jobs and reduce it to line-numbers
+# only for ones where we run tests.
+#
+# Additionally, we disable incremental builds entirely
+# as our caching system doesn't actually cache our crates.
+# It adds overhead to the build and another point of failure.
+
+jobs:
+  check:
+    # runtime is normally 2-8 minutes
+    #
+    # currently high due to documentation time problems on mac.
+    # https://github.com/rust-lang/rust/issues/114891
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows
+          - name: Windows x86_64
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
+            tier: 1
+            kind: native
+
+          # Windows
+          - name: Windows aarch64
+            os: windows-2022
+            target: aarch64-pc-windows-msvc
+            tier: 2
+            kind: native
+
+          # MacOS
+          - name: MacOS x86_64
+            os: macos-14
+            target: x86_64-apple-darwin
+            tier: 1
+            kind: native
+
+          - name: MacOS aarch64
+            os: macos-14
+            target: aarch64-apple-darwin
+            tier: 1
+            kind: native
+
+          # IOS
+          - name: IOS aarch64
+            os: macos-14
+            target: aarch64-apple-ios
+            tier: 2
+            kind: native
+
+          # VisionOS
+          - name: VisionOS aarch64
+            os: macos-14
+            target: aarch64-apple-visionos
+            kind: wgpu-only
+            tier: 3
+            extra-flags: -Zbuild-std
+
+          # Linux
+          - name: Linux x86_64
+            os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            tier: 1
+            kind: native
+
+          - name: Linux aarch64
+            os: ubuntu-24.04
+            target: aarch64-unknown-linux-gnu
+            tier: 1
+            kind: native
+
+          # FreeBSD
+          - name: FreeBSD x86_64
+            os: ubuntu-24.04
+            target: x86_64-unknown-freebsd
+            tier: 2
+            kind: wgpu-only
+
+          # NetBSD
+          - name: NetBSD x86_64
+            os: ubuntu-24.04
+            target: x86_64-unknown-netbsd
+            tier: 2
+            kind: wgpu-only
+
+          # Android
+          - name: Android aarch64
+            os: ubuntu-24.04
+            target: aarch64-linux-android
+            tier: 2
+            kind: native
+
+          # Android
+          - name: Android ARMv7
+            os: ubuntu-24.04
+            target: armv7-linux-androideabi
+            tier: 2
+            kind: wgpu-only
+
+          # Android
+          - name: Android x86_64
+            os: ubuntu-24.04
+            target: x86_64-linux-android
+            tier: 2
+            kind: wgpu-only
+
+          # OpenHarmony
+          - name: OpenHarmony aarch64
+            os: ubuntu-24.04
+            target: aarch64-unknown-linux-ohos
+            tier: 2
+            kind: native
+
+          # WebGPU/WebGL
+          - name: WebAssembly
+            os: ubuntu-24.04
+            target: wasm32-unknown-unknown
+            tier: 2
+            kind: web
+
+          - name: Emscripten
+            os: ubuntu-24.04
+            target: wasm32-unknown-emscripten
+            tier: 2
+            kind: wgpu-only
+
+          - name: WebAssembly Core 1.0
+            os: ubuntu-24.04
+            target: wasm32v1-none
+            tier: 2
+            kind: no_std
+
+          # 32-bit PowerPC Linux
+          # Included to test support for `portable-atomic`
+          - name: Linux ppc32
+            os: ubuntu-24.04
+            target: powerpc-unknown-linux-gnu
+            tier: 2
+            kind: wgpu-only
+
+    name: Clippy ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Install toolchain (repo MSRV - tier 1 or 2)
+        if: matrix.tier == 1 || matrix.tier == 2
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy
+          rustup target add ${{ matrix.target }} --toolchain ${{ env.REPO_MSRV }}
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
+
+      # In order to build on platforms that require a nightly toolchain, we install stable as expected,
+      # add the rust-src component, then tell stable to consider itself nightly by setting RUSTC_BOOTSTRAP=1.
+      #
+      # This is not formally "correct" thing to do, but it saves significant maintainer burden. If we were to
+      # use a proper nightly toolchain we would have to manually find a date that works. Even with a date that is
+      # carefully coordinated with the version of stable we are using, there are often mismatches of clippy lints
+      # between nightly and stable. This is a real mess. By using RUSTC_BOOTSTRAP=1, we get access to all the nice
+      # nightly features without needing to go through the hassle of maintaining a nightly toolchain.
+      #
+      # RUSTC_BOOTSTRAP=1 is how the rust project builds itself when bootstrapping the compiler, so while not "stable"
+      # it has been around for many years and don't anticipate it going away any time soon.
+      - name: Install toolchain (repo MSRV - tier 3)
+        if: matrix.tier == 3
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy,rust-src
+          echo "RUSTC_BOOTSTRAP=1" >> "$GITHUB_ENV"
+
+      - name: Disable debug symbols
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = false
+          EOF
+
+      - name: Caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: clippy-${{ matrix.target }}-${{ matrix.kind }}-${{ env.CACHE_SUFFIX }}
+
+      - name: (Linux `aarch64`) Install `aarch64-linux-gnu` `g++`
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          set -e
+
+          sudo apt-get update -y -qq
+
+          sudo apt-get install g++-aarch64-linux-gnu
+
+      - name: (Android) Add Android APK to `PATH`
+        if: matrix.target == 'aarch64-linux-android'
+        run: |
+          # clang++ will be detected correctly by CC from path
+          echo "$ANDROID_NDK/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+
+          # the android sdk doesn't use the conventional name for ar, so explicitly set it.
+          echo "AR_aarch64_linux_android=llvm-ar" >> "$GITHUB_ENV"
+
+      # Building for wasm32 requires a series of specific tests for the WebGPU backend.
+      - name: Check web
+        if: matrix.kind == 'web'
+        shell: bash
+        run: |
+          set -e
+
+          export RUSTFLAGS="$RUSTFLAGS --cfg getrandom_backend=\"wasm_js\""
+
+          # build for WebGPU
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --features glsl,spirv,fragile-send-sync-non-atomic-wasm
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --features glsl,spirv
+          cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-deps --features glsl,spirv
+
+          # check with only the web feature
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-default-features --features=web
+
+          # all features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --all-features
+          cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-deps --all-features
+
+      # Building for platforms where the tests do not compile.
+      - name: Check `wgpu` only
+        if: matrix.kind == 'wgpu-only'
+        shell: bash
+        run: |
+          set -e
+
+          # check with no features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu -p wgpu-hal --no-default-features
+
+          # Don't check samples since we use winit in our samples which has dropped support for Emscripten.
+
+          # Check with all features.
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --all-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --all-features
+
+      # Building for no_std platforms.
+      - name: Check `no_std`
+        if: matrix.kind == 'no_std'
+        shell: bash
+        run: |
+          set -e
+
+          # check with no features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --no-default-features
+
+          # Check with all compatible features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-types --no-default-features --features strict_asserts,fragile-send-sync-non-atomic-wasm,serde,counters
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p naga --no-default-features --features dot-out,spv-in,spv-out
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu-hal --no-default-features --features fragile-send-sync-non-atomic-wasm
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} -p wgpu --no-default-features --features serde
+
+      # Building for native platforms with standard tests.
+      - name: Check native
+        if: matrix.kind == 'native'
+        shell: bash
+        run: |
+          set -e
+
+          # check with no features
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --no-default-features
+
+          # Check with all features.
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --benches --all-features
+
+          # Check with all features and profiling macro code.
+          # If we don't check this then errors inside `profiling::scope!()` will not be caught.
+          cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --benches --all-features --features test-build-with-profiling
+
+          # build docs
+          cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} --all-features --no-deps
+
+      - name: Check private item docs
+        if: matrix.kind == 'native'
+        shell: bash
+        run: |
+          set -e
+
+          cargo --locked doc --target ${{ matrix.target }} ${{ matrix.extra-flags }} \
+                --package wgpu-core \
+                --package wgpu-hal \
+                --package naga \
+                --package wgpu \
+                --all-features --no-deps --document-private-items
+
+  # We run minimal checks on the MSRV of the core crates, ensuring that
+  # its dependency tree does not cause issues for firefox.
+  #
+  # We don't test all platforms, just ones with different dependency stacks.
+  check-core-msrv:
+    # runtime is normally 1-3 minutes
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows
+          - name: Windows x86_64
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
+
+          # MacOS
+          - name: MacOS x86_64
+            os: macos-14
+            target: x86_64-apple-darwin
+
+          # Linux
+          - name: Linux x86_64
+            os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+
+    name: MSRV Check ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Install core MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.CORE_MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
+          rustup override set ${{ env.CORE_MSRV }}
+          cargo -V
+
+      - name: Disable debug symbols
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = false
+          EOF
+
+      - name: Caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
+
+      - name: Reduce MSRV on dependencies
+        shell: bash
+        run: |
+          set -e
+
+          # 1.23.2 requires bytemuck_derive 1.10.1
+          cargo update -p bytemuck --precise 1.23.1
+          # 1.9.0 requires MSRV 1.84
+          cargo update -p bytemuck_derive --precise 1.8.1
+
+      - name: Check native
+        shell: bash
+        run: |
+          set -e
+
+          # check `wgpu-core` with all features. This will also get `wgpu-hal` and `wgpu-types`.
+          cargo check --target ${{ matrix.target }} --all-features -p wgpu-core
+
+  # Check that the libraries build — but not that there are no warnings or that tests pass -
+  # with `-Zdirect-minimal-versions` which lowers all dependencies from the workspace packages
+  # to non-workspace packages to their minimum allowed version.
+  check-minimal-versions:
+    # runtime is normally 2 minutes
+    timeout-minutes: 10
+
+    name: MSRV Minimal Versions
+    runs-on: ubuntu-24.04
+    env:
+      # Override flags to NOT include `-D warnings`, because warnings may be due to harmless problems in deps.
+      # Also, allow unexpected_cfgs because it is very common and spammy when using old deps.
+      RUSTFLAGS: -A unexpected_cfgs
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Install toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
+
+      - name: Disable debug symbols
+        shell: bash
+        run: |
+          mkdir -p .cargo
+          echo """
+          [profile.dev]
+          debug = false" >> .cargo/config.toml
+
+      - name: Set minimal versions
+        shell: bash
+        run: |
+          set -e
+
+          cargo +${{ env.REPO_MSRV }} update -Zdirect-minimal-versions
+        env:
+          RUSTC_BOOTSTRAP: 1
+
+      - name: Run cargo check
+        shell: bash
+        run: |
+          set -e
+
+          cargo check --all-targets --all-features
+
+  wasm-test:
+    # runtime is normally 2 minutes
+    timeout-minutes: 10
+
+    name: Test WebAssembly
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Install repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy --target wasm32-unknown-unknown
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
+
+      - name: Install `wasm-pack`
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-pack
+
+      - name: Execute tests
+        run: |
+          cd wgpu
+
+          export RUSTFLAGS="$RUSTFLAGS --cfg getrandom_backend=\"wasm_js\""
+
+          wasm-pack test --headless --chrome --no-default-features --features wgsl,webgl,web --workspace
+
+  gpu-test:
+    # runtime is normally 5-15 minutes
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows
+          - name: Windows x86_64
+            os: windows-2022
+
+          # Mac
+          - name: Mac aarch64
+            os: macos-14
+
+          # Linux
+          - name: Linux x86_64
+            os: ubuntu-24.04
+
+    name: Test ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Install repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal -c llvm-tools
+          cargo -V
+
+      - name: Install `cargo-nextest` and `cargo-llvm-cov`
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest,cargo-llvm-cov
+
+      - name: Debug symbols to line-tables-only
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = "line-tables-only"
+          EOF
+
+        # Cache step must go before warp and mesa install on windows as they write into the
+        # target directory, and rust-cache will overwrite the entirety of the target directory.
+      - name: Caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: test-${{ matrix.os }}-${{ env.CACHE_SUFFIX }}
+          workspaces: |
+            . -> target
+
+      - name: (Windows) Install DXC
+        if: matrix.os == 'windows-2022'
+        uses: ./.github/actions/install-dxc
+
+      - name: (Windows) Install WARP
+        if: matrix.os == 'windows-2022'
+        uses: ./.github/actions/install-warp
+        with:
+          target-dir: "target/llvm-cov-target/debug"
+
+      - name: (Windows) Install Mesa
+        if: matrix.os == 'windows-2022'
+        uses: ./.github/actions/install-mesa
+
+      - name: (Windows) Install Vulkan SDK
+        if: matrix.os == 'windows-2022'
+        uses: ./.github/actions/install-vulkan-sdk
+
+      - name: (Mac) Install Vulkan SDK
+        if: matrix.os == 'macos-14'
+        uses: ./.github/actions/install-vulkan-sdk
+
+      - name: (Linux) Install Vulkan SDK
+        if: matrix.os == 'ubuntu-24.04'
+        uses: ./.github/actions/install-vulkan-sdk
+
+      - name: (Linux) Install Mesa
+        if: matrix.os == 'ubuntu-24.04'
+        uses: ./.github/actions/install-mesa
+
+      - name: Delete Naga snapshots
+        shell: bash
+        run: |
+          set -e
+
+          # Delete snapshots so we can ensure there aren't any excess output files.
+          rm -r naga/tests/out
+
+      - name: Run tests
+        shell: bash
+        run: |
+          set -e
+
+          cargo --locked xtask test --llvm-cov
+
+      - name: Check Naga snapshots
+        # git diff doesn't check untracked files, we need to stage those then compare with HEAD.
+        run: git add . && git diff --exit-code HEAD naga/tests/out
+
+      - uses: actions/upload-artifact@v6
+        name: Upload comparison images
+        if: always() # We want artifacts even if the tests fail.
+        with:
+          name: comparison-images-${{ matrix.os }}
+          path: |
+            **/*-actual.png
+            **/*-difference.png
+
+      # Print GPU configuration so we can see what features were available during the test.
+      - name: Print GPU configurations
+        if: always() # We want this information even if the tests fail.
+        shell: bash
+        run: |
+          set -e
+
+          cat .gpuconfig
+
+      - name: Generate coverage report
+        id: coverage
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -e
+
+          cargo --locked llvm-cov report --lcov --output-path lcov.info
+
+      - name: Upload coverage report to Codecov
+        uses: codecov/codecov-action@v5
+        if: steps.coverage.outcome == 'success'
+        with:
+          files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  doctest:
+    # runtime is normally 2 minutes
+    timeout-minutes: 10
+
+    name: Doctest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Install repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component rustfmt
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
+
+      - name: Caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: doctests-${{ env.CACHE_SUFFIX }}
+
+      - name: Run doctests
+        shell: bash
+        run: |
+          set -e
+
+          cargo --locked test --doc
+
+  fmt:
+    # runtime is normally 15 seconds
+    timeout-minutes: 2
+
+    name: Format & Typos
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Install repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component rustfmt
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
+
+      - name: Run `cargo fmt`
+        run: |
+          cargo --locked fmt -- --check
+
+      - name: Install Taplo
+        uses: uncenter/setup-taplo@v1
+        with:
+          version: "0.9.3"
+
+      - name: Run `taplo fmt`
+        run: taplo format --check --diff
+
+      - name: Check for typos
+        uses: crate-ci/typos@v1.43.0
+
+  check-cts-runner:
+    # runtime is normally 2 minutes
+    timeout-minutes: 10
+
+    name: Clippy cts_runner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Install MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal --component clippy
+          rustup override set ${{ env.REPO_MSRV }}
+          cargo -V
+
+      - name: Disable debug symbols
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = false
+          EOF
+
+      - name: Caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: cts-runner-${{ env.CACHE_SUFFIX }}
+
+      - name: Build Deno
+        run: |
+          cargo --locked clippy --manifest-path cts_runner/Cargo.toml
+
+  # Separate job so that new advisories don't block CI.
+  #
+  # This job is not required to pass for PRs to be merged.
+  cargo-deny-check-advisories:
+    # runtime is normally 1 minute
+    timeout-minutes: 5
+
+    name: "cargo-deny advisories"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Run `cargo deny check`
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check advisories
+          arguments: --all-features --workspace
+          command-arguments: -Dwarnings -Aunmatched-organization
+          rust-version: ${{ env.REPO_MSRV }}
+
+  cargo-deny-check-rest:
+    # runtime is normally 1 minute
+    timeout-minutes: 5
+
+    name: "cargo-deny"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Run `cargo deny check`
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check bans licenses sources
+          arguments: --all-features --workspace
+          command-arguments: -Dwarnings -Aunmatched-organization
+          rust-version: ${{ env.REPO_MSRV }}

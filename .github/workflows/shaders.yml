@@ -1,0 +1,120 @@
+name: Shaders
+
+on:
+  push:
+    branches-ignore: [
+        # Renovate branches are always PRs, so they will be covered
+        # by the pull_request event.
+        "renovate/**",
+        # Branches with the `gh-readonly-queue` prefix are used by the
+        # merge queue, so they are already covered by the `merge_group` event.
+        "gh-readonly-queue/**",
+      ]
+  pull_request:
+  merge_group:
+
+# Every time a PR is pushed to, cancel any previous jobs. This
+# makes us behave nicer to github and get faster turnaround times
+# on PRs that are pushed to multiple times in rapid succession.
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+  cancel-in-progress: ${{github.event_name == 'pull_request'}}
+
+jobs:
+  naga-validate-windows:
+    name: "Validate: HLSL"
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Debug symbols to `line-tables-only`
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = "line-tables-only"
+          EOF
+
+      - uses: Swatinem/rust-cache@v2
+
+      # We must have the FXC job before the DXC job, so the DXC PATH has priority
+      # over the FXC PATH. This is because the windows kits also include an older
+      # version of DXC, which we don't want to use.
+      - name: Setup FXC
+        run: |
+          Get-Childitem -Path "C:\Program Files (x86)\Windows Kits\10\bin\**\x64\fxc.exe" `
+          | Sort-Object -Property LastWriteTime -Descending `
+          | Select-Object -First 1 `
+          | Split-Path -Parent `
+          | Out-File -FilePath $Env:GITHUB_PATH -Encoding utf8 -Append
+        shell: powershell
+
+      - name: Setup DXC
+        uses: ./.github/actions/install-dxc
+
+      - name: Validate
+        shell: bash
+        run: |
+          set -e
+
+          dxc --version
+
+          cd naga
+          cargo xtask validate hlsl dxc
+          cargo xtask validate hlsl fxc
+
+  naga-validate-macos:
+    name: "Validate: MSL"
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Debug symbols to line-tables-only
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = "line-tables-only"
+          EOF
+
+      - uses: Swatinem/rust-cache@v2
+
+      - run: |
+          cd naga
+          cargo xtask validate msl
+
+  naga-validate-linux:
+    name: "Validate: SPIR-V/GLSL/DOT/WGSL"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Vulkan SDK
+        uses: ./.github/actions/install-vulkan-sdk
+
+      - name: Install Graphviz
+        run: sudo apt-get install graphviz
+
+      - name: Debug symbols to `line-tables-only`
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = "line-tables-only"
+          EOF
+
+      - uses: Swatinem/rust-cache@v2
+
+      - run: cd naga; cargo xtask validate spv
+
+      - run: cd naga; cargo xtask validate glsl
+
+      - run: cd naga; cargo xtask validate dot
+
+      - run: cd naga; cargo xtask validate wgsl

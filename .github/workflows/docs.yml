@@ -1,0 +1,76 @@
+name: Docs
+
+on:
+  push:
+    branches-ignore: [
+        # Renovate branches are always PRs, so they will be covered
+        # by the pull_request event.
+        "renovate/**",
+        # Branches with the `gh-readonly-queue` prefix are used by the
+        # merge queue, so they are already covered by the `merge_group` event.
+        "gh-readonly-queue/**",
+      ]
+  pull_request:
+  merge_group:
+
+env:
+  # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
+  REPO_MSRV: "1.93"
+
+  CARGO_INCREMENTAL: false
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+
+# Every time a PR is pushed to, cancel any previous jobs. This
+# makes us behave nicer to github and get faster turnaround times
+# on PRs that are pushed to multiple times in rapid succession.
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+  cancel-in-progress: ${{github.event_name == 'pull_request'}}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Install documentation toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
+          rustup override set ${{ env.REPO_MSRV }}
+
+      - name: Disable debug symbols
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = false
+          EOF
+
+      - name: Caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: doc-build
+
+      - name: Build the docs
+        run: |
+          cargo doc --no-deps --lib --document-private-items
+        env:
+          RUSTDOCFLAGS: --cfg docsrs
+          RUSTC_BOOTSTRAP: 1
+
+      - name: Deploy the docs
+        uses: JamesIves/github-pages-deploy-action@v4.8.0
+        if: github.ref == 'refs/heads/trunk'
+        with:
+          token: ${{ secrets.WEB_DEPLOY }}
+          folder: target/doc
+          repository-name: gfx-rs/wgpu-rs.github.io
+          branch: master
+          target-folder: doc

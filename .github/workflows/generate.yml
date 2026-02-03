@@ -1,0 +1,93 @@
+name: cargo-generate
+
+on:
+  push:
+    branches-ignore: [
+        # Renovate branches are always PRs, so they will be covered
+        # by the pull_request event.
+        "renovate/**",
+        # Branches with the `gh-readonly-queue` prefix are used by the
+        # merge queue, so they are already covered by the `merge_group` event.
+        "gh-readonly-queue/**",
+      ]
+  pull_request:
+  merge_group:
+
+env:
+  #
+  # Dependency versioning
+  #
+
+  # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
+  REPO_MSRV: "1.93"
+  RUSTFLAGS: -D warnings
+
+# Every time a PR is pushed to, cancel any previous jobs. This
+# makes us behave nicer to github and get faster turnaround times
+# on PRs that are pushed to multiple times in rapid succession.
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+  cancel-in-progress: ${{github.event_name == 'pull_request'}}
+
+jobs:
+  cargo-generate:
+    timeout-minutes: 5
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "01-hello-compute"
+            path: "examples/standalone/01_hello_compute"
+          - name: "02-hello-window"
+            path: "examples/standalone/02_hello_window"
+          - name: "custom_backend"
+            path: "examples/standalone/custom_backend"
+
+    name: "${{ matrix.name }}"
+
+    steps:
+      - uses: actions/checkout@v6
+
+      # We can't rely on an override here, as that would only set
+      # the toolchain for the current directory, not the newly generated project.
+      - name: Install repo MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
+          cargo -V
+
+      - name: Disable debug symbols
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = false
+          EOF
+
+      - name: Caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: cargo-generate-${{ matrix.name }}
+
+      - name: Install `cargo-generate`
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-generate
+
+      - name: Run `cargo-generate`
+        run: |
+          cd ..
+          cargo generate --path wgpu --name ${{ matrix.name }} ${{ matrix.path }}
+
+      - name: Check generated files
+        run: |
+          cd ../${{ matrix.name }}/
+          cat <<EOF >> Cargo.toml
+            [patch.crates-io]
+            wgpu = { path = "../wgpu/wgpu" }
+          EOF
+          cargo +${{ env.REPO_MSRV }} check

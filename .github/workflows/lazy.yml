@@ -1,0 +1,165 @@
+# Non-critical jobs
+name: Lazy
+
+on:
+  push:
+    branches-ignore: [
+        # Renovate branches are always PRs, so they will be covered
+        # by the pull_request event.
+        "renovate/**",
+        # Branches with the `gh-readonly-queue` prefix are used by the
+        # merge queue, so they are already covered by the `merge_group` event.
+        "gh-readonly-queue/**",
+      ]
+  pull_request:
+  merge_group:
+
+env:
+  CARGO_INCREMENTAL: false
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: full
+
+# Every time a PR is pushed to, cancel any previous jobs. This
+# makes us behave nicer to github and get faster turnaround times
+# on PRs that are pushed to multiple times in rapid succession.
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+  cancel-in-progress: ${{github.event_name == 'pull_request'}}
+
+jobs:
+  parse-dota2:
+    name: "Validate Shaders: Dota2"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - run: mkdir naga/data
+
+      - name: Download shaders
+        run: curl https://user.fm/files/v2-5573e18b9f03f42c6ae53c392083da35/dota2-shaders.zip -o naga/data/all.zip
+
+      - name: Unpack shaders
+        run: |
+          cd naga/data
+          unzip all.zip
+
+      - name: Build Naga
+        run: |
+          cd naga
+          cargo build --release -p naga-cli
+
+      - name: Convert shaders
+        run: |
+          cd naga
+          for file in data/*.spv ; do echo "Translating" ${file} && ../target/release/naga --validate 27 ${file} ${file}.metal; done
+
+  parse-vulkan-tutorial-shaders:
+    name: "Validate Shaders: Sascha Willems Vulkan Tutorial"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download shaders
+        run: cd naga && git clone https://github.com/SaschaWillems/Vulkan.git
+
+      - name: Build Naga
+        run: |
+          cd naga
+          cargo build --release -p naga-cli
+
+      - name: Convert Metal shaders
+        run: |
+          # No needed to stop workflow if we can't validate one file
+          set +e
+          cd naga
+          touch counter
+          SUCCESS_RESULT_COUNT=0
+          FILE_COUNT=0
+          mkdir -p out
+          find "Vulkan/data/shaders/glsl/" -name '*.spv' | while read fname;
+          do
+              echo "Convert: $fname"
+              FILE_COUNT=$((FILE_COUNT+1))
+              ../target/release/naga --validate 27 $(realpath ${fname}) out/$(basename ${fname}).metal
+              if [[ $? -eq 0 ]]; then
+                  SUCCESS_RESULT_COUNT=$((SUCCESS_RESULT_COUNT + 1))
+              fi
+              echo "Result: $(expr $FILE_COUNT - $SUCCESS_RESULT_COUNT) / $FILE_COUNT" > counter
+          done
+          cat counter
+
+  dneto0_spirv-samples:
+    name: "Validate Shaders: dneto0 spirv-samples"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download shaders
+        run: |
+          cd naga
+          git clone https://github.com/dneto0/spirv-samples.git
+
+      - name: Build Naga
+        run: |
+          cargo build --release -p naga-cli
+
+      - name: Install Vulkan SDK
+        uses: ./.github/actions/install-vulkan-sdk
+
+      - name: Compile `spv` from `spvasm`
+        run: |
+          cd naga/spirv-samples
+          mkdir -p spv
+
+          find "./spvasm" -name '*.spvasm' | while read fname;
+          do
+              echo "Convert to spv with spirv-as: $fname"
+              spirv-as --target-env spv1.3 $(realpath ${fname}) -o ./spv/$(basename ${fname}).spv
+          done;
+
+      - name: Validate `spv` and generate `wgsl`
+        run: |
+          set +e
+          cd naga/spirv-samples
+          SUCCESS_RESULT_COUNT=0
+          FILE_COUNT=0
+          mkdir -p spv
+          mkdir -p wgsl
+
+          echo "==== Validate spv and generate wgsl ===="
+          rm -f counter
+          touch counter
+
+          find "./spv" -name '*.spv' | while read fname;
+          do
+              echo "Convert: $fname"
+              FILE_COUNT=$((FILE_COUNT+1))
+              ../../target/release/naga --validate 27 $(realpath ${fname}) ./wgsl/$(basename ${fname}).wgsl
+              if [[ $? -eq 0 ]]; then
+                  SUCCESS_RESULT_COUNT=$((SUCCESS_RESULT_COUNT + 1))
+              fi
+              echo "Result: $(expr $FILE_COUNT - $SUCCESS_RESULT_COUNT) / $FILE_COUNT" > counter
+          done
+          cat counter
+
+      - name: Validate output `wgsl`
+        run: |
+          set +e
+          cd naga/spirv-samples
+          SUCCESS_RESULT_COUNT=0
+          FILE_COUNT=0
+
+          rm -f counter
+          touch counter
+
+          find "./wgsl" -name '*.wgsl' | while read fname;
+          do
+              echo "Validate: $fname"
+              FILE_COUNT=$((FILE_COUNT+1))
+              ../../target/release/naga --validate 27 $(realpath ${fname})
+              if [[ $? -eq 0 ]]; then
+                  SUCCESS_RESULT_COUNT=$((SUCCESS_RESULT_COUNT + 1))
+              fi
+              echo "Result: $(expr $FILE_COUNT - $SUCCESS_RESULT_COUNT) / $FILE_COUNT" > counter
+          done
+          cat counter

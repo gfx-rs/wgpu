@@ -30,10 +30,6 @@ pub async fn run() -> Result<(), AnyError> {
         .ok_or_else(|| anyhow!("missing specifier in first command line argument"))?;
     let specifier = resolve_url_or_path(&url, &env::current_dir()?)?;
 
-    for (key, value) in env::vars() {
-        std::println!("{key}={value}");
-    }
-
     let options = RuntimeOptions {
         module_loader: Some(Rc::new(deno_core::FsModuleLoader)),
         extensions: vec![
