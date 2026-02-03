@@ -3083,31 +3083,12 @@ impl Writer {
                     Bi::PointCoord => BuiltIn::PointCoord,
                     Bi::FrontFacing => BuiltIn::FrontFacing,
                     Bi::PrimitiveIndex => {
-                        let reason = "`primitive_index` built-in";
                         // Prefer tesselation/geometry. If neither is supported try to enable mesh shaders
                         // which also requires an extension
-                        if self
-                            .require_any(
-                                reason,
-                                &[spirv::Capability::Geometry, spirv::Capability::Tessellation],
-                            )
-                            .is_err()
-                        {
-                            if self
-                                .require_any(reason, &[spirv::Capability::MeshShadingEXT])
-                                .is_err()
-                            {
-                                return Err(Error::MissingCapabilities(
-                                    reason,
-                                    vec![
-                                        spirv::Capability::Geometry,
-                                        spirv::Capability::Tessellation,
-                                        spirv::Capability::MeshShadingEXT,
-                                    ],
-                                ));
-                            }
-                            self.use_extension("SPV_EXT_mesh_shader");
-                        }
+                        self.require_any(
+                            "`primitive_index` built-in",
+                            &[spirv::Capability::Geometry],
+                        )?;
                         if stage == crate::ShaderStage::Mesh {
                             others.push(Decoration::PerPrimitiveEXT);
                         }
