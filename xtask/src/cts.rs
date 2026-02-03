@@ -324,7 +324,15 @@ pub fn run_cts(
     }
 
     let env_vars = if llvm_cov {
-        shell
+        // Typically coverage runs are done via cargo with `cargo llvm-cov run`. Running the
+        // coverage-instrumented binary directly requires setting some environment variables. See
+        // <https://github.com/taiki-e/cargo-llvm-cov/blob/main/README.md#get-coverage-of-external-tests>
+        //
+        // Unlike regular `llvm-cov run`, which builds artifacts in `target/llvm-cov-target`,
+        // `llvm-cov show-env` uses the regular target directory for artifacts. Because of this,
+        // the CTS job configures the `install-mesa` and `install-warp` actions with the regular
+        // target directory, not the `llvm-cov-target` directory.
+        let env = shell
             .cmd("cargo")
             .args(&["llvm-cov", "--no-cfg-coverage", "show-env"])
             .read()
@@ -343,7 +351,18 @@ pub fn run_cts(
                 (key.to_string(), value.to_string())
             })
             .collect::<Vec<_>>()
-            .into_iter()
+            .into_iter();
+
+        // Avoid conflicts between coverage and non-coverage build artifacts.
+        // This is recommended by the cargo-llvm-cov docs.
+        shell
+            .cmd("cargo")
+            .envs(env.clone())
+            .args(["llvm-cov", "clean", "--workspace"])
+            .run()
+            .context("Failed to run `llvm-cov clean`")?;
+
+        env
     } else {
         vec![].into_iter()
     };

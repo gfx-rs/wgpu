@@ -102,15 +102,18 @@ jobs:
         if: matrix.os == 'windows-2022'
         uses: ./.github/actions/install-dxc
 
+      # Note: `target-dir` is intentionally different from other jobs.
+      # See note in xtask about `llvm-cov show-env`.
       - name: (Windows) Install WARP
         if: matrix.os == 'windows-2022'
         uses: ./.github/actions/install-warp
         with:
-          target-dir: "target/llvm-cov-target/debug"
+          target-dir: "target/debug"
 
       - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'
         uses: ./.github/actions/install-mesa
+          target-dir: "target/debug"
 
       # Mixing --llvm-cov with deno (rusty_v8) has linking problems.
       # Explicitly set the backend to avoid EGL messages in output,
