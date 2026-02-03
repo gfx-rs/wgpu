@@ -34,7 +34,7 @@ use anyhow::{anyhow, bail, Context};
 use core::fmt;
 use pico_args::Arguments;
 use regex_lite::{Regex, RegexBuilder};
-use std::{ffi::OsString, path::Path, sync::LazyLock};
+use std::{ffi::OsString, sync::LazyLock};
 use xshell::Shell;
 
 use crate::util::{git_version_at_least, parse_binary_from_cargo_json};
@@ -319,8 +319,7 @@ pub fn run_cts(
     }
 
     let env_vars = if llvm_cov {
-        let mut dir = None;
-        let mut vec = shell
+        let env = shell
             .cmd("cargo")
             .args(&["llvm-cov", "--no-cfg-coverage", "show-env"])
             .read()
@@ -336,23 +335,9 @@ pub fn run_cts(
             })
             .map(|(key, value)| {
                 let value = value.trim_matches('"').trim_matches('\'');
-
-                let key = if key == "CARGO_LLVM_COV_TARGET_DIR" {
-                    // TODO comment here
-                    let key = Path::new(key).join("llvm-cov-target").into_os_string().into_string().unwrap();
-                    dir = Some(key.clone());
-                    key
-                } else {
-                    key.to_string()
-                };
-
-                (key, value.to_string())
+                (key.to_string(), value.to_string())
             })
-            .collect::<Vec<_>>();
-
-        vec.push(("CARGO_LLVM_COV_BUILD_DIR".into(), dir.take().unwrap()));
-
-        let env = vec
+            .collect::<Vec<_>>()
             .into_iter();
 
         // The cargo-llvm-cov docs specify to clean after setting the
@@ -408,22 +393,11 @@ pub fn run_cts(
             log::info!("Running {}", test.selector.to_string_lossy());
         }
 
-        let cmd = if test.selector != "webgpu:shader,execution,expression,call,builtin,textureSample:sampled_1d_coords:*" {
-            shell
-                .cmd(&bin)
-                .envs(env_vars.clone())
-                .args(cts_bin)
-                .args([&test.selector])
-
-        } else {
-            shell
-                .cmd("cargo")
-                .args(&["llvm-cov", "--no-cfg-coverage", "--no-report", "run"])
-                .args(&cargo_opts)
-                .arg("--")
-                .args(cts_bin)
-                .arg(&test.selector)
-        };
+        let cmd = shell
+            .cmd(&bin)
+            .envs(env_vars.clone())
+            .args(cts_bin)
+            .args([&test.selector]);
 
         match output_filter {
             PrintOutputWhen::TestFails => {

@@ -115,3 +115,35 @@ jobs:
       - name: Run CTS
         shell: bash
         run: cargo --locked xtask cts --print-output-when=always --llvm-cov --backend ${{ matrix.backend }} --filter '${{matrix.filter }}'
+
+      - name: Generate coverage report
+        id: coverage
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -e
+
+          cargo --locked llvm-cov report --lcov --output-path lcov.info
+
+      - name: Upload coverage report to Codecov
+        uses: codecov/codecov-action@v5
+        if: steps.coverage.outcome == 'success'
+        with:
+          files: lcov.info
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      # Notes:
+      # 1. We omit `--llvm-cov` because mixing it with deno (rusty_v8) has
+      #    linking problems.
+      # 2. Explicitly set the backend to avoid getting EGL messages in the
+      #    output. Some of these tests check stdout.
+      # 3. (TODO/TBD): Clean the tree?
+      - name: Test cts_runner
+        if: matrix.suite == 'other'
+        shell: bash
+        run: |
+          set -e
+
+          #cargo clean
+          DENO_WEBGPU_BACKEND=${{ matrix.backend }} cargo --locked test -p cts_runner
+
