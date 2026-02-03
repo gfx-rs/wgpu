@@ -305,10 +305,10 @@ impl Queue {
     ///
     /// The returned type depends on the backend:
     ///
-    #[doc = crate::hal_type_vulkan!("Queue")]
-    #[doc = crate::hal_type_metal!("Queue")]
-    #[doc = crate::hal_type_dx12!("Queue")]
-    #[doc = crate::hal_type_gles!("Queue")]
+    #[doc = crate::macros::hal_type_vulkan!("Queue")]
+    #[doc = crate::macros::hal_type_metal!("Queue")]
+    #[doc = crate::macros::hal_type_dx12!("Queue")]
+    #[doc = crate::macros::hal_type_gles!("Queue")]
     ///
     /// # Errors
     ///

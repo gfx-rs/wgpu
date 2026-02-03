@@ -243,6 +243,10 @@ impl<W: Write> Writer<W> {
                         Attribute::WorkGroupSize(ep.workgroup_size),
                     ]
                 }
+                ShaderStage::RayGeneration
+                | ShaderStage::AnyHit
+                | ShaderStage::ClosestHit
+                | ShaderStage::Miss => unreachable!(),
             };
             self.write_attributes(&attributes)?;
             // Add a newline after attribute
@@ -488,6 +492,10 @@ impl<W: Write> Writer<W> {
                         ShaderStage::Task => "task",
                         //Handled by another variant in the Attribute enum, so this code should never be hit.
                         ShaderStage::Mesh => unreachable!(),
+                        ShaderStage::RayGeneration
+                        | ShaderStage::AnyHit
+                        | ShaderStage::ClosestHit
+                        | ShaderStage::Miss => unreachable!(),
                     };
 
                     write!(self.out, "@{stage_str} ")?;
@@ -1086,6 +1094,7 @@ impl<W: Write> Writer<W> {
                 self.write_expr(module, data.stride, func_ctx)?;
                 writeln!(self.out, ");")?
             }
+            Statement::RayPipelineFunction(_) => unreachable!(),
         }
 
         Ok(())

@@ -192,6 +192,19 @@ impl crate::BuiltIn {
             | Self::PrimitiveCount
             | Self::Vertices
             | Self::Primitives => unreachable!(),
+            Self::RayInvocationId
+            | Self::NumRayInvocations
+            | Self::InstanceCustomData
+            | Self::GeometryIndex
+            | Self::WorldRayOrigin
+            | Self::WorldRayDirection
+            | Self::ObjectRayOrigin
+            | Self::ObjectRayDirection
+            | Self::RayTmin
+            | Self::RayTCurrentMax
+            | Self::ObjectToWorld
+            | Self::WorldToObject
+            | Self::HitKind => unreachable!(),
         })
     }
 }

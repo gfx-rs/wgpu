@@ -42,6 +42,7 @@ mod occlusion_query;
 mod oob_indexing;
 mod oom;
 mod pass_ops;
+mod passthrough;
 mod per_vertex;
 mod pipeline;
 mod pipeline_cache;
@@ -107,6 +108,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     oob_indexing::all_tests(&mut tests);
     oom::all_tests(&mut tests);
     pass_ops::all_tests(&mut tests);
+    passthrough::all_tests(&mut tests);
     per_vertex::all_tests(&mut tests);
     pipeline_cache::all_tests(&mut tests);
     pipeline::all_tests(&mut tests);

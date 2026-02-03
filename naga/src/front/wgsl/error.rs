@@ -387,6 +387,10 @@ pub(crate) enum Error<'a> {
         kind: EnableExtension,
         span: Span,
     },
+    EnableExtensionNotSupported {
+        kind: EnableExtension,
+        span: Span,
+    },
     LanguageExtensionNotYetImplemented {
         kind: UnimplementedLanguageExtension,
         span: Span,
@@ -434,6 +438,7 @@ pub(crate) enum Error<'a> {
         description: &'static str,
     },
     UnexpectedExprForTypeExpression(Span),
+    MissingIncomingPayload(Span),
 }
 
 impl From<ConflictingDiagnosticRuleError> for Error<'_> {
@@ -1257,6 +1262,17 @@ impl<'a> Error<'a> {
                     ]
                 },
             },
+            Error::EnableExtensionNotSupported { kind, span } => ParseError {
+                message: format!(
+                    "the `{}` extension is not supported in the current environment",
+                    kind.to_ident()
+                ),
+                labels: vec![(
+                    span,
+                    "unsupported enable-extension".into(),
+                )],
+                notes: vec![],
+            },
             Error::LanguageExtensionNotYetImplemented { kind, span } => ParseError {
                 message: format!(
                     "the `{}` language extension is not yet supported",
@@ -1473,7 +1489,15 @@ impl<'a> Error<'a> {
                 message: "unexpected expression".to_string(),
                 labels: vec![(expr_span, "needs to be an identifier resolving to a type declaration (alias or struct) or predeclared type(-generator)".into())],
                 notes: vec![],
-            }
+            },
+            Error::MissingIncomingPayload(span) => ParseError {
+                message: "incoming payload is missing on a `closest_hit`, `any_hit` or `miss` shader entry point".to_string(),
+                labels: vec![(
+                    span,
+                    "must be paired with a `@incoming_payload` attribute".into(),
+                )],
+                notes: vec![],
+            },
         }
     }
 }

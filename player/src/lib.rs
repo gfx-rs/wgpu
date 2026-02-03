@@ -268,10 +268,8 @@ impl Player {
             Action::CreateShaderModulePassthrough {
                 id,
                 data,
-                entry_point,
                 label,
                 num_workgroups,
-                runtime_checks,
             } => {
                 let spirv = data.iter().find_map(|a| {
                     if a.kind() == DataKind::Spv {
@@ -289,6 +287,9 @@ impl Player {
                 let hlsl = data
                     .iter()
                     .find_map(|a| (a.kind() == DataKind::Hlsl).then(|| loader.load_utf8(a)));
+                let metallib = data
+                    .iter()
+                    .find_map(|a| (a.kind() == DataKind::MetalLib).then(|| loader.load(a)));
                 let msl = data
                     .iter()
                     .find_map(|a| (a.kind() == DataKind::Msl).then(|| loader.load_utf8(a)));
@@ -299,14 +300,13 @@ impl Player {
                     .iter()
                     .find_map(|a| (a.kind() == DataKind::Wgsl).then(|| loader.load_utf8(a)));
                 let desc = wgt::CreateShaderModuleDescriptorPassthrough {
-                    entry_point,
                     label,
                     num_workgroups,
-                    runtime_checks,
 
                     spirv,
                     dxil,
                     hlsl,
+                    metallib,
                     msl,
                     glsl,
                     wgsl,

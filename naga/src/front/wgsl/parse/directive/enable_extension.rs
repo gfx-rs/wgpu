@@ -13,6 +13,7 @@ pub(crate) struct EnableExtensions {
     wgpu_mesh_shader: bool,
     wgpu_ray_query: bool,
     wgpu_ray_query_vertex_return: bool,
+    wgpu_ray_tracing_pipelines: bool,
     dual_source_blending: bool,
     /// Whether `enable f16;` was written earlier in the shader module.
     f16: bool,
@@ -26,6 +27,7 @@ impl EnableExtensions {
             wgpu_mesh_shader: false,
             wgpu_ray_query: false,
             wgpu_ray_query_vertex_return: false,
+            wgpu_ray_tracing_pipelines: false,
             f16: false,
             dual_source_blending: false,
             clip_distances: false,
@@ -40,6 +42,9 @@ impl EnableExtensions {
             ImplementedEnableExtension::WgpuRayQuery => &mut self.wgpu_ray_query,
             ImplementedEnableExtension::WgpuRayQueryVertexReturn => {
                 &mut self.wgpu_ray_query_vertex_return
+            }
+            ImplementedEnableExtension::WgpuRayTracingPipeline => {
+                &mut self.wgpu_ray_tracing_pipelines
             }
             ImplementedEnableExtension::DualSourceBlending => &mut self.dual_source_blending,
             ImplementedEnableExtension::F16 => &mut self.f16,
@@ -57,6 +62,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::WgpuRayQueryVertexReturn => {
                 self.wgpu_ray_query_vertex_return
             }
+            ImplementedEnableExtension::WgpuRayTracingPipeline => self.wgpu_ray_tracing_pipelines,
             ImplementedEnableExtension::DualSourceBlending => self.dual_source_blending,
             ImplementedEnableExtension::F16 => self.f16,
             ImplementedEnableExtension::ClipDistances => self.clip_distances,
@@ -93,6 +99,7 @@ impl EnableExtension {
     const MESH_SHADER: &'static str = "wgpu_mesh_shader";
     const RAY_QUERY: &'static str = "wgpu_ray_query";
     const RAY_QUERY_VERTEX_RETURN: &'static str = "wgpu_ray_query_vertex_return";
+    const RAY_TRACING_PIPELINE: &'static str = "wgpu_ray_tracing_pipeline";
     const COOPERATIVE_MATRIX: &'static str = "wgpu_cooperative_matrix";
     const SUBGROUPS: &'static str = "subgroups";
     const PRIMITIVE_INDEX: &'static str = "primitive_index";
@@ -109,6 +116,9 @@ impl EnableExtension {
             Self::RAY_QUERY => Self::Implemented(ImplementedEnableExtension::WgpuRayQuery),
             Self::RAY_QUERY_VERTEX_RETURN => {
                 Self::Implemented(ImplementedEnableExtension::WgpuRayQueryVertexReturn)
+            }
+            Self::RAY_TRACING_PIPELINE => {
+                Self::Implemented(ImplementedEnableExtension::WgpuRayTracingPipeline)
             }
             Self::COOPERATIVE_MATRIX => {
                 Self::Implemented(ImplementedEnableExtension::WgpuCooperativeMatrix)
@@ -134,6 +144,7 @@ impl EnableExtension {
                 ImplementedEnableExtension::DualSourceBlending => Self::DUAL_SOURCE_BLENDING,
                 ImplementedEnableExtension::F16 => Self::F16,
                 ImplementedEnableExtension::ClipDistances => Self::CLIP_DISTANCES,
+                ImplementedEnableExtension::WgpuRayTracingPipeline => Self::RAY_TRACING_PIPELINE,
             },
             Self::Unimplemented(kind) => match kind {
                 UnimplementedEnableExtension::Subgroups => Self::SUBGROUPS,
@@ -145,6 +156,7 @@ impl EnableExtension {
 
 /// A variant of [`EnableExtension::Implemented`].
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(test, derive(strum::VariantArray))]
 pub enum ImplementedEnableExtension {
     /// Enables `f16`/`half` primitive support in all shader languages.
     ///
@@ -170,8 +182,54 @@ pub enum ImplementedEnableExtension {
     WgpuRayQuery,
     /// Enables the `wgpu_ray_query_vertex_return` extension, native only.
     WgpuRayQueryVertexReturn,
+    /// Enables the `wgpu_ray_tracing_pipeline` extension, native only.
+    WgpuRayTracingPipeline,
     /// Enables the `wgpu_cooperative_matrix` extension, native only.
     WgpuCooperativeMatrix,
+}
+
+impl ImplementedEnableExtension {
+    /// A slice of all variants of [`ImplementedEnableExtension`].
+    pub const VARIANTS: &'static [Self] = &[
+        Self::F16,
+        Self::DualSourceBlending,
+        Self::ClipDistances,
+        Self::WgpuMeshShader,
+        Self::WgpuRayQuery,
+        Self::WgpuRayQueryVertexReturn,
+        Self::WgpuRayTracingPipeline,
+        Self::WgpuCooperativeMatrix,
+    ];
+
+    /// Returns slice of all variants of [`ImplementedEnableExtension`].
+    pub const fn all() -> &'static [Self] {
+        Self::VARIANTS
+    }
+
+    /// Returns the capability required for this enable extension.
+    pub const fn capability(self) -> crate::valid::Capabilities {
+        use crate::valid::Capabilities as C;
+        match self {
+            Self::F16 => C::SHADER_FLOAT16,
+            Self::DualSourceBlending => C::DUAL_SOURCE_BLENDING,
+            Self::ClipDistances => C::CLIP_DISTANCE,
+            Self::WgpuMeshShader => C::MESH_SHADER,
+            Self::WgpuRayQuery => C::RAY_QUERY,
+            Self::WgpuRayQueryVertexReturn => C::RAY_HIT_VERTEX_POSITION,
+            Self::WgpuCooperativeMatrix => C::COOPERATIVE_MATRIX,
+            Self::WgpuRayTracingPipeline => C::RAY_TRACING_PIPELINE,
+        }
+    }
+}
+
+#[test]
+/// Asserts that the manual implementation of VARIANTS is the same as the derived strum version would be
+/// while still allowing strum to be a dev-only dependency
+fn test_manual_variants_array_is_correct() {
+    assert_eq!(
+        <ImplementedEnableExtension as strum::VariantArray>::VARIANTS,
+        ImplementedEnableExtension::VARIANTS
+    );
 }
 
 /// A variant of [`EnableExtension::Unimplemented`].

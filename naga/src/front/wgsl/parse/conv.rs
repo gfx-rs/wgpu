@@ -30,6 +30,26 @@ pub fn map_address_space<'a>(
                 }))
             }
         }
+        "ray_payload" => {
+            if enable_extensions.contains(ImplementedEnableExtension::WgpuRayTracingPipeline) {
+                Ok(crate::AddressSpace::RayPayload)
+            } else {
+                Err(Box::new(Error::EnableExtensionNotEnabled {
+                    span,
+                    kind: ImplementedEnableExtension::WgpuRayTracingPipeline.into(),
+                }))
+            }
+        }
+        "incoming_ray_payload" => {
+            if enable_extensions.contains(ImplementedEnableExtension::WgpuRayTracingPipeline) {
+                Ok(crate::AddressSpace::IncomingRayPayload)
+            } else {
+                Err(Box::new(Error::EnableExtensionNotEnabled {
+                    span,
+                    kind: ImplementedEnableExtension::WgpuRayTracingPipeline.into(),
+                }))
+            }
+        }
         _ => Err(Box::new(Error::UnknownAddressSpace(span))),
     }
 }
@@ -116,6 +136,20 @@ pub fn map_built_in(
         "vertices" => crate::BuiltIn::Vertices,
         "primitive_count" => crate::BuiltIn::PrimitiveCount,
         "primitives" => crate::BuiltIn::Primitives,
+        // ray tracing pipeline
+        "ray_invocation_id" => crate::BuiltIn::RayInvocationId,
+        "num_ray_invocations" => crate::BuiltIn::NumRayInvocations,
+        "instance_custom_data" => crate::BuiltIn::InstanceCustomData,
+        "geometry_index" => crate::BuiltIn::GeometryIndex,
+        "world_ray_origin" => crate::BuiltIn::WorldRayOrigin,
+        "world_ray_direction" => crate::BuiltIn::WorldRayDirection,
+        "object_ray_origin" => crate::BuiltIn::ObjectRayOrigin,
+        "object_ray_direction" => crate::BuiltIn::ObjectRayDirection,
+        "ray_t_min" => crate::BuiltIn::RayTmin,
+        "ray_t_current_max" => crate::BuiltIn::RayTCurrentMax,
+        "object_to_world" => crate::BuiltIn::ObjectToWorld,
+        "world_to_object" => crate::BuiltIn::WorldToObject,
+        "hit_kind" => crate::BuiltIn::HitKind,
         _ => return Err(Box::new(Error::UnknownBuiltin(span))),
     };
     match built_in {
@@ -536,26 +570,34 @@ pub fn map_predeclared_type(
     };
 
     // Check for the enable extension required to use this type, if any.
-    let extension_needed = match ty {
+    // Slice should be at least len one otherwise extension_needed should be None.
+    let extensions_needed: Option<&[_]> = match ty {
         PredeclaredType::TypeInner(ref ty) if ty.scalar() == Some(Sc::F16) => {
-            Some(ImplementedEnableExtension::F16)
+            Some(&[ImplementedEnableExtension::F16])
         }
         PredeclaredType::RayDesc
         | PredeclaredType::RayIntersection
         | PredeclaredType::TypeGenerator(TypeGenerator::AccelerationStructure)
-        | PredeclaredType::TypeGenerator(TypeGenerator::RayQuery) => {
-            Some(ImplementedEnableExtension::WgpuRayQuery)
-        }
+        | PredeclaredType::TypeGenerator(TypeGenerator::RayQuery) => Some(&[
+            ImplementedEnableExtension::WgpuRayQuery,
+            ImplementedEnableExtension::WgpuRayTracingPipeline,
+        ]),
         PredeclaredType::TypeGenerator(TypeGenerator::CooperativeMatrix { .. }) => {
-            Some(ImplementedEnableExtension::WgpuCooperativeMatrix)
+            Some(&[ImplementedEnableExtension::WgpuCooperativeMatrix])
         }
         _ => None,
     };
-    if let Some(extension_needed) = extension_needed {
-        if !enable_extensions.contains(extension_needed) {
+    if let Some(extensions_needed) = extensions_needed {
+        let mut any_extension_enabled = false;
+        for extension_needed in extensions_needed {
+            if enable_extensions.contains(*extension_needed) {
+                any_extension_enabled = true;
+            }
+        }
+        if !any_extension_enabled {
             return Err(Box::new(Error::EnableExtensionNotEnabled {
                 span,
-                kind: extension_needed.into(),
+                kind: extensions_needed[0].into(),
             }));
         }
     }

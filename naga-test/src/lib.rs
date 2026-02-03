@@ -84,6 +84,7 @@ impl From<&WgslInParameters> for naga::front::wgsl::Options {
     fn from(value: &WgslInParameters) -> Self {
         Self {
             parse_doc_comments: value.parse_doc_comments,
+            capabilities: naga::valid::Capabilities::all(),
         }
     }
 }

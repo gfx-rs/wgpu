@@ -1,0 +1,2 @@
+capabilities = "RAY_TRACING_PIPELINE"
+targets = "IR"

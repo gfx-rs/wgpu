@@ -2338,25 +2338,25 @@ impl fmt::Debug for NagaShader {
 /// Shader input.
 pub enum ShaderInput<'a> {
     Naga(NagaShader),
+    MetalLib {
+        file: &'a [u8],
+        num_workgroups: (u32, u32, u32),
+    },
     Msl {
         shader: &'a str,
-        entry_point: String,
         num_workgroups: (u32, u32, u32),
     },
     SpirV(&'a [u32]),
     Dxil {
         shader: &'a [u8],
-        entry_point: String,
         num_workgroups: (u32, u32, u32),
     },
     Hlsl {
         shader: &'a str,
-        entry_point: String,
         num_workgroups: (u32, u32, u32),
     },
     Glsl {
         shader: &'a str,
-        entry_point: String,
         num_workgroups: (u32, u32, u32),
     },
 }

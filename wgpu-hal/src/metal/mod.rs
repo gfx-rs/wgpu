@@ -37,6 +37,7 @@ use bitflags::bitflags;
 use hashbrown::HashMap;
 use naga::FastHashMap;
 use objc2::{
+    available,
     rc::{autoreleasepool, Retained},
     runtime::ProtocolObject,
 };
@@ -45,7 +46,7 @@ use objc2_metal::{
     MTLArgumentBuffersTier, MTLBlitCommandEncoder, MTLBuffer, MTLCommandBuffer,
     MTLCommandBufferStatus, MTLCommandQueue, MTLComputeCommandEncoder, MTLComputePipelineState,
     MTLCounterSampleBuffer, MTLCullMode, MTLDepthClipMode, MTLDepthStencilState, MTLDevice,
-    MTLDrawable, MTLFunction, MTLIndexType, MTLLanguageVersion, MTLLibrary, MTLPrimitiveType,
+    MTLDrawable, MTLIndexType, MTLLanguageVersion, MTLLibrary, MTLPrimitiveType,
     MTLReadWriteTextureTier, MTLRenderCommandEncoder, MTLRenderPipelineState, MTLRenderStages,
     MTLResource, MTLResourceUsage, MTLSamplerState, MTLSharedEvent, MTLSize, MTLTexture,
     MTLTextureType, MTLTriangleFillMode, MTLWinding,
@@ -113,6 +114,21 @@ crate::impl_dyn_resource!(
     Texture,
     TextureView
 );
+
+/// Provides availability information about Mac APIs.
+///
+/// This may include Metal features that depend only on software support.
+/// Features with varying hardware support are in [`PrivateCapabilities`]
+///
+/// When feature detection is only needed once, it may also be done inline.
+struct OsFeatures;
+
+impl OsFeatures {
+    fn display_sync() -> bool {
+        // https://developer.apple.com/documentation/quartzcore/cametallayer/displaysyncenabled
+        available!(macos = 10.13) || cfg!(target_abi = "macabi")
+    }
+}
 
 pub struct Instance {}
 
@@ -317,15 +333,9 @@ struct PrivateCapabilities {
     sample_count_mask: crate::TextureFormatCapabilities,
     supports_debug_markers: bool,
     supports_binary_archives: bool,
-    supports_capture_manager: bool,
-    can_set_maximum_drawables_count: bool,
-    can_set_display_sync: bool,
-    can_set_next_drawable_timeout: bool,
     supports_arrays_of_textures: bool,
     supports_arrays_of_textures_write: bool,
-    supports_mutability: bool,
     supports_depth_clip_control: bool,
-    supports_preserve_invariance: bool,
     supports_shader_primitive_index: bool,
     has_unified_memory: Option<bool>,
     timestamp_query_support: TimestampQuerySupport,
@@ -335,7 +345,6 @@ struct PrivateCapabilities {
     int64_atomics_min_max: bool,
     int64_atomics: bool,
     float_atomics: bool,
-    supports_shared_event: bool,
     mesh_shaders: bool,
     max_mesh_task_workgroup_count: u32,
     max_task_payload_size: u32,
@@ -663,6 +672,10 @@ impl<T> ops::Index<naga::ShaderStage> for MultiStageData<T> {
             naga::ShaderStage::Compute => &self.cs,
             naga::ShaderStage::Task => &self.ts,
             naga::ShaderStage::Mesh => &self.ms,
+            naga::ShaderStage::RayGeneration
+            | naga::ShaderStage::AnyHit
+            | naga::ShaderStage::ClosestHit
+            | naga::ShaderStage::Miss => unimplemented!(),
         }
     }
 }
@@ -788,8 +801,6 @@ pub enum ShaderModuleSource {
 #[derive(Debug)]
 pub struct PassthroughShader {
     pub library: Retained<ProtocolObject<dyn MTLLibrary>>,
-    pub function: Retained<ProtocolObject<dyn MTLFunction>>,
-    pub entry_point: String,
     pub num_workgroups: (u32, u32, u32),
 }
 

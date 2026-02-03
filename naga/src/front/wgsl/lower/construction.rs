@@ -345,11 +345,11 @@ impl<'source> Lowerer<'source, '_> {
                 },
                 Constructor::PartialVector { size },
             ) => {
-                let consensus_scalar =
-                    ctx.automatic_conversion_consensus(&components)
-                        .map_err(|index| {
-                            Error::InvalidConstructorComponentType(spans[index], index as i32)
-                        })?;
+                let consensus_scalar = ctx
+                    .automatic_conversion_consensus(None, &components)
+                    .map_err(|index| {
+                        Error::InvalidConstructorComponentType(spans[index], index as i32)
+                    })?;
                 ctx.convert_slice_to_common_leaf_scalar(&mut components, consensus_scalar)?;
                 let inner = consensus_scalar.to_inner_vector(size);
                 let ty = ctx.ensure_type_exists(inner);
@@ -373,15 +373,14 @@ impl<'source> Lowerer<'source, '_> {
                 },
                 Constructor::PartialMatrix { columns, rows },
             ) if components.len() == columns as usize * rows as usize => {
-                let consensus_scalar =
-                    ctx.automatic_conversion_consensus(&components)
-                        .map_err(|index| {
-                            Error::InvalidConstructorComponentType(spans[index], index as i32)
-                        })?;
-                // We actually only accept floating-point elements.
-                let consensus_scalar = consensus_scalar
-                    .automatic_conversion_combine(crate::Scalar::ABSTRACT_FLOAT)
-                    .unwrap_or(consensus_scalar);
+                let consensus_scalar = ctx
+                    .automatic_conversion_consensus(
+                        Some(crate::Scalar::ABSTRACT_FLOAT),
+                        &components,
+                    )
+                    .map_err(|index| {
+                        Error::InvalidConstructorComponentType(spans[index], index as i32)
+                    })?;
                 ctx.convert_slice_to_common_leaf_scalar(&mut components, consensus_scalar)?;
                 let vec_ty = ctx.ensure_type_exists(consensus_scalar.to_inner_vector(rows));
 
@@ -451,11 +450,14 @@ impl<'source> Lowerer<'source, '_> {
                 },
                 Constructor::PartialMatrix { columns, rows },
             ) => {
-                let consensus_scalar =
-                    ctx.automatic_conversion_consensus(&components)
-                        .map_err(|index| {
-                            Error::InvalidConstructorComponentType(spans[index], index as i32)
-                        })?;
+                let consensus_scalar = ctx
+                    .automatic_conversion_consensus(
+                        Some(crate::Scalar::ABSTRACT_FLOAT),
+                        &components,
+                    )
+                    .map_err(|index| {
+                        Error::InvalidConstructorComponentType(spans[index], index as i32)
+                    })?;
                 ctx.convert_slice_to_common_leaf_scalar(&mut components, consensus_scalar)?;
                 let ty = ctx.ensure_type_exists(crate::TypeInner::Matrix {
                     columns,
@@ -489,7 +491,8 @@ impl<'source> Lowerer<'source, '_> {
             // Array constructor - infer type
             (components, Constructor::PartialArray) => {
                 let mut components = components.into_components_vec();
-                if let Ok(consensus_scalar) = ctx.automatic_conversion_consensus(&components) {
+                if let Ok(consensus_scalar) = ctx.automatic_conversion_consensus(None, &components)
+                {
                     // Note that this will *not* necessarily convert all the
                     // components to the same type! The `automatic_conversion_consensus`
                     // method only considers the parameters' leaf scalar

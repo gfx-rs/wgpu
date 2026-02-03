@@ -58,13 +58,16 @@ mod webgpu_impl {
     pub const WEBGPU_FEATURE_FLOAT32_FILTERABLE: u64 = 1 << 12;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_DUAL_SOURCE_BLENDING: u64 = 1 << 13;
+    pub const WEBGPU_FEATURE_FLOAT32_BLENDABLE: u64 = 1 << 13;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_CLIP_DISTANCES: u64 = 1 << 14;
+    pub const WEBGPU_FEATURE_DUAL_SOURCE_BLENDING: u64 = 1 << 14;
 
     #[doc(hidden)]
-    pub const WEBGPU_FEATURE_IMMEDIATES: u64 = 1 << 15;
+    pub const WEBGPU_FEATURE_CLIP_DISTANCES: u64 = 1 << 15;
+
+    #[doc(hidden)]
+    pub const WEBGPU_FEATURE_IMMEDIATES: u64 = 1 << 16;
 }
 
 macro_rules! bitflags_array_impl {
@@ -574,7 +577,6 @@ bitflags_array! {
         // ? const RW_STORAGE_TEXTURE_TIER_1 = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3838)
         // ? const NORM16_FILTERABLE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3839)
         // ? const NORM16_RESOLVE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3839)
-        // ? const FLOAT32_BLENDABLE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3556)
         // ? const 32BIT_FORMAT_MULTISAMPLE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3844)
         // ? const 32BIT_FORMAT_RESOLVE = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3844)
         // ? const TEXTURE_COMPRESSION_ASTC_HDR = 1 << ??; (https://github.com/gpuweb/gpuweb/issues/3856)
@@ -1508,6 +1510,12 @@ bitflags_array! {
         ///
         /// This is a web and native feature.
         const FLOAT32_FILTERABLE = WEBGPU_FEATURE_FLOAT32_FILTERABLE;
+
+        /// Allows textures with formats "r32float", "rg32float", and "rgba32float" to be blendable.
+        ///
+        /// Supported Platforms:
+        /// - Vulkan
+        const FLOAT32_BLENDABLE = WEBGPU_FEATURE_FLOAT32_BLENDABLE;
 
         /// Allows two outputs from a shader to be used for blending.
         /// Note that dual-source blending doesn't support multiple render targets.
