@@ -34,7 +34,7 @@ use anyhow::{anyhow, bail, Context};
 use core::fmt;
 use pico_args::Arguments;
 use regex_lite::{Regex, RegexBuilder};
-use std::{ffi::OsString, sync::LazyLock};
+use std::{ffi::OsString, path::Path, sync::LazyLock};
 use xshell::Shell;
 
 use crate::util::{git_version_at_least, parse_binary_from_cargo_json};
@@ -335,7 +335,15 @@ pub fn run_cts(
             })
             .map(|(key, value)| {
                 let value = value.trim_matches('"').trim_matches('\'');
-                (key.to_string(), value.to_string())
+
+                let key = if key == "CARGO_LLVM_COV_TARGET_DIR" {
+                    // TODO comment here
+                    Path::new(key).join("llvm-cov-target").into_os_string().into_string().unwrap()
+                } else {
+                    key.to_string()
+                };
+
+                (key, value.to_string())
             })
             .collect::<Vec<_>>()
             .into_iter();
