@@ -135,6 +135,7 @@ use crate::*;
 /// #     size: 400,
 /// #     usage: wgpu::BufferUsages::MAP_WRITE,
 /// #     mapped_at_creation: false,
+/// #     initial_queue: None,
 /// # });
 /// let capturable = buffer.clone();
 /// buffer.map_async(wgpu::MapMode::Write, .., move |result| {
