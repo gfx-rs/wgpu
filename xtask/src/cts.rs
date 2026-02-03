@@ -319,7 +319,7 @@ pub fn run_cts(
     }
 
     let env_vars = if llvm_cov {
-        shell
+        let env = shell
             .cmd("cargo")
             .args(&["llvm-cov", "--no-cfg-coverage", "show-env"])
             .read()
@@ -338,7 +338,18 @@ pub fn run_cts(
                 (key.to_string(), value.to_string())
             })
             .collect::<Vec<_>>()
-            .into_iter()
+            .into_iter();
+
+        // The cargo-llvm-cov docs specify to clean after setting the
+        // environment variables.
+        // <https://github.com/taiki-e/cargo-llvm-cov/blob/main/README.md#get-coverage-of-external-tests>
+        shell.cmd("cargo")
+            .envs(env.clone())
+            .args(["llvm-cov", "clean", "--workspace"])
+            .run()
+            .context("Failed to run `llvm-cov clean`")?;
+
+        env
     } else {
         vec![].into_iter()
     };
