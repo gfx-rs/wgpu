@@ -244,7 +244,7 @@ webgpu.GPUAdapter.prototype.requestDevice = function(desc) {
         if (!desc) {
             desc = { requiredFeatures: ['external-texture'] };
         } else if (!desc.requiredFeatures) {
-            desc.requiredFeatures = 'external-texture';
+            desc.requiredFeatures = ['external-texture'];
         } else {
             desc.requiredFeatures.push('external-texture');
         }

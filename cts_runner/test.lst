@@ -247,6 +247,7 @@ webgpu:api,validation,render_pipeline,inter_stage:location,*
 webgpu:api,validation,render_pipeline,inter_stage:max_shader_variable_location:*
 webgpu:api,validation,render_pipeline,inter_stage:max_variables_count,*
 webgpu:api,validation,render_pipeline,misc:basic:*
+fails-if(vulkan) webgpu:api,validation,render_pipeline,misc:external_texture:*
 webgpu:api,validation,render_pipeline,misc:no_attachment:*
 webgpu:api,validation,render_pipeline,misc:pipeline_layout,device_mismatch:*
 webgpu:api,validation,render_pipeline,misc:vertex_state_only:*
@@ -358,9 +359,13 @@ webgpu:shader,validation,expression,call,builtin,sin:*
 webgpu:shader,validation,expression,call,builtin,step:*
 webgpu:shader,validation,expression,call,builtin,tan:*
 webgpu:shader,validation,expression,call,builtin,tanh:*
+// Uses external textures
+fails-if(vulkan) webgpu:shader,validation,expression,call,builtin,textureLoad:*
 webgpu:shader,validation,expression,call,builtin,textureNumLayers:*
 webgpu:shader,validation,expression,call,builtin,textureNumLevels:*
 webgpu:shader,validation,expression,call,builtin,textureNumSamples:*
+// Uses external textures
+fails-if(vulkan) webgpu:shader,validation,expression,call,builtin,textureSampleBaseClampToEdge:*
 webgpu:shader,validation,expression,call,builtin,textureStore:*
 webgpu:shader,validation,expression,call,builtin,trunc:*
 // FAIL: others in `value_constructor` due to https://github.com/gfx-rs/wgpu/issues/4720, possibly more
@@ -393,6 +398,8 @@ webgpu:shader,validation,parse,semicolon:*
 webgpu:shader,validation,parse,shadow_builtins:function_param:*
 webgpu:shader,validation,parse,source:*
 webgpu:shader,validation,shader_io,entry_point:*
+// Uses external texture bindings
+fails-if(vulkan) webgpu:shader,validation,shader_io,group_and_binding:*
 webgpu:shader,validation,shader_io,invariant:*
 webgpu:shader,validation,statement,break_if:*
 webgpu:shader,validation,statement,break:*

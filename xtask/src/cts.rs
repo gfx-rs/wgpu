@@ -71,7 +71,6 @@ pub fn run_cts(
     let skip_checkout = args.contains("--skip-checkout");
     let llvm_cov = args.contains("--llvm-cov");
     let release = args.contains("--release");
-    let enable_external_texture = args.contains("--enable-external-texture");
 
     let output_filter = args
         .opt_value_from_str::<_, String>("--print-output-when")?
@@ -98,6 +97,12 @@ pub fn run_cts(
         .transpose()?;
 
     let running_on_backend = args.opt_value_from_str::<_, String>("--backend")?;
+    let enable_external_texture = args.contains("--enable-external-texture")
+        || (!args.contains("--disable-external-texture")
+            && running_on_backend
+                .as_ref()
+                .is_some_and(|b| ["metal", "dx12"].contains(&b.as_str())));
+
     let mut filter_pattern = args.opt_value_from_str::<_, String>("--filter")?;
     let mut filter_invert = false;
 
@@ -118,12 +123,6 @@ pub fn run_cts(
         None
     };
 
-    if running_on_backend.is_none() {
-        log::warn!(
-            "fails-if conditions are only evaluated if a backend is specified with --backend"
-        );
-    }
-
     let mut list_files = Vec::<OsString>::new();
     while let Some(file) = args.opt_value_from_str("-f")? {
         list_files.push(file);
@@ -137,6 +136,11 @@ pub fn run_cts(
             ..Default::default()
         })
         .collect::<Vec<_>>();
+
+    if running_on_backend.is_none() && (!list_files.is_empty() || tests.is_empty()) {
+        log::warn!("The `--backend` option was not provided. `fails-if` conditions and external");
+        log::warn!("texture support are handled correctly only when a backend is specified.");
+    }
 
     let mut default_output_filter = PrintOutputWhen::Always;
 

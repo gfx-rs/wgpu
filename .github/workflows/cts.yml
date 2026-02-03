@@ -124,11 +124,6 @@ jobs:
         shell: bash
         run: cargo --locked xtask cts --llvm-cov --backend ${{ matrix.backend }} --filter '${{matrix.filter }}'
 
-      - name: (Mac/Windows) Run external texture tests
-        if: matrix.suite == 'other' && matrix.backend != 'vulkan'
-        run: |
-          cargo --locked xtask cts --enable-external-texture --llvm-cov --backend ${{ matrix.backend }} -f cts_runner/external_texture.lst
-
       - name: Generate coverage report
         id: coverage
         shell: bash
