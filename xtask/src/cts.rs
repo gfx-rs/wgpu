@@ -215,12 +215,12 @@ pub fn run_cts(
     }
 
     let wgpu_cargo_toml = std::path::absolute(shell.current_dir().join("Cargo.toml"))
-        .context("Failed to get path to Cargo.toml")?;
+        .context("Failed to get path to `Cargo.toml`")?;
 
     let cts_revision = shell
         .read_file(CTS_REVISION_PATH)
         .context(format!(
-            "Failed to read CTS git SHA from {CTS_REVISION_PATH}"
+            "Failed to read CTS git SHA from `{CTS_REVISION_PATH}`"
         ))?
         .trim()
         .to_string();
@@ -328,7 +328,7 @@ pub fn run_cts(
             .cmd("cargo")
             .args(&["llvm-cov", "--no-cfg-coverage", "show-env"])
             .read()
-            .context("Failed to get llvm-cov environment variables")?
+            .context("Failed to get `llvm-cov` environment variables")?
             .lines()
             .filter_map(|line| {
                 let line = line.trim();
@@ -354,7 +354,7 @@ pub fn run_cts(
         .args(["build", "--message-format", "json-render-diagnostics"])
         .args(&cargo_opts)
         .read()
-        .context("Failed to build cts_runner")?;
+        .context("Failed to build `cts_runner`")?;
 
     let bin = parse_binary_from_cargo_json(&build_output)
         .context("Failed to identify executable from cargo build output")?;
