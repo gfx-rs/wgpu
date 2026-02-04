@@ -42,6 +42,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major Changes
+
+`wgpu` now has a new MSRV policy. This release has an MSRV of **1.87**. This is lower than v27's 1.88 and v28's 1.92. Going forward, we will only bump wgpu's MSRV if it has tangible benefits for the code, and we will never bump to an MSRV higher than `stable - 3`. So if stable is at 1.97 and 1.94 brought benefit to our code, we could bump it no higher than 1.94. As before, MSRV bumps will always be breaking changes. 
+
+By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
+
 ### New Features
 
 #### General

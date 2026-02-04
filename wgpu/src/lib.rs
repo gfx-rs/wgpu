@@ -28,7 +28,7 @@
 //! | --------------------- | ---------------------- |
 //! | ![render_coordinates] | ![texture_coordinates] |
 //!
-//! `wgpu`'s MSRV is **1.93**.
+//! `wgpu`'s MSRV is **1.87**.
 //!
 //! [Learn Wgpu]: https://sotrh.github.io/learn-wgpu/
 //! [WebGPU Fundamentals]: https://webgpufundamentals.org/
