@@ -127,13 +127,15 @@ jobs:
         with:
           target-dir: "target/debug"
 
-      # Mixing --llvm-cov with deno (rusty_v8) has linking problems.
-      # Explicitly set the backend to avoid EGL messages in output,
-      # because these tests check stdout.
+      # Some of these tests check stdout, so we explicitly set the backend
+      # to avoid getting EGL messages in the output. 
       - name: Test cts_runner
         if: matrix.suite == 'other'
         shell: bash
-        run: DENO_WEBGPU_BACKEND=${{ matrix.backend }} cargo --locked test -p cts_runner
+        run: |
+          export LLVM_PROFILE_FILE=${{ github.workspace }}/target/wgpu-%p-%m.profraw
+          export DENO_WEBGPU_BACKEND=${{ matrix.backend }}
+          cargo --locked llvm-cov test -p cts_runner
 
       - name: Run CTS
         shell: bash
