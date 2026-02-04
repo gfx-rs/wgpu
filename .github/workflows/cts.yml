@@ -128,14 +128,14 @@ jobs:
           target-dir: "target/debug"
 
       # Some of these tests check stdout, so we explicitly set the backend
-      # to avoid getting EGL messages in the output. 
+      # to avoid getting EGL messages in the output.
       - name: Test cts_runner
         if: matrix.suite == 'other'
         shell: bash
         run: |
           export LLVM_PROFILE_FILE=${{ github.workspace }}/target/wgpu-%p-%m.profraw
           export DENO_WEBGPU_BACKEND=${{ matrix.backend }}
-          cargo --locked llvm-cov test -p cts_runner
+          cargo --locked llvm-cov --no-cfg-coverage --no-report test -p cts_runner
 
       - name: Run CTS
         shell: bash
