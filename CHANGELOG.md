@@ -146,6 +146,7 @@ By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
 - Fixed calculation of the total number of bindings in a pipeline layout when validating against device limits. By @andyleiserson in [#8997](https://github.com/gfx-rs/wgpu/pull/8997).
 - Reject non-constructible types (runtime- and override-sized arrays, and structs containing non-constructible types) in more places where they should not be allowed. By @andyleiserson in [#8873](https://github.com/gfx-rs/wgpu/pull/8873).
 - The query set type for an occlusion query is now validated when opening the render pass, in addition to within the call to `beginOcclusionQuery`. By @andyleiserson in [#9086](https://github.com/gfx-rs/wgpu/pull/9086).
+- Require that the blend factor is `One` when the blend operation is `Min` or `Max`. The `BlendFactorOnUnsupportedTarget` error is now reported within `ColorStateError` rather than directly in `CreateRenderPipelineError`. By @andyleiserson in [#9110](https://github.com/gfx-rs/wgpu/pull/9110).
 
 #### Vulkan
 - Fixed a variety of mesh shader SPIR-V writer issues from the original implementation. By @inner-daemons in [#8756](https://github.com/gfx-rs/wgpu/pull/8756)

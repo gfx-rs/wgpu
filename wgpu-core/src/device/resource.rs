@@ -4126,20 +4126,32 @@ impl Device {
                     }
 
                     if let Some(blend_mode) = cs.blend {
-                        for factor in [
-                            blend_mode.color.src_factor,
-                            blend_mode.color.dst_factor,
-                            blend_mode.alpha.src_factor,
-                            blend_mode.alpha.dst_factor,
-                        ] {
-                            if factor.ref_second_blend_source() {
-                                self.require_features(wgt::Features::DUAL_SOURCE_BLENDING)?;
-                                if i == 0 {
-                                    dual_source_blending = true;
-                                    break;
-                                } else {
-                                    return Err(pipeline::CreateRenderPipelineError
-                                        ::BlendFactorOnUnsupportedTarget { factor, target: i as u32 });
+                        for component in [&blend_mode.color, &blend_mode.alpha] {
+                            for factor in [component.src_factor, component.dst_factor] {
+                                if factor.ref_second_blend_source() {
+                                    self.require_features(wgt::Features::DUAL_SOURCE_BLENDING)?;
+                                    if i == 0 {
+                                        dual_source_blending = true;
+                                    } else {
+                                        break 'error Some(
+                                            pipeline::ColorStateError::BlendFactorOnUnsupportedTarget {
+                                                factor,
+                                                target: i as u32,
+                                            }
+                                        );
+                                    }
+                                }
+
+                                if [wgt::BlendOperation::Min, wgt::BlendOperation::Max]
+                                    .contains(&component.operation)
+                                    && factor != wgt::BlendFactor::One
+                                {
+                                    break 'error Some(
+                                        pipeline::ColorStateError::InvalidMinMaxBlendFactor {
+                                            factor,
+                                            target: i as u32,
+                                        },
+                                    );
                                 }
                             }
                         }

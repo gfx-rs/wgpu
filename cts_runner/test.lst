@@ -252,6 +252,7 @@ webgpu:api,validation,render_pipeline,float32_blendable:*
 webgpu:api,validation,render_pipeline,fragment_state:color_target_exists:*
 webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,use_blend_src:*
 webgpu:api,validation,render_pipeline,fragment_state:limits,*
+webgpu:api,validation,render_pipeline,fragment_state:targets_blend:*
 webgpu:api,validation,render_pipeline,fragment_state:targets_format_filterable:*
 webgpu:api,validation,render_pipeline,fragment_state:targets_format_is_color_format:*
 webgpu:api,validation,render_pipeline,fragment_state:targets_format_renderable:*
