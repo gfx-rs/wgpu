@@ -97,6 +97,12 @@ pub fn run_cts(
         .transpose()?;
 
     let running_on_backend = args.opt_value_from_str::<_, String>("--backend")?;
+    let enable_external_texture = args.contains("--enable-external-texture")
+        || (!args.contains("--disable-external-texture")
+            && running_on_backend
+                .as_ref()
+                .is_some_and(|b| ["metal", "dx12"].contains(&b.as_str())));
+
     let mut filter_pattern = args.opt_value_from_str::<_, String>("--filter")?;
     let mut filter_invert = false;
 
@@ -117,12 +123,6 @@ pub fn run_cts(
         None
     };
 
-    if running_on_backend.is_none() {
-        log::warn!(
-            "fails-if conditions are only evaluated if a backend is specified with --backend"
-        );
-    }
-
     let mut list_files = Vec::<OsString>::new();
     while let Some(file) = args.opt_value_from_str("-f")? {
         list_files.push(file);
@@ -136,6 +136,11 @@ pub fn run_cts(
             ..Default::default()
         })
         .collect::<Vec<_>>();
+
+    if running_on_backend.is_none() && (!list_files.is_empty() || tests.is_empty()) {
+        log::warn!("The `--backend` option was not provided. `fails-if` conditions and external");
+        log::warn!("texture support are handled correctly only when a backend is specified.");
+    }
 
     let mut default_output_filter = PrintOutputWhen::Always;
 
@@ -313,18 +318,16 @@ pub fn run_cts(
     };
 
     if let Some(passthrough_args) = passthrough_args {
-        let mut cmd = shell
+        shell
             .cmd("cargo")
             .args(run_flags)
             .args(["--manifest-path".as_ref(), wgpu_cargo_toml.as_os_str()])
             .args(["-p", "cts_runner"])
-            .args(["--bin", "cts_runner"]);
-
-        if release {
-            cmd = cmd.arg("--release")
-        }
-
-        cmd.args(["--", "./tools/run_deno", "--verbose"])
+            .args(["--bin", "cts_runner"])
+            .args(release.then_some("--release"))
+            .arg("--")
+            .args(enable_external_texture.then_some("--enable-external-texture"))
+            .args(["./tools/run_deno", "--verbose"])
             .args(&passthrough_args)
             .run()?;
 
@@ -348,19 +351,16 @@ pub fn run_cts(
             log::info!("Running {}", test.selector.to_string_lossy());
         }
 
-        let mut cmd = shell
+        let cmd = shell
             .cmd("cargo")
             .args(run_flags)
             .args(["--manifest-path".as_ref(), wgpu_cargo_toml.as_os_str()])
             .args(["-p", "cts_runner"])
-            .args(["--bin", "cts_runner"]);
-
-        if release {
-            cmd = cmd.arg("--release")
-        }
-
-        cmd = cmd
-            .args(["--", "./tools/run_deno", "--verbose"])
+            .args(["--bin", "cts_runner"])
+            .args(release.then_some("--release"))
+            .arg("--")
+            .args(enable_external_texture.then_some("--enable-external-texture"))
+            .args(["./tools/run_deno", "--verbose"])
             .args([&test.selector]);
 
         match output_filter {
