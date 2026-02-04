@@ -1,8 +1,8 @@
-# Tests on desktop GL/using mesh shaders on vulkan
+# Tests on GLES
 
 capabilities = "PRIMITIVE_INDEX"
-targets = "SPIRV"
+targets = "GLSL"
 
-[spv]
-version = [1, 4]
-capabilities = ["MeshShadingEXT"]
+[glsl]
+version.Embedded.version = 320
+version.Embedded.is_webgl = false
