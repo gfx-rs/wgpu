@@ -74,6 +74,7 @@ jobs:
 
     defaults:
       run:
+        # Substitution of ${{ matrix.shell }} appears not to work in per-step configuration
         shell: ${{ matrix.shell }}
 
     steps:
