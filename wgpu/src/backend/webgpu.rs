@@ -1678,16 +1678,8 @@ impl dispatch::AdapterInterface for WebAdapter {
 
         let mapped_desc = webgpu_sys::GpuDeviceDescriptor::new();
 
-        // TODO: Migrate to a web_sys api.
-        // See https://github.com/rustwasm/wasm-bindgen/issues/3587
-        let limits_object = map_js_sys_limits(&desc.required_limits);
-
-        js_sys::Reflect::set(
-            &mapped_desc,
-            &JsValue::from("requiredLimits"),
-            &limits_object,
-        )
-        .expect("Setting Object properties should never fail.");
+        let required_limits = map_js_sys_limits(&desc.required_limits);
+        mapped_desc.set_required_limits(&required_limits);
 
         let required_features = FEATURES_MAPPING
             .iter()
