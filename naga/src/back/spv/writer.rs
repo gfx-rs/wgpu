@@ -817,7 +817,10 @@ impl Writer {
                 &format!("{:?}_from_std140", r#type.for_debug(&ir_module.types)),
             ));
         }
-        let param_type_id = self.std140_compat_uniform_types[&r#type].type_id;
+
+        let param_type_id = self
+            .write_std140_compat_type_declaration(ir_module, r#type)?
+            .unwrap();
         let return_type_id = self.get_handle_type_id(r#type);
 
         let mut function = Function::default();
