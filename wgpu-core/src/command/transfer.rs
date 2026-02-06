@@ -172,6 +172,8 @@ pub enum TransferError {
     InvalidMipLevel { requested: u32, count: u32 },
     #[error("Buffer is expected to be unmapped, but was not")]
     BufferNotAvailable,
+    #[error("Copying between depth stencil textures requires `DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES`")]
+    DepthStencilCopyRequiresDownlevel,
 }
 
 impl WebGpuError for TransferError {
@@ -214,7 +216,8 @@ impl WebGpuError for TransferError {
             | Self::SampleCountNotEqual { .. }
             | Self::InvalidMipLevel { .. }
             | Self::SameSourceDestinationBuffer
-            | Self::BufferNotAvailable => return ErrorType::Validation,
+            | Self::BufferNotAvailable
+            | Self::DepthStencilCopyRequiresDownlevel => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
@@ -1372,6 +1375,15 @@ pub(super) fn copy_texture_to_texture(
     }
     if dst_tex_base.aspect != dst_texture_aspects {
         return Err(TransferError::CopyDstMissingAspects.into());
+    }
+    if (src_texture_aspects | dst_texture_aspects).intersects(hal::FormatAspects::DEPTH_STENCIL)
+        && !state
+            .device
+            .downlevel
+            .flags
+            .contains(wgt::DownlevelFlags::DEPTH_TEXTURE_AND_BUFFER_COPIES)
+    {
+        return Err(TransferError::DepthStencilCopyRequiresDownlevel.into());
     }
 
     if src_texture.desc.sample_count != dst_texture.desc.sample_count {
