@@ -63,6 +63,7 @@ Bottom level categories:
 
 - `DisplayHandle` should now be passed to `InstanceDescriptor` for correct EGL initialization on Wayland. By @MarijnS95 in [#8012](https://github.com/gfx-rs/wgpu/pull/8012)
   Note that the existing workaround to create surfaces before the adapter is no longer valid.
+- Changing shader constants now correctly recompiles the shader.
 
 #### naga
 
