@@ -1733,20 +1733,7 @@ impl dispatch::AdapterInterface for WebAdapter {
     }
 
     fn get_info(&self) -> crate::AdapterInfo {
-        // TODO(https://github.com/gfx-rs/wgpu/issues/8818): web-sys has no way of getting information on adapters
-        wgt::AdapterInfo {
-            name: String::new(),
-            vendor: 0,
-            device: 0,
-            device_type: wgt::DeviceType::Other,
-            device_pci_bus_id: String::new(),
-            driver: String::new(),
-            driver_info: String::new(),
-            backend: wgt::Backend::BrowserWebGpu,
-            subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
-            subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
-            transient_saves_memory: false,
-        }
+        map_adapter_info(&self.inner.info())
     }
 
     fn get_texture_format_features(
