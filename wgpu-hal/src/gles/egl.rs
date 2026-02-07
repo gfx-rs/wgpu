@@ -573,6 +573,10 @@ impl Inner {
 
         let (config, supports_native_window) = choose_config(&egl, display, srgb_kind)?;
 
+        #[cfg(all(windows, __WINRT__))]
+        let supports_opengl = false;
+
+        #[cfg(not(all(windows, __WINRT__)))]
         let supports_opengl = if version >= (1, 4) {
             let client_apis = egl
                 .query_string(Some(display), khronos_egl::CLIENT_APIS)
@@ -1028,6 +1032,7 @@ impl crate::Instance for Instance {
             (Rwh::Xlib(_), _) => {}
             (Rwh::Xcb(_), _) => {}
             (Rwh::Win32(_), _) => {}
+            (Rwh::WinRt(_), _) => {}
             (Rwh::AppKit(_), _) => {}
             (Rwh::OhosNdk(_), _) => {}
             #[cfg(target_os = "android")]
@@ -1413,6 +1418,7 @@ impl crate::Surface for Surface {
                     (WindowKind::Unknown, Rwh::Win32(handle)) => {
                         handle.hwnd.get() as *mut ffi::c_void
                     }
+                    (WindowKind::Unknown, Rwh::WinRt(handle)) => handle.core_window.as_ptr(),
                     (WindowKind::Unknown, Rwh::AppKit(handle)) => {
                         #[cfg(not(target_os = "macos"))]
                         let window_ptr = handle.ns_view.as_ptr();
