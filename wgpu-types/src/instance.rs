@@ -58,9 +58,6 @@ pub struct InstanceDescriptor {
     /// the `EventLoop`) here.
     ///
     /// [`OwnedDisplayHandle`]: https://docs.rs/winit/latest/winit/event_loop/struct.OwnedDisplayHandle.html
-    // FUTURE: The RawDisplayHandle trait can/should be removed entirely from create_display()? At
-    // least `trait WindowHandle: HasWindowHandle + HasDisplayHandle` should really be removed as
-    // it's impractical and not implementable everywhere.
     pub display: Option<alloc::boxed::Box<dyn WgpuHasDisplayHandle>>,
 }
 

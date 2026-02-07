@@ -17,7 +17,7 @@ fn main() {
     };
 
     #[cfg(feature = "winit")]
-    use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+    use raw_window_handle::HasWindowHandle;
     #[cfg(feature = "winit")]
     use winit::{
         event::KeyEvent,
@@ -79,13 +79,8 @@ fn main() {
     let instance = wgc::instance::Instance::new("player", instance_desc, None);
 
     #[cfg(feature = "winit")]
-    let surface = unsafe {
-        instance.create_surface(
-            window.display_handle().unwrap().into(),
-            window.window_handle().unwrap().into(),
-        )
-    }
-    .unwrap();
+    let surface =
+        unsafe { instance.create_surface(None, window.window_handle().unwrap().into()) }.unwrap();
     #[cfg(feature = "winit")]
     let mut configured_surface_id = None;
 

@@ -227,26 +227,33 @@ impl Instance {
     ///
     /// # Safety
     ///
-    /// - `display_handle` must be a valid object to create a surface upon.
+    /// - `display_handle` must be a valid object to create a surface upon,
+    ///   falls back to the instance display handle otherwise.
     /// - `window_handle` must remain valid as long as the returned
     ///   [`SurfaceId`] is being used.
     pub unsafe fn create_surface(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
+        display_handle: Option<raw_window_handle::RawDisplayHandle>,
         window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Surface, CreateSurfaceError> {
         profiling::scope!("Instance::create_surface");
 
-        if let Some(instance_display_handle) = &self.display {
-            if instance_display_handle
-                .display_handle()
+        let instance_display_handle = self.display.as_ref().map(|d| {
+            d.display_handle()
                 .expect("Implementation did not provide a DisplayHandle")
                 .as_raw()
-                != display_handle
-            {
-                return Err(CreateSurfaceError::MismatchingDisplayHandle);
+        });
+        let display_handle = match (instance_display_handle, display_handle) {
+            (Some(a), Some(b)) => {
+                if a != b {
+                    return Err(CreateSurfaceError::MismatchingDisplayHandle);
+                }
+                a
             }
-        }
+            (Some(hnd), None) => hnd,
+            (None, Some(hnd)) => hnd,
+            (None, None) => return Err(CreateSurfaceError::MissingDisplayHandle),
+        };
 
         let mut errors = HashMap::default();
         let mut surface_per_backend = HashMap::default();
@@ -936,6 +943,13 @@ pub enum CreateSurfaceError {
     FailedToCreateSurfaceForAnyBackend(HashMap<Backend, hal::InstanceError>),
     #[error("The display handle used to create this Instance does not match the one used to create a surface on it")]
     MismatchingDisplayHandle,
+    #[error(
+        "No `DisplayHandle` is available to create this surface with.  When creating a surface with `create_surface()` \
+        you must specify a display handle in `InstanceDescriptor::display`.  \
+        Rarely, if you need to create surfaces from different `DisplayHandle`s (ex. different Wayland or X11 connections), \
+        you must use `create_surface_unsafe()`."
+    )]
+    MissingDisplayHandle,
 }
 
 impl Global {
@@ -953,12 +967,13 @@ impl Global {
     ///
     /// # Safety
     ///
-    /// - `display_handle` must be a valid object to create a surface upon.
+    /// - `display_handle` must be a valid object to create a surface upon,
+    ///   falls back to the instance display handle otherwise.
     /// - `window_handle` must remain valid as long as the returned
     ///   [`SurfaceId`] is being used.
     pub unsafe fn instance_create_surface(
         &self,
-        display_handle: raw_window_handle::RawDisplayHandle,
+        display_handle: Option<raw_window_handle::RawDisplayHandle>,
         window_handle: raw_window_handle::RawWindowHandle,
         id_in: Option<SurfaceId>,
     ) -> Result<SurfaceId, CreateSurfaceError> {

@@ -176,7 +176,7 @@ impl Instance {
     /// Internally, this creates surfaces for all backends that are enabled for this instance.
     ///
     /// See [`SurfaceTarget`] for what targets are supported.
-    /// See [`Instance::create_surface_unsafe`] for surface creation with unsafe target variants.
+    /// See [`Instance::create_surface_unsafe()`] for surface creation with unsafe target variants.
     ///
     /// Most commonly used are window handles (or provider of windows handles)
     /// which can be passed directly as they're automatically converted to [`SurfaceTarget`].
@@ -199,7 +199,20 @@ impl Instance {
 
                 surface
             }?,
+            SurfaceTarget::DisplayAndWindow(display_and_window_handle) => unsafe {
+                let surface = self.create_surface_unsafe(
+                    SurfaceTargetUnsafe::from_display_and_window(
+                        &display_and_window_handle,
+                        &display_and_window_handle,
+                    )
+                    .map_err(|e| CreateSurfaceError {
+                        inner: CreateSurfaceErrorKind::RawHandle(e),
+                    })?,
+                );
+                handle_source = Some(display_and_window_handle);
 
+                surface
+            }?,
             #[cfg(web)]
             SurfaceTarget::Canvas(canvas) => {
                 handle_source = None;
@@ -207,18 +220,16 @@ impl Instance {
                 let value: &wasm_bindgen::JsValue = &canvas;
                 let obj = core::ptr::NonNull::from(value).cast();
                 let raw_window_handle = raw_window_handle::WebCanvasWindowHandle::new(obj).into();
-                let raw_display_handle = raw_window_handle::WebDisplayHandle::new().into();
 
                 // Note that we need to call this while we still have `value` around.
                 // This is safe without storing canvas to `handle_origin` since the surface will create a copy internally.
                 unsafe {
                     self.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
-                        raw_display_handle,
+                        raw_display_handle: None,
                         raw_window_handle,
                     })
                 }?
             }
-
             #[cfg(web)]
             SurfaceTarget::OffscreenCanvas(canvas) => {
                 handle_source = None;
@@ -227,13 +238,12 @@ impl Instance {
                 let obj = core::ptr::NonNull::from(value).cast();
                 let raw_window_handle =
                     raw_window_handle::WebOffscreenCanvasWindowHandle::new(obj).into();
-                let raw_display_handle = raw_window_handle::WebDisplayHandle::new().into();
 
                 // Note that we need to call this while we still have `value` around.
                 // This is safe without storing canvas to `handle_origin` since the surface will create a copy internally.
                 unsafe {
                     self.create_surface_unsafe(SurfaceTargetUnsafe::RawHandle {
-                        raw_display_handle,
+                        raw_display_handle: None,
                         raw_window_handle,
                     })
                 }?
