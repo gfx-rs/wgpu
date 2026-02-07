@@ -3235,19 +3235,16 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         }
     }
 
-    fn insert_debug_marker(&self, _label: &str) {
-        // Not available in gecko yet
-        // self.insert_debug_marker(label);
+    fn insert_debug_marker(&self, label: &str) {
+        self.inner.insert_debug_marker(label)
     }
 
-    fn push_debug_group(&self, _label: &str) {
-        // Not available in gecko yet
-        // self.push_debug_group(label);
+    fn push_debug_group(&self, group_label: &str) {
+        self.inner.push_debug_group(group_label)
     }
 
     fn pop_debug_group(&self) {
-        // Not available in gecko yet
-        // self.pop_debug_group();
+        self.inner.pop_debug_group()
     }
 
     fn write_timestamp(&self, _query_set: &dispatch::DispatchQuerySet, _query_index: u32) {
@@ -3357,19 +3354,16 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
         panic!("IMMEDIATES feature must be enabled to call set_immediates")
     }
 
-    fn insert_debug_marker(&mut self, _label: &str) {
-        // Not available in gecko yet
-        // self.inner.insert_debug_marker(label);
+    fn insert_debug_marker(&mut self, label: &str) {
+        self.inner.insert_debug_marker(label);
     }
 
-    fn push_debug_group(&mut self, _group_label: &str) {
-        // Not available in gecko yet
-        // self.inner.push_debug_group(group_label);
+    fn push_debug_group(&mut self, group_label: &str) {
+        self.inner.push_debug_group(group_label);
     }
 
     fn pop_debug_group(&mut self) {
-        // Not available in gecko yet
-        // self.inner.pop_debug_group();
+        self.inner.pop_debug_group();
     }
 
     fn write_timestamp(&mut self, _query_set: &dispatch::DispatchQuerySet, _query_index: u32) {
@@ -3646,19 +3640,16 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         panic!("MESH_SHADER feature must be enabled to call multi_draw_mesh_tasks_indirect_count")
     }
 
-    fn insert_debug_marker(&mut self, _label: &str) {
-        // Not available in gecko yet
-        // self.inner.insert_debug_marker(label);
+    fn insert_debug_marker(&mut self, label: &str) {
+        self.inner.insert_debug_marker(label);
     }
 
-    fn push_debug_group(&mut self, _group_label: &str) {
-        // Not available in gecko yet
-        // self.inner.push_debug_group(group_label);
+    fn push_debug_group(&mut self, group_label: &str) {
+        self.inner.push_debug_group(group_label);
     }
 
     fn pop_debug_group(&mut self) {
-        // Not available in gecko yet
-        // self.inner.pop_debug_group();
+        self.inner.pop_debug_group();
     }
 
     fn write_timestamp(&mut self, _query_set: &dispatch::DispatchQuerySet, _query_index: u32) {
