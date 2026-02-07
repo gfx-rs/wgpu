@@ -7,7 +7,7 @@ use std::sync::Arc;
 fn device_is_not_available_by_default() {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::NOOP,
-        ..Default::default()
+        ..wgpu::InstanceDescriptor::new_without_display_handle()
     });
 
     pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
@@ -22,7 +22,7 @@ fn device_is_available_when_requested() {
             noop: wgpu::NoopBackendOptions { enable: true },
             ..Default::default()
         },
-        ..Default::default()
+        ..wgpu::InstanceDescriptor::new_without_display_handle()
     });
 
     pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))

@@ -12,11 +12,10 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     size.width = size.width.max(1);
     size.height = size.height.max(1);
 
-    let instance = wgpu::Instance::new(
-        wgpu::InstanceDescriptor::from_env_or_default()
-            // TODO: Use event_loop.owned_display_handle() with winit 0.30
-            .with_display_handle(Box::new(window.clone())),
-    );
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_with_display_handle_from_env(
+        // TODO: Use event_loop.owned_display_handle() with winit 0.30
+        Box::new(window.clone()),
+    ));
 
     let surface = instance.create_surface(&window).unwrap();
     let adapter = instance

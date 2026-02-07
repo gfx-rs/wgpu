@@ -71,7 +71,7 @@ fn main() {
             .unwrap(),
     );
 
-    let instance_desc = wgt::InstanceDescriptor::from_env_or_default();
+    let instance_desc = wgt::InstanceDescriptor::new_without_display_handle_from_env();
     #[cfg(feature = "winit")]
     // TODO: Use event_loop.owned_display_handle() with winit 0.30
     let instance_desc = instance_desc.with_display_handle(Box::new(window.clone()));

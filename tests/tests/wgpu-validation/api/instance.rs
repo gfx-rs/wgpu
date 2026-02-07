@@ -5,7 +5,7 @@ mod multi_instance {
         let adapter = {
             let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
                 backends: wgpu::Backends::from_env().unwrap_or_default(),
-                ..Default::default()
+                ..wgpu::InstanceDescriptor::new_without_display_handle()
             });
             instance
                 .request_adapter(&wgpu::RequestAdapterOptions::default())
