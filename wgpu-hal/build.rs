@@ -1,4 +1,7 @@
 fn main() {
+    // WinRT/UWP builds in this workspace pass a custom cfg.
+    println!("cargo:rustc-check-cfg=cfg(__WINRT__)");
+
     cfg_aliases::cfg_aliases! {
         native: { not(target_arch = "wasm32") },
         send_sync: { any(
