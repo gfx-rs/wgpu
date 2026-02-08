@@ -1,6 +1,18 @@
 fn main() {
-    // WinRT/UWP builds in this workspace pass a custom cfg.
+    // WinRT/UWP builds pass --cfg __WINRT__ via rustflags in .cargo/config.toml.
+    // Re-emit it from the build script so it reliably survives incremental builds
+    // and is always visible to #[cfg] gates in this crate (egl vs wgl selection,
+    // EGL ANGLE-only mode, etc.).  Desktop builds without the flag are unaffected.
     println!("cargo:rustc-check-cfg=cfg(__WINRT__)");
+    println!("cargo:rerun-if-env-changed=CARGO_ENCODED_RUSTFLAGS");
+    println!("cargo:rerun-if-env-changed=RUSTFLAGS");
+    {
+        let encoded = std::env::var("CARGO_ENCODED_RUSTFLAGS").unwrap_or_default();
+        let plain = std::env::var("RUSTFLAGS").unwrap_or_default();
+        if encoded.contains("__WINRT__") || plain.contains("__WINRT__") {
+            println!("cargo:rustc-cfg=__WINRT__");
+        }
+    }
 
     cfg_aliases::cfg_aliases! {
         native: { not(target_arch = "wasm32") },
