@@ -35,7 +35,7 @@ metal::float2 return_vec2f32_ai(
 
 type_4 return_arrf32_ai(
 ) {
-    return type_4 {1.0, 1.0, 1.0, 1.0};
+    return type_4 {{1.0, 1.0, 1.0, 1.0}};
 }
 
 float return_const_f32_const_ai(

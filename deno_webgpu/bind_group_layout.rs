@@ -69,6 +69,7 @@ pub(crate) struct GPUBindGroupLayoutEntry {
   pub sampler: Option<GPUSamplerBindingLayout>,
   pub texture: Option<GPUTextureBindingLayout>,
   pub storage_texture: Option<GPUStorageTextureBindingLayout>,
+  pub external_texture: Option<GPUExternalTextureBindingLayout>,
 }
 
 #[derive(WebIDL)]
@@ -189,3 +190,7 @@ impl From<GPUStorageTextureAccess> for wgpu_types::StorageTextureAccess {
     }
   }
 }
+
+#[derive(WebIDL)]
+#[webidl(dictionary)]
+pub(crate) struct GPUExternalTextureBindingLayout {}

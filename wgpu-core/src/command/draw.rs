@@ -46,17 +46,14 @@ pub enum DrawError {
     },
     #[error("Index {last_index} extends beyond limit {index_limit}. Did you bind the correct index buffer?")]
     IndexBeyondLimit { last_index: u64, index_limit: u64 },
-    #[error(
-        "Index buffer format {buffer_format:?} doesn't match {pipeline}'s index format {pipeline_format:?}"
-    )]
-    UnmatchedIndexFormats {
+    #[error("For indexed drawing with strip topology, {pipeline}'s strip index format {strip_index_format:?} must match index buffer format {buffer_format:?}")]
+    UnmatchedStripIndexFormat {
         pipeline: ResourceErrorIdent,
-        pipeline_format: wgt::IndexFormat,
+        strip_index_format: Option<wgt::IndexFormat>,
         buffer_format: wgt::IndexFormat,
     },
     #[error(transparent)]
     BindingSizeTooSmall(#[from] LateMinBufferBindingSizeMismatch),
-
     #[error(
         "Wrong pipeline type for this draw command. Attempted to call {} draw command on {} pipeline",
         if *wanted_mesh_pipeline {"mesh shader"} else {"standard"},

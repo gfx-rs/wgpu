@@ -399,6 +399,11 @@ pub enum GPUFeatureName {
   #[webidl(rename = "subgroups")]
   Subgroups,
 
+  // standard feature, but not default yet in wgpu due to incomplete support
+  // (and even if enabled in wgpu, doing so may not be appropriate in Deno)
+  #[webidl(rename = "external-texture")]
+  ExternalTexture,
+
   // extended from spec
   #[webidl(rename = "texture-format-16-bit-norm")]
   TextureFormat16BitNorm,
@@ -486,6 +491,7 @@ pub fn feature_names_to_features(
       GPUFeatureName::Float32Filterable => Features::FLOAT32_FILTERABLE,
       GPUFeatureName::DualSourceBlending => Features::DUAL_SOURCE_BLENDING,
       GPUFeatureName::Subgroups => Features::SUBGROUP,
+      GPUFeatureName::ExternalTexture => Features::EXTERNAL_TEXTURE,
       GPUFeatureName::TextureFormat16BitNorm => Features::TEXTURE_FORMAT_16BIT_NORM,
       GPUFeatureName::TextureCompressionAstcHdr => Features::TEXTURE_COMPRESSION_ASTC_HDR,
       GPUFeatureName::TextureAdapterSpecificFormatFeatures => Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
