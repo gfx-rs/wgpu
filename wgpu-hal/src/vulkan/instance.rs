@@ -539,7 +539,16 @@ impl super::Instance {
             unsafe { metal_loader.create_metal_surface(&vk_info, None).unwrap() }
         };
 
-        Ok(self.create_surface_from_vk_surface_khr(surface))
+        let native_surface = crate::vulkan::swapchain::NativeSurface::from_vk_surface_khr(
+            self,
+            surface,
+            Some(layer),
+        );
+
+        Ok(super::Surface {
+            inner: ManuallyDrop::new(Box::new(native_surface)),
+            swapchain: RwLock::new(None),
+        })
     }
 
     pub(super) fn create_surface_from_vk_surface_khr(
@@ -547,7 +556,7 @@ impl super::Instance {
         surface: vk::SurfaceKHR,
     ) -> super::Surface {
         let native_surface =
-            crate::vulkan::swapchain::NativeSurface::from_vk_surface_khr(self, surface);
+            crate::vulkan::swapchain::NativeSurface::from_vk_surface_khr(self, surface, None);
 
         super::Surface {
             inner: ManuallyDrop::new(Box::new(native_surface)),

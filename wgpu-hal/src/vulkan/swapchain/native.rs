@@ -17,15 +17,29 @@ pub(crate) struct NativeSurface {
     raw: vk::SurfaceKHR,
     functor: khr::surface::Instance,
     instance: Arc<InstanceShared>,
+    /// On Apple platforms, if the provided `CALayer` was not `CAMetalLayer`,
+    /// we create and insert a new child layer.
+    ///
+    /// To avoid keeping these layers around indefinitely, we need to remove
+    /// them from the parent layer again once we're done with them.
+    #[cfg(target_vendor = "apple")]
+    layer_to_remove_from_super: Option<raw_window_metal::Layer>,
 }
 
 impl NativeSurface {
-    pub fn from_vk_surface_khr(instance: &crate::vulkan::Instance, raw: vk::SurfaceKHR) -> Self {
+    pub fn from_vk_surface_khr(
+        instance: &crate::vulkan::Instance,
+        raw: vk::SurfaceKHR,
+        #[cfg(target_vendor = "apple")] layer_to_remove_from_super: Option<raw_window_metal::Layer>,
+        #[cfg(not(target_vendor = "apple"))] _layer_to_remove_from_super: Option<()>,
+    ) -> Self {
         let functor = khr::surface::Instance::new(&instance.shared.entry, &instance.shared.raw);
         Self {
             raw,
             functor,
             instance: Arc::clone(&instance.shared),
+            #[cfg(target_vendor = "apple")]
+            layer_to_remove_from_super,
         }
     }
 
@@ -36,6 +50,11 @@ impl NativeSurface {
 
 impl Surface for NativeSurface {
     unsafe fn delete_surface(self: Box<Self>) {
+        #[cfg(target_vendor = "apple")]
+        if let Some(layer_to_remove_from_super) = &self.layer_to_remove_from_super {
+            layer_to_remove_from_super.remove_from_superlayer_if_necessary();
+        }
+
         unsafe {
             self.functor.destroy_surface(self.raw, None);
         }

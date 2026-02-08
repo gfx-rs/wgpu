@@ -15,9 +15,10 @@ use parking_lot::{Mutex, RwLock};
 use super::OsFeatures;
 
 impl super::Surface {
-    pub fn new(layer: Retained<CAMetalLayer>) -> Self {
+    pub fn new(layer: Retained<CAMetalLayer>, should_remove_from_super: bool) -> Self {
         Self {
             render_layer: Mutex::new(layer),
+            should_remove_from_super,
             swapchain_format: RwLock::new(None),
             extent: RwLock::new(wgt::Extent3d::default()),
         }
@@ -25,7 +26,7 @@ impl super::Surface {
 
     pub fn from_layer(layer: &CAMetalLayer) -> Self {
         assert!(layer.isKindOfClass(CAMetalLayer::class()));
-        Self::new(layer.retain())
+        Self::new(layer.retain(), false)
     }
 
     pub fn render_layer(&self) -> &Mutex<Retained<CAMetalLayer>> {

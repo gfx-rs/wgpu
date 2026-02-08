@@ -167,13 +167,15 @@ impl crate::Instance for Instance {
             }
         };
 
+        let should_remove_from_super = !layer.pre_existing();
+
         // SAFETY: The layer is an initialized instance of `CAMetalLayer`, and
         // we transfer the retain count to `Retained` using `into_raw`.
         let layer = unsafe {
             Retained::from_raw(layer.into_raw().cast::<CAMetalLayer>().as_ptr()).unwrap()
         };
 
-        Ok(Surface::new(layer))
+        Ok(Surface::new(layer, should_remove_from_super))
     }
 
     unsafe fn enumerate_adapters(
@@ -437,12 +439,26 @@ pub struct Device {
 
 pub struct Surface {
     render_layer: Mutex<Retained<CAMetalLayer>>,
+    /// If the provided `CALayer` was not `CAMetalLayer`, we create and insert
+    /// a new child layer.
+    ///
+    /// To avoid keeping these layers around indefinitely, we need to remove
+    /// them from the parent layer again once we're done with them.
+    should_remove_from_super: bool,
     swapchain_format: RwLock<Option<wgt::TextureFormat>>,
     extent: RwLock<wgt::Extent3d>,
 }
 
 unsafe impl Send for Surface {}
 unsafe impl Sync for Surface {}
+
+impl Drop for Surface {
+    fn drop(&mut self) {
+        if self.should_remove_from_super {
+            self.render_layer.get_mut().removeFromSuperlayer();
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct SurfaceTexture {
