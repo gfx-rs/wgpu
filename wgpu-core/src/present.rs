@@ -293,11 +293,7 @@ impl Surface {
             .take()
             .ok_or(SurfaceError::AlreadyAcquired)?;
 
-        let mut exclusive_snatch_guard = device.snatchable_lock.write();
-        let inner = texture.inner.snatch(&mut exclusive_snatch_guard);
-        drop(exclusive_snatch_guard);
-
-        let result = match inner {
+        let result = match texture.inner.snatch(&mut device.snatchable_lock.write()) {
             None => return Err(SurfaceError::TextureDestroyed),
             Some(resource::TextureInner::Surface { raw }) => {
                 let raw_surface = self.raw(device.backend()).unwrap();
@@ -341,11 +337,7 @@ impl Surface {
             .take()
             .ok_or(SurfaceError::AlreadyAcquired)?;
 
-        let mut exclusive_snatch_guard = device.snatchable_lock.write();
-        let inner = texture.inner.snatch(&mut exclusive_snatch_guard);
-        drop(exclusive_snatch_guard);
-
-        match inner {
+        match texture.inner.snatch(&mut device.snatchable_lock.write()) {
             None => return Err(SurfaceError::TextureDestroyed),
             Some(resource::TextureInner::Surface { raw }) => {
                 let raw_surface = self.raw(device.backend()).unwrap();
