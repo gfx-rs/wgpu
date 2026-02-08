@@ -1226,11 +1226,12 @@ impl crate::Adapter for super::Adapter {
         wgt::BufferUses::INCLUSIVE | wgt::BufferUses::MAP_WRITE
     }
 
+    // Don't put barriers between inclusive uses
+    // DX12 implicitly orders renderpasses on the same resources.
     fn get_texture_ordered(&self) -> wgt::TextureUses {
         wgt::TextureUses::INCLUSIVE
             | wgt::TextureUses::COLOR_TARGET
             | wgt::TextureUses::DEPTH_STENCIL_WRITE
-            | wgt::TextureUses::STORAGE_READ_ONLY
     }
 }
 
