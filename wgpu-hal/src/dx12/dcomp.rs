@@ -30,7 +30,7 @@ impl DCompLib {
     fn get_lib(&self) -> Result<&DynLib, crate::SurfaceError> {
         match self.lib.as_ref() {
             Ok(lib) => Ok(lib),
-            Err(err) => Err(err.clone()),
+            Err(err) => Err((*err).clone()),
         }
     }
 

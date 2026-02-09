@@ -254,7 +254,7 @@ windows-core = { workspace = true, optional = true }
 # Backend: Dx12
 bit-set = { workspace = true, optional = true }
 range-alloc = { workspace = true, optional = true }
-once_cell = { workspace = true, optional = true }
+once_cell = { workspace = true, optional = true, features = ["std"] }
 # backend: GLES
 glutin_wgl_sys = { workspace = true, optional = true }
 

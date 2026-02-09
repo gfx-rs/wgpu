@@ -553,6 +553,11 @@ struct SwapChain {
 enum SurfaceTarget {
     /// Borrowed, lifetime externally managed
     WndHandle(Foundation::HWND),
+    /// Borrowed, lifetime externally managed.
+    ///
+    /// This is a WinRT CoreWindow pointer (IUnknown) used with
+    /// IDXGIFactory2::CreateSwapChainForCoreWindow.
+    CoreWindow(*mut ffi::c_void),
     /// `handle` is borrowed, lifetime externally managed
     VisualFromWndHandle {
         handle: Foundation::HWND,
@@ -1366,6 +1371,24 @@ impl crate::Surface for Surface {
                             )
                         }
                     }
+                    SurfaceTarget::CoreWindow(core_window) => {
+                        profiling::scope!("IDXGIFactory2::CreateSwapChainForCoreWindow");
+                        let core_window = unsafe {
+                            windows_core::IUnknown::from_raw_borrowed(&core_window)
+                        }
+                        .ok_or(crate::SurfaceError::Other(
+                            "CoreWindow pointer should not be NULL",
+                        ))?;
+
+                        unsafe {
+                            self.factory.CreateSwapChainForCoreWindow(
+                                &device.present_queue,
+                                core_window,
+                                &desc,
+                                None,
+                            )
+                        }
+                    }
                 };
 
                 let swap_chain1 = swap_chain1.map_err(|err| {
@@ -1374,7 +1397,9 @@ impl crate::Surface for Surface {
                 })?;
 
                 match &self.target {
-                    SurfaceTarget::WndHandle(_) | SurfaceTarget::SurfaceHandle(_) => {}
+                    SurfaceTarget::WndHandle(_)
+                    | SurfaceTarget::SurfaceHandle(_)
+                    | SurfaceTarget::CoreWindow(_) => {}
                     SurfaceTarget::VisualFromWndHandle {
                         handle,
                         dcomp_state,
@@ -1442,7 +1467,8 @@ impl crate::Surface for Surface {
             SurfaceTarget::Visual(_)
             | SurfaceTarget::VisualFromWndHandle { .. }
             | SurfaceTarget::SurfaceHandle(_)
-            | SurfaceTarget::SwapChainPanel(_) => {}
+            | SurfaceTarget::SwapChainPanel(_)
+            | SurfaceTarget::CoreWindow(_) => {}
         }
 
         unsafe { swap_chain.SetMaximumFrameLatency(config.maximum_frame_latency) }

@@ -142,8 +142,30 @@ impl crate::Instance for super::Instance {
                     options: self.options.clone(),
                 })
             }
+            raw_window_handle::RawWindowHandle::WinRt(handle) => {
+                let target = match self.presentation_system {
+                    wgt::Dx12SwapchainKind::DxgiFromHwnd => {
+                        SurfaceTarget::CoreWindow(handle.core_window.as_ptr())
+                    }
+                    wgt::Dx12SwapchainKind::DxgiFromVisual => {
+                        return Err(crate::InstanceError::new(
+                            "DX12 presentation_system=DxgiFromVisual is not supported for WinRT CoreWindow surfaces"
+                                .into(),
+                        ));
+                    }
+                };
+
+                Ok(super::Surface {
+                    factory: self.factory.clone(),
+                    factory_media: self.factory_media.clone(),
+                    target,
+                    supports_allow_tearing: self.supports_allow_tearing,
+                    swap_chain: RwLock::new(None),
+                    options: self.options.clone(),
+                })
+            }
             _ => Err(crate::InstanceError::new(format!(
-                "window handle {window_handle:?} is not a Win32 handle"
+                "window handle {window_handle:?} is not a Win32 or WinRT handle"
             ))),
         }
     }
