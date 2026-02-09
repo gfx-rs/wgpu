@@ -18,11 +18,13 @@ env:
   # Dependency versioning
   #
 
-  # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
+  # This is the MSRV used by all repository infrastructure.
   REPO_MSRV: "1.93"
+  # This is the MSRV used by `wgpu` itself.
+  WGPU_MSRV: "1.87"
   # This is the MSRV used by the `wgpu-core`, `wgpu-hal`, and `wgpu-types` crates,
   # to ensure that they can be used with firefox.
-  CORE_MSRV: "1.90.0"
+  CORE_MSRV: "1.87"
 
   #
   # Environment variables
@@ -350,6 +352,83 @@ jobs:
                 --package wgpu \
                 --all-features --no-deps --document-private-items
 
+  # We run minimal checks on the MSRV of the `wgpu` crate, ensuring that
+  # its dependency tree does not cause issues for servo or other users.
+  #
+  # We don't test all platforms, just ones with different dependency stacks.
+  check-wgpu-msrv:
+    # runtime is normally 1-3 minutes
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows
+          - name: Windows x86_64
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
+
+          # MacOS
+          - name: MacOS x86_64
+            os: macos-14
+            target: x86_64-apple-darwin
+
+          # Linux
+          - name: Linux x86_64
+            os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+
+          # WebGPU
+          - name: WebAssembly
+            os: ubuntu-24.04
+            target: wasm32-unknown-unknown
+
+    name: wgpu MSRV Check ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Install core MSRV toolchain
+        run: |
+          rustup toolchain install ${{ env.WGPU_MSRV }} --no-self-update --profile=minimal --component clippy --target ${{ matrix.target }}
+          rustup override set ${{ env.WGPU_MSRV }}
+          cargo -V
+
+      - name: Disable debug symbols
+        shell: bash
+        run: |
+          mkdir -p .cargo
+
+          cat <<EOF >> .cargo/config.toml
+            [profile.dev]
+            debug = false
+          EOF
+
+      - name: Caching
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: wgpu-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
+
+      - name: Reduce MSRV on dependencies
+        shell: bash
+        run: |
+          set -e
+
+          # No needed operations currently.
+          # If we find a dependency that needs to be downgraded to achieve
+          # the MSRV, we can do it here with `cargo update -p <crate> --precise <version>`
+
+      - name: Check native
+        shell: bash
+        run: |
+          set -e
+
+          # check `wgpu` with all features.
+          cargo check --target ${{ matrix.target }} --all-features -p wgpu
+
   # We run minimal checks on the MSRV of the core crates, ensuring that
   # its dependency tree does not cause issues for firefox.
   #
@@ -377,7 +456,7 @@ jobs:
             os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
 
-    name: MSRV Check ${{ matrix.name }}
+    name: Core MSRV Check ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -403,17 +482,16 @@ jobs:
       - name: Caching
         uses: Swatinem/rust-cache@v2
         with:
-          key: msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
+          key: core-msrv-check-${{ matrix.target }}-${{ env.CACHE_SUFFIX }}
 
       - name: Reduce MSRV on dependencies
         shell: bash
         run: |
           set -e
 
-          # 1.23.2 requires bytemuck_derive 1.10.1
-          cargo update -p bytemuck --precise 1.23.1
-          # 1.9.0 requires MSRV 1.84
-          cargo update -p bytemuck_derive --precise 1.8.1
+          # No needed operations currently.
+          # If we find a dependency that needs to be downgraded to achieve
+          # the MSRV, we can do it here with `cargo update -p <crate> --precise <version>`
 
       - name: Check native
         shell: bash

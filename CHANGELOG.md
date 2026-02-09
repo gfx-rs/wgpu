@@ -42,6 +42,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major Changes
+
+`wgpu` now has a new MSRV policy. This release has an MSRV of **1.87**. This is lower than v27's 1.88 and v28's 1.92. Going forward, we will only bump wgpu's MSRV if it has tangible benefits for the code, and we will never bump to an MSRV higher than `stable - 3`. So if stable is at 1.97 and 1.94 brought benefit to our code, we could bump it no higher than 1.94. As before, MSRV bumps will always be breaking changes. 
+
+By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
+
 ### New Features
 
 #### General
@@ -61,6 +67,7 @@ Bottom level categories:
         - `ir::Block::is_empty`
         - `ir::Block::len`
 - Changed passthrough shaders to not require an entry point parameter, so that the same shader module may be used in multiple entry points. Also added support for metallib passthrough. By @inner-daemons in #8886.
+- Added support for `insert_debug_marker`, `push_debug_group` and `pop_debug_group` on WebGPU. By @evilpie in [#9017](https://github.com/gfx-rs/wgpu/pull/9017).
 - Added support for `enable primitive_index` and `@builtin(primitive_index)` with support on all platforms. By @inner-daemons in #8879.
 
 #### naga

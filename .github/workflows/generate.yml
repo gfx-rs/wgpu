@@ -18,8 +18,8 @@ env:
   # Dependency versioning
   #
 
-  # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.93"
+  # This is the MSRV used by `wgpu` itself.
+  WGPU_MSRV: "1.87"
   RUSTFLAGS: -D warnings
 
 # Every time a PR is pushed to, cancel any previous jobs. This
@@ -55,7 +55,7 @@ jobs:
       # the toolchain for the current directory, not the newly generated project.
       - name: Install repo MSRV toolchain
         run: |
-          rustup toolchain install ${{ env.REPO_MSRV }} --no-self-update --profile=minimal
+          rustup toolchain install ${{ env.WGPU_MSRV }} --no-self-update --profile=minimal
           cargo -V
 
       - name: Disable debug symbols
@@ -90,4 +90,4 @@ jobs:
             [patch.crates-io]
             wgpu = { path = "../wgpu/wgpu" }
           EOF
-          cargo +${{ env.REPO_MSRV }} check
+          cargo +${{ env.WGPU_MSRV }} check
