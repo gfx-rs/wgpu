@@ -136,16 +136,8 @@ impl crate::Instance for Context {
 pub fn adapter_info() -> wgt::AdapterInfo {
     wgt::AdapterInfo {
         name: String::from("noop wgpu backend"),
-        vendor: 0,
-        device: 0,
-        device_type: wgt::DeviceType::Cpu,
-        device_pci_bus_id: String::new(),
         driver: String::from("wgpu"),
-        driver_info: String::new(),
-        backend: wgt::Backend::Noop,
-        subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
-        subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
-        transient_saves_memory: false,
+        ..wgt::AdapterInfo::new(wgt::DeviceType::Cpu, wgt::Backend::Noop)
     }
 }
 
