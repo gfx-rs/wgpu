@@ -1881,6 +1881,8 @@ pub enum CreateTextureViewError {
     InvalidResource(#[from] InvalidResourceError),
     #[error(transparent)]
     MissingFeatures(#[from] MissingFeatures),
+    #[error(transparent)]
+    MissingDownlevelFlags(#[from] MissingDownlevelFlags),
 }
 
 impl WebGpuError for CreateTextureViewError {
@@ -1905,7 +1907,8 @@ impl WebGpuError for CreateTextureViewError {
             | Self::TextureViewFormatNotRenderable(_)
             | Self::TextureViewFormatNotStorage(_)
             | Self::InvalidTextureViewUsage { .. }
-            | Self::MissingFeatures(_) => ErrorType::Validation,
+            | Self::MissingFeatures(_)
+            | Self::MissingDownlevelFlags(_) => ErrorType::Validation,
         }
     }
 }

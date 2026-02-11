@@ -664,7 +664,8 @@ impl PhysicalDeviceFeatures {
             | Df::VIEW_FORMATS
             | Df::UNRESTRICTED_EXTERNAL_TEXTURE_COPIES
             | Df::NONBLOCKING_QUERY_RESOLVE
-            | Df::SHADER_F16_IN_F32;
+            | Df::SHADER_F16_IN_F32
+            | Df::TEXTURE_FORMAT_BGRA;
 
         dl_flags.set(
             Df::SURFACE_VIEW_FORMATS,

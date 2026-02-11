@@ -282,6 +282,25 @@ pub(crate) enum DeferredDestroy {
     BindGroups(WeakVec<BindGroup>),
 }
 
+#[derive(Clone, Debug)]
+enum FormatFeaturesError {
+    MissingFeatures(TextureFormat, MissingFeatures),
+    MissingDownlevelFlags(MissingDownlevelFlags),
+}
+
+impl From<FormatFeaturesError> for resource::CreateTextureError {
+    fn from(error: FormatFeaturesError) -> Self {
+        match error {
+            FormatFeaturesError::MissingFeatures(format, missing) => {
+                resource::CreateTextureError::MissingFeatures(format, missing)
+            }
+            FormatFeaturesError::MissingDownlevelFlags(missing) => {
+                resource::CreateTextureError::MissingDownlevelFlags(missing)
+            }
+        }
+    }
+}
+
 impl fmt::Debug for Device {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Device")
@@ -1199,9 +1218,7 @@ impl Device {
         hal_texture: Box<dyn hal::DynTexture>,
         desc: &resource::TextureDescriptor,
     ) -> Result<Arc<Texture>, resource::CreateTextureError> {
-        let format_features = self
-            .describe_format_features(desc.format)
-            .map_err(|error| resource::CreateTextureError::MissingFeatures(desc.format, error))?;
+        let format_features = self.describe_format_features(desc.format)?;
 
         unsafe { self.raw().add_raw_texture(&*hal_texture) };
 
@@ -1472,9 +1489,7 @@ impl Device {
             }
         }
 
-        let format_features = self
-            .describe_format_features(desc.format)
-            .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
+        let format_features = self.describe_format_features(desc.format)?;
 
         if desc.sample_count > 1 {
             // <https://www.w3.org/TR/2025/CRD-webgpu-20251120/#:~:text=If%20descriptor%2EsampleCount%20%3E%201>
@@ -1541,10 +1556,7 @@ impl Device {
                 for plane in 0..planes {
                     let aspect = wgt::TextureAspect::from_plane(plane).unwrap();
                     let format = desc.format.aspect_specific_format(aspect).unwrap();
-                    let format_features = self
-                        .describe_format_features(format)
-                        .map_err(|error| CreateTextureError::MissingFeatures(desc.format, error))?;
-
+                    let format_features = self.describe_format_features(format)?;
                     planes_usages &= format_features.allowed_usages;
                 }
 
@@ -1749,7 +1761,16 @@ impl Device {
             }
         };
 
-        let format_features = self.describe_format_features(resolved_format)?;
+        let format_features = self
+            .describe_format_features(resolved_format)
+            .map_err(|error| match error {
+                FormatFeaturesError::MissingFeatures(_, missing) => {
+                    resource::CreateTextureViewError::MissingFeatures(missing)
+                }
+                FormatFeaturesError::MissingDownlevelFlags(missing) => {
+                    resource::CreateTextureViewError::MissingDownlevelFlags(missing)
+                }
+            })?;
         let allowed_format_usages = format_features.allowed_usages;
         if resolved_usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
             && !allowed_format_usages.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
@@ -2657,7 +2678,14 @@ impl Device {
                         self.describe_format_features(format).map_err(|error| {
                             binding_model::CreateBindGroupLayoutError::Entry {
                                 binding: entry.binding,
-                                error: BindGroupLayoutEntryError::MissingFeatures(error),
+                                error: match error {
+                                    FormatFeaturesError::MissingFeatures(_, missing) => {
+                                        BindGroupLayoutEntryError::MissingFeatures(missing)
+                                    }
+                                    FormatFeaturesError::MissingDownlevelFlags(missing) => {
+                                        BindGroupLayoutEntryError::MissingDownlevelFlags(missing)
+                                    }
+                                },
                             }
                         })?;
 
@@ -4127,7 +4155,18 @@ impl Device {
                         ));
                     }
 
-                    let format_features = self.describe_format_features(cs.format)?;
+                    let format_features =
+                        self.describe_format_features(cs.format)
+                            .map_err(|error| match error {
+                                FormatFeaturesError::MissingFeatures(_, missing) => {
+                                    pipeline::CreateRenderPipelineError::MissingFeatures(missing)
+                                }
+                                FormatFeaturesError::MissingDownlevelFlags(missing) => {
+                                    pipeline::CreateRenderPipelineError::MissingDownlevelFlags(
+                                        missing,
+                                    )
+                                }
+                            })?;
                     if !format_features
                         .allowed_usages
                         .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
@@ -4222,7 +4261,16 @@ impl Device {
                     ));
                 }
 
-                let format_features = self.describe_format_features(ds.format)?;
+                let format_features =
+                    self.describe_format_features(ds.format)
+                        .map_err(|error| match error {
+                            FormatFeaturesError::MissingFeatures(_, missing) => {
+                                pipeline::CreateRenderPipelineError::MissingFeatures(missing)
+                            }
+                            FormatFeaturesError::MissingDownlevelFlags(missing) => {
+                                pipeline::CreateRenderPipelineError::MissingDownlevelFlags(missing)
+                            }
+                        })?;
                 if !format_features
                     .allowed_usages
                     .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
@@ -4795,8 +4843,17 @@ impl Device {
     fn describe_format_features(
         &self,
         format: TextureFormat,
-    ) -> Result<wgt::TextureFormatFeatures, MissingFeatures> {
-        self.require_features(format.required_features())?;
+    ) -> Result<wgt::TextureFormatFeatures, FormatFeaturesError> {
+        self.require_features(format.required_features())
+            .map_err(|missing| FormatFeaturesError::MissingFeatures(format, missing))?;
+
+        if matches!(
+            format,
+            TextureFormat::Bgra8Unorm | TextureFormat::Bgra8UnormSrgb
+        ) {
+            self.require_downlevel_flags(wgt::DownlevelFlags::TEXTURE_FORMAT_BGRA)
+                .map_err(FormatFeaturesError::MissingDownlevelFlags)?;
+        }
 
         let using_device_features = self
             .features

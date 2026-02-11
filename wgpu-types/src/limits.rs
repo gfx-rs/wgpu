@@ -952,6 +952,11 @@ bitflags::bitflags! {
         ///
         /// Not supported by Vulkan on Mesa when [`Features::SHADER_F16`] is absent.
         const SHADER_F16_IN_F32 = 1 << 23;
+
+        /// Support for [`TextureFormat::Bgra8Unorm`] and [`TextureFormat::Bgra8UnormSrgb`].
+        ///
+        /// WebGL doesn't support this. WebGPU does.
+        const TEXTURE_FORMAT_BGRA = 1 << 24;
     }
 }
 

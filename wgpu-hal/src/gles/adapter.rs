@@ -447,6 +447,10 @@ impl super::Adapter {
         if query_buffers {
             downlevel_flags.set(wgt::DownlevelFlags::NONBLOCKING_QUERY_RESOLVE, true);
         }
+        downlevel_flags.set(
+            wgt::DownlevelFlags::TEXTURE_FORMAT_BGRA,
+            !cfg!(any(webgl, Emscripten)),
+        );
 
         let mut features = wgt::Features::empty()
             | wgt::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
