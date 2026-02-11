@@ -3083,6 +3083,7 @@ impl Writer {
                     Bi::PointCoord => BuiltIn::PointCoord,
                     Bi::FrontFacing => BuiltIn::FrontFacing,
                     Bi::PrimitiveIndex => {
+                        // Geometry shader capability is required for primitive index
                         self.require_any(
                             "`primitive_index` built-in",
                             &[spirv::Capability::Geometry],

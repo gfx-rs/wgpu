@@ -46,6 +46,10 @@ pub enum PipelineConstantError {
 
 /// Compact `module` and replace all overrides with constants.
 ///
+/// `module` must be valid. Both compaction and constant evaluation may produce
+/// invalid results (e.g. replace an invalid expression with a constant) for
+/// invalid modules.
+///
 /// If no changes are needed, this just returns `Cow::Borrowed` references to
 /// `module` and `module_info`. Otherwise, it clones `module`, retains only the
 /// selected entry point, compacts the module, edits its [`global_expressions`]
