@@ -823,6 +823,7 @@ impl Buffer {
                     trace.add(trace::Action::WriteBuffer {
                         id: self.to_trace(),
                         data,
+                        // NOTE: `self.size` here corresponds to `data`'s actual length.
                         offset: 0,
                         size: self.size,
                         queued: true,
