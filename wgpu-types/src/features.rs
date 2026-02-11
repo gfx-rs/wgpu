@@ -1291,6 +1291,10 @@ bitflags_array! {
         /// - GLES
         /// - Vulkan
         ///
+        /// Potential platforms:
+        /// - DX12
+        /// - Metal
+        ///
         /// This is a native only feature.
         const SHADER_DRAW_INDEX = 1 << 59;
     }
