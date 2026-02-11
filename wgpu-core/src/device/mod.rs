@@ -538,6 +538,10 @@ pub fn features_to_naga_capabilities(
         Caps::PER_VERTEX,
         features.intersects(wgt::Features::SHADER_PER_VERTEX),
     );
+    caps.set(
+        Caps::DRAW_INDEX,
+        features.intersects(wgt::Features::SHADER_DRAW_INDEX),
+    );
 
     caps
 }
