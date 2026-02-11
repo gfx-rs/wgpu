@@ -259,6 +259,12 @@ pub struct GlBackendOptions {
     /// disabled on devices with known bugs (e.g., Mali GPUs can crash in
     /// `glPushDebugGroup`). Use [`GlDebugFns::ForceEnabled`] to override this
     /// behavior, or [`GlDebugFns::Disabled`] to disable debug functions entirely.
+    ///
+    /// See also [`InstanceFlags::DISCARD_HAL_LABELS`], which prevents debug
+    /// markers and labels from being sent to *any* backend, but without the
+    /// driver-specific bug workarounds provided here.
+    ///
+    /// [`InstanceFlags::DISCARD_HAL_LABELS`]: crate::InstanceFlags::DISCARD_HAL_LABELS
     pub debug_fns: GlDebugFns,
 }
 

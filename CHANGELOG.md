@@ -63,6 +63,10 @@ Bottom level categories:
 
 - Allow parsing shaders which make use of `SPV_KHR_non_semantic_info` for debug info. Also removes `naga::front::spv::SUPPORTED_EXT_SETS`. By @inner-daemons in #8827.
 
+#### GLES
+
+- Added `GlDebugFns` option in `GlBackendOptions` to control OpenGL debug functions (`glPushDebugGroup`, `glPopDebugGroup`, `glObjectLabel`, etc.). Automatically disables them on Mali GPUs to work around a driver crash. By @Xavientois in [#8931](https://github.com/gfx-rs/wgpu/pull/8931).
+
 ### Changes
 
 #### Metal
