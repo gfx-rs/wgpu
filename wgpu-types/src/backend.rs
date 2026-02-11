@@ -252,6 +252,20 @@ pub struct GlBackendOptions {
     pub gles_minor_version: Gles3MinorVersion,
     /// Behavior of OpenGL fences. Affects how `on_completed_work_done` and `device.poll` behave.
     pub fence_behavior: GlFenceBehavior,
+    /// Controls whether debug functions (`glPushDebugGroup`, `glPopDebugGroup`,
+    /// `glObjectLabel`, etc.) are enabled when supported by the driver.
+    ///
+    /// By default ([`GlDebugFns::Auto`]), debug functions are automatically
+    /// disabled on devices with known bugs (e.g., Mali GPUs can crash in
+    /// `glPushDebugGroup`). Use [`GlDebugFns::ForceEnabled`] to override this
+    /// behavior, or [`GlDebugFns::Disabled`] to disable debug functions entirely.
+    ///
+    /// See also [`InstanceFlags::DISCARD_HAL_LABELS`], which prevents debug
+    /// markers and labels from being sent to *any* backend, but without the
+    /// driver-specific bug workarounds provided here.
+    ///
+    /// [`InstanceFlags::DISCARD_HAL_LABELS`]: crate::InstanceFlags::DISCARD_HAL_LABELS
+    pub debug_fns: GlDebugFns,
 }
 
 impl GlBackendOptions {
@@ -261,9 +275,11 @@ impl GlBackendOptions {
     #[must_use]
     pub fn from_env_or_default() -> Self {
         let gles_minor_version = Gles3MinorVersion::from_env().unwrap_or_default();
+        let debug_fns = GlDebugFns::from_env().unwrap_or_default();
         Self {
             gles_minor_version,
             fence_behavior: GlFenceBehavior::Normal,
+            debug_fns,
         }
     }
 
@@ -273,10 +289,73 @@ impl GlBackendOptions {
     #[must_use]
     pub fn with_env(self) -> Self {
         let gles_minor_version = self.gles_minor_version.with_env();
-        let short_circuit_fences = self.fence_behavior.with_env();
+        let fence_behavior = self.fence_behavior.with_env();
+        let debug_fns = self.debug_fns.with_env();
         Self {
             gles_minor_version,
-            fence_behavior: short_circuit_fences,
+            fence_behavior,
+            debug_fns,
+        }
+    }
+}
+
+/// Controls whether OpenGL debug functions are enabled.
+///
+/// Debug functions include `glPushDebugGroup`, `glPopDebugGroup`, `glObjectLabel`, etc.
+/// These are useful for debugging but can cause crashes on some buggy drivers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum GlDebugFns {
+    /// Automatically decide whether to enable debug functions.
+    ///
+    /// Debug functions will be enabled if supported by the driver, unless
+    /// running on a device known to have buggy debug function implementations
+    /// (e.g., Mali GPUs which can crash in `glPushDebugGroup`).
+    ///
+    /// This is the default behavior.
+    #[default]
+    Auto,
+    /// Force enable debug functions if supported by the driver.
+    ///
+    /// This ignores any device-specific workarounds and enables debug functions
+    /// on all devices that support them, including those with known bugs.
+    ForceEnabled,
+    /// Disable debug functions entirely.
+    ///
+    /// Debug functions will not be used even if supported by the driver.
+    Disabled,
+}
+
+impl GlDebugFns {
+    /// Choose debug functions setting from the environment variable `WGPU_GL_DEBUG_FNS`.
+    ///
+    /// Possible values (case insensitive):
+    /// - `auto` - automatically decide based on device
+    /// - `forceenabled`, `force_enabled`, or `enabled` - force enable
+    /// - `disabled` - disable entirely
+    ///
+    /// Use with `unwrap_or_default()` to get the default value if the environment variable is not set.
+    #[must_use]
+    pub fn from_env() -> Option<Self> {
+        let value = crate::env::var("WGPU_GL_DEBUG_FNS")
+            .as_deref()?
+            .to_lowercase();
+        match value.as_str() {
+            "auto" => Some(Self::Auto),
+            "forceenabled" | "force_enabled" | "enabled" => Some(Self::ForceEnabled),
+            "disabled" => Some(Self::Disabled),
+            _ => None,
+        }
+    }
+
+    /// Takes the given setting, modifies it based on the `WGPU_GL_DEBUG_FNS` environment variable, and returns the result.
+    ///
+    /// See `from_env` for more information.
+    #[must_use]
+    pub fn with_env(self) -> Self {
+        if let Some(debug_fns) = Self::from_env() {
+            debug_fns
+        } else {
+            self
         }
     }
 }

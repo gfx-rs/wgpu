@@ -1,6 +1,7 @@
 use alloc::borrow::ToOwned as _;
 
 use objc2::{
+    available,
     rc::{autoreleasepool, Retained},
     runtime::ProtocolObject,
     ClassType, Message,
@@ -10,6 +11,8 @@ use objc2_foundation::NSObjectProtocol;
 use objc2_metal::MTLTextureType;
 use objc2_quartz_core::{CAMetalDrawable, CAMetalLayer};
 use parking_lot::{Mutex, RwLock};
+
+use super::OsFeatures;
 
 impl super::Surface {
     pub fn new(layer: Retained<CAMetalLayer>) -> Self {
@@ -95,10 +98,11 @@ impl crate::Surface for super::Surface {
         // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)
         render_layer.setMaximumDrawableCount(config.maximum_frame_latency as usize + 1);
         render_layer.setDrawableSize(drawable_size);
-        if caps.can_set_next_drawable_timeout {
+        // https://developer.apple.com/documentation/quartzcore/cametallayer/allowsnextdrawabletimeout
+        if available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0) {
             render_layer.setAllowsNextDrawableTimeout(false);
         }
-        if caps.can_set_display_sync {
+        if OsFeatures::display_sync() {
             render_layer.setDisplaySyncEnabled(display_sync);
         }
 

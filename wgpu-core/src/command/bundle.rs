@@ -718,7 +718,7 @@ fn draw(
     first_vertex: u32,
     first_instance: u32,
 ) -> Result<(), RenderBundleErrorInner> {
-    state.is_ready()?;
+    state.is_ready(DrawCommandFamily::Draw)?;
     let pipeline = state.pipeline()?;
 
     let vertex_limits = super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.steps);
@@ -746,13 +746,10 @@ fn draw_indexed(
     base_vertex: i32,
     first_instance: u32,
 ) -> Result<(), RenderBundleErrorInner> {
-    state.is_ready()?;
+    state.is_ready(DrawCommandFamily::DrawIndexed)?;
     let pipeline = state.pipeline()?;
 
-    let index = match state.index {
-        Some(ref index) => index,
-        None => return Err(DrawError::MissingIndexBuffer.into()),
-    };
+    let index = state.index.as_ref().unwrap();
 
     let vertex_limits = super::VertexLimits::new(state.vertex_buffer_sizes(), &pipeline.steps);
 
@@ -788,7 +785,7 @@ fn draw_mesh_tasks(
     group_count_y: u32,
     group_count_z: u32,
 ) -> Result<(), RenderBundleErrorInner> {
-    state.is_ready()?;
+    state.is_ready(DrawCommandFamily::DrawMeshTasks)?;
 
     let groups_size_limit = state.device.limits.max_task_mesh_workgroups_per_dimension;
     let max_groups = state.device.limits.max_task_mesh_workgroup_total_count;
@@ -822,7 +819,7 @@ fn multi_draw_indirect(
     offset: u64,
     family: DrawCommandFamily,
 ) -> Result<(), RenderBundleErrorInner> {
-    state.is_ready()?;
+    state.is_ready(family)?;
     state
         .device
         .require_downlevel_flags(wgt::DownlevelFlags::INDIRECT_EXECUTION)?;
@@ -846,10 +843,7 @@ fn multi_draw_indirect(
         ));
 
     let vertex_or_index_limit = if family == DrawCommandFamily::DrawIndexed {
-        let index = match state.index {
-            Some(ref mut index) => index,
-            None => return Err(DrawError::MissingIndexBuffer.into()),
-        };
+        let index = state.index.as_mut().unwrap();
         state.commands.extend(index.flush());
         index.limit()
     } else {
@@ -1408,11 +1402,29 @@ impl State {
     /// Validation for a draw command.
     ///
     /// This should be further deduplicated with similar validation on render/compute passes.
-    fn is_ready(&mut self) -> Result<(), DrawError> {
+    fn is_ready(&mut self, family: DrawCommandFamily) -> Result<(), DrawError> {
         if let Some(pipeline) = self.pipeline.as_ref() {
             self.binder
                 .check_compatibility(pipeline.pipeline.as_ref())?;
             self.binder.check_late_buffer_bindings()?;
+
+            if family == DrawCommandFamily::DrawIndexed {
+                let pipeline = &pipeline.pipeline;
+                let index_format = match &self.index {
+                    Some(index) => index.format,
+                    None => return Err(DrawError::MissingIndexBuffer),
+                };
+
+                if pipeline.topology.is_strip() && pipeline.strip_index_format != Some(index_format)
+                {
+                    return Err(DrawError::UnmatchedStripIndexFormat {
+                        pipeline: pipeline.error_ident(),
+                        strip_index_format: pipeline.strip_index_format,
+                        buffer_format: index_format,
+                    });
+                }
+            }
+
             Ok(())
         } else {
             Err(DrawError::MissingPipeline(pass::MissingPipeline))

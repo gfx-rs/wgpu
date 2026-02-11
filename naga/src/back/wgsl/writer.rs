@@ -278,10 +278,39 @@ impl<W: Write> Writer<W> {
     /// Helper method which writes all the `enable` declarations
     /// needed for a module.
     fn write_enable_declarations(&mut self, module: &Module) -> BackendResult {
-        let mut needs_f16 = false;
-        let mut needs_dual_source_blending = false;
-        let mut needs_clip_distances = false;
-        let mut needs_cooperative_matrix = false;
+        #[derive(Default)]
+        struct RequiredEnabled {
+            f16: bool,
+            dual_source_blending: bool,
+            clip_distances: bool,
+            mesh_shaders: bool,
+            primitive_index: bool,
+            cooperative_matrix: bool,
+        }
+        let mut needed = RequiredEnabled::default();
+        needed.mesh_shaders = module.uses_mesh_shaders();
+
+        let check_binding = |binding: &crate::Binding, needed: &mut RequiredEnabled| match *binding
+        {
+            crate::Binding::Location {
+                blend_src: Some(_), ..
+            } => {
+                needed.dual_source_blending = true;
+            }
+            crate::Binding::BuiltIn(crate::BuiltIn::ClipDistance) => {
+                needed.clip_distances = true;
+            }
+            crate::Binding::BuiltIn(crate::BuiltIn::PrimitiveIndex) => {
+                needed.primitive_index = true;
+            }
+            crate::Binding::Location {
+                per_primitive: true,
+                ..
+            } => {
+                needed.mesh_shaders = true;
+            }
+            _ => {}
+        };
 
         // Determine which `enable` declarations are needed
         for (_, ty) in module.types.iter() {
@@ -289,41 +318,45 @@ impl<W: Write> Writer<W> {
                 TypeInner::Scalar(scalar)
                 | TypeInner::Vector { scalar, .. }
                 | TypeInner::Matrix { scalar, .. } => {
-                    needs_f16 |= scalar == crate::Scalar::F16;
+                    needed.f16 |= scalar == crate::Scalar::F16;
                 }
                 TypeInner::Struct { ref members, .. } => {
                     for binding in members.iter().filter_map(|m| m.binding.as_ref()) {
-                        match *binding {
-                            crate::Binding::Location {
-                                blend_src: Some(_), ..
-                            } => {
-                                needs_dual_source_blending = true;
-                            }
-                            crate::Binding::BuiltIn(crate::BuiltIn::ClipDistance) => {
-                                needs_clip_distances = true;
-                            }
-                            _ => {}
-                        }
+                        check_binding(binding, &mut needed);
                     }
                 }
                 TypeInner::CooperativeMatrix { .. } => {
-                    needs_cooperative_matrix = true;
+                    needed.cooperative_matrix = true;
                 }
                 _ => {}
             }
         }
 
+        for ep in &module.entry_points {
+            if let Some(res) = ep.function.result.as_ref().and_then(|a| a.binding.as_ref()) {
+                check_binding(res, &mut needed);
+            }
+            for arg in ep
+                .function
+                .arguments
+                .iter()
+                .filter_map(|a| a.binding.as_ref())
+            {
+                check_binding(arg, &mut needed);
+            }
+        }
+
         // Write required declarations
         let mut any_written = false;
-        if needs_f16 {
+        if needed.f16 {
             writeln!(self.out, "enable f16;")?;
             any_written = true;
         }
-        if needs_dual_source_blending {
+        if needed.dual_source_blending {
             writeln!(self.out, "enable dual_source_blending;")?;
             any_written = true;
         }
-        if needs_clip_distances {
+        if needed.clip_distances {
             writeln!(self.out, "enable clip_distances;")?;
             any_written = true;
         }
@@ -331,7 +364,11 @@ impl<W: Write> Writer<W> {
             writeln!(self.out, "enable wgpu_mesh_shader;")?;
             any_written = true;
         }
-        if needs_cooperative_matrix {
+        if needed.primitive_index {
+            writeln!(self.out, "enable primitive_index;")?;
+            any_written = true;
+        }
+        if needed.cooperative_matrix {
             writeln!(self.out, "enable wgpu_cooperative_matrix;")?;
             any_written = true;
         }
