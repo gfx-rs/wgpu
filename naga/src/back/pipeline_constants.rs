@@ -46,6 +46,10 @@ pub enum PipelineConstantError {
 
 /// Compact `module` and replace all overrides with constants.
 ///
+/// `module` must be valid. Both compaction and constant evaluation may produce
+/// invalid results (e.g. replace an invalid expression with a constant) for
+/// invalid modules.
+///
 /// If no changes are needed, this just returns `Cow::Borrowed` references to
 /// `module` and `module_info`. Otherwise, it clones `module`, retains only the
 /// selected entry point, compacts the module, edits its [`global_expressions`]
@@ -882,6 +886,17 @@ fn adjust_stmt(new_pos: &HandleVec<Expression, Handle<Expression>>, stmt: &mut S
             adjust(&mut data.pointer);
             adjust(&mut data.stride);
         }
+        Statement::RayPipelineFunction(ref mut func) => match *func {
+            crate::RayPipelineFunction::TraceRay {
+                ref mut acceleration_structure,
+                ref mut descriptor,
+                ref mut payload,
+            } => {
+                adjust(acceleration_structure);
+                adjust(descriptor);
+                adjust(payload);
+            }
+        },
         Statement::Break
         | Statement::Continue
         | Statement::Kill

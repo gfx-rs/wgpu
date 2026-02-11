@@ -52,11 +52,12 @@ default-members = [
 
 [workspace.lints.clippy]
 ref_as_ptr = "warn"
-# NOTE: disallowed-types is configured in other file: clippy.toml
+# NOTE: clippy configuration values (disallowed-types and
+# large-error-threshold) are in other file: clippy.toml
 
 [workspace.package]
 edition = "2021"
-rust-version = "1.92"
+rust-version = "1.93"
 keywords = ["graphics"]
 license = "MIT OR Apache-2.0"
 homepage = "https://wgpu.rs/"
@@ -122,7 +123,7 @@ fern = "0.7"
 flume = "0.12"
 futures-lite = "2"
 getrandom = "0.3"
-glam = "0.30.7"
+glam = "0.31.0"
 glob = "0.3"
 half = { version = "2.5", default-features = false } # We require 2.5 to have `Arbitrary` support.
 hashbrown = { version = "0.16", default-features = false, features = [
@@ -203,6 +204,7 @@ xshell = "0.2.2"
 
 # Metal dependencies
 block2 = "0.6.2"
+dispatch2 = "0.3.0"
 objc2 = "0.6.3"
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = [
     "std",
@@ -218,6 +220,7 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = [
 objc2-metal = { version = "0.3.2", default-features = false, features = [
     "std",
     "block2",
+    "dispatch2",
     "MTLAllocation",
     "MTLBlitCommandEncoder",
     "MTLBlitPass",

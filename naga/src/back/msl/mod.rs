@@ -723,7 +723,20 @@ impl ResolvedBinding {
                     | Bi::VertexCount
                     | Bi::PrimitiveCount
                     | Bi::Vertices
-                    | Bi::Primitives => unreachable!(),
+                    | Bi::Primitives
+                    | Bi::RayInvocationId
+                    | Bi::NumRayInvocations
+                    | Bi::InstanceCustomData
+                    | Bi::GeometryIndex
+                    | Bi::WorldRayOrigin
+                    | Bi::WorldRayDirection
+                    | Bi::ObjectRayOrigin
+                    | Bi::ObjectRayDirection
+                    | Bi::RayTmin
+                    | Bi::RayTCurrentMax
+                    | Bi::ObjectToWorld
+                    | Bi::WorldToObject
+                    | Bi::HitKind => unreachable!(),
                 };
                 write!(out, "{name}")?;
             }

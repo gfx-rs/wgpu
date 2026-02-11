@@ -201,6 +201,7 @@ impl super::CommandEncoder {
                 self.state.blit = Some(cmd_buf.blitCommandEncoder().unwrap());
             });
 
+            #[expect(clippy::panicking_unwrap, reason = "false positive")]
             let encoder = self.state.blit.as_ref().unwrap();
 
             // UNTESTED:
@@ -259,6 +260,7 @@ impl super::CommandEncoder {
             S::Task => &bg_info.base_resource_indices.ts,
             S::Mesh => &bg_info.base_resource_indices.ms,
             S::Compute => &bg_info.base_resource_indices.cs,
+            S::RayGeneration | S::AnyHit | S::ClosestHit | S::Miss => unimplemented!(),
         };
         let buffers = match encoder.stage() {
             S::Vertex => group.counters.vs.buffers,
@@ -266,6 +268,7 @@ impl super::CommandEncoder {
             S::Task => group.counters.ts.buffers,
             S::Mesh => group.counters.ms.buffers,
             S::Compute => group.counters.cs.buffers,
+            S::RayGeneration | S::AnyHit | S::ClosestHit | S::Miss => unimplemented!(),
         };
         let mut changes_sizes_buffer = false;
         for index in 0..buffers {
@@ -303,6 +306,7 @@ impl super::CommandEncoder {
             S::Task => group.counters.ts.samplers,
             S::Mesh => group.counters.ms.samplers,
             S::Compute => group.counters.cs.samplers,
+            S::RayGeneration | S::AnyHit | S::ClosestHit | S::Miss => unimplemented!(),
         };
         for index in 0..samplers {
             let res = group.samplers[(index_base.samplers + index) as usize];
@@ -317,6 +321,7 @@ impl super::CommandEncoder {
             S::Task => group.counters.ts.textures,
             S::Mesh => group.counters.ms.textures,
             S::Compute => group.counters.cs.textures,
+            S::RayGeneration | S::AnyHit | S::ClosestHit | S::Miss => unimplemented!(),
         };
         for index in 0..textures {
             let res = group.textures[(index_base.textures + index) as usize];

@@ -45,7 +45,7 @@ impl ExprPos {
 }
 
 #[derive(Debug)]
-pub struct Context<'a> {
+pub(crate) struct Context<'a> {
     pub expressions: Arena<Expression>,
     pub locals: Arena<LocalVariable>,
 

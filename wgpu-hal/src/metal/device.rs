@@ -1,9 +1,14 @@
 use alloc::{borrow::ToOwned as _, sync::Arc, vec::Vec};
-use core::{ptr::NonNull, sync::atomic};
+use core::{
+    ffi::c_void,
+    ptr::{self, NonNull},
+    sync::atomic,
+};
+use dispatch2::DispatchData;
 use std::{thread, time};
 
 use objc2::{
-    msg_send,
+    available, msg_send,
     rc::{autoreleasepool, Retained},
     runtime::ProtocolObject,
 };
@@ -221,7 +226,8 @@ impl super::Device {
                 let options = MTLCompileOptions::new();
                 options.setLanguageVersion(self.shared.private_caps.msl_version);
 
-                if self.shared.private_caps.supports_preserve_invariance {
+                // https://developer.apple.com/documentation/metal/mtlcompileoptions/preserveinvariance
+                if available!(macos = 11.0, ios = 13.0, tvos = 14.0, visionos = 1.0) {
                     options.setPreserveInvariance(true);
                 }
 
@@ -320,7 +326,10 @@ impl super::Device {
             }
             ShaderModuleSource::Passthrough(ref shader) => Ok(CompiledShader {
                 library: shader.library.clone(),
-                function: shader.function.clone(),
+                function: shader
+                    .library
+                    .newFunctionWithName(&NSString::from_str(stage.entry_point))
+                    .ok_or(crate::PipelineError::EntryPoint(naga_stage))?,
                 wg_size: MTLSize {
                     width: shader.num_workgroups.0 as usize,
                     height: shader.num_workgroups.1 as usize,
@@ -409,7 +418,7 @@ impl crate::Device for super::Device {
                 .shared
                 .device
                 .newBufferWithLength_options(desc.size as usize, options)
-                .unwrap();
+                .ok_or(crate::DeviceError::OutOfMemory)?;
             if let Some(label) = desc.label {
                 raw.setLabel(Some(&NSString::from_str(label)));
             }
@@ -1089,9 +1098,36 @@ impl crate::Device for super::Device {
                 source: ShaderModuleSource::Naga(naga),
                 bounds_checks: desc.runtime_checks,
             }),
+            crate::ShaderInput::MetalLib {
+                file,
+                num_workgroups,
+            } => {
+                // SAFETY: this creates a reference to `file` that is dropped before `file` is dropped.
+                let data = unsafe {
+                    DispatchData::new(
+                        NonNull::new(file.as_ptr() as *mut c_void).unwrap(),
+                        file.len(),
+                        None,
+                        ptr::null_mut(),
+                    )
+                };
+                let library = self
+                    .shared
+                    .device
+                    .newLibraryWithData_error(&data)
+                    .map_err(|e| crate::ShaderError::Compilation(format!("Metallib: {e:?}")))?;
+                drop(data);
+                Ok(super::ShaderModule {
+                    source: ShaderModuleSource::Passthrough(PassthroughShader {
+                        library,
+                        num_workgroups,
+                    }),
+                    // This goes unused for passthrough shaders
+                    bounds_checks: wgt::ShaderRuntimeChecks::unchecked(),
+                })
+            }
             crate::ShaderInput::Msl {
                 shader: source,
-                entry_point,
                 num_workgroups,
             } => {
                 let options = MTLCompileOptions::new();
@@ -1100,22 +1136,14 @@ impl crate::Device for super::Device {
                 let library = device
                     .newLibraryWithSource_options_error(&NSString::from_str(source), Some(&options))
                     .map_err(|e| crate::ShaderError::Compilation(format!("MSL: {e:?}")))?;
-                let function = library
-                    .newFunctionWithName(&NSString::from_str(&entry_point))
-                    .ok_or_else(|| {
-                        crate::ShaderError::Compilation(format!(
-                            "Entry point '{entry_point}' not found"
-                        ))
-                    })?;
 
                 Ok(super::ShaderModule {
                     source: ShaderModuleSource::Passthrough(PassthroughShader {
                         library,
-                        function,
-                        entry_point,
                         num_workgroups,
                     }),
-                    bounds_checks: desc.runtime_checks,
+                    // This goes unused for passthrough shaders
+                    bounds_checks: wgt::ShaderRuntimeChecks::unchecked(),
                 })
             }
             crate::ShaderInput::SpirV(_)
@@ -1182,6 +1210,10 @@ impl crate::Device for super::Device {
                     unsafe { descriptor_fn!(self.setMaxVertexAmplificationCount(count)) }
                 }
             }
+
+            // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
+            let supports_mutability =
+                available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0);
 
             let (primitive_class, raw_primitive_type) =
                 conv::map_primitive_topology(desc.primitive.topology);
@@ -1253,7 +1285,8 @@ impl crate::Device for super::Device {
                         )?;
 
                         descriptor.setVertexFunction(Some(&vs.function));
-                        if self.shared.private_caps.supports_mutability {
+
+                        if supports_mutability {
                             Self::set_buffers_mutability(
                                 &descriptor.vertexBuffers(),
                                 vs.immutable_buffer_mask,
@@ -1357,7 +1390,7 @@ impl crate::Device for super::Device {
                             naga::ShaderStage::Task,
                         )?;
                         unsafe { descriptor.setObjectFunction(Some(&ts.function)) };
-                        if self.shared.private_caps.supports_mutability {
+                        if supports_mutability {
                             Self::set_buffers_mutability(
                                 &descriptor.meshBuffers(),
                                 ts.immutable_buffer_mask,
@@ -1386,7 +1419,7 @@ impl crate::Device for super::Device {
                             naga::ShaderStage::Mesh,
                         )?;
                         unsafe { descriptor.setMeshFunction(Some(&ms.function)) };
-                        if self.shared.private_caps.supports_mutability {
+                        if supports_mutability {
                             Self::set_buffers_mutability(
                                 &descriptor.meshBuffers(),
                                 ms.immutable_buffer_mask,
@@ -1428,7 +1461,7 @@ impl crate::Device for super::Device {
                     )?;
 
                     unsafe { descriptor.setFragmentFunction(Some(&fs.function)) };
-                    if self.shared.private_caps.supports_mutability {
+                    if supports_mutability {
                         Self::set_buffers_mutability(
                             &descriptor.fragmentBuffers(),
                             fs.immutable_buffer_mask,
@@ -1603,14 +1636,17 @@ impl crate::Device for super::Device {
             let descriptor = MTLComputePipelineDescriptor::new();
 
             let module = desc.stage.module;
-            let cs = if let ShaderModuleSource::Passthrough(desc) = &module.source {
+            let cs = if let ShaderModuleSource::Passthrough(passthrough_desc) = &module.source {
                 CompiledShader {
-                    library: desc.library.clone(),
-                    function: desc.function.clone(),
+                    library: passthrough_desc.library.clone(),
+                    function: passthrough_desc
+                        .library
+                        .newFunctionWithName(&NSString::from_str(desc.stage.entry_point))
+                        .ok_or(crate::PipelineError::EntryPoint(naga::ShaderStage::Compute))?,
                     wg_size: MTLSize {
-                        width: desc.num_workgroups.0 as usize,
-                        height: desc.num_workgroups.1 as usize,
-                        depth: desc.num_workgroups.2 as usize,
+                        width: passthrough_desc.num_workgroups.0 as usize,
+                        height: passthrough_desc.num_workgroups.1 as usize,
+                        depth: passthrough_desc.num_workgroups.2 as usize,
                     },
                     wg_memory_sizes: vec![],
                     sized_bindings: vec![],
@@ -1628,7 +1664,8 @@ impl crate::Device for super::Device {
 
             descriptor.setComputeFunction(Some(&cs.function));
 
-            if self.shared.private_caps.supports_mutability {
+            // https://developer.apple.com/documentation/metal/mtlpipelinebufferdescriptor/mutability
+            if available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0) {
                 Self::set_buffers_mutability(&descriptor.buffers(), cs.immutable_buffer_mask);
             }
 
@@ -1761,7 +1798,8 @@ impl crate::Device for super::Device {
 
     unsafe fn create_fence(&self) -> DeviceResult<super::Fence> {
         self.counters.fences.add(1);
-        let shared_event = if self.shared.private_caps.supports_shared_event {
+        // https://developer.apple.com/documentation/metal/mtlsharedevent
+        let shared_event = if available!(macos = 10.14, ios = 12.0, tvos = 12.0, visionos = 1.0) {
             Some(self.shared.device.newSharedEvent().unwrap())
         } else {
             None
@@ -1823,7 +1861,8 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn start_graphics_debugger_capture(&self) -> bool {
-        if !self.shared.private_caps.supports_capture_manager {
+        // https://developer.apple.com/documentation/metal/mtlcapturemanager
+        if !available!(macos = 10.13, ios = 11.0, tvos = 11.0, visionos = 1.0) {
             return false;
         }
         let device = &self.shared.device;

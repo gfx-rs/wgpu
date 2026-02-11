@@ -108,10 +108,10 @@ impl Adapter {
     ///
     /// The returned type depends on the backend:
     ///
-    #[doc = crate::hal_type_vulkan!("Adapter")]
-    #[doc = crate::hal_type_metal!("Adapter")]
-    #[doc = crate::hal_type_dx12!("Adapter")]
-    #[doc = crate::hal_type_gles!("Adapter")]
+    #[doc = crate::macros::hal_type_vulkan!("Adapter")]
+    #[doc = crate::macros::hal_type_metal!("Adapter")]
+    #[doc = crate::macros::hal_type_dx12!("Adapter")]
+    #[doc = crate::macros::hal_type_gles!("Adapter")]
     ///
     /// # Errors
     ///
