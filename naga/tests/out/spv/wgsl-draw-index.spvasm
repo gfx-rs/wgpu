@@ -1,53 +1,36 @@
 ; SPIR-V
 ; Version: 1.4
 ; Generator: rspirv
-; Bound: 22
+; Bound: 21
 OpCapability Shader
 OpCapability DrawParameters
 OpExtension "SPV_KHR_shader_draw_parameters"
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint Vertex %15 "vertex" %10 %13
-%3 = OpString "draw-index.wgsl"
-OpSource Unknown 0 %3 "enable draw_index;
-
-struct Input {
-    @builtin(draw_index) draw_index: u32,
-}
-
-@vertex
-fn vertex(input: Input) -> @builtin(position) vec4<f32> {
-    return vec4<f32>(f32(input.draw_index), 1.0, 1.0, 1.0);
-}"
-OpMemberName %5 0 "draw_index"
-OpName %5 "Input"
-OpName %10 "draw_index"
-OpName %15 "vertex"
-OpMemberDecorate %5 0 Offset 0
-OpDecorate %10 BuiltIn DrawIndex
-OpDecorate %13 BuiltIn Position
+OpEntryPoint Vertex %14 "vertex" %9 %12
+OpMemberDecorate %4 0 Offset 0
+OpDecorate %9 BuiltIn DrawIndex
+OpDecorate %12 BuiltIn Position
 %2 = OpTypeVoid
-%4 = OpTypeInt 32 0
-%5 = OpTypeStruct %4
-%7 = OpTypeFloat 32
-%6 = OpTypeVector %7 4
-%11 = OpTypePointer Input %4
-%10 = OpVariable  %11  Input
-%14 = OpTypePointer Output %6
-%13 = OpVariable  %14  Output
-%16 = OpTypeFunction %2
-%17 = OpConstant  %7  1
-%15 = OpFunction  %2  None %16
-%8 = OpLabel
-%12 = OpLoad  %4  %10
-%9 = OpCompositeConstruct  %5  %12
-OpBranch %18
-%18 = OpLabel
-OpLine %3 9 22
-%19 = OpCompositeExtract  %4  %9 0
-%20 = OpConvertUToF  %7  %19
-OpLine %3 9 12
-%21 = OpCompositeConstruct  %6  %20 %17 %17 %17
-OpStore %13 %21
+%3 = OpTypeInt 32 0
+%4 = OpTypeStruct %3
+%6 = OpTypeFloat 32
+%5 = OpTypeVector %6 4
+%10 = OpTypePointer Input %3
+%9 = OpVariable  %10  Input
+%13 = OpTypePointer Output %5
+%12 = OpVariable  %13  Output
+%15 = OpTypeFunction %2
+%16 = OpConstant  %6  1
+%14 = OpFunction  %2  None %15
+%7 = OpLabel
+%11 = OpLoad  %3  %9
+%8 = OpCompositeConstruct  %4  %11
+OpBranch %17
+%17 = OpLabel
+%18 = OpCompositeExtract  %3  %8 0
+%19 = OpConvertUToF  %6  %18
+%20 = OpCompositeConstruct  %5  %19 %16 %16 %16
+OpStore %12 %20
 OpReturn
 OpFunctionEnd
