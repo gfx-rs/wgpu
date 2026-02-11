@@ -21,13 +21,11 @@ static ALLOW_INPUT_NOT_CONSUMED: GpuTestConfiguration = GpuTestConfiguration::ne
             .device
             .create_shader_module(include_wgsl!("issue_5553.wgsl"));
 
-        let pipeline_layout = ctx
-            .device
-            .create_pipeline_layout(&PipelineLayoutDescriptor {
-                label: Some("Pipeline Layout"),
-                bind_group_layouts: &[],
-                immediate_size: 0,
-            });
+        let pipeline_layout =
+            ctx.device
+                .create_pipeline_layout(&PipelineLayoutDescriptor::empty_with_label(
+                    "Pipeline Layout",
+                ));
 
         let _ = ctx
             .device

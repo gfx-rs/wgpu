@@ -30,12 +30,12 @@ impl PipelineLayout {
 /// Corresponds to [WebGPU `GPUPipelineLayoutDescriptor`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpupipelinelayoutdescriptor).
 #[derive(Clone, Debug, Default)]
-pub struct PipelineLayoutDescriptor<'a> {
+pub struct PipelineLayoutDescriptor<'a, BGL> {
     /// Debug label of the pipeline layout. This will show up in graphics debuggers for easy identification.
     pub label: Label<'a>,
     /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
     /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
-    pub bind_group_layouts: &'a [&'a BindGroupLayout],
+    pub bind_group_layouts: &'a [BGL],
     /// The number of bytes of immediate data that are allocated for use
     /// in the shader. The `var<immediate>`s in the shader attached to
     /// this pipeline must be equal or smaller than this size.
@@ -44,4 +44,45 @@ pub struct PipelineLayoutDescriptor<'a> {
     pub immediate_size: u32,
 }
 #[cfg(send_sync)]
-static_assertions::assert_impl_all!(PipelineLayoutDescriptor<'_>: Send, Sync);
+static_assertions::assert_impl_all!(PipelineLayoutDescriptor<'_, Option<&'_ BindGroupLayout>>: Send, Sync);
+
+impl PipelineLayoutDescriptor<'static, &'static BindGroupLayout> {
+    /// Returns an empty pipeline layout descriptor.
+    pub const fn empty() -> Self {
+        Self {
+            label: None,
+            bind_group_layouts: &[],
+            immediate_size: 0,
+        }
+    }
+}
+
+impl<'a> PipelineLayoutDescriptor<'a, &'static BindGroupLayout> {
+    /// Returns an empty pipeline layout descriptor with a label.
+    pub const fn empty_with_label(label: &'a str) -> Self {
+        Self {
+            label: Some(label),
+            bind_group_layouts: &[],
+            immediate_size: 0,
+        }
+    }
+}
+
+/// Helper trait used to get an `Option<&T>` from
+/// a `&T` or from an `Option<&T>`.
+pub(crate) trait AsOptRef<T> {
+    /// Returns an optional referencce to T.
+    fn as_opt_ref(&self) -> Option<&T>;
+}
+
+impl<T> AsOptRef<T> for Option<&T> {
+    fn as_opt_ref(&self) -> Option<&T> {
+        *self
+    }
+}
+
+impl<T> AsOptRef<T> for &T {
+    fn as_opt_ref(&self) -> Option<&T> {
+        Some(*self)
+    }
+}

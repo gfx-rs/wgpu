@@ -119,11 +119,8 @@ impl crate::framework::Example for Example {
             ms_name,
             fs_name,
         } = get_shaders(device, adapter.get_info().backend);
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[],
-            immediate_size: 0,
-        });
+        let pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor::empty());
         let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),

@@ -210,11 +210,7 @@ fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
         ms_name,
         fs_name,
     } = get_shaders(device, backend, &test_hash, &info);
-    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: None,
-        bind_group_layouts: &[],
-        immediate_size: 0,
-    });
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor::empty());
     let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
         label: None,
         layout: Some(&layout),
@@ -296,11 +292,7 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestIn
         fs_name,
     } = get_shaders(device, backend, &test_hash, &info);
     let frag = fs.unwrap();
-    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: None,
-        bind_group_layouts: &[],
-        immediate_size: 0,
-    });
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor::empty());
     let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
         label: None,
         layout: Some(&layout),

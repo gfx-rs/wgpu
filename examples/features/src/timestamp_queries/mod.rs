@@ -348,11 +348,7 @@ fn render_pass(
 ) {
     let format = wgpu::TextureFormat::Rgba8Unorm;
 
-    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: None,
-        bind_group_layouts: &[],
-        immediate_size: 0,
-    });
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor::empty());
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         label: None,

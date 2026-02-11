@@ -1269,7 +1269,7 @@ impl dispatch::DeviceInterface for CoreDevice {
 
     fn create_pipeline_layout(
         &self,
-        desc: &crate::PipelineLayoutDescriptor<'_>,
+        desc: &crate::PipelineLayoutDescriptor<'_, Option<&'_ crate::BindGroupLayout>>,
     ) -> dispatch::DispatchPipelineLayout {
         // Limit is always less or equal to hal::MAX_BIND_GROUPS, so this is always right
         // Guards following ArrayVec
@@ -1283,7 +1283,7 @@ impl dispatch::DeviceInterface for CoreDevice {
         let temp_layouts = desc
             .bind_group_layouts
             .iter()
-            .map(|bgl| Some(bgl.inner.as_core().id))
+            .map(|bgl| bgl.map(|bgl| bgl.inner.as_core().id))
             .collect::<ArrayVec<_, { wgc::MAX_BIND_GROUPS }>>();
         let descriptor = wgc::binding_model::PipelineLayoutDescriptor {
             label: desc.label.map(Borrowed),

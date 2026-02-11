@@ -41,13 +41,11 @@ static PASS_RESET_VERTEX_BUFFER: GpuTestConfiguration = GpuTestConfiguration::ne
             mapped_at_creation: false,
         });
 
-        let pipeline_layout = ctx
-            .device
-            .create_pipeline_layout(&PipelineLayoutDescriptor {
-                label: Some("Pipeline Layout"),
-                bind_group_layouts: &[],
-                immediate_size: 0,
-            });
+        let pipeline_layout =
+            ctx.device
+                .create_pipeline_layout(&PipelineLayoutDescriptor::empty_with_label(
+                    "Pipeline Layout",
+                ));
 
         let double_pipeline = ctx
             .device

@@ -2127,12 +2127,16 @@ impl dispatch::DeviceInterface for WebDevice {
 
     fn create_pipeline_layout(
         &self,
-        desc: &crate::PipelineLayoutDescriptor<'_>,
+        desc: &crate::PipelineLayoutDescriptor<'_, Option<&'_ crate::BindGroupLayout>>,
     ) -> dispatch::DispatchPipelineLayout {
+        let null = wasm_bindgen::JsValue::NULL;
         let temp_layouts = desc
             .bind_group_layouts
             .iter()
-            .map(|bgl| &bgl.inner.as_webgpu().inner)
+            .map(|bgl| match bgl {
+                Some(bgl) => bgl.inner.as_webgpu().inner.as_ref(),
+                None => &null,
+            })
             .collect::<js_sys::Array>();
         let mapped_desc = webgpu_sys::GpuPipelineLayoutDescriptor::new(&temp_layouts);
         if let Some(label) = desc.label {
@@ -3315,18 +3319,15 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
         bind_group: Option<&dispatch::DispatchBindGroup>,
         offsets: &[crate::DynamicOffset],
     ) {
-        let Some(bind_group) = bind_group else {
-            return;
-        };
-        let bind_group = &bind_group.as_webgpu().inner;
+        let bind_group = bind_group.map(|bind_group| &bind_group.as_webgpu().inner);
 
         if offsets.is_empty() {
-            self.inner.set_bind_group(index, Some(bind_group));
+            self.inner.set_bind_group(index, bind_group);
         } else {
             self.inner
                 .set_bind_group_with_u32_slice_and_f64_and_dynamic_offsets_data_length(
                     index,
-                    Some(bind_group),
+                    bind_group,
                     offsets,
                     0f64,
                     offsets.len() as u32,
@@ -3402,18 +3403,15 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         bind_group: Option<&dispatch::DispatchBindGroup>,
         offsets: &[crate::DynamicOffset],
     ) {
-        let Some(bind_group) = bind_group else {
-            return;
-        };
-        let bind_group = &bind_group.as_webgpu().inner;
+        let bind_group = bind_group.map(|bind_group| &bind_group.as_webgpu().inner);
 
         if offsets.is_empty() {
-            self.inner.set_bind_group(index, Some(bind_group));
+            self.inner.set_bind_group(index, bind_group);
         } else {
             self.inner
                 .set_bind_group_with_u32_slice_and_f64_and_dynamic_offsets_data_length(
                     index,
-                    Some(bind_group),
+                    bind_group,
                     offsets,
                     0f64,
                     offsets.len() as u32,
@@ -3696,18 +3694,15 @@ impl dispatch::RenderBundleEncoderInterface for WebRenderBundleEncoder {
         bind_group: Option<&dispatch::DispatchBindGroup>,
         offsets: &[crate::DynamicOffset],
     ) {
-        let Some(bind_group) = bind_group else {
-            return;
-        };
-        let bind_group = &bind_group.as_webgpu().inner;
+        let bind_group = bind_group.map(|bind_group| &bind_group.as_webgpu().inner);
 
         if offsets.is_empty() {
-            self.inner.set_bind_group(index, Some(bind_group));
+            self.inner.set_bind_group(index, bind_group);
         } else {
             self.inner
                 .set_bind_group_with_u32_slice_and_f64_and_dynamic_offsets_data_length(
                     index,
-                    Some(bind_group),
+                    bind_group,
                     offsets,
                     0f64,
                     offsets.len() as u32,

@@ -267,9 +267,9 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
     let render_pipeline_layout = ctx
         .device
         .create_pipeline_layout(&PipelineLayoutDescriptor {
+            label: None,
             bind_group_layouts: &[&bind_group_layout],
             immediate_size: 8 * size_of::<u32>() as u32,
-            ..Default::default()
         });
 
     let pipeline = ctx

@@ -151,7 +151,7 @@ pub trait DeviceInterface: CommonTraits {
     fn create_bind_group(&self, desc: &crate::BindGroupDescriptor<'_>) -> DispatchBindGroup;
     fn create_pipeline_layout(
         &self,
-        desc: &crate::PipelineLayoutDescriptor<'_>,
+        desc: &crate::PipelineLayoutDescriptor<'_, Option<&'_ crate::BindGroupLayout>>,
     ) -> DispatchPipelineLayout;
     fn create_render_pipeline(
         &self,

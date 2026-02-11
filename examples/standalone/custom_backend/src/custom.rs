@@ -164,7 +164,7 @@ impl DeviceInterface for CustomDevice {
 
     fn create_pipeline_layout(
         &self,
-        _desc: &wgpu::PipelineLayoutDescriptor<'_>,
+        _desc: &wgpu::PipelineLayoutDescriptor<'_, Option<&'_ wgpu::BindGroupLayout>>,
     ) -> wgpu::custom::DispatchPipelineLayout {
         unimplemented!()
     }
