@@ -2309,22 +2309,6 @@ fn invalid_zero_value_constructors() {
 "#,
     );
 
-    // Rejected in parser (but may change with template-list discovery)
-    check(
-        "
-        fn f() {
-            let x = texture_2d<f32>();
-        }
-        ",
-        r#"error: type `texture_2d` is not constructible
-  ┌─ wgsl:3:21
-  │
-3 │             let x = texture_2d<f32>();
-  │                     ^^^^^^^^^^ type is not constructible
-
-"#,
-    );
-
     // Rejected in constructor lowering
     check(
         "
