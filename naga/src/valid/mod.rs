@@ -770,6 +770,10 @@ impl Validator {
                     }
                     .with_span_handle(handle, &module.types)
                 })?;
+            debug_assert!(
+                ty_info.flags.contains(TypeFlags::CONSTRUCTIBLE)
+                    == module.types[handle].inner.is_constructible(&module.types)
+            );
             mod_info.type_flags.push(ty_info.flags);
             self.types[handle.index()] = ty_info;
         }

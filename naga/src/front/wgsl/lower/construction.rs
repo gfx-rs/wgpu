@@ -152,12 +152,9 @@ impl<'source> Lowerer<'source, '_> {
 
         let expr;
         match (components, constructor) {
-            // Zero-value constructor with explicit type. Not everything this
-            // matches is constructible, but the non-constructible types not
-            // excluded by `!is_dynamically_sized` are rejected by the
-            // parser.
+            // Zero-value constructor with explicit type.
             (Components::None, Constructor::Type((result_ty, inner)))
-                if !inner.is_dynamically_sized(&ctx.module.types) =>
+                if inner.is_constructible(&ctx.module.types) =>
             {
                 expr = crate::Expression::ZeroValue(result_ty);
             }
@@ -535,11 +532,11 @@ impl<'source> Lowerer<'source, '_> {
                 expr = crate::Expression::Compose { ty, components };
             }
 
-            // Array constructor, explicit type. Override- and runtime-sized arrays are not constructible.
+            // Array constructor, explicit type.
             (
                 components,
                 Constructor::Type((ty, inner @ &crate::TypeInner::Array { base, .. })),
-            ) if !inner.is_dynamically_sized(&ctx.module.types) => {
+            ) if inner.is_constructible(&ctx.module.types) => {
                 let mut components = components.into_components_vec();
                 ctx.try_automatic_conversions_slice(&mut components, &Tr::Handle(base), ty_span)?;
                 expr = crate::Expression::Compose { ty, components };
@@ -549,7 +546,7 @@ impl<'source> Lowerer<'source, '_> {
             (
                 components,
                 Constructor::Type((ty, inner @ &crate::TypeInner::Struct { ref members, .. })),
-            ) if !inner.is_dynamically_sized(&ctx.module.types) => {
+            ) if inner.is_constructible(&ctx.module.types) => {
                 let mut components = components.into_components_vec();
                 let struct_ty_span = ctx.module.types.get_span(ty);
 
