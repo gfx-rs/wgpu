@@ -516,6 +516,41 @@ pub enum DxcShaderModel {
     V6_5,
     V6_6,
     V6_7,
+    V6_8,
+}
+
+impl DxcShaderModel {
+    /// Get the shader model supported by a certain DXC version.
+    pub fn from_dxc_version(major: u32, minor: u32) -> Self {
+        // DXC version roughly has corresponded to shader model so far, where DXC 1.x supports SM 6.x.
+        // See discussion in https://discord.com/channels/590611987420020747/996417435374714920/1471234702206701650.
+        // Presumably DXC 2.0 and up will still support shader model 6.8.
+        if major > 1 {
+            Self::V6_8
+        } else {
+            Self::from_parts(6, minor)
+        }
+    }
+
+    /// Parse a DxcShaderModel from its version components.
+    pub fn from_parts(major: u32, minor: u32) -> Self {
+        if major > 6 || minor > 8 {
+            Self::V6_8
+        } else {
+            match minor {
+                0 => DxcShaderModel::V6_0,
+                1 => DxcShaderModel::V6_1,
+                2 => DxcShaderModel::V6_2,
+                3 => DxcShaderModel::V6_3,
+                4 => DxcShaderModel::V6_4,
+                5 => DxcShaderModel::V6_5,
+                6 => DxcShaderModel::V6_6,
+                7 => DxcShaderModel::V6_7,
+                // >= 6.8
+                _ => DxcShaderModel::V6_8,
+            }
+        }
+    }
 }
 
 /// Selects which DX12 shader compiler to use.
@@ -524,7 +559,6 @@ pub enum Dx12Compiler {
     /// The Fxc compiler (default) is old, slow and unmaintained.
     ///
     /// However, it doesn't require any additional .dlls to be shipped with the application.
-    #[default]
     Fxc,
     /// The Dxc compiler is new, fast and maintained.
     ///
@@ -537,14 +571,15 @@ pub enum Dx12Compiler {
     DynamicDxc {
         /// Path to `dxcompiler.dll`.
         dxc_path: String,
-        /// Maximum shader model the given dll supports.
-        max_shader_model: DxcShaderModel,
     },
     /// The statically-linked variant of Dxc.
     ///
     /// The `static-dxc` feature is required for this setting to be used successfully on DX12.
     /// Not available on `windows-aarch64-pc-*` targets.
     StaticDxc,
+    /// Use statically-linked DXC if available. Otherwise check for dynamically linked DXC on the PATH. Finally, fallback to FXC.
+    #[default]
+    Auto,
 }
 
 impl Dx12Compiler {
@@ -554,7 +589,6 @@ impl Dx12Compiler {
     pub fn default_dynamic_dxc() -> Self {
         Self::DynamicDxc {
             dxc_path: String::from("dxcompiler.dll"),
-            max_shader_model: DxcShaderModel::V6_7, // should be 6.8 but the variant is missing
         }
     }
 
@@ -573,6 +607,7 @@ impl Dx12Compiler {
             "dxc" | "dynamicdxc" => Some(Self::default_dynamic_dxc()),
             "staticdxc" => Some(Self::StaticDxc),
             "fxc" => Some(Self::Fxc),
+            "auto" => Some(Self::Auto),
             _ => None,
         }
     }

@@ -67,6 +67,7 @@ By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
         - `ir::Block::is_empty`
         - `ir::Block::len`
 - Changed passthrough shaders to not require an entry point parameter, so that the same shader module may be used in multiple entry points. Also added support for metallib passthrough. By @inner-daemons in #8886.
+- Added `Dx12Compiler::Auto` to automatically use static or dynamic DXC if available, before falling back to FXC. By @inner-daemons in [#8882](https://github.com/gfx-rs/wgpu/pull/8882).
 - Added support for `insert_debug_marker`, `push_debug_group` and `pop_debug_group` on WebGPU. By @evilpie in [#9017](https://github.com/gfx-rs/wgpu/pull/9017).
 - Added support for `enable primitive_index` and `@builtin(primitive_index)` with support on all platforms. By @inner-daemons in #8879.
 
