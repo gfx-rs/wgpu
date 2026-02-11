@@ -660,8 +660,16 @@ impl Queue {
         if !buffer_offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             return Err(TransferError::UnalignedBufferOffset(buffer_offset));
         }
-        if buffer_offset + buffer_size.get() > buffer.size {
-            return Err(TransferError::BufferOverrun {
+
+        if buffer_offset > buffer.size {
+            return Err(TransferError::BufferStartOffsetOverrun {
+                start_offset: buffer_offset,
+                buffer_size: buffer.size,
+                side: CopySide::Destination,
+            });
+        }
+        if buffer_size.get() > buffer.size - buffer_offset {
+            return Err(TransferError::BufferEndOffsetOverrun {
                 start_offset: buffer_offset,
                 size: buffer_size.get(),
                 buffer_size: buffer.size,

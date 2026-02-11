@@ -281,26 +281,45 @@ pub enum BufferAccessError {
     #[error("Buffer range size invalid: range_size {range_size} must be multiple of 4")]
     UnalignedRangeSize { range_size: wgt::BufferAddress },
     #[error("Buffer access out of bounds: index {index} would underrun the buffer (limit: {min})")]
-    OutOfBoundsUnderrun {
+    OutOfBoundsStartOffsetUnderrun {
         index: wgt::BufferAddress,
         min: wgt::BufferAddress,
     },
     #[error(
-        "Buffer access out of bounds: last index {index} would overrun the buffer (limit: {max})"
+        "Buffer access out of bounds: start offset {index} would overrun the buffer (limit: {max})"
     )]
-    OutOfBoundsOverrun {
+    OutOfBoundsStartOffsetOverrun {
         index: wgt::BufferAddress,
         max: wgt::BufferAddress,
     },
-    #[error("Buffer map range start {start} is greater than end {end}")]
-    NegativeRange {
-        start: wgt::BufferAddress,
-        end: wgt::BufferAddress,
+    #[error(
+        "Buffer access out of bounds: start offset {index} + size {size} would overrun the buffer (limit: {max})"
+    )]
+    OutOfBoundsEndOffsetOverrun {
+        index: wgt::BufferAddress,
+        size: wgt::BufferAddress,
+        max: wgt::BufferAddress,
     },
     #[error("Buffer map aborted")]
     MapAborted,
     #[error(transparent)]
     InvalidResource(#[from] InvalidResourceError),
+    #[error("Map start offset ({offset}) is out-of-bounds for buffer of size {buffer_size}")]
+    MapStartOffsetOverrun {
+        offset: wgt::BufferAddress,
+        buffer_size: wgt::BufferAddress,
+    },
+    #[error(
+        "Map end offset (start at {} + size of {}) is out-of-bounds for buffer of size {}",
+        offset,
+        size,
+        buffer_size
+    )]
+    MapEndOffsetOverrun {
+        offset: wgt::BufferAddress,
+        size: wgt::BufferAddress,
+        buffer_size: wgt::BufferAddress,
+    },
 }
 
 impl WebGpuError for BufferAccessError {
@@ -318,10 +337,12 @@ impl WebGpuError for BufferAccessError {
             | Self::UnalignedRange
             | Self::UnalignedOffset { .. }
             | Self::UnalignedRangeSize { .. }
-            | Self::OutOfBoundsUnderrun { .. }
-            | Self::OutOfBoundsOverrun { .. }
-            | Self::NegativeRange { .. }
-            | Self::MapAborted => return ErrorType::Validation,
+            | Self::OutOfBoundsStartOffsetUnderrun { .. }
+            | Self::OutOfBoundsStartOffsetOverrun { .. }
+            | Self::OutOfBoundsEndOffsetOverrun { .. }
+            | Self::MapAborted
+            | Self::MapStartOffsetOverrun { .. }
+            | Self::MapEndOffsetOverrun { .. } => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
@@ -592,10 +613,30 @@ impl Buffer {
             return Err((op, BufferAccessError::UnalignedRangeSize { range_size }));
         }
 
-        let range = offset..(offset + range_size);
+        if offset > self.size {
+            return Err((
+                op,
+                BufferAccessError::MapStartOffsetOverrun {
+                    offset,
+                    buffer_size: self.size,
+                },
+            ));
+        }
+        // NOTE: Should never underflow because of our earlier check.
+        if range_size > self.size - offset {
+            return Err((
+                op,
+                BufferAccessError::MapEndOffsetOverrun {
+                    offset,
+                    size: range_size,
+                    buffer_size: self.size,
+                },
+            ));
+        }
+        let end_offset = offset + range_size;
 
-        if !range.start.is_multiple_of(wgt::MAP_ALIGNMENT)
-            || !range.end.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT)
+        if !offset.is_multiple_of(wgt::MAP_ALIGNMENT)
+            || !end_offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT)
         {
             return Err((op, BufferAccessError::UnalignedRange));
         }
@@ -607,25 +648,6 @@ impl Buffer {
 
         if let Err(e) = self.check_usage(pub_usage) {
             return Err((op, e.into()));
-        }
-
-        if range.start > range.end {
-            return Err((
-                op,
-                BufferAccessError::NegativeRange {
-                    start: range.start,
-                    end: range.end,
-                },
-            ));
-        }
-        if range.end > self.size {
-            return Err((
-                op,
-                BufferAccessError::OutOfBoundsOverrun {
-                    index: range.end,
-                    max: self.size,
-                },
-            ));
         }
 
         let device = &self.device;
@@ -650,7 +672,7 @@ impl Buffer {
                     return Err((op, BufferAccessError::MapAlreadyPending));
                 }
                 BufferMapState::Idle => BufferMapState::Waiting(BufferPendingMapping {
-                    range,
+                    range: offset..end_offset,
                     op,
                     _parent_buffer: self.clone(),
                 }),
@@ -704,11 +726,18 @@ impl Buffer {
         let map_state = &*self.map_state.lock();
         match *map_state {
             BufferMapState::Init { ref staging_buffer } => {
-                // offset (u64) can not be < 0, so no need to validate the lower bound
-                if offset + range_size > self.size {
-                    return Err(BufferAccessError::OutOfBoundsOverrun {
-                        index: offset + range_size - 1,
-                        max: self.size,
+                if offset > self.size {
+                    return Err(BufferAccessError::MapStartOffsetOverrun {
+                        offset,
+                        buffer_size: self.size,
+                    });
+                }
+                // NOTE: Should never underflow because of our earlier check.
+                if range_size > self.size - offset {
+                    return Err(BufferAccessError::MapEndOffsetOverrun {
+                        offset,
+                        size: range_size,
+                        buffer_size: self.size,
                     });
                 }
                 let ptr = unsafe { staging_buffer.ptr() };
@@ -720,15 +749,22 @@ impl Buffer {
                 ref range,
                 ..
             } => {
+                if offset > range.end {
+                    return Err(BufferAccessError::OutOfBoundsStartOffsetOverrun {
+                        index: offset,
+                        max: range.end,
+                    });
+                }
                 if offset < range.start {
-                    return Err(BufferAccessError::OutOfBoundsUnderrun {
+                    return Err(BufferAccessError::OutOfBoundsStartOffsetUnderrun {
                         index: offset,
                         min: range.start,
                     });
                 }
-                if offset + range_size > range.end {
-                    return Err(BufferAccessError::OutOfBoundsOverrun {
-                        index: offset + range_size - 1,
+                if range_size > range.end - offset {
+                    return Err(BufferAccessError::OutOfBoundsEndOffsetOverrun {
+                        index: offset,
+                        size: range_size,
                         max: range.end,
                     });
                 }
