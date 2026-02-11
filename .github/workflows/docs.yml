@@ -14,7 +14,7 @@ on:
   merge_group:
 
 env:
-  # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
+  # This is the MSRV used by all repository infrastructure.
   REPO_MSRV: "1.93"
 
   CARGO_INCREMENTAL: false
