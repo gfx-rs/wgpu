@@ -103,6 +103,7 @@ depth_stencil: Some(wgpu::DepthStencilState::stencil(
 - Added support for `enable primitive_index` and `@builtin(primitive_index)` with support on all platforms. By @inner-daemons in #8879.
 - BREAKING: Add `V6_8` variant to `DxcShaderModel` and `naga::back::hlsl::ShaderModel`. By @inner-daemons in [#8882](https://github.com/gfx-rs/wgpu/pull/8882) and @ErichDonGubler in [#9083](https://github.com/gfx-rs/wgpu/pull/9083).
 - BREAKING: Add `V6_9` variant to `DxcShaderModel` and `naga::back::hlsl::ShaderModel`. By @ErichDonGubler in [#????](https://github.com/gfx-rs/wgpu/pull/????).
+- Allow gaps in bind group layouts and added full support for unbinding. By @teoxoy in [#9034](https://github.com/gfx-rs/wgpu/pull/9034).
 
 #### naga
 
