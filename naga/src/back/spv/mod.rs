@@ -934,7 +934,7 @@ pub struct Writer {
     force_loop_bounding: bool,
     use_storage_input_output_16: bool,
     void_type: Word,
-    double_u32_ty_id: Option<Word>,
+    tuple_of_u32s_ty_id: Option<Word>,
     //TODO: convert most of these into vectors, addressable by handle indices
     lookup_type: crate::FastHashMap<LookupType, Word>,
     lookup_function: crate::FastHashMap<Handle<crate::Function>, Word>,
@@ -970,7 +970,12 @@ pub struct Writer {
     debug_printf: Option<Word>,
     pub(crate) ray_query_initialization_tracking: bool,
 
+    /// Limits to the mesh shader dispatch group a task workgroup can dispatch.
+    ///
+    /// Metal for example limits to 1024 workgroups per task shader dispatch. Dispatching more is
+    /// undefined behavior, so this would validate that to dispatch zero workgroups.
     task_runtime_limits: Option<TaskRuntimeLimits>,
+    /// If true, naga may generate checks that the primitive indices are valid in the output.
     mesh_shader_primitive_indices_clamp: bool,
 }
 

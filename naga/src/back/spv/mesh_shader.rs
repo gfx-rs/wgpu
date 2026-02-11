@@ -888,7 +888,7 @@ impl super::Writer {
                 let max_total = self.get_constant_scalar(crate::Literal::U32(
                     task_limits.max_mesh_workgroups_total,
                 ));
-                let combined_struct_type = self.get_double_u32_ty_id(); // TODO
+                let combined_struct_type = self.get_tuple_of_u32s_ty_id();
                 let values = [self.id_gen.next(), self.id_gen.next(), self.id_gen.next()];
                 for (i, value) in values.into_iter().enumerate() {
                     block.body.push(Instruction::composite_extract(
