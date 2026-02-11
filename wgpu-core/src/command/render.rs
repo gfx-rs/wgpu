@@ -559,21 +559,20 @@ impl<'scope, 'snatch_guard, 'cmd_enc> State<'scope, 'snatch_guard, 'cmd_enc> {
 
             if family == DrawCommandFamily::DrawIndexed {
                 // Pipeline expects an index buffer
-                if let Some(pipeline_index_format) = pipeline.strip_index_format {
-                    // We have a buffer bound
-                    let buffer_index_format = self
-                        .index
-                        .buffer_format
-                        .ok_or(DrawError::MissingIndexBuffer)?;
+                // We have a buffer bound
+                let buffer_index_format = self
+                    .index
+                    .buffer_format
+                    .ok_or(DrawError::MissingIndexBuffer)?;
 
-                    // The buffers are different formats
-                    if pipeline_index_format != buffer_index_format {
-                        return Err(DrawError::UnmatchedIndexFormats {
-                            pipeline: pipeline.error_ident(),
-                            pipeline_format: pipeline_index_format,
-                            buffer_format: buffer_index_format,
-                        });
-                    }
+                if pipeline.topology.is_strip()
+                    && pipeline.strip_index_format != Some(buffer_index_format)
+                {
+                    return Err(DrawError::UnmatchedStripIndexFormat {
+                        pipeline: pipeline.error_ident(),
+                        strip_index_format: pipeline.strip_index_format,
+                        buffer_format: buffer_index_format,
+                    });
                 }
             }
             if (family == DrawCommandFamily::DrawMeshTasks) != pipeline.is_mesh {
@@ -2410,7 +2409,7 @@ fn set_index_buffer(
 
     buffer.check_usage(BufferUsages::INDEX)?;
 
-    if offset % u64::try_from(index_format.byte_size()).unwrap() != 0 {
+    if !offset.is_multiple_of(u64::try_from(index_format.byte_size()).unwrap()) {
         return Err(RenderCommandError::UnalignedIndexBuffer {
             offset,
             alignment: index_format.byte_size(),
@@ -2474,7 +2473,7 @@ fn set_vertex_buffer(
 
     buffer.check_usage(BufferUsages::VERTEX)?;
 
-    if offset % wgt::VERTEX_ALIGNMENT != 0 {
+    if !offset.is_multiple_of(wgt::VERTEX_ALIGNMENT) {
         return Err(RenderCommandError::UnalignedVertexBuffer { slot, offset }.into());
     }
     let (binding, buffer_size) = buffer
@@ -2781,7 +2780,7 @@ fn multi_draw_indirect(
     indirect_buffer.check_usage(BufferUsages::INDIRECT)?;
     indirect_buffer.check_destroyed(state.pass.base.snatch_guard)?;
 
-    if offset % 4 != 0 {
+    if !offset.is_multiple_of(4) {
         return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
     }
 
@@ -2991,7 +2990,7 @@ fn multi_draw_indirect_count(
     count_buffer.check_usage(BufferUsages::INDIRECT)?;
     let count_raw = count_buffer.try_raw(state.pass.base.snatch_guard)?;
 
-    if offset % 4 != 0 {
+    if !offset.is_multiple_of(4) {
         return Err(RenderPassErrorInner::UnalignedIndirectBufferOffset(offset));
     }
 

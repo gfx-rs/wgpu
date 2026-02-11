@@ -21,7 +21,6 @@ use super::bind_group_layout::GPUBindGroupLayout;
 use super::buffer::GPUBuffer;
 use super::compute_pipeline::GPUComputePipeline;
 use super::pipeline_layout::GPUPipelineLayout;
-use super::queue::GPUQueue;
 use super::sampler::GPUSampler;
 use super::shader::GPUShaderModule;
 use super::texture::GPUTexture;
@@ -38,11 +37,16 @@ use crate::shader::GPUCompilationInfo;
 use crate::webidl::features_to_feature_names;
 use crate::Instance;
 
+/// External memory associated with device and queue, to encourage V8 to garbage
+/// collect devices promptly. This seems to be particularly important when
+/// running CTS tests under `webgpu:api,validation,capability_checks,limits,*`
+/// on DX12 in wgpu CI, where any smaller power of two results in OOM errors.
+pub(crate) const DEVICE_EXTERNAL_MEMORY_SIZE: i64 = 1 << 24; // 16 MB
+
 pub struct GPUDevice {
   pub instance: Instance,
   pub id: wgpu_core::id::DeviceId,
   pub adapter: wgpu_core::id::AdapterId,
-  pub queue: wgpu_core::id::QueueId,
 
   pub label: String,
 
@@ -50,10 +54,13 @@ pub struct GPUDevice {
   pub limits: SameObject<GPUSupportedLimits>,
   pub adapter_info: Rc<SameObject<GPUAdapterInfo>>,
 
-  pub queue_obj: SameObject<GPUQueue>,
+  pub queue_obj: v8::Global<v8::Object>,
 
   pub error_handler: super::error::ErrorHandler,
   pub lost_promise: v8::Global<v8::Promise>,
+
+  // Weak reference to the JS object so we can attach a finalizer.
+  pub(crate) weak: std::sync::OnceLock<v8::Weak<v8::Object>>,
 }
 
 impl Drop for GPUDevice {
@@ -126,14 +133,8 @@ impl GPUDevice {
 
   #[getter]
   #[global]
-  fn queue(&self, scope: &mut v8::HandleScope) -> v8::Global<v8::Object> {
-    self.queue_obj.get(scope, |_| GPUQueue {
-      id: self.queue,
-      device: self.id,
-      error_handler: self.error_handler.clone(),
-      instance: self.instance.clone(),
-      label: self.label.clone(),
-    })
+  fn queue(&self) -> v8::Global<v8::Object> {
+    self.queue_obj.clone()
   }
 
   #[fast]
@@ -303,6 +304,7 @@ impl GPUDevice {
         entry.sampler.is_some(),
         entry.texture.is_some(),
         entry.storage_texture.is_some(),
+        entry.external_texture.is_some(),
       ]
       .into_iter()
       .filter(|t| *t)
@@ -334,6 +336,8 @@ impl GPUDevice {
           format: storage_texture.format.into(),
           view_dimension: storage_texture.view_dimension.into(),
         }
+      } else if entry.external_texture.is_some() {
+        BindingType::ExternalTexture
       } else {
         unreachable!()
       };
@@ -433,6 +437,9 @@ impl GPUDevice {
               offset: buffer_binding.offset,
               size: buffer_binding.size,
             })
+          }
+          GPUBindingResource::ExternalTexture(external_texture) => {
+            BindingResource::ExternalTexture(external_texture.id)
           }
         },
       })

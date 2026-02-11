@@ -59,7 +59,7 @@ RayDesc_ ConstructRayDesc_(uint arg0, uint arg1, float arg2, float arg3, float3 
     return ret;
 }
 
-RayIntersection GetCommittedIntersection(RayQuery<RAY_FLAG_NONE> rq) {
+RayIntersection GetCommittedIntersection(RayQuery<RAY_FLAG_NONE> rq, uint rq_tracker) {
     RayIntersection ret = (RayIntersection)0;
     ret.kind = rq.CommittedStatus();
     if( rq.CommittedStatus() == COMMITTED_NOTHING) {} else {
@@ -82,13 +82,18 @@ RayIntersection GetCommittedIntersection(RayQuery<RAY_FLAG_NONE> rq) {
 RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructure acs)
 {
     RayQuery<RAY_FLAG_NONE> rq_1;
+    uint naga_query_init_tracker_for_rq_1 = 0;
 
-    rq_1.TraceRayInline(acs, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos, dir).flags, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos, dir).cull_mask, RayDescFromRayDesc_(ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos, dir)));
+    {
+        RayDesc_ naga_desc = ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos, dir);
+        rq_1.TraceRayInline(acs, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
+    }
     uint2 loop_bound = uint2(4294967295u, 4294967295u);
     while(true) {
         if (all(loop_bound == uint2(0u, 0u))) { break; }
         loop_bound -= uint2(loop_bound.y == 0u, 1u);
-        const bool _e9 = rq_1.Proceed();
+        bool _e9 = false;
+        _e9 = rq_1.Proceed();
         if (_e9) {
         } else {
             break;
@@ -96,7 +101,7 @@ RayIntersection query_loop(float3 pos, float3 dir, RaytracingAccelerationStructu
         {
         }
     }
-    const RayIntersection rayintersection = GetCommittedIntersection(rq_1);
+    const RayIntersection rayintersection = GetCommittedIntersection(rq_1, naga_query_init_tracker_for_rq_1);
     return rayintersection;
 }
 
@@ -120,7 +125,7 @@ void main()
     return;
 }
 
-RayIntersection GetCandidateIntersection(RayQuery<RAY_FLAG_NONE> rq) {
+RayIntersection GetCandidateIntersection(RayQuery<RAY_FLAG_NONE> rq, uint rq_tracker) {
     RayIntersection ret = (RayIntersection)0;
     CANDIDATE_TYPE kind = rq.CandidateType();
     if (kind == CANDIDATE_NON_OPAQUE_TRIANGLE) {
@@ -145,11 +150,15 @@ RayIntersection GetCandidateIntersection(RayQuery<RAY_FLAG_NONE> rq) {
 void main_candidate()
 {
     RayQuery<RAY_FLAG_NONE> rq;
+    uint naga_query_init_tracker_for_rq = 0;
 
     float3 pos_2 = (0.0).xxx;
     float3 dir_2 = float3(0.0, 1.0, 0.0);
-    rq.TraceRayInline(acc_struct, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos_2, dir_2).flags, ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos_2, dir_2).cull_mask, RayDescFromRayDesc_(ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos_2, dir_2)));
-    RayIntersection intersection_1 = GetCandidateIntersection(rq);
+    {
+        RayDesc_ naga_desc = ConstructRayDesc_(4u, 255u, 0.1, 100.0, pos_2, dir_2);
+        rq.TraceRayInline(acc_struct, naga_desc.flags, naga_desc.cull_mask, RayDescFromRayDesc_(naga_desc));
+    }
+    RayIntersection intersection_1 = GetCandidateIntersection(rq, naga_query_init_tracker_for_rq);
     if ((intersection_1.kind == 3u)) {
         rq.CommitProceduralPrimitiveHit(10.0);
         return;

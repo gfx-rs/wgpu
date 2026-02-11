@@ -23,10 +23,12 @@ use termcolor::ColorSpec;
 use termcolor::WriteColor;
 
 pub async fn run() -> Result<(), AnyError> {
-    let mut args_iter = env::args();
-    let _ = args_iter.next();
-    let url = args_iter
-        .next()
+    let mut args = pico_args::Arguments::from_env();
+    let enable_external_texture = args.contains("--enable-external-texture");
+    let url = args
+        .subcommand()
+        .ok()
+        .flatten()
         .ok_or_else(|| anyhow!("missing specifier in first command line argument"))?;
     let specifier = resolve_url_or_path(&url, &env::current_dir()?)?;
 
@@ -43,8 +45,17 @@ pub async fn run() -> Result<(), AnyError> {
         ..Default::default()
     };
     let mut js_runtime = JsRuntime::new(options);
-    let args = args_iter.collect::<Vec<String>>();
-    let cfg = json!({"args": args, "cwd": env::current_dir().unwrap().to_string_lossy() });
+    let args = args
+        .finish()
+        .into_iter()
+        .map(|os| os.into_string().ok())
+        .collect::<Option<Vec<String>>>()
+        .ok_or_else(|| anyhow!("Invalid UTF-8 in arguments"))?;
+    let cfg = json!({
+        "args": args,
+        "cwd": env::current_dir().unwrap().to_string_lossy(),
+        "enableExternalTexture": enable_external_texture,
+    });
 
     {
         let context = js_runtime.main_context();

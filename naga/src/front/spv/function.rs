@@ -158,6 +158,18 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
                     fun_inst.expect(1)?;
                     break;
                 }
+                spirv::Op::ExtInst => {
+                    let _ = self.next()?;
+                    let _ = self.next()?;
+                    let set_id = self.next()?;
+                    if Some(set_id) == self.ext_non_semantic_id {
+                        for _ in 0..fun_inst.wc - 4 {
+                            self.next()?;
+                        }
+                    } else {
+                        return Err(Error::UnsupportedInstruction(self.state, fun_inst.op));
+                    }
+                }
                 _ => {
                     return Err(Error::UnsupportedInstruction(self.state, fun_inst.op));
                 }
@@ -598,6 +610,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
             function,
             mesh_info: None,
             task_payload: None,
+            incoming_ray_payload: None,
         });
 
         Ok(())
@@ -605,7 +618,7 @@ impl<I: Iterator<Item = u32>> super::Frontend<I> {
 }
 
 impl BlockContext<'_> {
-    pub(super) fn gctx(&self) -> crate::proc::GlobalCtx<'_> {
+    pub(super) const fn gctx(&self) -> crate::proc::GlobalCtx<'_> {
         crate::proc::GlobalCtx {
             types: &self.module.types,
             constants: &self.module.constants,

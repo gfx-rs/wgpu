@@ -221,7 +221,7 @@ fn check_member_layout(
 const fn ptr_space_argument_flag(space: crate::AddressSpace) -> TypeFlags {
     use crate::AddressSpace as As;
     match space {
-        As::Function | As::Private => TypeFlags::ARGUMENT,
+        As::Function | As::Private | As::RayPayload | As::IncomingRayPayload => TypeFlags::ARGUMENT,
         As::Uniform
         | As::Storage { .. }
         | As::Handle
@@ -800,7 +800,8 @@ impl super::Validator {
                 Alignment::ONE,
             ),
             Ti::AccelerationStructure { vertex_return } => {
-                self.require_type_capability(Capabilities::RAY_QUERY)?;
+                self.require_type_capability(Capabilities::RAY_TRACING_PIPELINE)
+                    .or_else(|_| self.require_type_capability(Capabilities::RAY_QUERY))?;
                 if vertex_return {
                     self.require_type_capability(Capabilities::RAY_HIT_VERTEX_POSITION)?;
                 }

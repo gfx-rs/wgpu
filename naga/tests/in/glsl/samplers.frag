@@ -1,8 +1,15 @@
 #version 440 core
 precision mediump float;
 
+// WGSL doesn't have 1D depth, 1D array or 2D multisampled array textures.
+#define HAS_1D_DEPTH_TEXTURES 0
+#define HAS_1D_ARRAY_TEXTURES 0
+#define HAS_2D_MS_ARRAY_TEXTURES 0
+
 layout(set = 1, binding = 0) uniform texture1D tex1D;
+#if HAS_1D_ARRAY_TEXTURES
 layout(set = 1, binding = 1) uniform texture1DArray tex1DArray;
+#endif
 layout(set = 1, binding = 2) uniform texture2D tex2D;
 layout(set = 1, binding = 3) uniform texture2DArray tex2DArray;
 layout(set = 1, binding = 4) uniform textureCube texCube;
@@ -13,9 +20,6 @@ layout(set = 1, binding = 7) uniform utexture2D utex2D;
 layout(set = 1, binding = 8) uniform itexture2D itex2D;
 
 layout(set = 2, binding = 0) uniform sampler samp;
-
-// WGSL doesn't have 1D depth samplers.
-#define HAS_1D_DEPTH_TEXTURES 0
 
 #if HAS_1D_DEPTH_TEXTURES
 layout(set = 1, binding = 10) uniform texture1D tex1DShadow;
@@ -30,7 +34,9 @@ layout(set = 1, binding = 16) uniform texture3D tex3DShadow;
 layout(set = 1, binding = 17) uniform samplerShadow sampShadow;
 
 layout(binding = 18) uniform texture2DMS tex2DMS;
+#if HAS_2D_MS_ARRAY_TEXTURES
 layout(binding = 19) uniform texture2DMSArray tex2DMSArray;
+#endif
 
 // Conventions for readability:
 //   1.0 = Shadow Ref
@@ -97,6 +103,7 @@ void testTex1DShadow(float coord) {
 }
 #endif
 
+#if HAS_1D_ARRAY_TEXTURES
 void testTex1DArray(in vec2 coord) {
     ivec2 size1DArray = textureSize(sampler1DArray(tex1DArray, samp), 0);
     int levels = textureQueryLevels(sampler1DArray(tex1DArray, samp));
@@ -112,6 +119,7 @@ void testTex1DArray(in vec2 coord) {
     c = texelFetch(sampler1DArray(tex1DArray, samp), ivec2(coord), 3);
     c = texelFetchOffset(sampler1DArray(tex1DArray, samp), ivec2(coord), 3, 5);
 }
+#endif
 
 #if HAS_1D_DEPTH_TEXTURES
 void testTex1DArrayShadow(in vec2 coord) {
@@ -290,18 +298,22 @@ void testTex2DMS(in vec2 coord) {
     c = texelFetch(sampler2DMS(tex2DMS, samp), ivec2(coord), 3);
 }
 
+#if HAS_2D_MS_ARRAY_TEXTURES
 void testTex2DMSArray(in vec3 coord) {
     ivec3 size2DMSArray = textureSize(sampler2DMSArray(tex2DMSArray, samp));
     vec4 c;
     c = texelFetch(sampler2DMSArray(tex2DMSArray, samp), ivec3(coord), 3);
 }
+#endif
 
 void main() {
     testTex1D(1.0);
 #if HAS_1D_DEPTH_TEXTURES
     testTex1DShadow(2.0);
 #endif
+#if HAS_1D_ARRAY_TEXTURES
     testTex1DArray(vec2(3.0));
+#endif
 #if HAS_1D_DEPTH_TEXTURES
     testTex1DArrayShadow(vec2(4.0));
 #endif
@@ -315,5 +327,7 @@ void main() {
     testTexCubeArrayShadow(vec4(1.0));
     testTex3D(vec3(1.0));
     testTex2DMS(vec2(1.0));
+#if HAS_2D_MS_ARRAY_TEXTURES
     testTex2DMSArray(vec3(1.0));
+#endif
 }

@@ -1059,7 +1059,6 @@ impl Global {
         (id, Some(error))
     }
 
-    #[allow(unused_unsafe)]
     /// # Safety
     ///
     /// This function passes source code or binary to the backend as-is and can potentially result in a
@@ -1100,6 +1099,7 @@ impl Global {
                     ),
                     (desc.dxil.as_deref(), DataKind::Dxil),
                     (desc.hlsl.as_ref().map(|a| a.as_bytes()), DataKind::Hlsl),
+                    (desc.metallib.as_deref(), DataKind::MetalLib),
                     (desc.msl.as_ref().map(|a| a.as_bytes()), DataKind::Msl),
                     (desc.glsl.as_ref().map(|a| a.as_bytes()), DataKind::Glsl),
                     (desc.wgsl.as_ref().map(|a| a.as_bytes()), DataKind::Wgsl),
@@ -1111,11 +1111,8 @@ impl Global {
                 trace.add(trace::Action::CreateShaderModulePassthrough {
                     id: shader.to_trace(),
                     data: file_names,
-
-                    entry_point: desc.entry_point.clone(),
                     label: desc.label.clone(),
                     num_workgroups: desc.num_workgroups,
-                    runtime_checks: desc.runtime_checks,
                 });
             };
 
@@ -1393,6 +1390,7 @@ impl Global {
                 Ok(cache) => cache,
                 Err(e) => break 'error e.into(),
             };
+            let mut passthrough_stages = wgt::ShaderStages::empty();
 
             let vertex = match desc.vertex {
                 RenderPipelineVertexProcessor::Vertex(ref vertex) => {
@@ -1408,6 +1406,9 @@ impl Global {
                         Ok(module) => module,
                         Err(e) => break 'error e,
                     };
+                    if module.interface.is_none() {
+                        passthrough_stages |= wgt::ShaderStages::VERTEX;
+                    }
                     let stage = ResolvedProgrammableStageDescriptor {
                         module,
                         entry_point: vertex.stage.entry_point.clone(),
@@ -1435,6 +1436,9 @@ impl Global {
                             Ok(module) => module,
                             Err(e) => break 'error e,
                         };
+                        if module.interface.is_none() {
+                            passthrough_stages |= wgt::ShaderStages::TASK;
+                        }
                         let state = ResolvedProgrammableStageDescriptor {
                             module,
                             entry_point: task.stage.entry_point.clone(),
@@ -1459,6 +1463,9 @@ impl Global {
                         Ok(module) => module,
                         Err(e) => break 'error e,
                     };
+                    if mesh_module.interface.is_none() {
+                        passthrough_stages |= wgt::ShaderStages::VERTEX;
+                    }
                     let mesh_stage = ResolvedProgrammableStageDescriptor {
                         module: mesh_module,
                         entry_point: mesh.stage.entry_point.clone(),
@@ -1487,6 +1494,9 @@ impl Global {
                     Ok(module) => module,
                     Err(e) => break 'error e,
                 };
+                if module.interface.is_none() {
+                    passthrough_stages |= wgt::ShaderStages::FRAGMENT;
+                }
                 let stage = ResolvedProgrammableStageDescriptor {
                     module,
                     entry_point: state.stage.entry_point.clone(),
@@ -1500,6 +1510,12 @@ impl Global {
             } else {
                 None
             };
+
+            if !passthrough_stages.is_empty() && layout.is_none() {
+                break 'error pipeline::CreateRenderPipelineError::Implicit(
+                    pipeline::ImplicitLayoutError::Passthrough(passthrough_stages),
+                );
+            }
 
             let desc = ResolvedGeneralRenderPipelineDescriptor {
                 label: desc.label.clone(),
@@ -1560,13 +1576,22 @@ impl Global {
                 Ok(pipeline) => pipeline,
                 Err(e) => break 'error e.into(),
             };
-            let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
-                Some(bg) => fid.assign(Fallible::Valid(bg.clone())),
-                None => {
-                    break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index)
+            match pipeline.get_bind_group_layout(index) {
+                Ok(bgl) => {
+                    #[cfg(feature = "trace")]
+                    if let Some(ref mut trace) = *pipeline.device.trace.lock() {
+                        trace.add(trace::Action::GetRenderPipelineBindGroupLayout {
+                            id: bgl.to_trace(),
+                            pipeline: pipeline.to_trace(),
+                            index,
+                        });
+                    }
+
+                    let id = fid.assign(Fallible::Valid(bgl.clone()));
+                    return (id, None);
                 }
+                Err(err) => break 'error err,
             };
-            return (id, None);
         };
 
         let id = fid.assign(Fallible::Invalid(Arc::new(String::new())));
@@ -1634,6 +1659,11 @@ impl Global {
                 Ok(module) => module,
                 Err(e) => break 'error e.into(),
             };
+            if module.interface.is_none() && layout.is_none() {
+                break 'error pipeline::CreateComputePipelineError::Implicit(
+                    pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::COMPUTE),
+                );
+            }
             let stage = ResolvedProgrammableStageDescriptor {
                 module,
                 entry_point: desc.stage.entry_point.clone(),
@@ -1696,14 +1726,22 @@ impl Global {
                 Err(e) => break 'error e.into(),
             };
 
-            let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
-                Some(bg) => fid.assign(Fallible::Valid(bg.clone())),
-                None => {
-                    break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index)
-                }
-            };
+            match pipeline.get_bind_group_layout(index) {
+                Ok(bgl) => {
+                    #[cfg(feature = "trace")]
+                    if let Some(ref mut trace) = *pipeline.device.trace.lock() {
+                        trace.add(trace::Action::GetComputePipelineBindGroupLayout {
+                            id: bgl.to_trace(),
+                            pipeline: pipeline.to_trace(),
+                            index,
+                        });
+                    }
 
-            return (id, None);
+                    let id = fid.assign(Fallible::Valid(bgl.clone()));
+                    return (id, None);
+                }
+                Err(err) => break 'error err,
+            };
         };
 
         let id = fid.assign(Fallible::Invalid(Arc::new(String::new())));

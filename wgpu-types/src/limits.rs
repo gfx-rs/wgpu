@@ -85,7 +85,7 @@ macro_rules! with_limits {
 /// - [`Limits::downlevel_defaults()`]. This is a set of limits that is guaranteed to work on almost
 ///   all backends, including "downlevel" backends such as OpenGL and D3D11, other than WebGL. For
 ///   most applications we recommend using these limits, assuming they are high enough for your
-///   application, and you do not intent to support WebGL.
+///   application, and you do not intend to support WebGL.
 /// - [`Limits::downlevel_webgl2_defaults()`] This is a set of limits that is lower even than the
 ///   [`downlevel_defaults()`], configured to be low enough to support running in the browser using
 ///   WebGL2.
@@ -717,8 +717,7 @@ impl Limits {
     ///
     /// This function is not for clamping requests for values beyond the
     /// supported limits. For that purpose the desired function would be
-    /// `or_worse_values_from` (which doesn't exist, but could be added if
-    /// needed).
+    /// `or_worse_values_from`.
     #[must_use]
     pub fn or_better_values_from(mut self, other: &Self) -> Self {
         macro_rules! or_better_value_from {
@@ -734,6 +733,30 @@ impl Limits {
         }
 
         with_limits!(or_better_value_from);
+
+        self
+    }
+
+    /// For each limit in `other` that is worse than the value in `self`,
+    /// replace the value in `self` with the value from `other`.
+    ///
+    /// This function is for clamping requests for values beyond the
+    /// supported limits.
+    #[must_use]
+    pub fn or_worse_values_from(mut self, other: &Self) -> Self {
+        macro_rules! or_worse_value_from {
+            ($name:ident, $ordering:expr) => {
+                match $ordering {
+                    // Limits that are maximum values (most of them)
+                    Ordering::Less => self.$name = self.$name.min(other.$name),
+                    // Limits that are minimum values
+                    Ordering::Greater => self.$name = self.$name.max(other.$name),
+                    Ordering::Equal => unreachable!(),
+                }
+            };
+        }
+
+        with_limits!(or_worse_value_from);
 
         self
     }

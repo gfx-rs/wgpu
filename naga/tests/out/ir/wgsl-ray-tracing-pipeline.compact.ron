@@ -1,0 +1,350 @@
+(
+    types: [
+        (
+            name: None,
+            inner: Scalar((
+                kind: Uint,
+                width: 4,
+            )),
+        ),
+        (
+            name: Some("HitCounters"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("hit_num"),
+                        ty: 0,
+                        binding: None,
+                        offset: 0,
+                    ),
+                    (
+                        name: Some("selected_hit"),
+                        ty: 0,
+                        binding: None,
+                        offset: 4,
+                    ),
+                ],
+                span: 8,
+            ),
+        ),
+        (
+            name: None,
+            inner: AccelerationStructure(
+                vertex_return: false,
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar((
+                kind: Float,
+                width: 4,
+            )),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Tri,
+                scalar: (
+                    kind: Float,
+                    width: 4,
+                ),
+            ),
+        ),
+        (
+            name: Some("RayDesc"),
+            inner: Struct(
+                members: [
+                    (
+                        name: Some("flags"),
+                        ty: 0,
+                        binding: None,
+                        offset: 0,
+                    ),
+                    (
+                        name: Some("cull_mask"),
+                        ty: 0,
+                        binding: None,
+                        offset: 4,
+                    ),
+                    (
+                        name: Some("tmin"),
+                        ty: 3,
+                        binding: None,
+                        offset: 8,
+                    ),
+                    (
+                        name: Some("tmax"),
+                        ty: 3,
+                        binding: None,
+                        offset: 12,
+                    ),
+                    (
+                        name: Some("origin"),
+                        ty: 4,
+                        binding: None,
+                        offset: 16,
+                    ),
+                    (
+                        name: Some("dir"),
+                        ty: 4,
+                        binding: None,
+                        offset: 32,
+                    ),
+                ],
+                span: 48,
+            ),
+        ),
+    ],
+    special_types: (
+        ray_desc: Some(5),
+        ray_intersection: None,
+        ray_vertex_return: None,
+        external_texture_params: None,
+        external_texture_transfer_function: None,
+        predeclared_types: {},
+    ),
+    constants: [],
+    overrides: [],
+    global_variables: [
+        (
+            name: Some("hit_num"),
+            space: RayPayload,
+            binding: None,
+            ty: 1,
+            init: None,
+        ),
+        (
+            name: Some("acc_struct"),
+            space: Handle,
+            binding: Some((
+                group: 0,
+                binding: 0,
+            )),
+            ty: 2,
+            init: None,
+        ),
+        (
+            name: Some("incoming_hit_num"),
+            space: IncomingRayPayload,
+            binding: None,
+            ty: 1,
+            init: None,
+        ),
+    ],
+    global_expressions: [],
+    functions: [],
+    entry_points: [
+        (
+            name: "ray_gen_main",
+            stage: RayGeneration,
+            early_depth_test: None,
+            workgroup_size: (0, 0, 0),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("ray_gen_main"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [
+                    GlobalVariable(0),
+                    ZeroValue(1),
+                    GlobalVariable(1),
+                    Literal(U32(0)),
+                    Literal(U32(255)),
+                    Literal(F32(0.01)),
+                    Literal(F32(100.0)),
+                    Literal(F32(0.0)),
+                    Splat(
+                        size: Tri,
+                        value: 7,
+                    ),
+                    Literal(F32(0.0)),
+                    Literal(F32(1.0)),
+                    Literal(F32(0.0)),
+                    Compose(
+                        ty: 4,
+                        components: [
+                            9,
+                            10,
+                            11,
+                        ],
+                    ),
+                    Compose(
+                        ty: 5,
+                        components: [
+                            3,
+                            4,
+                            5,
+                            6,
+                            8,
+                            12,
+                        ],
+                    ),
+                    GlobalVariable(0),
+                ],
+                named_expressions: {},
+                body: [
+                    Store(
+                        pointer: 0,
+                        value: 1,
+                    ),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 0,
+                        end: 0,
+                    )),
+                    Emit((
+                        start: 8,
+                        end: 9,
+                    )),
+                    Emit((
+                        start: 12,
+                        end: 14,
+                    )),
+                    RayPipelineFunction(TraceRay(
+                        acceleration_structure: 2,
+                        descriptor: 13,
+                        payload: 14,
+                    )),
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+            mesh_info: None,
+            task_payload: None,
+            incoming_ray_payload: None,
+        ),
+        (
+            name: "miss",
+            stage: Miss,
+            early_depth_test: None,
+            workgroup_size: (0, 0, 0),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("miss"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [],
+                named_expressions: {},
+                body: [
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+            mesh_info: None,
+            task_payload: None,
+            incoming_ray_payload: Some(2),
+        ),
+        (
+            name: "any_hit_main",
+            stage: AnyHit,
+            early_depth_test: None,
+            workgroup_size: (0, 0, 0),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("any_hit_main"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 0,
+                        index: 0,
+                    ),
+                    Literal(U32(1)),
+                    Load(
+                        pointer: 1,
+                    ),
+                    Binary(
+                        op: Add,
+                        left: 3,
+                        right: 2,
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 5,
+                        index: 1,
+                    ),
+                    GlobalVariable(2),
+                    AccessIndex(
+                        base: 7,
+                        index: 0,
+                    ),
+                    Load(
+                        pointer: 8,
+                    ),
+                ],
+                named_expressions: {},
+                body: [
+                    Emit((
+                        start: 1,
+                        end: 2,
+                    )),
+                    Emit((
+                        start: 3,
+                        end: 5,
+                    )),
+                    Store(
+                        pointer: 1,
+                        value: 4,
+                    ),
+                    Emit((
+                        start: 6,
+                        end: 7,
+                    )),
+                    Emit((
+                        start: 8,
+                        end: 10,
+                    )),
+                    Store(
+                        pointer: 6,
+                        value: 9,
+                    ),
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+            mesh_info: None,
+            task_payload: None,
+            incoming_ray_payload: Some(2),
+        ),
+        (
+            name: "closest_hit_main",
+            stage: ClosestHit,
+            early_depth_test: None,
+            workgroup_size: (0, 0, 0),
+            workgroup_size_overrides: None,
+            function: (
+                name: Some("closest_hit_main"),
+                arguments: [],
+                result: None,
+                local_variables: [],
+                expressions: [],
+                named_expressions: {},
+                body: [
+                    Return(
+                        value: None,
+                    ),
+                ],
+                diagnostic_filter_leaf: None,
+            ),
+            mesh_info: None,
+            task_payload: None,
+            incoming_ray_payload: Some(2),
+        ),
+    ],
+    diagnostic_filters: [],
+    diagnostic_filter_leaf: None,
+    doc_comments: None,
+)

@@ -298,6 +298,15 @@ impl PrimitiveTopology {
             Self::LineStrip | Self::TriangleStrip => true,
         }
     }
+
+    /// Returns true for triangle topologies.
+    #[must_use]
+    pub fn is_triangles(&self) -> bool {
+        match *self {
+            Self::TriangleList | Self::TriangleStrip => true,
+            Self::PointList | Self::LineList | Self::LineStrip => false,
+        }
+    }
 }
 
 /// Vertex winding order which classifies the "front" face of a triangle.
@@ -365,7 +374,8 @@ pub struct PrimitiveState {
     /// When drawing strip topologies with indices, this is the required format for the index buffer.
     /// This has no effect on non-indexed or non-strip draws.
     ///
-    /// Specifying this value enables primitive restart, allowing individual strips to be separated
+    /// This is required for indexed drawing with strip topology and must match index buffer format, as primitive restart is always enabled
+    /// in all backends and individual strips will be separated
     /// with the index value `0xFFFF` when using `Uint16`, or `0xFFFFFFFF` when using `Uint32`.
     #[cfg_attr(feature = "serde", serde(default))]
     pub strip_index_format: Option<IndexFormat>,

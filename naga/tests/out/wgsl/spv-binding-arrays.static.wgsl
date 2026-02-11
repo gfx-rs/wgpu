@@ -4,7 +4,7 @@ var global: binding_array<texture_2d<f32>, 256>;
 var global_1: binding_array<sampler, 256>;
 var<private> global_2: vec4<f32>;
 
-fn function() {
+fn function_() {
     let _e8 = textureSampleLevel(global[1i], global_1[1i], vec2<f32>(0.5f, 0.5f), 0f);
     global_2 = _e8;
     return;
@@ -12,7 +12,7 @@ fn function() {
 
 @fragment 
 fn main() -> @location(0) vec4<f32> {
-    function();
+    function_();
     let _e1 = global_2;
     return _e1;
 }

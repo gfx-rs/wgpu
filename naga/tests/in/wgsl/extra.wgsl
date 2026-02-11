@@ -1,3 +1,5 @@
+enable primitive_index;
+
 struct ImmediateData {
     index: u32,
     double: vec2<f32>,

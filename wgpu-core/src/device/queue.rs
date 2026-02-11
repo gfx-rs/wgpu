@@ -654,10 +654,10 @@ impl Queue {
             return Err(TransferError::BufferNotAvailable);
         }
         buffer.check_usage(wgt::BufferUsages::COPY_DST)?;
-        if buffer_size.get() % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+        if !buffer_size.get().is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             return Err(TransferError::UnalignedCopySize(buffer_size.get()));
         }
-        if buffer_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+        if !buffer_offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             return Err(TransferError::UnalignedBufferOffset(buffer_offset));
         }
         if buffer_offset + buffer_size.get() > buffer.size {

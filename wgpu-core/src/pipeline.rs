@@ -14,7 +14,10 @@ use wgt::error::{ErrorType, WebGpuError};
 
 pub use crate::pipeline_cache::PipelineCacheValidationError;
 use crate::{
-    binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError, PipelineLayout},
+    binding_model::{
+        BindGroupLayout, CreateBindGroupLayoutError, CreatePipelineLayoutError,
+        GetBindGroupLayoutError, PipelineLayout,
+    },
     command::ColorAttachmentError,
     device::{Device, DeviceError, MissingDownlevelFlags, MissingFeatures, RenderPassContext},
     id::{PipelineCacheId, PipelineLayoutId, ShaderModuleId},
@@ -199,6 +202,8 @@ pub enum ImplicitLayoutError {
     BindGroup(#[from] CreateBindGroupLayoutError),
     #[error(transparent)]
     Pipeline(#[from] CreatePipelineLayoutError),
+    #[error("Unable to create implicit pipeline layout from passthrough shader stage: {0:?}")]
+    Passthrough(wgt::ShaderStages),
 }
 
 impl WebGpuError for ImplicitLayoutError {
@@ -207,6 +212,7 @@ impl WebGpuError for ImplicitLayoutError {
             Self::ReflectionError(_) => return ErrorType::Validation,
             Self::BindGroup(e) => e,
             Self::Pipeline(e) => e,
+            Self::Passthrough(_) => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
@@ -300,6 +306,17 @@ crate::impl_trackable!(ComputePipeline);
 impl ComputePipeline {
     pub(crate) fn raw(&self) -> &dyn hal::DynComputePipeline {
         self.raw.as_ref()
+    }
+
+    pub fn get_bind_group_layout(
+        self: &Arc<Self>,
+        index: u32,
+    ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
+        self.layout
+            .bind_group_layouts
+            .get(index as usize)
+            .cloned()
+            .ok_or(GetBindGroupLayoutError::InvalidGroupIndex(index))
     }
 }
 
@@ -625,6 +642,8 @@ pub enum DepthStencilStateError {
     FormatNotStencil(wgt::TextureFormat),
     #[error("Sample count {0} is not supported by format {1:?} on this device. The WebGPU spec guarantees {2:?} samples are supported by this format. With the TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES feature your device supports {3:?}.")]
     InvalidSampleCount(u32, wgt::TextureFormat, Vec<u32>, Vec<u32>),
+    #[error("Depth bias is not compatible with non-triangle topology {0:?}")]
+    DepthBiasWithIncompatibleTopology(wgt::PrimitiveTopology),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -702,10 +721,6 @@ pub enum CreateRenderPipelineError {
         factor: wgt::BlendFactor,
         target: u32,
     },
-    #[error("Pipeline expects the shader entry point to make use of dual-source blending.")]
-    PipelineExpectsShaderToUseDualSourceBlending,
-    #[error("Shader entry point expects the pipeline to make use of dual-source blending.")]
-    ShaderExpectsPipelineToUseDualSourceBlending,
     #[error("{}", concat!(
         "At least one color attachment or depth-stencil attachment was expected, ",
         "but no render target for the pipeline was specified."
@@ -742,8 +757,6 @@ impl WebGpuError for CreateRenderPipelineError {
             | Self::Stage { .. }
             | Self::UnalignedShader { .. }
             | Self::BlendFactorOnUnsupportedTarget { .. }
-            | Self::PipelineExpectsShaderToUseDualSourceBlending
-            | Self::ShaderExpectsPipelineToUseDualSourceBlending
             | Self::NoTargetSpecified
             | Self::PipelineConstants { .. }
             | Self::VertexAttributeStrideTooLarge { .. } => return ErrorType::Validation,
@@ -794,6 +807,7 @@ pub struct RenderPipeline {
     pub(crate) _shader_modules: ArrayVec<Arc<ShaderModule>, { hal::MAX_CONCURRENT_SHADER_STAGES }>,
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
+    pub(crate) topology: wgt::PrimitiveTopology,
     pub(crate) strip_index_format: Option<wgt::IndexFormat>,
     pub(crate) vertex_steps: Vec<VertexStep>,
     pub(crate) late_sized_buffer_groups: ArrayVec<LateSizedBufferGroup, { hal::MAX_BIND_GROUPS }>,
@@ -824,5 +838,16 @@ crate::impl_trackable!(RenderPipeline);
 impl RenderPipeline {
     pub(crate) fn raw(&self) -> &dyn hal::DynRenderPipeline {
         self.raw.as_ref()
+    }
+
+    pub fn get_bind_group_layout(
+        self: &Arc<Self>,
+        index: u32,
+    ) -> Result<Arc<BindGroupLayout>, GetBindGroupLayoutError> {
+        self.layout
+            .bind_group_layouts
+            .get(index as usize)
+            .cloned()
+            .ok_or(GetBindGroupLayoutError::InvalidGroupIndex(index))
     }
 }

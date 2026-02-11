@@ -517,14 +517,33 @@ impl ParsingContext<'_> {
         ctx: &mut Context,
         stmt: &mut StmtContext,
     ) -> Result<Handle<HirExpr>> {
+        let mut exprs = Vec::new();
         let mut expr = self.parse_assignment(frontend, ctx, stmt)?;
+        exprs.push(expr);
 
         while let TokenValue::Comma = self.expect_peek(frontend)?.value {
             self.bump(frontend)?;
             expr = self.parse_assignment(frontend, ctx, stmt)?;
+            exprs.push(expr);
         }
 
-        Ok(expr)
+        if exprs.len() == 1 {
+            Ok(expr)
+        } else {
+            let mut meta = stmt.hir_exprs[exprs[0]].meta;
+            for &e in &exprs[1..] {
+                meta.subsume(stmt.hir_exprs[e].meta);
+            }
+            expr = stmt.hir_exprs.append(
+                HirExpr {
+                    kind: HirExprKind::Sequence { exprs },
+                    meta,
+                },
+                Default::default(),
+            );
+
+            Ok(expr)
+        }
     }
 }
 

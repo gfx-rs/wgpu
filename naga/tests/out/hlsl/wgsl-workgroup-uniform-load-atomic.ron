@@ -1,0 +1,12 @@
+(
+    vertex:[
+    ],
+    fragment:[
+    ],
+    compute:[
+        (
+            entry_point:"test_atomic_workgroup_uniform_load",
+            target_profile:"cs_5_1",
+        ),
+    ],
+)

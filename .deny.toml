@@ -7,6 +7,9 @@ skip-tree = [
 
     # introduced by Deno, to be investigated
     { name = "petgraph", version = "0.6.5" },
+
+    # Winit 0.30 uses an older objc2
+    { name = "objc2-foundation", version = "0.2" },
 ]
 skip = [
     # Deno uses an old version

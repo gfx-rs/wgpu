@@ -935,4 +935,6 @@ pub static RESERVED_CASE_INSENSITIVE_SET: RacyLock<CaseInsensitiveKeywordSet> =
 pub const RESERVED_PREFIXES: &[&str] = &[
     "__dynamic_buffer_offsets",
     super::help::IMAGE_STORAGE_LOAD_SCALAR_WRAPPER,
+    super::writer::RAY_QUERY_TRACKER_VARIABLE_PREFIX,
+    super::writer::INTERNAL_PREFIX,
 ];

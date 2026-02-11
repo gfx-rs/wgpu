@@ -171,10 +171,10 @@ impl Surface<'_> {
     ///
     /// The returned type depends on the backend:
     ///
-    #[doc = crate::hal_type_vulkan!("Surface")]
-    #[doc = crate::hal_type_metal!("Surface")]
-    #[doc = crate::hal_type_dx12!("Surface")]
-    #[doc = crate::hal_type_gles!("Surface")]
+    #[doc = crate::macros::hal_type_vulkan!("Surface")]
+    #[doc = crate::macros::hal_type_metal!("Surface")]
+    #[doc = crate::macros::hal_type_dx12!("Surface")]
+    #[doc = crate::macros::hal_type_gles!("Surface")]
     ///
     /// # Errors
     ///

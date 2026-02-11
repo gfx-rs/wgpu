@@ -116,7 +116,7 @@ impl Instance {
             display: instance_desc.display.take(),
         };
 
-        #[cfg(vulkan)]
+        #[cfg(all(vulkan, not(target_os = "netbsd")))]
         this.try_add_hal(hal::api::Vulkan, &instance_desc, telemetry);
         #[cfg(metal)]
         this.try_add_hal(hal::api::Metal, &instance_desc, telemetry);
@@ -293,7 +293,12 @@ impl Instance {
     ///
     /// This function is only available on non-apple Unix-like platforms (Linux, FreeBSD) and
     /// currently only works with the Vulkan backend.
-    #[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
+    #[cfg(all(
+        unix,
+        not(target_vendor = "apple"),
+        not(target_family = "wasm"),
+        not(target_os = "netbsd")
+    ))]
     #[cfg_attr(not(vulkan), expect(unused_variables))]
     pub unsafe fn create_surface_from_drm(
         &self,
@@ -310,7 +315,7 @@ impl Instance {
         let mut surface_per_backend: HashMap<Backend, Box<dyn hal::DynSurface>> =
             HashMap::default();
 
-        #[cfg(vulkan)]
+        #[cfg(all(vulkan, not(target_os = "netbsd")))]
         {
             let instance = unsafe { self.as_hal::<hal::api::Vulkan>() }
                 .ok_or(CreateSurfaceError::BackendNotEnabled(Backend::Vulkan))?;
@@ -810,7 +815,6 @@ impl Adapter {
         }
     }
 
-    #[allow(clippy::type_complexity)]
     fn create_device_and_queue_from_hal(
         self: &Arc<Self>,
         hal_device: hal::DynOpenDevice,
@@ -973,7 +977,12 @@ impl Global {
     ///
     /// This function is only available on non-apple Unix-like platforms (Linux, FreeBSD) and
     /// currently only works with the Vulkan backend.
-    #[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
+    #[cfg(all(
+        unix,
+        not(target_vendor = "apple"),
+        not(target_family = "wasm"),
+        not(target_os = "netbsd")
+    ))]
     pub unsafe fn instance_create_surface_from_drm(
         &self,
         fd: i32,

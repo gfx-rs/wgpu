@@ -30,8 +30,9 @@ use crate::{
     },
     command, conv,
     device::{
-        bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
-        DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures, RenderPassContext,
+        bgl, create_validator, features_to_naga_capabilities, life::WaitIdleError, map_buffer,
+        AttachmentData, DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures,
+        RenderPassContext,
     },
     hal_label,
     init_tracker::{
@@ -1015,7 +1016,7 @@ impl Device {
         }
 
         if desc.mapped_at_creation {
-            if desc.size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            if !desc.size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
                 return Err(resource::CreateBufferError::UnalignedSize);
             }
             if !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
@@ -1362,7 +1363,7 @@ impl Device {
         if desc.format.is_compressed() {
             let (block_width, block_height) = desc.format.block_dimensions();
 
-            if desc.size.width % block_width != 0 {
+            if !desc.size.width.is_multiple_of(block_width) {
                 return Err(CreateTextureError::InvalidDimension(
                     TextureDimensionError::NotMultipleOfBlockWidth {
                         width: desc.size.width,
@@ -1372,7 +1373,7 @@ impl Device {
                 ));
             }
 
-            if desc.size.height % block_height != 0 {
+            if !desc.size.height.is_multiple_of(block_height) {
                 return Err(CreateTextureError::InvalidDimension(
                     TextureDimensionError::NotMultipleOfBlockHeight {
                         height: desc.size.height,
@@ -1419,7 +1420,7 @@ impl Device {
                 height_multiple <<= desc.mip_level_count.saturating_sub(1);
             }
 
-            if desc.size.width % width_multiple != 0 {
+            if !desc.size.width.is_multiple_of(width_multiple) {
                 return Err(CreateTextureError::InvalidDimension(
                     TextureDimensionError::WidthNotMultipleOf {
                         width: desc.size.width,
@@ -1429,7 +1430,7 @@ impl Device {
                 ));
             }
 
-            if desc.size.height % height_multiple != 0 {
+            if !desc.size.height.is_multiple_of(height_multiple) {
                 return Err(CreateTextureError::InvalidDimension(
                     TextureDimensionError::HeightNotMultipleOf {
                         height: desc.size.height,
@@ -1822,7 +1823,7 @@ impl Device {
                 }
             }
             TextureViewDimension::CubeArray => {
-                if resolved_array_layer_count % 6 != 0 {
+                if !resolved_array_layer_count.is_multiple_of(6) {
                     return Err(
                         resource::CreateTextureViewError::InvalidCubemapArrayTextureDepth {
                             depth: resolved_array_layer_count,
@@ -2223,8 +2224,13 @@ impl Device {
         let (module, source) = match source {
             #[cfg(feature = "wgsl")]
             pipeline::ShaderModuleSource::Wgsl(code) => {
-                profiling::scope!("naga::front::wgsl::parse_str");
-                let module = naga::front::wgsl::parse_str(&code).map_err(|inner| {
+                profiling::scope!("naga::front::wgsl::parse");
+                let capabilities =
+                    features_to_naga_capabilities(self.features, self.downlevel.flags);
+                let mut options = naga::front::wgsl::Options::new();
+                options.capabilities = capabilities;
+                let mut frontend = naga::front::wgsl::Frontend::new_with_options(options);
+                let module = frontend.parse(&code).map_err(|inner| {
                     pipeline::CreateShaderModuleError::Parsing(naga::error::ShaderError {
                         source: code.to_string(),
                         label: desc.label.as_ref().map(|l| l.to_string()),
@@ -2362,33 +2368,37 @@ impl Device {
                 if let Some(dxil) = &descriptor.dxil {
                     hal::ShaderInput::Dxil {
                         shader: dxil,
-                        entry_point: descriptor.entry_point.clone(),
                         num_workgroups: descriptor.num_workgroups,
                     }
                 } else if let Some(hlsl) = &descriptor.hlsl {
                     hal::ShaderInput::Hlsl {
                         shader: hlsl,
-                        entry_point: descriptor.entry_point.clone(),
                         num_workgroups: descriptor.num_workgroups,
                     }
                 } else {
                     return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend);
                 }
             }
-            wgt::Backend::Metal => hal::ShaderInput::Msl {
-                shader: descriptor
-                    .msl
-                    .as_ref()
-                    .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
-                entry_point: descriptor.entry_point.clone(),
-                num_workgroups: descriptor.num_workgroups,
-            },
+            wgt::Backend::Metal => {
+                if let Some(metallib) = &descriptor.metallib {
+                    hal::ShaderInput::MetalLib {
+                        file: metallib,
+                        num_workgroups: descriptor.num_workgroups,
+                    }
+                } else if let Some(msl) = &descriptor.msl {
+                    hal::ShaderInput::Msl {
+                        shader: msl,
+                        num_workgroups: descriptor.num_workgroups,
+                    }
+                } else {
+                    return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend);
+                }
+            }
             wgt::Backend::Gl => hal::ShaderInput::Glsl {
                 shader: descriptor
                     .glsl
                     .as_ref()
                     .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
-                entry_point: descriptor.entry_point.clone(),
                 num_workgroups: descriptor.num_workgroups,
             },
             wgt::Backend::Noop => {
@@ -2826,7 +2836,7 @@ impl Device {
 
         let (align, align_limit_name) =
             binding_model::buffer_binding_type_alignment(&self.limits, binding_ty);
-        if bb.offset % align as u64 != 0 {
+        if !bb.offset.is_multiple_of(align as u64) {
             return Err(Error::UnalignedBufferOffset(
                 bb.offset,
                 align_limit_name,
@@ -3610,7 +3620,10 @@ impl Device {
                 max: self.limits.max_immediate_size,
             });
         }
-        if desc.immediate_size % wgt::IMMEDIATE_DATA_ALIGNMENT != 0 {
+        if !desc
+            .immediate_size
+            .is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT)
+        {
             return Err(Error::MisalignedImmediateSize {
                 size: desc.immediate_size,
             });
@@ -3896,14 +3909,12 @@ impl Device {
         let mut vertex_steps;
         let mut vertex_buffers;
         let mut total_attributes;
-        let mut shader_expects_dual_source_blending = false;
-        let mut pipeline_expects_dual_source_blending = false;
+        let mut dual_source_blending = false;
+        let mut has_depth_attachment = false;
         if let pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) = desc.vertex {
             vertex_steps = Vec::with_capacity(vertex.buffers.len());
             vertex_buffers = Vec::with_capacity(vertex.buffers.len());
             total_attributes = 0;
-            shader_expects_dual_source_blending = false;
-            pipeline_expects_dual_source_blending = false;
             for (i, vb_state) in vertex.buffers.iter().enumerate() {
                 // https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-gpuvertexbufferlayout
 
@@ -4123,7 +4134,7 @@ impl Device {
                             if factor.ref_second_blend_source() {
                                 self.require_features(wgt::Features::DUAL_SOURCE_BLENDING)?;
                                 if i == 0 {
-                                    pipeline_expects_dual_source_blending = true;
+                                    dual_source_blending = true;
                                     break;
                                 } else {
                                     return Err(pipeline::CreateRenderPipelineError
@@ -4169,7 +4180,9 @@ impl Device {
                 }
 
                 let aspect = hal::FormatAspects::from(ds.format);
-                if ds.is_depth_enabled() && !aspect.contains(hal::FormatAspects::DEPTH) {
+                if aspect.contains(hal::FormatAspects::DEPTH) {
+                    has_depth_attachment = true;
+                } else if ds.is_depth_enabled() {
                     break 'error Some(pipeline::DepthStencilStateError::FormatNotDepth(ds.format));
                 }
                 if ds.stencil.is_enabled() && !aspect.contains(hal::FormatAspects::STENCIL) {
@@ -4204,6 +4217,16 @@ impl Device {
 
             if ds.bias.clamp != 0.0 {
                 self.require_downlevel_flags(wgt::DownlevelFlags::DEPTH_BIAS_CLAMP)?;
+            }
+
+            if (ds.bias.is_enabled() || ds.bias.clamp != 0.0)
+                && !desc.primitive.topology.is_triangles()
+            {
+                return Err(pipeline::CreateRenderPipelineError::DepthStencilState(
+                    pipeline::DepthStencilStateError::DepthBiasWithIncompatibleTopology(
+                        desc.primitive.topology,
+                    ),
+                ));
             }
         }
 
@@ -4378,7 +4401,10 @@ impl Device {
         let fragment_entry_point_name;
         let fragment_stage = match desc.fragment {
             Some(ref fragment_state) => {
-                let stage = validation::ShaderStageForValidation::Fragment;
+                let stage = validation::ShaderStageForValidation::Fragment {
+                    dual_source_blending,
+                    has_depth_attachment,
+                };
                 let stage_bit = stage.to_wgt_bit();
 
                 let shader_module = &fragment_state.stage.module;
@@ -4413,15 +4439,6 @@ impl Device {
                     validated_stages |= stage_bit;
                 }
 
-                if let Some(ref interface) = shader_module.interface {
-                    shader_expects_dual_source_blending = interface
-                        .fragment_uses_dual_source_blending(&fragment_entry_point_name)
-                        .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
-                            stage: stage_bit,
-                            error,
-                        })?;
-                }
-
                 Some(hal::ProgrammableStage {
                     module: shader_module.raw(),
                     entry_point: &fragment_entry_point_name,
@@ -4433,17 +4450,6 @@ impl Device {
             }
             None => None,
         };
-
-        if !pipeline_expects_dual_source_blending && shader_expects_dual_source_blending {
-            return Err(
-                pipeline::CreateRenderPipelineError::ShaderExpectsPipelineToUseDualSourceBlending,
-            );
-        }
-        if pipeline_expects_dual_source_blending && !shader_expects_dual_source_blending {
-            return Err(
-                pipeline::CreateRenderPipelineError::PipelineExpectsShaderToUseDualSourceBlending,
-            );
-        }
 
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
             for (i, output) in io.varyings.iter() {
@@ -4626,6 +4632,7 @@ impl Device {
             pass_context,
             _shader_modules: shader_modules,
             flags,
+            topology: desc.primitive.topology,
             strip_index_format: desc.primitive.strip_index_format,
             vertex_steps,
             late_sized_buffer_groups,
