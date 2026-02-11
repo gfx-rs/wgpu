@@ -1613,12 +1613,13 @@ impl Global {
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *queue.device.trace.lock() {
             use crate::device::trace::DataKind;
-            let range = buffer_offset..buffer_offset + data.len() as u64;
+            let size = data.len() as u64;
             let data = trace.make_binary(DataKind::Bin, data);
             trace.add(Action::WriteBuffer {
                 id: buffer.to_trace(),
                 data,
-                range,
+                offset: buffer_offset,
+                size,
                 queued: true,
             });
         }

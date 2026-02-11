@@ -377,19 +377,19 @@ impl Player {
             Action::WriteBuffer {
                 id,
                 data,
-                range,
+                offset,
+                size,
                 queued,
             } => {
                 let buffer = self.resolve_buffer_id(id);
                 let bin = loader.load(&data);
-                let size = (range.end - range.start) as usize;
                 if queued {
                     queue
-                        .write_buffer(buffer, range.start, &bin)
+                        .write_buffer(buffer, offset, &bin)
                         .expect("Queue::write_buffer error");
                 } else {
                     device
-                        .set_buffer_data(&buffer, range.start, &bin[..size])
+                        .set_buffer_data(&buffer, offset, &bin[..size.try_into().unwrap()])
                         .expect("Device::set_buffer_data error");
                 }
             }

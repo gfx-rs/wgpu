@@ -823,7 +823,8 @@ impl Buffer {
                     trace.add(trace::Action::WriteBuffer {
                         id: self.to_trace(),
                         data,
-                        range: 0..self.size,
+                        offset: 0,
+                        size: self.size,
                         queued: true,
                     });
                 }
@@ -889,7 +890,8 @@ impl Buffer {
                         trace.add(trace::Action::WriteBuffer {
                             id: self.to_trace(),
                             data,
-                            range: range.clone(),
+                            offset: range.start,
+                            size,
                             queued: false,
                         });
                     }
