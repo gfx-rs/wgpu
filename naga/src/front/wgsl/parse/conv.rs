@@ -21,14 +21,8 @@ pub fn map_address_space<'a>(
         "immediate" => Ok(crate::AddressSpace::Immediate),
         "function" => Ok(crate::AddressSpace::Function),
         "task_payload" => {
-            if enable_extensions.contains(ImplementedEnableExtension::WgpuMeshShader) {
-                Ok(crate::AddressSpace::TaskPayload)
-            } else {
-                Err(Box::new(Error::EnableExtensionNotEnabled {
-                    span,
-                    kind: ImplementedEnableExtension::WgpuMeshShader.into(),
-                }))
-            }
+            enable_extensions.require(ImplementedEnableExtension::WgpuMeshShader, span)?;
+            Ok(crate::AddressSpace::TaskPayload)
         }
         "ray_payload" => {
             if enable_extensions.contains(ImplementedEnableExtension::WgpuRayTracingPipeline) {
@@ -155,12 +149,11 @@ pub fn map_built_in(
     };
     match built_in {
         crate::BuiltIn::ClipDistance => {
-            if !enable_extensions.contains(ImplementedEnableExtension::ClipDistances) {
-                return Err(Box::new(Error::EnableExtensionNotEnabled {
-                    span,
-                    kind: ImplementedEnableExtension::ClipDistances.into(),
-                }));
-            }
+            enable_extensions.require(ImplementedEnableExtension::ClipDistances, span)?
+        }
+
+        crate::BuiltIn::PrimitiveIndex => {
+            enable_extensions.require(ImplementedEnableExtension::PrimitiveIndex, span)?
         }
         crate::BuiltIn::DrawIndex => {
             if !enable_extensions.contains(ImplementedEnableExtension::DrawIndex) {
@@ -178,12 +171,7 @@ pub fn map_built_in(
         | crate::BuiltIn::Vertices
         | crate::BuiltIn::PrimitiveCount
         | crate::BuiltIn::Primitives => {
-            if !enable_extensions.contains(ImplementedEnableExtension::WgpuMeshShader) {
-                return Err(Box::new(Error::EnableExtensionNotEnabled {
-                    span,
-                    kind: ImplementedEnableExtension::WgpuMeshShader.into(),
-                }));
-            }
+            enable_extensions.require(ImplementedEnableExtension::WgpuMeshShader, span)?
         }
         _ => {}
     }

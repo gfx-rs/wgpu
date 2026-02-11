@@ -125,7 +125,18 @@ impl GPUAdapter {
       .cloned()
       .collect::<HashSet<_>>();
 
-    if !required_features.is_subset(&supported_features) {
+    // External textures are a required part of WebGPU, and `external-texture`
+    // is not a WebGPU-defined feature. `wgpu` has it behind a feature for now,
+    // because support is not complete. Allow applications to request that
+    // feature even though it is not reported as an adapter-supported feature.
+    //
+    // There is probably not anything useful that Deno applications can do with
+    // external textures, but it is useful to be able to enable it in
+    // `cts_runner`.
+    if required_features
+      .difference(&supported_features)
+      .any(|feat| *feat != GPUFeatureName::ExternalTexture)
+    {
       return Err(CreateDeviceError::RequiredFeaturesNotASubset);
     }
 

@@ -42,6 +42,12 @@ Bottom level categories:
 
 ## Unreleased
 
+### Major Changes
+
+`wgpu` now has a new MSRV policy. This release has an MSRV of **1.87**. This is lower than v27's 1.88 and v28's 1.92. Going forward, we will only bump wgpu's MSRV if it has tangible benefits for the code, and we will never bump to an MSRV higher than `stable - 3`. So if stable is at 1.97 and 1.94 brought benefit to our code, we could bump it no higher than 1.94. As before, MSRV bumps will always be breaking changes. 
+
+By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
+
 ### New Features
 
 #### General
@@ -62,11 +68,17 @@ Bottom level categories:
         - `ir::Block::len`
 - Changed passthrough shaders to not require an entry point parameter, so that the same shader module may be used in multiple entry points. Also added support for metallib passthrough. By @inner-daemons in #8886.
 - Added support for `@builtin(draw_index)` to the vulkan backend. By @inner-daemons in #8883.
+- Added support for `insert_debug_marker`, `push_debug_group` and `pop_debug_group` on WebGPU. By @evilpie in [#9017](https://github.com/gfx-rs/wgpu/pull/9017).
+- Added support for `enable primitive_index` and `@builtin(primitive_index)` with support on all platforms. By @inner-daemons in #8879.
 
 #### naga
 
 - Initial wgsl-in ray tracing pipelines. By @Vecvec in [#8570](https://github.com/gfx-rs/wgpu/pull/8570).
 - Allow parsing shaders which make use of `SPV_KHR_non_semantic_info` for debug info. Also removes `naga::front::spv::SUPPORTED_EXT_SETS`. By @inner-daemons in #8827.
+
+#### GLES
+
+- Added `GlDebugFns` option in `GlBackendOptions` to control OpenGL debug functions (`glPushDebugGroup`, `glPopDebugGroup`, `glObjectLabel`, etc.). Automatically disables them on Mali GPUs to work around a driver crash. By @Xavientois in [#8931](https://github.com/gfx-rs/wgpu/pull/8931).
 
 ### Changes
 
@@ -100,17 +112,20 @@ Bottom level categories:
 - Fixed `workgroupUniformLoad` incorrectly returning an atomic when called on an atomic, it now returns the inner `T` as per the spec. By @cryvosh in [#8791](https://github.com/gfx-rs/wgpu/pull/8791).
 - Fixed constant evaluation for `sign()` builtin to return zero when the argument is zero. By @mandryskowski in [#8942](https://github.com/gfx-rs/wgpu/pull/8942).
 - Allow array generation to compile with the macOS 10.12 Metal compiler. By @madsmtm in [#8953](https://github.com/gfx-rs/wgpu/pull/8953)
+- Naga now detects bitwise shifts by a constant exceeding the operand bit width at compile time, and disallows scalar-by-vector and vector-by-scalar shifts in constant evaluation. By @andyleiserson in [#8907](https://github.com/gfx-rs/wgpu/pull/8907).
 
 #### Validation
 
 - Fixed validation of the texture format in GPUDepthStencilState when neither depth nor stencil is actually enabled. By @andyleiserson in [#8766](https://github.com/gfx-rs/wgpu/pull/8766).
 - Check that depth bias is not used with non-triangle topologies. By @andyleiserson in [#8856](https://github.com/gfx-rs/wgpu/pull/8856).
 - Check that if the shader outputs `frag_depth`, then the pipeline must have a depth attachment. By @andyleiserson in [#8856](https://github.com/gfx-rs/wgpu/pull/8856).
+- Fix incorrect acceptance of some swizzle selectors that are not valid for their operand, e.g. `const v = vec2<i32>(); let r = v.xyz`. By @andyleiserson in [#8949](https://github.com/gfx-rs/wgpu/pull/8949).
 
 #### GLES
 
 - `DisplayHandle` should now be passed to `InstanceDescriptor` for correct EGL initialization on Wayland. By @MarijnS95 in [#8012](https://github.com/gfx-rs/wgpu/pull/8012)
   Note that the existing workaround to create surfaces before the adapter is no longer valid.
+- Changing shader constants now correctly recompiles the shader. By @DerSchmale in [#8291](https://github.com/gfx-rs/wgpu/pull/8291).
 
 ### Documentation
 

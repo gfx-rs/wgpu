@@ -20,6 +20,7 @@ pub(crate) struct EnableExtensions {
     clip_distances: bool,
     wgpu_cooperative_matrix: bool,
     draw_index: bool,
+    primitive_index: bool,
 }
 
 impl EnableExtensions {
@@ -34,6 +35,7 @@ impl EnableExtensions {
             clip_distances: false,
             wgpu_cooperative_matrix: false,
             draw_index: false,
+            primitive_index: false,
         }
     }
 
@@ -53,6 +55,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::ClipDistances => &mut self.clip_distances,
             ImplementedEnableExtension::WgpuCooperativeMatrix => &mut self.wgpu_cooperative_matrix,
             ImplementedEnableExtension::DrawIndex => &mut self.draw_index,
+            ImplementedEnableExtension::PrimitiveIndex => &mut self.primitive_index,
         };
         *field = true;
     }
@@ -71,6 +74,22 @@ impl EnableExtensions {
             ImplementedEnableExtension::ClipDistances => self.clip_distances,
             ImplementedEnableExtension::WgpuCooperativeMatrix => self.wgpu_cooperative_matrix,
             ImplementedEnableExtension::DrawIndex => self.draw_index,
+            ImplementedEnableExtension::PrimitiveIndex => self.primitive_index,
+        }
+    }
+
+    pub(crate) fn require(
+        &self,
+        ext: ImplementedEnableExtension,
+        span: Span,
+    ) -> Result<'static, ()> {
+        if !self.contains(ext) {
+            Err(Box::new(Error::EnableExtensionNotEnabled {
+                span,
+                kind: ext.into(),
+            }))
+        } else {
+            Ok(())
         }
     }
 }
@@ -129,10 +148,8 @@ impl EnableExtension {
                 Self::Implemented(ImplementedEnableExtension::WgpuCooperativeMatrix)
             }
             Self::SUBGROUPS => Self::Unimplemented(UnimplementedEnableExtension::Subgroups),
-            Self::PRIMITIVE_INDEX => {
-                Self::Unimplemented(UnimplementedEnableExtension::PrimitiveIndex)
-            }
             Self::DRAW_INDEX => Self::Implemented(ImplementedEnableExtension::DrawIndex),
+            Self::PRIMITIVE_INDEX => Self::Implemented(ImplementedEnableExtension::PrimitiveIndex),
             _ => return Err(Box::new(Error::UnknownEnableExtension(span, word))),
         })
     }
@@ -151,11 +168,11 @@ impl EnableExtension {
                 ImplementedEnableExtension::F16 => Self::F16,
                 ImplementedEnableExtension::ClipDistances => Self::CLIP_DISTANCES,
                 ImplementedEnableExtension::DrawIndex => Self::DRAW_INDEX,
+                ImplementedEnableExtension::PrimitiveIndex => Self::PRIMITIVE_INDEX,
                 ImplementedEnableExtension::WgpuRayTracingPipeline => Self::RAY_TRACING_PIPELINE,
             },
             Self::Unimplemented(kind) => match kind {
                 UnimplementedEnableExtension::Subgroups => Self::SUBGROUPS,
-                UnimplementedEnableExtension::PrimitiveIndex => Self::PRIMITIVE_INDEX,
             },
         }
     }
@@ -195,6 +212,12 @@ pub enum ImplementedEnableExtension {
     WgpuCooperativeMatrix,
     /// Enables the `draw_index` builtin. Not currently part of the WGSL spec but probably will be at some point.
     DrawIndex,
+    /// Enables the `@builtin(primitive_index)` attribute in WGSL.
+    ///
+    /// In the WGSL standard, this corresponds to [`enable primitive-index;`].
+    ///
+    /// [`enable primitive-index;`]: https://www.w3.org/TR/WGSL/#extension-primitive_index
+    PrimitiveIndex,
 }
 
 impl ImplementedEnableExtension {
@@ -209,6 +232,7 @@ impl ImplementedEnableExtension {
         Self::WgpuRayTracingPipeline,
         Self::WgpuCooperativeMatrix,
         Self::DrawIndex,
+        Self::PrimitiveIndex,
     ];
 
     /// Returns slice of all variants of [`ImplementedEnableExtension`].
@@ -229,6 +253,7 @@ impl ImplementedEnableExtension {
             Self::WgpuCooperativeMatrix => C::COOPERATIVE_MATRIX,
             Self::WgpuRayTracingPipeline => C::RAY_TRACING_PIPELINE,
             Self::DrawIndex => C::DRAW_INDEX,
+            Self::PrimitiveIndex => C::PRIMITIVE_INDEX,
         }
     }
 }
@@ -252,19 +277,12 @@ pub enum UnimplementedEnableExtension {
     ///
     /// [`enable subgroups;`]: https://www.w3.org/TR/WGSL/#extension-subgroups
     Subgroups,
-    /// Enables the `@builtin(primitive_index)` attribute in WGSL.
-    ///
-    /// In the WGSL standard, this corresponds to [`enable primitive-index;`].
-    ///
-    /// [`enable primitive-index;`]: https://www.w3.org/TR/WGSL/#extension-primitive_index
-    PrimitiveIndex,
 }
 
 impl UnimplementedEnableExtension {
     pub(crate) const fn tracking_issue_num(self) -> u16 {
         match self {
             Self::Subgroups => 5555,
-            Self::PrimitiveIndex => 8236,
         }
     }
 }

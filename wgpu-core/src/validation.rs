@@ -1687,6 +1687,13 @@ impl Interface {
                     return Err(StageError::MissingFragDepthAttachment);
                 }
             }
+            ShaderStageForValidation::Mesh => {
+                for output in &entry_point.outputs {
+                    if matches!(output, Varying::BuiltIn(naga::BuiltIn::PrimitiveIndex)) {
+                        this_stage_primitive_index = true;
+                    }
+                }
+            }
             _ => (),
         }
 

@@ -2490,9 +2490,14 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                         lowered_base.map(|base| ir::Expression::AccessIndex { base, index })
                     }
-                    ir::TypeInner::Vector { .. } => {
+                    ir::TypeInner::Vector { size: vec_size, .. } => {
                         match Components::new(field.name, field.span)? {
                             Components::Swizzle { size, pattern } => {
+                                for &component in pattern[..size as usize].iter() {
+                                    if component as u8 >= vec_size as u8 {
+                                        return Err(Box::new(Error::BadAccessor(field.span)));
+                                    }
+                                }
                                 Typed::Plain(ir::Expression::Swizzle {
                                     size,
                                     vector: ctx.apply_load_rule(lowered_base)?,
@@ -2500,6 +2505,9 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
                                 })
                             }
                             Components::Single(index) => {
+                                if index >= vec_size as u32 {
+                                    return Err(Box::new(Error::BadAccessor(field.span)));
+                                }
                                 lowered_base.map(|base| ir::Expression::AccessIndex { base, index })
                             }
                         }
