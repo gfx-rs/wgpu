@@ -443,6 +443,9 @@ pub enum DxcShaderModel {
 impl DxcShaderModel {
     /// Get the shader model supported by a certain DXC version.
     pub fn from_dxc_version(major: u32, minor: u32) -> Self {
+        // DXC version roughly has corresponded to shader model so far, where DXC 1.x supports SM 6.x.
+        // See discussion in https://discord.com/channels/590611987420020747/996417435374714920/1471234702206701650.
+        // Presumably DXC 2.0 and up will still support shader model 6.8.
         if major > 1 {
             Self::V6_8
         } else {
