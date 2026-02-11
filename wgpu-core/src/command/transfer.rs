@@ -47,10 +47,12 @@ pub enum TransferError {
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error(transparent)]
     MissingTextureUsage(#[from] MissingTextureUsageError),
-    #[error("Copy of {start_offset}..{end_offset} would end up overrunning the bounds of the {side:?} buffer of size {buffer_size}")]
+    #[error(
+        "Copy at offset {start_offset} for {size} bytes would end up overrunning the bounds of the {side:?} buffer of size {buffer_size}"
+    )]
     BufferOverrun {
         start_offset: BufferAddress,
-        end_offset: BufferAddress,
+        size: BufferAddress,
         buffer_size: BufferAddress,
         side: CopySide,
     },
@@ -344,7 +346,7 @@ pub(crate) fn validate_linear_texture_data(
     if bytes_in_copy > buffer_size || offset > buffer_size - bytes_in_copy {
         return Err(TransferError::BufferOverrun {
             start_offset: offset,
-            end_offset: offset.wrapping_add(bytes_in_copy),
+            size: bytes_in_copy,
             buffer_size,
             side: buffer_side,
         });
@@ -1021,7 +1023,7 @@ pub(super) fn copy_buffer_to_buffer(
     if source_end_offset > src_buffer.size {
         return Err(TransferError::BufferOverrun {
             start_offset: source_offset,
-            end_offset: source_end_offset,
+            size,
             buffer_size: src_buffer.size,
             side: CopySide::Source,
         }
@@ -1030,7 +1032,7 @@ pub(super) fn copy_buffer_to_buffer(
     if destination_end_offset > dst_buffer.size {
         return Err(TransferError::BufferOverrun {
             start_offset: destination_offset,
-            end_offset: destination_end_offset,
+            size,
             buffer_size: dst_buffer.size,
             side: CopySide::Destination,
         }
