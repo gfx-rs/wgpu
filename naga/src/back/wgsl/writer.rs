@@ -287,8 +287,10 @@ impl<W: Write> Writer<W> {
             primitive_index: bool,
             cooperative_matrix: bool,
         }
-        let mut needed = RequiredEnabled::default();
-        needed.mesh_shaders = module.uses_mesh_shaders();
+        let mut needed = RequiredEnabled {
+            mesh_shaders: module.uses_mesh_shaders(),
+            ..Default::default()
+        };
 
         let check_binding = |binding: &crate::Binding, needed: &mut RequiredEnabled| match *binding
         {
