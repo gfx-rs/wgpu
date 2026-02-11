@@ -45,7 +45,7 @@ impl ExprPos {
 }
 
 #[derive(Debug)]
-pub struct Context<'a> {
+pub(crate) struct Context<'a> {
     pub expressions: Arena<Expression>,
     pub locals: Arena<LocalVariable>,
 
@@ -409,7 +409,7 @@ impl<'a> Context<'a> {
     /// - If more than one [`StmtContext`] are active at the same time or if the
     ///   previous call didn't use it in lowering.
     #[must_use]
-    pub fn stmt_ctx(&mut self) -> StmtContext {
+    pub const fn stmt_ctx(&mut self) -> StmtContext {
         self.stmt_ctx.take().unwrap()
     }
 
@@ -561,7 +561,7 @@ impl<'a> Context<'a> {
                     _ => self
                         .module
                         .to_ctx()
-                        .eval_expr_to_u32_from(index, &self.expressions)
+                        .get_const_val_from(index, &self.expressions)
                         .ok(),
                 };
 
@@ -1333,6 +1333,7 @@ impl<'a> Context<'a> {
                             }
                         }
                     }
+
                     _ => {
                         return Err(Error {
                             kind: ErrorKind::SemanticError(
@@ -1341,6 +1342,18 @@ impl<'a> Context<'a> {
                             meta,
                         });
                     }
+                }
+            }
+            HirExprKind::Sequence { ref exprs } if pos != ExprPos::Lhs => {
+                let mut last_handle = None;
+                for expr in exprs.iter() {
+                    let (handle, _) =
+                        self.lower_expect_inner(stmt, frontend, *expr, ExprPos::Rhs)?;
+                    last_handle = Some(handle);
+                }
+                match last_handle {
+                    Some(handle) => handle,
+                    None => unreachable!(),
                 }
             }
             _ => {

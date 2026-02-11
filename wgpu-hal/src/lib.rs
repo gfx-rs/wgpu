@@ -305,6 +305,7 @@ use core::{
 };
 
 use bitflags::bitflags;
+use raw_window_handle::DisplayHandle;
 use thiserror::Error;
 use wgt::WasmNotSendSync;
 
@@ -643,7 +644,7 @@ pub trait Api: Clone + fmt::Debug + Sized + WasmNotSendSync + 'static {
 pub trait Instance: Sized + WasmNotSendSync {
     type A: Api;
 
-    unsafe fn init(desc: &InstanceDescriptor) -> Result<Self, InstanceError>;
+    unsafe fn init(desc: &InstanceDescriptor<'_>) -> Result<Self, InstanceError>;
     unsafe fn create_surface(
         &self,
         display_handle: raw_window_handle::RawDisplayHandle,
@@ -1870,13 +1871,16 @@ bitflags!(
     }
 );
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct InstanceDescriptor<'a> {
     pub name: &'a str,
     pub flags: wgt::InstanceFlags,
     pub memory_budget_thresholds: wgt::MemoryBudgetThresholds,
     pub backend_options: wgt::BackendOptions,
     pub telemetry: Option<Telemetry>,
+    /// This is a borrow because the surrounding `core::Instance` keeps the the owned display handle
+    /// alive already.
+    pub display: Option<DisplayHandle<'a>>,
 }
 
 #[derive(Clone, Debug)]
@@ -1917,6 +1921,10 @@ pub struct Capabilities {
     pub limits: wgt::Limits,
     pub alignments: Alignments,
     pub downlevel: wgt::DownlevelCapabilities,
+    /// Supported cooperative matrix configurations.
+    ///
+    /// Empty if cooperative matrices are not supported.
+    pub cooperative_matrix_properties: Vec<wgt::CooperativeMatrixProperties>,
 }
 
 /// An adapter with all the information needed to reason about its capabilities.
@@ -2023,7 +2031,7 @@ impl TextureDescriptor<'_> {
 
     pub fn is_cube_compatible(&self) -> bool {
         self.dimension == wgt::TextureDimension::D2
-            && self.size.depth_or_array_layers % 6 == 0
+            && self.size.depth_or_array_layers.is_multiple_of(6)
             && self.sample_count == 1
             && self.size.width == self.size.height
     }
@@ -2328,28 +2336,27 @@ impl fmt::Debug for NagaShader {
 }
 
 /// Shader input.
-#[allow(clippy::large_enum_variant)]
 pub enum ShaderInput<'a> {
     Naga(NagaShader),
+    MetalLib {
+        file: &'a [u8],
+        num_workgroups: (u32, u32, u32),
+    },
     Msl {
         shader: &'a str,
-        entry_point: String,
         num_workgroups: (u32, u32, u32),
     },
     SpirV(&'a [u32]),
     Dxil {
         shader: &'a [u8],
-        entry_point: String,
         num_workgroups: (u32, u32, u32),
     },
     Hlsl {
         shader: &'a str,
-        entry_point: String,
         num_workgroups: (u32, u32, u32),
     },
     Glsl {
         shader: &'a str,
-        entry_point: String,
         num_workgroups: (u32, u32, u32),
     },
 }
@@ -2806,6 +2813,7 @@ pub struct TlasInstance {
 #[cfg(dx12)]
 pub enum D3D12ExposeAdapterResult {
     CreateDeviceError(dx12::CreateDeviceError),
+    UnknownFeatureLevel(i32),
     ResourceBindingTier2Requirement,
     ShaderModel6Requirement,
     Success(dx12::FeatureLevel, dx12::ShaderModel),
@@ -2817,7 +2825,7 @@ pub struct Telemetry {
     #[cfg(dx12)]
     pub d3d12_expose_adapter: fn(
         desc: &windows::Win32::Graphics::Dxgi::DXGI_ADAPTER_DESC2,
-        driver_version: [u16; 4],
+        driver_version: Result<[u16; 4], windows_core::HRESULT>,
         result: D3D12ExposeAdapterResult,
     ),
 }

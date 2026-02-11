@@ -75,6 +75,12 @@ pub enum CreateBindGroupLayoutError {
     InvalidBindingIndex { binding: u32, maximum: u32 },
     #[error("Invalid visibility {0:?}")]
     InvalidVisibility(wgt::ShaderStages),
+    #[error("Binding index {binding}: {access:?} access to storage textures with format {format:?} is not supported")]
+    UnsupportedStorageTextureAccess {
+        binding: u32,
+        access: wgt::StorageTextureAccess,
+        format: wgt::TextureFormat,
+    },
 }
 
 impl WebGpuError for CreateBindGroupLayoutError {
@@ -88,7 +94,8 @@ impl WebGpuError for CreateBindGroupLayoutError {
             | Self::InvalidBindingIndex { .. }
             | Self::InvalidVisibility(_)
             | Self::ContainsBothBindingArrayAndDynamicOffsetArray
-            | Self::ContainsBothBindingArrayAndUniformBuffer => ErrorType::Validation,
+            | Self::ContainsBothBindingArrayAndUniformBuffer
+            | Self::UnsupportedStorageTextureAccess { .. } => ErrorType::Validation,
         }
     }
 }
@@ -242,14 +249,6 @@ pub enum CreateBindGroupError {
     MissingTLASVertexReturn { binding: u32 },
     #[error("Bound texture views can not have both depth and stencil aspects enabled")]
     DepthStencilAspect,
-    #[error("The adapter does not support read access for storage textures of format {0:?}")]
-    StorageReadNotSupported(wgt::TextureFormat),
-    #[error("The adapter does not support atomics for storage textures of format {0:?}")]
-    StorageAtomicNotSupported(wgt::TextureFormat),
-    #[error("The adapter does not support write access for storage textures of format {0:?}")]
-    StorageWriteNotSupported(wgt::TextureFormat),
-    #[error("The adapter does not support read-write access for storage textures of format {0:?}")]
-    StorageReadWriteNotSupported(wgt::TextureFormat),
     #[error(transparent)]
     ResourceUsageCompatibility(#[from] ResourceUsageCompatibilityError),
     #[error(transparent)]
@@ -287,10 +286,6 @@ impl WebGpuError for CreateBindGroupError {
             | Self::WrongSamplerComparison { .. }
             | Self::WrongSamplerFiltering { .. }
             | Self::DepthStencilAspect
-            | Self::StorageReadNotSupported(_)
-            | Self::StorageWriteNotSupported(_)
-            | Self::StorageReadWriteNotSupported(_)
-            | Self::StorageAtomicNotSupported(_)
             | Self::MissingTLASVertexReturn { .. }
             | Self::InvalidExternalTextureMipLevelCount { .. }
             | Self::InvalidExternalTextureFormat { .. } => return ErrorType::Validation,
@@ -738,7 +733,6 @@ pub struct BindGroupLayout {
     /// (derived BGLs) must not be removed.
     pub(crate) origin: bgl::Origin,
     pub(crate) exclusive_pipeline: crate::OnceCellOrLock<ExclusivePipeline>,
-    #[allow(unused)]
     pub(crate) binding_count_validator: BindingTypeMaxCountValidator,
     /// The `label` from the descriptor used to create the resource.
     pub(crate) label: String,
@@ -907,7 +901,7 @@ impl PipelineLayout {
         // as immediate data ranges are already validated to be within bounds,
         // and we validate that they are within the ranges.
 
-        if offset % wgt::IMMEDIATE_DATA_ALIGNMENT != 0 {
+        if !offset.is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT) {
             return Err(ImmediateUploadError::Unaligned(offset));
         }
 
@@ -1168,7 +1162,7 @@ impl BindGroup {
         {
             let (alignment, limit_name) =
                 buffer_binding_type_alignment(&self.device.limits, info.binding_type);
-            if offset as wgt::BufferAddress % alignment as u64 != 0 {
+            if !(offset as wgt::BufferAddress).is_multiple_of(alignment as u64) {
                 return Err(BindError::UnalignedDynamicBinding {
                     bind_group: self.error_ident(),
                     group: bind_group_index,

@@ -8,9 +8,14 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
-rust-version.workspace = true
 readme = "../README.md"
 exclude = ["Cargo.lock"]
+
+# Override the workspace's `rust-version` key. `wgpu` and its dependencies
+# have a less strict MSRV, to allow users more leeway in updating their Rust toolchain.
+#
+# See the repo README for more information on MSRV policy.
+rust-version = "1.87.0"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -120,9 +125,8 @@ strict_asserts = ["wgpu-core?/strict_asserts", "wgpu-types/strict_asserts"]
 ## Enables serialization via `serde` on common wgpu types.
 serde = ["wgpu-core?/serde", "wgpu-types/serde"]
 
-# Uncomment once we get to https://github.com/gfx-rs/wgpu/issues/5974
 # ## Allow writing of trace capture files. See [`Adapter::request_device`].
-# trace = ["serde", "wgpu-core/trace"]
+trace = ["serde", "wgpu-core?/trace"]
 
 #! ### External libraries
 # --------------------------------------------------------------------
@@ -160,7 +164,7 @@ fragile-send-sync-non-atomic-wasm = [
 
 ## Use web-specific libraries on WASM
 ##
-## Those libraties (wasm-bindgen, web-sys, js-sys) can only be used when there is a JavaScript
+## Those libraries (wasm-bindgen, web-sys, js-sys) can only be used when there is a JavaScript
 ## context around the WASM VM, e.g., when the WASM binary is used in a browser.
 web = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "wgpu-types/web"]
 
@@ -210,9 +214,8 @@ static_assertions.workspace = true
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 # Needed for only wgpu-core backend. Not optional as only wgpu-core backend exists on native platforms.
 wgpu-core = { workspace = true, features = [
-    "raw-window-handle",
     "renderdoc",
-    "wgsl",              # needed for indirect draw/dispatch validation
+    "wgsl",            # needed for indirect draw/dispatch validation
     "portable-atomic",
 ] }
 wgpu-hal.workspace = true
@@ -232,9 +235,7 @@ web-sys = { workspace = true, optional = true, features = [
 ] }
 
 # Needed for only wgpu-core backend. Optional as webgl is optional on WebAssembly.
-wgpu-core = { workspace = true, optional = true, features = [
-    "raw-window-handle",
-] }
+wgpu-core = { workspace = true, optional = true }
 wgpu-hal = { workspace = true, optional = true }
 
 smallvec = { workspace = true, optional = true }
@@ -246,7 +247,7 @@ wasm-bindgen-futures = { workspace = true, optional = true }
 # Emscripten #
 ##############
 [target.'cfg(target_os = "emscripten")'.dependencies]
-wgpu-core = { workspace = true, features = ["raw-window-handle"] }
+wgpu-core.workspace = true
 wgpu-hal.workspace = true
 
 smallvec.workspace = true

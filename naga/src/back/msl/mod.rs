@@ -227,8 +227,10 @@ pub enum Error {
     UnsupportedArrayOf(String),
     #[error("array of type '{0:?}' is not supported")]
     UnsupportedArrayOfType(Handle<crate::Type>),
-    #[error("ray tracing is not supported prior to MSL 2.3")]
+    #[error("ray tracing is not supported prior to MSL 2.4")]
     UnsupportedRayTracing,
+    #[error("cooperative matrix is not supported prior to MSL 2.3")]
+    UnsupportedCooperativeMatrix,
     #[error("overrides should not be present at this stage")]
     Override,
     #[error("bitcasting to {0:?} is not supported")]
@@ -538,7 +540,7 @@ impl Options {
                     }
                     // macOS: Since Metal 2.2
                     // iOS: Since Metal 2.3 (check depends on https://github.com/gfx-rs/wgpu/issues/4414)
-                    crate::BuiltIn::Barycentric if self.lang_version < (2, 3) => {
+                    crate::BuiltIn::Barycentric { .. } if self.lang_version < (2, 3) => {
                         return Err(Error::UnsupportedAttribute("barycentric_coord".to_string()));
                     }
                     _ => {}
@@ -693,7 +695,10 @@ impl ResolvedBinding {
                     Bi::PointCoord => "point_coord",
                     Bi::FrontFacing => "front_facing",
                     Bi::PrimitiveIndex => "primitive_id",
-                    Bi::Barycentric => "barycentric_coord",
+                    Bi::Barycentric { perspective: true } => "barycentric_coord",
+                    Bi::Barycentric { perspective: false } => {
+                        "barycentric_coord, center_no_perspective"
+                    }
                     Bi::SampleIndex => "sample_id",
                     Bi::SampleMask => "sample_mask",
                     // compute
@@ -718,7 +723,20 @@ impl ResolvedBinding {
                     | Bi::VertexCount
                     | Bi::PrimitiveCount
                     | Bi::Vertices
-                    | Bi::Primitives => unreachable!(),
+                    | Bi::Primitives
+                    | Bi::RayInvocationId
+                    | Bi::NumRayInvocations
+                    | Bi::InstanceCustomData
+                    | Bi::GeometryIndex
+                    | Bi::WorldRayOrigin
+                    | Bi::WorldRayDirection
+                    | Bi::ObjectRayOrigin
+                    | Bi::ObjectRayDirection
+                    | Bi::RayTmin
+                    | Bi::RayTCurrentMax
+                    | Bi::ObjectToWorld
+                    | Bi::WorldToObject
+                    | Bi::HitKind => unreachable!(),
                 };
                 write!(out, "{name}")?;
             }

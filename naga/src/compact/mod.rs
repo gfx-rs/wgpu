@@ -157,19 +157,15 @@ pub fn compact(module: &mut crate::Module, keep_unused: KeepUnused) {
                 }
             }
             if e.stage == crate::ShaderStage::Task || e.stage == crate::ShaderStage::Mesh {
-                // u32 should always be there if the module is valid, as it is e.g. the type of some expressions
-                let u32_type = module
-                    .types
-                    .iter()
-                    .find_map(|tuple| {
-                        if tuple.1.inner == crate::TypeInner::Scalar(crate::Scalar::U32) {
-                            Some(tuple.0)
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap();
-                module_tracer.types_used.insert(u32_type);
+                // Mesh shaders always need a u32 type, as it is e.g. the type of some
+                // expressions. We tolerate its absence here because compaction is
+                // infallible, but the module will fail validation.
+                if let Some(u32_type) = module.types.iter().find_map(|tuple| {
+                    (tuple.1.inner == crate::TypeInner::Scalar(crate::Scalar::U32))
+                        .then_some(tuple.0)
+                }) {
+                    module_tracer.types_used.insert(u32_type);
+                }
             }
 
             let mut used = module_tracer.as_function(&e.function);
@@ -529,7 +525,7 @@ impl<'module> ModuleTracer<'module> {
         }
     }
 
-    fn as_type(&mut self) -> types::TypeTracer<'_> {
+    const fn as_type(&mut self) -> types::TypeTracer<'_> {
         types::TypeTracer {
             overrides: &self.module.overrides,
             types_used: &mut self.types_used,
@@ -538,7 +534,7 @@ impl<'module> ModuleTracer<'module> {
         }
     }
 
-    fn as_const_expression(&mut self) -> expressions::ExpressionTracer<'_> {
+    const fn as_const_expression(&mut self) -> expressions::ExpressionTracer<'_> {
         expressions::ExpressionTracer {
             constants: &self.module.constants,
             overrides: &self.module.overrides,

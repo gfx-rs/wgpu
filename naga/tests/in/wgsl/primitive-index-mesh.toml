@@ -1,0 +1,8 @@
+# Tests on GLES
+
+capabilities = "PRIMITIVE_INDEX"
+targets = "GLSL"
+
+[glsl]
+version.Embedded.version = 320
+version.Embedded.is_webgl = false

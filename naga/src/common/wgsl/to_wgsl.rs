@@ -169,7 +169,8 @@ impl TryToWgsl for crate::BuiltIn {
             Bi::FragDepth => "frag_depth",
             Bi::FrontFacing => "front_facing",
             Bi::PrimitiveIndex => "primitive_index",
-            Bi::Barycentric => "barycentric",
+            Bi::Barycentric { perspective: true } => "barycentric",
+            Bi::Barycentric { perspective: false } => "barycentric_no_perspective",
             Bi::SampleIndex => "sample_index",
             Bi::SampleMask => "sample_mask",
             Bi::GlobalInvocationId => "global_invocation_id",
@@ -199,7 +200,20 @@ impl TryToWgsl for crate::BuiltIn {
             | Bi::PointSize
             | Bi::DrawID
             | Bi::PointCoord
-            | Bi::WorkGroupSize => return None,
+            | Bi::WorkGroupSize
+            | Bi::RayInvocationId
+            | Bi::NumRayInvocations
+            | Bi::InstanceCustomData
+            | Bi::GeometryIndex
+            | Bi::WorldRayOrigin
+            | Bi::WorldRayDirection
+            | Bi::ObjectRayOrigin
+            | Bi::ObjectRayDirection
+            | Bi::RayTmin
+            | Bi::RayTCurrentMax
+            | Bi::ObjectToWorld
+            | Bi::WorldToObject
+            | Bi::HitKind => return None,
         })
     }
 }
@@ -210,6 +224,7 @@ impl ToWgsl for crate::Interpolation {
             crate::Interpolation::Perspective => "perspective",
             crate::Interpolation::Linear => "linear",
             crate::Interpolation::Flat => "flat",
+            crate::Interpolation::PerVertex => "per_vertex",
         }
     }
 }
@@ -310,15 +325,23 @@ impl TryToWgsl for crate::Scalar {
     }
 }
 
+impl ToWgsl for crate::CooperativeRole {
+    fn to_wgsl(self) -> &'static str {
+        match self {
+            Self::A => "A",
+            Self::B => "B",
+            Self::C => "C",
+        }
+    }
+}
+
 impl ToWgsl for crate::ImageDimension {
     fn to_wgsl(self) -> &'static str {
-        use crate::ImageDimension as IDim;
-
         match self {
-            IDim::D1 => "1d",
-            IDim::D2 => "2d",
-            IDim::D3 => "3d",
-            IDim::Cube => "cube",
+            Self::D1 => "1d",
+            Self::D2 => "2d",
+            Self::D3 => "3d",
+            Self::Cube => "cube",
         }
     }
 }
@@ -364,6 +387,7 @@ pub const fn address_space_str(
             As::Handle => return (None, None),
             As::Function => "function",
             As::TaskPayload => "task_payload",
+            As::IncomingRayPayload | As::RayPayload => return (None, None),
         }),
         None,
     )

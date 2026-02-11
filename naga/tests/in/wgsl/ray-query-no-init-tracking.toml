@@ -11,8 +11,7 @@ zero_initialize_workgroup_memory = false
 shader_model = "V6_5"
 fake_missing_bindings = true
 zero_initialize_workgroup_memory = true
-# Not yet implemented
-# ray_query_initialization_tracking = false
+ray_query_initialization_tracking = false
 
 [spv]
 version = [1, 4]

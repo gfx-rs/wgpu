@@ -24,6 +24,10 @@ name = "wgpu-gpu"
 harness = false
 
 [[test]]
+name = "wgpu_trace"
+harness = true
+
+[[test]]
 name = "wgpu-validation"
 harness = true
 
@@ -39,8 +43,10 @@ test-build-with-profiling = ["profiling/type-check"]
 # `cargo clippy -- -Wunused-crate-dependencies` give fewer false positives.
 [dependencies]
 wgpu = { workspace = true, features = ["noop"] }
+wgpu-core = { workspace = true, features = ["trace"] }
 wgpu-hal = { workspace = true, features = ["validation_canary"] }
 wgpu-macros.workspace = true
+wgpu-types.workspace = true
 
 anyhow.workspace = true
 arrayvec.workspace = true

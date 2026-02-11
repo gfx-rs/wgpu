@@ -12,11 +12,11 @@ use crate::{
 pub struct Alignment(NonZeroU32);
 
 impl Alignment {
-    pub const ONE: Self = Self(unsafe { NonZeroU32::new_unchecked(1) });
-    pub const TWO: Self = Self(unsafe { NonZeroU32::new_unchecked(2) });
-    pub const FOUR: Self = Self(unsafe { NonZeroU32::new_unchecked(4) });
-    pub const EIGHT: Self = Self(unsafe { NonZeroU32::new_unchecked(8) });
-    pub const SIXTEEN: Self = Self(unsafe { NonZeroU32::new_unchecked(16) });
+    pub const ONE: Self = Self(NonZeroU32::new(1).unwrap());
+    pub const TWO: Self = Self(NonZeroU32::new(2).unwrap());
+    pub const FOUR: Self = Self(NonZeroU32::new(4).unwrap());
+    pub const EIGHT: Self = Self(NonZeroU32::new(8).unwrap());
+    pub const SIXTEEN: Self = Self(NonZeroU32::new(16).unwrap());
 
     pub const MIN_UNIFORM: Self = Self::SIXTEEN;
 
@@ -31,7 +31,7 @@ impl Alignment {
 
     /// # Panics
     /// If `width` is not a power of 2
-    pub fn from_width(width: u8) -> Self {
+    pub const fn from_width(width: u8) -> Self {
         Self::new(width as u32).unwrap()
     }
 
@@ -83,6 +83,12 @@ impl From<crate::VectorSize> for Alignment {
             crate::VectorSize::Tri => Alignment::FOUR,
             crate::VectorSize::Quad => Alignment::FOUR,
         }
+    }
+}
+
+impl From<crate::CooperativeSize> for Alignment {
+    fn from(size: crate::CooperativeSize) -> Self {
+        Self(unsafe { NonZeroU32::new_unchecked(size as u32) })
     }
 }
 
@@ -205,6 +211,19 @@ impl Layouter {
                     columns: _,
                     rows,
                     scalar,
+                } => {
+                    let alignment = Alignment::new(scalar.width as u32)
+                        .ok_or(LayoutErrorInner::NonPowerOfTwoWidth.with(ty_handle))?;
+                    TypeLayout {
+                        size,
+                        alignment: Alignment::from(rows) * alignment,
+                    }
+                }
+                Ti::CooperativeMatrix {
+                    columns: _,
+                    rows,
+                    scalar,
+                    role: _,
                 } => {
                     let alignment = Alignment::new(scalar.width as u32)
                         .ok_or(LayoutErrorInner::NonPowerOfTwoWidth.with(ty_handle))?;

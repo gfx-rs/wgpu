@@ -585,7 +585,7 @@ impl Buffer {
             self.size.saturating_sub(offset)
         };
 
-        if offset % wgt::MAP_ALIGNMENT != 0 {
+        if !offset.is_multiple_of(wgt::MAP_ALIGNMENT) {
             return Err((op, BufferAccessError::UnalignedOffset { offset }));
         }
         if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
@@ -693,7 +693,7 @@ impl Buffer {
             self.size.saturating_sub(offset)
         };
 
-        if offset % wgt::MAP_ALIGNMENT != 0 {
+        if !offset.is_multiple_of(wgt::MAP_ALIGNMENT) {
             return Err(BufferAccessError::UnalignedOffset { offset });
         }
         if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
@@ -815,9 +815,9 @@ impl Buffer {
             BufferMapState::Init { staging_buffer } => {
                 #[cfg(feature = "trace")]
                 if let Some(ref mut trace) = *device.trace.lock() {
-                    use crate::device::trace::IntoTrace;
+                    use crate::device::trace::{DataKind, IntoTrace};
 
-                    let data = trace.make_binary("bin", staging_buffer.get_data());
+                    let data = trace.make_binary(DataKind::Bin, staging_buffer.get_data());
                     trace.add(trace::Action::WriteBuffer {
                         id: self.to_trace(),
                         data,
@@ -878,10 +878,10 @@ impl Buffer {
                 if host == HostMap::Write {
                     #[cfg(feature = "trace")]
                     if let Some(ref mut trace) = *device.trace.lock() {
-                        use crate::device::trace::IntoTrace;
+                        use crate::device::trace::{DataKind, IntoTrace};
 
                         let size = range.end - range.start;
-                        let data = trace.make_binary("bin", unsafe {
+                        let data = trace.make_binary(DataKind::Bin, unsafe {
                             core::slice::from_raw_parts(mapping.ptr.as_ptr(), size as usize)
                         });
                         trace.add(trace::Action::WriteBuffer {
@@ -2327,7 +2327,7 @@ impl Blas {
                             // Clippy complains about this because it might not be intended, but
                             // this is intentional.
                             #[expect(clippy::single_range_in_vec_init)]
-                            self.device.raw().flush_mapped_ranges(
+                            self.device.raw().invalidate_mapped_ranges(
                                 compaction_buffer,
                                 &[0..size_of::<wgpu_types::BufferAddress>() as wgt::BufferAddress],
                             );

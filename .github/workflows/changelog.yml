@@ -18,8 +18,8 @@ env:
   # Dependency versioning
   #
 
-  # This is the MSRV used by `wgpu` itself and all surrounding infrastructure.
-  REPO_MSRV: "1.92"
+  # This is the MSRV used by all repository infrastructure.
+  REPO_MSRV: "1.93"
 
   #
   # Environment variables

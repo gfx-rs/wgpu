@@ -14,7 +14,7 @@ use super::{
     variables::{GlobalOrConstant, VarDeclaration},
     Frontend, Result,
 };
-use crate::{arena::Handle, proc::U32EvalError, Expression, Module, Span, Type};
+use crate::{arena::Handle, proc::ConstValueError, Expression, Module, Span, Type};
 
 mod declarations;
 mod expressions;
@@ -211,15 +211,15 @@ impl<'source> ParsingContext<'source> {
             ctx.global_expression_kind_tracker,
         )?;
 
-        let res = ctx.module.to_ctx().eval_expr_to_u32(const_expr);
+        let res = ctx.module.to_ctx().get_const_val(const_expr);
 
         let int = match res {
             Ok(value) => Ok(value),
-            Err(U32EvalError::Negative) => Err(Error {
+            Err(ConstValueError::Negative) => Err(Error {
                 kind: ErrorKind::SemanticError("int constant overflows".into()),
                 meta,
             }),
-            Err(U32EvalError::NonConst) => Err(Error {
+            Err(ConstValueError::NonConst | ConstValueError::InvalidType) => Err(Error {
                 kind: ErrorKind::SemanticError("Expected a uint constant".into()),
                 meta,
             }),

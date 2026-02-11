@@ -36,7 +36,6 @@ bytemuck.workspace = true
 workspace = true
 features = [
     "replay",
-    "raw-window-handle",
     "strict_asserts",
     "wgsl",
     "metal",

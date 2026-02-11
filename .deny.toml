@@ -7,6 +7,9 @@ skip-tree = [
 
     # introduced by Deno, to be investigated
     { name = "petgraph", version = "0.6.5" },
+
+    # Winit 0.30 uses an older objc2
+    { name = "objc2-foundation", version = "0.2" },
 ]
 skip = [
     # Deno uses an old version
@@ -15,6 +18,9 @@ skip = [
 
     # Winit uses an old version
     { name = "windows-sys", version = "0.52.0" },
+
+    # parking-lot uses an old version
+    { name = "redox_syscall", version = "0.5.18" },
 ]
 wildcards = "deny"
 allow-wildcard-paths = true
@@ -32,6 +38,9 @@ ignore = [
     "RUSTSEC-2025-0081",
     "RUSTSEC-2025-0098",
     "RUSTSEC-2025-0100",
+    # `bincode` is no longer maintained https://rustsec.org/advisories/RUSTSEC-2025-0141
+    # We only use it directly for tests and tools. It is also used indirectly via deno.
+    "RUSTSEC-2025-0141",
 ]
 
 [licenses]
@@ -56,6 +65,8 @@ allow-git = [
 
     # Pending a release for https://github.com/Xudong-Huang/generator-rs/pull/75
     "https://github.com/Xudong-Huang/generator-rs",
+    # Pending a release for https://github.com/gfx-rs/rspirv
+    "https://github.com/gfx-rs/rspirv",
 ]
 unknown-registry = "deny"
 unknown-git = "deny"

@@ -16,6 +16,7 @@ impl TypeTracer<'_> {
             Ti::Scalar { .. }
             | Ti::Vector { .. }
             | Ti::Matrix { .. }
+            | Ti::CooperativeMatrix { .. }
             | Ti::Atomic { .. }
             | Ti::ValuePointer { .. }
             | Ti::Image { .. }
@@ -66,6 +67,7 @@ impl ModuleMap {
             Ti::Scalar(_)
             | Ti::Vector { .. }
             | Ti::Matrix { .. }
+            | Ti::CooperativeMatrix { .. }
             | Ti::Atomic(_)
             | Ti::ValuePointer { .. }
             | Ti::Image { .. }

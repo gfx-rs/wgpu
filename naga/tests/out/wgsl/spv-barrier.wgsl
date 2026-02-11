@@ -1,4 +1,4 @@
-fn function() {
+fn function_() {
     workgroupBarrier();
     workgroupBarrier();
     storageBarrier();
@@ -16,5 +16,5 @@ fn function() {
 
 @compute @workgroup_size(64, 1, 1) 
 fn main() {
-    function();
+    function_();
 }

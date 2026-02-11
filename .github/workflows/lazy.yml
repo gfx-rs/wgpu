@@ -1,11 +1,18 @@
-# Lazy jobs running on trunk post merges.
+# Non-critical jobs
 name: Lazy
+
 on:
-  pull_request:
-    paths:
-      - ".github/workflows/lazy.yml"
   push:
-    branches: [trunk]
+    branches-ignore: [
+        # Renovate branches are always PRs, so they will be covered
+        # by the pull_request event.
+        "renovate/**",
+        # Branches with the `gh-readonly-queue` prefix are used by the
+        # merge queue, so they are already covered by the `merge_group` event.
+        "gh-readonly-queue/**",
+      ]
+  pull_request:
+  merge_group:
 
 env:
   CARGO_INCREMENTAL: false
@@ -96,12 +103,8 @@ jobs:
         run: |
           cargo build --release -p naga-cli
 
-      - name: Install `spirv-tools`
-        run: |
-          cd naga
-          wget -q https://storage.googleapis.com/spirv-tools/artifacts/prod/graphics_shader_compiler/spirv-tools/linux-clang-release/continuous/1489/20210629-121459/install.tgz
-          tar zxf install.tgz
-          ./install/bin/spirv-as --version
+      - name: Install Vulkan SDK
+        uses: ./.github/actions/install-vulkan-sdk
 
       - name: Compile `spv` from `spvasm`
         run: |
@@ -111,7 +114,7 @@ jobs:
           find "./spvasm" -name '*.spvasm' | while read fname;
           do
               echo "Convert to spv with spirv-as: $fname"
-              ../install/bin/spirv-as --target-env spv1.3 $(realpath ${fname}) -o ./spv/$(basename ${fname}).spv
+              spirv-as --target-env spv1.3 $(realpath ${fname}) -o ./spv/$(basename ${fname}).spv
           done;
 
       - name: Validate `spv` and generate `wgsl`

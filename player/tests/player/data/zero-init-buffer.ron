@@ -67,7 +67,7 @@
         ),
         WriteBuffer(
             id: PointerId(0x120),
-            data: "data1.bin",
+            data: File("data1.bin"),
             range: (
                 start: 4,
                 end: 20,
@@ -80,7 +80,7 @@
                 label: None,
                 flags: (bits: 3),
             ),
-            data: "zero-init-buffer-for-binding.wgsl",
+            data: File("zero-init-buffer-for-binding.wgsl"),
         ),
         CreateBuffer(PointerId(0x130), (
             label: Some("used in binding"),

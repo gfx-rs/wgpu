@@ -13,7 +13,7 @@ var<storage> global_1: type_4;
 @group(0) @binding(2) 
 var global_2: texture_depth_2d;
 
-fn function() {
+fn function_() {
     let _e6 = global_1.member;
     let _e7 = textureLoad(global_2, _e6, 0i);
     global.member = vec4(_e7).x;
@@ -22,5 +22,5 @@ fn function() {
 
 @compute @workgroup_size(32, 1, 1) 
 fn cull_fetch_depth() {
-    function();
+    function_();
 }

@@ -73,6 +73,7 @@ deno_core::extension!(
   ],
   objects = [
     GPU,
+    WGSLLanguageFeatures,
     adapter::GPUAdapter,
     adapter::GPUAdapterInfo,
     bind_group::GPUBindGroup,
@@ -114,14 +115,24 @@ pub fn op_create_gpu(
   scope: &mut v8::HandleScope,
   webidl_brand: v8::Local<v8::Value>,
   set_event_target_data: v8::Local<v8::Value>,
-  error_event_class: v8::Local<v8::Value>,
+  uncaptured_error_event_class: v8::Local<v8::Value>,
+  pipeline_error_class: v8::Local<v8::Value>,
 ) -> GPU {
   state.put(EventTargetSetup {
     brand: v8::Global::new(scope, webidl_brand),
     set_event_target_data: v8::Global::new(scope, set_event_target_data),
   });
-  state.put(ErrorEventClass(v8::Global::new(scope, error_event_class)));
-  GPU
+  state.put(ErrorEventClass(v8::Global::new(
+    scope,
+    uncaptured_error_event_class,
+  )));
+  state.put(PipelineErrorClass(v8::Global::new(
+    scope,
+    pipeline_error_class,
+  )));
+  GPU {
+    wgsl_language_features: SameObject::new(),
+  }
 }
 
 struct EventTargetSetup {
@@ -129,8 +140,11 @@ struct EventTargetSetup {
   set_event_target_data: v8::Global<v8::Value>,
 }
 struct ErrorEventClass(v8::Global<v8::Value>);
+struct PipelineErrorClass(v8::Global<v8::Value>);
 
-pub struct GPU;
+pub struct GPU {
+  pub wgsl_language_features: SameObject<WGSLLanguageFeatures>,
+}
 
 impl GarbageCollected for GPU {
   fn get_name(&self) -> &'static std::ffi::CStr {
@@ -164,7 +178,7 @@ impl GPU {
     } else {
       state.put(Arc::new(wgpu_core::global::Global::new(
         "webgpu",
-        &wgpu_types::InstanceDescriptor {
+        wgpu_types::InstanceDescriptor {
           backends,
           flags: wgpu_types::InstanceFlags::from_build_config(),
           memory_budget_thresholds: wgpu_types::MemoryBudgetThresholds {
@@ -179,6 +193,7 @@ impl GPU {
             gl: wgpu_types::GlBackendOptions::default(),
             noop: wgpu_types::NoopBackendOptions::default(),
           },
+          display: None,
         },
         None,
       )));
@@ -217,6 +232,53 @@ impl GPU {
     } else {
       texture::GPUTextureFormat::Bgra8unorm.as_str()
     }
+  }
+
+  #[getter]
+  #[global]
+  fn wgslLanguageFeatures(
+    &self,
+    scope: &mut v8::HandleScope,
+  ) -> v8::Global<v8::Object> {
+    self
+      .wgsl_language_features
+      .get(scope, WGSLLanguageFeatures::new)
+  }
+}
+
+pub struct WGSLLanguageFeatures(v8::Global<v8::Value>);
+
+impl GarbageCollected for WGSLLanguageFeatures {
+  fn get_name(&self) -> &'static std::ffi::CStr {
+    c"WGSLLanguageFeatures"
+  }
+}
+
+impl WGSLLanguageFeatures {
+  pub fn new(scope: &mut v8::HandleScope) -> Self {
+    use wgpu_core::naga::front::wgsl::ImplementedLanguageExtension;
+
+    let set = v8::Set::new(scope);
+    for ext in ImplementedLanguageExtension::all() {
+      let key = v8::String::new(scope, ext.to_ident()).unwrap();
+      set.add(scope, key.into());
+    }
+    Self(v8::Global::new(scope, <v8::Local<v8::Value>>::from(set)))
+  }
+}
+
+#[op2]
+impl WGSLLanguageFeatures {
+  #[constructor]
+  #[cppgc]
+  fn constructor(_: bool) -> Result<WGSLLanguageFeatures, GPUGenericError> {
+    Err(GPUGenericError::InvalidConstructor)
+  }
+
+  #[global]
+  #[symbol("setlike_set")]
+  fn set(&self) -> v8::Global<v8::Value> {
+    self.0.clone()
   }
 }
 

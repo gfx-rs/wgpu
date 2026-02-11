@@ -47,7 +47,7 @@
                 label: None,
                 flags: (bits: 3),
             ),
-            data: "empty.wgsl",
+            data: File("empty.wgsl"),
         ),
         CreateComputePipeline(
             id: PointerId(0x10),

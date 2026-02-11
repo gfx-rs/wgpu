@@ -11,9 +11,9 @@ OpEntryPoint TaskEXT %21 "ts_main" %16
 OpEntryPoint MeshEXT %44 "ms_main" %16 %30 %40 %43 %18 %47
 OpExecutionMode %21 LocalSize 1 1 1
 OpExecutionMode %44 LocalSize 1 1 1
-OpExecutionMode %44 OutputLinesNV
+OpExecutionMode %44 OutputLinesEXT
 OpExecutionMode %44 OutputVertices 2
-OpExecutionMode %44 OutputPrimitivesNV 1
+OpExecutionMode %44 OutputPrimitivesEXT 1
 OpDecorate %30 BuiltIn LocalInvocationIndex
 OpMemberDecorate %37 0 BuiltIn Position
 OpDecorate %37 Block

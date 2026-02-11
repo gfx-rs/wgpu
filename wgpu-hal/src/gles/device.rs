@@ -99,7 +99,12 @@ impl CompilationContext<'_> {
                     unsafe { gl.bind_frag_data_location(program, location.location, &name) }
                 }
                 naga::ShaderStage::Compute => {}
-                naga::ShaderStage::Task | naga::ShaderStage::Mesh => unreachable!(),
+                naga::ShaderStage::Task
+                | naga::ShaderStage::Mesh
+                | naga::ShaderStage::RayGeneration
+                | naga::ShaderStage::AnyHit
+                | naga::ShaderStage::ClosestHit
+                | naga::ShaderStage::Miss => unreachable!(),
             }
         }
 
@@ -175,7 +180,12 @@ impl super::Device {
             naga::ShaderStage::Vertex => glow::VERTEX_SHADER,
             naga::ShaderStage::Fragment => glow::FRAGMENT_SHADER,
             naga::ShaderStage::Compute => glow::COMPUTE_SHADER,
-            naga::ShaderStage::Task | naga::ShaderStage::Mesh => unreachable!(),
+            naga::ShaderStage::Task
+            | naga::ShaderStage::Mesh
+            | naga::ShaderStage::RayGeneration
+            | naga::ShaderStage::AnyHit
+            | naga::ShaderStage::ClosestHit
+            | naga::ShaderStage::Miss => unreachable!(),
         };
 
         let raw = unsafe { gl.create_shader(target) }.unwrap();
@@ -321,6 +331,7 @@ impl super::Device {
                 shader_id: stage.module.id,
                 entry_point: stage.entry_point.to_owned(),
                 zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
+                constant_hash: Self::create_constant_hash(stage),
             });
         }
         let mut guard = self
@@ -350,6 +361,17 @@ impl super::Device {
         drop(guard);
 
         Ok(program)
+    }
+
+    fn create_constant_hash(stage: &crate::ProgrammableStage<super::ShaderModule>) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::new();
+
+        for (key, value) in stage.constants.iter() {
+            buf.extend_from_slice(key.as_bytes());
+            buf.extend_from_slice(&value.to_ne_bytes());
+        }
+
+        buf
     }
 
     unsafe fn create_program<'a>(
@@ -1342,6 +1364,7 @@ impl crate::Device for super::Device {
                 // The backend doesn't yet expose this feature so it should be fine
                 crate::ShaderInput::Glsl { .. } => unimplemented!(),
                 crate::ShaderInput::SpirV(_)
+                | crate::ShaderInput::MetalLib { .. }
                 | crate::ShaderInput::Msl { .. }
                 | crate::ShaderInput::Dxil { .. }
                 | crate::ShaderInput::Hlsl { .. } => {

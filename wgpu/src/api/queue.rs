@@ -267,7 +267,7 @@ impl Queue {
     ///
     /// Returns zero if timestamp queries are unsupported.
     ///
-    /// Timestamp values are represented in nanosecond values on WebGPU, see `<https://gpuweb.github.io/gpuweb/#timestamp>`
+    /// Timestamp values are represented in nanosecond values on WebGPU, see <https://gpuweb.github.io/gpuweb/#timestamp>
     /// Therefore, this is always 1.0 on the web, but on wgpu-core a manual conversion is required.
     pub fn get_timestamp_period(&self) -> f32 {
         self.inner.get_timestamp_period()
@@ -305,10 +305,10 @@ impl Queue {
     ///
     /// The returned type depends on the backend:
     ///
-    #[doc = crate::hal_type_vulkan!("Queue")]
-    #[doc = crate::hal_type_metal!("Queue")]
-    #[doc = crate::hal_type_dx12!("Queue")]
-    #[doc = crate::hal_type_gles!("Queue")]
+    #[doc = crate::macros::hal_type_vulkan!("Queue")]
+    #[doc = crate::macros::hal_type_metal!("Queue")]
+    #[doc = crate::macros::hal_type_dx12!("Queue")]
+    #[doc = crate::macros::hal_type_gles!("Queue")]
     ///
     /// # Errors
     ///

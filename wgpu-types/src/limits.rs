@@ -46,7 +46,6 @@ macro_rules! with_limits {
         $macro_name!(max_vertex_buffer_array_stride, Ordering::Less);
         $macro_name!(min_uniform_buffer_offset_alignment, Ordering::Greater);
         $macro_name!(min_storage_buffer_offset_alignment, Ordering::Greater);
-        $macro_name!(max_inter_stage_shader_components, Ordering::Less);
         $macro_name!(max_color_attachments, Ordering::Less);
         $macro_name!(max_color_attachment_bytes_per_sample, Ordering::Less);
         $macro_name!(max_compute_workgroup_storage_size, Ordering::Less);
@@ -86,7 +85,7 @@ macro_rules! with_limits {
 /// - [`Limits::downlevel_defaults()`]. This is a set of limits that is guaranteed to work on almost
 ///   all backends, including "downlevel" backends such as OpenGL and D3D11, other than WebGL. For
 ///   most applications we recommend using these limits, assuming they are high enough for your
-///   application, and you do not intent to support WebGL.
+///   application, and you do not intend to support WebGL.
 /// - [`Limits::downlevel_webgl2_defaults()`] This is a set of limits that is lower even than the
 ///   [`downlevel_defaults()`], configured to be low enough to support running in the browser using
 ///   WebGL2.
@@ -180,6 +179,11 @@ pub struct Limits {
     /// Maximum value for `VertexBufferLayout::array_stride` when creating a `RenderPipeline`.
     /// Defaults to 2048. Higher is "better".
     pub max_vertex_buffer_array_stride: u32,
+    /// Maximum value for the number of input or output variables for inter-stage communication
+    /// (like vertex outputs or fragment inputs) `@location(…)`s (in WGSL parlance)
+    /// when creating a `RenderPipeline`.
+    /// Defaults to 16. Higher is "better".
+    pub max_inter_stage_shader_variables: u32,
     /// Required `BufferBindingType::Uniform` alignment for `BufferBinding::offset`
     /// when creating a `BindGroup`, or for `set_bind_group` `dynamicOffsets`.
     /// Defaults to 256. Lower is "better".
@@ -188,10 +192,6 @@ pub struct Limits {
     /// when creating a `BindGroup`, or for `set_bind_group` `dynamicOffsets`.
     /// Defaults to 256. Lower is "better".
     pub min_storage_buffer_offset_alignment: u32,
-    /// Maximum allowed number of components (scalars) of input or output locations for
-    /// inter-stage communication (vertex outputs to fragment inputs). Defaults to 60.
-    /// Higher is "better".
-    pub max_inter_stage_shader_components: u32,
     /// The maximum allowed number of color attachments.
     pub max_color_attachments: u32,
     /// The maximum number of bytes necessary to hold one sample (pixel or subpixel) of render
@@ -325,9 +325,9 @@ impl Limits {
     ///     max_buffer_size: 256 << 20, // (256 MiB)
     ///     max_vertex_attributes: 16,
     ///     max_vertex_buffer_array_stride: 2048,
+    ///     max_inter_stage_shader_variables: 16,
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
-    ///     max_inter_stage_shader_components: 60,
     ///     max_color_attachments: 8,
     ///     max_color_attachment_bytes_per_sample: 32,
     ///     max_compute_workgroup_storage_size: 16384,
@@ -383,9 +383,9 @@ impl Limits {
             max_buffer_size: 256 << 20, // (256 MiB)
             max_vertex_attributes: 16,
             max_vertex_buffer_array_stride: 2048,
+            max_inter_stage_shader_variables: 16,
             min_uniform_buffer_offset_alignment: 256,
             min_storage_buffer_offset_alignment: 256,
-            max_inter_stage_shader_components: 60,
             max_color_attachments: 8,
             max_color_attachment_bytes_per_sample: 32,
             max_compute_workgroup_storage_size: 16384,
@@ -447,7 +447,7 @@ impl Limits {
     ///     max_immediate_size: 0,
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
-    ///     max_inter_stage_shader_components: 60,
+    ///     max_inter_stage_shader_variables: 15,
     ///     max_color_attachments: 4,
     ///     max_color_attachment_bytes_per_sample: 32,
     ///     max_compute_workgroup_storage_size: 16352, // *
@@ -487,6 +487,7 @@ impl Limits {
             max_texture_dimension_3d: 256,
             max_storage_buffers_per_shader_stage: 4,
             max_uniform_buffer_binding_size: 16 << 10, // (16 KiB)
+            max_inter_stage_shader_variables: 15,
             max_color_attachments: 4,
             // see: https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf#page=7
             max_compute_workgroup_storage_size: 16352,
@@ -524,7 +525,7 @@ impl Limits {
     ///     max_immediate_size: 0,
     ///     min_uniform_buffer_offset_alignment: 256,
     ///     min_storage_buffer_offset_alignment: 256,
-    ///     max_inter_stage_shader_components: 31,
+    ///     max_inter_stage_shader_variables: 15,
     ///     max_color_attachments: 4,
     ///     max_color_attachment_bytes_per_sample: 32,
     ///     max_compute_workgroup_storage_size: 0, // +
@@ -573,7 +574,7 @@ impl Limits {
             max_compute_workgroups_per_dimension: 0,
 
             // Value supported by Intel Celeron B830 on Windows (OpenGL 3.1)
-            max_inter_stage_shader_components: 31,
+            max_inter_stage_shader_variables: 15,
 
             // Most of the values should be the same as the downlevel defaults
             ..Self::downlevel_defaults()
@@ -716,8 +717,7 @@ impl Limits {
     ///
     /// This function is not for clamping requests for values beyond the
     /// supported limits. For that purpose the desired function would be
-    /// `or_worse_values_from` (which doesn't exist, but could be added if
-    /// needed).
+    /// `or_worse_values_from`.
     #[must_use]
     pub fn or_better_values_from(mut self, other: &Self) -> Self {
         macro_rules! or_better_value_from {
@@ -733,6 +733,30 @@ impl Limits {
         }
 
         with_limits!(or_better_value_from);
+
+        self
+    }
+
+    /// For each limit in `other` that is worse than the value in `self`,
+    /// replace the value in `self` with the value from `other`.
+    ///
+    /// This function is for clamping requests for values beyond the
+    /// supported limits.
+    #[must_use]
+    pub fn or_worse_values_from(mut self, other: &Self) -> Self {
+        macro_rules! or_worse_value_from {
+            ($name:ident, $ordering:expr) => {
+                match $ordering {
+                    // Limits that are maximum values (most of them)
+                    Ordering::Less => self.$name = self.$name.min(other.$name),
+                    // Limits that are minimum values
+                    Ordering::Greater => self.$name = self.$name.max(other.$name),
+                    Ordering::Equal => unreachable!(),
+                }
+            };
+        }
+
+        with_limits!(or_worse_value_from);
 
         self
     }

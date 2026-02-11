@@ -536,17 +536,18 @@ impl BlockContext<'_> {
     /// Emit code to subscript a vector by value with a computed index.
     ///
     /// Return the id of the element value.
+    ///
+    /// If `base_id_override` is provided, it is used as the vector expression
+    /// to be subscripted into, rather than the cached value of `base`.
     pub(super) fn write_vector_access(
         &mut self,
-        expr_handle: Handle<crate::Expression>,
+        result_type_id: Word,
         base: Handle<crate::Expression>,
-        index: Handle<crate::Expression>,
+        base_id_override: Option<Word>,
+        index: GuardedIndex,
         block: &mut Block,
     ) -> Result<Word, Error> {
-        let result_type_id = self.get_expression_type_id(&self.fun_info[expr_handle].ty);
-
-        let base_id = self.cached[base];
-        let index = GuardedIndex::Expression(index);
+        let base_id = base_id_override.unwrap_or_else(|| self.cached[base]);
 
         let result_id = match self.write_bounds_check(base, index, block)? {
             BoundsCheckResult::KnownInBounds(known_index) => {
