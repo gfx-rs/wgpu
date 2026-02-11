@@ -141,6 +141,8 @@ pub struct PhysicalDeviceFeatures {
 
     /// Features provided by `VK_KHR_vulkan_memory_model`, promoted to Vulkan 1.2
     vulkan_memory_model: Option<vk::PhysicalDeviceVulkanMemoryModelFeaturesKHR<'static>>,
+
+    shader_draw_parameters: Option<vk::PhysicalDeviceShaderDrawParametersFeatures<'static>>,
 }
 
 impl PhysicalDeviceFeatures {
@@ -224,6 +226,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.vulkan_memory_model {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.shader_draw_parameters {
             info = info.push_next(feature);
         }
         info
@@ -602,6 +607,14 @@ impl PhysicalDeviceFeatures {
                 Some(
                     vk::PhysicalDeviceVulkanMemoryModelFeaturesKHR::default()
                         .vulkan_memory_model(needed),
+                )
+            } else {
+                None
+            },
+            shader_draw_parameters: if device_api_version >= vk::API_VERSION_1_1 {
+                Some(
+                    vk::PhysicalDeviceShaderDrawParametersFeatures::default()
+                        .shader_draw_parameters(true),
                 )
             } else {
                 None
@@ -1006,6 +1019,13 @@ impl PhysicalDeviceFeatures {
             !caps.cooperative_matrix_properties.is_empty(),
         );
 
+        features.set(
+            F::SHADER_DRAW_INDEX,
+            self.shader_draw_parameters
+                .is_some_and(|a| a.shader_draw_parameters != 0)
+                || caps.supports_extension(c"VK_KHR_shader_draw_parameters"),
+        );
+
         (features, dl_flags)
     }
 }
@@ -1146,6 +1166,10 @@ impl PhysicalDeviceProperties {
                 // - `VK_KHR_16bit_storage` requires `VK_KHR_storage_buffer_storage_class`, however
                 //   we require that one already.
                 extensions.push(khr::_16bit_storage::NAME);
+            }
+
+            if requested_features.contains(wgt::Features::SHADER_DRAW_INDEX) {
+                extensions.push(khr::shader_draw_parameters::NAME);
             }
         }
 
@@ -1829,6 +1853,13 @@ impl super::InstanceShared {
                 features2 = features2.push_next(next);
             }
 
+            if capabilities.device_api_version >= vk::API_VERSION_1_1 {
+                let next = features
+                    .shader_draw_parameters
+                    .insert(vk::PhysicalDeviceShaderDrawParametersFeatures::default());
+                features2 = features2.push_next(next);
+            }
+
             unsafe { get_device_properties.get_physical_device_features2(phd, &mut features2) };
             features2.features
         } else {
@@ -2356,6 +2387,10 @@ impl super::Adapter {
                 .intersects(wgt::Features::SHADER_BARYCENTRICS | wgt::Features::SHADER_PER_VERTEX)
             {
                 capabilities.push(spv::Capability::FragmentBarycentricKHR);
+            }
+
+            if features.contains(wgt::Features::SHADER_DRAW_INDEX) {
+                capabilities.push(spv::Capability::DrawParameters);
             }
 
             let mut flags = spv::WriterFlags::empty();

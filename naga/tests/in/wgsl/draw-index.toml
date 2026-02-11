@@ -1,0 +1,6 @@
+capabilities = "DRAW_INDEX"
+targets = "SPIRV | WGSL"
+
+[spv]
+version = [1, 4]
+capabilities = ["DrawParameters"]

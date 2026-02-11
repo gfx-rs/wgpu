@@ -141,7 +141,7 @@ pub enum VertexFormat {
     Uint16x2 = 13,
     /// Four unsigned shorts (u16). `vec4<u32>` in shaders.
     Uint16x4 = 14,
-    /// One signed short (u16). `i32` in shaders.
+    /// One signed short (i16). `i32` in shaders.
     Sint16 = 15,
     /// Two signed shorts (i16). `vec2<i32>` in shaders.
     Sint16x2 = 16,

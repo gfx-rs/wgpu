@@ -28,7 +28,7 @@
 //! | --------------------- | ---------------------- |
 //! | ![render_coordinates] | ![texture_coordinates] |
 //!
-//! `wgpu`'s MSRV is **1.93**.
+//! `wgpu`'s MSRV is **1.87**.
 //!
 //! [Learn Wgpu]: https://sotrh.github.io/learn-wgpu/
 //! [WebGPU Fundamentals]: https://webgpufundamentals.org/
@@ -138,9 +138,9 @@ pub use wgt::{
     DownlevelLimits, Dx12BackendOptions, Dx12Compiler, Dx12SwapchainKind,
     Dx12UseFrameLatencyWaitableObject, DxcShaderModel, DynamicOffset, ExperimentalFeatures,
     Extent3d, ExternalTextureFormat, ExternalTextureTransferFunction, Face, Features, FeaturesWGPU,
-    FeaturesWebGPU, FilterMode, FrontFace, GlBackendOptions, GlFenceBehavior, Gles3MinorVersion,
-    HalCounters, ImageSubresourceRange, IndexFormat, InstanceDescriptor, InstanceFlags,
-    InternalCounters, Limits, LoadOpDontCare, MemoryBudgetThresholds, MemoryHints,
+    FeaturesWebGPU, FilterMode, FrontFace, GlBackendOptions, GlDebugFns, GlFenceBehavior,
+    Gles3MinorVersion, HalCounters, ImageSubresourceRange, IndexFormat, InstanceDescriptor,
+    InstanceFlags, InternalCounters, Limits, LoadOpDontCare, MemoryBudgetThresholds, MemoryHints,
     MipmapFilterMode, MultisampleState, NoopBackendOptions, Origin2d, Origin3d,
     PipelineStatisticsTypes, PollError, PollStatus, PolygonMode, PowerPreference,
     PredefinedColorSpace, PresentMode, PresentationTimestamp, PrimitiveState, PrimitiveTopology,

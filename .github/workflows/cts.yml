@@ -50,21 +50,32 @@ jobs:
             os: windows-2022
             target: x86_64-pc-windows-msvc
             backend: dx12
+            shell: bash
 
           # Mac
+          # Need to use `zsh` for `source <(cmd)` because it doesn't work in
+          # ancient MacOS bash. `zsh` is a non-standard shell in GitHub
+          # actions, so must be specified as a command string.
           - platform: Mac aarch64
             os: macos-14
             target: x86_64-apple-darwin
             backend: metal
+            shell: zsh {0}
 
           # Linux
           - platform: Linux x86_64
             os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             backend: vulkan
+            shell: bash
 
     name: ${{ matrix.suite }} ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        # Substitution of ${{ matrix.shell }} appears not to work in per-step configuration
+        shell: ${{ matrix.shell }}
 
     steps:
       - name: checkout repo
@@ -102,23 +113,29 @@ jobs:
         if: matrix.os == 'windows-2022'
         uses: ./.github/actions/install-dxc
 
+      # Note: `target-dir` is intentionally different from other jobs.
+      # See note in xtask about `llvm-cov show-env`.
       - name: (Windows) Install WARP
         if: matrix.os == 'windows-2022'
         uses: ./.github/actions/install-warp
         with:
-          target-dir: "target/llvm-cov-target/debug"
+          target-dir: "target/debug"
 
       - name: (Linux) Install Mesa
         if: matrix.os == 'ubuntu-24.04'
         uses: ./.github/actions/install-mesa
+        with:
+          target-dir: "target/debug"
 
-      # Mixing --llvm-cov with deno (rusty_v8) has linking problems.
-      # Explicitly set the backend to avoid EGL messages in output,
-      # because these tests check stdout.
+      # Some of these tests check stdout, so we explicitly set the backend
+      # to avoid getting EGL messages in the output.
       - name: Test cts_runner
         if: matrix.suite == 'other'
         shell: bash
-        run: DENO_WEBGPU_BACKEND=${{ matrix.backend }} cargo --locked test -p cts_runner
+        run: |
+          export LLVM_PROFILE_FILE=${{ github.workspace }}/target/wgpu-%p-%m.profraw
+          export DENO_WEBGPU_BACKEND=${{ matrix.backend }}
+          cargo --locked llvm-cov --no-cfg-coverage --no-report test -p cts_runner
 
       - name: Run CTS
         shell: bash
@@ -126,11 +143,11 @@ jobs:
 
       - name: Generate coverage report
         id: coverage
-        shell: bash
         continue-on-error: true
         run: |
           set -e
 
+          source <(cargo llvm-cov --no-cfg-coverage show-env --sh)
           cargo --locked llvm-cov report --lcov --output-path lcov.info
 
       - name: Upload coverage report to Codecov

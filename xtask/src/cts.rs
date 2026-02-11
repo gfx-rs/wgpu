@@ -37,7 +37,7 @@ use regex_lite::{Regex, RegexBuilder};
 use std::{ffi::OsString, sync::LazyLock};
 use xshell::Shell;
 
-use crate::util::git_version_at_least;
+use crate::util::{git_version_at_least, parse_binary_from_cargo_json};
 
 /// Path within the repository where the CTS will be checked out.
 const CTS_CHECKOUT_PATH: &str = "cts";
@@ -97,6 +97,12 @@ pub fn run_cts(
         .transpose()?;
 
     let running_on_backend = args.opt_value_from_str::<_, String>("--backend")?;
+    let enable_external_texture = args.contains("--enable-external-texture")
+        || (!args.contains("--disable-external-texture")
+            && running_on_backend
+                .as_ref()
+                .is_some_and(|b| ["metal", "dx12"].contains(&b.as_str())));
+
     let mut filter_pattern = args.opt_value_from_str::<_, String>("--filter")?;
     let mut filter_invert = false;
 
@@ -117,12 +123,6 @@ pub fn run_cts(
         None
     };
 
-    if running_on_backend.is_none() {
-        log::warn!(
-            "fails-if conditions are only evaluated if a backend is specified with --backend"
-        );
-    }
-
     let mut list_files = Vec::<OsString>::new();
     while let Some(file) = args.opt_value_from_str("-f")? {
         list_files.push(file);
@@ -136,6 +136,11 @@ pub fn run_cts(
             ..Default::default()
         })
         .collect::<Vec<_>>();
+
+    if running_on_backend.is_none() && (!list_files.is_empty() || tests.is_empty()) {
+        log::warn!("The `--backend` option was not provided. `fails-if` conditions and external");
+        log::warn!("texture support are handled correctly only when a backend is specified.");
+    }
 
     let mut default_output_filter = PrintOutputWhen::Always;
 
@@ -210,12 +215,12 @@ pub fn run_cts(
     }
 
     let wgpu_cargo_toml = std::path::absolute(shell.current_dir().join("Cargo.toml"))
-        .context("Failed to get path to Cargo.toml")?;
+        .context("Failed to get path to `Cargo.toml`")?;
 
     let cts_revision = shell
         .read_file(CTS_REVISION_PATH)
         .context(format!(
-            "Failed to read CTS git SHA from {CTS_REVISION_PATH}"
+            "Failed to read CTS git SHA from `{CTS_REVISION_PATH}`"
         ))?
         .trim()
         .to_string();
@@ -306,29 +311,83 @@ pub fn run_cts(
         log::info!("Skipping CTS checkout because --skip-checkout was specified");
     }
 
-    let run_flags = if llvm_cov {
-        &["llvm-cov", "--no-cfg-coverage", "--no-report", "run"][..]
+    let mut cargo_opts: Vec<OsString> = vec![
+        "--manifest-path".into(),
+        wgpu_cargo_toml.into(),
+        "-p".into(),
+        "cts_runner".into(),
+        "--bin".into(),
+        "cts_runner".into(),
+    ];
+    if release {
+        cargo_opts.push("--release".into());
+    }
+
+    let env_vars = if llvm_cov {
+        // Typically coverage runs are done via cargo with `cargo llvm-cov run`. Running the
+        // coverage-instrumented binary directly requires setting some environment variables. See
+        // <https://github.com/taiki-e/cargo-llvm-cov/blob/main/README.md#get-coverage-of-external-tests>
+        //
+        // Unlike regular `llvm-cov run`, which builds artifacts in `target/llvm-cov-target`,
+        // `llvm-cov show-env` uses the regular target directory for artifacts. Because of this,
+        // the CTS job configures the `install-mesa` and `install-warp` actions with the regular
+        // target directory, not the `llvm-cov-target` directory.
+        let env = shell
+            .cmd("cargo")
+            .args(&["llvm-cov", "--no-cfg-coverage", "show-env"])
+            .read()
+            .context("Failed to get `llvm-cov` environment variables")?
+            .lines()
+            .filter_map(|line| {
+                let line = line.trim();
+                if line.is_empty() || line.starts_with('#') {
+                    None
+                } else {
+                    line.split_once('=')
+                }
+            })
+            .map(|(key, value)| {
+                let value = value.trim_matches('"').trim_matches('\'');
+                (key.to_string(), value.to_string())
+            })
+            .collect::<Vec<_>>()
+            .into_iter();
+
+        // Avoid conflicts between coverage and non-coverage build artifacts.
+        // This is recommended by the `cargo-llvm-cov` docs.
+        shell
+            .cmd("cargo")
+            .envs(env.clone())
+            .args(["llvm-cov", "clean", "--workspace"])
+            .run()
+            .context("Failed to run `llvm-cov clean`")?;
+
+        env
     } else {
-        &["run"][..]
+        vec![].into_iter()
     };
 
+    let build_output = shell
+        .cmd("cargo")
+        .envs(env_vars.clone())
+        .args(["build", "--message-format", "json-render-diagnostics"])
+        .args(&cargo_opts)
+        .read()
+        .context("Failed to build `cts_runner`")?;
+
+    let bin = parse_binary_from_cargo_json(&build_output)
+        .context("Failed to identify executable from cargo build output")?;
+
+    let cts_bin = &["./tools/run_deno", "--verbose"];
+
     if let Some(passthrough_args) = passthrough_args {
-        let mut cmd = shell
-            .cmd("cargo")
-            .args(run_flags)
-            .args(["--manifest-path".as_ref(), wgpu_cargo_toml.as_os_str()])
-            .args(["-p", "cts_runner"])
-            .args(["--bin", "cts_runner"]);
-
-        if release {
-            cmd = cmd.arg("--release")
-        }
-
-        cmd.args(["--", "./tools/run_deno", "--verbose"])
+        return Ok(shell
+            .cmd(bin)
+            .envs(env_vars)
+            .args(cts_bin)
+            .args(enable_external_texture.then_some("--enable-external-texture"))
             .args(&passthrough_args)
-            .run()?;
-
-        return Ok(());
+            .run()?);
     }
 
     log::info!("Running CTS");
@@ -348,19 +407,11 @@ pub fn run_cts(
             log::info!("Running {}", test.selector.to_string_lossy());
         }
 
-        let mut cmd = shell
-            .cmd("cargo")
-            .args(run_flags)
-            .args(["--manifest-path".as_ref(), wgpu_cargo_toml.as_os_str()])
-            .args(["-p", "cts_runner"])
-            .args(["--bin", "cts_runner"]);
-
-        if release {
-            cmd = cmd.arg("--release")
-        }
-
-        cmd = cmd
-            .args(["--", "./tools/run_deno", "--verbose"])
+        let cmd = shell
+            .cmd(&bin)
+            .envs(env_vars.clone())
+            .args(enable_external_texture.then_some("--enable-external-texture"))
+            .args(cts_bin)
             .args([&test.selector]);
 
         match output_filter {

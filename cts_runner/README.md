@@ -3,8 +3,8 @@
 This crate contains infrastructure for running the WebGPU conformance tests on
 Deno's `wgpu`-based implementation of WebGPU.
 
-Instructions for running the tests via the CTS `xtask` are in the
-[top-level README](https://github.com/gfx-rs/wgpu/blob/trunk/README.md#webgpu-conformance-test-suite).
+Instructions for running the tests via the CTS `xtask` are in
+[docs/testing.md](https://github.com/gfx-rs/wgpu/blob/trunk/docs/testing.md#webgpu-cts).
 The file [revision.txt](./revision.txt) specifies the version of the CTS that
 will be used by default.
 

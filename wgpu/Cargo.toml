@@ -8,9 +8,14 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
-rust-version.workspace = true
 readme = "../README.md"
 exclude = ["Cargo.lock"]
+
+# Override the workspace's `rust-version` key. `wgpu` and its dependencies
+# have a less strict MSRV, to allow users more leeway in updating their Rust toolchain.
+#
+# See the repo README for more information on MSRV policy.
+rust-version = "1.87.0"
 
 [package.metadata.docs.rs]
 all-features = true

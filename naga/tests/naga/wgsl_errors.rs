@@ -4210,13 +4210,10 @@ fn invalid_clip_distances() {
 
 #[test]
 fn recognized_but_unimplemented_enable_extension() {
-    for extension in [
-        naga::front::wgsl::UnimplementedEnableExtension::Subgroups,
-        naga::front::wgsl::UnimplementedEnableExtension::PrimitiveIndex,
-    ] {
-        // NOTE: We match exhaustively here to help maintainers add or remove variants to the above
-        // array.
-        let snapshot = match extension {
+    let extension = naga::front::wgsl::UnimplementedEnableExtension::Subgroups;
+    // NOTE: We match exhaustively here to help maintainers add or remove variants to the above
+    // array.
+    let snapshot = match extension {
             naga::front::wgsl::UnimplementedEnableExtension::Subgroups => "\
 error: the `subgroups` enable-extension is not yet supported
   ┌─ wgsl:1:8
@@ -4227,25 +4224,14 @@ error: the `subgroups` enable-extension is not yet supported
   = note: Let Naga maintainers know that you ran into this at <https://github.com/gfx-rs/wgpu/issues/5555>, so they can prioritize it!
 
 ",
-            naga::front::wgsl::UnimplementedEnableExtension::PrimitiveIndex => "\
-error: the `primitive_index` enable-extension is not yet supported
-  ┌─ wgsl:1:8
-  │
-1 │ enable primitive_index;
-  │        ^^^^^^^^^^^^^^^ this enable-extension specifies standard functionality which is not yet implemented in Naga
-  │
-  = note: Let Naga maintainers know that you ran into this at <https://github.com/gfx-rs/wgpu/issues/8236>, so they can prioritize it!
-
-",
         };
 
-        let shader = {
-            let extension = naga::front::wgsl::EnableExtension::Unimplemented(extension);
-            format!("enable {};", extension.to_ident())
-        };
+    let shader = {
+        let extension = naga::front::wgsl::EnableExtension::Unimplemented(extension);
+        format!("enable {};", extension.to_ident())
+    };
 
-        check(&shader, snapshot);
-    }
+    check(&shader, snapshot);
 }
 
 #[test]

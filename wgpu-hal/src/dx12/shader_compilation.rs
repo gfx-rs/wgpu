@@ -46,17 +46,22 @@ impl CompilerContainer {
         FxcLib::new_dynamic().map(|fxc| Self::Fxc(CompilerFxc { fxc }))
     }
 
-    pub(super) fn new_dynamic_dxc(
-        dxc_path: PathBuf,
-        max_shader_model: wgt::DxcShaderModel,
-    ) -> Result<Self, GetContainerError> {
+    pub(super) fn new_dynamic_dxc(dxc_path: PathBuf) -> Result<Self, GetContainerError> {
         let dxc = DxcLib::new_dynamic(dxc_path)
             .map_err(|e| GetContainerError::FailedToLoad("dxcompiler.dll", e))?;
 
         let compiler = dxc.create_instance::<Dxc::IDxcCompiler3>()?;
 
+        let (mut major, mut minor) = (1, 0);
+        // DXC 1.0 didn't support this. If the cast fails assume it is DXC 1.0.
+        if let Ok(version_info) = compiler.cast::<Dxc::IDxcVersionInfo>() {
+            unsafe {
+                version_info.GetVersion(&mut major, &mut minor).unwrap();
+            }
+        }
+
         Ok(Self::DynamicDxc(CompilerDynamicDxc {
-            max_shader_model,
+            max_shader_model: wgt::DxcShaderModel::from_dxc_version(major, minor),
             compiler,
             _dxc: dxc,
         }))

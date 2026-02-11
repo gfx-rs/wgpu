@@ -234,9 +234,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> webgpu_sys::GpuText
         TextureFormat::Bgra8UnormSrgb => tf::Bgra8unormSrgb,
         // Packed 32-bit formats
         TextureFormat::Rgb9e5Ufloat => tf::Rgb9e5ufloat,
-        TextureFormat::Rgb10a2Uint => {
-            unimplemented!("Current version of web_sys is missing {texture_format:?}")
-        }
+        TextureFormat::Rgb10a2Uint => tf::Rgb10a2uint,
         TextureFormat::Rgb10a2Unorm => tf::Rgb10a2unorm,
         TextureFormat::Rg11b10Ufloat => tf::Rg11b10ufloat,
         // 64-bit formats
@@ -1678,16 +1676,8 @@ impl dispatch::AdapterInterface for WebAdapter {
 
         let mapped_desc = webgpu_sys::GpuDeviceDescriptor::new();
 
-        // TODO: Migrate to a web_sys api.
-        // See https://github.com/rustwasm/wasm-bindgen/issues/3587
-        let limits_object = map_js_sys_limits(&desc.required_limits);
-
-        js_sys::Reflect::set(
-            &mapped_desc,
-            &JsValue::from("requiredLimits"),
-            &limits_object,
-        )
-        .expect("Setting Object properties should never fail.");
+        let required_limits = map_js_sys_limits(&desc.required_limits);
+        mapped_desc.set_required_limits(&required_limits);
 
         let required_features = FEATURES_MAPPING
             .iter()
@@ -1733,20 +1723,7 @@ impl dispatch::AdapterInterface for WebAdapter {
     }
 
     fn get_info(&self) -> crate::AdapterInfo {
-        // TODO(https://github.com/gfx-rs/wgpu/issues/8818): web-sys has no way of getting information on adapters
-        wgt::AdapterInfo {
-            name: String::new(),
-            vendor: 0,
-            device: 0,
-            device_type: wgt::DeviceType::Other,
-            device_pci_bus_id: String::new(),
-            driver: String::new(),
-            driver_info: String::new(),
-            backend: wgt::Backend::BrowserWebGpu,
-            subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
-            subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
-            transient_saves_memory: false,
-        }
+        map_adapter_info(&self.inner.info())
     }
 
     fn get_texture_format_features(
@@ -2596,20 +2573,11 @@ impl dispatch::QueueInterface for WebQueue {
         data: &[u8],
     ) {
         let buffer = buffer.as_webgpu();
-        /* Skip the copy once gecko allows BufferSource instead of ArrayBuffer
-        self.inner.write_buffer_with_f64_and_u8_array_and_f64_and_f64(
-            &buffer.buffer,
-            offset as f64,
-            data,
-            0f64,
-            data.len() as f64,
-        );
-        */
         self.inner
-            .write_buffer_with_f64_and_buffer_source_and_f64_and_f64(
+            .write_buffer_with_f64_and_u8_slice_and_f64_and_f64(
                 &buffer.inner,
                 offset as f64,
-                &js_sys::Uint8Array::from(data).buffer(),
+                data,
                 0f64,
                 data.len() as f64,
             )
@@ -3256,19 +3224,16 @@ impl dispatch::CommandEncoderInterface for WebCommandEncoder {
         }
     }
 
-    fn insert_debug_marker(&self, _label: &str) {
-        // Not available in gecko yet
-        // self.insert_debug_marker(label);
+    fn insert_debug_marker(&self, label: &str) {
+        self.inner.insert_debug_marker(label)
     }
 
-    fn push_debug_group(&self, _label: &str) {
-        // Not available in gecko yet
-        // self.push_debug_group(label);
+    fn push_debug_group(&self, group_label: &str) {
+        self.inner.push_debug_group(group_label)
     }
 
     fn pop_debug_group(&self) {
-        // Not available in gecko yet
-        // self.pop_debug_group();
+        self.inner.pop_debug_group()
     }
 
     fn write_timestamp(&self, _query_set: &dispatch::DispatchQuerySet, _query_index: u32) {
@@ -3378,19 +3343,16 @@ impl dispatch::ComputePassInterface for WebComputePassEncoder {
         panic!("IMMEDIATES feature must be enabled to call set_immediates")
     }
 
-    fn insert_debug_marker(&mut self, _label: &str) {
-        // Not available in gecko yet
-        // self.inner.insert_debug_marker(label);
+    fn insert_debug_marker(&mut self, label: &str) {
+        self.inner.insert_debug_marker(label);
     }
 
-    fn push_debug_group(&mut self, _group_label: &str) {
-        // Not available in gecko yet
-        // self.inner.push_debug_group(group_label);
+    fn push_debug_group(&mut self, group_label: &str) {
+        self.inner.push_debug_group(group_label);
     }
 
     fn pop_debug_group(&mut self) {
-        // Not available in gecko yet
-        // self.inner.pop_debug_group();
+        self.inner.pop_debug_group();
     }
 
     fn write_timestamp(&mut self, _query_set: &dispatch::DispatchQuerySet, _query_index: u32) {
@@ -3667,19 +3629,16 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         panic!("MESH_SHADER feature must be enabled to call multi_draw_mesh_tasks_indirect_count")
     }
 
-    fn insert_debug_marker(&mut self, _label: &str) {
-        // Not available in gecko yet
-        // self.inner.insert_debug_marker(label);
+    fn insert_debug_marker(&mut self, label: &str) {
+        self.inner.insert_debug_marker(label);
     }
 
-    fn push_debug_group(&mut self, _group_label: &str) {
-        // Not available in gecko yet
-        // self.inner.push_debug_group(group_label);
+    fn push_debug_group(&mut self, group_label: &str) {
+        self.inner.push_debug_group(group_label);
     }
 
     fn pop_debug_group(&mut self) {
-        // Not available in gecko yet
-        // self.inner.pop_debug_group();
+        self.inner.pop_debug_group();
     }
 
     fn write_timestamp(&mut self, _query_set: &dispatch::DispatchQuerySet, _query_index: u32) {
