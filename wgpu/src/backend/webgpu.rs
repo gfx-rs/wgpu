@@ -3645,14 +3645,12 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         panic!("TIMESTAMP_QUERY_INSIDE_PASSES feature must be enabled to call write_timestamp in a render pass.")
     }
 
-    fn begin_occlusion_query(&mut self, _query_index: u32) {
-        // Not available in gecko yet
-        // self.inner.begin_occlusion_query(query_index);
+    fn begin_occlusion_query(&mut self, query_index: u32) {
+        self.inner.begin_occlusion_query(query_index);
     }
 
     fn end_occlusion_query(&mut self) {
-        // Not available in gecko yet
-        // self.inner.end_occlusion_query();
+        self.inner.end_occlusion_query();
     }
 
     fn begin_pipeline_statistics_query(
@@ -3660,14 +3658,11 @@ impl dispatch::RenderPassInterface for WebRenderPassEncoder {
         _query_set: &dispatch::DispatchQuerySet,
         _query_index: u32,
     ) {
-        // Not available in gecko yet
-        // let query_set = query_set.as_webgpu();
-        // self.inner.begin_pipeline_statistics_query(query_set, query_index);
+        // Removed from WebGPU in https://github.com/gpuweb/gpuweb/pull/2296
     }
 
     fn end_pipeline_statistics_query(&mut self) {
-        // Not available in gecko yet
-        // self.inner.end_pipeline_statistics_query();
+        // Removed from WebGPU https://github.com/gpuweb/gpuweb/pull/2296
     }
 
     fn execute_bundles(
