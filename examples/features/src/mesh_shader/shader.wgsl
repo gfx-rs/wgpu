@@ -33,12 +33,15 @@ var<workgroup> workgroupData: f32;
 
 @task
 @payload(taskPayload)
-@workgroup_size(1)
-fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
-    workgroupData = 1.0;
-    taskPayload.colorMask = vec4(1.0, 1.0, 0.0, 1.0);
-    taskPayload.visible = true;
-    return vec3(1, 1, 1);
+@workgroup_size(64)
+fn ts_main(@builtin(local_invocation_id) thread_id: vec3<u32>) -> @builtin(mesh_task_size) vec3<u32> {
+    if thread_id.x == 0 {
+        workgroupData = 1.0;
+        taskPayload.colorMask = vec4(1.0, 1.0, 0.0, 1.0);
+        taskPayload.visible = true;
+        return vec3(1, 1, 1);
+    }
+    return vec3(0, 0, 0);
 }
 
 struct MeshOutput {
@@ -52,24 +55,21 @@ var<workgroup> mesh_output: MeshOutput;
 
 @mesh(mesh_output)
 @payload(taskPayload)
-@workgroup_size(1)
-fn ms_main() {
-    mesh_output.vertex_count = 3;
-    mesh_output.primitive_count = 1;
-    workgroupData = 2.0;
+@workgroup_size(64)
+fn ms_main(@builtin(local_invocation_id) thread_id: vec3<u32>) {
+    if thread_id.x == 0 {
+        mesh_output.vertex_count = 3;
+        mesh_output.primitive_count = 1;
+        workgroupData = 2.0;
 
-    mesh_output.vertices[0].position = positions[0];
-    mesh_output.vertices[0].color = colors[0] * taskPayload.colorMask;
-
-    mesh_output.vertices[1].position = positions[1];
-    mesh_output.vertices[1].color = colors[1] * taskPayload.colorMask;
-
-    mesh_output.vertices[2].position = positions[2];
-    mesh_output.vertices[2].color = colors[2] * taskPayload.colorMask;
-
-    mesh_output.primitives[0].indices = vec3<u32>(0, 1, 2);
-    mesh_output.primitives[0].cull = !taskPayload.visible;
-    mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
+        mesh_output.primitives[0].indices = vec3<u32>(0, 1, 2);
+        mesh_output.primitives[0].cull = !taskPayload.visible;
+        mesh_output.primitives[0].colorMask = vec4<f32>(1.0, 0.0, 1.0, 1.0);
+    }
+    if thread_id.x < 3 {
+        mesh_output.vertices[thread_id.x].position = positions[thread_id.x];
+        mesh_output.vertices[thread_id.x].color = colors[thread_id.x] * taskPayload.colorMask;
+    }
 }
 
 @fragment

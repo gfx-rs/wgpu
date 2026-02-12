@@ -288,7 +288,10 @@ impl<W: Write> Writer<W> {
             cooperative_matrix: bool,
             draw_index: bool,
         }
-        let mut needed = RequiredEnabled::default();
+        let mut needed = RequiredEnabled {
+            mesh_shaders: module.uses_mesh_shaders(),
+            ..Default::default()
+        };
 
         let check_binding = |binding: &crate::Binding, needed: &mut RequiredEnabled| match *binding
         {
@@ -310,19 +313,6 @@ impl<W: Write> Writer<W> {
                 needed.mesh_shaders = true;
             }
             crate::Binding::BuiltIn(crate::BuiltIn::DrawIndex) => needed.draw_index = true,
-            crate::Binding::BuiltIn(
-                crate::BuiltIn::MeshTaskSize
-                | crate::BuiltIn::CullPrimitive
-                | crate::BuiltIn::PointIndex
-                | crate::BuiltIn::LineIndices
-                | crate::BuiltIn::TriangleIndices
-                | crate::BuiltIn::VertexCount
-                | crate::BuiltIn::Vertices
-                | crate::BuiltIn::PrimitiveCount
-                | crate::BuiltIn::Primitives,
-            ) => {
-                needed.mesh_shaders = true;
-            }
             _ => {}
         };
 
@@ -347,9 +337,6 @@ impl<W: Write> Writer<W> {
         }
 
         for ep in &module.entry_points {
-            if matches!(ep.stage, ShaderStage::Mesh | ShaderStage::Task) {
-                needed.mesh_shaders = true;
-            }
             if let Some(res) = ep.function.result.as_ref().and_then(|a| a.binding.as_ref()) {
                 check_binding(res, &mut needed);
             }
@@ -361,14 +348,6 @@ impl<W: Write> Writer<W> {
             {
                 check_binding(arg, &mut needed);
             }
-        }
-
-        if module
-            .global_variables
-            .iter()
-            .any(|gv| gv.1.space == crate::AddressSpace::TaskPayload)
-        {
-            needed.mesh_shaders = true;
         }
 
         // Write required declarations
@@ -385,7 +364,7 @@ impl<W: Write> Writer<W> {
             writeln!(self.out, "enable clip_distances;")?;
             any_written = true;
         }
-        if needed.mesh_shaders {
+        if module.uses_mesh_shaders() {
             writeln!(self.out, "enable wgpu_mesh_shader;")?;
             any_written = true;
         }

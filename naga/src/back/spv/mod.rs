@@ -120,6 +120,7 @@ use spirv::Word;
 use thiserror::Error;
 
 use crate::arena::{Handle, HandleVec};
+use crate::back::TaskDispatchLimits;
 use crate::proc::{BoundsCheckPolicies, TypeResolution};
 
 #[derive(Clone)]
@@ -933,6 +934,7 @@ pub struct Writer {
     force_loop_bounding: bool,
     use_storage_input_output_16: bool,
     void_type: Word,
+    tuple_of_u32s_ty_id: Option<Word>,
     //TODO: convert most of these into vectors, addressable by handle indices
     lookup_type: crate::FastHashMap<LookupType, Word>,
     lookup_function: crate::FastHashMap<Handle<crate::Function>, Word>,
@@ -967,6 +969,16 @@ pub struct Writer {
     /// Non semantic debug printf extension `OpExtInstImport`
     debug_printf: Option<Word>,
     pub(crate) ray_query_initialization_tracking: bool,
+
+    /// Limits to the mesh shader dispatch group a task workgroup can dispatch.
+    ///
+    /// Metal for example limits to 1024 workgroups per task shader dispatch. Dispatching more is
+    /// undefined behavior, so this would validate that to dispatch zero workgroups.
+    task_dispatch_limits: Option<TaskDispatchLimits>,
+    /// If true, naga may generate checks that the primitive indices are valid in the output.
+    ///
+    /// Currently this validation is unimplemented.
+    mesh_shader_primitive_indices_clamp: bool,
 }
 
 bitflags::bitflags! {
@@ -1071,6 +1083,10 @@ pub struct Options<'a> {
     pub use_storage_input_output_16: bool,
 
     pub debug_info: Option<DebugInfo<'a>>,
+
+    pub task_dispatch_limits: Option<TaskDispatchLimits>,
+
+    pub mesh_shader_primitive_indices_clamp: bool,
 }
 
 impl Default for Options<'_> {
@@ -1093,6 +1109,8 @@ impl Default for Options<'_> {
             ray_query_initialization_tracking: true,
             use_storage_input_output_16: true,
             debug_info: None,
+            task_dispatch_limits: None,
+            mesh_shader_primitive_indices_clamp: true,
         }
     }
 }

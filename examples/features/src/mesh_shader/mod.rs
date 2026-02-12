@@ -1,9 +1,15 @@
 // Same as in mesh shader tests
 fn compile_wgsl(device: &wgpu::Device) -> wgpu::ShaderModule {
-    device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
-    })
+    // Workgroup memory zero initialization can be expensive for mesh shaders
+    unsafe {
+        device.create_shader_module_trusted(
+            wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+            },
+            wgpu::ShaderRuntimeChecks::unchecked(),
+        )
+    }
 }
 fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::ShaderModule {
     let out_path = format!(
