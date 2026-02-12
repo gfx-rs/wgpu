@@ -286,6 +286,7 @@ impl<W: Write> Writer<W> {
             mesh_shaders: bool,
             primitive_index: bool,
             cooperative_matrix: bool,
+            draw_index: bool,
         }
         let mut needed = RequiredEnabled {
             mesh_shaders: module.uses_mesh_shaders(),
@@ -311,6 +312,7 @@ impl<W: Write> Writer<W> {
             } => {
                 needed.mesh_shaders = true;
             }
+            crate::Binding::BuiltIn(crate::BuiltIn::DrawIndex) => needed.draw_index = true,
             _ => {}
         };
 
@@ -364,6 +366,10 @@ impl<W: Write> Writer<W> {
         }
         if module.uses_mesh_shaders() {
             writeln!(self.out, "enable wgpu_mesh_shader;")?;
+            any_written = true;
+        }
+        if needed.draw_index {
+            writeln!(self.out, "enable draw_index;")?;
             any_written = true;
         }
         if needed.primitive_index {

@@ -104,6 +104,7 @@ pub fn map_built_in(
         "front_facing" => crate::BuiltIn::FrontFacing,
         "frag_depth" => crate::BuiltIn::FragDepth,
         "primitive_index" => crate::BuiltIn::PrimitiveIndex,
+        "draw_index" => crate::BuiltIn::DrawIndex,
         "barycentric" => crate::BuiltIn::Barycentric { perspective: true },
         "barycentric_no_perspective" => crate::BuiltIn::Barycentric { perspective: false },
         "sample_index" => crate::BuiltIn::SampleIndex,
@@ -153,6 +154,14 @@ pub fn map_built_in(
 
         crate::BuiltIn::PrimitiveIndex => {
             enable_extensions.require(ImplementedEnableExtension::PrimitiveIndex, span)?
+        }
+        crate::BuiltIn::DrawIndex => {
+            if !enable_extensions.contains(ImplementedEnableExtension::DrawIndex) {
+                return Err(Box::new(Error::EnableExtensionNotEnabled {
+                    span,
+                    kind: ImplementedEnableExtension::DrawIndex.into(),
+                }));
+            }
         }
         crate::BuiltIn::CullPrimitive
         | crate::BuiltIn::PointIndex

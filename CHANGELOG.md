@@ -66,9 +66,11 @@ By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
         - `front::wgsl::Frontend::set_options`
         - `ir::Block::is_empty`
         - `ir::Block::len`
+- Added `Dx12BackendOptions::force_shader_model` to allow using advanced features in passthrough shaders without bundling DXC. By @inner-daemons in [#8984](https://github.com/gfx-rs/wgpu/pull/8984).
 - Changed passthrough shaders to not require an entry point parameter, so that the same shader module may be used in multiple entry points. Also added support for metallib passthrough. By @inner-daemons in #8886.
 - Added `Dx12Compiler::Auto` to automatically use static or dynamic DXC if available, before falling back to FXC. By @inner-daemons in [#8882](https://github.com/gfx-rs/wgpu/pull/8882).
 - Added support for `insert_debug_marker`, `push_debug_group` and `pop_debug_group` on WebGPU. By @evilpie in [#9017](https://github.com/gfx-rs/wgpu/pull/9017).
+- Added support for `@builtin(draw_index)` to the vulkan backend. By @inner-daemons in #8883.
 - Added support for `enable primitive_index` and `@builtin(primitive_index)` with support on all platforms. By @inner-daemons in #8879.
 
 #### naga
@@ -79,6 +81,10 @@ By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
 #### GLES
 
 - Added `GlDebugFns` option in `GlBackendOptions` to control OpenGL debug functions (`glPushDebugGroup`, `glPopDebugGroup`, `glObjectLabel`, etc.). Automatically disables them on Mali GPUs to work around a driver crash. By @Xavientois in [#8931](https://github.com/gfx-rs/wgpu/pull/8931).
+
+#### WebGPU
+- Added support for `insert_debug_marker`, `push_debug_group` and `pop_debug_group`. By @evilpie in [#9017](https://github.com/gfx-rs/wgpu/pull/9017).
+- Added support for `begin_occlusion_query` and `end_occlusion_query`. By @evilpie in [#9039](https://github.com/gfx-rs/wgpu/pull/9039).
 
 ### Changes
 
@@ -120,6 +126,7 @@ By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
 - Check that depth bias is not used with non-triangle topologies. By @andyleiserson in [#8856](https://github.com/gfx-rs/wgpu/pull/8856).
 - Check that if the shader outputs `frag_depth`, then the pipeline must have a depth attachment. By @andyleiserson in [#8856](https://github.com/gfx-rs/wgpu/pull/8856).
 - Fix incorrect acceptance of some swizzle selectors that are not valid for their operand, e.g. `const v = vec2<i32>(); let r = v.xyz`. By @andyleiserson in [#8949](https://github.com/gfx-rs/wgpu/pull/8949).
+- Fixed calculation of the total number of bindings in a pipeline layout when validating against device limits. By @andyleiserson in [#8997](https://github.com/gfx-rs/wgpu/pull/8997).
 
 #### Vulkan
 - Fixed a variety of mesh shader SPIR-V writer issues from the original implementation. By @inner-daemons in [#8756](https://github.com/gfx-rs/wgpu/pull/8756)
