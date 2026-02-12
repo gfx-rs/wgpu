@@ -1599,6 +1599,7 @@ pub enum CommandEncoderError {
     ComputePass(#[from] ComputePassError),
     #[error(transparent)]
     RenderPass(#[from] RenderPassError),
+    #[error(transparent)]
     CreateCommandEncoder(#[from] CreateCommandEncoderError),
 }
 
