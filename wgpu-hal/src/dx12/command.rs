@@ -340,6 +340,7 @@ impl super::CommandEncoder {
                         size: size.get(),
                         usage: wgt::BufferUses::COPY_SRC | wgt::BufferUses::COPY_DST,
                         memory_flags: crate::MemoryFlags::empty(),
+                        initial_queue: Some(self.queue_index),
                     })
                     .expect(concat!(
                         "internal error: ",
@@ -364,6 +365,7 @@ impl super::CommandEncoder {
                         from: wgt::BufferUses::empty(),
                         to: wgt::BufferUses::COPY_DST,
                     },
+                    src_dst_queue_index: None,
                 }]
                 .into_iter(),
             )
@@ -379,6 +381,7 @@ impl super::CommandEncoder {
                         from: wgt::BufferUses::COPY_DST,
                         to: wgt::BufferUses::COPY_SRC,
                     },
+                    src_dst_queue_index: None,
                 }]
                 .into_iter(),
             )
@@ -1806,10 +1809,12 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn place_acceleration_structure_barrier(
-        &mut self,
-        _barriers: crate::AccelerationStructureBarrier,
-    ) {
+    unsafe fn transition_acceleration_structures<'a, T>(&mut self, barriers: T)
+    where
+        T: Iterator<
+            Item = crate::AccelerationStructureBarrier<'a, <Self::A as crate::Api>::Buffer>,
+        >,
+    {
         // TODO: This is not very optimal, we should be using [enhanced barriers](https://microsoft.github.io/DirectX-Specs/d3d/D3D12EnhancedBarriers.html) if possible
         let list = self
             .list

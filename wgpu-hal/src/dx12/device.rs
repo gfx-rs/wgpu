@@ -814,6 +814,7 @@ impl crate::Device for super::Device {
             temp: super::Temp::default(),
             end_of_pass_timer_query: None,
             counters: Arc::clone(&self.counters),
+            queue_index: desc.queue.index,
         })
     }
 
@@ -1723,6 +1724,7 @@ impl crate::Device for super::Device {
                 usage: wgt::BufferUses::STORAGE_READ_ONLY | wgt::BufferUses::MAP_WRITE,
                 // D3D12 backend doesn't care about the memory flags
                 memory_flags: crate::MemoryFlags::empty(),
+                initial_queue: None,
             };
 
             let (buffer, allocation) =

@@ -734,6 +734,7 @@ unsafe impl Sync for Device {}
 pub struct Queue {
     raw: Direct3D12::ID3D12CommandQueue,
     temp_lists: Mutex<Vec<Option<Direct3D12::ID3D12CommandList>>>,
+    index: u32,
 }
 
 impl Queue {
@@ -869,6 +870,8 @@ pub struct CommandEncoder {
     end_of_pass_timer_query: Option<(Direct3D12::ID3D12QueryHeap, u32)>,
 
     counters: Arc<wgt::HalCounters>,
+
+    queue_index: u32,
 }
 
 unsafe impl Send for CommandEncoder {}

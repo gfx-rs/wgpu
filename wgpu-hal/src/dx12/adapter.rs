@@ -204,6 +204,20 @@ impl super::Adapter {
             subgroup_min_size: features1.WaveLaneCountMin,
             subgroup_max_size: features1.WaveLaneCountMax,
             transient_saves_memory: false,
+            supported_queue_families: vec![
+                wgt::QueueFamilyInfo {
+                    num_queues: crate::MAX_QUEUES_OF_FAMILY,
+                    usage: wgt::QueueUsageFlags::all(),
+                },
+                wgt::QueueFamilyInfo {
+                    num_queues: crate::MAX_QUEUES_OF_FAMILY,
+                    usage: wgt::QueueUsageFlags::COMPUTE | wgt::QueueUsageFlags::TRANSFER,
+                },
+                wgt::QueueFamilyInfo {
+                    num_queues: crate::MAX_QUEUES_OF_FAMILY,
+                    usage: wgt::QueueUsageFlags::TRANSFER,
+                },
+            ],
         };
 
         let mut options = Direct3D12::D3D12_FEATURE_DATA_D3D12_OPTIONS::default();
@@ -946,25 +960,40 @@ impl crate::Adapter for super::Adapter {
         features: wgt::Features,
         limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
+        queues_indices: &[u32],
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        let queue: Direct3D12::ID3D12CommandQueue = {
-            profiling::scope!("ID3D12Device::CreateCommandQueue");
-            unsafe {
-                self.device
-                    .CreateCommandQueue(&Direct3D12::D3D12_COMMAND_QUEUE_DESC {
-                        Type: Direct3D12::D3D12_COMMAND_LIST_TYPE_DIRECT,
-                        Priority: Direct3D12::D3D12_COMMAND_QUEUE_PRIORITY_NORMAL.0,
-                        Flags: Direct3D12::D3D12_COMMAND_QUEUE_FLAG_NONE,
-                        NodeMask: 0,
-                    })
-            }
-            .into_device_result("Queue creation")?
-        };
+        let mut queues = Vec::new();
+        for (i, &queue) in queues_indices.iter().enumerate() {
+            let ty = match queue {
+                0 => Direct3D12::D3D12_COMMAND_LIST_TYPE_DIRECT,
+                1 => Direct3D12::D3D12_COMMAND_LIST_TYPE_COMPUTE,
+                2 => Direct3D12::D3D12_COMMAND_LIST_TYPE_COPY,
+                _ => unreachable!(),
+            };
+            let queue: Direct3D12::ID3D12CommandQueue = {
+                profiling::scope!("ID3D12Device::CreateCommandQueue");
+                unsafe {
+                    self.device
+                        .CreateCommandQueue(&Direct3D12::D3D12_COMMAND_QUEUE_DESC {
+                            Type: ty,
+                            Priority: Direct3D12::D3D12_COMMAND_QUEUE_PRIORITY_NORMAL.0,
+                            Flags: Direct3D12::D3D12_COMMAND_QUEUE_FLAG_NONE,
+                            NodeMask: 0,
+                        })
+                }
+                .into_device_result("Queue creation")?
+            };
+            queues.push(super::Queue {
+                raw: queue,
+                temp_lists: Mutex::new(Vec::new()),
+                index: i as u32,
+            });
+        }
 
         let device = super::Device::new(
             self.raw.clone(),
             self.device.clone(),
-            queue.clone(),
+            queues[0].raw.clone(),
             features,
             limits,
             memory_hints,
@@ -975,13 +1004,7 @@ impl crate::Adapter for super::Adapter {
             self.compiler_container.clone(),
             self.options.clone(),
         )?;
-        Ok(crate::OpenDevice {
-            device,
-            queue: super::Queue {
-                raw: queue,
-                temp_lists: Mutex::new(Vec::new()),
-            },
-        })
+        Ok(crate::OpenDevice { device, queues })
     }
 
     unsafe fn texture_format_capabilities(

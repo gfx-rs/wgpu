@@ -1919,7 +1919,7 @@ impl super::Instance {
                 continue;
             }
             queue_infos.push(wgt::QueueFamilyInfo {
-                num_queues: queue.queue_count,
+                num_queues: queue.queue_count.min(crate::MAX_QUEUES_OF_FAMILY),
                 usage: caps,
             });
             queue_indices.push(i as u32);
