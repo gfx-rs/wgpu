@@ -1548,7 +1548,7 @@ impl crate::Queue for Queue {
         submits: &mut [crate::QueueSubmitInfo<'_, CommandBuffer, Fence, Texture>],
     ) -> Result<(), crate::DeviceError> {
         for submit in submits {
-            for (ref wait_fence, wait_value) in submit.wait_fences {
+            for &mut (ref wait_fence, wait_value) in submit.wait_fences {
                 unsafe { self.raw.Wait(&wait_fence.raw, wait_value) }
                     .into_device_result("Wait fence")?;
             }
@@ -1563,7 +1563,7 @@ impl crate::Queue for Queue {
                 unsafe { self.raw.ExecuteCommandLists(&temp_lists) }
             }
 
-            for (ref signal_fence, signal_value) in submit.signal_fences {
+            for &mut (ref signal_fence, signal_value) in submit.signal_fences {
                 unsafe { self.raw.Signal(&signal_fence.raw, signal_value) }
                     .into_device_result("Signal fence")?;
             }
