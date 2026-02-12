@@ -364,7 +364,12 @@ impl super::Adapter {
             }
         };
 
-        let shader_model = if let Some(max_shader_model) = compiler_container.max_shader_model() {
+        let wgt_shader_model = backend_options
+            .force_shader_model
+            .get()
+            .or(compiler_container.max_shader_model());
+
+        let shader_model = if let Some(max_shader_model) = wgt_shader_model {
             let max_dxc_shader_model = match max_shader_model {
                 wgt::DxcShaderModel::V6_0 => ShaderModel::_6_0,
                 wgt::DxcShaderModel::V6_1 => ShaderModel::_6_1,
@@ -374,6 +379,7 @@ impl super::Adapter {
                 wgt::DxcShaderModel::V6_5 => ShaderModel::_6_5,
                 wgt::DxcShaderModel::V6_6 => ShaderModel::_6_6,
                 wgt::DxcShaderModel::V6_7 => ShaderModel::_6_7,
+                wgt::DxcShaderModel::V6_8 => ShaderModel::_6_8,
             };
 
             let shader_model = max_device_shader_model.min(max_dxc_shader_model);

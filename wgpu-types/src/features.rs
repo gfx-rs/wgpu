@@ -1284,6 +1284,19 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const SHADER_PER_VERTEX = 1 << 58;
+
+        /// Enables shader `draw_index` builtin.
+        ///
+        /// Supported platforms:
+        /// - GLES
+        /// - Vulkan
+        ///
+        /// Potential platforms:
+        /// - DX12
+        /// - Metal
+        ///
+        /// This is a native only feature.
+        const SHADER_DRAW_INDEX = 1 << 59;
     }
 
     /// Features that are not guaranteed to be supported.

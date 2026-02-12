@@ -3077,7 +3077,14 @@ impl Writer {
                     Bi::InstanceIndex => BuiltIn::InstanceIndex,
                     Bi::PointSize => BuiltIn::PointSize,
                     Bi::VertexIndex => BuiltIn::VertexIndex,
-                    Bi::DrawID => BuiltIn::DrawIndex,
+                    Bi::DrawIndex => {
+                        self.use_extension("SPV_KHR_shader_draw_parameters");
+                        self.require_any(
+                            "`draw_index built-in",
+                            &[spirv::Capability::DrawParameters],
+                        )?;
+                        BuiltIn::DrawIndex
+                    }
                     // fragment
                     Bi::FragDepth => BuiltIn::FragDepth,
                     Bi::PointCoord => BuiltIn::PointCoord,

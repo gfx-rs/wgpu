@@ -19,6 +19,7 @@ pub(crate) struct EnableExtensions {
     f16: bool,
     clip_distances: bool,
     wgpu_cooperative_matrix: bool,
+    draw_index: bool,
     primitive_index: bool,
 }
 
@@ -33,6 +34,7 @@ impl EnableExtensions {
             dual_source_blending: false,
             clip_distances: false,
             wgpu_cooperative_matrix: false,
+            draw_index: false,
             primitive_index: false,
         }
     }
@@ -52,6 +54,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::F16 => &mut self.f16,
             ImplementedEnableExtension::ClipDistances => &mut self.clip_distances,
             ImplementedEnableExtension::WgpuCooperativeMatrix => &mut self.wgpu_cooperative_matrix,
+            ImplementedEnableExtension::DrawIndex => &mut self.draw_index,
             ImplementedEnableExtension::PrimitiveIndex => &mut self.primitive_index,
         };
         *field = true;
@@ -70,6 +73,7 @@ impl EnableExtensions {
             ImplementedEnableExtension::F16 => self.f16,
             ImplementedEnableExtension::ClipDistances => self.clip_distances,
             ImplementedEnableExtension::WgpuCooperativeMatrix => self.wgpu_cooperative_matrix,
+            ImplementedEnableExtension::DrawIndex => self.draw_index,
             ImplementedEnableExtension::PrimitiveIndex => self.primitive_index,
         }
     }
@@ -122,6 +126,7 @@ impl EnableExtension {
     const COOPERATIVE_MATRIX: &'static str = "wgpu_cooperative_matrix";
     const SUBGROUPS: &'static str = "subgroups";
     const PRIMITIVE_INDEX: &'static str = "primitive_index";
+    const DRAW_INDEX: &'static str = "draw_index";
 
     /// Convert from a sentinel word in WGSL into its associated [`EnableExtension`], if possible.
     pub(crate) fn from_ident(word: &str, span: Span) -> Result<'_, Self> {
@@ -143,6 +148,7 @@ impl EnableExtension {
                 Self::Implemented(ImplementedEnableExtension::WgpuCooperativeMatrix)
             }
             Self::SUBGROUPS => Self::Unimplemented(UnimplementedEnableExtension::Subgroups),
+            Self::DRAW_INDEX => Self::Implemented(ImplementedEnableExtension::DrawIndex),
             Self::PRIMITIVE_INDEX => Self::Implemented(ImplementedEnableExtension::PrimitiveIndex),
             _ => return Err(Box::new(Error::UnknownEnableExtension(span, word))),
         })
@@ -161,6 +167,7 @@ impl EnableExtension {
                 ImplementedEnableExtension::DualSourceBlending => Self::DUAL_SOURCE_BLENDING,
                 ImplementedEnableExtension::F16 => Self::F16,
                 ImplementedEnableExtension::ClipDistances => Self::CLIP_DISTANCES,
+                ImplementedEnableExtension::DrawIndex => Self::DRAW_INDEX,
                 ImplementedEnableExtension::PrimitiveIndex => Self::PRIMITIVE_INDEX,
                 ImplementedEnableExtension::WgpuRayTracingPipeline => Self::RAY_TRACING_PIPELINE,
             },
@@ -203,6 +210,8 @@ pub enum ImplementedEnableExtension {
     WgpuRayTracingPipeline,
     /// Enables the `wgpu_cooperative_matrix` extension, native only.
     WgpuCooperativeMatrix,
+    /// Enables the `draw_index` builtin. Not currently part of the WGSL spec but probably will be at some point.
+    DrawIndex,
     /// Enables the `@builtin(primitive_index)` attribute in WGSL.
     ///
     /// In the WGSL standard, this corresponds to [`enable primitive-index;`].
@@ -222,6 +231,7 @@ impl ImplementedEnableExtension {
         Self::WgpuRayQueryVertexReturn,
         Self::WgpuRayTracingPipeline,
         Self::WgpuCooperativeMatrix,
+        Self::DrawIndex,
         Self::PrimitiveIndex,
     ];
 
@@ -242,6 +252,7 @@ impl ImplementedEnableExtension {
             Self::WgpuRayQueryVertexReturn => C::RAY_HIT_VERTEX_POSITION,
             Self::WgpuCooperativeMatrix => C::COOPERATIVE_MATRIX,
             Self::WgpuRayTracingPipeline => C::RAY_TRACING_PIPELINE,
+            Self::DrawIndex => C::DRAW_INDEX,
             Self::PrimitiveIndex => C::PRIMITIVE_INDEX,
         }
     }

@@ -1,5 +1,4 @@
 use std::{borrow::Cow, sync::Arc};
-use tempfile::tempdir;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::EventLoop,
@@ -29,8 +28,6 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         .await
         .expect("Failed to find an appropriate adapter");
 
-    let trace_dir = tempdir().expect("Failed to create temporary directory for trace");
-
     // Create the logical device and command queue
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
@@ -41,7 +38,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 .using_resolution(adapter.limits()),
             experimental_features: wgpu::ExperimentalFeatures::disabled(),
             memory_hints: wgpu::MemoryHints::MemoryUsage,
-            trace: wgpu::Trace::Directory(trace_dir.path().to_path_buf()),
+            trace: wgpu::Trace::Off,
         })
         .await
         .expect("Failed to create device");

@@ -172,7 +172,15 @@ web = ["dep:wasm-bindgen", "dep:js-sys", "dep:web-sys", "wgpu-types/web"]
 ##
 ## This can allow for better error reporting and for improved multithreading
 ## support.
-std = ["raw-window-handle/std", "wgpu-types/std", "wgpu-core?/std"]
+std = [
+    "raw-window-handle/std",
+    "wgpu-types/std",
+    "wgpu-core?/std",
+    "js-sys?/std",
+    "web-sys?/std",
+    "wasm-bindgen?/std",
+    "wasm-bindgen-futures?/std",
+]
 
 ## Uses `parking_lot` as the implementation for locking primitives.
 ##
@@ -227,7 +235,7 @@ smallvec.workspace = true
 ###############
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))'.dependencies]
 # Needed for all backends
-js-sys = { workspace = true, optional = true, features = ["default"] }
+js-sys = { workspace = true, optional = true }
 wasm-bindgen = { workspace = true, optional = true }
 web-sys = { workspace = true, optional = true, features = [
     "HtmlCanvasElement",

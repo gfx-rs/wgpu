@@ -360,6 +360,28 @@ impl GlDebugFns {
     }
 }
 
+/// Used to force wgpu to expose certain features on passthrough shaders even when
+/// those features aren't present on runtime-compiled shaders
+#[derive(Default, Clone, Debug)]
+pub struct ForceShaderModelToken {
+    inner: Option<DxcShaderModel>,
+}
+impl ForceShaderModelToken {
+    /// Creates an unsafe token, opting you in to seeing features that you may not necessarily use
+    /// on standard runtime-compiled shaders.
+    /// # Safety
+    /// Do not make use in runtime-compiled shaders of any features that may not be supported by the FXC or DXC
+    /// version you use.
+    pub unsafe fn with_shader_model(sm: DxcShaderModel) -> Self {
+        Self { inner: Some(sm) }
+    }
+
+    /// Returns the shader model version, if any, in this token.
+    pub fn get(&self) -> Option<DxcShaderModel> {
+        self.inner.clone()
+    }
+}
+
 /// Configuration for the DX12 backend.
 ///
 /// Part of [`BackendOptions`].
@@ -371,6 +393,11 @@ pub struct Dx12BackendOptions {
     pub presentation_system: Dx12SwapchainKind,
     /// Whether to wait for the latency waitable object before acquiring the next swapchain image.
     pub latency_waitable_object: Dx12UseFrameLatencyWaitableObject,
+    /// For use with passthrough shaders. Expose features as if this shader model is present, even if you do not
+    /// intend to ship DXC with your app.
+    ///
+    /// This does not override the device's shader model version, only the external shader compiler's version.
+    pub force_shader_model: ForceShaderModelToken,
 }
 
 impl Dx12BackendOptions {
@@ -387,6 +414,7 @@ impl Dx12BackendOptions {
             shader_compiler: compiler,
             presentation_system,
             latency_waitable_object,
+            force_shader_model: ForceShaderModelToken::default(),
         }
     }
 
@@ -402,6 +430,7 @@ impl Dx12BackendOptions {
             shader_compiler,
             presentation_system,
             latency_waitable_object,
+            force_shader_model: ForceShaderModelToken::default(),
         }
     }
 }
@@ -516,6 +545,41 @@ pub enum DxcShaderModel {
     V6_5,
     V6_6,
     V6_7,
+    V6_8,
+}
+
+impl DxcShaderModel {
+    /// Get the shader model supported by a certain DXC version.
+    pub fn from_dxc_version(major: u32, minor: u32) -> Self {
+        // DXC version roughly has corresponded to shader model so far, where DXC 1.x supports SM 6.x.
+        // See discussion in https://discord.com/channels/590611987420020747/996417435374714920/1471234702206701650.
+        // Presumably DXC 2.0 and up will still support shader model 6.8.
+        if major > 1 {
+            Self::V6_8
+        } else {
+            Self::from_parts(6, minor)
+        }
+    }
+
+    /// Parse a DxcShaderModel from its version components.
+    pub fn from_parts(major: u32, minor: u32) -> Self {
+        if major > 6 || minor > 8 {
+            Self::V6_8
+        } else {
+            match minor {
+                0 => DxcShaderModel::V6_0,
+                1 => DxcShaderModel::V6_1,
+                2 => DxcShaderModel::V6_2,
+                3 => DxcShaderModel::V6_3,
+                4 => DxcShaderModel::V6_4,
+                5 => DxcShaderModel::V6_5,
+                6 => DxcShaderModel::V6_6,
+                7 => DxcShaderModel::V6_7,
+                // >= 6.8
+                _ => DxcShaderModel::V6_8,
+            }
+        }
+    }
 }
 
 /// Selects which DX12 shader compiler to use.
@@ -524,7 +588,6 @@ pub enum Dx12Compiler {
     /// The Fxc compiler (default) is old, slow and unmaintained.
     ///
     /// However, it doesn't require any additional .dlls to be shipped with the application.
-    #[default]
     Fxc,
     /// The Dxc compiler is new, fast and maintained.
     ///
@@ -537,14 +600,15 @@ pub enum Dx12Compiler {
     DynamicDxc {
         /// Path to `dxcompiler.dll`.
         dxc_path: String,
-        /// Maximum shader model the given dll supports.
-        max_shader_model: DxcShaderModel,
     },
     /// The statically-linked variant of Dxc.
     ///
     /// The `static-dxc` feature is required for this setting to be used successfully on DX12.
     /// Not available on `windows-aarch64-pc-*` targets.
     StaticDxc,
+    /// Use statically-linked DXC if available. Otherwise check for dynamically linked DXC on the PATH. Finally, fallback to FXC.
+    #[default]
+    Auto,
 }
 
 impl Dx12Compiler {
@@ -554,7 +618,6 @@ impl Dx12Compiler {
     pub fn default_dynamic_dxc() -> Self {
         Self::DynamicDxc {
             dxc_path: String::from("dxcompiler.dll"),
-            max_shader_model: DxcShaderModel::V6_7, // should be 6.8 but the variant is missing
         }
     }
 
@@ -573,6 +636,7 @@ impl Dx12Compiler {
             "dxc" | "dynamicdxc" => Some(Self::default_dynamic_dxc()),
             "staticdxc" => Some(Self::StaticDxc),
             "fxc" => Some(Self::Fxc),
+            "auto" => Some(Self::Auto),
             _ => None,
         }
     }
