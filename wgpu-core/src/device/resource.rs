@@ -923,13 +923,21 @@ impl Device {
             };
 
             let fence = queue.fence.read();
+
+            // For multi-queue there are multiple queues to poll, so we subtract the time we've already waited
+            // so as not to multiply the maximum timeout. However, web doesn't support time, so we have to skip
+            // this check on web. That's fine because webgpu and webgl don't support multi-queue
+            #[cfg(not(target_arch = "wasm32"))]
             let start_time = Instant::now();
             let wait_result = unsafe {
                 self.raw()
                     .wait(fence.as_ref(), target_submission_index, wait_timeout)
             };
-            let end_time = Instant::now();
-            current_duration += end_time - start_time;
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let end_time = Instant::now();
+                current_duration += end_time - start_time;
+            }
 
             // This error match is only about `DeviceErrors`. At this stage we do not care if
             // the wait succeeded or not, and the `Ok(bool)`` variant is ignored.
