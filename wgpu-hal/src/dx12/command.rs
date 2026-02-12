@@ -1809,7 +1809,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
     }
 
-    unsafe fn transition_acceleration_structures<'a, T>(&mut self, barriers: T)
+    unsafe fn transition_acceleration_structures<'a, T>(&mut self, _barriers: T)
     where
         T: Iterator<
             Item = crate::AccelerationStructureBarrier<'a, <Self::A as crate::Api>::Buffer>,

@@ -1545,29 +1545,35 @@ impl crate::Queue for Queue {
 
     unsafe fn submit(
         &self,
-        command_buffers: &[&CommandBuffer],
-        _surface_textures: &[&Texture],
-        (signal_fence, signal_value): (&mut Fence, crate::FenceValue),
+        submits: &mut [crate::QueueSubmitInfo<'_, CommandBuffer, Fence, SurfaceTexture>],
     ) -> Result<(), crate::DeviceError> {
-        let mut temp_lists = self.temp_lists.lock();
-        temp_lists.clear();
-        for cmd_buf in command_buffers {
-            temp_lists.push(Some(cmd_buf.raw.clone().into()));
+        for submit in submits {
+            for &mut (wait_fence, wait_value) in submit.wait_fences {
+                unsafe { self.raw.Wait(&wait_fence.raw, wait_value) }
+                    .into_device_result("Wait fence")?;
+            }
+            let mut temp_lists = self.temp_lists.lock();
+            temp_lists.clear();
+            for &cmd_buf in submit.command_buffers {
+                temp_lists.push(Some(cmd_buf.raw.clone().into()));
+            }
+
+            {
+                profiling::scope!("ID3D12CommandQueue::ExecuteCommandLists");
+                unsafe { self.raw.ExecuteCommandLists(&temp_lists) }
+            }
+
+            for &mut (signal_fence, signal_value) in submit.signal_fences {
+                unsafe { self.raw.Signal(&signal_fence.raw, signal_value) }
+                    .into_device_result("Signal fence")?;
+            }
+
+            // Note the lack of synchronization here between the main Direct queue
+            // and the dedicated presentation queue. This is automatically handled
+            // by the D3D runtime by detecting uses of resources derived from the
+            // swapchain. This automatic detection is why you cannot use a swapchain
+            // as an UAV in D3D12.
         }
-
-        {
-            profiling::scope!("ID3D12CommandQueue::ExecuteCommandLists");
-            unsafe { self.raw.ExecuteCommandLists(&temp_lists) }
-        }
-
-        unsafe { self.raw.Signal(&signal_fence.raw, signal_value) }
-            .into_device_result("Signal fence")?;
-
-        // Note the lack of synchronization here between the main Direct queue
-        // and the dedicated presentation queue. This is automatically handled
-        // by the D3D runtime by detecting uses of resources derived from the
-        // swapchain. This automatic detection is why you cannot use a swapchain
-        // as an UAV in D3D12.
 
         Ok(())
     }
