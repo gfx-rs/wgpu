@@ -154,7 +154,7 @@ struct Args {
     capabilities: CapabilitiesArg,
 
     /// the limits on the task shader dispatch size
-    #[argh(option, default = "TaskDispatchLimits(None)")]
+    #[argh(option, default = "TaskDispatchLimitsArg(None)")]
     task_limits: TaskDispatchLimitsArg,
 
     /// whether or not the mesh shader output should be validated.
