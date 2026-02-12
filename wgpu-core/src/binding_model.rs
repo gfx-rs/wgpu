@@ -398,9 +398,9 @@ impl PerStageBindingTypeCounter {
     }
 
     pub(crate) fn merge(&mut self, other: &Self) {
-        self.vertex = self.vertex.max(other.vertex);
-        self.fragment = self.fragment.max(other.fragment);
-        self.compute = self.compute.max(other.compute);
+        self.vertex += other.vertex;
+        self.fragment += other.fragment;
+        self.compute += other.compute;
     }
 
     pub(crate) fn validate(

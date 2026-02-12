@@ -152,6 +152,34 @@ struct Args {
     /// "67108864"), the string "none", or the string "all".
     #[argh(option, default = "CapabilitiesArg(naga::valid::Capabilities::all())")]
     capabilities: CapabilitiesArg,
+
+    /// the limits on the task shader dispatch size
+    #[argh(option, default = "TaskDispatchLimitsArg(None)")]
+    task_limits: TaskDispatchLimitsArg,
+
+    /// whether or not the mesh shader output should be validated.
+    #[argh(option, default = "true")]
+    validate_mesh_output: bool,
+}
+
+/// Newtype so we can implement [`FromStr`] for `Option<TaskDispatchLimits>`.
+#[derive(Debug, Clone, Copy)]
+struct TaskDispatchLimitsArg(Option<naga::back::TaskDispatchLimits>);
+
+impl FromStr for TaskDispatchLimitsArg {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let values = s
+            .split_once(",")
+            .ok_or_else(|| format!("No comma present for --task-limits value: {s}"))?;
+        let x = values.0.parse::<u32>().map_err(|e| e.to_string())?;
+        let y = values.1.parse::<u32>().map_err(|e| e.to_string())?;
+        Ok(Self(Some(naga::back::TaskDispatchLimits {
+            max_mesh_workgroups_per_dim: x,
+            max_mesh_workgroups_total: y,
+        })))
+    }
 }
 
 /// Newtype so we can implement [`FromStr`] for `BoundsCheckPolicy`.
@@ -544,6 +572,9 @@ fn run() -> anyhow::Result<()> {
 
     params.compact = args.compact;
     params.capabilities = args.capabilities.0;
+
+    params.spv_out.mesh_shader_primitive_indices_clamp = args.validate_mesh_output;
+    params.spv_out.task_dispatch_limits = args.task_limits.0;
 
     if args.bulk_validate {
         return bulk_validate(&args, &params);

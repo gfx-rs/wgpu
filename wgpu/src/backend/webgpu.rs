@@ -2656,18 +2656,10 @@ impl dispatch::QueueInterface for WebQueue {
         }
         mapped_data_layout.set_offset(data_layout.offset as f64);
 
-        /* Skip the copy once gecko allows BufferSource instead of ArrayBuffer
-        self.inner.write_texture_with_u8_array_and_gpu_extent_3d_dict(
-            &map_texture_copy_view(texture),
-            data,
-            &mapped_data_layout,
-            &map_extent_3d(size),
-        );
-        */
         self.inner
-            .write_texture_with_buffer_source_and_gpu_extent_3d_dict(
+            .write_texture_with_u8_slice_and_gpu_extent_3d_dict(
                 &map_texture_copy_view(texture),
-                &js_sys::Uint8Array::from(data).buffer(),
+                data,
                 &mapped_data_layout,
                 &map_extent_3d(size),
             )

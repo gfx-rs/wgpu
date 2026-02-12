@@ -270,8 +270,6 @@ jobs:
         run: |
           set -e
 
-          export RUSTFLAGS="$RUSTFLAGS --cfg getrandom_backend=\"wasm_js\""
-
           # build for WebGPU
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --features glsl,spirv,fragile-send-sync-non-atomic-wasm
           cargo --locked clippy --target ${{ matrix.target }} ${{ matrix.extra-flags }} --tests --features glsl,spirv
@@ -574,8 +572,6 @@ jobs:
       - name: Execute tests
         run: |
           cd wgpu
-
-          export RUSTFLAGS="$RUSTFLAGS --cfg getrandom_backend=\"wasm_js\""
 
           wasm-pack test --headless --chrome --no-default-features --features wgsl,webgl,web --workspace
 

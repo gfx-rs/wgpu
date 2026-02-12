@@ -43,6 +43,13 @@ pub struct ShaderRuntimeChecks {
     ///
     /// It is the aim that these cases will not cause UB if this is set to true, but currently this will still happen on DX12 and Metal.
     pub ray_query_initialization_tracking: bool,
+
+    /// If false, task shaders will not validate that the mesh shader grid they dispatch is within legal limits.
+    pub task_shader_dispatch_tracking: bool,
+
+    /// If false, mesh shaders won't clamp the output primitives' vertex indices, which can lead to
+    /// undefined behavior and arbitrary memory access.
+    pub mesh_shader_primitive_indices_clamp: bool,
 }
 
 impl ShaderRuntimeChecks {
@@ -76,6 +83,8 @@ impl ShaderRuntimeChecks {
             bounds_checks: all_checks,
             force_loop_bounding: all_checks,
             ray_query_initialization_tracking: all_checks,
+            task_shader_dispatch_tracking: all_checks,
+            mesh_shader_primitive_indices_clamp: all_checks,
         }
     }
 }

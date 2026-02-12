@@ -2218,6 +2218,7 @@ impl super::Adapter {
         drop_callback: Option<crate::DropCallback>,
         enabled_extensions: &[&'static CStr],
         features: wgt::Features,
+        limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
         family_index: u32,
         queue_index: u32,
@@ -2485,6 +2486,11 @@ impl super::Adapter {
                 // We need to build this separately for each invocation, so just default it out here
                 binding_map: BTreeMap::default(),
                 debug_info: None,
+                task_dispatch_limits: Some(naga::back::TaskDispatchLimits {
+                    max_mesh_workgroups_per_dim: limits.max_task_mesh_workgroups_per_dimension,
+                    max_mesh_workgroups_total: limits.max_task_mesh_workgroup_total_count,
+                }),
+                mesh_shader_primitive_indices_clamp: true,
             }
         };
 
@@ -2597,6 +2603,7 @@ impl super::Adapter {
     pub unsafe fn open_with_callback<'a>(
         &self,
         features: wgt::Features,
+        limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
         callback: Option<Box<super::CreateDeviceCallback<'a>>>,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
@@ -2659,6 +2666,7 @@ impl super::Adapter {
                 None,
                 &enabled_extensions,
                 features,
+                limits,
                 memory_hints,
                 family_info.queue_family_index,
                 0,
@@ -2673,10 +2681,10 @@ impl crate::Adapter for super::Adapter {
     unsafe fn open(
         &self,
         features: wgt::Features,
-        _limits: &wgt::Limits,
+        limits: &wgt::Limits,
         memory_hints: &wgt::MemoryHints,
     ) -> Result<crate::OpenDevice<super::Api>, crate::DeviceError> {
-        unsafe { self.open_with_callback(features, memory_hints, None) }
+        unsafe { self.open_with_callback(features, limits, memory_hints, None) }
     }
 
     unsafe fn texture_format_capabilities(

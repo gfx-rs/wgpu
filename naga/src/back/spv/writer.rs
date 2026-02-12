@@ -96,6 +96,7 @@ impl Writer {
             ray_query_initialization_tracking: options.ray_query_initialization_tracking,
             use_storage_input_output_16: options.use_storage_input_output_16,
             void_type,
+            tuple_of_u32s_ty_id: None,
             lookup_type: crate::FastHashMap::default(),
             lookup_function: crate::FastHashMap::default(),
             lookup_function_type: crate::FastHashMap::default(),
@@ -114,6 +115,8 @@ impl Writer {
                 options.use_storage_input_output_16,
             ),
             debug_printf: None,
+            task_dispatch_limits: options.task_dispatch_limits,
+            mesh_shader_primitive_indices_clamp: options.mesh_shader_primitive_indices_clamp,
         })
     }
 
@@ -132,6 +135,8 @@ impl Writer {
         self.binding_map = options.binding_map.clone();
         self.io_f16_polyfills =
             super::f16_polyfill::F16IoPolyfill::new(options.use_storage_input_output_16);
+        self.task_dispatch_limits = options.task_dispatch_limits;
+        self.mesh_shader_primitive_indices_clamp = options.mesh_shader_primitive_indices_clamp;
         Ok(())
     }
 
@@ -170,10 +175,13 @@ impl Writer {
             capabilities_available: take(&mut self.capabilities_available),
             fake_missing_bindings: self.fake_missing_bindings,
             binding_map: take(&mut self.binding_map),
+            task_dispatch_limits: self.task_dispatch_limits,
+            mesh_shader_primitive_indices_clamp: self.mesh_shader_primitive_indices_clamp,
 
             // Initialized afresh:
             id_gen,
             void_type,
+            tuple_of_u32s_ty_id: None,
             gl450_ext_inst_id,
 
             // Reclaimed:
@@ -408,14 +416,6 @@ impl Writer {
         self.get_pointer_type_id(vec2u_id, class)
     }
 
-    pub(super) fn get_vec3u_pointer_type_id(&mut self, class: spirv::StorageClass) -> Word {
-        let vec3u_id = self.get_numeric_type_id(NumericType::Vector {
-            size: crate::VectorSize::Tri,
-            scalar: crate::Scalar::U32,
-        });
-        self.get_pointer_type_id(vec3u_id, class)
-    }
-
     pub(super) fn get_bool_type_id(&mut self) -> Word {
         self.get_numeric_type_id(NumericType::Scalar(crate::Scalar::BOOL))
     }
@@ -432,6 +432,23 @@ impl Writer {
             size: crate::VectorSize::Tri,
             scalar: crate::Scalar::BOOL,
         })
+    }
+
+    /// Used for "mulhi" to get the upper bits of multiplication.
+    ///
+    /// More specifically, `OpUMulExtended` multiplies 2 numbers and returns the lower and upper bits of the result
+    /// as a user-defined struct type with 2 u32s. This defines that struct.
+    pub(super) fn get_tuple_of_u32s_ty_id(&mut self) -> Word {
+        if let Some(val) = self.tuple_of_u32s_ty_id {
+            val
+        } else {
+            let id = self.id_gen.next();
+            let u32_id = self.get_u32_type_id();
+            let ins = Instruction::type_struct(id, &[u32_id, u32_id]);
+            ins.to_words(&mut self.logical_layout.declarations);
+            self.tuple_of_u32s_ty_id = Some(id);
+            id
+        }
     }
 
     pub(super) fn decorate(&mut self, id: Word, decoration: spirv::Decoration, operands: &[Word]) {
@@ -1195,10 +1212,9 @@ impl Writer {
             mesh_state: None,
         };
 
-        let mut local_invocation_id = None;
-
         let mut parameter_type_ids = Vec::with_capacity(ir_function.arguments.len());
 
+        let mut local_invocation_index_var_id = None;
         let mut local_invocation_index_id = None;
 
         for argument in ir_function.arguments.iter() {
@@ -1228,13 +1244,9 @@ impl Writer {
                         varying_id,
                         argument_type_id,
                     );
-
-                    if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationId) {
-                        local_invocation_id = Some(id);
-                    } else if binding
-                        == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex)
-                    {
+                    if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex) {
                         local_invocation_index_id = Some(id);
+                        local_invocation_index_var_id = Some(varying_id);
                     }
 
                     id
@@ -1259,13 +1271,10 @@ impl Writer {
                         let id =
                             self.load_io_with_f16_polyfill(&mut prelude.body, varying_id, type_id);
                         constituent_ids.push(id);
-
-                        if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationId) {
-                            local_invocation_id = Some(id);
-                        } else if binding
-                            == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex)
+                        if binding == &crate::Binding::BuiltIn(crate::BuiltIn::LocalInvocationIndex)
                         {
                             local_invocation_index_id = Some(id);
+                            local_invocation_index_var_id = Some(varying_id);
                         }
                     }
                     prelude.body.push(Instruction::composite_construct(
@@ -1393,7 +1402,11 @@ impl Writer {
                             .body
                             .push(Instruction::store(varying_id, default_value_id, None));
                     }
-                    self.void_type
+                    if iface.stage == crate::ShaderStage::Task {
+                        self.get_vec3u_type_id()
+                    } else {
+                        self.void_type
+                    }
                 } else {
                     self.get_handle_type_id(result.ty)
                 }
@@ -1409,9 +1422,8 @@ impl Writer {
             }
             self.write_entry_point_mesh_shader_info(
                 iface,
-                local_invocation_index_id,
+                local_invocation_index_var_id,
                 ir_module,
-                &mut prelude,
                 &mut ep_context,
             )?;
         }
@@ -1654,7 +1666,7 @@ impl Writer {
                     next_id,
                     ir_module,
                     info,
-                    local_invocation_id,
+                    local_invocation_index_id,
                     interface,
                     context.function,
                 ),
@@ -1679,7 +1691,21 @@ impl Writer {
 
         function.to_words(&mut self.logical_layout.function_definitions);
 
-        Ok(function_id)
+        if let Some(EntryPointContext {
+            mesh_state: Some(ref mesh_state),
+            ..
+        }) = function.entry_point_context
+        {
+            self.write_mesh_shader_wrapper(mesh_state, function_id)
+        } else if let Some(EntryPointContext {
+            task_payload_variable_id: Some(tp),
+            ..
+        }) = function.entry_point_context
+        {
+            self.write_task_shader_wrapper(tp, function_id)
+        } else {
+            Ok(function_id)
+        }
     }
 
     fn write_execution_mode(
@@ -1702,6 +1728,7 @@ impl Writer {
         debug_info: &Option<DebugInfoInner>,
     ) -> Result<Instruction, Error> {
         let mut interface_ids = Vec::new();
+
         let function_id = self.write_function(
             &entry_point.function,
             info,
@@ -2705,7 +2732,7 @@ impl Writer {
         entry_id: Word,
         ir_module: &crate::Module,
         info: &FunctionInfo,
-        local_invocation_id: Option<Word>,
+        local_invocation_index: Option<Word>,
         interface: &mut FunctionInterface,
         function: &mut Function,
     ) -> Option<Word> {
@@ -2713,7 +2740,10 @@ impl Writer {
             .global_variables
             .iter()
             .filter(|&(handle, var)| {
-                !info[handle].is_empty() && var.space == crate::AddressSpace::WorkGroup
+                let task_exception = (var.space == crate::AddressSpace::TaskPayload)
+                    && interface.stage == crate::ShaderStage::Task;
+                !info[handle].is_empty()
+                    && (var.space == crate::AddressSpace::WorkGroup || task_exception)
             })
             .map(|(handle, var)| {
                 // It's safe to use `var_id` here, not `access_id`, because only
@@ -2730,16 +2760,15 @@ impl Writer {
             return None;
         }
 
-        let uint3_type_id = self.get_vec3u_type_id();
-
         let mut pre_if_block = Block::new(entry_id);
 
-        let local_invocation_id = if let Some(local_invocation_id) = local_invocation_id {
-            local_invocation_id
+        let local_invocation_index = if let Some(local_invocation_index) = local_invocation_index {
+            local_invocation_index
         } else {
             let varying_id = self.id_gen.next();
             let class = spirv::StorageClass::Input;
-            let pointer_type_id = self.get_vec3u_pointer_type_id(class);
+            let u32_ty_id = self.get_u32_type_id();
+            let pointer_type_id = self.get_pointer_type_id(u32_ty_id, class);
 
             Instruction::variable(pointer_type_id, varying_id, class, None)
                 .to_words(&mut self.logical_layout.declarations);
@@ -2747,37 +2776,27 @@ impl Writer {
             self.decorate(
                 varying_id,
                 spirv::Decoration::BuiltIn,
-                &[spirv::BuiltIn::LocalInvocationId as u32],
+                &[spirv::BuiltIn::LocalInvocationIndex as u32],
             );
 
             interface.varying_ids.push(varying_id);
             let id = self.id_gen.next();
             pre_if_block
                 .body
-                .push(Instruction::load(uint3_type_id, id, varying_id, None));
+                .push(Instruction::load(u32_ty_id, id, varying_id, None));
 
             id
         };
 
-        let zero_id = self.get_constant_null(uint3_type_id);
-        let bool3_type_id = self.get_vec3_bool_type_id();
+        let zero_id = self.get_constant_scalar(crate::Literal::U32(0));
 
         let eq_id = self.id_gen.next();
         pre_if_block.body.push(Instruction::binary(
             spirv::Op::IEqual,
-            bool3_type_id,
+            self.get_bool_type_id(),
             eq_id,
-            local_invocation_id,
+            local_invocation_index,
             zero_id,
-        ));
-
-        let condition_id = self.id_gen.next();
-        let bool_type_id = self.get_bool_type_id();
-        pre_if_block.body.push(Instruction::relational(
-            spirv::Op::All,
-            bool_type_id,
-            condition_id,
-            eq_id,
         ));
 
         let merge_id = self.id_gen.next();
@@ -2789,7 +2808,7 @@ impl Writer {
         let accept_id = self.id_gen.next();
         function.consume(
             pre_if_block,
-            Instruction::branch_conditional(condition_id, accept_id, merge_id),
+            Instruction::branch_conditional(eq_id, accept_id, merge_id),
         );
 
         let accept_block = Block {
@@ -3022,7 +3041,6 @@ impl Writer {
                 }
                 if per_primitive && stage == crate::ShaderStage::Fragment {
                     others.push(Decoration::PerPrimitiveEXT);
-                    self.require_mesh_shaders()?;
                 }
                 Ok(BindingDecorations::Location {
                     location,
@@ -3033,13 +3051,6 @@ impl Writer {
             crate::Binding::BuiltIn(built_in) => {
                 use crate::BuiltIn as Bi;
                 let mut others = ArrayVec::new();
-
-                if matches!(
-                    built_in,
-                    Bi::CullPrimitive | Bi::PointIndex | Bi::LineIndices | Bi::TriangleIndices
-                ) {
-                    self.require_mesh_shaders()?;
-                }
 
                 let built_in = match built_in {
                     Bi::Position { invariant } => {
@@ -3164,22 +3175,12 @@ impl Writer {
                         BuiltIn::SubgroupLocalInvocationId
                     }
                     Bi::CullPrimitive => {
-                        self.require_mesh_shaders()?;
                         others.push(Decoration::PerPrimitiveEXT);
                         BuiltIn::CullPrimitiveEXT
                     }
-                    Bi::PointIndex => {
-                        self.require_mesh_shaders()?;
-                        BuiltIn::PrimitivePointIndicesEXT
-                    }
-                    Bi::LineIndices => {
-                        self.require_mesh_shaders()?;
-                        BuiltIn::PrimitiveLineIndicesEXT
-                    }
-                    Bi::TriangleIndices => {
-                        self.require_mesh_shaders()?;
-                        BuiltIn::PrimitiveTriangleIndicesEXT
-                    }
+                    Bi::PointIndex => BuiltIn::PrimitivePointIndicesEXT,
+                    Bi::LineIndices => BuiltIn::PrimitiveLineIndicesEXT,
+                    Bi::TriangleIndices => BuiltIn::PrimitiveTriangleIndicesEXT,
                     // No decoration, this EmitMeshTasksEXT is called at function return
                     Bi::MeshTaskSize => return Ok(BindingDecorations::None),
                     // These aren't normal builtins and don't occur in function output
@@ -3554,17 +3555,6 @@ impl Writer {
             | ir_module.special_types.ray_intersection.is_some();
         let has_vertex_return = ir_module.special_types.ray_vertex_return.is_some();
 
-        // Ways mesh shaders are required:
-        // * Mesh entry point used - checked for
-        // * Mesh function like setVertex used outside mesh entry point, this is handled when those are written
-        // * Fragment shader with per primitive data - handled in `map_binding`
-        let has_mesh_shaders = ir_module.entry_points.iter().any(|entry| {
-            entry.stage == crate::ShaderStage::Mesh || entry.stage == crate::ShaderStage::Task
-        }) || ir_module
-            .global_variables
-            .iter()
-            .any(|gvar| gvar.1.space == crate::AddressSpace::TaskPayload);
-
         for (_, &crate::Type { ref inner, .. }) in ir_module.types.iter() {
             // spirv does not know whether these have vertex return - that is done by us
             if let &crate::TypeInner::AccelerationStructure { .. }
@@ -3591,8 +3581,13 @@ impl Writer {
             Instruction::extension("SPV_KHR_ray_tracing_position_fetch")
                 .to_words(&mut self.logical_layout.extensions);
         }
-        if has_mesh_shaders {
-            self.require_mesh_shaders()?;
+        if ir_module.uses_mesh_shaders() {
+            self.use_extension("SPV_EXT_mesh_shader");
+            self.require_any("Mesh Shaders", &[spirv::Capability::MeshShadingEXT])?;
+            let lang_version = self.lang_version();
+            if lang_version.0 <= 1 && lang_version.1 < 4 {
+                return Err(Error::SpirvVersionTooLow(1, 4));
+            }
         }
         Instruction::type_void(self.void_type).to_words(&mut self.logical_layout.declarations);
         Instruction::ext_inst_import(self.gl450_ext_inst_id, "GLSL.std.450")
