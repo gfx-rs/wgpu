@@ -690,7 +690,7 @@ impl super::Device {
                             naga::back::spv::ZeroInitializeWorkgroupMemoryMode::None;
                     }
                     if !runtime_checks.task_shader_dispatch_tracking {
-                        temp_options.task_runtime_limits = None;
+                        temp_options.task_dispatch_limits = None;
                     }
                     temp_options.mesh_shader_primitive_indices_clamp =
                         runtime_checks.mesh_shader_primitive_indices_clamp;

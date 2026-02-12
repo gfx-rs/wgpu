@@ -79,7 +79,7 @@ where
 #[serde(default)]
 pub struct WriterSharedOptions {
     pub mesh_output_validation: bool,
-    pub task_limits: Option<naga::back::TaskRuntimeLimits>,
+    pub task_limits: Option<naga::back::TaskDispatchLimits>,
     pub bounds_checks_policies: naga::proc::BoundsCheckPolicies,
 }
 
@@ -173,7 +173,7 @@ impl SpirvOutParameters {
             ray_query_initialization_tracking: true,
             debug_info,
             use_storage_input_output_16: self.use_storage_input_output_16,
-            task_runtime_limits: shared_info.task_limits,
+            task_dispatch_limits: shared_info.task_limits,
             mesh_shader_primitive_indices_clamp: shared_info.mesh_output_validation,
         }
     }
@@ -248,11 +248,11 @@ pub struct Parameters {
 
     pub mesh_output_validation: bool,
     #[serde(default = "default_task_limits")]
-    pub task_limits: Option<naga::back::TaskRuntimeLimits>,
+    pub task_limits: Option<naga::back::TaskDispatchLimits>,
 }
 
-fn default_task_limits() -> Option<naga::back::TaskRuntimeLimits> {
-    Some(naga::back::TaskRuntimeLimits {
+fn default_task_limits() -> Option<naga::back::TaskDispatchLimits> {
+    Some(naga::back::TaskDispatchLimits {
         max_mesh_workgroups_per_dim: 256,
         max_mesh_workgroups_total: 1024,
     })

@@ -880,7 +880,7 @@ impl super::Writer {
                 &[],
             ));
             self.write_control_barrier(crate::Barrier::WORK_GROUP, &mut block.body);
-            let final_value = if let Some(task_limits) = self.task_runtime_limits {
+            let final_value = if let Some(task_limits) = self.task_dispatch_limits {
                 let zero_u32 = self.get_constant_scalar(crate::Literal::U32(0));
                 let max_per_dim = self.get_constant_scalar(crate::Literal::U32(
                     task_limits.max_mesh_workgroups_per_dim,

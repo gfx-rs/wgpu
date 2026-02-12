@@ -396,7 +396,7 @@ pub enum RayIntersectionType {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct TaskRuntimeLimits {
+pub struct TaskDispatchLimits {
     pub max_mesh_workgroups_per_dim: u32,
     pub max_mesh_workgroups_total: u32,
 }
