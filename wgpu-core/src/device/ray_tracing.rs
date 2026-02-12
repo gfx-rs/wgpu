@@ -33,6 +33,13 @@ impl Device {
         self.check_is_valid()?;
         self.require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
 
+        if blas_desc.initial_queue >= self.queues.len() as u32 {
+            return Err(CreateBlasError::InvalidQueue {
+                requested: blas_desc.initial_queue,
+                highest: self.queues.len() as u32 - 1,
+            });
+        }
+
         if blas_desc
             .flags
             .contains(wgt::AccelerationStructureFlags::ALLOW_RAY_HIT_VERTEX_RETURN)
@@ -181,6 +188,13 @@ impl Device {
     ) -> Result<Arc<resource::Tlas>, CreateTlasError> {
         self.check_is_valid()?;
         self.require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
+
+        if desc.initial_queue >= self.queues.len() as u32 {
+            return Err(CreateTlasError::InvalidQueue {
+                requested: desc.initial_queue,
+                highest: self.queues.len() as u32 - 1,
+            });
+        }
 
         if desc.max_instances > self.limits.max_tlas_instance_count {
             return Err(CreateTlasError::TooManyInstances(

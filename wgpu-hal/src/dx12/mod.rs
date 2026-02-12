@@ -1563,7 +1563,7 @@ impl crate::Queue for Queue {
                 unsafe { self.raw.ExecuteCommandLists(&temp_lists) }
             }
 
-            for &mut (signal_fence, signal_value) in submit.signal_fences.iter() {
+            for (signal_fence, signal_value) in submit.signal_fences.iter() {
                 unsafe { self.raw.Signal(&signal_fence.raw, *signal_value) }
                     .into_device_result("Signal fence")?;
             }

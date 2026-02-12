@@ -11,7 +11,7 @@ use crate::{
     },
     command::{self, CommandEncoder},
     conv,
-    device::{life::WaitIdleError, DeviceError, DeviceLostClosure},
+    device::{life::WaitIdleError, DeviceLostClosure},
     global::Global,
     id::{self, AdapterId, DeviceId, QueueId, SurfaceId},
     instance::{self, Adapter, Surface},
@@ -1147,7 +1147,10 @@ impl Global {
         queue_id: QueueId,
         desc: &wgt::CommandEncoderDescriptor<Label, u32>,
         id_in: Option<id::CommandEncoderId>,
-    ) -> (id::CommandEncoderId, Option<DeviceError>) {
+    ) -> (
+        id::CommandEncoderId,
+        Option<resource::CreateCommandEncoderError>,
+    ) {
         profiling::scope!("Device::create_command_encoder");
 
         let hub = &self.hub;

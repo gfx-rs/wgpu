@@ -1066,6 +1066,8 @@ pub enum CreateBufferError {
     MissingFeatures(#[from] MissingFeatures),
     #[error("Failed to create bind group for indirect buffer validation: {0}")]
     IndirectValidationBindGroup(DeviceError),
+    #[error("Queue index {requested} is higher than last queue {highest}")]
+    InvalidQueue { requested: u32, highest: u32 },
 }
 
 crate::impl_resource_type!(Buffer);
@@ -1086,7 +1088,8 @@ impl WebGpuError for CreateBufferError {
             Self::UnalignedSize
             | Self::InvalidUsage(_)
             | Self::UsageMismatch(_)
-            | Self::MaxBufferSize { .. } => return ErrorType::Validation,
+            | Self::MaxBufferSize { .. }
+            | Self::InvalidQueue { .. } => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
@@ -1661,6 +1664,25 @@ impl WebGpuError for TextureDimensionError {
 
 #[derive(Clone, Debug, Error)]
 #[non_exhaustive]
+pub enum CreateCommandEncoderError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("Queue index {requested} is higher than last queue {highest}")]
+    InvalidQueue { requested: u32, highest: u32 },
+}
+
+impl WebGpuError for CreateCommandEncoderError {
+    fn webgpu_error_type(&self) -> ErrorType {
+        let e: &dyn WebGpuError = match self {
+            Self::Device(e) => e,
+            Self::InvalidQueue { .. } => return ErrorType::Validation,
+        };
+        e.webgpu_error_type()
+    }
+}
+
+#[derive(Clone, Debug, Error)]
+#[non_exhaustive]
 pub enum CreateTextureError {
     #[error(transparent)]
     Device(#[from] DeviceError),
@@ -1701,6 +1723,8 @@ pub enum CreateTextureError {
     MissingFeatures(wgt::TextureFormat, #[source] MissingFeatures),
     #[error(transparent)]
     MissingDownlevelFlags(#[from] MissingDownlevelFlags),
+    #[error("Queue index {requested} is higher than last queue {highest}")]
+    InvalidQueue { requested: u32, highest: u32 },
 }
 
 crate::impl_resource_type!(Texture);
@@ -1735,7 +1759,8 @@ impl WebGpuError for CreateTextureError {
             | Self::InvalidMultisampledStorageBinding
             | Self::InvalidMultisampledFormat(_)
             | Self::InvalidSampleCount(..)
-            | Self::MultisampledNotRenderAttachment => return ErrorType::Validation,
+            | Self::MultisampledNotRenderAttachment
+            | Self::InvalidQueue { .. } => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
@@ -2045,6 +2070,8 @@ pub enum CreateExternalTextureError {
         expected: u8,
         provided: wgt::TextureFormat,
     },
+    #[error("Queue index {requested} is higher than last queue {highest}")]
+    InvalidQueue { requested: u32, highest: u32 },
 }
 
 impl WebGpuError for CreateExternalTextureError {
@@ -2060,9 +2087,8 @@ impl WebGpuError for CreateExternalTextureError {
             | CreateExternalTextureError::InvalidPlaneMultisample(_)
             | CreateExternalTextureError::InvalidPlaneSampleType { .. }
             | CreateExternalTextureError::InvalidPlaneDimension(_)
-            | CreateExternalTextureError::InvalidPlaneFormat { .. } => {
-                return ErrorType::Validation
-            }
+            | CreateExternalTextureError::InvalidPlaneFormat { .. }
+            | CreateExternalTextureError::InvalidQueue { .. } => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
