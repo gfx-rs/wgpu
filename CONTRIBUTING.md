@@ -155,6 +155,19 @@ is responsible for authoring it. The assignee is usually the reviewer,
 but they can also delegate the review to someone else. The intent of
 assignment is simply to ensure that pull requests don't get neglected.
 
+#### Change Ownership
+
+PR authors must be able to understand, justify, and explain all proposed
+changes. After a PR is accepted, both the reviewer and author must
+understand it as a positive change to the codebase.
+
+#### LLMs (AI)
+
+Using LLMs and AIs to generate code that is part of a contribution is allowed.
+However, the author submitting the PR must fully adhere to [Change Ownership](#change-ownership) rules.
+The author is responsible for the code, regardless of how it was created. 
+Do not use "LLM generated" as a justification for low quality code.
+
 #### Designing new features
 
 As an open source project, wgpu wants to serve a broad audience. This
@@ -169,6 +182,12 @@ maintainership before you invest yourself too heavily. Try to build a
 consensus on the approach, including API changes, shader language
 extensions, implementation architecture, error handling, testing
 plans, benchmarking, and so on.
+
+#### Undue Burden
+
+We reserve the right to close any PRs that cause an undue burden on
+the maintainership. This could include, but is not limited to, [massive PRs](#large-pull-requests-are-risky),
+[LLM slop](#llms-ai), or contributions not in good faith.
 
 #### Large pull requests are risky
 
