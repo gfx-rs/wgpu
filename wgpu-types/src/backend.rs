@@ -610,12 +610,30 @@ pub struct NoopBackendOptions {
     /// it must not be used when not expected. Therefore, it will not be used unless explicitly
     /// enabled.
     pub enable: bool,
+
+    /// Specify the reported limits values. If `None`, reports maximally permissive limits.
+    pub limits: Option<crate::Limits>,
+
+    /// Specify the reported feature support. If `None`, reports support for all features.
+    pub features: Option<crate::Features>,
+
+    /// Specify the reported device type. If `None`, uses [`crate::DeviceType::Other`].
+    pub device_type: Option<crate::DeviceType>,
+
+    /// Specify the reported minimum subgroup size.
+    pub subgroup_min_size: Option<u32>,
+
+    /// Specify the reported maximum subgroup size.
+    pub subgroup_max_size: Option<u32>,
 }
 
 impl NoopBackendOptions {
     /// Enable the noop backend.
     pub fn enabled() -> Self {
-        Self { enable: true }
+        Self {
+            enable: true,
+            ..Default::default()
+        }
     }
 
     /// Choose whether the noop backend is enabled from the environment.
@@ -626,6 +644,7 @@ impl NoopBackendOptions {
     pub fn from_env_or_default() -> Self {
         Self {
             enable: Self::enable_from_env().unwrap_or(false),
+            ..Default::default()
         }
     }
 
@@ -637,6 +656,7 @@ impl NoopBackendOptions {
     pub fn with_env(self) -> Self {
         Self {
             enable: Self::enable_from_env().unwrap_or(self.enable),
+            ..self
         }
     }
 

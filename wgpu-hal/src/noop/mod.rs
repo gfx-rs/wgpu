@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 
-use alloc::{string::String, vec, vec::Vec};
+use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use core::{ptr, sync::atomic::Ordering, time::Duration};
 
 #[cfg(supports_64bit_atomics)]
@@ -17,7 +17,10 @@ pub use command::CommandBuffer;
 
 #[derive(Clone, Debug)]
 pub struct Api;
-pub struct Context;
+
+pub struct Context {
+    options: Arc<wgt::NoopBackendOptions>,
+}
 #[derive(Debug)]
 pub struct Encoder;
 #[derive(Debug)]
@@ -89,20 +92,9 @@ impl crate::Instance for Context {
     type A = Api;
 
     unsafe fn init(desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
-        let crate::InstanceDescriptor {
-            backend_options:
-                wgt::BackendOptions {
-                    noop: wgt::NoopBackendOptions { enable },
-                    ..
-                },
-            name: _,
-            flags: _,
-            memory_budget_thresholds: _,
-            telemetry: _,
-            display: _,
-        } = *desc;
-        if enable {
-            Ok(Context)
+        let options = Arc::new(desc.backend_options.noop.clone());
+        if options.enable {
+            Ok(Context { options })
         } else {
             Err(crate::InstanceError::new(String::from(
                 "noop backend disabled because NoopBackendOptions::enable is false",
@@ -114,17 +106,48 @@ impl crate::Instance for Context {
         _display_handle: raw_window_handle::RawDisplayHandle,
         _window_handle: raw_window_handle::RawWindowHandle,
     ) -> Result<Context, crate::InstanceError> {
-        Ok(Context)
+        Ok(Context {
+            options: Arc::clone(&self.options),
+        })
     }
     unsafe fn enumerate_adapters(
         &self,
         _surface_hint: Option<&Context>,
     ) -> Vec<crate::ExposedAdapter<Api>> {
+        let device_type = self.options.device_type.unwrap_or(wgt::DeviceType::Other);
+        let subgroup_min_size = self
+            .options
+            .subgroup_min_size
+            .unwrap_or(wgt::MINIMUM_SUBGROUP_MIN_SIZE);
+        let subgroup_max_size = self
+            .options
+            .subgroup_max_size
+            .unwrap_or(wgt::MAXIMUM_SUBGROUP_MAX_SIZE);
+        let features = self.options.features.unwrap_or(wgt::Features::all());
+        let limits = self
+            .options
+            .limits
+            .clone()
+            .unwrap_or(CAPABILITIES.limits.clone());
+
+        let info = wgt::AdapterInfo {
+            subgroup_min_size,
+            subgroup_max_size,
+            ..adapter_info()
+        };
+
+        let capabilities = crate::Capabilities {
+            limits,
+            ..CAPABILITIES
+        };
+
         vec![crate::ExposedAdapter {
-            adapter: Context,
-            info: adapter_info(),
-            features: wgt::Features::all(),
-            capabilities: CAPABILITIES,
+            adapter: Context {
+                options: Arc::clone(&self.options),
+            },
+            info,
+            features,
+            capabilities,
         }]
     }
 }
@@ -261,8 +284,12 @@ impl crate::Adapter for Context {
         _memory_hints: &wgt::MemoryHints,
     ) -> DeviceResult<crate::OpenDevice<Api>> {
         Ok(crate::OpenDevice {
-            device: Context,
-            queue: Context,
+            device: Context {
+                options: Arc::clone(&self.options),
+            },
+            queue: Context {
+                options: Arc::clone(&self.options),
+            },
         })
     }
     unsafe fn texture_format_capabilities(
