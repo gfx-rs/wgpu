@@ -1050,6 +1050,13 @@ impl Device {
     ) -> Result<Arc<Buffer>, resource::CreateBufferError> {
         self.check_is_valid()?;
 
+        if desc.initial_queue >= self.queues.len() as u32 {
+            return Err(resource::CreateBufferError::InvalidQueue {
+                requested: desc.initial_queue,
+                highest: self.queues.len() as u32 - 1,
+            });
+        }
+
         if desc.size > self.limits.max_buffer_size {
             return Err(resource::CreateBufferError::MaxBufferSize {
                 requested: desc.size,
@@ -1388,6 +1395,13 @@ impl Device {
         use resource::{CreateTextureError, TextureDimensionError};
 
         self.check_is_valid()?;
+
+        if desc.initial_queue >= self.queues.len() as u32 {
+            return Err(CreateTextureError::InvalidQueue {
+                requested: desc.initial_queue,
+                highest: self.queues.len() as u32 - 1,
+            });
+        }
 
         if desc.usage.is_empty() || desc.usage.contains_unknown_bits() {
             return Err(CreateTextureError::InvalidUsage(desc.usage));
@@ -2099,6 +2113,13 @@ impl Device {
         self.require_features(wgt::Features::EXTERNAL_TEXTURE)?;
         self.check_is_valid()?;
 
+        if desc.initial_queue >= self.queues.len() as u32 {
+            return Err(CreateExternalTextureError::InvalidQueue {
+                requested: desc.initial_queue,
+                highest: self.queues.len() as u32 - 1,
+            });
+        }
+
         if desc.num_planes() != planes.len() {
             return Err(CreateExternalTextureError::IncorrectPlaneCount {
                 format: desc.format,
@@ -2524,8 +2545,15 @@ impl Device {
         self: &Arc<Self>,
         label: &crate::Label,
         queue_idx: u32,
-    ) -> Result<Arc<command::CommandEncoder>, DeviceError> {
+    ) -> Result<Arc<command::CommandEncoder>, resource::CreateCommandEncoderError> {
         self.check_is_valid()?;
+
+        if queue_idx >= self.queues.len() as u32 {
+            return Err(resource::CreateCommandEncoderError::InvalidQueue {
+                requested: queue_idx,
+                highest: self.queues.len() as u32 - 1,
+            });
+        }
 
         let queue = self.get_queue(queue_idx).unwrap();
 

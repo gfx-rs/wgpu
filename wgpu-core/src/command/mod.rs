@@ -92,12 +92,12 @@ pub use self::{compute_command::ComputeCommand, render_command::RenderCommand};
 pub(crate) use timestamp_writes::ArcPassTimestampWrites;
 pub use timestamp_writes::PassTimestampWrites;
 
-use crate::binding_model::BindingError;
 use crate::device::queue::{Queue, TempResource};
 use crate::device::{Device, DeviceError, MissingFeatures};
 use crate::id::Id;
 use crate::lock::{rank, Mutex};
 use crate::snatch::SnatchGuard;
+use crate::{binding_model::BindingError, resource::CreateCommandEncoderError};
 
 use crate::init_tracker::BufferInitTrackerAction;
 use crate::ray_tracing::{AsAction, BuildAccelerationStructureError};
@@ -1599,6 +1599,7 @@ pub enum CommandEncoderError {
     ComputePass(#[from] ComputePassError),
     #[error(transparent)]
     RenderPass(#[from] RenderPassError),
+    CreateCommandEncoder(#[from] CreateCommandEncoderError),
 }
 
 impl CommandEncoderError {
@@ -1649,6 +1650,7 @@ impl WebGpuError for CommandEncoderError {
             Self::ResourceUsage(e) => e,
             Self::ComputePass(e) => e,
             Self::RenderPass(e) => e,
+            Self::CreateCommandEncoder(e) => e,
         };
         e.webgpu_error_type()
     }

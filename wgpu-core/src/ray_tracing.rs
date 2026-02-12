@@ -48,6 +48,8 @@ pub enum CreateBlasError {
         "Limit `max_blas_primitive_count` is {0}, but the BLAS had a maximum of {1} primitives"
     )]
     TooManyPrimitives(u32, u32),
+    #[error("Queue index {requested} is higher than last queue {highest}")]
+    InvalidQueue { requested: u32, highest: u32 },
 }
 
 impl WebGpuError for CreateBlasError {
@@ -58,7 +60,8 @@ impl WebGpuError for CreateBlasError {
             Self::MissingIndexData
             | Self::InvalidVertexFormat(..)
             | Self::TooManyGeometries(..)
-            | Self::TooManyPrimitives(..) => return ErrorType::Validation,
+            | Self::TooManyPrimitives(..)
+            | Self::InvalidQueue { .. } => return ErrorType::Validation,
         };
         e.webgpu_error_type()
     }
@@ -74,6 +77,8 @@ pub enum CreateTlasError {
     DisallowedFlag(wgt::AccelerationStructureFlags),
     #[error("Limit `max_tlas_instance_count` is {0}, but the TLAS had a maximum of {1} instances")]
     TooManyInstances(u32, u32),
+    #[error("Queue index {requested} is higher than last queue {highest}")]
+    InvalidQueue { requested: u32, highest: u32 },
 }
 
 impl WebGpuError for CreateTlasError {
@@ -81,7 +86,9 @@ impl WebGpuError for CreateTlasError {
         let e: &dyn WebGpuError = match self {
             Self::Device(e) => e,
             Self::MissingFeatures(e) => e,
-            Self::DisallowedFlag(..) | Self::TooManyInstances(..) => return ErrorType::Validation,
+            Self::DisallowedFlag(..) | Self::TooManyInstances(..) | Self::InvalidQueue { .. } => {
+                return ErrorType::Validation
+            }
         };
         e.webgpu_error_type()
     }
