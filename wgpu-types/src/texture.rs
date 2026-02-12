@@ -570,7 +570,7 @@ impl<L, V, Q: Clone> TextureDescriptor<L, V, Q> {
     ///
     /// ```rust
     /// # use wgpu_types as wgpu;
-    /// # type TextureDescriptor<'a> = wgpu::TextureDescriptor<(), &'a [wgpu::TextureFormat]>;
+    /// # type TextureDescriptor<'a> = wgpu::TextureDescriptor<(), &'a [wgpu::TextureFormat], Option<()>>;
     /// let desc  = TextureDescriptor {
     ///   label: (),
     ///   size: wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 },
@@ -580,6 +580,7 @@ impl<L, V, Q: Clone> TextureDescriptor<L, V, Q> {
     ///   format: wgpu::TextureFormat::Rgba8Sint,
     ///   usage: wgpu::TextureUsages::empty(),
     ///   view_formats: &[],
+    ///   initial_queue: None,
     /// };
     ///
     /// assert_eq!(desc.mip_level_size(0), Some(wgpu::Extent3d { width: 100, height: 60, depth_or_array_layers: 1 }));
