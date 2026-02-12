@@ -862,6 +862,10 @@ fn map_adapter_info(adapter_info: &webgpu_sys::GpuAdapterInfo) -> wgt::AdapterIn
         subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
         subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
         transient_saves_memory: false,
+        supported_queue_families: vec![wgt::QueueFamilyInfo {
+            num_queues: 1,
+            usage: wgt::QueueUsageFlags::all(),
+        }],
     }
 }
 
@@ -959,7 +963,7 @@ fn request_adapter_null_error(requested_backends: Backends) -> wgt::RequestAdapt
 
 fn future_request_device(
     result: JsFutureResult,
-) -> Result<(dispatch::DispatchDevice, dispatch::DispatchQueue), crate::RequestDeviceError> {
+) -> Result<(dispatch::DispatchDevice, Vec<dispatch::DispatchQueue>), crate::RequestDeviceError> {
     result
         .map(|js_value| {
             let device = webgpu_sys::GpuDevice::from(js_value);
@@ -972,11 +976,11 @@ fn future_request_device(
                     error_scope_count: Rc::new(Cell::new(0)),
                 }
                 .into(),
-                WebQueue {
+                vec![WebQueue {
                     inner: queue,
                     ident: crate::cmp::Identifier::create(),
                 }
-                .into(),
+                .into()],
             )
         })
         .map_err(|error_value| crate::RequestDeviceError {
@@ -2541,7 +2545,10 @@ impl dispatch::DeviceInterface for WebDevice {
         // No capturing api in webgpu
     }
 
-    fn poll(&self, _poll_type: wgt::PollType<u64>) -> Result<crate::PollStatus, crate::PollError> {
+    fn poll(
+        &self,
+        _poll_type: wgt::PollType<(u32, u64)>,
+    ) -> Result<crate::PollStatus, crate::PollError> {
         // Device is polled automatically
         Ok(crate::PollStatus::QueueEmpty)
     }

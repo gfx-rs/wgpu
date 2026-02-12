@@ -1107,7 +1107,7 @@ impl Queue {
                 start_offset: source.origin.x,
                 end_offset: source.origin.x + size.width,
                 texture_size: src_width,
-                dimension: crate::resource::TextureErrorDimension::X,
+                dimension: resource::TextureErrorDimension::X,
                 side: CopySide::Source,
             }
             .into());
@@ -1117,7 +1117,7 @@ impl Queue {
                 start_offset: source.origin.y,
                 end_offset: source.origin.y + size.height,
                 texture_size: src_height,
-                dimension: crate::resource::TextureErrorDimension::Y,
+                dimension: resource::TextureErrorDimension::Y,
                 side: CopySide::Source,
             }
             .into());
@@ -1127,7 +1127,7 @@ impl Queue {
                 start_offset: 0,
                 end_offset: size.depth_or_array_layers,
                 texture_size: 1,
-                dimension: crate::resource::TextureErrorDimension::Z,
+                dimension: resource::TextureErrorDimension::Z,
                 side: CopySide::Source,
             }
             .into());
@@ -1171,7 +1171,7 @@ impl Queue {
                     .drain(init_layer_range)
                     .collect::<Vec<core::ops::Range<u32>>>()
                 {
-                    let mut trackers = self.device.trackers.lock();
+                    let mut trackers = self.device.per_queue_data[0].get().unwrap().trackers.lock();
                     crate::command::clear_texture(
                         &dst,
                         TextureInitRange {
@@ -1207,7 +1207,7 @@ impl Queue {
             size: hal_copy_size,
         };
 
-        let mut trackers = self.device.trackers.lock();
+        let mut trackers = self.device.per_queue_data[0].get().unwrap().trackers.lock();
         let transitions = trackers
             .textures
             .set_single(&dst, selector, wgt::TextureUses::COPY_DST);
@@ -1228,6 +1228,7 @@ impl Queue {
                 texture: dst_raw_webgl,
                 range: dyn_transition.range,
                 usage: dyn_transition.usage,
+                src_dst_queue_index: None,
             }
         });
 
