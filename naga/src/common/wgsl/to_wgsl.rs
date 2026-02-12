@@ -169,6 +169,7 @@ impl TryToWgsl for crate::BuiltIn {
             Bi::FragDepth => "frag_depth",
             Bi::FrontFacing => "front_facing",
             Bi::PrimitiveIndex => "primitive_index",
+            Bi::DrawIndex => "draw_index",
             Bi::Barycentric { perspective: true } => "barycentric",
             Bi::Barycentric { perspective: false } => "barycentric_no_perspective",
             Bi::SampleIndex => "sample_index",
@@ -198,7 +199,6 @@ impl TryToWgsl for crate::BuiltIn {
             | Bi::BaseVertex
             | Bi::CullDistance
             | Bi::PointSize
-            | Bi::DrawID
             | Bi::PointCoord
             | Bi::WorkGroupSize
             | Bi::RayInvocationId

@@ -624,7 +624,7 @@ impl<W> Writer<'_, W> {
                         self.features.request(Features::SAMPLE_VARIABLES)
                     }
                     crate::BuiltIn::ViewIndex => self.features.request(Features::MULTI_VIEW),
-                    crate::BuiltIn::InstanceIndex | crate::BuiltIn::DrawID => {
+                    crate::BuiltIn::InstanceIndex | crate::BuiltIn::DrawIndex => {
                         self.features.request(Features::INSTANCE_INDEX)
                     }
                     crate::BuiltIn::Barycentric { .. } => {

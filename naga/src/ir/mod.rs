@@ -421,7 +421,7 @@ pub enum BuiltIn {
     /// Read in vertex shaders
     VertexIndex,
     /// Read in vertex & task shaders, or mesh shaders in pipelines without task shaders
-    DrawID,
+    DrawIndex,
 
     /// Written in fragment shaders
     FragDepth,

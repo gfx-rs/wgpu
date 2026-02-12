@@ -199,7 +199,7 @@ impl Queue {
         })
     }
 
-    /// Copies the bytes of `data` into into a texture.
+    /// Copies the bytes of `data` into a texture.
     ///
     /// * `data` contains the texels to be written, which must be in
     ///   [the same format as the texture](TextureFormat).

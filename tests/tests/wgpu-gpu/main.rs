@@ -25,6 +25,7 @@ mod compute_pass_ownership;
 mod create_surface_error;
 mod device;
 mod dispatch_workgroups_indirect;
+mod draw_index;
 mod draw_indirect;
 mod dual_source_blending;
 mod encoder;
@@ -94,6 +95,7 @@ fn all_tests() -> Vec<wgpu_test::GpuTestInitializer> {
     compute_pass_ownership::all_tests(&mut tests);
     device::all_tests(&mut tests);
     dispatch_workgroups_indirect::all_tests(&mut tests);
+    draw_index::all_tests(&mut tests);
     draw_indirect::all_tests(&mut tests);
     dual_source_blending::all_tests(&mut tests);
     encoder::all_tests(&mut tests);
