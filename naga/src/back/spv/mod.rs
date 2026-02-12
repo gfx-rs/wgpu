@@ -976,6 +976,8 @@ pub struct Writer {
     /// undefined behavior, so this would validate that to dispatch zero workgroups.
     task_runtime_limits: Option<TaskRuntimeLimits>,
     /// If true, naga may generate checks that the primitive indices are valid in the output.
+    ///
+    /// Currently this validation is unimplemented.
     mesh_shader_primitive_indices_clamp: bool,
 }
 
