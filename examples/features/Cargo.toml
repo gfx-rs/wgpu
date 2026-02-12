@@ -45,7 +45,6 @@ noise.workspace = true
 obj.workspace = true
 png.workspace = true
 pollster.workspace = true
-tempfile.workspace = true
 web-time.workspace = true
 winit.workspace = true
 

@@ -4855,7 +4855,6 @@ dependencies = [
  "obj",
  "png",
  "pollster",
- "tempfile",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
