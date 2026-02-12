@@ -15,7 +15,13 @@ use crate::{
     track::TrackerIndex,
     FastHashMap,
 };
-use alloc::{boxed::Box, string::ToString, sync::Arc, vec, vec::Vec};
+use alloc::{
+    boxed::Box,
+    string::ToString,
+    sync::{Arc, Weak},
+    vec,
+    vec::Vec,
+};
 use core::{
     mem::{size_of, size_of_val},
     num::NonZeroU64,
@@ -726,17 +732,19 @@ struct CurrentEntry {
 /// Holds all command buffer-level resources that are needed to validate indirect draws.
 pub(crate) struct DrawResources {
     device: Arc<Device>,
-    queue: Arc<Queue>,
+    queue: Weak<Queue>,
     dst_entries: Vec<BufferPoolEntry>,
     metadata_entries: Vec<BufferPoolEntry>,
 }
 
 impl Drop for DrawResources {
     fn drop(&mut self) {
-        if let Some(ref indirect_validation) = self.queue.shared.indirect_validation {
-            let indirect_draw_validation = &indirect_validation.draw;
-            indirect_draw_validation.release_dst_entries(self.dst_entries.drain(..));
-            indirect_draw_validation.release_metadata_entries(self.metadata_entries.drain(..));
+        if let Some(queue) = self.queue.upgrade() {
+            if let Some(ref indirect_validation) = queue.shared.indirect_validation {
+                let indirect_draw_validation = &indirect_validation.draw;
+                indirect_draw_validation.release_dst_entries(self.dst_entries.drain(..));
+                indirect_draw_validation.release_metadata_entries(self.metadata_entries.drain(..));
+            }
         }
     }
 }
@@ -745,7 +753,7 @@ impl DrawResources {
     pub(crate) fn new(device: Arc<Device>, queue: Arc<Queue>) -> Self {
         DrawResources {
             device,
-            queue,
+            queue: Arc::downgrade(&queue),
             dst_entries: Vec::new(),
             metadata_entries: Vec::new(),
         }
@@ -776,8 +784,8 @@ impl DrawResources {
         size: u64,
         current_entry: &mut Option<CurrentEntry>,
     ) -> Result<(usize, u64), DeviceError> {
-        let indirect_draw_validation =
-            &self.queue.shared.indirect_validation.as_ref().unwrap().draw;
+        let queue = self.queue.upgrade().unwrap();
+        let indirect_draw_validation = &queue.shared.indirect_validation.as_ref().unwrap().draw;
         let ensure_entry = |index: usize| {
             if self.dst_entries.len() <= index {
                 let entry = indirect_draw_validation.acquire_dst_entry(self.device.raw())?;
@@ -794,8 +802,8 @@ impl DrawResources {
         size: u64,
         current_entry: &mut Option<CurrentEntry>,
     ) -> Result<(usize, u64), DeviceError> {
-        let indirect_draw_validation =
-            &self.queue.shared.indirect_validation.as_ref().unwrap().draw;
+        let queue = self.queue.upgrade().unwrap();
+        let indirect_draw_validation = &queue.shared.indirect_validation.as_ref().unwrap().draw;
         let ensure_entry = |index: usize| {
             if self.metadata_entries.len() <= index {
                 let entry = indirect_draw_validation.acquire_metadata_entry(self.device.raw())?;

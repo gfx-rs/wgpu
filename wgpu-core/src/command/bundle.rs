@@ -496,7 +496,7 @@ impl RenderBundleEncoder {
             is_depth_read_only: self.is_depth_read_only,
             is_stencil_read_only: self.is_stencil_read_only,
             device: device.clone(),
-            queue: queue.clone(),
+            queue_index: hub.queues.get(self.queue_id).index,
             used: trackers,
             buffer_memory_init_actions,
             texture_memory_init_actions,
@@ -931,7 +931,7 @@ pub struct RenderBundle {
     pub(super) is_depth_read_only: bool,
     pub(super) is_stencil_read_only: bool,
     pub(crate) device: Arc<Device>,
-    pub(crate) queue: Arc<Queue>,
+    pub(crate) queue_index: u32,
     pub(crate) used: RenderBundleScope,
     pub(super) buffer_memory_init_actions: Vec<BufferInitTrackerAction>,
     pub(super) texture_memory_init_actions: Vec<TextureInitTrackerAction>,
@@ -1114,7 +1114,14 @@ impl RenderBundle {
                     vertex_or_index_limit,
                     instance_limit,
                 } => {
-                    let (buffer, offset) = if self.queue.shared.indirect_validation.is_some() {
+                    let (buffer, offset) = if self
+                        .device
+                        .get_queue(self.queue_index)
+                        .unwrap()
+                        .shared
+                        .indirect_validation
+                        .is_some()
+                    {
                         let (dst_resource_index, offset) = indirect_draw_validation_batcher.add(
                             indirect_draw_validation_resources,
                             &self.device,

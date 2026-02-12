@@ -28,7 +28,13 @@ mod timestamp_writes;
 mod transfer;
 mod transition_resources;
 
-use alloc::{borrow::ToOwned as _, boxed::Box, string::String, sync::Arc, vec::Vec};
+use alloc::{
+    borrow::ToOwned as _,
+    boxed::Box,
+    string::String,
+    sync::{Arc, Weak},
+    vec::Vec,
+};
 use core::convert::Infallible;
 use core::mem::{self, ManuallyDrop};
 use core::{ops, panic};
@@ -613,7 +619,7 @@ pub(crate) struct InnerCommandEncoder {
 
     pub(crate) device: Arc<Device>,
 
-    pub(crate) queue: Arc<Queue>,
+    pub(crate) queue: Weak<Queue>,
 
     /// True if `raw` is in the "recording" state.
     ///
@@ -796,7 +802,9 @@ impl Drop for InnerCommandEncoder {
         }
         // SAFETY: We are in the Drop impl and we don't use self.raw anymore after this point.
         let raw = unsafe { ManuallyDrop::take(&mut self.raw) };
-        self.queue.shared.command_allocator.release_encoder(raw);
+        if let Some(queue) = self.queue.upgrade() {
+            queue.shared.command_allocator.release_encoder(raw);
+        }
     }
 }
 
@@ -895,7 +903,7 @@ impl CommandEncoder {
                         raw: ManuallyDrop::new(encoder),
                         list: Vec::new(),
                         device: device.clone(),
-                        queue: queue.clone(),
+                        queue: Arc::downgrade(queue),
                         is_open: false,
                         api: EncodingApi::Undecided,
                         label: label.to_string(),

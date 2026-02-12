@@ -490,7 +490,7 @@ impl PendingWrites {
                     raw: ManuallyDrop::new(mem::replace(&mut self.command_encoder, new_encoder)),
                     list: vec![cmd_buf],
                     device: device.clone(),
-                    queue: queue.clone(),
+                    queue: Arc::downgrade(queue),
                     is_open: false,
                     api: crate::command::EncodingApi::InternalUse,
                     label: "(wgpu internal) PendingWrites command encoder".into(),
