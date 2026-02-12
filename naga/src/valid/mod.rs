@@ -207,6 +207,8 @@ bitflags::bitflags! {
         const PER_VERTEX = 1 << 37;
         /// Support for ray generation, any hit, closest hit, and miss shaders.
         const RAY_TRACING_PIPELINE = 1 << 38;
+        /// Support for draw index builtin
+        const DRAW_INDEX = 1 << 39;
     }
 }
 

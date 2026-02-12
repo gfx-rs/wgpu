@@ -1,0 +1,12 @@
+capabilities = "PRIMITIVE_INDEX"
+targets = "WGSL | SPIRV | HLSL | METAL | GLSL"
+
+[spv]
+version = [1, 4]
+capabilities = ["Geometry"]
+
+[glsl]
+version.Desktop = 450
+
+[msl]
+lang_version = [2, 3]

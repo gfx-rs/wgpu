@@ -35,7 +35,6 @@ bytemuck.workspace = true
 cfg-if.workspace = true
 encase = { workspace = true }
 flume.workspace = true
-getrandom = { workspace = true, features = ["wasm_js"] }
 glam = { workspace = true, features = ["bytemuck", "encase"] }
 half = { workspace = true, features = ["bytemuck"] }
 ktx2.workspace = true
@@ -45,7 +44,6 @@ noise.workspace = true
 obj.workspace = true
 png.workspace = true
 pollster.workspace = true
-tempfile.workspace = true
 web-time.workspace = true
 winit.workspace = true
 

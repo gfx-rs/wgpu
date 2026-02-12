@@ -88,7 +88,7 @@ pub(in crate::back::glsl) const fn glsl_built_in(
         }
         Bi::PointSize => "gl_PointSize",
         Bi::VertexIndex => "uint(gl_VertexID)",
-        Bi::DrawID => "gl_DrawID",
+        Bi::DrawIndex => "gl_DrawID",
         // fragment
         Bi::FragDepth => "gl_FragDepth",
         Bi::PointCoord => "gl_PointCoord",
