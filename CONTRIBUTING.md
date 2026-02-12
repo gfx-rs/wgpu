@@ -78,12 +78,6 @@ The wgpu project has multiple official platforms for community engagement:
 [Meeting Link]: https://meet.google.com/ubo-ztcw-gwf
 [`CODE_OF_CONDUCT.md`]: ./CODE_OF_CONDUCT.md
 
-## Contributing to wgpu
-
-Community response to contributions are, in general, prioritized based on their
-relevance to wgpu's mission and decision-making groups' interest (see
-[`GOVERNANCE.md`]).
-
 ### "What can I work on?" as a new contributor
 
 TODO
@@ -151,8 +145,9 @@ TODO
 You can see some common things that PR reviewers are going to look for in
 [`docs/review-checklist.md`].
 
-A draft pull request is taken to be not yet ready for review. Marking
-drafts as such helps the maintainers triage review work.
+A draft pull request is taken to be not yet ready for review and as such
+is not included in our weekly triage meetings. If you need a review before
+being taken out of draft, please let one of us know.
 
 The `Assigned` field on a pull request indicates who has taken
 responsibility for shepherding it through the review process, not who
