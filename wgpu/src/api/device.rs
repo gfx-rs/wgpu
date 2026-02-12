@@ -299,7 +299,7 @@ impl Device {
             descriptor: wgt::TextureDescriptor {
                 label: None,
                 view_formats: (),
-                initial_queue: desc.initial_queue.map(|q| q.index).unwrap_or(0),
+                initial_queue: desc.initial_queue.unwrap_or(0),
 
                 size: desc.size,
                 mip_level_count: desc.mip_level_count,
@@ -345,7 +345,7 @@ impl Device {
             descriptor: wgt::TextureDescriptor {
                 label: None,
                 view_formats: (),
-                initial_queue: desc.initial_queue.map(|q| q.index).unwrap_or(0),
+                initial_queue: desc.initial_queue.unwrap_or(0),
 
                 size: desc.size,
                 mip_level_count: desc.mip_level_count,

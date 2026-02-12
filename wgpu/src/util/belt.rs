@@ -1,6 +1,6 @@
 use crate::{
     util::align_to, Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferSlice, BufferUsages,
-    BufferViewMut, CommandEncoder, Device, MapMode, Queue,
+    BufferViewMut, CommandEncoder, Device, MapMode,
 };
 use alloc::vec::Vec;
 use core::fmt;
@@ -44,7 +44,7 @@ pub struct StagingBelt {
     sender: Exclusive<mpsc::Sender<Chunk>>,
     /// Free chunks are received here to be put on `self.free_chunks`.
     receiver: Exclusive<mpsc::Receiver<Chunk>>,
-    queue: Queue,
+    queue: u32,
 }
 
 impl StagingBelt {
@@ -61,7 +61,7 @@ impl StagingBelt {
     ///
     /// The buffers returned by this [`StagingBelt`] will be have the buffer usages
     /// [`COPY_SRC | MAP_WRITE`](crate::BufferUsages)
-    pub fn new(device: Device, chunk_size: BufferAddress, queue: &Queue) -> Self {
+    pub fn new(device: Device, chunk_size: BufferAddress, queue: u32) -> Self {
         Self::new_with_buffer_usages(device, chunk_size, BufferUsages::COPY_SRC, queue)
     }
 
@@ -88,7 +88,7 @@ impl StagingBelt {
         device: Device,
         chunk_size: BufferAddress,
         mut buffer_usages: BufferUsages,
-        queue: &Queue,
+        queue: u32,
     ) -> Self {
         let (sender, receiver) = mpsc::channel();
 
@@ -114,7 +114,7 @@ impl StagingBelt {
             free_chunks: Vec::new(),
             sender: Exclusive::new(sender),
             receiver: Exclusive::new(receiver),
-            queue: queue.clone(),
+            queue,
         }
     }
 
@@ -218,7 +218,7 @@ impl StagingBelt {
                         size: self.chunk_size.max(size.get()),
                         usage: self.buffer_usages,
                         mapped_at_creation: true,
-                        initial_queue: Some(&self.queue),
+                        initial_queue: Some(self.queue),
                     }),
                     offset: 0,
                 }

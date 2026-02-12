@@ -1,5 +1,5 @@
 use crate::{api::blas::TlasInstance, dispatch};
-use crate::{BindingResource, Label, Queue};
+use crate::{BindingResource, Label};
 use alloc::vec::Vec;
 #[cfg(wgpu_core)]
 use core::ops::Deref;
@@ -7,7 +7,7 @@ use core::ops::{Index, IndexMut, Range};
 use wgt::WasmNotSendSync;
 
 /// Descriptor to create top level acceleration structures.
-pub type CreateTlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>, Option<&'a Queue>>;
+pub type CreateTlasDescriptor<'a> = wgt::CreateTlasDescriptor<Label<'a>, Option<u32>>;
 static_assertions::assert_impl_all!(CreateTlasDescriptor<'_>: Send, Sync);
 
 #[derive(Debug, Clone)]
