@@ -2647,13 +2647,13 @@ impl super::Adapter {
             queues_by_family.resize(queues_by_family.len().max(id as usize + 1), 0);
             let index_in_family = queues_by_family[id as usize];
             queues_by_family[id as usize] += 1;
-            let famiy_index = self.queue_indices[id as usize];
+            let family_index = self.queue_indices[id as usize];
             queue_create_infos.push(
                 vk::DeviceQueueCreateInfo::default()
-                    .queue_family_index(famiy_index)
+                    .queue_family_index(family_index)
                     .queue_priorities(&[1.0]),
             );
-            queue_families_indices.push((famiy_index, index_in_family));
+            queue_families_indices.push((family_index, index_in_family));
         }
 
         let mut pre_info = vk::DeviceCreateInfo::default();
