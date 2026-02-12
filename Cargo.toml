@@ -204,7 +204,6 @@ xshell = "0.2.2"
 
 # Metal dependencies
 block2 = "0.6.2"
-dispatch2 = "0.3.0"
 objc2 = "0.6.3"
 objc2-core-foundation = { version = "0.3.2", default-features = false, features = [
     "std",
@@ -220,7 +219,6 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = [
 objc2-metal = { version = "0.3.2", default-features = false, features = [
     "std",
     "block2",
-    "dispatch2",
     "MTLAllocation",
     "MTLBlitCommandEncoder",
     "MTLBlitPass",
