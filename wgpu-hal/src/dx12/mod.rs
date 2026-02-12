@@ -1545,7 +1545,7 @@ impl crate::Queue for Queue {
 
     unsafe fn submit(
         &self,
-        submits: &mut [crate::QueueSubmitInfo<'_, CommandBuffer, Fence, SurfaceTexture>],
+        submits: &mut [crate::QueueSubmitInfo<'_, CommandBuffer, Fence, Texture>],
     ) -> Result<(), crate::DeviceError> {
         for submit in submits {
             for &mut (wait_fence, wait_value) in submit.wait_fences {
