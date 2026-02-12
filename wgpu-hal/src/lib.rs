@@ -329,6 +329,7 @@ pub const MAX_MIP_LEVELS: u32 = 16;
 /// Size of a single occlusion/timestamp query, when copied into a buffer, in bytes.
 /// cbindgen:ignore
 pub const QUERY_SIZE: wgt::BufferAddress = 8;
+#[allow(dead_code)]
 const MAX_QUEUES_OF_FAMILY: u32 = 256;
 
 pub type Label<'a> = Option<&'a str>;
