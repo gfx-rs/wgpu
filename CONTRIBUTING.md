@@ -6,6 +6,19 @@ First of all, welcome to the wgpu community! 👋 We're glad you want to
 contribute. If you are unfamiliar with the wgpu project, we recommend you read
 [`GOVERNANCE.md`] for an overview of its goals, and how it's governed.
 
+## Table of Contents
+- [Documentation Overview](#documentation-overview)
+- [Talking to other humans in the wgpu project](#talking-to-other-humans-in-the-wgpu-project)
+- ["What can I work on?" as a new contributor](#what-can-i-work-on-as-a-new-contributor)
+- [Setting up a wgpu development environment](#setting-up-a-wgpu-development-environment)
+- [What to expect when you file an issue](#what-to-expect-when-you-file-an-issue)
+- [Pull requests](#pull-requests)
+  - [Change Ownership](#change-ownership)
+  - [LLMs (AI)](#llms-ai)
+  - [Designing new features](#designing-new-features)
+  - [Undue Burden](#undue-burden)
+  - [Large pull requests are risky](#large-pull-requests-are-risky)
+
 ## Documentation Overview:
 
 - [`GOVERNANCE.md`]: An overview of the wgpu project's goals and governance.
