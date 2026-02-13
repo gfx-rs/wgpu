@@ -96,6 +96,14 @@ static METAL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::ne
     .run_sync(metal_test);
 
 fn metallib_source(test_hash: u64) -> Cow<'static, [u8]> {
+    struct FileDropGuard<'a> {
+        file_name: &'a str,
+    }
+    impl Drop for FileDropGuard<'_> {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(self.file_name);
+        }
+    }
     if cfg!(not(target_vendor = "apple")) {
         return Cow::Borrowed(&[]);
     }
@@ -140,6 +148,9 @@ fn metallib_source(test_hash: u64) -> Cow<'static, [u8]> {
             );
         }
     }
+    let _air_drop_guard = FileDropGuard {
+        file_name: &air_name,
+    };
     {
         let output = std::process::Command::new("xcrun")
             .args(["metallib", &air_name, "-o", &output_name])
@@ -152,6 +163,9 @@ fn metallib_source(test_hash: u64) -> Cow<'static, [u8]> {
             );
         }
     }
+    let _metallib_drop_guard = FileDropGuard {
+        file_name: &output_name,
+    };
     let source = std::fs::read(&output_name).unwrap();
     Cow::Owned(source)
 }
