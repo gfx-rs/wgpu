@@ -449,7 +449,8 @@ impl super::Adapter {
         }
         downlevel_flags.set(
             wgt::DownlevelFlags::TEXTURE_FORMAT_BGRA,
-            !cfg!(any(webgl, Emscripten)),
+            !cfg!(any(webgl, Emscripten))
+                && (full_ver.is_some() || extensions.contains("GL_EXT_texture_format_BGRA8888")),
         );
 
         let mut features = wgt::Features::empty()

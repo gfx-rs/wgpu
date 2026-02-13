@@ -955,7 +955,16 @@ bitflags::bitflags! {
 
         /// Support for [`TextureFormat::Bgra8Unorm`] and [`TextureFormat::Bgra8UnormSrgb`].
         ///
-        /// WebGL doesn't support this. WebGPU does.
+        /// Supported by:
+        /// - Vulkan
+        /// - DX12
+        /// - Metal
+        /// - OpenGL
+        /// - GL ES (with GL_EXT_texture_format_BGRA8888)
+        /// - WebGPU
+        ///
+        /// Not Supported by:
+        /// - WebGL
         const TEXTURE_FORMAT_BGRA = 1 << 24;
     }
 }
