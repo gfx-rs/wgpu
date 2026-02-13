@@ -22,12 +22,12 @@ struct MeshOutput {
 var<task_payload> taskPayload: TaskPayload;
 var<workgroup> mesh_output: MeshOutput;
 
-@task @payload(taskPayload) @workgroup_size(1, 1, 1) 
+@task @payload(taskPayload) @workgroup_size(64, 1, 1) 
 fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
     return vec3<u32>(1u, 1u, 1u);
 }
 
-@mesh(mesh_output) @workgroup_size(1, 1, 1) @payload(taskPayload) 
+@mesh(mesh_output) @workgroup_size(64, 1, 1) @payload(taskPayload) 
 fn ms_main() {
     return;
 }
