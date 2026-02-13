@@ -301,6 +301,45 @@ impl From<FormatFeaturesError> for resource::CreateTextureError {
     }
 }
 
+impl From<FormatFeaturesError> for pipeline::CreateRenderPipelineError {
+    fn from(error: FormatFeaturesError) -> Self {
+        match error {
+            FormatFeaturesError::MissingFeatures(_, missing) => {
+                pipeline::CreateRenderPipelineError::MissingFeatures(missing)
+            }
+            FormatFeaturesError::MissingDownlevelFlags(missing) => {
+                pipeline::CreateRenderPipelineError::MissingDownlevelFlags(missing)
+            }
+        }
+    }
+}
+
+impl From<FormatFeaturesError> for resource::CreateTextureViewError {
+    fn from(error: FormatFeaturesError) -> Self {
+        match error {
+            FormatFeaturesError::MissingFeatures(_, missing) => {
+                resource::CreateTextureViewError::MissingFeatures(missing)
+            }
+            FormatFeaturesError::MissingDownlevelFlags(missing) => {
+                resource::CreateTextureViewError::MissingDownlevelFlags(missing)
+            }
+        }
+    }
+}
+
+impl From<FormatFeaturesError> for BindGroupLayoutEntryError {
+    fn from(error: FormatFeaturesError) -> Self {
+        match error {
+            FormatFeaturesError::MissingFeatures(_, missing) => {
+                BindGroupLayoutEntryError::MissingFeatures(missing)
+            }
+            FormatFeaturesError::MissingDownlevelFlags(missing) => {
+                BindGroupLayoutEntryError::MissingDownlevelFlags(missing)
+            }
+        }
+    }
+}
+
 impl fmt::Debug for Device {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Device")
@@ -1761,16 +1800,7 @@ impl Device {
             }
         };
 
-        let format_features = self
-            .describe_format_features(resolved_format)
-            .map_err(|error| match error {
-                FormatFeaturesError::MissingFeatures(_, missing) => {
-                    resource::CreateTextureViewError::MissingFeatures(missing)
-                }
-                FormatFeaturesError::MissingDownlevelFlags(missing) => {
-                    resource::CreateTextureViewError::MissingDownlevelFlags(missing)
-                }
-            })?;
+        let format_features = self.describe_format_features(resolved_format)?;
         let allowed_format_usages = format_features.allowed_usages;
         if resolved_usage.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
             && !allowed_format_usages.contains(wgt::TextureUsages::RENDER_ATTACHMENT)
@@ -2678,14 +2708,7 @@ impl Device {
                         self.describe_format_features(format).map_err(|error| {
                             binding_model::CreateBindGroupLayoutError::Entry {
                                 binding: entry.binding,
-                                error: match error {
-                                    FormatFeaturesError::MissingFeatures(_, missing) => {
-                                        BindGroupLayoutEntryError::MissingFeatures(missing)
-                                    }
-                                    FormatFeaturesError::MissingDownlevelFlags(missing) => {
-                                        BindGroupLayoutEntryError::MissingDownlevelFlags(missing)
-                                    }
-                                },
+                                error: error.into(),
                             }
                         })?;
 
@@ -4155,18 +4178,7 @@ impl Device {
                         ));
                     }
 
-                    let format_features =
-                        self.describe_format_features(cs.format)
-                            .map_err(|error| match error {
-                                FormatFeaturesError::MissingFeatures(_, missing) => {
-                                    pipeline::CreateRenderPipelineError::MissingFeatures(missing)
-                                }
-                                FormatFeaturesError::MissingDownlevelFlags(missing) => {
-                                    pipeline::CreateRenderPipelineError::MissingDownlevelFlags(
-                                        missing,
-                                    )
-                                }
-                            })?;
+                    let format_features = self.describe_format_features(cs.format)?;
                     if !format_features
                         .allowed_usages
                         .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
@@ -4261,16 +4273,7 @@ impl Device {
                     ));
                 }
 
-                let format_features =
-                    self.describe_format_features(ds.format)
-                        .map_err(|error| match error {
-                            FormatFeaturesError::MissingFeatures(_, missing) => {
-                                pipeline::CreateRenderPipelineError::MissingFeatures(missing)
-                            }
-                            FormatFeaturesError::MissingDownlevelFlags(missing) => {
-                                pipeline::CreateRenderPipelineError::MissingDownlevelFlags(missing)
-                            }
-                        })?;
+                let format_features = self.describe_format_features(ds.format)?;
                 if !format_features
                     .allowed_usages
                     .contains(wgt::TextureUsages::RENDER_ATTACHMENT)
