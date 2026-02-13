@@ -22,6 +22,15 @@ extern "C" {
 
 const DISPATCH_DATA_DESTRUCTOR_DEFAULT: *mut c_void = core::ptr::null_mut();
 
+/// See https://github.com/madsmtm/objc2/issues/819.
+///
+/// newLibraryWithData requires DispatchData, part of the Dispatch library.
+/// Not only is this a big additional dependency for a glorified Vec<u8>
+/// in this case, but the code in the dispatch2 rust crate is a WIP and
+/// Mozilla has decided not to vendor it yet.
+///
+/// This function allows us to deal with DispatchData without dealing
+/// with these problems.
 pub(crate) fn new_library_from_metallib_bytes(
     device: &ProtocolObject<dyn MTLDevice>,
     data: &[u8],
