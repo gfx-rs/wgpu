@@ -613,6 +613,11 @@ pub struct NoopBackendOptions {
 }
 
 impl NoopBackendOptions {
+    /// Enable the noop backend.
+    pub fn enabled() -> Self {
+        Self { enable: true }
+    }
+
     /// Choose whether the noop backend is enabled from the environment.
     ///
     /// It will be enabled if the environment variable `WGPU_NOOP_BACKEND` has the value `1`

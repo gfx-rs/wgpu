@@ -2,7 +2,7 @@ fn noop_adapter() -> wgpu::Adapter {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::NOOP,
         backend_options: wgpu::BackendOptions {
-            noop: wgpu::NoopBackendOptions { enable: true },
+            noop: wgpu::NoopBackendOptions::enabled(),
             ..Default::default()
         },
         ..wgpu::InstanceDescriptor::new_without_display_handle()
