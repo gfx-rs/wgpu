@@ -1328,7 +1328,7 @@ impl Device {
             let uses = if i == desc.initial_queue {
                 wgt::TextureUses::UNINITIALIZED
             } else {
-                wgt::TextureUses::UNOWNED
+                wgt::TextureUses::UNKNOWN
             };
             self.get_queue_shared(i)
                 .trackers
@@ -1755,7 +1755,7 @@ impl Device {
             let state = if queue_idx == desc.initial_queue {
                 wgt::TextureUses::UNINITIALIZED
             } else {
-                wgt::TextureUses::UNOWNED
+                wgt::TextureUses::UNKNOWN
             };
 
             queue

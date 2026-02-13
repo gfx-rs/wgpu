@@ -261,9 +261,9 @@ bitflags::bitflags! {
         const COMPLEX = 1 << 13;
         /// Flag used by the wgpu-core texture tracker to say that the tracker does not know the state of the sub-resource.
         /// This is different from UNINITIALIZED as that says the tracker does know, but the texture has not been initialized.
+        ///
+        /// This is also used by wgpu-core to represent a texture that isn't currently owned by the queue.
         const UNKNOWN = 1 << 14;
-        /// Flag is used by the wgpu-core texture tracker to say that the texture isn't owned by the queue.
-        const UNOWNED = 1 << 15;
     }
 }
 
