@@ -129,11 +129,11 @@ macro_rules! include_spirv {
 #[expect(dead_code)]
 static SPIRV: crate::ShaderModuleDescriptor<'_> = include_spirv!("le-aligned.spv");
 
-/// Macro to load raw SPIR-V data statically, for use with [`Features::EXPERIMENTAL_PASSTHROUGH_SHADERS`].
+/// Macro to load raw SPIR-V data statically, for use with [`Features::PASSTHROUGH_SHADERS`].
 ///
 /// It ensures the word alignment as well as the magic number.
 ///
-/// [`Features::EXPERIMENTAL_PASSTHROUGH_SHADERS`]: crate::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS
+/// [`Features::PASSTHROUGH_SHADERS`]: crate::Features::PASSTHROUGH_SHADERS
 #[macro_export]
 macro_rules! include_spirv_raw {
     ($($token:tt)*) => {

@@ -1004,7 +1004,7 @@ impl super::PrivateCapabilities {
             | F::SHADER_F16
             | F::DEPTH32FLOAT_STENCIL8
             | F::BGRA8UNORM_STORAGE
-            | F::EXPERIMENTAL_PASSTHROUGH_SHADERS
+            | F::PASSTHROUGH_SHADERS
             | F::EXTERNAL_TEXTURE;
 
         features.set(F::FLOAT32_FILTERABLE, self.supports_float_filtering);
