@@ -127,6 +127,10 @@ fn metallib_source(test_hash: u64) -> Cow<'static, [u8]> {
         env!("CARGO_MANIFEST_DIR")
     );
 
+    let _air_drop_guard = FileDropGuard {
+        file_name: &air_name,
+    };
+
     {
         let output = std::process::Command::new("xcrun")
             .args([
@@ -148,9 +152,11 @@ fn metallib_source(test_hash: u64) -> Cow<'static, [u8]> {
             );
         }
     }
-    let _air_drop_guard = FileDropGuard {
-        file_name: &air_name,
+
+    let _metallib_drop_guard = FileDropGuard {
+        file_name: &output_name,
     };
+
     {
         let output = std::process::Command::new("xcrun")
             .args(["metallib", &air_name, "-o", &output_name])
@@ -163,9 +169,6 @@ fn metallib_source(test_hash: u64) -> Cow<'static, [u8]> {
             );
         }
     }
-    let _metallib_drop_guard = FileDropGuard {
-        file_name: &output_name,
-    };
     let source = std::fs::read(&output_name).unwrap();
     Cow::Owned(source)
 }
