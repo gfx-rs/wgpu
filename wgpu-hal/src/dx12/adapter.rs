@@ -500,6 +500,8 @@ impl super::Adapter {
             features |= wgt::Features::VERTEX_WRITABLE_STORAGE;
         }
 
+        features.set(wgt::Features::HOST_IMAGE_COPY, features_architecture.UMA);
+
         features.set(
             wgt::Features::CONSERVATIVE_RASTERIZATION,
             options.ConservativeRasterizationTier

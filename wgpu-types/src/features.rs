@@ -1304,6 +1304,18 @@ bitflags_array! {
         ///
         /// This is a native only feature.
         const SHADER_DRAW_INDEX = 1 << 59;
+
+        /// Enables creating textures with `TextureUsages::HOST_VISIBLE`.
+        ///
+        /// This is generally only available on UMA systems.
+        ///
+        /// Supported platforms:
+        /// - Vulkan
+        /// - Metal
+        /// - DX12
+        ///
+        /// This is a native only feature.
+        const HOST_IMAGE_COPY = 1 << 60;
     }
 
     /// Features that are not guaranteed to be supported.

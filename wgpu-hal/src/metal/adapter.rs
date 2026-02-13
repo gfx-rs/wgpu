@@ -1108,6 +1108,8 @@ impl super::PrivateCapabilities {
             features.insert(F::MULTIVIEW);
         }
 
+        features.set(F::HOST_IMAGE_COPY, self.has_unified_memory == Some(true));
+
         features
     }
 

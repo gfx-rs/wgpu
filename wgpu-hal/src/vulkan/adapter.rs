@@ -143,6 +143,8 @@ pub struct PhysicalDeviceFeatures {
     vulkan_memory_model: Option<vk::PhysicalDeviceVulkanMemoryModelFeaturesKHR<'static>>,
 
     shader_draw_parameters: Option<vk::PhysicalDeviceShaderDrawParametersFeatures<'static>>,
+
+    host_image_copy: Option<vk::PhysicalDeviceHostImageCopyFeaturesEXT<'static>>,
 }
 
 impl PhysicalDeviceFeatures {
@@ -229,6 +231,9 @@ impl PhysicalDeviceFeatures {
             info = info.push_next(feature);
         }
         if let Some(ref mut feature) = self.shader_draw_parameters {
+            info = info.push_next(feature);
+        }
+        if let Some(ref mut feature) = self.host_image_copy {
             info = info.push_next(feature);
         }
         info
@@ -616,6 +621,14 @@ impl PhysicalDeviceFeatures {
                     vk::PhysicalDeviceShaderDrawParametersFeatures::default()
                         .shader_draw_parameters(true),
                 )
+            } else {
+                None
+            },
+            host_image_copy: if device_api_version >= vk::make_api_version(0, 1, 4, 0)
+                || enabled_extensions.contains(&ext::host_image_copy::NAME)
+            {
+                let needed = requested_features.contains(wgt::Features::HOST_IMAGE_COPY);
+                Some(vk::PhysicalDeviceHostImageCopyFeaturesEXT::default().host_image_copy(needed))
             } else {
                 None
             },
@@ -1026,6 +1039,11 @@ impl PhysicalDeviceFeatures {
                 || caps.supports_extension(c"VK_KHR_shader_draw_parameters"),
         );
 
+        features.set(
+            F::HOST_IMAGE_COPY,
+            self.host_image_copy.is_some_and(|a| a.host_image_copy != 0),
+        );
+
         (features, dl_flags)
     }
 }
@@ -1230,6 +1248,12 @@ impl PhysicalDeviceProperties {
             if self.supports_extension(khr::shader_integer_dot_product::NAME) {
                 extensions.push(khr::shader_integer_dot_product::NAME);
             }
+        }
+
+        if self.device_api_version < vk::make_api_version(0, 1, 4, 0)
+            && requested_features.intersects(wgt::Features::HOST_IMAGE_COPY)
+        {
+            extensions.push(ext::host_image_copy::NAME);
         }
 
         // Optional `VK_KHR_swapchain_mutable_format`
@@ -1857,6 +1881,13 @@ impl super::InstanceShared {
                 let next = features
                     .shader_draw_parameters
                     .insert(vk::PhysicalDeviceShaderDrawParametersFeatures::default());
+                features2 = features2.push_next(next);
+            }
+
+            if capabilities.supports_extension(ext::host_image_copy::NAME) {
+                let next = features
+                    .host_image_copy
+                    .insert(vk::PhysicalDeviceHostImageCopyFeaturesEXT::default());
                 features2 = features2.push_next(next);
             }
 
