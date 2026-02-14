@@ -102,6 +102,7 @@ impl ParseError {
     }
 
     /// Emits a summary of the error to a string.
+    #[cfg(feature = "fs")]
     pub fn emit_to_string_with_path<P>(&self, source: &str, path: P) -> String
     where
         P: AsRef<std::path::Path>,
@@ -113,6 +114,18 @@ impl ParseError {
         let mut writer = crate::error::DiagnosticBuffer::new();
         writer
             .emit_to_self(&config, &files, &self.diagnostic())
+            .expect("cannot write error");
+        writer.into_string()
+    }
+
+    /// Emits a summary of the error to a string.
+    #[cfg(not(feature = "fs"))]
+    pub fn emit_to_string_with_path(&self, source: &str, path: &str) -> String {
+        let files = SimpleFile::new(path, replace_control_chars(source));
+        let config = term::Config::default();
+
+        let mut writer = crate::error::DiagnosticBuffer::new();
+        term::emit(writer.inner_mut(), &config, &files, &self.diagnostic())
             .expect("cannot write error");
         writer.into_string()
     }

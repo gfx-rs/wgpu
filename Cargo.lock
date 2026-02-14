@@ -1773,8 +1773,10 @@ checksum = "fc0fef456e4baa96da950455cd02c081ca953b141298e41db3fc7e36b1da849c"
 [[package]]
 name = "hexf-parse"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfa686283ad6dd069f105e5ab091b04c62850d3e4cf5d67debad1933f55023df"
+source = "git+https://github.com/lifthrasiir/hexf?rev=0e69bc4f63895feb51e9b738a8a2d4ec9398957b#0e69bc4f63895feb51e9b738a8a2d4ec9398957b"
+dependencies = [
+ "libm",
+]
 
 [[package]]
 name = "hlsl-snapshots"

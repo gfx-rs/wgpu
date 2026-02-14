@@ -135,7 +135,7 @@ hashbrown = { version = "0.16", default-features = false, features = [
     "inline-more",
 ] }
 heck = "0.5"
-hexf-parse = "0.2"
+hexf-parse = { version = "0.2.1", git = "https://github.com/lifthrasiir/hexf", rev = "0e69bc4f63895feb51e9b738a8a2d4ec9398957b", default-features = false }
 image = { version = "0.25", default-features = false, features = ["png"] }
 indexmap = { version = "2.11.4", default-features = false }
 indicatif = "0.18"
