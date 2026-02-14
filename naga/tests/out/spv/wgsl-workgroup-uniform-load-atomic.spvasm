@@ -5,13 +5,14 @@
 OpCapability Shader
 %1 = OpExtInstImport "GLSL.std.450"
 OpMemoryModel Logical GLSL450
-OpEntryPoint GLCompute %22 "test_atomic_workgroup_uniform_load" %17 %20
+OpEntryPoint GLCompute %22 "test_atomic_workgroup_uniform_load" %17 %20 %42
 OpExecutionMode %22 LocalSize 64 1 1
 OpDecorate %5 ArrayStride 4
 OpMemberDecorate %7 0 Offset 0
 OpMemberDecorate %7 1 Offset 4
 OpDecorate %17 BuiltIn WorkgroupId
 OpDecorate %20 BuiltIn LocalInvocationId
+OpDecorate %42 BuiltIn LocalInvocationIndex
 %2 = OpTypeVoid
 %3 = OpTypeInt 32 0
 %4 = OpTypeInt 32 1
@@ -44,8 +45,8 @@ OpDecorate %20 BuiltIn LocalInvocationId
 %39 = OpConstantNull  %3
 %40 = OpConstantNull  %4
 %41 = OpConstantNull  %7
-%42 = OpConstantNull  %8
-%43 = OpTypeVector %9 3
+%43 = OpTypePointer Input %3
+%42 = OpVariable  %43  Input
 %48 = OpConstant  %3  264
 %57 = OpConstant  %4  2
 %60 = OpTypePointer Workgroup %5
@@ -58,8 +59,8 @@ OpDecorate %20 BuiltIn LocalInvocationId
 %21 = OpLoad  %8  %20
 OpBranch %38
 %38 = OpLabel
-%44 = OpIEqual  %43  %21 %42
-%45 = OpAll  %9  %44
+%44 = OpLoad  %3  %42
+%45 = OpIEqual  %9  %44 %28
 OpSelectionMerge %46 None
 OpBranchConditional %45 %47 %46
 %47 = OpLabel

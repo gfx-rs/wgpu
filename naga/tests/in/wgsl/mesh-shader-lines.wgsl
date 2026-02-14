@@ -17,7 +17,7 @@ var<task_payload> taskPayload: TaskPayload;
 
 @task
 @payload(taskPayload)
-@workgroup_size(1)
+@workgroup_size(64)
 fn ts_main() -> @builtin(mesh_task_size) vec3<u32> {
     return vec3(1, 1, 1);
 }
@@ -33,5 +33,5 @@ var<workgroup> mesh_output: MeshOutput;
 
 @mesh(mesh_output)
 @payload(taskPayload)
-@workgroup_size(1)
+@workgroup_size(64)
 fn ms_main() {}

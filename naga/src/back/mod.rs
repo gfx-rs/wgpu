@@ -148,6 +148,7 @@ fn get_entry_points(
 /// [`EntryPoint`]: crate::EntryPoint
 /// [`Module`]: crate::Module
 /// [`Module::entry_points`]: crate::Module::entry_points
+#[derive(Clone, Copy, Debug)]
 pub enum FunctionType {
     /// A regular function.
     Function(crate::Handle<crate::Function>),
@@ -390,4 +391,12 @@ bitflags::bitflags! {
 pub enum RayIntersectionType {
     Triangle = 1,
     BoundingBox = 4,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+pub struct TaskDispatchLimits {
+    pub max_mesh_workgroups_per_dim: u32,
+    pub max_mesh_workgroups_total: u32,
 }

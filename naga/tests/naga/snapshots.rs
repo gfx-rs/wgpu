@@ -57,6 +57,12 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
             })
     };
 
+    let shared_info = WriterSharedOptions {
+        mesh_output_validation: params.mesh_output_validation,
+        task_limits: params.task_limits,
+        bounds_checks_policies: params.bounds_check_policies,
+    };
+
     {
         if targets.contains(Targets::ANALYSIS) {
             let config = ron::ser::PrettyConfig::default().new_line("\n".to_string());
@@ -84,8 +90,8 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
             &info,
             debug_info,
             &params.spv,
-            params.bounds_check_policies,
             &params.pipeline_constants,
+            &shared_info,
         );
     }
 
@@ -169,12 +175,12 @@ fn write_output_spv(
     info: &naga::valid::ModuleInfo,
     debug_info: Option<naga::back::spv::DebugInfo>,
     params: &SpirvOutParameters,
-    bounds_check_policies: naga::proc::BoundsCheckPolicies,
     pipeline_constants: &naga::back::PipelineConstants,
+    shared_options: &WriterSharedOptions,
 ) {
     use naga::back::spv;
 
-    let options = params.to_options(bounds_check_policies, debug_info);
+    let options = params.to_options(shared_options, debug_info);
 
     let (module, info) =
         naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)

@@ -1513,7 +1513,7 @@ impl Interface {
                 Varying::BuiltIn(naga::BuiltIn::PrimitiveIndex) => {
                     this_stage_primitive_index = true;
                 }
-                Varying::BuiltIn(naga::BuiltIn::DrawID) => {
+                Varying::BuiltIn(naga::BuiltIn::DrawIndex) => {
                     has_draw_id = true;
                 }
                 Varying::BuiltIn(_) => {}
