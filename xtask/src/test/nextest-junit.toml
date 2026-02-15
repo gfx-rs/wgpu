@@ -1,0 +1,4 @@
+[profile.default.junit]
+path = "nextest-junit.xml"
+store-success-output = true
+store-failure-output = true

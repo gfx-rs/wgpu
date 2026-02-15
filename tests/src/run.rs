@@ -1,16 +1,46 @@
-use std::panic::AssertUnwindSafe;
+use std::{io::Write, panic::AssertUnwindSafe};
 
 use futures_lite::FutureExt;
 use wgpu::{Adapter, Device, Instance, Queue};
+use wgpu_test_metadata::{
+    AdapterKey, EventPhase, GpuHarnessEvent, GpuTestKey, GPU_TEST_EVENT_PREFIX,
+};
 
 use crate::{
-    expectations::{expectations_match_failures, ExpectationMatchResult, FailureResult},
+    expectations::{
+        expectations_match_failures, expected_failure_signatures, ExpectationMatchResult,
+        FailureResult,
+    },
     init::{init_logger, initialize_adapter, initialize_device},
     isolation,
     params::TestInfo,
     report::AdapterReport,
     GpuTestConfiguration,
 };
+
+fn adapter_key(info: &wgpu::AdapterInfo) -> AdapterKey {
+    AdapterKey {
+        backend: format!("{:?}", info.backend),
+        vendor: info.vendor,
+        device: info.device,
+        name: info.name.clone(),
+        driver: info.driver.clone(),
+    }
+}
+
+fn test_key(test_path: &str, info: &wgpu::AdapterInfo) -> GpuTestKey {
+    GpuTestKey {
+        test_path: test_path.to_owned(),
+        adapter: adapter_key(info),
+    }
+}
+
+fn emit_gpu_test_event(event: &GpuHarnessEvent) {
+    if let Ok(json) = serde_json::to_string(event) {
+        println!("{GPU_TEST_EVENT_PREFIX}{json}");
+        let _ = std::io::stdout().flush();
+    }
+}
 
 #[derive(Hash)]
 /// Parameters and resources handed to the test function.
@@ -34,9 +64,44 @@ pub async fn execute_test(
     config: GpuTestConfiguration,
     test_info: Option<TestInfo>,
 ) {
-    // If we get information externally, skip based on that information before we do anything.
-    if let Some(TestInfo { skip: true, .. }) = test_info {
-        return;
+    let mut test_info = test_info;
+    // If we get information externally and know we should skip, avoid adapter/device setup.
+    if let (Some(test_info), Some(adapter_report)) = (test_info.as_ref(), adapter_report) {
+        if test_info.skip {
+            let expected_failure_signatures = expected_failure_signatures(&test_info.failures);
+            let key = test_key(&config.name, &adapter_report.info);
+
+            emit_gpu_test_event(&GpuHarnessEvent {
+                version: 1,
+                phase: EventPhase::Before,
+                key: key.clone(),
+                inline_expect_fail: test_info.inline_expect_fail,
+                inline_expect_crash: test_info.inline_expect_crash,
+                skip: test_info.skip,
+                skip_due_to_unsupported: test_info.skip_due_to_unsupported,
+                skip_due_to_expectation: test_info.skip_due_to_expectation,
+                expected_failure_signatures,
+                actual_success: None,
+                actual_failure_signatures: Vec::new(),
+                expectation_verdict: None,
+            });
+
+            emit_gpu_test_event(&GpuHarnessEvent {
+                version: 1,
+                phase: EventPhase::After,
+                key,
+                inline_expect_fail: test_info.inline_expect_fail,
+                inline_expect_crash: test_info.inline_expect_crash,
+                skip: test_info.skip,
+                skip_due_to_unsupported: test_info.skip_due_to_unsupported,
+                skip_due_to_expectation: test_info.skip_due_to_expectation,
+                expected_failure_signatures: Vec::new(),
+                actual_success: None,
+                actual_failure_signatures: Vec::new(),
+                expectation_verdict: Some("skipped".to_owned()),
+            });
+            return;
+        }
     }
 
     init_logger();
@@ -49,13 +114,44 @@ pub async fn execute_test(
     let adapter_info = adapter.get_info();
     let adapter_downlevel_capabilities = adapter.get_downlevel_capabilities();
 
-    let test_info = test_info.unwrap_or_else(|| {
+    let test_info = test_info.take().unwrap_or_else(|| {
         let adapter_report = AdapterReport::from_adapter(&adapter);
         TestInfo::from_configuration(&config, &adapter_report)
     });
 
+    let event_key = test_key(&config.name, &adapter_info);
+    let expected_failure_signatures = expected_failure_signatures(&test_info.failures);
+    emit_gpu_test_event(&GpuHarnessEvent {
+        version: 1,
+        phase: EventPhase::Before,
+        key: event_key.clone(),
+        inline_expect_fail: test_info.inline_expect_fail,
+        inline_expect_crash: test_info.inline_expect_crash,
+        skip: test_info.skip,
+        skip_due_to_unsupported: test_info.skip_due_to_unsupported,
+        skip_due_to_expectation: test_info.skip_due_to_expectation,
+        expected_failure_signatures,
+        actual_success: None,
+        actual_failure_signatures: Vec::new(),
+        expectation_verdict: None,
+    });
+
     // We are now guaranteed to have information about this test, so skip if we need to.
     if test_info.skip {
+        emit_gpu_test_event(&GpuHarnessEvent {
+            version: 1,
+            phase: EventPhase::After,
+            key: event_key,
+            inline_expect_fail: test_info.inline_expect_fail,
+            inline_expect_crash: test_info.inline_expect_crash,
+            skip: test_info.skip,
+            skip_due_to_unsupported: test_info.skip_due_to_unsupported,
+            skip_due_to_expectation: test_info.skip_due_to_expectation,
+            expected_failure_signatures: Vec::new(),
+            actual_success: None,
+            actual_failure_signatures: Vec::new(),
+            expectation_verdict: Some("skipped".to_owned()),
+        });
         log::info!("TEST RESULT: SKIPPED");
         return;
     }
@@ -116,8 +212,35 @@ pub async fn execute_test(
         }
     );
 
+    let actual_success = failures.is_empty();
+    let actual_failure_signatures = failures
+        .iter()
+        .map(FailureResult::to_signature)
+        .collect::<Vec<_>>();
+
+    let expectation_match = expectations_match_failures(&test_info.failures, failures);
+    let expectation_verdict = match expectation_match {
+        ExpectationMatchResult::Panic => "panic",
+        ExpectationMatchResult::Complete => "complete",
+    };
+
+    emit_gpu_test_event(&GpuHarnessEvent {
+        version: 1,
+        phase: EventPhase::After,
+        key: event_key,
+        inline_expect_fail: test_info.inline_expect_fail,
+        inline_expect_crash: test_info.inline_expect_crash,
+        skip: false,
+        skip_due_to_unsupported: false,
+        skip_due_to_expectation: false,
+        expected_failure_signatures: Vec::new(),
+        actual_success: Some(actual_success),
+        actual_failure_signatures,
+        expectation_verdict: Some(expectation_verdict.to_owned()),
+    });
+
     // The call to matches_failure will log.
-    if expectations_match_failures(&test_info.failures, failures) == ExpectationMatchResult::Panic {
+    if expectation_match == ExpectationMatchResult::Panic {
         panic!(
             "{}: test {:?} did not behave as expected",
             config.location, config.name

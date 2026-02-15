@@ -111,6 +111,10 @@ impl TestParameters {
 /// Information about a test, including if if it should be skipped.
 pub struct TestInfo {
     pub skip: bool,
+    pub skip_due_to_unsupported: bool,
+    pub skip_due_to_expectation: bool,
+    pub inline_expect_fail: bool,
+    pub inline_expect_crash: bool,
     pub failure_application_reasons: FailureApplicationReasons,
     pub failures: Vec<FailureCase>,
     pub running_msg: String,
@@ -157,17 +161,22 @@ impl TestInfo {
         let mut applicable_cases = Vec::with_capacity(test.params.failures.len());
         let mut failure_application_reasons = FailureApplicationReasons::empty();
         let mut flaky = false;
+        let mut inline_expect_crash = false;
         for failure in &test.params.failures {
             if let Some(reasons) = failure.applies_to_adapter(&adapter_lowercase_info) {
                 failure_application_reasons.insert(reasons);
                 applicable_cases.push(failure.clone());
                 flaky |= matches!(failure.behavior, FailureBehavior::Ignore);
+                inline_expect_crash |= matches!(failure.behavior, FailureBehavior::ExpectCrash);
             }
         }
 
         let mut skip = false;
+        let mut skip_due_to_unsupported = false;
+        let mut skip_due_to_expectation = false;
         let running_msg = if let Some(reasons) = skip_application_reason {
             skip = true;
+            skip_due_to_expectation = true;
 
             let names: ArrayVec<_, 4> = reasons.iter_names().map(|(name, _)| name).collect();
             let names_text = names.join(" | ");
@@ -175,10 +184,12 @@ impl TestInfo {
             format!("Skipped Failure: {names_text}")
         } else if !unsupported_reasons.is_empty() {
             skip = true;
+            skip_due_to_unsupported = true;
             format!("Unsupported: {}", unsupported_reasons.join(" | "))
         } else if !failure_application_reasons.is_empty() {
             if cfg!(target_arch = "wasm32") {
                 skip = true;
+                skip_due_to_expectation = true;
             }
 
             let names: ArrayVec<_, 4> = failure_application_reasons
@@ -195,6 +206,10 @@ impl TestInfo {
 
         Self {
             skip,
+            skip_due_to_unsupported,
+            skip_due_to_expectation,
+            inline_expect_fail: !applicable_cases.is_empty() || skip_due_to_expectation,
+            inline_expect_crash,
             failure_application_reasons,
             failures: applicable_cases,
             running_msg,

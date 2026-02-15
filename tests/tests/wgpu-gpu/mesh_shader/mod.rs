@@ -404,14 +404,14 @@ fn default_gpu_test_config(draw_type: DrawType) -> GpuTestConfiguration {
                     },
             )
             .limits(wgpu::Limits::default().using_recommended_minimum_mesh_shader_values())
-            .skip(wgpu_test::FailureCase {
+            .expect_fail(wgpu_test::FailureCase {
                 backends: None,
                 // Skip Mesa because LLVMPIPE has what is believed to be a driver bug
                 vendor: Some(0x10005),
                 adapter: None,
                 driver: None,
                 reasons: vec![],
-                behavior: wgpu_test::FailureBehavior::Ignore,
+                behavior: wgpu_test::FailureBehavior::ExpectCrash,
             }),
     )
 }

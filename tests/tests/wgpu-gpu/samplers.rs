@@ -184,7 +184,7 @@ static SAMPLER_SINGLE_BIND_GROUP: GpuTestConfiguration = GpuTestConfiguration::n
         TestParameters::default()
             .test_features_limits()
             // In OpenGL textures cannot be used with multiple samplers.
-            .skip(wgpu_test::FailureCase::backend(wgpu::Backends::GL)),
+            .expect_fail(wgpu_test::FailureCase::backend(wgpu::Backends::GL)),
     )
     .run_sync(|ctx| sampler_bind_group(ctx, GroupType::Single));
 
@@ -194,7 +194,7 @@ static SAMPLER_MULTI_BIND_GROUP: GpuTestConfiguration = GpuTestConfiguration::ne
         TestParameters::default()
             .test_features_limits()
             // In OpenGL textures cannot be used with multiple samplers.
-            .skip(wgpu_test::FailureCase::backend(wgpu::Backends::GL)),
+            .expect_fail(wgpu_test::FailureCase::backend(wgpu::Backends::GL)),
     )
     .run_sync(|ctx| sampler_bind_group(ctx, GroupType::Multi));
 

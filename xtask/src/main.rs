@@ -58,6 +58,19 @@ Commands:
     --llvm-cov  Run tests with LLVM code coverage using the llvm-cov tool
     --list      List all of the tests and their executables without running them
     --retries   Number of times to retry failing tests
+    -b, --baseline <name>
+                Load baseline from target\\xtask\\<name>.json
+    -s, --save-baseline <name>
+                Save current run as target\\xtask\\<name>.json
+    --list-baselines
+                List available baseline names in target\\xtask
+    --clear-baselines
+                Delete all baseline JSON files in target\\xtask
+    --skip-analysis
+                Disable GPU expectation post-processing and run nextest normally
+    --verbose
+                Print all expectation categories (including zero-count categories) and
+                list tests under each category
 
     All extra arguments will be forwarded to cargo-nextest (NOT wgpu-info)
 

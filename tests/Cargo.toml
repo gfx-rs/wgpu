@@ -46,6 +46,7 @@ wgpu = { workspace = true, features = ["noop"] }
 wgpu-core = { workspace = true, features = ["trace"] }
 wgpu-hal = { workspace = true, features = ["validation_canary"] }
 wgpu-macros.workspace = true
+wgpu-test-metadata.workspace = true
 wgpu-types.workspace = true
 
 anyhow.workspace = true

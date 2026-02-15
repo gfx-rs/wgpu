@@ -1,4 +1,5 @@
 use core::fmt;
+use wgpu_test_metadata::FailureSignature;
 
 /// Conditions under which a test should fail or be skipped.
 ///
@@ -197,6 +198,17 @@ impl FailureCase {
         }
     }
 
+    /// Expect a hard process crash (abort/segfault) under this condition.
+    ///
+    /// This is intended for failures that cannot be represented as a panic or
+    /// validation error.
+    pub fn crash(self) -> Self {
+        FailureCase {
+            behavior: FailureBehavior::ExpectCrash,
+            ..self
+        }
+    }
+
     /// Test whether `self` applies to `info`.
     ///
     /// If it does, return a `FailureReasons` whose set bits indicate
@@ -266,6 +278,13 @@ impl FailureCase {
 
         false
     }
+
+    pub(crate) fn expected_signatures(&self) -> Vec<FailureSignature> {
+        self.reasons()
+            .iter()
+            .map(FailureReason::to_signature)
+            .collect()
+    }
 }
 
 bitflags::bitflags! {
@@ -332,6 +351,13 @@ impl FailureReason {
             ..self
         }
     }
+
+    fn to_signature(&self) -> FailureSignature {
+        FailureSignature {
+            kind: self.kind.map(|kind| kind.as_str().to_owned()),
+            message: self.message.map(ToOwned::to_owned),
+        }
+    }
 }
 
 #[derive(Default, Clone, PartialEq)]
@@ -346,6 +372,11 @@ pub enum FailureBehavior {
     /// This is useful for tests that flake in a very specific way,
     /// but sometimes succeed, so we can't assert that they always fail.
     Ignore,
+    /// Assert that the test process crashes.
+    ///
+    /// This is consumed by outer tooling because in-process harness code cannot
+    /// observe hard crashes.
+    ExpectCrash,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -360,6 +391,15 @@ impl fmt::Display for FailureResultKind {
         match self {
             FailureResultKind::ValidationError => write!(f, "Validation Error"),
             FailureResultKind::Panic => write!(f, "Panic"),
+        }
+    }
+}
+
+impl FailureResultKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            FailureResultKind::ValidationError => "validation_error",
+            FailureResultKind::Panic => "panic",
         }
     }
 }
@@ -395,12 +435,26 @@ impl FailureResult {
             message: Some(message.to_string()),
         }
     }
+
+    pub(crate) fn to_signature(&self) -> FailureSignature {
+        FailureSignature {
+            kind: Some(self.kind.as_str().to_owned()),
+            message: self.message.clone(),
+        }
+    }
 }
 
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub(crate) enum ExpectationMatchResult {
     Panic,
     Complete,
+}
+
+pub(crate) fn expected_failure_signatures(expectations: &[FailureCase]) -> Vec<FailureSignature> {
+    expectations
+        .iter()
+        .flat_map(FailureCase::expected_signatures)
+        .collect()
 }
 
 /// Compares if the actual failures match the expected failures.
@@ -421,7 +475,11 @@ pub(crate) fn expectations_match_failures(
         // In reverse, to be able to use swap_remove.
         actual.retain(|failure| {
             // If the failure matches, remove it from the list of failures, as we expected it.
-            let matches = expected_failure.matches_failure(failure);
+            let matches = if matches!(expected_failure.behavior, FailureBehavior::ExpectCrash) {
+                false
+            } else {
+                expected_failure.matches_failure(failure)
+            };
 
             if matches {
                 matched = true;
@@ -433,7 +491,7 @@ pub(crate) fn expectations_match_failures(
 
         // If we didn't match our expected failure against any of the actual failures,
         // and this failure is not flaky, then we need to panic, as we got an unexpected success.
-        if !matched && matches!(expected_failure.behavior, FailureBehavior::AssertFailure) {
+        if !matched && !matches!(expected_failure.behavior, FailureBehavior::Ignore) {
             result = ExpectationMatchResult::Panic;
             log::error!(
                 "Expected to fail due to {:?}, but did not fail",

@@ -1,0 +1,15 @@
+[package]
+name = "wgpu-test-metadata"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "shared metadata types for wgpu gpu test harness and xtask"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+serde = { workspace = true, features = ["derive", "alloc"] }
