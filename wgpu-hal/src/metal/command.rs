@@ -6,10 +6,11 @@ use objc2_foundation::{NSRange, NSString, NSUInteger};
 use objc2_metal::{
     MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLBlitCommandEncoder,
     MTLBlitPassDescriptor, MTLBuffer, MTLCommandBuffer, MTLCommandEncoder, MTLCommandQueue,
-    MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLCounterDontSample, MTLLoadAction,
-    MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor, MTLSamplerState,
-    MTLScissorRect, MTLSize, MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping,
-    MTLViewport, MTLVisibilityResultMode,
+    MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLCounterDontSample, MTLDevice,
+    MTLLoadAction, MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor,
+    MTLResidencySet, MTLResidencySetDescriptor, MTLSamplerState, MTLScissorRect, MTLSize,
+    MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping, MTLViewport,
+    MTLVisibilityResultMode,
 };
 
 use super::{conv, TimestampQuerySupport};
@@ -1813,6 +1814,29 @@ impl crate::CommandEncoder for super::CommandEncoder {
             &buffer.raw,
             0,
         );
+    }
+
+    unsafe fn set_acceleration_structure_dependencies(
+        command_buffers: &[&super::CommandBuffer],
+        dependencies: &[&super::AccelerationStructure],
+    ) {
+        let Some(first_command_buffer) = command_buffers.first() else {
+            return;
+        };
+        let desc = MTLResidencySetDescriptor::new();
+        desc.setLabel(first_command_buffer.raw.label().as_deref());
+        let residency_set = first_command_buffer
+            .raw
+            .device()
+            .newResidencySetWithDescriptor_error(&desc)
+            .unwrap();
+        for command_buffer in command_buffers {
+            command_buffer.raw.useResidencySet(&residency_set);
+        }
+        for dependency in dependencies {
+            residency_set.addAllocation(ProtocolObject::from_ref(&*dependency.raw));
+        }
+        residency_set.commit();
     }
 }
 

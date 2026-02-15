@@ -194,12 +194,10 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
             dyn DynAccelerationStructure,
         >],
     );
-
     unsafe fn place_acceleration_structure_barrier(
         &mut self,
         barrier: AccelerationStructureBarrier,
     );
-
     unsafe fn copy_acceleration_structure_to_acceleration_structure(
         &mut self,
         src: &dyn DynAccelerationStructure,
@@ -210,6 +208,11 @@ pub trait DynCommandEncoder: DynResource + core::fmt::Debug {
         &mut self,
         acceleration_structure: &dyn DynAccelerationStructure,
         buf: &dyn DynBuffer,
+    );
+    unsafe fn set_acceleration_structure_dependencies(
+        &self,
+        command_buffers: &[Box<dyn DynCommandBuffer>],
+        dependencies: &[&dyn DynAccelerationStructure],
     );
 }
 
@@ -702,6 +705,22 @@ impl<C: CommandEncoder + DynResource> DynCommandEncoder for C {
         let acceleration_structure = acceleration_structure.expect_downcast_ref();
         let buf = buf.expect_downcast_ref();
         unsafe { C::read_acceleration_structure_compact_size(self, acceleration_structure, buf) }
+    }
+
+    unsafe fn set_acceleration_structure_dependencies(
+        &self,
+        command_buffers: &[Box<dyn DynCommandBuffer>],
+        dependencies: &[&dyn DynAccelerationStructure],
+    ) {
+        let command_buffers: Vec<&<C::A as Api>::CommandBuffer> = command_buffers
+            .iter()
+            .map(|command_buffer| command_buffer.expect_downcast_ref())
+            .collect();
+        let dependencies: Vec<&<C::A as Api>::AccelerationStructure> = dependencies
+            .iter()
+            .map(|dependency| dependency.expect_downcast_ref())
+            .collect();
+        unsafe { C::set_acceleration_structure_dependencies(&command_buffers, &dependencies) }
     }
 }
 
