@@ -885,13 +885,17 @@ fn map_adapter_info(adapter_info: &webgpu_sys::GpuAdapterInfo) -> wgt::AdapterIn
         name: adapter_info.description().to_string(),
         vendor: 0,
         device: 0,
-        device_type: wgt::DeviceType::Other,
+        device_type: if adapter_info.is_fallback_adapter() {
+            wgt::DeviceType::Cpu
+        } else {
+            wgt::DeviceType::Other
+        },
         device_pci_bus_id: String::new(),
         driver: String::new(),
         driver_info: String::new(),
         backend: wgt::Backend::BrowserWebGpu,
-        subgroup_min_size: wgt::MINIMUM_SUBGROUP_MIN_SIZE,
-        subgroup_max_size: wgt::MAXIMUM_SUBGROUP_MAX_SIZE,
+        subgroup_min_size: adapter_info.subgroup_min_size(),
+        subgroup_max_size: adapter_info.subgroup_max_size(),
         transient_saves_memory: false,
         limit_bucket: None,
     }
