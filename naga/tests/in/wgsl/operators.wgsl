@@ -3,6 +3,9 @@ const v_f32_zero = vec4<f32>(0.0, 0.0, 0.0, 0.0);
 const v_f32_half = vec4<f32>(0.5, 0.5, 0.5, 0.5);
 const v_i32_one = vec4<i32>(1, 1, 1, 1);
 
+const b_false = false;
+const b_true = true;
+
 fn builtins() -> vec4<f32> {
     // select()
     let condition = true;
@@ -45,6 +48,14 @@ fn q() -> bool { return false; }
 fn r() -> bool { return true; }
 fn s() -> bool { return false; }
 
+const short_circuit_1_invalid_rhs = false && sqrt(-1) != 0;
+// TODO(https://github.com/gfx-rs/wgpu/issues/8440):
+// The following should not be accepted, but it currently is.
+// When fixed, move this to a wgsl_errors test.
+const short_circuit_2_invalid_rhs = false && (0u + 1.0f > 0);
+const short_circuit_3 = b_false || b_true;
+const short_circuit_4 = !((b_false) || (any(vec3(false, false, false))));
+
 fn logical() {
     let t = true;
     let f = false;
@@ -60,7 +71,18 @@ fn logical() {
     let bitwise_or1 = vec3(t) | vec3(f);
     let bitwise_and0 = t & f;
     let bitwise_and1 = vec4(t) & vec4(f);
-    let short_circuit = (p() || q()) && (r() || s());
+
+    const short_circuit_1_invalid = false && sqrt(-1) != 0;
+    // TODO(https://github.com/gfx-rs/wgpu/issues/8440):
+    // The following should not be accepted, but it currently is.
+    // When fixed, move this to a wgsl_errors test.
+    const short_circuit_2_invalid_rhs = false && (0u + 1.0f > 0);
+    const short_circuit_3 = b_false || b_true;
+    const short_circuit_4 = !((b_false) || (any(vec3(false, false, false))));
+
+    let short_circuit_5 = !((f) || (any(vec3(false, false, false))));
+    let short_circuit_6 = (p() || q()) && (r() || s());
+    let short_circuit_7 = true || q();
 }
 
 fn arithmetic() {
@@ -330,4 +352,3 @@ fn main(@builtin(workgroup_id) id: vec3<u32>) {
 
     negation_avoids_prefix_decrement();
 }
-

@@ -92,7 +92,7 @@ impl<const SRGB: bool> crate::framework::Example for Example<SRGB> {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bind_group_layout],
-            immediates_ranges: &[],
+            immediate_size: 0,
         });
 
         // Create bind group

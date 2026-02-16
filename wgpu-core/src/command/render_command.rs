@@ -46,9 +46,6 @@ pub enum RenderCommand<R: ReferenceType> {
     /// See [`wgpu::RenderPass::set_immediates`] for a detailed explanation
     /// of the restrictions these commands must satisfy.
     SetImmediate {
-        /// Which stages we are setting immediate data values for.
-        stages: wgt::ShaderStages,
-
         /// The byte offset within the immediate data storage to write to.  This
         /// must be a multiple of four.
         offset: u32,

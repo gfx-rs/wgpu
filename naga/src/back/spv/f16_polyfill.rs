@@ -96,9 +96,9 @@ impl F16IoPolyfill {
     }
 }
 
-impl crate::back::spv::recyclable::Recyclable for F16IoPolyfill {
-    fn recycle(mut self) -> Self {
-        self.io_var_to_f32_type = self.io_var_to_f32_type.recycle();
+impl crate::back::spv::reclaimable::Reclaimable for F16IoPolyfill {
+    fn reclaim(mut self) -> Self {
+        self.io_var_to_f32_type = self.io_var_to_f32_type.reclaim();
         self
     }
 }

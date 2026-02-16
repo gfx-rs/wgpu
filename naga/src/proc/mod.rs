@@ -121,6 +121,9 @@ impl crate::Literal {
         match (value, scalar.kind, scalar.width) {
             (value, crate::ScalarKind::Float, 8) => Some(Self::F64(value as _)),
             (value, crate::ScalarKind::Float, 4) => Some(Self::F32(value as _)),
+            (value, crate::ScalarKind::Float, 2) => {
+                Some(Self::F16(half::f16::from_f32_const(value as _)))
+            }
             (value, crate::ScalarKind::Uint, 4) => Some(Self::U32(value as _)),
             (value, crate::ScalarKind::Sint, 4) => Some(Self::I32(value as _)),
             (value, crate::ScalarKind::Uint, 8) => Some(Self::U64(value as _)),
@@ -172,6 +175,29 @@ impl crate::Literal {
     }
 }
 
+impl TryFrom<crate::Literal> for u32 {
+    type Error = ConstValueError;
+
+    fn try_from(value: crate::Literal) -> Result<Self, Self::Error> {
+        match value {
+            crate::Literal::U32(value) => Ok(value),
+            crate::Literal::I32(value) => value.try_into().map_err(|_| ConstValueError::Negative),
+            _ => Err(ConstValueError::InvalidType),
+        }
+    }
+}
+
+impl TryFrom<crate::Literal> for bool {
+    type Error = ConstValueError;
+
+    fn try_from(value: crate::Literal) -> Result<Self, Self::Error> {
+        match value {
+            crate::Literal::Bool(value) => Ok(value),
+            _ => Err(ConstValueError::InvalidType),
+        }
+    }
+}
+
 impl super::AddressSpace {
     pub fn access(self) -> crate::StorageAccess {
         use crate::StorageAccess as Sa;
@@ -186,6 +212,9 @@ impl super::AddressSpace {
             // TaskPayload isn't always writable, but this is checked for elsewhere,
             // when not using multiple payloads and matching the entry payload is checked.
             crate::AddressSpace::TaskPayload => Sa::LOAD | Sa::STORE,
+            crate::AddressSpace::RayPayload | crate::AddressSpace::IncomingRayPayload => {
+                Sa::LOAD | Sa::STORE
+            }
         }
     }
 }
@@ -425,9 +454,16 @@ impl crate::Module {
 }
 
 #[derive(Debug)]
-pub(super) enum U32EvalError {
+pub enum ConstValueError {
     NonConst,
     Negative,
+    InvalidType,
+}
+
+impl From<core::convert::Infallible> for ConstValueError {
+    fn from(_: core::convert::Infallible) -> Self {
+        unreachable!()
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -439,56 +475,44 @@ pub struct GlobalCtx<'a> {
 }
 
 impl GlobalCtx<'_> {
-    /// Try to evaluate the expression in `self.global_expressions` using its `handle` and return it as a `u32`.
-    #[allow(dead_code)]
-    pub(super) fn eval_expr_to_u32(
+    /// Try to evaluate the expression in `self.global_expressions` using its `handle`
+    /// and return it as a `T: TryFrom<ir::Literal>`.
+    ///
+    /// This currently only evaluates scalar expressions. If adding support for vectors,
+    /// consider changing `valid::expression::validate_constant_shift_amounts` to use that
+    /// support.
+    #[cfg_attr(
+        not(any(
+            feature = "glsl-in",
+            feature = "spv-in",
+            feature = "wgsl-in",
+            glsl_out,
+            hlsl_out,
+            msl_out,
+            wgsl_out
+        )),
+        allow(dead_code)
+    )]
+    pub(super) fn get_const_val<T, E>(
         &self,
         handle: crate::Handle<crate::Expression>,
-    ) -> Result<u32, U32EvalError> {
-        self.eval_expr_to_u32_from(handle, self.global_expressions)
+    ) -> Result<T, ConstValueError>
+    where
+        T: TryFrom<crate::Literal, Error = E>,
+        E: Into<ConstValueError>,
+    {
+        self.get_const_val_from(handle, self.global_expressions)
     }
 
-    /// Try to evaluate the expression in the `arena` using its `handle` and return it as a `u32`.
-    pub(super) fn eval_expr_to_u32_from(
+    pub(super) fn get_const_val_from<T, E>(
         &self,
         handle: crate::Handle<crate::Expression>,
         arena: &crate::Arena<crate::Expression>,
-    ) -> Result<u32, U32EvalError> {
-        match self.eval_expr_to_literal_from(handle, arena) {
-            Some(crate::Literal::U32(value)) => Ok(value),
-            Some(crate::Literal::I32(value)) => {
-                value.try_into().map_err(|_| U32EvalError::Negative)
-            }
-            _ => Err(U32EvalError::NonConst),
-        }
-    }
-
-    /// Try to evaluate the expression in the `arena` using its `handle` and return it as a `bool`.
-    #[allow(dead_code)]
-    pub(super) fn eval_expr_to_bool_from(
-        &self,
-        handle: crate::Handle<crate::Expression>,
-        arena: &crate::Arena<crate::Expression>,
-    ) -> Option<bool> {
-        match self.eval_expr_to_literal_from(handle, arena) {
-            Some(crate::Literal::Bool(value)) => Some(value),
-            _ => None,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn eval_expr_to_literal(
-        &self,
-        handle: crate::Handle<crate::Expression>,
-    ) -> Option<crate::Literal> {
-        self.eval_expr_to_literal_from(handle, self.global_expressions)
-    }
-
-    pub(super) fn eval_expr_to_literal_from(
-        &self,
-        handle: crate::Handle<crate::Expression>,
-        arena: &crate::Arena<crate::Expression>,
-    ) -> Option<crate::Literal> {
+    ) -> Result<T, ConstValueError>
+    where
+        T: TryFrom<crate::Literal, Error = E>,
+        E: Into<ConstValueError>,
+    {
         fn get(
             gctx: GlobalCtx,
             handle: crate::Handle<crate::Expression>,
@@ -503,11 +527,15 @@ impl GlobalCtx<'_> {
                 _ => None,
             }
         }
-        match arena[handle] {
+        let value = match arena[handle] {
             crate::Expression::Constant(c) => {
                 get(*self, self.constants[c].init, self.global_expressions)
             }
             _ => get(*self, handle, arena),
+        };
+        match value {
+            Some(v) => v.try_into().map_err(Into::into),
+            None => Err(ConstValueError::NonConst),
         }
     }
 
@@ -541,9 +569,11 @@ impl crate::ArraySize {
                 let Some(expr) = gctx.overrides[handle].init else {
                     return Err(ResolveArraySizeError::NonConstArrayLength);
                 };
-                let length = gctx.eval_expr_to_u32(expr).map_err(|err| match err {
-                    U32EvalError::NonConst => ResolveArraySizeError::NonConstArrayLength,
-                    U32EvalError::Negative => ResolveArraySizeError::ExpectedPositiveArrayLength,
+                let length = gctx.get_const_val(expr).map_err(|err| match err {
+                    ConstValueError::NonConst => ResolveArraySizeError::NonConstArrayLength,
+                    ConstValueError::Negative | ConstValueError::InvalidType => {
+                        ResolveArraySizeError::ExpectedPositiveArrayLength
+                    }
                 })?;
 
                 if length == 0 {
@@ -640,6 +670,15 @@ impl super::ShaderStage {
         match self {
             Self::Vertex | Self::Fragment => false,
             Self::Compute | Self::Task | Self::Mesh => true,
+            Self::RayGeneration | Self::AnyHit | Self::ClosestHit | Self::Miss => false,
+        }
+    }
+
+    /// Mesh or task shader
+    pub const fn mesh_like(self) -> bool {
+        match self {
+            Self::Task | Self::Mesh => true,
+            _ => false,
         }
     }
 }
@@ -830,5 +869,87 @@ impl crate::Module {
                 .inner
                 .map(|a| a.with_span_handle(self.global_variables[gv].ty, &self.types)),
         )
+    }
+
+    pub fn uses_mesh_shaders(&self) -> bool {
+        let binding_uses_mesh = |b: &crate::Binding| {
+            matches!(
+                b,
+                crate::Binding::BuiltIn(
+                    crate::BuiltIn::MeshTaskSize
+                        | crate::BuiltIn::CullPrimitive
+                        | crate::BuiltIn::PointIndex
+                        | crate::BuiltIn::LineIndices
+                        | crate::BuiltIn::TriangleIndices
+                        | crate::BuiltIn::VertexCount
+                        | crate::BuiltIn::Vertices
+                        | crate::BuiltIn::PrimitiveCount
+                        | crate::BuiltIn::Primitives,
+                ) | crate::Binding::Location {
+                    per_primitive: true,
+                    ..
+                }
+            )
+        };
+        for (_, ty) in self.types.iter() {
+            match ty.inner {
+                crate::TypeInner::Struct { ref members, .. } => {
+                    for binding in members.iter().filter_map(|m| m.binding.as_ref()) {
+                        if binding_uses_mesh(binding) {
+                            return true;
+                        }
+                    }
+                }
+                _ => (),
+            }
+        }
+        for ep in &self.entry_points {
+            if matches!(
+                ep.stage,
+                crate::ShaderStage::Mesh | crate::ShaderStage::Task
+            ) {
+                return true;
+            }
+            for binding in ep
+                .function
+                .arguments
+                .iter()
+                .filter_map(|arg| arg.binding.as_ref())
+                .chain(
+                    ep.function
+                        .result
+                        .iter()
+                        .filter_map(|res| res.binding.as_ref()),
+                )
+            {
+                if binding_uses_mesh(binding) {
+                    return true;
+                }
+            }
+        }
+        if self
+            .global_variables
+            .iter()
+            .any(|gv| gv.1.space == crate::AddressSpace::TaskPayload)
+        {
+            return true;
+        }
+        false
+    }
+}
+
+impl crate::MeshOutputTopology {
+    pub const fn to_builtin(self) -> crate::BuiltIn {
+        match self {
+            Self::Points => crate::BuiltIn::PointIndex,
+            Self::Lines => crate::BuiltIn::LineIndices,
+            Self::Triangles => crate::BuiltIn::TriangleIndices,
+        }
+    }
+}
+
+impl crate::AddressSpace {
+    pub const fn is_workgroup_like(self) -> bool {
+        matches!(self, Self::WorkGroup | Self::TaskPayload)
     }
 }

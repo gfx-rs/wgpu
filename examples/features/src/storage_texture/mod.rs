@@ -90,7 +90,7 @@ async fn run(_path: Option<String>) {
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         label: None,
         bind_group_layouts: &[&bind_group_layout],
-        immediates_ranges: &[],
+        immediate_size: 0,
     });
     let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         label: None,

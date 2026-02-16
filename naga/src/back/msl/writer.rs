@@ -79,6 +79,8 @@ pub(crate) const ARGUMENT_BUFFER_WRAPPER_STRUCT: &str = "NagaArgumentBufferWrapp
 /// allowing them to be conveniently passed to user-defined or wrapper
 /// functions. The struct is declared in [`Writer::write_type_defs`].
 pub(crate) const EXTERNAL_TEXTURE_WRAPPER_STRUCT: &str = "NagaExternalTextureWrapper";
+pub(crate) const COOPERATIVE_LOAD_FUNCTION: &str = "NagaCooperativeLoad";
+pub(crate) const COOPERATIVE_MULTIPLY_ADD_FUNCTION: &str = "NagaCooperativeMultiplyAdd";
 
 /// Write the Metal name for a Naga numeric type: scalar, vector, or matrix.
 ///
@@ -236,6 +238,21 @@ impl Display for TypeContext<'_> {
                 rows,
                 scalar,
             } => put_numeric_type(out, scalar, &[rows, columns]),
+            // Requires Metal-2.3
+            crate::TypeInner::CooperativeMatrix {
+                columns,
+                rows,
+                scalar,
+                role: _,
+            } => {
+                write!(
+                    out,
+                    "{NAMESPACE}::simdgroup_{}{}x{}",
+                    scalar.to_msl_name(),
+                    columns as u32,
+                    rows as u32,
+                )
+            }
             crate::TypeInner::Pointer { base, space } => {
                 let sub = Self {
                     handle: base,
@@ -469,6 +486,19 @@ enum WrappedFunction {
     ImageQuerySize {
         class: crate::ImageClass,
     },
+    CooperativeLoad {
+        space_name: &'static str,
+        columns: crate::CooperativeSize,
+        rows: crate::CooperativeSize,
+        scalar: crate::Scalar,
+    },
+    CooperativeMultiplyAdd {
+        space_name: &'static str,
+        columns: crate::CooperativeSize,
+        rows: crate::CooperativeSize,
+        intermediate: crate::CooperativeSize,
+        scalar: crate::Scalar,
+    },
 }
 
 pub struct Writer<W> {
@@ -598,6 +628,7 @@ impl crate::AddressSpace {
             | Self::Handle
             | Self::TaskPayload => true,
             Self::Function => false,
+            Self::RayPayload | Self::IncomingRayPayload => unreachable!(),
         }
     }
 
@@ -609,7 +640,7 @@ impl crate::AddressSpace {
             // may end up with "const" even if the binding is read-write,
             // and that should be OK.
             Self::Storage { .. } => true,
-            Self::TaskPayload => unimplemented!(),
+            Self::TaskPayload | Self::RayPayload | Self::IncomingRayPayload => unimplemented!(),
             // These should always be read-write.
             Self::Private | Self::WorkGroup => false,
             // These translate to `constant` address space, no need for qualifiers.
@@ -624,9 +655,13 @@ impl crate::AddressSpace {
             Self::Handle => None,
             Self::Uniform | Self::Immediate => Some("constant"),
             Self::Storage { .. } => Some("device"),
-            Self::Private | Self::Function => Some("thread"),
+            // note for `RayPayload`, this probably needs to be emulated as a
+            // private variable, as metal has essentially an inout input
+            // for where it is passed.
+            Self::Private | Self::Function | Self::RayPayload => Some("thread"),
             Self::WorkGroup => Some("threadgroup"),
             Self::TaskPayload => Some("object_data"),
+            Self::IncomingRayPayload => Some("ray_data"),
         }
     }
 }
@@ -641,6 +676,7 @@ impl crate::Type {
             Ti::Scalar(_)
             | Ti::Vector { .. }
             | Ti::Matrix { .. }
+            | Ti::CooperativeMatrix { .. }
             | Ti::Atomic(_)
             | Ti::Pointer { .. }
             | Ti::ValuePointer { .. } => self.name.is_some(),
@@ -833,7 +869,6 @@ impl<W: Write> Writer<W> {
 
     /// Finishes writing and returns the output.
     // See https://github.com/rust-lang/rust-clippy/issues/4979.
-    #[allow(clippy::missing_const_for_fn)]
     pub fn finish(self) -> W {
         self.out
     }
@@ -1808,7 +1843,19 @@ impl<W: Write> Writer<W> {
                             put_expression,
                         )?;
                     }
-                    crate::TypeInner::Array { .. } | crate::TypeInner::Struct { .. } => {
+                    crate::TypeInner::Array { .. } => {
+                        // Naga Arrays are Metal arrays wrapped in structs, so
+                        // we need two levels of braces.
+                        write!(self.out, " {{{{")?;
+                        for (index, &component) in components.iter().enumerate() {
+                            if index != 0 {
+                                write!(self.out, ", ")?;
+                            }
+                            put_expression(self, ctx, component)?;
+                        }
+                        write!(self.out, "}}}}")?;
+                    }
+                    crate::TypeInner::Struct { .. } => {
                         write!(self.out, " {{")?;
                         for (index, &component) in components.iter().enumerate() {
                             if index != 0 {
@@ -2824,6 +2871,29 @@ impl<W: Write> Writer<W> {
                 }
                 write!(self.out, "}}")?;
             }
+            crate::Expression::CooperativeLoad { ref data, .. } => {
+                if context.lang_version < (2, 3) {
+                    return Err(Error::UnsupportedCooperativeMatrix);
+                }
+                write!(self.out, "{COOPERATIVE_LOAD_FUNCTION}(")?;
+                write!(self.out, "&")?;
+                self.put_access_chain(data.pointer, context.policies.index, context)?;
+                write!(self.out, ", ")?;
+                self.put_expression(data.stride, context, true)?;
+                write!(self.out, ", {})", data.row_major)?;
+            }
+            crate::Expression::CooperativeMultiplyAdd { a, b, c } => {
+                if context.lang_version < (2, 3) {
+                    return Err(Error::UnsupportedCooperativeMatrix);
+                }
+                write!(self.out, "{COOPERATIVE_MULTIPLY_ADD_FUNCTION}(")?;
+                self.put_expression(a, context, true)?;
+                write!(self.out, ", ")?;
+                self.put_expression(b, context, true)?;
+                write!(self.out, ", ")?;
+                self.put_expression(c, context, true)?;
+                write!(self.out, ")")?;
+            }
         }
         Ok(())
     }
@@ -2981,7 +3051,6 @@ impl<W: Write> Writer<W> {
     /// [`ReadZeroSkipWrite`]: index::BoundsCheckPolicy::ReadZeroSkipWrite
     /// [`Store`]: crate::Statement::Store
     /// [`Load`]: crate::Expression::Load
-    #[allow(unused_variables)]
     fn put_bounds_checks(
         &mut self,
         chain: Handle<crate::Expression>,
@@ -3455,8 +3524,23 @@ impl<W: Write> Writer<W> {
             }) => {
                 put_numeric_type(&mut self.out, scalar, &[rows, columns])?;
             }
+            TypeResolution::Value(crate::TypeInner::CooperativeMatrix {
+                columns,
+                rows,
+                scalar,
+                role: _,
+            }) => {
+                write!(
+                    self.out,
+                    "{}::simdgroup_{}{}x{}",
+                    NAMESPACE,
+                    scalar.to_msl_name(),
+                    columns as u32,
+                    rows as u32,
+                )?;
+            }
             TypeResolution::Value(ref other) => {
-                log::warn!("Type {other:?} isn't a known local"); //TEMP!
+                log::warn!("Type {other:?} isn't a known local");
                 return Err(Error::FeatureNotImplemented("weird local type".to_string()));
             }
         }
@@ -4194,6 +4278,25 @@ impl<W: Write> Writer<W> {
                     }
                     writeln!(self.out, ");")?;
                 }
+                crate::Statement::CooperativeStore { target, ref data } => {
+                    write!(self.out, "{level}simdgroup_store(")?;
+                    self.put_expression(target, &context.expression, true)?;
+                    write!(self.out, ", &")?;
+                    self.put_access_chain(
+                        data.pointer,
+                        context.expression.policies.index,
+                        &context.expression,
+                    )?;
+                    write!(self.out, ", ")?;
+                    self.put_expression(data.stride, &context.expression, true)?;
+                    if data.row_major {
+                        let matrix_origin = "0";
+                        let transpose = true;
+                        write!(self.out, ", {matrix_origin}, {transpose}")?;
+                    }
+                    writeln!(self.out, ");")?;
+                }
+                crate::Statement::RayPipelineFunction(_) => unreachable!(),
             }
         }
 
@@ -4274,6 +4377,7 @@ impl<W: Write> Writer<W> {
         self.namer.reset(
             module,
             &super::keywords::RESERVED_SET,
+            proc::KeywordSet::empty(),
             proc::CaseInsensitiveKeywordSet::empty(),
             &[CLAMPED_LOD_LOAD_PREFIX],
             &mut self.names,
@@ -6307,6 +6411,106 @@ template <typename A>
         Ok(())
     }
 
+    fn write_wrapped_cooperative_load(
+        &mut self,
+        module: &crate::Module,
+        func_ctx: &back::FunctionCtx,
+        columns: crate::CooperativeSize,
+        rows: crate::CooperativeSize,
+        pointer: Handle<crate::Expression>,
+    ) -> BackendResult {
+        let ptr_ty = func_ctx.resolve_type(pointer, &module.types);
+        let space = ptr_ty.pointer_space().unwrap();
+        let space_name = space.to_msl_name().unwrap_or_default();
+        let scalar = ptr_ty
+            .pointer_base_type()
+            .unwrap()
+            .inner_with(&module.types)
+            .scalar()
+            .unwrap();
+        let wrapped = WrappedFunction::CooperativeLoad {
+            space_name,
+            columns,
+            rows,
+            scalar,
+        };
+        if !self.wrapped_functions.insert(wrapped) {
+            return Ok(());
+        }
+        let scalar_name = scalar.to_msl_name();
+        writeln!(
+            self.out,
+            "{NAMESPACE}::simdgroup_{scalar_name}{}x{} {COOPERATIVE_LOAD_FUNCTION}(const {space_name} {scalar_name}* ptr, int stride, bool is_row_major) {{",
+            columns as u32, rows as u32,
+        )?;
+        let l1 = back::Level(1);
+        writeln!(
+            self.out,
+            "{l1}{NAMESPACE}::simdgroup_{scalar_name}{}x{} m;",
+            columns as u32, rows as u32
+        )?;
+        let matrix_origin = "0";
+        writeln!(
+            self.out,
+            "{l1}simdgroup_load(m, ptr, stride, {matrix_origin}, is_row_major);"
+        )?;
+        writeln!(self.out, "{l1}return m;")?;
+        writeln!(self.out, "}}")?;
+        writeln!(self.out)?;
+        Ok(())
+    }
+
+    fn write_wrapped_cooperative_multiply_add(
+        &mut self,
+        module: &crate::Module,
+        func_ctx: &back::FunctionCtx,
+        space: crate::AddressSpace,
+        a: Handle<crate::Expression>,
+        b: Handle<crate::Expression>,
+    ) -> BackendResult {
+        let space_name = space.to_msl_name().unwrap_or_default();
+        let (a_c, a_r, scalar) = match *func_ctx.resolve_type(a, &module.types) {
+            crate::TypeInner::CooperativeMatrix {
+                columns,
+                rows,
+                scalar,
+                ..
+            } => (columns, rows, scalar),
+            _ => unreachable!(),
+        };
+        let (b_c, b_r) = match *func_ctx.resolve_type(b, &module.types) {
+            crate::TypeInner::CooperativeMatrix { columns, rows, .. } => (columns, rows),
+            _ => unreachable!(),
+        };
+        let wrapped = WrappedFunction::CooperativeMultiplyAdd {
+            space_name,
+            columns: b_c,
+            rows: a_r,
+            intermediate: a_c,
+            scalar,
+        };
+        if !self.wrapped_functions.insert(wrapped) {
+            return Ok(());
+        }
+        let scalar_name = scalar.to_msl_name();
+        writeln!(
+            self.out,
+            "{NAMESPACE}::simdgroup_{scalar_name}{}x{} {COOPERATIVE_MULTIPLY_ADD_FUNCTION}(const {space_name} {NAMESPACE}::simdgroup_{scalar_name}{}x{}& a, const {space_name} {NAMESPACE}::simdgroup_{scalar_name}{}x{}& b, const {space_name} {NAMESPACE}::simdgroup_{scalar_name}{}x{}& c) {{",
+            b_c as u32, a_r as u32, a_c as u32, a_r as u32, b_c as u32, b_r as u32, b_c as u32, a_r as u32,
+        )?;
+        let l1 = back::Level(1);
+        writeln!(
+            self.out,
+            "{l1}{NAMESPACE}::simdgroup_{scalar_name}{}x{} d;",
+            b_c as u32, a_r as u32
+        )?;
+        writeln!(self.out, "{l1}simdgroup_multiply_accumulate(d,a,b,c);")?;
+        writeln!(self.out, "{l1}return d;")?;
+        writeln!(self.out, "}}")?;
+        writeln!(self.out)?;
+        Ok(())
+    }
+
     pub(super) fn write_wrapped_functions(
         &mut self,
         module: &crate::Module,
@@ -6380,6 +6584,24 @@ template <typename A>
                 }
                 crate::Expression::ImageQuery { image, query } => {
                     self.write_wrapped_image_query(module, func_ctx, image, query)?;
+                }
+                crate::Expression::CooperativeLoad {
+                    columns,
+                    rows,
+                    role: _,
+                    ref data,
+                } => {
+                    self.write_wrapped_cooperative_load(
+                        module,
+                        func_ctx,
+                        columns,
+                        rows,
+                        data.pointer,
+                    )?;
+                }
+                crate::Expression::CooperativeMultiplyAdd { a, b, c: _ } => {
+                    let space = crate::AddressSpace::Private;
+                    self.write_wrapped_cooperative_multiply_add(module, func_ctx, space, a, b)?;
                 }
                 _ => {}
             }
@@ -6572,7 +6794,6 @@ template <typename A>
                     names: &self.names,
                     handle,
                     usage: fun_info[handle],
-
                     reference: true,
                 };
                 let separator =
@@ -6672,6 +6893,10 @@ template <typename A>
                     false,
                 ),
                 crate::ShaderStage::Task | crate::ShaderStage::Mesh => unimplemented!(),
+                crate::ShaderStage::RayGeneration
+                | crate::ShaderStage::AnyHit
+                | crate::ShaderStage::ClosestHit
+                | crate::ShaderStage::Miss => unimplemented!(),
             };
 
             // Should this entry point be modified to do vertex pulling?
@@ -6744,6 +6969,8 @@ template <typename A>
                         crate::AddressSpace::Function
                         | crate::AddressSpace::Private
                         | crate::AddressSpace::WorkGroup => {}
+                        crate::AddressSpace::RayPayload
+                        | crate::AddressSpace::IncomingRayPayload => unimplemented!(),
                     }
                 }
                 if needs_buffer_sizes {
@@ -6820,11 +7047,8 @@ template <typename A>
                     writeln!(self.out, "struct {stage_in_name} {{")?;
                 }
                 for &(ref name_key, ty, binding) in flattened_arguments.iter() {
-                    let (binding, location) = match binding {
-                        Some(ref binding @ &crate::Binding::Location { location, .. }) => {
-                            (binding, location)
-                        }
-                        _ => continue,
+                    let Some(binding) = binding else {
+                        continue;
                     };
                     let name = match *name_key {
                         NameKey::StructMember(..) => &flattened_member_names[name_key],
@@ -6838,7 +7062,15 @@ template <typename A>
                         first_time: false,
                     };
                     let resolved = options.resolve_local_binding(binding, in_mode)?;
+                    let location = match *binding {
+                        crate::Binding::Location { location, .. } => Some(location),
+                        crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. }) => None,
+                        crate::Binding::BuiltIn(_) => continue,
+                    };
                     if do_vertex_pulling {
+                        let Some(location) = location else {
+                            continue;
+                        };
                         // Update our attribute mapping.
                         am_resolved.insert(
                             location,
@@ -6986,6 +7218,7 @@ template <typename A>
             // struct.
             for &(ref name_key, ty, binding) in flattened_arguments.iter() {
                 let binding = match binding {
+                    Some(&crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. })) => continue,
                     Some(binding @ &crate::Binding::BuiltIn { .. }) => binding,
                     _ => continue,
                 };
@@ -7570,8 +7803,9 @@ template <typename A>
                         }
                         writeln!(self.out, " }};")?;
                     }
-                    _ => {
-                        if let Some(crate::Binding::Location { .. }) = arg.binding {
+                    _ => match arg.binding {
+                        Some(crate::Binding::Location { .. })
+                        | Some(crate::Binding::BuiltIn(crate::BuiltIn::Barycentric { .. })) => {
                             if has_varyings {
                                 writeln!(
                                     self.out,
@@ -7583,7 +7817,8 @@ template <typename A>
                                 )?;
                             }
                         }
-                    }
+                        _ => {}
+                    },
                 }
             }
 

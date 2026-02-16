@@ -77,7 +77,7 @@ pub enum PrintingVerbosity {
 // Lets keep these print statements on one line
 #[rustfmt::skip]
 fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize, verbosity: PrintingVerbosity) -> io::Result<()> {
-    let AdapterReport { 
+    let AdapterReport {
         info,
         features,
         limits,
@@ -164,9 +164,9 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_buffer_size,
         max_vertex_attributes,
         max_vertex_buffer_array_stride,
+        max_inter_stage_shader_variables,
         min_uniform_buffer_offset_alignment,
         min_storage_buffer_offset_alignment,
-        max_inter_stage_shader_components,
         max_color_attachments,
         max_color_attachment_bytes_per_sample,
         max_compute_workgroup_storage_size,
@@ -178,10 +178,17 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
         max_immediate_size,
         max_non_sampler_bindings,
 
-        max_task_workgroup_total_count,
-        max_task_workgroups_per_dimension,
-        max_mesh_multiview_view_count: max_mesh_multiview_count,
+        max_task_mesh_workgroup_total_count,
+        max_task_mesh_workgroups_per_dimension,
+        max_task_invocations_per_workgroup,
+        max_task_invocations_per_dimension,
+        max_mesh_invocations_per_workgroup,
+        max_mesh_invocations_per_dimension,
+        max_task_payload_size,
+        max_mesh_output_vertices,
+        max_mesh_output_primitives,
         max_mesh_output_layers,
+        max_mesh_multiview_view_count,
 
         max_blas_primitive_count,
         max_blas_geometry_count,
@@ -211,10 +218,10 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                                 Max Vertex Buffers: {max_vertex_buffers}")?;
     writeln!(output, "\t\t                              Max Vertex Attributes: {max_vertex_attributes}")?;
     writeln!(output, "\t\t                     Max Vertex Buffer Array Stride: {max_vertex_buffer_array_stride}")?;
-    writeln!(output, "\t\t                             Max Immediate data Size: {max_immediate_size}")?;
+    writeln!(output, "\t\t                            Max Immediate data Size: {max_immediate_size}")?;
+    writeln!(output, "\t\t                   Max Inter-stage Shader Variables: {max_inter_stage_shader_variables}")?;
     writeln!(output, "\t\t                Min Uniform Buffer Offset Alignment: {min_uniform_buffer_offset_alignment}")?;
     writeln!(output, "\t\t                Min Storage Buffer Offset Alignment: {min_storage_buffer_offset_alignment}")?;
-    writeln!(output, "\t\t                   Max Inter-Stage Shader Component: {max_inter_stage_shader_components}")?;
     writeln!(output, "\t\t                              Max Color Attachments: {max_color_attachments}")?;
     writeln!(output, "\t\t              Max Color Attachment Bytes per sample: {max_color_attachment_bytes_per_sample}")?;
     writeln!(output, "\t\t                 Max Compute Workgroup Storage Size: {max_compute_workgroup_storage_size}")?;
@@ -223,11 +230,19 @@ fn print_adapter(output: &mut impl io::Write, report: &AdapterReport, idx: usize
     writeln!(output, "\t\t                       Max Compute Workgroup Size Y: {max_compute_workgroup_size_y}")?;
     writeln!(output, "\t\t                       Max Compute Workgroup Size Z: {max_compute_workgroup_size_z}")?;
     writeln!(output, "\t\t               Max Compute Workgroups Per Dimension: {max_compute_workgroups_per_dimension}")?;
-    
-    writeln!(output, "\t\t                     Max Task Workgroup Total Count: {max_task_workgroup_total_count}")?;
-    writeln!(output, "\t\t                  Max Task Workgroups Per Dimension: {max_task_workgroups_per_dimension}")?;
-    writeln!(output, "\t\t                      Max Mesh Multiview View Count: {max_mesh_multiview_count}")?;
+
+    writeln!(output, "\t\t                Max Task/Mesh Workgroup Total Count: {max_task_mesh_workgroup_total_count}")?;
+    writeln!(output, "\t\t             Max Task/Mesh Workgroups Per Dimension: {max_task_mesh_workgroups_per_dimension}")?;
+    writeln!(output, "\t\t                 Max Task Invocations Per Workgroup: {max_task_invocations_per_workgroup}")?;
+    writeln!(output, "\t\t                 Max Task Invocations Per Dimension: {max_task_invocations_per_dimension}")?;
+    writeln!(output, "\t\t                 Max Mesh Invocations Per Workgroup: {max_mesh_invocations_per_workgroup}")?;
+    writeln!(output, "\t\t                 Max Mesh Invocations Per Dimension: {max_mesh_invocations_per_dimension}")?;
+
+    writeln!(output, "\t\t                              Max Task Payload Size: {max_task_payload_size}")?;
+    writeln!(output, "\t\t                           Max Mesh Output Vertices: {max_mesh_output_vertices}")?;
+    writeln!(output, "\t\t                         Max Mesh Output Primitives: {max_mesh_output_primitives}")?;
     writeln!(output, "\t\t                             Max Mesh Output Layers: {max_mesh_output_layers}")?;
+    writeln!(output, "\t\t                      Max Mesh Multiview View Count: {max_mesh_multiview_view_count}")?;
 
     writeln!(output, "\t\t                           Max BLAS Primitive count: {max_blas_primitive_count}")?;
     writeln!(output, "\t\t                            Max BLAS Geometry count: {max_blas_geometry_count}")?;

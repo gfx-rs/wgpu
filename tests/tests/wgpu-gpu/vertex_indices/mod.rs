@@ -234,7 +234,7 @@ async fn vertex_index_common(ctx: TestingContext) {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bgl],
-            immediates_ranges: &[],
+            immediate_size: 0,
         });
 
     let mut pipeline_desc = wgpu::RenderPipelineDescriptor {

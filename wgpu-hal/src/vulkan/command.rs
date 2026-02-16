@@ -284,7 +284,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         if self.device.workarounds.contains(
             super::Workarounds::FORCE_FILL_BUFFER_WITH_SIZE_GREATER_4096_ALIGNED_OFFSET_16,
         ) && range_size >= 4096
-            && range.start % 16 != 0
+            && !range.start.is_multiple_of(16)
         {
             let rounded_start = wgt::math::align_to(range.start, 16);
             let prefix_size = rounded_start - range.start;
@@ -943,7 +943,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn set_immediates(
         &mut self,
         layout: &super::PipelineLayout,
-        stages: wgt::ShaderStages,
         offset_bytes: u32,
         data: &[u32],
     ) {
@@ -951,7 +950,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
             self.device.raw.cmd_push_constants(
                 self.active,
                 layout.raw,
-                conv::map_shader_stage(stages),
+                vk::ShaderStageFlags::ALL,
                 offset_bytes,
                 bytemuck::cast_slice(data),
             )
@@ -1129,15 +1128,35 @@ impl crate::CommandEncoder for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        unsafe {
-            self.device.raw.cmd_draw_indirect(
-                self.active,
-                buffer.raw,
-                offset,
-                draw_count,
-                size_of::<wgt::DrawIndirectArgs>() as u32,
-            )
-        };
+        if draw_count >= 1
+            && self.device.private_caps.multi_draw_indirect
+            && draw_count <= self.device.private_caps.max_draw_indirect_count
+        {
+            unsafe {
+                self.device.raw.cmd_draw_indirect(
+                    self.active,
+                    buffer.raw,
+                    offset,
+                    draw_count,
+                    size_of::<wgt::DrawIndirectArgs>() as u32,
+                )
+            };
+        } else {
+            for i in 0..draw_count {
+                let indirect_offset = offset
+                    + i as wgt::BufferAddress
+                        * size_of::<wgt::DrawIndirectArgs>() as wgt::BufferAddress;
+                unsafe {
+                    self.device.raw.cmd_draw_indirect(
+                        self.active,
+                        buffer.raw,
+                        indirect_offset,
+                        1,
+                        size_of::<wgt::DrawIndirectArgs>() as u32,
+                    )
+                };
+            }
+        }
     }
     unsafe fn draw_indexed_indirect(
         &mut self,
@@ -1145,7 +1164,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
         offset: wgt::BufferAddress,
         draw_count: u32,
     ) {
-        if draw_count >= 1 && self.device.private_caps.multi_draw_indirect {
+        if draw_count >= 1
+            && self.device.private_caps.multi_draw_indirect
+            && draw_count <= self.device.private_caps.max_draw_indirect_count
+        {
             unsafe {
                 self.device.raw.cmd_draw_indexed_indirect(
                     self.active,
@@ -1156,12 +1178,15 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 )
             };
         } else {
-            for _ in 0..draw_count {
+            for i in 0..draw_count {
+                let indirect_offset = offset
+                    + i as wgt::BufferAddress
+                        * size_of::<wgt::DrawIndexedIndirectArgs>() as wgt::BufferAddress;
                 unsafe {
                     self.device.raw.cmd_draw_indexed_indirect(
                         self.active,
                         buffer.raw,
-                        offset,
+                        indirect_offset,
                         1,
                         size_of::<wgt::DrawIndexedIndirectArgs>() as u32,
                     )

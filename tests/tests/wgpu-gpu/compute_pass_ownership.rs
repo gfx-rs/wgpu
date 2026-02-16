@@ -323,7 +323,7 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline_layout"),
             bind_group_layouts: &[&bgl],
-            immediates_ranges: &[],
+            immediate_size: 0,
         });
 
     let pipeline = ctx

@@ -169,7 +169,9 @@ impl TryToWgsl for crate::BuiltIn {
             Bi::FragDepth => "frag_depth",
             Bi::FrontFacing => "front_facing",
             Bi::PrimitiveIndex => "primitive_index",
-            Bi::Barycentric => "barycentric",
+            Bi::DrawIndex => "draw_index",
+            Bi::Barycentric { perspective: true } => "barycentric",
+            Bi::Barycentric { perspective: false } => "barycentric_no_perspective",
             Bi::SampleIndex => "sample_index",
             Bi::SampleMask => "sample_mask",
             Bi::GlobalInvocationId => "global_invocation_id",
@@ -183,22 +185,36 @@ impl TryToWgsl for crate::BuiltIn {
             Bi::SubgroupInvocationId => "subgroup_invocation_id",
 
             // Non-standard built-ins.
+            Bi::MeshTaskSize => "mesh_task_size",
+            Bi::TriangleIndices => "triangle_indices",
+            Bi::LineIndices => "line_indices",
+            Bi::PointIndex => "point_index",
+            Bi::Vertices => "vertices",
+            Bi::Primitives => "primitives",
+            Bi::VertexCount => "vertex_count",
+            Bi::PrimitiveCount => "primitive_count",
+            Bi::CullPrimitive => "cull_primitive",
+
+            Bi::RayInvocationId => "ray_invocation_id",
+            Bi::NumRayInvocations => "num_ray_invocations",
+            Bi::InstanceCustomData => "instance_custom_data",
+            Bi::GeometryIndex => "geometry_index",
+            Bi::WorldRayOrigin => "world_ray_origin",
+            Bi::WorldRayDirection => "world_ray_direction",
+            Bi::ObjectRayOrigin => "object_ray_origin",
+            Bi::ObjectRayDirection => "object_ray_direction",
+            Bi::RayTmin => "ray_t_min",
+            Bi::RayTCurrentMax => "ray_t_current_max",
+            Bi::ObjectToWorld => "object_to_world",
+            Bi::WorldToObject => "world_to_object",
+            Bi::HitKind => "hit_kind",
+
             Bi::BaseInstance
             | Bi::BaseVertex
             | Bi::CullDistance
             | Bi::PointSize
-            | Bi::DrawID
             | Bi::PointCoord
-            | Bi::WorkGroupSize
-            | Bi::CullPrimitive
-            | Bi::TriangleIndices
-            | Bi::LineIndices
-            | Bi::MeshTaskSize
-            | Bi::PointIndex
-            | Bi::VertexCount
-            | Bi::PrimitiveCount
-            | Bi::Vertices
-            | Bi::Primitives => return None,
+            | Bi::WorkGroupSize => return None,
         })
     }
 }
@@ -209,6 +225,7 @@ impl ToWgsl for crate::Interpolation {
             crate::Interpolation::Perspective => "perspective",
             crate::Interpolation::Linear => "linear",
             crate::Interpolation::Flat => "flat",
+            crate::Interpolation::PerVertex => "per_vertex",
         }
     }
 }
@@ -309,15 +326,23 @@ impl TryToWgsl for crate::Scalar {
     }
 }
 
+impl ToWgsl for crate::CooperativeRole {
+    fn to_wgsl(self) -> &'static str {
+        match self {
+            Self::A => "A",
+            Self::B => "B",
+            Self::C => "C",
+        }
+    }
+}
+
 impl ToWgsl for crate::ImageDimension {
     fn to_wgsl(self) -> &'static str {
-        use crate::ImageDimension as IDim;
-
         match self {
-            IDim::D1 => "1d",
-            IDim::D2 => "2d",
-            IDim::D3 => "3d",
-            IDim::Cube => "cube",
+            Self::D1 => "1d",
+            Self::D2 => "2d",
+            Self::D3 => "3d",
+            Self::Cube => "cube",
         }
     }
 }
@@ -362,7 +387,9 @@ pub const fn address_space_str(
             As::WorkGroup => "workgroup",
             As::Handle => return (None, None),
             As::Function => "function",
-            As::TaskPayload => return (None, None),
+            As::TaskPayload => "task_payload",
+            As::IncomingRayPayload => "incoming_ray_payload",
+            As::RayPayload => "ray_payload",
         }),
         None,
     )

@@ -124,4 +124,11 @@ fn invalid_usages() {
         rayQueryProceed(&rq);
         let intersection = rayQueryGetCommittedIntersection(&rq);
     }
+    {
+        var rq: ray_query;
+        rayQueryInitialize(&rq, acc_struct, RayDesc(0u, 0xFFu, 0.001, 100000.0, vec3f(0.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0)));
+        rayQueryProceed(&rq);
+        // The acceleration structure has been set up to not generate an intersections, meaning terminate is invalid here.
+        rayQueryTerminate(&rq);
+    }
 }

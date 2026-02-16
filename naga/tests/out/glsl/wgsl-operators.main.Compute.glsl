@@ -9,6 +9,12 @@ const vec4 v_f32_one = vec4(1.0, 1.0, 1.0, 1.0);
 const vec4 v_f32_zero = vec4(0.0, 0.0, 0.0, 0.0);
 const vec4 v_f32_half = vec4(0.5, 0.5, 0.5, 0.5);
 const ivec4 v_i32_one = ivec4(1, 1, 1, 1);
+const bool b_false = false;
+const bool b_true = true;
+const bool short_circuit_1_invalid_rhs = false;
+const bool short_circuit_2_invalid_rhs = false;
+const bool short_circuit_3_ = true;
+const bool short_circuit_4_ = true;
 
 
 vec4 builtins() {
@@ -68,6 +74,8 @@ void logical() {
     bool local_2 = false;
     bool local_3 = false;
     bool local_4 = false;
+    bool local_5 = false;
+    bool local_6 = false;
     bool neg0_ = !(true);
     bvec2 neg1_ = not(bvec2(true));
     if (!(true)) {
@@ -86,28 +94,42 @@ void logical() {
     bvec3 bitwise_or1_ = bvec3(bvec3(true).x || bvec3(false).x, bvec3(true).y || bvec3(false).y, bvec3(true).z || bvec3(false).z);
     bool bitwise_and0_ = (true && false);
     bvec4 bitwise_and1_ = bvec4(bvec4(true).x && bvec4(false).x, bvec4(true).y && bvec4(false).y, bvec4(true).z && bvec4(false).z, bvec4(true).w && bvec4(false).w);
-    bool _e22 = p();
-    if (!(_e22)) {
-        bool _e26 = q();
-        local_2 = _e26;
+    if (!(false)) {
+        local_2 = false;
     } else {
         local_2 = true;
     }
-    bool _e28 = local_2;
-    if (_e28) {
-        bool _e31 = r();
-        if (!(_e31)) {
-            bool _e35 = s();
-            local_4 = _e35;
-        } else {
-            local_4 = true;
-        }
-        bool _e37 = local_4;
-        local_3 = _e37;
+    bool _e27 = local_2;
+    bool short_circuit_5_ = !(_e27);
+    bool _e29 = p();
+    if (!(_e29)) {
+        bool _e33 = q();
+        local_3 = _e33;
     } else {
-        local_3 = false;
+        local_3 = true;
     }
-    bool short_circuit = local_3;
+    bool _e35 = local_3;
+    if (_e35) {
+        bool _e38 = r();
+        if (!(_e38)) {
+            bool _e42 = s();
+            local_5 = _e42;
+        } else {
+            local_5 = true;
+        }
+        bool _e44 = local_5;
+        local_4 = _e44;
+    } else {
+        local_4 = false;
+    }
+    bool short_circuit_6_ = local_4;
+    if (false) {
+        bool _e50 = q();
+        local_6 = _e50;
+    } else {
+        local_6 = true;
+    }
+    bool short_circuit_7_ = local_6;
     return;
 }
 

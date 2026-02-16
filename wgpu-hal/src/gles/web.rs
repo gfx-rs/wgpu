@@ -114,7 +114,7 @@ unsafe impl Send for Instance {}
 impl crate::Instance for Instance {
     type A = super::Api;
 
-    unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+    unsafe fn init(desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init OpenGL (WebGL) Backend");
         Ok(Instance {
             options: desc.backend_options.gl.clone(),

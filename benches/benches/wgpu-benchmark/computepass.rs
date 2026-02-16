@@ -251,7 +251,7 @@ impl ComputepassState {
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: None,
                     bind_group_layouts: &[&bind_group_layout],
-                    immediates_ranges: &[],
+                    immediate_size: 0,
                 });
 
         let pipeline =
@@ -346,7 +346,7 @@ impl ComputepassState {
                     .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                         label: None,
                         bind_group_layouts: &[&bindless_bind_group_layout],
-                        immediates_ranges: &[],
+                        immediate_size: 0,
                     });
 
             let bindless_pipeline =

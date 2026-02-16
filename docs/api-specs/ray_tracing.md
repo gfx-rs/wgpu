@@ -78,7 +78,7 @@ fn render(/*whatever args you need to render*/) {
   /* do other preparations on the TlasInstance.*/
   encoder.build_acceleration_structures(iter::empty(), iter::once(&tlas_package));
   /* more render code */
-  queue.submit(Some(encoder.finish()));
+  queue.submit([encoder.finish()]);
 }
 ```
 
@@ -93,10 +93,12 @@ fn render(/*whatever args you need to render*/) {
 
 ## `naga`'s raytracing API:
 
-`naga` supports ray queries (also known as inline raytracing) only. To enable basic ray query functions you must add
+`naga` supports ray queries (also known as inline raytracing). To enable basic ray query functions you must add
 `enable wgpu_ray_query` to the shader, ray queries and acceleration structures also support tags which require extra
-`enable` extensions (see Acceleration structure tags for more info). Ray tracing pipelines
-are currently unsupported. Naming is mostly taken from vulkan.
+`enable` extensions (see Acceleration structure tags for more info). Ray tracing pipelines are currently in
+development. Naming is mostly taken from vulkan.
+
+### Ray Queries
 
 ```wgsl
 // - Initializes the `ray_query` to check where (if anywhere) the ray defined by `ray_desc` hits in `acceleration_structure`
@@ -125,8 +127,9 @@ rayQueryGenerateIntersection(hit_t: f32)
 // - Commits a hit from triangular non-opaque geometry.
 rayQueryConfirmIntersection()
 
-// - Aborts the query.
-rayQueryTerminate()
+// Aborts the query which is in progress, that is, the next `rayQueryProceed` is guaranteed to return `false`
+// and any call to `rayQueryGetCommittedIntersection` will return the closest committed result so far.
+rayQueryTerminate(rq: ptr<function, ray_query>)
 
 // - Returns intersection details about a hit considered `Committed`.
 rayQueryGetCommittedIntersection(rq: ptr<function, ray_query>) -> RayIntersection
@@ -147,7 +150,7 @@ getCandidateHitVertexPositions(rq: ptr<function, ray_query<vertex_return>>) -> a
 
 > [!CAUTION]
 >
-> ### ⚠️Undefined behavior ⚠️:
+> #### ⚠️Undefined behavior ⚠️:
 > - Calling `rayQueryGetCommittedIntersection` or `rayQueryGetCandidateIntersection` when `rayQueryProceed` has not been
 > called on this ray query since it was initialized (or if the ray query has not been previously initialized).
 > - Calling `rayQueryGetCommittedIntersection` when `rayQueryProceed`'s latest return on this ray query is considered
@@ -271,6 +274,39 @@ const RAY_QUERY_INTERSECTION_GENERATED = 2;
 const RAY_QUERY_INTERSECTION_AABB = 3;
 ```
 
+### Ray Tracing Pipelines
+
+Functions
+```wgsl
+// Begins to check where (if anywhere) the ray defined by `ray_desc` hits in `acceleration_structure` calling through the `any_hit` shaders and `closest_hit` shader if something was hit or the `miss` shader if no hit was found
+traceRay<T>(acceleration_structure: acceleration_structure, ray_desc: RayDesc, payload: ptr<ray_payload, T>)
+```
+
+> [!CAUTION]
+>
+> #### ⚠️Undefined behavior ⚠️:
+> Calling `traceRay` inside another `traceRay` more than `max_recursion_depth` times
+>
+> *this is only known undefined behaviour, and will be worked around in the future.
+
+New shader stages
+```wgsl
+// First stage to be called, allowed to call `traceRay`
+@ray_generation
+fn rg() {}
+
+// Stage called on any hit that is not opaque, not allowed to call `traceRay`
+@any_hit
+fn ah() {}
+
+// Stage called on the closest hit, allowed to call `traceRay`
+@closest_hit
+fn ch() {}
+
+// Stage call if there was never a hit, allowed to call `traceRay`
+@miss
+fn miss() {}
+```
 ### Acceleration structure tags
 
 These are tags that can be added to a acceleration structure (`acceleration_structure` ->

@@ -93,21 +93,25 @@ struct Example<A: hal::Api> {
 
 impl<A: hal::Api> Example<A> {
     fn init(window: &winit::window::Window) -> Result<Self, Box<dyn std::error::Error>> {
+        // The Instance can be initialized with the DisplayHandle from the EventLoop as well
+        let raw_display_handle = window.display_handle()?;
+
         let instance_desc = hal::InstanceDescriptor {
             name: "example",
             flags: wgpu_types::InstanceFlags::from_build_config().with_env(),
             memory_budget_thresholds: wgpu_types::MemoryBudgetThresholds::default(),
             // Can't rely on having DXC available, so use FXC instead
             backend_options: wgpu_types::BackendOptions::default(),
+            telemetry: None,
+            display: Some(raw_display_handle),
         };
         let instance = unsafe { A::Instance::init(&instance_desc)? };
         let surface = {
             let raw_window_handle = window.window_handle()?.as_raw();
-            let raw_display_handle = window.display_handle()?.as_raw();
 
             unsafe {
                 instance
-                    .create_surface(raw_display_handle, raw_window_handle)
+                    .create_surface(raw_display_handle.as_raw(), raw_window_handle)
                     .unwrap()
             }
         };
@@ -242,7 +246,7 @@ impl<A: hal::Api> Example<A> {
             label: None,
             flags: hal::PipelineLayoutFlags::empty(),
             bind_group_layouts: &[&global_group_layout, &local_group_layout],
-            immediates_ranges: &[],
+            immediate_size: 0,
         };
         let pipeline_layout = unsafe {
             device

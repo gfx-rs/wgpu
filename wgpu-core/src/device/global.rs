@@ -87,6 +87,11 @@ impl Global {
         device.limits.clone()
     }
 
+    pub fn device_adapter_info(&self, device_id: DeviceId) -> wgt::AdapterInfo {
+        let device = self.hub.devices.get(device_id);
+        device.adapter.get_info()
+    }
+
     pub fn device_downlevel_properties(&self, device_id: DeviceId) -> wgt::DownlevelCapabilities {
         let device = self.hub.devices.get(device_id);
         device.downlevel.clone()
@@ -739,7 +744,7 @@ impl Global {
             let desc = binding_model::ResolvedPipelineLayoutDescriptor {
                 label: desc.label.clone(),
                 bind_group_layouts: Cow::Owned(bind_group_layouts),
-                immediates_ranges: desc.immediates_ranges.clone(),
+                immediate_size: desc.immediate_size,
             };
 
             let layout = match device.create_pipeline_layout(&desc) {
@@ -997,27 +1002,31 @@ impl Global {
             let device = self.hub.devices.get(device_id);
 
             #[cfg(feature = "trace")]
-            let data = device.trace.lock().as_mut().map(|trace| match source {
-                #[cfg(feature = "wgsl")]
-                pipeline::ShaderModuleSource::Wgsl(ref code) => {
-                    trace.make_binary("wgsl", code.as_bytes())
-                }
-                #[cfg(feature = "glsl")]
-                pipeline::ShaderModuleSource::Glsl(ref code, _) => {
-                    trace.make_binary("glsl", code.as_bytes())
-                }
-                #[cfg(feature = "spirv")]
-                pipeline::ShaderModuleSource::SpirV(ref code, _) => {
-                    trace.make_binary("spirv", bytemuck::cast_slice::<u32, u8>(code))
-                }
-                pipeline::ShaderModuleSource::Naga(ref module) => {
-                    let string =
-                        ron::ser::to_string_pretty(module, ron::ser::PrettyConfig::default())
-                            .unwrap();
-                    trace.make_binary("ron", string.as_bytes())
-                }
-                pipeline::ShaderModuleSource::Dummy(_) => {
-                    panic!("found `ShaderModuleSource::Dummy`")
+            let data = device.trace.lock().as_mut().map(|trace| {
+                use crate::device::trace::DataKind;
+
+                match source {
+                    #[cfg(feature = "wgsl")]
+                    pipeline::ShaderModuleSource::Wgsl(ref code) => {
+                        trace.make_binary(DataKind::Wgsl, code.as_bytes())
+                    }
+                    #[cfg(feature = "glsl")]
+                    pipeline::ShaderModuleSource::Glsl(ref code, _) => {
+                        trace.make_binary(DataKind::Glsl, code.as_bytes())
+                    }
+                    #[cfg(feature = "spirv")]
+                    pipeline::ShaderModuleSource::SpirV(ref code, _) => {
+                        trace.make_binary(DataKind::Spv, bytemuck::cast_slice::<u32, u8>(code))
+                    }
+                    pipeline::ShaderModuleSource::Naga(ref module) => {
+                        let string =
+                            ron::ser::to_string_pretty(module, ron::ser::PrettyConfig::default())
+                                .unwrap();
+                        trace.make_binary(DataKind::Ron, string.as_bytes())
+                    }
+                    pipeline::ShaderModuleSource::Dummy(_) => {
+                        panic!("found `ShaderModuleSource::Dummy`")
+                    }
                 }
             });
 
@@ -1050,7 +1059,6 @@ impl Global {
         (id, Some(error))
     }
 
-    #[allow(unused_unsafe)]
     /// # Safety
     ///
     /// This function passes source code or binary to the backend as-is and can potentially result in a
@@ -1081,27 +1089,30 @@ impl Global {
 
             #[cfg(feature = "trace")]
             if let Some(ref mut trace) = *device.trace.lock() {
+                use crate::device::trace::DataKind;
+
                 let mut file_names = Vec::new();
-                for (data, ext) in [
-                    (desc.spirv.as_ref().map(|a| bytemuck::cast_slice(a)), "spv"),
-                    (desc.dxil.as_deref(), "dxil"),
-                    (desc.hlsl.as_ref().map(|a| a.as_bytes()), "hlsl"),
-                    (desc.msl.as_ref().map(|a| a.as_bytes()), "msl"),
-                    (desc.glsl.as_ref().map(|a| a.as_bytes()), "glsl"),
-                    (desc.wgsl.as_ref().map(|a| a.as_bytes()), "wgsl"),
+                for (data, kind) in [
+                    (
+                        desc.spirv.as_ref().map(|a| bytemuck::cast_slice(a)),
+                        DataKind::Spv,
+                    ),
+                    (desc.dxil.as_deref(), DataKind::Dxil),
+                    (desc.hlsl.as_ref().map(|a| a.as_bytes()), DataKind::Hlsl),
+                    (desc.metallib.as_deref(), DataKind::MetalLib),
+                    (desc.msl.as_ref().map(|a| a.as_bytes()), DataKind::Msl),
+                    (desc.glsl.as_ref().map(|a| a.as_bytes()), DataKind::Glsl),
+                    (desc.wgsl.as_ref().map(|a| a.as_bytes()), DataKind::Wgsl),
                 ] {
                     if let Some(data) = data {
-                        file_names.push(trace.make_binary(ext, data));
+                        file_names.push(trace.make_binary(kind, data));
                     }
                 }
                 trace.add(trace::Action::CreateShaderModulePassthrough {
                     id: shader.to_trace(),
                     data: file_names,
-
-                    entry_point: desc.entry_point.clone(),
                     label: desc.label.clone(),
                     num_workgroups: desc.num_workgroups,
-                    runtime_checks: desc.runtime_checks,
                 });
             };
 
@@ -1379,6 +1390,7 @@ impl Global {
                 Ok(cache) => cache,
                 Err(e) => break 'error e.into(),
             };
+            let mut passthrough_stages = wgt::ShaderStages::empty();
 
             let vertex = match desc.vertex {
                 RenderPipelineVertexProcessor::Vertex(ref vertex) => {
@@ -1394,6 +1406,9 @@ impl Global {
                         Ok(module) => module,
                         Err(e) => break 'error e,
                     };
+                    if module.interface.is_none() {
+                        passthrough_stages |= wgt::ShaderStages::VERTEX;
+                    }
                     let stage = ResolvedProgrammableStageDescriptor {
                         module,
                         entry_point: vertex.stage.entry_point.clone(),
@@ -1421,6 +1436,9 @@ impl Global {
                             Ok(module) => module,
                             Err(e) => break 'error e,
                         };
+                        if module.interface.is_none() {
+                            passthrough_stages |= wgt::ShaderStages::TASK;
+                        }
                         let state = ResolvedProgrammableStageDescriptor {
                             module,
                             entry_point: task.stage.entry_point.clone(),
@@ -1445,6 +1463,9 @@ impl Global {
                         Ok(module) => module,
                         Err(e) => break 'error e,
                     };
+                    if mesh_module.interface.is_none() {
+                        passthrough_stages |= wgt::ShaderStages::VERTEX;
+                    }
                     let mesh_stage = ResolvedProgrammableStageDescriptor {
                         module: mesh_module,
                         entry_point: mesh.stage.entry_point.clone(),
@@ -1473,6 +1494,9 @@ impl Global {
                     Ok(module) => module,
                     Err(e) => break 'error e,
                 };
+                if module.interface.is_none() {
+                    passthrough_stages |= wgt::ShaderStages::FRAGMENT;
+                }
                 let stage = ResolvedProgrammableStageDescriptor {
                     module,
                     entry_point: state.stage.entry_point.clone(),
@@ -1486,6 +1510,12 @@ impl Global {
             } else {
                 None
             };
+
+            if !passthrough_stages.is_empty() && layout.is_none() {
+                break 'error pipeline::CreateRenderPipelineError::Implicit(
+                    pipeline::ImplicitLayoutError::Passthrough(passthrough_stages),
+                );
+            }
 
             let desc = ResolvedGeneralRenderPipelineDescriptor {
                 label: desc.label.clone(),
@@ -1546,13 +1576,22 @@ impl Global {
                 Ok(pipeline) => pipeline,
                 Err(e) => break 'error e.into(),
             };
-            let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
-                Some(bg) => fid.assign(Fallible::Valid(bg.clone())),
-                None => {
-                    break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index)
+            match pipeline.get_bind_group_layout(index) {
+                Ok(bgl) => {
+                    #[cfg(feature = "trace")]
+                    if let Some(ref mut trace) = *pipeline.device.trace.lock() {
+                        trace.add(trace::Action::GetRenderPipelineBindGroupLayout {
+                            id: bgl.to_trace(),
+                            pipeline: pipeline.to_trace(),
+                            index,
+                        });
+                    }
+
+                    let id = fid.assign(Fallible::Valid(bgl.clone()));
+                    return (id, None);
                 }
+                Err(err) => break 'error err,
             };
-            return (id, None);
         };
 
         let id = fid.assign(Fallible::Invalid(Arc::new(String::new())));
@@ -1620,6 +1659,11 @@ impl Global {
                 Ok(module) => module,
                 Err(e) => break 'error e.into(),
             };
+            if module.interface.is_none() && layout.is_none() {
+                break 'error pipeline::CreateComputePipelineError::Implicit(
+                    pipeline::ImplicitLayoutError::Passthrough(wgt::ShaderStages::COMPUTE),
+                );
+            }
             let stage = ResolvedProgrammableStageDescriptor {
                 module,
                 entry_point: desc.stage.entry_point.clone(),
@@ -1682,14 +1726,22 @@ impl Global {
                 Err(e) => break 'error e.into(),
             };
 
-            let id = match pipeline.layout.bind_group_layouts.get(index as usize) {
-                Some(bg) => fid.assign(Fallible::Valid(bg.clone())),
-                None => {
-                    break 'error binding_model::GetBindGroupLayoutError::InvalidGroupIndex(index)
-                }
-            };
+            match pipeline.get_bind_group_layout(index) {
+                Ok(bgl) => {
+                    #[cfg(feature = "trace")]
+                    if let Some(ref mut trace) = *pipeline.device.trace.lock() {
+                        trace.add(trace::Action::GetComputePipelineBindGroupLayout {
+                            id: bgl.to_trace(),
+                            pipeline: pipeline.to_trace(),
+                            index,
+                        });
+                    }
 
-            return (id, None);
+                    let id = fid.assign(Fallible::Valid(bgl.clone()));
+                    return (id, None);
+                }
+                Err(err) => break 'error err,
+            };
         };
 
         let id = fid.assign(Fallible::Invalid(Arc::new(String::new())));
@@ -1982,6 +2034,15 @@ impl Global {
     ) -> Option<wgt::AllocatorReport> {
         let device = self.hub.devices.get(device_id);
         device.generate_allocator_report()
+    }
+
+    #[cfg(feature = "trace")]
+    pub fn device_take_trace(
+        &self,
+        device_id: DeviceId,
+    ) -> Option<Box<dyn trace::Trace + Send + Sync + 'static>> {
+        let device = self.hub.devices.get(device_id);
+        device.take_trace()
     }
 
     pub fn queue_drop(&self, queue_id: QueueId) {

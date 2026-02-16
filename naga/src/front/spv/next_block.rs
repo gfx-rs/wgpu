@@ -277,7 +277,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                         let index_maybe = match *index_expr_data {
                             crate::Expression::Constant(const_handle) => Some(
                                 ctx.gctx()
-                                    .eval_expr_to_u32(ctx.module.constants[const_handle].init)
+                                    .get_const_val(ctx.module.constants[const_handle].init)
                                     .map_err(|_| {
                                         Error::InvalidAccess(crate::Expression::Constant(
                                             const_handle,
@@ -1693,7 +1693,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let set_id = self.next()?;
-                    if Some(set_id) != self.ext_glsl_id {
+                    if Some(set_id) == self.ext_non_semantic_id {
+                        for _ in 0..inst.wc - 4 {
+                            self.next()?;
+                        }
+                        continue;
+                    } else if Some(set_id) != self.ext_glsl_id {
                         return Err(Error::UnsupportedExtInstSet(set_id));
                     }
                     let inst_id = self.next()?;

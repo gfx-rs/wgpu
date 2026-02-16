@@ -99,10 +99,7 @@ async fn partial_update_test(ctx: TestingContext) {
         .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("pipeline_layout"),
             bind_group_layouts: &[&bgl],
-            immediates_ranges: &[wgpu::ImmediateRange {
-                stages: wgpu::ShaderStages::COMPUTE,
-                range: 0..32,
-            }],
+            immediate_size: 32,
         });
 
     let pipeline = ctx
@@ -271,10 +268,7 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
         .device
         .create_pipeline_layout(&PipelineLayoutDescriptor {
             bind_group_layouts: &[&bind_group_layout],
-            immediates_ranges: &[ImmediateRange {
-                stages: ShaderStages::VERTEX_FRAGMENT,
-                range: 0..8 * size_of::<u32>() as u32,
-            }],
+            immediate_size: 8 * size_of::<u32>() as u32,
             ..Default::default()
         });
 
@@ -338,7 +332,7 @@ async fn render_pass_test(ctx: &TestingContext, use_render_bundle: bool) {
     ) {
         let data_as_u8: &[u8] = bytemuck::cast_slice(data.as_slice());
         encoder.set_pipeline(pipeline);
-        encoder.set_immediates(ShaderStages::VERTEX_FRAGMENT, 0, data_as_u8);
+        encoder.set_immediates(0, data_as_u8);
         encoder.set_bind_group(0, Some(bind_group), &[]);
         encoder.draw(0..4, 0..1);
     }

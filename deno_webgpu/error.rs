@@ -201,7 +201,7 @@ impl GPUError {
   }
 }
 
-fn fmt_err(err: &(dyn std::error::Error + 'static)) -> String {
+pub(crate) fn fmt_err(err: &(dyn std::error::Error + 'static)) -> String {
   let mut output = err.to_string();
 
   let mut e = err.source();
@@ -378,4 +378,44 @@ pub enum GPUGenericError {
   #[class(type)]
   #[error("Illegal constructor")]
   InvalidConstructor,
+}
+
+pub enum GPUPipelineErrorReason {
+  Validation,
+  #[expect(dead_code)]
+  Internal,
+}
+
+impl Display for GPUPipelineErrorReason {
+  fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Validation => f.write_str("validation"),
+      Self::Internal => f.write_str("internal"),
+    }
+  }
+}
+
+pub(crate) fn make_pipeline_error<'a>(
+  scope: &mut v8::HandleScope<'a>,
+  reason: GPUPipelineErrorReason,
+  message: &str,
+) -> v8::Local<'a, v8::Object> {
+  let state = JsRuntime::op_state_from(scope);
+  let class = state
+    .borrow()
+    .borrow::<crate::PipelineErrorClass>()
+    .0
+    .clone();
+  let constructor =
+    v8::Local::<v8::Function>::try_from(v8::Local::new(scope, class)).unwrap();
+  let message_str = v8::String::new(scope, message).unwrap();
+  let reason_str = v8::String::new(scope, &reason.to_string()).unwrap();
+
+  let options = v8::Object::new(scope);
+  let key = v8::String::new(scope, "reason").unwrap();
+  options.set(scope, key.into(), reason_str.into());
+
+  constructor
+    .new_instance(scope, &[message_str.into(), options.into()])
+    .unwrap()
 }

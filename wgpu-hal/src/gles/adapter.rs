@@ -633,7 +633,13 @@ impl super::Adapter {
             super::PrivateCapabilities::TEXTURE_STORAGE,
             supported((3, 0), (4, 2)),
         );
-        private_caps.set(super::PrivateCapabilities::DEBUG_FNS, gl.supports_debug());
+        let is_mali = renderer.to_lowercase().contains("mali");
+        let debug_fns_enabled = match backend_options.debug_fns {
+            wgt::GlDebugFns::Auto => gl.supports_debug() && !is_mali,
+            wgt::GlDebugFns::ForceEnabled => gl.supports_debug(),
+            wgt::GlDebugFns::Disabled => false,
+        };
+        private_caps.set(super::PrivateCapabilities::DEBUG_FNS, debug_fns_enabled);
         private_caps.set(
             super::PrivateCapabilities::INVALIDATE_FRAMEBUFFER,
             supported((3, 0), (4, 3)),
@@ -684,15 +690,14 @@ impl super::Adapter {
 
         let max_color_attachments = unsafe {
             gl.get_parameter_i32(glow::MAX_COLOR_ATTACHMENTS)
-                .min(gl.get_parameter_i32(glow::MAX_DRAW_BUFFERS))
-                .min(crate::MAX_COLOR_ATTACHMENTS as i32) as u32
+                .min(gl.get_parameter_i32(glow::MAX_DRAW_BUFFERS)) as u32
         };
 
         // 16 bytes per sample is the maximum size of a color attachment.
         let max_color_attachment_bytes_per_sample =
             max_color_attachments * wgt::TextureFormat::MAX_TARGET_PIXEL_BYTE_COST;
 
-        let limits = wgt::Limits {
+        let limits = crate::auxil::apply_hal_limits(wgt::Limits {
             max_texture_dimension_1d: max_texture_size,
             max_texture_dimension_2d: max_texture_size,
             max_texture_dimension_3d: max_texture_3d_size,
@@ -724,8 +729,7 @@ impl super::Adapter {
                 (unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIB_BINDINGS) } as u32)
             } else {
                 16 // should this be different?
-            }
-            .min(crate::MAX_VERTEX_BUFFERS as u32),
+            },
             max_vertex_attributes: (unsafe { gl.get_parameter_i32(glow::MAX_VERTEX_ATTRIBS) }
                 as u32)
                 .min(super::MAX_VERTEX_ATTRIBUTES as u32),
@@ -761,17 +765,17 @@ impl super::Adapter {
             max_immediate_size: super::MAX_IMMEDIATES as u32 * 4,
             min_uniform_buffer_offset_alignment,
             min_storage_buffer_offset_alignment,
-            max_inter_stage_shader_components: {
+            max_inter_stage_shader_variables: {
                 // MAX_VARYING_COMPONENTS may return 0, because it is deprecated since OpenGL 3.2 core,
                 // and an OpenGL Context with the core profile and with forward-compatibility=true,
                 // will make deprecated constants unavailable.
                 let max_varying_components =
                     unsafe { gl.get_parameter_i32(glow::MAX_VARYING_COMPONENTS) } as u32;
                 if max_varying_components == 0 {
-                    // default value for max_inter_stage_shader_components
-                    60
+                    // default value for max_inter_stage_shader_variables
+                    15
                 } else {
-                    max_varying_components
+                    max_varying_components / 4
                 }
             },
             max_color_attachments,
@@ -808,10 +812,17 @@ impl super::Adapter {
             max_buffer_size: i32::MAX as u64,
             max_non_sampler_bindings: u32::MAX,
 
-            max_task_workgroup_total_count: 0,
-            max_task_workgroups_per_dimension: 0,
-            max_mesh_multiview_view_count: 0,
+            max_task_mesh_workgroup_total_count: 0,
+            max_task_mesh_workgroups_per_dimension: 0,
+            max_task_invocations_per_workgroup: 0,
+            max_task_invocations_per_dimension: 0,
+            max_mesh_invocations_per_workgroup: 0,
+            max_mesh_invocations_per_dimension: 0,
+            max_task_payload_size: 0,
+            max_mesh_output_vertices: 0,
+            max_mesh_output_primitives: 0,
             max_mesh_output_layers: 0,
+            max_mesh_multiview_view_count: 0,
 
             max_blas_primitive_count: 0,
             max_blas_geometry_count: 0,
@@ -819,7 +830,7 @@ impl super::Adapter {
             max_acceleration_structures_per_shader_stage: 0,
 
             max_multiview_view_count: 0,
-        };
+        });
 
         let mut workarounds = super::Workarounds::empty();
 
@@ -894,6 +905,7 @@ impl super::Adapter {
                     raw_tlas_instance_size: 0,
                     ray_tracing_scratch_buffer_alignment: 0,
                 },
+                cooperative_matrix_properties: Vec::new(),
             },
         })
     }

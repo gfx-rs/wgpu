@@ -107,7 +107,7 @@ impl crate::framework::Example for Example {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("compute"),
                 bind_group_layouts: &[&compute_bind_group_layout],
-                immediates_ranges: &[],
+                immediate_size: 0,
             });
 
         // create render pipeline with empty bind group layout
@@ -116,7 +116,7 @@ impl crate::framework::Example for Example {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("render"),
                 bind_group_layouts: &[],
-                immediates_ranges: &[],
+                immediate_size: 0,
             });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -332,9 +332,7 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
     optional_features: wgpu::Features::default(),
     base_test_parameters: wgpu_test::TestParameters::default()
         .downlevel_flags(wgpu::DownlevelFlags::COMPUTE_SHADERS)
-        .limits(wgpu::Limits::downlevel_defaults())
-        // Lots of validation errors, maybe related to https://github.com/gfx-rs/wgpu/issues/3160
-        .expect_fail(wgpu_test::FailureCase::molten_vk()),
+        .limits(wgpu::Limits::downlevel_defaults()),
     comparisons: &[wgpu_test::ComparisonType::Mean(0.005)],
     _phantom: std::marker::PhantomData::<Example>,
 };

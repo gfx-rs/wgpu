@@ -57,6 +57,12 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
             })
     };
 
+    let shared_info = WriterSharedOptions {
+        mesh_output_validation: params.mesh_output_validation,
+        task_limits: params.task_limits,
+        bounds_checks_policies: params.bounds_check_policies,
+    };
+
     {
         if targets.contains(Targets::ANALYSIS) {
             let config = ron::ser::PrettyConfig::default().new_line("\n".to_string());
@@ -84,8 +90,8 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
             &info,
             debug_info,
             &params.spv,
-            params.bounds_check_policies,
             &params.pipeline_constants,
+            &shared_info,
         );
     }
 
@@ -169,12 +175,12 @@ fn write_output_spv(
     info: &naga::valid::ModuleInfo,
     debug_info: Option<naga::back::spv::DebugInfo>,
     params: &SpirvOutParameters,
-    bounds_check_policies: naga::proc::BoundsCheckPolicies,
     pipeline_constants: &naga::back::PipelineConstants,
+    shared_options: &WriterSharedOptions,
 ) {
     use naga::back::spv;
 
-    let options = params.to_options(bounds_check_policies, debug_info);
+    let options = params.to_options(shared_options, debug_info);
 
     let (module, info) =
         naga::back::pipeline_constants::process_overrides(module, info, None, pipeline_constants)
@@ -253,7 +259,7 @@ fn write_output_msl(
         }
     }
 
-    input.write_output_file("msl", "msl", string, DIR_OUT);
+    input.write_output_file("msl", "metal", string, DIR_OUT);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -335,7 +341,12 @@ fn write_output_hlsl(
             naga::ShaderStage::Vertex => &mut config.vertex,
             naga::ShaderStage::Fragment => &mut config.fragment,
             naga::ShaderStage::Compute => &mut config.compute,
-            naga::ShaderStage::Task | naga::ShaderStage::Mesh => unreachable!(),
+            naga::ShaderStage::Task
+            | naga::ShaderStage::Mesh
+            | naga::ShaderStage::RayGeneration
+            | naga::ShaderStage::AnyHit
+            | naga::ShaderStage::ClosestHit
+            | naga::ShaderStage::Miss => unreachable!(),
         }
         .push(hlsl_snapshots::ConfigItem {
             entry_point: name.clone(),
@@ -435,7 +446,6 @@ fn convert_snapshots_spv() {
 // While we _can_ run this test under miri, it is extremely slow (>5 minutes),
 // and naga isn't the primary target for miri testing, so we disable it.
 #[cfg_attr(miri, ignore)]
-#[allow(unused_variables)]
 #[test]
 fn convert_snapshots_glsl() {
     let _ = env_logger::try_init();

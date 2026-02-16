@@ -18,4 +18,5 @@ env_logger.workspace = true
 regex-lite.workspace = true
 log.workspace = true
 pico-args.workspace = true
+serde_json.workspace = true
 xshell.workspace = true

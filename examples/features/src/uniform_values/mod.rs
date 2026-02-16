@@ -162,7 +162,7 @@ impl WgpuContext {
             label: None,
             // (4)
             bind_group_layouts: &[&bind_group_layout],
-            immediates_ranges: &[],
+            immediate_size: 0,
         });
 
         let swapchain_capabilities = surface.get_capabilities(&adapter);

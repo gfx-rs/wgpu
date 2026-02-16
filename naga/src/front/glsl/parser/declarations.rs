@@ -608,6 +608,7 @@ impl ParsingContext<'_> {
                 kind: match global {
                     GlobalOrConstant::Global(handle) => GlobalLookupKind::BlockSelect(handle, i),
                     GlobalOrConstant::Constant(handle) => GlobalLookupKind::Constant(handle, ty),
+                    GlobalOrConstant::Override(handle) => GlobalLookupKind::Override(handle, ty),
                 },
                 entry_arg: None,
                 mutable: true,

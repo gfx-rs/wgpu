@@ -466,7 +466,7 @@ impl crate::framework::Example for Example {
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("shadow"),
                 bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
-                immediates_ranges: &[],
+                immediate_size: 0,
             });
 
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -582,7 +582,7 @@ impl crate::framework::Example for Example {
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("main"),
                 bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
-                immediates_ranges: &[],
+                immediate_size: 0,
             });
 
             let mx_total = Self::generate_matrix(config.width as f32 / config.height as f32);

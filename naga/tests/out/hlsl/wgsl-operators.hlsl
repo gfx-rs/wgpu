@@ -2,6 +2,12 @@ static const float4 v_f32_one = float4(1.0, 1.0, 1.0, 1.0);
 static const float4 v_f32_zero = float4(0.0, 0.0, 0.0, 0.0);
 static const float4 v_f32_half = float4(0.5, 0.5, 0.5, 0.5);
 static const int4 v_i32_one = int4(int(1), int(1), int(1), int(1));
+static const bool b_false = false;
+static const bool b_true = true;
+static const bool short_circuit_1_invalid_rhs = false;
+static const bool short_circuit_2_invalid_rhs = false;
+static const bool short_circuit_3_ = true;
+static const bool short_circuit_4_ = true;
 
 float4 builtins()
 {
@@ -75,6 +81,8 @@ void logical()
     bool local_2 = (bool)0;
     bool local_3 = (bool)0;
     bool local_4 = (bool)0;
+    bool local_5 = (bool)0;
+    bool local_6 = (bool)0;
 
     bool neg0_ = !(true);
     bool2 neg1_ = !((true).xx);
@@ -94,28 +102,42 @@ void logical()
     bool3 bitwise_or1_ = ((true).xxx | (false).xxx);
     bool bitwise_and0_ = (true & false);
     bool4 bitwise_and1_ = ((true).xxxx & (false).xxxx);
-    const bool _e22 = p();
-    if (!(_e22)) {
-        const bool _e26 = q();
-        local_2 = _e26;
+    if (!(false)) {
+        local_2 = false;
     } else {
         local_2 = true;
     }
-    bool _e28 = local_2;
-    if (_e28) {
-        const bool _e31 = r();
-        if (!(_e31)) {
-            const bool _e35 = s();
-            local_4 = _e35;
-        } else {
-            local_4 = true;
-        }
-        bool _e37 = local_4;
-        local_3 = _e37;
+    bool _e27 = local_2;
+    bool short_circuit_5_ = !(_e27);
+    const bool _e29 = p();
+    if (!(_e29)) {
+        const bool _e33 = q();
+        local_3 = _e33;
     } else {
-        local_3 = false;
+        local_3 = true;
     }
-    bool short_circuit = local_3;
+    bool _e35 = local_3;
+    if (_e35) {
+        const bool _e38 = r();
+        if (!(_e38)) {
+            const bool _e42 = s();
+            local_5 = _e42;
+        } else {
+            local_5 = true;
+        }
+        bool _e44 = local_5;
+        local_4 = _e44;
+    } else {
+        local_4 = false;
+    }
+    bool short_circuit_6_ = local_4;
+    if (false) {
+        const bool _e50 = q();
+        local_6 = _e50;
+    } else {
+        local_6 = true;
+    }
+    bool short_circuit_7_ = local_6;
     return;
 }
 

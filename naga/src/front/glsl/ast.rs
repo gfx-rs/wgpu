@@ -4,13 +4,14 @@ use core::fmt;
 use super::{builtins::MacroCall, Span};
 use crate::{
     AddressSpace, BinaryOperator, Binding, Constant, Expression, Function, GlobalVariable, Handle,
-    Interpolation, Literal, Sampling, StorageAccess, Type, UnaryOperator,
+    Interpolation, Literal, Override, Sampling, StorageAccess, Type, UnaryOperator,
 };
 
 #[derive(Debug, Clone, Copy)]
 pub enum GlobalLookupKind {
     Variable(Handle<GlobalVariable>),
     Constant(Handle<Constant>, Handle<Type>),
+    Override(Handle<Override>, Handle<Type>),
     BlockSelect(Handle<GlobalVariable>, u32),
 }
 
@@ -115,6 +116,10 @@ pub struct HirExpr {
 
 #[derive(Debug, Clone)]
 pub enum HirExprKind {
+    /// Represents a sequence of expressions. It returns the type and value of the last (i.e. right-most) expression.
+    Sequence {
+        exprs: Vec<Handle<HirExpr>>,
+    },
     Access {
         base: Handle<HirExpr>,
         index: Handle<HirExpr>,

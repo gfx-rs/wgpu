@@ -7,7 +7,7 @@ const NUM_VECS: i32 = 42i;
 @group(1) @binding(0) 
 var<uniform> global: Data;
 
-fn function() -> vec4<f32> {
+fn function_() -> vec4<f32> {
     var sum: vec4<f32> = vec4(0f);
     var i: i32 = 0i;
 
@@ -32,7 +32,7 @@ fn function() -> vec4<f32> {
 }
 
 fn main_1() {
-    let _e0 = function();
+    let _e0 = function_();
     return;
 }
 

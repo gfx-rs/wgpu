@@ -79,7 +79,7 @@ impl<T: 'static> AsAny for T {
 trait_alias!(CommonTraits: AsAny + Any + Debug + WasmNotSendSync);
 
 pub trait InstanceInterface: CommonTraits {
-    fn new(desc: &crate::InstanceDescriptor) -> Self
+    fn new(desc: crate::InstanceDescriptor) -> Self
     where
         Self: Sized;
 
@@ -124,11 +124,14 @@ pub trait AdapterInterface: CommonTraits {
     ) -> crate::TextureFormatFeatures;
 
     fn get_presentation_timestamp(&self) -> crate::PresentationTimestamp;
+
+    fn cooperative_matrix_properties(&self) -> Vec<crate::wgt::CooperativeMatrixProperties>;
 }
 
 pub trait DeviceInterface: CommonTraits {
     fn features(&self) -> crate::Features;
     fn limits(&self) -> crate::Limits;
+    fn adapter_info(&self) -> crate::AdapterInfo;
 
     fn create_shader_module(
         &self,
@@ -369,7 +372,7 @@ pub trait CommandEncoderInterface: CommonTraits {
         texture_transitions: &mut dyn Iterator<Item = wgt::TextureTransition<&'a DispatchTexture>>,
     );
 }
-pub trait ComputePassInterface: CommonTraits {
+pub trait ComputePassInterface: CommonTraits + Drop {
     fn set_pipeline(&mut self, pipeline: &DispatchComputePipeline);
     fn set_bind_group(
         &mut self,
@@ -393,9 +396,8 @@ pub trait ComputePassInterface: CommonTraits {
         indirect_buffer: &DispatchBuffer,
         indirect_offset: crate::BufferAddress,
     );
-    fn end(&mut self);
 }
-pub trait RenderPassInterface: CommonTraits {
+pub trait RenderPassInterface: CommonTraits + Drop {
     fn set_pipeline(&mut self, pipeline: &DispatchRenderPipeline);
     fn set_bind_group(
         &mut self,
@@ -417,7 +419,7 @@ pub trait RenderPassInterface: CommonTraits {
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     );
-    fn set_immediates(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]);
+    fn set_immediates(&mut self, offset: u32, data: &[u8]);
     fn set_blend_constant(&mut self, color: crate::Color);
     fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32);
     fn set_viewport(
@@ -504,8 +506,6 @@ pub trait RenderPassInterface: CommonTraits {
     fn end_pipeline_statistics_query(&mut self);
 
     fn execute_bundles(&mut self, render_bundles: &mut dyn Iterator<Item = &DispatchRenderBundle>);
-
-    fn end(&mut self);
 }
 
 pub trait RenderBundleEncoderInterface: CommonTraits {
@@ -530,7 +530,7 @@ pub trait RenderBundleEncoderInterface: CommonTraits {
         offset: crate::BufferAddress,
         size: Option<crate::BufferSize>,
     );
-    fn set_immediates(&mut self, stages: crate::ShaderStages, offset: u32, data: &[u8]);
+    fn set_immediates(&mut self, offset: u32, data: &[u8]);
 
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>);
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>);

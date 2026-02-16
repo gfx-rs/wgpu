@@ -15,6 +15,7 @@ use crate::device::GPUDevice;
 use crate::error::GPUGenericError;
 use crate::texture::GPUTexture;
 use crate::texture::GPUTextureFormat;
+use crate::webidl::GPUTextureUsageFlags;
 
 #[derive(Debug, thiserror::Error, deno_error::JsError)]
 pub enum SurfaceError {
@@ -31,7 +32,7 @@ pub enum SurfaceError {
 
 pub struct Configuration {
   pub device: Ptr<GPUDevice>,
-  pub usage: u32,
+  pub usage: GPUTextureUsageFlags,
   pub format: GPUTextureFormat,
   pub surface_config:
     wgpu_types::SurfaceConfiguration<Vec<wgpu_types::TextureFormat>>,
@@ -73,11 +74,9 @@ impl GPUCanvasContext {
     &self,
     #[webidl] configuration: GPUCanvasConfiguration,
   ) -> Result<(), JsErrorBox> {
-    let usage = wgpu_types::TextureUsages::from_bits(configuration.usage)
-      .ok_or_else(|| JsErrorBox::type_error("usage is not valid"))?;
     let format = configuration.format.clone().into();
     let conf = wgpu_types::SurfaceConfiguration {
-      usage,
+      usage: configuration.usage.into(),
       format,
       width: *self.width.borrow(),
       height: *self.height.borrow(),
@@ -214,9 +213,8 @@ impl GPUCanvasContext {
 struct GPUCanvasConfiguration {
   device: Ptr<GPUDevice>,
   format: GPUTextureFormat,
-  #[webidl(default = wgpu_types::TextureUsages::RENDER_ATTACHMENT.bits())]
-  #[options(enforce_range = true)]
-  usage: u32,
+  #[webidl(default = GPUTextureUsageFlags(wgpu_types::TextureUsages::RENDER_ATTACHMENT))]
+  usage: GPUTextureUsageFlags,
   #[webidl(default = GPUCanvasAlphaMode::Opaque)]
   alpha_mode: GPUCanvasAlphaMode,
 

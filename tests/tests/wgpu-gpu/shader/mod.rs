@@ -9,8 +9,8 @@ use std::{borrow::Cow, fmt::Debug};
 use wgpu::{
     Backends, BindGroupDescriptor, BindGroupEntry, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
     BindingType, BufferDescriptor, BufferUsages, CommandEncoderDescriptor, ComputePassDescriptor,
-    ComputePipelineDescriptor, ImmediateRange, MapMode, PipelineLayoutDescriptor, PollType,
-    ShaderModuleDescriptor, ShaderSource, ShaderStages,
+    ComputePipelineDescriptor, MapMode, PipelineLayoutDescriptor, PollType, ShaderModuleDescriptor,
+    ShaderSource, ShaderStages,
 };
 
 use wgpu_test::{GpuTestInitializer, TestingContext};
@@ -280,12 +280,9 @@ async fn shader_input_output_test(
         .create_pipeline_layout(&PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bgl],
-            immediates_ranges: match storage_type {
-                InputStorageType::Immediate => &[ImmediateRange {
-                    stages: ShaderStages::COMPUTE,
-                    range: 0..MAX_BUFFER_SIZE as u32,
-                }],
-                _ => &[],
+            immediate_size: match storage_type {
+                InputStorageType::Immediate => MAX_BUFFER_SIZE as u32,
+                _ => 0,
             },
         });
 

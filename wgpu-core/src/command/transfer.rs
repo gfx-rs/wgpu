@@ -460,7 +460,7 @@ pub(crate) fn validate_texture_buffer_copy<T>(
             .expect("non-copyable formats should have been rejected previously")
     };
 
-    if aligned && layout.offset % u64::from(offset_alignment) != 0 {
+    if aligned && !layout.offset.is_multiple_of(u64::from(offset_alignment)) {
         return Err(TransferError::UnalignedBufferOffset(layout.offset));
     }
 
@@ -559,16 +559,16 @@ pub(crate) fn validate_texture_copy_range<T>(
         false, // partial copy always allowed on Z/layer dimension
     )?;
 
-    if texture_copy_view.origin.x % block_width != 0 {
+    if !texture_copy_view.origin.x.is_multiple_of(block_width) {
         return Err(TransferError::UnalignedCopyOriginX);
     }
-    if texture_copy_view.origin.y % block_height != 0 {
+    if !texture_copy_view.origin.y.is_multiple_of(block_height) {
         return Err(TransferError::UnalignedCopyOriginY);
     }
-    if copy_size.width % block_width != 0 {
+    if !copy_size.width.is_multiple_of(block_width) {
         return Err(TransferError::UnalignedCopyWidth);
     }
-    if copy_size.height % block_height != 0 {
+    if !copy_size.height.is_multiple_of(block_height) {
         return Err(TransferError::UnalignedCopyHeight);
     }
 
@@ -989,10 +989,10 @@ pub(super) fn copy_buffer_to_buffer(
     if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
         return Err(TransferError::UnalignedCopySize(size).into());
     }
-    if source_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+    if !source_offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
         return Err(TransferError::UnalignedBufferOffset(source_offset).into());
     }
-    if destination_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+    if !destination_offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
         return Err(TransferError::UnalignedBufferOffset(destination_offset).into());
     }
     if !state

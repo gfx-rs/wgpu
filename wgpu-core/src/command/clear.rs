@@ -166,12 +166,12 @@ pub(super) fn clear_buffer(
     dst_buffer.check_usage(BufferUsages::COPY_DST)?;
 
     // Check if offset & size are valid.
-    if offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+    if !offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
         return Err(ClearError::UnalignedBufferOffset(offset));
     }
 
     let size = size.unwrap_or(dst_buffer.size.saturating_sub(offset));
-    if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+    if !size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
         return Err(ClearError::UnalignedFillSize(size));
     }
     let end_offset =

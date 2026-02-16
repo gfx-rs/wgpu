@@ -1,7 +1,7 @@
 ; SPIR-V
 ; Version: 1.4
 ; Generator: rspirv
-; Bound: 244
+; Bound: 258
 OpCapability Shader
 OpCapability RayQueryKHR
 OpExtension "SPV_KHR_ray_query"
@@ -308,6 +308,25 @@ OpBranch %231
 %231 = OpLabel
 OpReturn
 OpFunctionEnd
+%245 = OpFunction  %2  None %225
+%246 = OpFunctionParameter  %32
+%247 = OpFunctionParameter  %33
+%248 = OpLabel
+%249 = OpLoad  %7  %247
+%252 = OpBitwiseAnd  %7  %249 %90
+%253 = OpINotEqual  %10  %252 %35
+%254 = OpBitwiseAnd  %7  %249 %23
+%255 = OpINotEqual  %10  %254 %35
+%256 = OpLogicalNot  %10  %255
+%257 = OpLogicalAnd  %10  %256 %253
+OpSelectionMerge %250 None
+OpBranchConditional %257 %251 %250
+%251 = OpLabel
+OpRayQueryTerminateKHR %246
+OpBranch %250
+%250 = OpLabel
+OpReturn
+OpFunctionEnd
 %16 = OpFunction  %2  None %17
 %15 = OpLabel
 %31 = OpVariable  %32  Function
@@ -334,6 +353,7 @@ OpBranchConditional %221 %223 %224
 %243 = OpFunctionCall  %2  %226 %31 %34
 OpReturn
 %224 = OpLabel
+%244 = OpFunctionCall  %2  %245 %31 %34
 OpReturn
 %222 = OpLabel
 OpBranch %181

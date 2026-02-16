@@ -207,10 +207,7 @@ impl TestResources {
             .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: None,
                 bind_group_layouts: &[&bgl],
-                immediates_ranges: &[wgpu::ImmediateRange {
-                    stages: wgpu::ShaderStages::COMPUTE,
-                    range: 0..4,
-                }],
+                immediate_size: 4,
             });
 
         let pipeline = ctx

@@ -94,7 +94,7 @@ impl<'a> TextureBlitterBuilder<'a> {
             .create_pipeline_layout(&PipelineLayoutDescriptor {
                 label: Some("wgpu::util::TextureBlitter::pipeline_layout"),
                 bind_group_layouts: &[&bind_group_layout],
-                immediates_ranges: &[],
+                immediate_size: 0,
             });
 
         let shader = self.device.create_shader_module(include_wgsl!("blit.wgsl"));

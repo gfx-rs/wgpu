@@ -29,6 +29,7 @@ bitflags::bitflags! {
         const WORK_GROUP_BARRIER = 0x1;
         const DERIVATIVE = if DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE { 0 } else { 0x2 };
         const IMPLICIT_LEVEL = if DISABLE_UNIFORMITY_REQ_FOR_FRAGMENT_STAGE { 0 } else { 0x4 };
+        const COOP_OPS = 0x8;
     }
 }
 
@@ -238,7 +239,6 @@ struct Sampling {
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
 pub struct FunctionInfo {
     /// Validation flags.
-    #[allow(dead_code)]
     flags: ValidationFlags,
     /// Set of shader stages where calling this function is valid.
     pub available_stages: ShaderStages,
@@ -269,7 +269,7 @@ pub struct FunctionInfo {
     /// `FunctionInfo` implements `core::ops::Index<Handle<GlobalVariable>>`,
     /// so you can simply index this struct with a global handle to retrieve
     /// its usage information.
-    global_uses: Box<[GlobalUse]>,
+    pub global_uses: Box<[GlobalUse]>,
 
     /// Information about each expression in this function's body.
     ///
@@ -653,7 +653,7 @@ impl FunctionInfo {
                 let var = &resolve_context.global_vars[gh];
                 let uniform = match var.space {
                     // local data is non-uniform
-                    As::Function | As::Private => false,
+                    As::Function | As::Private | As::RayPayload | As::IncomingRayPayload => false,
                     // workgroup memory is exclusively accessed by the group
                     // task payload memory is very similar to workgroup memory
                     As::WorkGroup | As::TaskPayload => true,
@@ -842,6 +842,14 @@ impl FunctionInfo {
             } => Uniformity {
                 non_uniform_result: self.add_ref(query),
                 requirements: UniformityRequirements::empty(),
+            },
+            E::CooperativeLoad { ref data, .. } => Uniformity {
+                non_uniform_result: self.add_ref(data.pointer).or(self.add_ref(data.stride)),
+                requirements: UniformityRequirements::COOP_OPS,
+            },
+            E::CooperativeMultiplyAdd { a, b, c } => Uniformity {
+                non_uniform_result: self.add_ref(a).or(self.add_ref(b).or(self.add_ref(c))),
+                requirements: UniformityRequirements::COOP_OPS,
             },
         };
 
@@ -1169,6 +1177,30 @@ impl FunctionInfo {
                             let _ = self.add_ref(index);
                         }
                         crate::GatherMode::QuadSwap(_) => {}
+                    }
+                    FunctionUniformity::new()
+                }
+                S::CooperativeStore { target, ref data } => FunctionUniformity {
+                    result: Uniformity {
+                        non_uniform_result: self
+                            .add_ref(target)
+                            .or(self.add_ref_impl(data.pointer, GlobalUse::WRITE))
+                            .or(self.add_ref(data.stride)),
+                        requirements: UniformityRequirements::COOP_OPS,
+                    },
+                    exit: ExitFlags::empty(),
+                },
+                S::RayPipelineFunction(ref fun) => {
+                    match *fun {
+                        crate::RayPipelineFunction::TraceRay {
+                            acceleration_structure,
+                            descriptor,
+                            payload,
+                        } => {
+                            let _ = self.add_ref(acceleration_structure);
+                            let _ = self.add_ref(descriptor);
+                            let _ = self.add_ref(payload);
+                        }
                     }
                     FunctionUniformity::new()
                 }

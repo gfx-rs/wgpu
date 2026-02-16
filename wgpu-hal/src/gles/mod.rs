@@ -409,7 +409,6 @@ pub struct Texture {
     pub mip_level_count: u32,
     pub array_layer_count: u32,
     pub format: wgt::TextureFormat,
-    #[allow(unused)]
     pub format_desc: TextureFormatDesc,
     pub copy_size: CopyExtent,
 
@@ -706,6 +705,7 @@ struct ProgramStage {
     shader_id: ShaderId,
     entry_point: String,
     zero_initialize_workgroup_memory: bool,
+    constant_hash: Vec<u8>,
 }
 
 #[derive(PartialEq, Eq, Hash)]

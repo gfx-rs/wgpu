@@ -30,8 +30,9 @@ use crate::{
     },
     command, conv,
     device::{
-        bgl, create_validator, life::WaitIdleError, map_buffer, AttachmentData,
-        DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures, RenderPassContext,
+        bgl, create_validator, features_to_naga_capabilities, life::WaitIdleError, map_buffer,
+        AttachmentData, DeviceLostInvocation, HostMap, MissingDownlevelFlags, MissingFeatures,
+        RenderPassContext,
     },
     hal_label,
     init_tracker::{
@@ -272,7 +273,7 @@ pub struct Device {
     pub(crate) default_external_texture_params_buffer: ManuallyDrop<Box<dyn hal::DynBuffer>>,
     // needs to be dropped last
     #[cfg(feature = "trace")]
-    pub(crate) trace: Mutex<Option<trace::Trace>>,
+    pub(crate) trace: Mutex<Option<Box<dyn trace::Trace + Send + Sync + 'static>>>,
 }
 
 pub(crate) enum DeferredDestroy {
@@ -385,9 +386,41 @@ impl Device {
             }
         };
         #[cfg(feature = "trace")]
-        let trace_dir_name: Option<&std::path::PathBuf> = match &desc.trace {
+        let trace: Option<Box<dyn trace::Trace + Send + Sync + 'static>> = match &desc.trace {
             wgt::Trace::Off => None,
-            wgt::Trace::Directory(d) => Some(d),
+            wgt::Trace::Directory(dir) => match trace::DiskTrace::new(dir.clone()) {
+                Ok(mut trace) => {
+                    trace::Trace::add(
+                        &mut trace,
+                        trace::Action::Init {
+                            desc: wgt::DeviceDescriptor {
+                                trace: wgt::Trace::Off,
+                                ..desc.clone()
+                            },
+                            backend: adapter.backend(),
+                        },
+                    );
+                    Some(Box::new(trace))
+                }
+                Err(e) => {
+                    log::error!("Unable to start a trace in '{dir:?}': {e}");
+                    None
+                }
+            },
+            wgt::Trace::Memory => {
+                let mut trace = trace::MemoryTrace::new();
+                trace::Trace::add(
+                    &mut trace,
+                    trace::Action::Init {
+                        desc: wgt::DeviceDescriptor {
+                            trace: wgt::Trace::Off,
+                            ..desc.clone()
+                        },
+                        backend: adapter.backend(),
+                    },
+                );
+                Some(Box::new(trace))
+            }
             // The enum is non_exhaustive, so we must have a fallback arm (that should be
             // unreachable in practice).
             t => {
@@ -483,25 +516,7 @@ impl Device {
             tracker_indices: TrackerIndexAllocators::new(),
             bgl_pool: ResourcePool::new(),
             #[cfg(feature = "trace")]
-            trace: Mutex::new(
-                rank::DEVICE_TRACE,
-                trace_dir_name.and_then(|path| match trace::Trace::new(path.clone()) {
-                    Ok(mut trace) => {
-                        trace.add(trace::Action::Init {
-                            desc: wgt::DeviceDescriptor {
-                                trace: wgt::Trace::Off,
-                                ..desc.clone()
-                            },
-                            backend: adapter.backend(),
-                        });
-                        Some(trace)
-                    }
-                    Err(e) => {
-                        log::error!("Unable to start a trace in '{path:?}': {e}");
-                        None
-                    }
-                }),
-            ),
+            trace: Mutex::new(rank::DEVICE_TRACE, trace),
             alignments,
             limits: desc.required_limits.clone(),
             features: desc.required_features,
@@ -567,7 +582,7 @@ impl Device {
                     buffer: params_buffer,
                     usage: hal::StateTransition {
                         from: wgt::BufferUses::MAP_WRITE,
-                        to: wgt::BufferUses::COPY_SRC,
+                        to: wgt::BufferUses::COPY_DST,
                     },
                 }]);
             pending_writes.command_encoder.copy_buffer_to_buffer(
@@ -626,6 +641,14 @@ impl Device {
         } else {
             Err(DeviceError::Lost)
         }
+    }
+
+    /// Stop tracing and return the trace object.
+    ///
+    /// This is mostly useful for in-memory traces.
+    #[cfg(feature = "trace")]
+    pub fn take_trace(&self) -> Option<Box<dyn trace::Trace + Send + Sync + 'static>> {
+        self.trace.lock().take()
     }
 
     /// Checks that we are operating within the memory budget reported by the native APIs.
@@ -854,7 +877,20 @@ impl Device {
                 user_closures.mappings,
                 user_closures.blas_compact_ready,
                 queue_empty,
-            ) = queue_result
+            ) = queue_result;
+            // DEADLOCK PREVENTION: We must drop `snatch_guard` before `queue` goes out of scope.
+            //
+            // `Queue::drop` acquires the snatch guard. If we still hold it when `queue` is dropped
+            // at the end of this block, we would deadlock. This can happen in the following scenario:
+            //
+            // - Thread A calls `Device::maintain` while Thread B holds the last strong ref to the queue.
+            // - Thread A calls `self.get_queue()`, obtaining a new strong ref, and enters this branch.
+            // - Thread B drops its strong ref, making Thread A's ref the last one.
+            // - When `queue` goes out of scope here, `Queue::drop` runs and tries to acquire the
+            //   snatch guard — but Thread A (this thread) still holds it, causing a deadlock.
+            drop(snatch_guard);
+        } else {
+            drop(snatch_guard);
         };
 
         // Based on the queue empty status, and the current finished submission index, determine the result of the poll.
@@ -909,7 +945,6 @@ impl Device {
 
         // Don't hold the locks while calling release_gpu_resources.
         drop(fence);
-        drop(snatch_guard);
 
         if should_release_gpu_resource {
             self.release_gpu_resources();
@@ -981,7 +1016,7 @@ impl Device {
         }
 
         if desc.mapped_at_creation {
-            if desc.size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            if !desc.size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
                 return Err(resource::CreateBufferError::UnalignedSize);
             }
             if !desc.usage.contains(wgt::BufferUsages::MAP_WRITE) {
@@ -1328,7 +1363,7 @@ impl Device {
         if desc.format.is_compressed() {
             let (block_width, block_height) = desc.format.block_dimensions();
 
-            if desc.size.width % block_width != 0 {
+            if !desc.size.width.is_multiple_of(block_width) {
                 return Err(CreateTextureError::InvalidDimension(
                     TextureDimensionError::NotMultipleOfBlockWidth {
                         width: desc.size.width,
@@ -1338,7 +1373,7 @@ impl Device {
                 ));
             }
 
-            if desc.size.height % block_height != 0 {
+            if !desc.size.height.is_multiple_of(block_height) {
                 return Err(CreateTextureError::InvalidDimension(
                     TextureDimensionError::NotMultipleOfBlockHeight {
                         height: desc.size.height,
@@ -1385,7 +1420,7 @@ impl Device {
                 height_multiple <<= desc.mip_level_count.saturating_sub(1);
             }
 
-            if desc.size.width % width_multiple != 0 {
+            if !desc.size.width.is_multiple_of(width_multiple) {
                 return Err(CreateTextureError::InvalidDimension(
                     TextureDimensionError::WidthNotMultipleOf {
                         width: desc.size.width,
@@ -1395,7 +1430,7 @@ impl Device {
                 ));
             }
 
-            if desc.size.height % height_multiple != 0 {
+            if !desc.size.height.is_multiple_of(height_multiple) {
                 return Err(CreateTextureError::InvalidDimension(
                     TextureDimensionError::HeightNotMultipleOf {
                         height: desc.size.height,
@@ -1788,7 +1823,7 @@ impl Device {
                 }
             }
             TextureViewDimension::CubeArray => {
-                if resolved_array_layer_count % 6 != 0 {
+                if !resolved_array_layer_count.is_multiple_of(6) {
                     return Err(
                         resource::CreateTextureViewError::InvalidCubemapArrayTextureDepth {
                             depth: resolved_array_layer_count,
@@ -2189,8 +2224,13 @@ impl Device {
         let (module, source) = match source {
             #[cfg(feature = "wgsl")]
             pipeline::ShaderModuleSource::Wgsl(code) => {
-                profiling::scope!("naga::front::wgsl::parse_str");
-                let module = naga::front::wgsl::parse_str(&code).map_err(|inner| {
+                profiling::scope!("naga::front::wgsl::parse");
+                let capabilities =
+                    features_to_naga_capabilities(self.features, self.downlevel.flags);
+                let mut options = naga::front::wgsl::Options::new();
+                options.capabilities = capabilities;
+                let mut frontend = naga::front::wgsl::Frontend::new_with_options(options);
+                let module = frontend.parse(&code).map_err(|inner| {
                     pipeline::CreateShaderModuleError::Parsing(naga::error::ShaderError {
                         source: code.to_string(),
                         label: desc.label.as_ref().map(|l| l.to_string()),
@@ -2328,33 +2368,37 @@ impl Device {
                 if let Some(dxil) = &descriptor.dxil {
                     hal::ShaderInput::Dxil {
                         shader: dxil,
-                        entry_point: descriptor.entry_point.clone(),
                         num_workgroups: descriptor.num_workgroups,
                     }
                 } else if let Some(hlsl) = &descriptor.hlsl {
                     hal::ShaderInput::Hlsl {
                         shader: hlsl,
-                        entry_point: descriptor.entry_point.clone(),
                         num_workgroups: descriptor.num_workgroups,
                     }
                 } else {
                     return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend);
                 }
             }
-            wgt::Backend::Metal => hal::ShaderInput::Msl {
-                shader: descriptor
-                    .msl
-                    .as_ref()
-                    .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
-                entry_point: descriptor.entry_point.clone(),
-                num_workgroups: descriptor.num_workgroups,
-            },
+            wgt::Backend::Metal => {
+                if let Some(metallib) = &descriptor.metallib {
+                    hal::ShaderInput::MetalLib {
+                        file: metallib,
+                        num_workgroups: descriptor.num_workgroups,
+                    }
+                } else if let Some(msl) = &descriptor.msl {
+                    hal::ShaderInput::Msl {
+                        shader: msl,
+                        num_workgroups: descriptor.num_workgroups,
+                    }
+                } else {
+                    return Err(pipeline::CreateShaderModuleError::NotCompiledForBackend);
+                }
+            }
             wgt::Backend::Gl => hal::ShaderInput::Glsl {
                 shader: descriptor
                     .glsl
                     .as_ref()
                     .ok_or(pipeline::CreateShaderModuleError::NotCompiledForBackend)?,
-                entry_point: descriptor.entry_point.clone(),
                 num_workgroups: descriptor.num_workgroups,
             },
             wgt::Backend::Noop => {
@@ -2566,8 +2610,10 @@ impl Device {
                 Bt::StorageTexture {
                     access,
                     view_dimension,
-                    format: _,
+                    format,
                 } => {
+                    use wgt::{StorageTextureAccess as Access, TextureFormatFeatureFlags as Flags};
+
                     match view_dimension {
                         TextureViewDimension::Cube | TextureViewDimension::CubeArray => {
                             return Err(binding_model::CreateBindGroupLayoutError::Entry {
@@ -2588,6 +2634,30 @@ impl Device {
                         }
                         _ => (),
                     }
+
+                    let format_features =
+                        self.describe_format_features(format).map_err(|error| {
+                            binding_model::CreateBindGroupLayoutError::Entry {
+                                binding: entry.binding,
+                                error: BindGroupLayoutEntryError::MissingFeatures(error),
+                            }
+                        })?;
+
+                    let required_feature_flag = match access {
+                        Access::WriteOnly => Flags::STORAGE_WRITE_ONLY,
+                        Access::ReadOnly => Flags::STORAGE_READ_ONLY,
+                        Access::ReadWrite => Flags::STORAGE_READ_WRITE,
+                        Access::Atomic => Flags::STORAGE_ATOMIC,
+                    };
+
+                    if !format_features.flags.contains(required_feature_flag) {
+                        return Err(binding_model::CreateBindGroupLayoutError::UnsupportedStorageTextureAccess {
+                            binding: entry.binding,
+                            access,
+                            format,
+                        });
+                    }
+
                     (
                         Some(
                             wgt::Features::TEXTURE_BINDING_ARRAY
@@ -2766,7 +2836,7 @@ impl Device {
 
         let (align, align_limit_name) =
             binding_model::buffer_binding_type_alignment(&self.limits, binding_ty);
-        if bb.offset % align as u64 != 0 {
+        if !bb.offset.is_multiple_of(align as u64) {
             return Err(Error::UnalignedBufferOffset(
                 bb.offset,
                 align_limit_name,
@@ -2782,18 +2852,27 @@ impl Device {
 
         buffer.check_usage(pub_usage)?;
 
-        let (bb, bind_size) = buffer.binding(bb.offset, bb.size, snatch_guard)?;
-
-        if matches!(binding_ty, wgt::BufferBindingType::Storage { .. }) {
-            let storage_buf_size_alignment = 4;
-
-            let aligned = bind_size % u64::from(storage_buf_size_alignment) == 0;
-            if !aligned {
-                return Err(Error::UnalignedEffectiveBufferBindingSizeForStorage {
-                    alignment: storage_buf_size_alignment,
-                    size: bind_size,
-                });
+        let req_size = match bb.size.map(wgt::BufferSize::new) {
+            // Requested a non-zero size
+            Some(non_zero @ Some(_)) => non_zero,
+            // Requested size not specified
+            None => None,
+            // Requested zero size
+            Some(None) => {
+                return Err(binding_model::CreateBindGroupError::BindingZeroSize(
+                    buffer.error_ident(),
+                ))
             }
+        };
+        let (bb, bind_size) = buffer.binding(bb.offset, req_size, snatch_guard)?;
+
+        if matches!(binding_ty, wgt::BufferBindingType::Storage { .. })
+            && bind_size % u64::from(wgt::STORAGE_BINDING_SIZE_ALIGNMENT) != 0
+        {
+            return Err(Error::UnalignedEffectiveBufferBindingSizeForStorage {
+                alignment: wgt::STORAGE_BINDING_SIZE_ALIGNMENT,
+                size: bind_size,
+            });
         }
 
         let bind_end = bb.offset + bind_size;
@@ -3463,52 +3542,14 @@ impl Device {
                     });
                 }
 
-                let internal_use = match access {
-                    wgt::StorageTextureAccess::WriteOnly => {
-                        if !view
-                            .format_features
-                            .flags
-                            .contains(wgt::TextureFormatFeatureFlags::STORAGE_WRITE_ONLY)
-                        {
-                            return Err(Error::StorageWriteNotSupported(view.desc.format));
-                        }
-                        wgt::TextureUses::STORAGE_WRITE_ONLY
-                    }
-                    wgt::StorageTextureAccess::ReadOnly => {
-                        if !view
-                            .format_features
-                            .flags
-                            .contains(wgt::TextureFormatFeatureFlags::STORAGE_READ_ONLY)
-                        {
-                            return Err(Error::StorageReadNotSupported(view.desc.format));
-                        }
-                        wgt::TextureUses::STORAGE_READ_ONLY
-                    }
-                    wgt::StorageTextureAccess::ReadWrite => {
-                        if !view
-                            .format_features
-                            .flags
-                            .contains(wgt::TextureFormatFeatureFlags::STORAGE_READ_WRITE)
-                        {
-                            return Err(Error::StorageReadWriteNotSupported(view.desc.format));
-                        }
-
-                        wgt::TextureUses::STORAGE_READ_WRITE
-                    }
-                    wgt::StorageTextureAccess::Atomic => {
-                        if !view
-                            .format_features
-                            .flags
-                            .contains(wgt::TextureFormatFeatureFlags::STORAGE_ATOMIC)
-                        {
-                            return Err(Error::StorageAtomicNotSupported(view.desc.format));
-                        }
-
-                        wgt::TextureUses::STORAGE_ATOMIC
-                    }
-                };
                 view.check_usage(wgt::TextureUsages::STORAGE_BINDING)?;
-                Ok(internal_use)
+
+                Ok(match access {
+                    wgt::StorageTextureAccess::ReadOnly => wgt::TextureUses::STORAGE_READ_ONLY,
+                    wgt::StorageTextureAccess::WriteOnly => wgt::TextureUses::STORAGE_WRITE_ONLY,
+                    wgt::StorageTextureAccess::ReadWrite => wgt::TextureUses::STORAGE_READ_WRITE,
+                    wgt::StorageTextureAccess::Atomic => wgt::TextureUses::STORAGE_ATOMIC,
+                })
             }
             wgt::BindingType::ExternalTexture => {
                 if view.desc.dimension != TextureViewDimension::D2 {
@@ -3570,42 +3611,22 @@ impl Device {
             });
         }
 
-        if !desc.immediates_ranges.is_empty() {
+        if desc.immediate_size != 0 {
             self.require_features(wgt::Features::IMMEDIATES)?;
         }
-
-        let mut used_stages = wgt::ShaderStages::empty();
-        for (index, pc) in desc.immediates_ranges.iter().enumerate() {
-            if pc.stages.intersects(used_stages) {
-                return Err(Error::MoreThanOneImmediateRangePerStage {
-                    index,
-                    provided: pc.stages,
-                    intersected: pc.stages & used_stages,
-                });
-            }
-            used_stages |= pc.stages;
-
-            let device_max_pc_size = self.limits.max_immediate_size;
-            if device_max_pc_size < pc.range.end {
-                return Err(Error::ImmediateRangeTooLarge {
-                    index,
-                    range: pc.range.clone(),
-                    max: device_max_pc_size,
-                });
-            }
-
-            if pc.range.start % wgt::IMMEDIATES_ALIGNMENT != 0 {
-                return Err(Error::MisalignedImmediateRange {
-                    index,
-                    bound: pc.range.start,
-                });
-            }
-            if pc.range.end % wgt::IMMEDIATES_ALIGNMENT != 0 {
-                return Err(Error::MisalignedImmediateRange {
-                    index,
-                    bound: pc.range.end,
-                });
-            }
+        if self.limits.max_immediate_size < desc.immediate_size {
+            return Err(Error::ImmediateRangeTooLarge {
+                size: desc.immediate_size,
+                max: self.limits.max_immediate_size,
+            });
+        }
+        if !desc
+            .immediate_size
+            .is_multiple_of(wgt::IMMEDIATE_DATA_ALIGNMENT)
+        {
+            return Err(Error::MisalignedImmediateSize {
+                size: desc.immediate_size,
+            });
         }
 
         let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
@@ -3643,7 +3664,7 @@ impl Device {
                 | hal::PipelineLayoutFlags::NUM_WORK_GROUPS
                 | additional_flags,
             bind_group_layouts: &raw_bind_group_layouts,
-            immediates_ranges: desc.immediates_ranges.as_ref(),
+            immediate_size: desc.immediate_size,
         };
 
         let raw = unsafe { self.raw().create_pipeline_layout(&hal_desc) }
@@ -3656,7 +3677,7 @@ impl Device {
             device: self.clone(),
             label: desc.label.to_string(),
             bind_group_layouts,
-            immediates_ranges: desc.immediates_ranges.iter().cloned().collect(),
+            immediate_size: desc.immediate_size,
         };
 
         let layout = Arc::new(layout);
@@ -3703,7 +3724,7 @@ impl Device {
         let layout_desc = binding_model::ResolvedPipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: Cow::Owned(bind_group_layouts),
-            immediates_ranges: Cow::Borrowed(&[]), //TODO?
+            immediate_size: 0, //TODO?
         };
 
         let layout = self.create_pipeline_layout(&layout_desc)?;
@@ -3745,10 +3766,10 @@ impl Device {
         let final_entry_point_name;
 
         {
-            let stage = wgt::ShaderStages::COMPUTE;
+            let stage = validation::ShaderStageForValidation::Compute;
 
             final_entry_point_name = shader_module.finalize_entry_point_name(
-                stage,
+                stage.to_naga(),
                 desc.stage.entry_point.as_ref().map(|ep| ep.as_ref()),
             )?;
 
@@ -3759,7 +3780,6 @@ impl Device {
                     &final_entry_point_name,
                     stage,
                     io,
-                    None,
                 )?;
             }
         }
@@ -3889,14 +3909,12 @@ impl Device {
         let mut vertex_steps;
         let mut vertex_buffers;
         let mut total_attributes;
-        let mut shader_expects_dual_source_blending = false;
-        let mut pipeline_expects_dual_source_blending = false;
+        let mut dual_source_blending = false;
+        let mut has_depth_attachment = false;
         if let pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) = desc.vertex {
             vertex_steps = Vec::with_capacity(vertex.buffers.len());
             vertex_buffers = Vec::with_capacity(vertex.buffers.len());
             total_attributes = 0;
-            shader_expects_dual_source_blending = false;
-            pipeline_expects_dual_source_blending = false;
             for (i, vb_state) in vertex.buffers.iter().enumerate() {
                 // https://gpuweb.github.io/gpuweb/#abstract-opdef-validating-gpuvertexbufferlayout
 
@@ -3985,7 +4003,7 @@ impl Device {
                         self.require_features(wgt::Features::VERTEX_ATTRIBUTE_64BIT)?;
                     }
 
-                    let previous = io.insert(
+                    let previous = io.varyings.insert(
                         attribute.shader_location,
                         validation::InterfaceVar::vertex_attribute(attribute.format),
                     );
@@ -4116,7 +4134,7 @@ impl Device {
                             if factor.ref_second_blend_source() {
                                 self.require_features(wgt::Features::DUAL_SOURCE_BLENDING)?;
                                 if i == 0 {
-                                    pipeline_expects_dual_source_blending = true;
+                                    dual_source_blending = true;
                                     break;
                                 } else {
                                     return Err(pipeline::CreateRenderPipelineError
@@ -4143,6 +4161,14 @@ impl Device {
         if let Some(ds) = depth_stencil_state {
             target_specified = true;
             let error = 'error: {
+                if !ds.format.is_depth_stencil_format() {
+                    // This error case is not redundant with the aspect check below when
+                    // neither depth nor stencil is enabled at all.
+                    break 'error Some(pipeline::DepthStencilStateError::FormatNotDepthOrStencil(
+                        ds.format,
+                    ));
+                }
+
                 let format_features = self.describe_format_features(ds.format)?;
                 if !format_features
                     .allowed_usages
@@ -4154,7 +4180,9 @@ impl Device {
                 }
 
                 let aspect = hal::FormatAspects::from(ds.format);
-                if ds.is_depth_enabled() && !aspect.contains(hal::FormatAspects::DEPTH) {
+                if aspect.contains(hal::FormatAspects::DEPTH) {
+                    has_depth_attachment = true;
+                } else if ds.is_depth_enabled() {
                     break 'error Some(pipeline::DepthStencilStateError::FormatNotDepth(ds.format));
                 }
                 if ds.stencil.is_enabled() && !aspect.contains(hal::FormatAspects::STENCIL) {
@@ -4189,6 +4217,16 @@ impl Device {
 
             if ds.bias.clamp != 0.0 {
                 self.require_downlevel_flags(wgt::DownlevelFlags::DEPTH_BIAS_CLAMP)?;
+            }
+
+            if (ds.bias.is_enabled() || ds.bias.clamp != 0.0)
+                && !desc.primitive.topology.is_triangles()
+            {
+                return Err(pipeline::CreateRenderPipelineError::DepthStencilState(
+                    pipeline::DepthStencilStateError::DepthBiasWithIncompatibleTopology(
+                        desc.primitive.topology,
+                    ),
+                ));
             }
         }
 
@@ -4232,17 +4270,23 @@ impl Device {
             pipeline::RenderPipelineVertexProcessor::Vertex(ref vertex) => {
                 vertex_stage = {
                     let stage_desc = &vertex.stage;
-                    let stage = wgt::ShaderStages::VERTEX;
+                    let stage = validation::ShaderStageForValidation::Vertex {
+                        topology: desc.primitive.topology,
+                        compare_function: desc.depth_stencil.as_ref().map(|d| d.depth_compare),
+                    };
+                    let stage_bit = stage.to_wgt_bit();
 
                     let vertex_shader_module = &stage_desc.module;
                     vertex_shader_module.same_device(self)?;
 
-                    let stage_err =
-                        |error| pipeline::CreateRenderPipelineError::Stage { stage, error };
+                    let stage_err = |error| pipeline::CreateRenderPipelineError::Stage {
+                        stage: stage_bit,
+                        error,
+                    };
 
                     _vertex_entry_point_name = vertex_shader_module
                         .finalize_entry_point_name(
-                            stage,
+                            stage.to_naga(),
                             stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
                         )
                         .map_err(stage_err)?;
@@ -4255,10 +4299,9 @@ impl Device {
                                 &_vertex_entry_point_name,
                                 stage,
                                 io,
-                                desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                             )
                             .map_err(stage_err)?;
-                        validated_stages |= stage;
+                        validated_stages |= stage_bit;
                     }
                     Some(hal::ProgrammableStage {
                         module: vertex_shader_module.raw(),
@@ -4274,16 +4317,19 @@ impl Device {
 
                 task_stage = if let Some(task) = task {
                     let stage_desc = &task.stage;
-                    let stage = wgt::ShaderStages::TASK;
+                    let stage = validation::ShaderStageForValidation::Task;
+                    let stage_bit = stage.to_wgt_bit();
                     let task_shader_module = &stage_desc.module;
                     task_shader_module.same_device(self)?;
 
-                    let stage_err =
-                        |error| pipeline::CreateRenderPipelineError::Stage { stage, error };
+                    let stage_err = |error| pipeline::CreateRenderPipelineError::Stage {
+                        stage: stage_bit,
+                        error,
+                    };
 
                     _task_entry_point_name = task_shader_module
                         .finalize_entry_point_name(
-                            stage,
+                            stage.to_naga(),
                             stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
                         )
                         .map_err(stage_err)?;
@@ -4296,10 +4342,9 @@ impl Device {
                                 &_task_entry_point_name,
                                 stage,
                                 io,
-                                desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                             )
                             .map_err(stage_err)?;
-                        validated_stages |= stage;
+                        validated_stages |= stage_bit;
                     }
                     Some(hal::ProgrammableStage {
                         module: task_shader_module.raw(),
@@ -4313,16 +4358,19 @@ impl Device {
                 };
                 mesh_stage = {
                     let stage_desc = &mesh.stage;
-                    let stage = wgt::ShaderStages::MESH;
+                    let stage = validation::ShaderStageForValidation::Mesh;
+                    let stage_bit = stage.to_wgt_bit();
                     let mesh_shader_module = &stage_desc.module;
                     mesh_shader_module.same_device(self)?;
 
-                    let stage_err =
-                        |error| pipeline::CreateRenderPipelineError::Stage { stage, error };
+                    let stage_err = |error| pipeline::CreateRenderPipelineError::Stage {
+                        stage: stage_bit,
+                        error,
+                    };
 
                     _mesh_entry_point_name = mesh_shader_module
                         .finalize_entry_point_name(
-                            stage,
+                            stage.to_naga(),
                             stage_desc.entry_point.as_ref().map(|ep| ep.as_ref()),
                         )
                         .map_err(stage_err)?;
@@ -4335,10 +4383,9 @@ impl Device {
                                 &_mesh_entry_point_name,
                                 stage,
                                 io,
-                                desc.depth_stencil.as_ref().map(|d| d.depth_compare),
                             )
                             .map_err(stage_err)?;
-                        validated_stages |= stage;
+                        validated_stages |= stage_bit;
                     }
                     Some(hal::ProgrammableStage {
                         module: mesh_shader_module.raw(),
@@ -4354,16 +4401,23 @@ impl Device {
         let fragment_entry_point_name;
         let fragment_stage = match desc.fragment {
             Some(ref fragment_state) => {
-                let stage = wgt::ShaderStages::FRAGMENT;
+                let stage = validation::ShaderStageForValidation::Fragment {
+                    dual_source_blending,
+                    has_depth_attachment,
+                };
+                let stage_bit = stage.to_wgt_bit();
 
                 let shader_module = &fragment_state.stage.module;
                 shader_module.same_device(self)?;
 
-                let stage_err = |error| pipeline::CreateRenderPipelineError::Stage { stage, error };
+                let stage_err = |error| pipeline::CreateRenderPipelineError::Stage {
+                    stage: stage_bit,
+                    error,
+                };
 
                 fragment_entry_point_name = shader_module
                     .finalize_entry_point_name(
-                        stage,
+                        stage.to_naga(),
                         fragment_state
                             .stage
                             .entry_point
@@ -4372,29 +4426,17 @@ impl Device {
                     )
                     .map_err(stage_err)?;
 
-                if validated_stages == wgt::ShaderStages::VERTEX {
-                    if let Some(ref interface) = shader_module.interface {
-                        io = interface
-                            .check_stage(
-                                &mut binding_layout_source,
-                                &mut shader_binding_sizes,
-                                &fragment_entry_point_name,
-                                stage,
-                                io,
-                                desc.depth_stencil.as_ref().map(|d| d.depth_compare),
-                            )
-                            .map_err(stage_err)?;
-                        validated_stages |= stage;
-                    }
-                }
-
                 if let Some(ref interface) = shader_module.interface {
-                    shader_expects_dual_source_blending = interface
-                        .fragment_uses_dual_source_blending(&fragment_entry_point_name)
-                        .map_err(|error| pipeline::CreateRenderPipelineError::Stage {
+                    io = interface
+                        .check_stage(
+                            &mut binding_layout_source,
+                            &mut shader_binding_sizes,
+                            &fragment_entry_point_name,
                             stage,
-                            error,
-                        })?;
+                            io,
+                        )
+                        .map_err(stage_err)?;
+                    validated_stages |= stage_bit;
                 }
 
                 Some(hal::ProgrammableStage {
@@ -4409,19 +4451,8 @@ impl Device {
             None => None,
         };
 
-        if !pipeline_expects_dual_source_blending && shader_expects_dual_source_blending {
-            return Err(
-                pipeline::CreateRenderPipelineError::ShaderExpectsPipelineToUseDualSourceBlending,
-            );
-        }
-        if pipeline_expects_dual_source_blending && !shader_expects_dual_source_blending {
-            return Err(
-                pipeline::CreateRenderPipelineError::PipelineExpectsShaderToUseDualSourceBlending,
-            );
-        }
-
         if validated_stages.contains(wgt::ShaderStages::FRAGMENT) {
-            for (i, output) in io.iter() {
+            for (i, output) in io.varyings.iter() {
                 match color_targets.get(*i as usize) {
                     Some(Some(state)) => {
                         validation::check_texture_format(state.format, &output.ty).map_err(
@@ -4601,6 +4632,7 @@ impl Device {
             pass_context,
             _shader_modules: shader_modules,
             flags,
+            topology: desc.primitive.topology,
             strip_index_format: desc.primitive.strip_index_format,
             vertex_steps,
             late_sized_buffer_groups,

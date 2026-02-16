@@ -72,6 +72,27 @@ void meshShader(
     out.set_primitive(0, prim);
 }
 
+[[mesh]]
+void meshNoTaskShader(
+    Meshlet out
+)
+{
+    out.set_primitive_count(1);
+
+    for(int i = 0;i < 3;i++) {
+        OutVertex vert;
+        vert.Position = positions[i];
+        vert.Color = colors[i];
+        out.set_vertex(i, vert);
+        out.set_index(i, i);
+    }
+
+    OutPrimitive prim;
+    prim.ColorMask = float4(1.0, 0.0, 0.0, 1.0);
+    prim.CullPrimitive = false;
+    out.set_primitive(0, prim);
+}
+
 fragment float4 fragShader(FragmentIn data [[stage_in]]) {
     return data.Color * data.ColorMask;
 }

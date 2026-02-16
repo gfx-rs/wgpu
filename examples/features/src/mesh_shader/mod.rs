@@ -1,31 +1,14 @@
-use std::process::Stdio;
-
 // Same as in mesh shader tests
-fn compile_glsl(device: &wgpu::Device, shader_stage: &'static str) -> wgpu::ShaderModule {
-    let cmd = std::process::Command::new("glslc")
-        .args([
-            &format!(
-                "{}/src/mesh_shader/shader.{shader_stage}",
-                env!("CARGO_MANIFEST_DIR")
-            ),
-            "-o",
-            "-",
-            "--target-env=vulkan1.2",
-            "--target-spv=spv1.4",
-        ])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("Failed to call glslc");
-    let output = cmd.wait_with_output().expect("Error waiting for glslc");
-    assert!(output.status.success());
+fn compile_wgsl(device: &wgpu::Device) -> wgpu::ShaderModule {
+    // Workgroup memory zero initialization can be expensive for mesh shaders
     unsafe {
-        device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-            entry_point: "main".into(),
-            label: None,
-            spirv: Some(wgpu::util::make_spirv_raw(&output.stdout)),
-            ..Default::default()
-        })
+        device.create_shader_module_trusted(
+            wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+            },
+            wgpu::ShaderRuntimeChecks::unchecked(),
+        )
     }
 }
 fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::ShaderModule {
@@ -52,7 +35,6 @@ fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::Sh
     std::fs::remove_file(out_path).unwrap();
     unsafe {
         device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-            entry_point: entry.to_owned(),
             label: None,
             num_workgroups: (1, 1, 1),
             dxil: Some(std::borrow::Cow::Owned(file)),
@@ -61,15 +43,61 @@ fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::Sh
     }
 }
 
-fn compile_msl(device: &wgpu::Device, entry: &str) -> wgpu::ShaderModule {
+fn compile_msl(device: &wgpu::Device) -> wgpu::ShaderModule {
     unsafe {
         device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-            entry_point: entry.to_owned(),
             label: None,
             msl: Some(std::borrow::Cow::Borrowed(include_str!("shader.metal"))),
             num_workgroups: (1, 1, 1),
             ..Default::default()
         })
+    }
+}
+
+struct Shaders {
+    ts: wgpu::ShaderModule,
+    ms: wgpu::ShaderModule,
+    fs: wgpu::ShaderModule,
+    ts_name: &'static str,
+    ms_name: &'static str,
+    fs_name: &'static str,
+}
+
+fn get_shaders(device: &wgpu::Device, backend: wgpu::Backend) -> Shaders {
+    // In the case that the platform does support mesh shaders, the dummy
+    // shader is used to avoid requiring EXPERIMENTAL_PASSTHROUGH_SHADERS.
+    match backend {
+        wgpu::Backend::Vulkan => {
+            let compiled = compile_wgsl(device);
+            Shaders {
+                ts: compiled.clone(),
+                ms: compiled.clone(),
+                fs: compiled.clone(),
+                ts_name: "ts_main",
+                ms_name: "ms_main",
+                fs_name: "fs_main",
+            }
+        }
+        wgpu::Backend::Dx12 => Shaders {
+            ts: compile_hlsl(device, "Task", "as"),
+            ms: compile_hlsl(device, "Mesh", "ms"),
+            fs: compile_hlsl(device, "Frag", "ps"),
+            ts_name: "main",
+            ms_name: "main",
+            fs_name: "main",
+        },
+        wgpu::Backend::Metal => {
+            let compiled = compile_msl(device);
+            Shaders {
+                ts: compiled.clone(),
+                ms: compiled.clone(),
+                fs: compiled.clone(),
+                ts_name: "taskShader",
+                ms_name: "meshShader",
+                fs_name: "fragShader",
+            }
+        }
+        _ => unreachable!(),
     }
 }
 
@@ -83,45 +111,35 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
-        let (ts, ms, fs) = match adapter.get_info().backend {
-            wgpu::Backend::Vulkan => (
-                compile_glsl(device, "task"),
-                compile_glsl(device, "mesh"),
-                compile_glsl(device, "frag"),
-            ),
-            wgpu::Backend::Dx12 => (
-                compile_hlsl(device, "Task", "as"),
-                compile_hlsl(device, "Mesh", "ms"),
-                compile_hlsl(device, "Frag", "ps"),
-            ),
-            wgpu::Backend::Metal => (
-                compile_msl(device, "taskShader"),
-                compile_msl(device, "meshShader"),
-                compile_msl(device, "fragShader"),
-            ),
-            _ => panic!("Example can currently only run on vulkan, dx12 or metal"),
-        };
+        let Shaders {
+            ts,
+            ms,
+            fs,
+            ts_name,
+            ms_name,
+            fs_name,
+        } = get_shaders(device, adapter.get_info().backend);
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
-            immediates_ranges: &[],
+            immediate_size: 0,
         });
         let pipeline = device.create_mesh_pipeline(&wgpu::MeshPipelineDescriptor {
             label: None,
             layout: Some(&pipeline_layout),
             task: Some(wgpu::TaskState {
                 module: &ts,
-                entry_point: Some("main"),
+                entry_point: Some(ts_name),
                 compilation_options: Default::default(),
             }),
             mesh: wgpu::MeshState {
                 module: &ms,
-                entry_point: Some("main"),
+                entry_point: Some(ms_name),
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
                 module: &fs,
-                entry_point: Some("main"),
+                entry_point: Some(fs_name),
                 compilation_options: Default::default(),
                 targets: &[Some(config.view_formats[0].into())],
             }),
@@ -208,7 +226,17 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
             wgpu::Features::EXPERIMENTAL_MESH_SHADER
                 | wgpu::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS,
         )
-        .limits(wgpu::Limits::defaults().using_recommended_minimum_mesh_shader_values()),
-    comparisons: &[wgpu_test::ComparisonType::Mean(0.01)],
+        .instance_flags(wgpu::InstanceFlags::advanced_debugging())
+        .limits(wgpu::Limits::defaults().using_recommended_minimum_mesh_shader_values())
+        .skip(wgpu_test::FailureCase {
+            backends: None,
+            // Skip Mesa because LLVMPIPE has what is believed to be a driver bug
+            vendor: Some(0x10005),
+            adapter: None,
+            driver: None,
+            reasons: vec![],
+            behavior: wgpu_test::FailureBehavior::Ignore,
+        }),
+    comparisons: &[wgpu_test::ComparisonType::Mean(0.005)],
     _phantom: std::marker::PhantomData::<Example>,
 };

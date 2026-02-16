@@ -58,5 +58,5 @@ fn render_vertex(
   v_in: VertexInput,
 ) -> VertexOutput
 {
-  return VertexOutput(vec4f(v_in.v_uint8.x));
+  return VertexOutput(vec4f(v_in.v_float32.x));
 }

@@ -105,7 +105,7 @@ pub enum PresentMode {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum CompositeAlphaMode {
-    /// Chooses either `Opaque` or `Inherit` automatically，depending on the
+    /// Chooses either `Opaque` or `Inherit` automatically, depending on the
     /// `alpha_mode` that the current surface can support.
     #[default]
     Auto = 0,

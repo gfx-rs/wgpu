@@ -18,7 +18,7 @@ use crate::{
 impl crate::Instance for super::Instance {
     type A = super::Api;
 
-    unsafe fn init(desc: &crate::InstanceDescriptor) -> Result<Self, crate::InstanceError> {
+    unsafe fn init(desc: &crate::InstanceDescriptor<'_>) -> Result<Self, crate::InstanceError> {
         profiling::scope!("Init DX12 Backend");
         let lib_main = D3D12Lib::new().map_err(|e| {
             crate::InstanceError::with_source(String::from("failed to load d3d12.dll"), e)
@@ -37,7 +37,6 @@ impl crate::Instance for super::Instance {
                     .flags
                     .intersects(wgt::InstanceFlags::GPU_BASED_VALIDATION)
                 {
-                    #[allow(clippy::collapsible_if)]
                     if let Ok(debug1) = debug_controller.cast::<Direct3D12::ID3D12Debug1>() {
                         unsafe { debug1.SetEnableGPUBasedValidation(true) }
                     } else {
@@ -71,20 +70,50 @@ impl crate::Instance for super::Instance {
 
         // Initialize the shader compiler
         let compiler_container = match desc.backend_options.dx12.shader_compiler.clone() {
-            wgt::Dx12Compiler::DynamicDxc {
-                dxc_path,
-                max_shader_model,
-            } => CompilerContainer::new_dynamic_dxc(dxc_path.into(), max_shader_model).map_err(
-                |e| {
+            wgt::Dx12Compiler::DynamicDxc { dxc_path } => {
+                CompilerContainer::new_dynamic_dxc(dxc_path.into()).map_err(|e| {
                     crate::InstanceError::with_source(String::from("Failed to load dynamic DXC"), e)
-                },
-            )?,
+                })?
+            }
             wgt::Dx12Compiler::StaticDxc => CompilerContainer::new_static_dxc().map_err(|e| {
                 crate::InstanceError::with_source(String::from("Failed to load static DXC"), e)
             })?,
             wgt::Dx12Compiler::Fxc => CompilerContainer::new_fxc().map_err(|e| {
                 crate::InstanceError::with_source(String::from("Failed to load FXC"), e)
             })?,
+            wgt::Dx12Compiler::Auto => {
+                if cfg!(feature = "static-dxc") {
+                    // Prefer static DXC if its compiled in
+                    CompilerContainer::new_static_dxc().map_err(|e| {
+                        crate::InstanceError::with_source(
+                            String::from("Failed to load static DXC"),
+                            e,
+                        )
+                    })?
+                } else {
+                    // Try to load dynamic DXC
+                    let dynamic = CompilerContainer::new_dynamic_dxc("dxcompiler.dll".into());
+                    match dynamic {
+                        Ok(v) => v,
+                        Err(super::shader_compilation::GetContainerError::FailedToLoad(..)) => {
+                            // If it can't be found load FXC
+                            CompilerContainer::new_fxc().map_err(|e| {
+                                crate::InstanceError::with_source(
+                                    String::from("Failed to load FXC"),
+                                    e,
+                                )
+                            })?
+                        }
+                        Err(e) => {
+                            // If another error occurs when loading static DXC return that error
+                            return Err(crate::InstanceError::with_source(
+                                String::from("Failed to load dynamic DXC"),
+                                e,
+                            ));
+                        }
+                    }
+                }
+            }
         };
 
         match compiler_container {
@@ -112,6 +141,7 @@ impl crate::Instance for super::Instance {
             memory_budget_thresholds: desc.memory_budget_thresholds,
             compiler_container: Arc::new(compiler_container),
             options: desc.backend_options.dx12.clone(),
+            telemetry: desc.telemetry,
         })
     }
 
@@ -164,6 +194,7 @@ impl crate::Instance for super::Instance {
                     self.memory_budget_thresholds,
                     self.compiler_container.clone(),
                     self.options.clone(),
+                    self.telemetry,
                 )
             })
             .collect()

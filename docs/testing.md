@@ -40,6 +40,7 @@ This is a table of contents, in the form of the repository's directory structure
    - [compile](#wgpu-compile-tests)
    - [dependency](#wgpu-dependency-tests)
    - [gpu](#wgpu-gpu-tests)
+   - [trace](#wgpu-trace-tests)
    - [validation](#wgpu-validation-tests)
 
 And where applicable [unit-tests](#unit-tests)
@@ -102,7 +103,7 @@ There are inputs in `wgsl`, `spirv`, and `glsl`. There are outputs for
 `hlsl`, `spirv`, `wgsl`, `msl`, `glsl`, and naga's internal IR. The tests
 can be configured by a sidecar toml file of the same name as the input file.
 
-This is the goto tool for testing all kinds of codegen and parsing features. 
+This is the goto tool for testing all kinds of codegen and parsing features.
 
 To avoid clutter we generally use the following pattern:
 
@@ -143,7 +144,7 @@ the [wgsl errors](#naga-wgsl-error-tests) tests.
 
 These are tests for the error messages that the `wgsl` frontend
 produces. Additionally you can check that a given validation error
-is produced by the validator from a given `wgsl` snippet. 
+is produced by the validator from a given `wgsl` snippet.
 
 ## `player` Tests
 
@@ -208,6 +209,15 @@ Normal `#[test]`s will not be found in this test crate, as we use a custom harne
 
 See also the [example tests](#example-tests) for additional GPU tests.
 
+## `wgpu` Trace Tests
+
+- Located in: `tests/tests/wgpu_trace.rs`
+- Run with `cargo nextest run --test wgpu_trace`
+- Use the standard `#[test]` harness.
+
+These tests are focused on testing the tracing functionality in `wgpu`.  They
+use the a special `noop` backend which does not connect to a real GPU.
+
 ## `wgpu` Validation Tests
 
 - Located in: `tests/tests/wgpu-validation`
@@ -215,7 +225,7 @@ See also the [example tests](#example-tests) for additional GPU tests.
 - Use the standard `#[test]` harness.
 - `wgpu` integration tests, with access to `wgpu_test` helpers.
 
-These tests are focused on testing the validation inside of `wgpu-core`. 
+These tests are focused on testing the validation inside of `wgpu-core`.
 They are written against the `wgpu` API, but are targeting a special `noop`
 backend which does not connect to a real GPU.
 

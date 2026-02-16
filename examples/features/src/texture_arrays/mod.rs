@@ -328,7 +328,7 @@ impl crate::framework::Example for Example {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("main"),
             bind_group_layouts: &[&bind_group_layout, &uniform_bind_group_layout],
-            immediates_ranges: &[],
+            immediate_size: 0,
         });
 
         let index_format = wgpu::IndexFormat::Uint16;
