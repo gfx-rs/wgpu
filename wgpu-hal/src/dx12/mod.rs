@@ -966,8 +966,10 @@ impl Texture {
 
     fn calc_subresource_for_copy(&self, base: &crate::TextureCopyBase) -> u32 {
         let plane = match base.aspect {
-            crate::FormatAspects::COLOR | crate::FormatAspects::DEPTH => 0,
-            crate::FormatAspects::STENCIL => 1,
+            crate::FormatAspects::COLOR
+            | crate::FormatAspects::DEPTH
+            | crate::FormatAspects::PLANE_0 => 0,
+            crate::FormatAspects::STENCIL | crate::FormatAspects::PLANE_1 => 1,
             _ => unreachable!(),
         };
         self.calc_subresource(base.mip_level, base.array_layer, plane)
