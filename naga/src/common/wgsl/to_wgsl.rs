@@ -195,25 +195,26 @@ impl TryToWgsl for crate::BuiltIn {
             Bi::PrimitiveCount => "primitive_count",
             Bi::CullPrimitive => "cull_primitive",
 
+            Bi::RayInvocationId => "ray_invocation_id",
+            Bi::NumRayInvocations => "num_ray_invocations",
+            Bi::InstanceCustomData => "instance_custom_data",
+            Bi::GeometryIndex => "geometry_index",
+            Bi::WorldRayOrigin => "world_ray_origin",
+            Bi::WorldRayDirection => "world_ray_direction",
+            Bi::ObjectRayOrigin => "object_ray_origin",
+            Bi::ObjectRayDirection => "object_ray_direction",
+            Bi::RayTmin => "ray_t_min",
+            Bi::RayTCurrentMax => "ray_t_current_max",
+            Bi::ObjectToWorld => "object_to_world",
+            Bi::WorldToObject => "world_to_object",
+            Bi::HitKind => "hit_kind",
+
             Bi::BaseInstance
             | Bi::BaseVertex
             | Bi::CullDistance
             | Bi::PointSize
             | Bi::PointCoord
-            | Bi::WorkGroupSize
-            | Bi::RayInvocationId
-            | Bi::NumRayInvocations
-            | Bi::InstanceCustomData
-            | Bi::GeometryIndex
-            | Bi::WorldRayOrigin
-            | Bi::WorldRayDirection
-            | Bi::ObjectRayOrigin
-            | Bi::ObjectRayDirection
-            | Bi::RayTmin
-            | Bi::RayTCurrentMax
-            | Bi::ObjectToWorld
-            | Bi::WorldToObject
-            | Bi::HitKind => return None,
+            | Bi::WorkGroupSize => return None,
         })
     }
 }
@@ -387,7 +388,8 @@ pub const fn address_space_str(
             As::Handle => return (None, None),
             As::Function => "function",
             As::TaskPayload => "task_payload",
-            As::IncomingRayPayload | As::RayPayload => return (None, None),
+            As::IncomingRayPayload => "incoming_ray_payload",
+            As::RayPayload => "ray_payload",
         }),
         None,
     )
