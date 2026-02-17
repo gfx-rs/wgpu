@@ -88,3 +88,13 @@ impl crate::AtomicFunction {
         }
     }
 }
+
+pub fn supported_capabilities() -> crate::valid::Capabilities {
+    use crate::valid::Capabilities as Caps;
+    Caps::IMMEDIATES
+        | Caps::CLIP_DISTANCE
+        | Caps::MULTISAMPLED_SHADING
+        | Caps::DUAL_SOURCE_BLENDING
+        | Caps::CUBE_ARRAY_TEXTURES
+        | Caps::SHADER_FLOAT16
+}

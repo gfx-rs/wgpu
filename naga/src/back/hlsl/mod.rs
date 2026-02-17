@@ -756,3 +756,9 @@ pub struct Writer<'a, W> {
     temp_access_chain: Vec<storage::SubAccess>,
     need_bake_expressions: back::NeedBakeExpressions,
 }
+
+pub fn supported_capabilities() -> crate::valid::Capabilities {
+    use crate::valid::Capabilities as Caps;
+    // TODO
+    Caps::all()
+}
