@@ -1570,6 +1570,7 @@ bitflags_array! {
         ///
         /// Supported platforms:
         /// - Vulkan (mainly on Desktop GPUs)
+        /// - Metal
         /// - GL (Desktop or `GL_EXT_clip_cull_distance`)
         /// - WebGPU
         ///
