@@ -318,10 +318,10 @@ pub(crate) fn validate_linear_texture_data(
         bytes_in_copy,
     } = layout.get_buffer_texture_copy_info(format, aspect, copy_size)?;
 
-    if copy_width % block_width_texels != 0 {
+    if !copy_width.is_multiple_of(block_width_texels) {
         return Err(TransferError::UnalignedCopyWidth);
     }
-    if copy_height % block_height_texels != 0 {
+    if !copy_height.is_multiple_of(block_height_texels) {
         return Err(TransferError::UnalignedCopyHeight);
     }
 
@@ -986,7 +986,7 @@ pub(super) fn copy_buffer_to_buffer(
         None => (src_buffer.size - source_offset, src_buffer.size),
     };
 
-    if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+    if !size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
         return Err(TransferError::UnalignedCopySize(size).into());
     }
     if !source_offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
