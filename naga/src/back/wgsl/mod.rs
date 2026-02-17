@@ -89,12 +89,8 @@ impl crate::AtomicFunction {
     }
 }
 
-pub fn supported_capabilities() -> crate::valid::Capabilities {
+pub const fn supported_capabilities() -> crate::valid::Capabilities {
+    // WGSL regurgitation supports almost everything, though browser webgpu can't parse most of these.
     use crate::valid::Capabilities as Caps;
-    Caps::IMMEDIATES
-        | Caps::CLIP_DISTANCE
-        | Caps::MULTISAMPLED_SHADING
-        | Caps::DUAL_SOURCE_BLENDING
-        | Caps::CUBE_ARRAY_TEXTURES
-        | Caps::SHADER_FLOAT16
+    Caps::all()
 }

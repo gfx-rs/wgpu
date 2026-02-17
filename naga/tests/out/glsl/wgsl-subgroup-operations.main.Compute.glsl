@@ -18,8 +18,6 @@ void main() {
     Structure sizes = Structure(gl_NumSubgroups, gl_SubgroupSize);
     uint subgroup_id = gl_SubgroupID;
     uint subgroup_invocation_id = gl_SubgroupInvocationID;
-    subgroupMemoryBarrier();
-    barrier();
     uvec4 _e7 = subgroupBallot(((subgroup_invocation_id & 1u) == 1u));
     uvec4 _e8 = subgroupBallot(true);
     bool _e11 = subgroupAll((subgroup_invocation_id != 0u));

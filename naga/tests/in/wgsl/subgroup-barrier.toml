@@ -1,4 +1,5 @@
-capabilities = "SUBGROUP"
+capabilities = "SUBGROUP | SUBGROUP_BARRIER"
+targets = "WGSL | SPIRV | METAL"
 
 [msl]
 fake_missing_bindings = false

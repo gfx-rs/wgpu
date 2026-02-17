@@ -760,7 +760,7 @@ pub struct Writer<'a, W> {
 pub fn supported_capabilities() -> crate::valid::Capabilities {
     use crate::valid::Capabilities as Caps;
     Caps::IMMEDIATES
-        // No FLOAT64
+        | Caps::FLOAT64 // Unsupported by wgpu but supported by naga
         | Caps::PRIMITIVE_INDEX
         | Caps::TEXTURE_AND_SAMPLER_BINDING_ARRAY
         // No BUFFER_BINDING_ARRAY
@@ -772,7 +772,7 @@ pub fn supported_capabilities() -> crate::valid::Capabilities {
         | Caps::MULTIVIEW
         // No EARLY_DEPTH_TEST
         | Caps::MULTISAMPLED_SHADING
-        // No RAY_QUERY
+        | Caps::RAY_QUERY
         | Caps::DUAL_SOURCE_BLENDING
         | Caps::CUBE_ARRAY_TEXTURES
         | Caps::SHADER_INT64
