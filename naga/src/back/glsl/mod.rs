@@ -617,7 +617,7 @@ fn is_value_init_supported(module: &crate::Module, ty: Handle<crate::Type>) -> b
     }
 }
 
-pub fn supported_capabilities() -> valid::Capabilities {
+pub const fn supported_capabilities() -> valid::Capabilities {
     use valid::Capabilities as Caps;
     // TODO
     Caps::all()

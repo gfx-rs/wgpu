@@ -757,7 +757,7 @@ pub struct Writer<'a, W> {
     need_bake_expressions: back::NeedBakeExpressions,
 }
 
-pub fn supported_capabilities() -> crate::valid::Capabilities {
+pub const fn supported_capabilities() -> crate::valid::Capabilities {
     use crate::valid::Capabilities as Caps;
     // TODO
     Caps::all()
