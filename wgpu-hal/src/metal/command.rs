@@ -96,8 +96,12 @@ impl Encoder<'_> {
                 Self::Fragment(enc) => {
                     enc.setFragmentAccelerationStructure_atBufferIndex(buffer, index)
                 }
-                Self::Task(_) => {}
-                Self::Mesh(_) => {}
+                Self::Task(_) => {
+                    unreachable!("Acceleration structures are not allowed in task shaders")
+                }
+                Self::Mesh(_) => {
+                    unreachable!("Acceleration structures are not allowed in mesh shaders")
+                }
                 Self::Compute(enc) => enc.setAccelerationStructure_atBufferIndex(buffer, index),
             }
         }

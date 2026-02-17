@@ -409,8 +409,8 @@ pub fn map_acceleration_structure_descriptor<'a>(
                     }
                     descriptor.setVertexStride(triangles.vertex_stride as usize);
                     // Safety: MTLVertexFormat and MTLAttributeFormat are identical.
-                    // https://docs.rs/metal/latest/metal/enum.MTLAttributeFormat.html
-                    // https://docs.rs/metal/latest/metal/enum.MTLVertexFormat.html
+                    // https://docs.rs/objc2-metal/latest/objc2_metal/struct.MTLAttributeFormat.html
+                    // https://docs.rs/objc2-metal/latest/objc2_metal/struct.MTLVertexFormat.html
                     descriptor.setVertexFormat(unsafe {
                         core::mem::transmute::<MTLVertexFormat, MTLAttributeFormat>(
                             map_vertex_format(triangles.vertex_format),

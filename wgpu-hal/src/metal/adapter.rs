@@ -980,7 +980,13 @@ impl super::PrivateCapabilities {
             supports_cooperative_matrix: family_check
                 && (device.supportsFamily(MTLGPUFamily::Apple7)
                     || device.supportsFamily(MTLGPUFamily::Mac2)),
-            supports_raytracing: if available!(macos = 15.0, ios = 18.0) {
+            // https://developer.apple.com/documentation/metal/mtlresidencyset
+            supports_raytracing: if available!(
+                macos = 15.0,
+                ios = 18.0,
+                tvos = 18.0,
+                visionos = 2.0,
+            ) {
                 device.supportsRaytracing() && device.supportsRaytracingFromRender()
             } else {
                 false
