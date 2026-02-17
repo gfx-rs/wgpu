@@ -47,3 +47,7 @@ wgpu/src/backend/webgpu/webgpu_sys/wasm_bindgen_clone_tmp
 
 # LLM-related
 .claude/settings.local.json
+
+# Wasm test generated files
+/wasm-test/dist
+/wasm-test/runner/node_modules

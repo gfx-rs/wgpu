@@ -12,6 +12,8 @@ mod params;
 mod poll;
 mod report;
 mod run;
+pub mod wasm;
+pub mod wasm_logger;
 
 #[cfg(target_arch = "wasm32")]
 pub use init::initialize_html_canvas;
@@ -118,11 +120,14 @@ pub fn did_oom<T>(device: &wgpu::Device, callback: impl FnOnce() -> T) -> (bool,
 macro_rules! gpu_test_main {
     ($tests: expr) => {
         #[cfg(target_arch = "wasm32")]
-        wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+        #[wasm_bindgen::prelude::wasm_bindgen]
+        pub fn tests() {
+            $crate::wasm::main($tests);
+        }
+
         #[cfg(target_arch = "wasm32")]
-        fn main() {
-            // Ensure that value is used so that warnings don't happen.
-            let _ = $tests;
+        pub fn main() {
+            $tests;
         }
 
         #[cfg(not(target_arch = "wasm32"))]
