@@ -246,9 +246,7 @@ impl super::DeviceShared {
     }
 }
 
-impl descriptor::DescriptorDevice<vk::DescriptorSetLayout, vk::DescriptorPool, vk::DescriptorSet>
-    for super::DeviceShared
-{
+impl descriptor::DescriptorDevice for super::DeviceShared {
     fn create_descriptor_pool(
         &self,
         descriptor_count: &descriptor::DescriptorTotalCount,
@@ -1496,7 +1494,7 @@ impl crate::Device for super::Device {
 
         let mut vk_sets = unsafe {
             self.desc_allocator.lock().allocate(
-                &*self.shared,
+                &self.shared,
                 &desc.layout.raw,
                 desc_set_layout_flags,
                 &desc.layout.desc_count,
@@ -1694,11 +1692,7 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn destroy_bind_group(&self, group: super::BindGroup) {
-        unsafe {
-            self.desc_allocator
-                .lock()
-                .free(&*self.shared, Some(group.set))
-        };
+        unsafe { self.desc_allocator.lock().free(&self.shared, [group.set]) };
 
         self.counters.bind_groups.sub(1);
     }

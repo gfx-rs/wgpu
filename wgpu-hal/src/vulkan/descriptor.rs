@@ -4,6 +4,7 @@
 // which is licenced under MIT/APACHE
 
 use alloc::{collections::VecDeque, vec::Vec};
+use ash::vk;
 use core::{
     convert::TryFrom as _,
     fmt::{self, Debug, Display},
@@ -91,14 +92,16 @@ pub enum DeviceAllocationError {
 }
 
 /// Abstract device that can create pools of type `P` and allocate sets `S` with layout `L`.
-pub trait DescriptorDevice<L, P, S> {
+pub trait DescriptorDevice {
+    //vk::DescriptorSetLayout, vk::DescriptorPool, vk::DescriptorSet
+
     /// Creates a new descriptor pool.
     fn create_descriptor_pool(
         &self,
         descriptor_count: &DescriptorTotalCount,
         max_sets: u32,
         flags: DescriptorPoolCreateFlags,
-    ) -> Result<P, CreatePoolError>;
+    ) -> Result<vk::DescriptorPool, CreatePoolError>;
 
     /// Destroys descriptor pool.
     ///
@@ -106,7 +109,7 @@ pub trait DescriptorDevice<L, P, S> {
     ///
     /// Pool must be created from this device.
     /// All descriptor sets allocated from this pool become invalid.
-    unsafe fn destroy_descriptor_pool(&self, pool: P);
+    unsafe fn destroy_descriptor_pool(&self, pool: vk::DescriptorPool);
 
     /// Allocates descriptor sets.
     ///
@@ -115,19 +118,21 @@ pub trait DescriptorDevice<L, P, S> {
     /// Pool must be created from this device.
     unsafe fn alloc_descriptor_sets<'a>(
         &self,
-        pool: &mut P,
-        layouts: impl ExactSizeIterator<Item = &'a L>,
-        sets: &mut impl Extend<S>,
-    ) -> Result<(), DeviceAllocationError>
-    where
-        L: 'a;
+        pool: &mut vk::DescriptorPool,
+        layouts: impl ExactSizeIterator<Item = &'a vk::DescriptorSetLayout>,
+        sets: &mut impl Extend<vk::DescriptorSet>,
+    ) -> Result<(), DeviceAllocationError>;
 
     /// Deallocates descriptor sets.
     ///
     /// # Safety
     ///
     /// Sets must be allocated from specified pool and not deallocated before.
-    unsafe fn dealloc_descriptor_sets(&self, pool: &mut P, sets: impl Iterator<Item = S>);
+    unsafe fn dealloc_descriptor_sets(
+        &self,
+        pool: &mut vk::DescriptorPool,
+        sets: impl Iterator<Item = vk::DescriptorSet>,
+    );
 }
 
 bitflags::bitflags! {
@@ -145,16 +150,16 @@ bitflags::bitflags! {
 
 /// Descriptor set from allocator.
 #[derive(Debug)]
-pub struct DescriptorSet<S> {
-    raw: S,
+pub struct DescriptorSet {
+    raw: vk::DescriptorSet,
     pool_id: u64,
     size: DescriptorTotalCount,
     update_after_bind: bool,
 }
 
-impl<S> DescriptorSet<S> {
+impl DescriptorSet {
     /// Returns reference to raw descriptor set.
-    pub fn raw(&self) -> &S {
+    pub fn raw(&self) -> &vk::DescriptorSet {
         &self.raw
     }
 }
@@ -203,8 +208,8 @@ const MIN_SETS: u32 = 64;
 const MAX_SETS: u32 = 512;
 
 #[derive(Debug)]
-struct DescriptorPool<P> {
-    raw: P,
+struct DescriptorPool {
+    raw: vk::DescriptorPool,
 
     /// Number of sets allocated from pool.
     allocated: u32,
@@ -214,15 +219,15 @@ struct DescriptorPool<P> {
 }
 
 #[derive(Debug)]
-struct DescriptorBucket<P> {
+struct DescriptorBucket {
     offset: u64,
-    pools: VecDeque<DescriptorPool<P>>,
+    pools: VecDeque<DescriptorPool>,
     total: u32,
     update_after_bind: bool,
     size: DescriptorTotalCount,
 }
 
-impl<P> Drop for DescriptorBucket<P> {
+impl Drop for DescriptorBucket {
     fn drop(&mut self) {
         if std::thread::panicking() {
             return;
@@ -233,7 +238,7 @@ impl<P> Drop for DescriptorBucket<P> {
     }
 }
 
-impl<P> DescriptorBucket<P> {
+impl DescriptorBucket {
     fn new(update_after_bind: bool, size: DescriptorTotalCount) -> Self {
         DescriptorBucket {
             offset: 0,
@@ -290,12 +295,12 @@ impl<P> DescriptorBucket<P> {
         (pool_size, max_sets)
     }
 
-    unsafe fn allocate<L, S>(
+    unsafe fn allocate(
         &mut self,
-        device: &impl DescriptorDevice<L, P, S>,
-        layout: &L,
+        device: &super::DeviceShared,
+        layout: &vk::DescriptorSetLayout,
         mut count: u32,
-        allocated_sets: &mut Vec<DescriptorSet<S>>,
+        allocated_sets: &mut Vec<DescriptorSet>,
     ) -> Result<(), AllocationError> {
         debug_assert!(usize::try_from(count).is_ok(), "Must be ensured by caller");
 
@@ -421,10 +426,10 @@ impl<P> DescriptorBucket<P> {
         Ok(())
     }
 
-    unsafe fn free<L, S>(
+    unsafe fn free(
         &mut self,
-        device: &impl DescriptorDevice<L, P, S>,
-        raw_sets: impl IntoIterator<Item = S>,
+        device: &super::DeviceShared,
+        raw_sets: impl IntoIterator<Item = vk::DescriptorSet>,
         pool_id: u64,
     ) {
         let pool = usize::try_from(pool_id - self.offset)
@@ -462,7 +467,7 @@ impl<P> DescriptorBucket<P> {
         }
     }
 
-    unsafe fn cleanup<L, S>(&mut self, device: &impl DescriptorDevice<L, P, S>) {
+    unsafe fn cleanup(&mut self, device: &super::DeviceShared) {
         while let Some(pool) = self.pools.pop_front() {
             if pool.allocated != 0 {
                 self.pools.push_front(pool);
@@ -480,16 +485,16 @@ impl<P> DescriptorBucket<P> {
 /// Descriptor allocator.
 /// Can be used to allocate descriptor sets for any layout.
 #[derive(Debug)]
-pub struct DescriptorAllocator<P, S> {
-    buckets: HashMap<(DescriptorTotalCount, bool), DescriptorBucket<P>>,
-    sets_cache: Vec<DescriptorSet<S>>,
-    raw_sets_cache: Vec<S>,
+pub struct DescriptorAllocator {
+    buckets: HashMap<(DescriptorTotalCount, bool), DescriptorBucket>,
+    sets_cache: Vec<DescriptorSet>,
+    raw_sets_cache: Vec<vk::DescriptorSet>,
     max_update_after_bind_descriptors_in_all_pools: u32,
     current_update_after_bind_descriptors_in_all_pools: u32,
     total: u32,
 }
 
-impl<P, S> Drop for DescriptorAllocator<P, S> {
+impl Drop for DescriptorAllocator {
     fn drop(&mut self) {
         if self.buckets.drain().any(|(_, bucket)| bucket.total != 0) {
             log::error!(
@@ -499,7 +504,7 @@ impl<P, S> Drop for DescriptorAllocator<P, S> {
     }
 }
 
-impl<P, S> DescriptorAllocator<P, S> {
+impl DescriptorAllocator {
     /// Create new allocator instance.
     pub fn new(max_update_after_bind_descriptors_in_all_pools: u32) -> Self {
         DescriptorAllocator {
@@ -520,19 +525,14 @@ impl<P, S> DescriptorAllocator<P, S> {
     ///   one `DescriptorAllocator` instance.
     /// * `flags` must match flags that were used to create the layout.
     /// * `layout_descriptor_count` must match descriptor numbers in the layout.
-    pub unsafe fn allocate<L, D>(
+    pub unsafe fn allocate(
         &mut self,
-        device: &D,
-        layout: &L,
+        device: &super::DeviceShared,
+        layout: &vk::DescriptorSetLayout,
         flags: DescriptorSetLayoutCreateFlags,
         layout_descriptor_count: &DescriptorTotalCount,
         count: u32,
-    ) -> Result<Vec<DescriptorSet<S>>, AllocationError>
-    where
-        S: Debug,
-        L: Debug,
-        D: DescriptorDevice<L, P, S>,
-    {
+    ) -> Result<Vec<DescriptorSet>, AllocationError> {
         if count == 0 {
             return Ok(Vec::new());
         }
@@ -604,10 +604,9 @@ impl<P, S> DescriptorAllocator<P, S> {
     /// * None of descriptor sets can be referenced in any pending command buffers.
     /// * All command buffers where at least one of descriptor sets referenced
     ///   move to invalid state.
-    pub unsafe fn free<L, D, I>(&mut self, device: &D, sets: I)
+    pub unsafe fn free<I>(&mut self, device: &super::DeviceShared, sets: I)
     where
-        D: DescriptorDevice<L, P, S>,
-        I: IntoIterator<Item = DescriptorSet<S>>,
+        I: IntoIterator<Item = DescriptorSet>,
     {
         debug_assert!(self.raw_sets_cache.is_empty());
 
@@ -640,15 +639,13 @@ impl<P, S> DescriptorAllocator<P, S> {
     }
 
     /// Frees the cached descriptor sets which must be allocated from the same bucket and pool.
-    unsafe fn free_raw_sets_cache<L, D>(
+    unsafe fn free_raw_sets_cache(
         &mut self,
-        device: &D,
+        device: &super::DeviceShared,
         bucket_key: &(DescriptorTotalCount, bool),
         pool_id: u64,
         descriptor_count: u32,
-    ) where
-        D: DescriptorDevice<L, P, S>,
-    {
+    ) {
         let bucket = self
             .buckets
             .get_mut(bucket_key)
@@ -672,7 +669,7 @@ impl<P, S> DescriptorAllocator<P, S> {
     ///
     /// * Same `device` instance must be passed to all method calls of
     ///   one `DescriptorAllocator` instance.
-    pub unsafe fn cleanup<L>(&mut self, device: &impl DescriptorDevice<L, P, S>) {
+    pub unsafe fn cleanup(&mut self, device: &super::DeviceShared) {
         for bucket in self.buckets.values_mut() {
             unsafe { bucket.cleanup(device) }
         }
@@ -698,15 +695,15 @@ const EMPTY_COUNT: DescriptorTotalCount = DescriptorTotalCount {
     inline_uniform_block_bindings: 0,
 };
 
-struct Allocation<'a, S> {
+struct Allocation<'a> {
     update_after_bind: bool,
     size: DescriptorTotalCount,
     pool_id: u64,
-    sets: &'a mut Vec<DescriptorSet<S>>,
+    sets: &'a mut Vec<DescriptorSet>,
 }
 
-impl<S> Extend<S> for Allocation<'_, S> {
-    fn extend<T: IntoIterator<Item = S>>(&mut self, iter: T) {
+impl Extend<vk::DescriptorSet> for Allocation<'_> {
+    fn extend<T: IntoIterator<Item = vk::DescriptorSet>>(&mut self, iter: T) {
         let update_after_bind = self.update_after_bind;
         let size = self.size;
         let pool_id = self.pool_id;

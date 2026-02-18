@@ -514,7 +514,7 @@ impl Drop for DeviceShared {
 
 pub struct Device {
     mem_allocator: Mutex<gpu_allocator::vulkan::Allocator>,
-    desc_allocator: Mutex<descriptor::DescriptorAllocator<vk::DescriptorPool, vk::DescriptorSet>>,
+    desc_allocator: Mutex<descriptor::DescriptorAllocator>,
     valid_ash_memory_types: u32,
     naga_options: naga::back::spv::Options<'static>,
     #[cfg(feature = "renderdoc")]
@@ -527,7 +527,7 @@ pub struct Device {
 
 impl Drop for Device {
     fn drop(&mut self) {
-        unsafe { self.desc_allocator.lock().cleanup(&*self.shared) };
+        unsafe { self.desc_allocator.lock().cleanup(&self.shared) };
     }
 }
 
@@ -820,7 +820,7 @@ impl crate::DynPipelineLayout for PipelineLayout {}
 
 #[derive(Debug)]
 pub struct BindGroup {
-    set: descriptor::DescriptorSet<vk::DescriptorSet>,
+    set: descriptor::DescriptorSet,
 }
 
 impl crate::DynBindGroup for BindGroup {}
