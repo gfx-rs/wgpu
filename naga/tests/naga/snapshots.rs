@@ -34,7 +34,10 @@ fn check_targets(input: &Input, module: &mut naga::Module, source_code: Option<&
         } else {
             let diff = capabilities - allowed_capabilities;
             if !diff.is_empty() {
-                panic!("Invalid capabilities for backends on shader {name}: {diff:?}");
+                panic!(
+                    "Invalid capabilities for backends on shader {name}: used {diff:?} which aren't supported by one of the targets.
+Note: this is an issue with snapshot configuration, not code. If you added a new capability, add it to `supported_capabilities()` in each backend where it is supported"
+                );
             }
         }
     }
