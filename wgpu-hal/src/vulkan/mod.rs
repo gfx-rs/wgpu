@@ -27,6 +27,7 @@ Otherwise, we manage a pool of `VkFence` objects behind each `hal::Fence`.
 mod adapter;
 mod command;
 pub mod conv;
+mod descriptor;
 mod device;
 mod drm;
 mod instance;
@@ -513,8 +514,7 @@ impl Drop for DeviceShared {
 
 pub struct Device {
     mem_allocator: Mutex<gpu_allocator::vulkan::Allocator>,
-    desc_allocator:
-        Mutex<gpu_descriptor::DescriptorAllocator<vk::DescriptorPool, vk::DescriptorSet>>,
+    desc_allocator: Mutex<descriptor::DescriptorAllocator<vk::DescriptorPool, vk::DescriptorSet>>,
     valid_ash_memory_types: u32,
     naga_options: naga::back::spv::Options<'static>,
     #[cfg(feature = "renderdoc")]
@@ -799,7 +799,7 @@ struct BindingInfo {
 #[derive(Debug)]
 pub struct BindGroupLayout {
     raw: vk::DescriptorSetLayout,
-    desc_count: gpu_descriptor::DescriptorTotalCount,
+    desc_count: descriptor::DescriptorTotalCount,
     /// Sorted list of entries.
     entries: Box<[wgt::BindGroupLayoutEntry]>,
     /// Map of original binding index to remapped binding index and optional
@@ -820,7 +820,7 @@ impl crate::DynPipelineLayout for PipelineLayout {}
 
 #[derive(Debug)]
 pub struct BindGroup {
-    set: gpu_descriptor::DescriptorSet<vk::DescriptorSet>,
+    set: descriptor::DescriptorSet<vk::DescriptorSet>,
 }
 
 impl crate::DynBindGroup for BindGroup {}

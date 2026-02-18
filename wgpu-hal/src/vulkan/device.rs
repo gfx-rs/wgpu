@@ -12,7 +12,7 @@ use ash::{ext, vk};
 use hashbrown::hash_map::Entry;
 use parking_lot::Mutex;
 
-use super::{conv, RawTlasInstance};
+use super::{conv, descriptor, RawTlasInstance};
 use crate::TlasInstance;
 
 impl super::DeviceShared {
@@ -246,16 +246,15 @@ impl super::DeviceShared {
     }
 }
 
-impl
-    gpu_descriptor::DescriptorDevice<vk::DescriptorSetLayout, vk::DescriptorPool, vk::DescriptorSet>
+impl descriptor::DescriptorDevice<vk::DescriptorSetLayout, vk::DescriptorPool, vk::DescriptorSet>
     for super::DeviceShared
 {
-    unsafe fn create_descriptor_pool(
+    fn create_descriptor_pool(
         &self,
-        descriptor_count: &gpu_descriptor::DescriptorTotalCount,
+        descriptor_count: &descriptor::DescriptorTotalCount,
         max_sets: u32,
-        flags: gpu_descriptor::DescriptorPoolCreateFlags,
-    ) -> Result<vk::DescriptorPool, gpu_descriptor::CreatePoolError> {
+        flags: descriptor::DescriptorPoolCreateFlags,
+    ) -> Result<vk::DescriptorPool, descriptor::CreatePoolError> {
         //Note: ignoring other types, since they can't appear here
         let unfiltered_counts = [
             (vk::DescriptorType::SAMPLER, descriptor_count.sampler),
@@ -300,12 +299,12 @@ impl
             .collect::<ArrayVec<_, 8>>();
 
         let mut vk_flags =
-            if flags.contains(gpu_descriptor::DescriptorPoolCreateFlags::UPDATE_AFTER_BIND) {
+            if flags.contains(descriptor::DescriptorPoolCreateFlags::UPDATE_AFTER_BIND) {
                 vk::DescriptorPoolCreateFlags::UPDATE_AFTER_BIND
             } else {
                 vk::DescriptorPoolCreateFlags::empty()
             };
-        if flags.contains(gpu_descriptor::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET) {
+        if flags.contains(descriptor::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET) {
             vk_flags |= vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET;
         }
         let vk_info = vk::DescriptorPoolCreateInfo::default()
@@ -316,14 +315,12 @@ impl
         match unsafe { self.raw.create_descriptor_pool(&vk_info, None) } {
             Ok(pool) => Ok(pool),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(gpu_descriptor::CreatePoolError::OutOfHostMemory)
+                Err(descriptor::CreatePoolError::OutOfHostMemory)
             }
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(gpu_descriptor::CreatePoolError::OutOfDeviceMemory)
+                Err(descriptor::CreatePoolError::OutOfDeviceMemory)
             }
-            Err(vk::Result::ERROR_FRAGMENTATION) => {
-                Err(gpu_descriptor::CreatePoolError::Fragmentation)
-            }
+            Err(vk::Result::ERROR_FRAGMENTATION) => Err(descriptor::CreatePoolError::Fragmentation),
             Err(err) => handle_unexpected(err),
         }
     }
@@ -337,7 +334,7 @@ impl
         pool: &mut vk::DescriptorPool,
         layouts: impl ExactSizeIterator<Item = &'a vk::DescriptorSetLayout>,
         sets: &mut impl Extend<vk::DescriptorSet>,
-    ) -> Result<(), gpu_descriptor::DeviceAllocationError> {
+    ) -> Result<(), descriptor::DeviceAllocationError> {
         let result = unsafe {
             self.raw.allocate_descriptor_sets(
                 &vk::DescriptorSetAllocateInfo::default()
@@ -357,13 +354,13 @@ impl
             }
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY)
             | Err(vk::Result::ERROR_OUT_OF_POOL_MEMORY) => {
-                Err(gpu_descriptor::DeviceAllocationError::OutOfHostMemory)
+                Err(descriptor::DeviceAllocationError::OutOfHostMemory)
             }
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(gpu_descriptor::DeviceAllocationError::OutOfDeviceMemory)
+                Err(descriptor::DeviceAllocationError::OutOfDeviceMemory)
             }
             Err(vk::Result::ERROR_FRAGMENTED_POOL) => {
-                Err(gpu_descriptor::DeviceAllocationError::FragmentedPool)
+                Err(descriptor::DeviceAllocationError::FragmentedPool)
             }
             Err(err) => handle_unexpected(err),
         }
@@ -1290,7 +1287,7 @@ impl crate::Device for super::Device {
         let mut binding_map = Vec::new();
         let mut next_binding = 0;
         let mut contains_binding_arrays = false;
-        let mut desc_count = gpu_descriptor::DescriptorTotalCount::default();
+        let mut desc_count = descriptor::DescriptorTotalCount::default();
         for entry in desc.entries {
             if entry.count.is_some() {
                 contains_binding_arrays = true;
@@ -1492,9 +1489,9 @@ impl crate::Device for super::Device {
         >,
     ) -> Result<super::BindGroup, crate::DeviceError> {
         let desc_set_layout_flags = if desc.layout.contains_binding_arrays {
-            gpu_descriptor::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND
+            descriptor::DescriptorSetLayoutCreateFlags::UPDATE_AFTER_BIND
         } else {
-            gpu_descriptor::DescriptorSetLayoutCreateFlags::empty()
+            descriptor::DescriptorSetLayoutCreateFlags::empty()
         };
 
         let mut vk_sets = unsafe {
@@ -2785,9 +2782,9 @@ impl super::DeviceShared {
     }
 }
 
-impl From<gpu_descriptor::AllocationError> for crate::DeviceError {
-    fn from(error: gpu_descriptor::AllocationError) -> Self {
-        use gpu_descriptor::AllocationError as Ae;
+impl From<descriptor::AllocationError> for crate::DeviceError {
+    fn from(error: descriptor::AllocationError) -> Self {
+        use descriptor::AllocationError as Ae;
         match error {
             Ae::OutOfDeviceMemory | Ae::OutOfHostMemory | Ae::Fragmentation => Self::OutOfMemory,
         }
