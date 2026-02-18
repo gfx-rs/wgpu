@@ -554,71 +554,34 @@ impl DescriptorAllocator {
         }
     }
 
-    /// Free descriptor sets.
+    /// Free a descriptor set.
     ///
     /// # Safety
     ///
     /// * Same `device` instance must be passed to all method calls of
     ///   one `DescriptorAllocator` instance.
-    /// * None of descriptor sets can be referenced in any pending command buffers.
-    /// * All command buffers where at least one of descriptor sets referenced
+    /// * The descriptor set cannot be referenced in any pending command buffers.
+    /// * All command buffers where the descriptor set is referenced
     ///   move to invalid state.
-    pub unsafe fn free<I>(&mut self, device: &super::DeviceShared, sets: I)
-    where
-        I: IntoIterator<Item = DescriptorSet>,
-    {
+    pub unsafe fn free(&mut self, device: &super::DeviceShared, set: DescriptorSet) {
         debug_assert!(self.raw_sets_cache.is_empty());
 
-        let mut last_key = (Default::default(), false);
-        let mut last_pool_id = None;
+        self.raw_sets_cache.push(set.raw);
 
-        let mut descriptor_count = 0;
-
-        // Batch freeing of adjacent descriptor sets that belong to the same bucket and pool.
-        for set in sets {
-            descriptor_count += set.size.total();
-
-            if last_key != (set.size, set.update_after_bind) || last_pool_id != Some(set.pool_id) {
-                if let Some(pool_id) = last_pool_id {
-                    unsafe {
-                        self.free_raw_sets_cache(device, &last_key, pool_id, descriptor_count)
-                    };
-                    descriptor_count = 0;
-                }
-
-                last_key = (set.size, set.update_after_bind);
-                last_pool_id = Some(set.pool_id);
-            }
-            self.raw_sets_cache.push(set.raw);
-        }
-
-        if let Some(pool_id) = last_pool_id {
-            unsafe { self.free_raw_sets_cache(device, &last_key, pool_id, descriptor_count) };
-        }
-    }
-
-    /// Frees the cached descriptor sets which must be allocated from the same bucket and pool.
-    unsafe fn free_raw_sets_cache(
-        &mut self,
-        device: &super::DeviceShared,
-        bucket_key: &(DescriptorTotalCount, bool),
-        pool_id: u64,
-        descriptor_count: u32,
-    ) {
         let bucket = self
             .buckets
-            .get_mut(bucket_key)
+            .get_mut(&(set.size, set.update_after_bind))
             .expect("Set must be allocated from this allocator");
 
         debug_assert!(u32::try_from(self.raw_sets_cache.len())
             .ok()
             .is_some_and(|count| count <= bucket.total));
 
-        unsafe { bucket.free(device, self.raw_sets_cache.drain(..), pool_id) };
+        unsafe { bucket.free(device, self.raw_sets_cache.drain(..), set.pool_id) };
 
-        self.total -= descriptor_count;
+        self.total -= set.size.total();
         if bucket.update_after_bind {
-            self.current_update_after_bind_descriptors_in_all_pools -= descriptor_count;
+            self.current_update_after_bind_descriptors_in_all_pools -= set.size.total();
         }
     }
 

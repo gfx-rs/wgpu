@@ -1556,7 +1556,7 @@ impl crate::Device for super::Device {
     }
 
     unsafe fn destroy_bind_group(&self, group: super::BindGroup) {
-        unsafe { self.desc_allocator.lock().free(&self.shared, [group.set]) };
+        unsafe { self.desc_allocator.lock().free(&self.shared, group.set) };
 
         self.counters.bind_groups.sub(1);
     }
