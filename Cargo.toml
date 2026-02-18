@@ -191,7 +191,7 @@ static_assertions = "1.1"
 strum = { version = "0.27.1", default-features = false, features = ["derive"] }
 syn = "2.0.98"
 tempfile = "3"
-toml = "0.9.0"
+toml = "1.0.0"
 trybuild = "1"
 tracy-client = "0.18"
 thiserror = { version = "2.0.12", default-features = false }
