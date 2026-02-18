@@ -323,10 +323,6 @@ impl descriptor::DescriptorDevice for super::DeviceShared {
         }
     }
 
-    unsafe fn destroy_descriptor_pool(&self, pool: vk::DescriptorPool) {
-        unsafe { self.raw.destroy_descriptor_pool(pool, None) }
-    }
-
     unsafe fn alloc_descriptor_sets<'a>(
         &self,
         pool: &mut vk::DescriptorPool,

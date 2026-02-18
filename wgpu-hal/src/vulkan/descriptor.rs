@@ -103,14 +103,6 @@ pub trait DescriptorDevice {
         flags: DescriptorPoolCreateFlags,
     ) -> Result<vk::DescriptorPool, CreatePoolError>;
 
-    /// Destroys descriptor pool.
-    ///
-    /// # Safety
-    ///
-    /// Pool must be created from this device.
-    /// All descriptor sets allocated from this pool become invalid.
-    unsafe fn destroy_descriptor_pool(&self, pool: vk::DescriptorPool);
-
     /// Allocates descriptor sets.
     ///
     /// # Safety
@@ -396,7 +388,7 @@ impl DescriptorBucket {
             match result {
                 Ok(()) => {}
                 Err(err) => {
-                    unsafe { device.destroy_descriptor_pool(raw) };
+                    unsafe { device.raw.destroy_descriptor_pool(raw, None) };
                     match err {
                         DeviceAllocationError::OutOfDeviceMemory => {
                             return Err(AllocationError::OutOfDeviceMemory)
@@ -429,7 +421,7 @@ impl DescriptorBucket {
     unsafe fn free(
         &mut self,
         device: &super::DeviceShared,
-        raw_sets: impl IntoIterator<Item = vk::DescriptorSet>,
+        raw_sets: impl ExactSizeIterator<Item = vk::DescriptorSet>,
         pool_id: u64,
     ) {
         let pool = usize::try_from(pool_id - self.offset)
@@ -437,16 +429,8 @@ impl DescriptorBucket {
             .and_then(|index| self.pools.get_mut(index))
             .expect("Invalid pool id");
 
-        let mut raw_sets = raw_sets.into_iter();
-        let mut count = 0;
-        unsafe {
-            device.dealloc_descriptor_sets(&mut pool.raw, raw_sets.by_ref().inspect(|_| count += 1))
-        };
-
-        debug_assert!(
-            raw_sets.next().is_none(),
-            "Device must deallocated all sets from iterator"
-        );
+        let count = raw_sets.len() as u32;
+        unsafe { device.dealloc_descriptor_sets(&mut pool.raw, raw_sets) };
 
         pool.available += count;
         pool.allocated -= count;
@@ -462,7 +446,7 @@ impl DescriptorBucket {
 
             log::trace!("Destroying old descriptor pool");
 
-            unsafe { device.destroy_descriptor_pool(pool.raw) };
+            unsafe { device.raw.destroy_descriptor_pool(pool.raw, None) };
             self.offset += 1;
         }
     }
@@ -476,7 +460,7 @@ impl DescriptorBucket {
 
             log::trace!("Destroying old descriptor pool");
 
-            unsafe { device.destroy_descriptor_pool(pool.raw) };
+            unsafe { device.raw.destroy_descriptor_pool(pool.raw, None) };
             self.offset += 1;
         }
     }
@@ -496,7 +480,7 @@ pub struct DescriptorAllocator {
 
 impl Drop for DescriptorAllocator {
     fn drop(&mut self) {
-        if self.buckets.drain().any(|(_, bucket)| bucket.total != 0) {
+        if self.buckets.values().any(|bucket| bucket.total != 0) {
             log::error!(
                 "`DescriptorAllocator` is dropped while some descriptor sets were not deallocated"
             );
