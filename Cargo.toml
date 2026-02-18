@@ -183,7 +183,7 @@ ron = "0.12"
 # (using default-features = false to support no-std build, avoiding any extra features that may require std::collections)
 rustc-hash = { version = "1.1", default-features = false }
 serde_json = "1.0.143"
-serde = { version = "1.0.219", default-features = false }
+serde = { version = "1.0.225", default-features = false }
 shell-words = "1"
 smallvec = "1.14"
 spirv = { version = "0.3", git = "https://github.com/gfx-rs/rspirv", rev = "89ce4d0e64c91b0635f617409dc57cb031749a39" }
