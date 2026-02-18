@@ -2640,16 +2640,6 @@ impl super::DeviceShared {
     }
 }
 
-impl From<descriptor::AllocationError> for crate::DeviceError {
-    fn from(error: descriptor::AllocationError) -> Self {
-        use descriptor::AllocationError as Ae;
-        match error {
-            Ae::OutOfDeviceMemory | Ae::OutOfHostMemory | Ae::Fragmentation => Self::OutOfMemory,
-            Ae::Unexpected => Self::Unexpected,
-        }
-    }
-}
-
 /// We usually map unexpected vulkan errors to the [`crate::DeviceError::Unexpected`]
 /// variant to be more robust even in cases where the driver is not
 /// complying with the spec.
