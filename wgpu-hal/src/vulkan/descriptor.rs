@@ -181,8 +181,7 @@ impl super::DeviceShared {
         &self,
         pool: &mut vk::DescriptorPool,
         layouts: impl ExactSizeIterator<Item = &'a vk::DescriptorSetLayout>,
-        sets: &mut impl Extend<vk::DescriptorSet>,
-    ) -> Result<(), DeviceAllocationError> {
+    ) -> Result<Vec<vk::DescriptorSet>, DeviceAllocationError> {
         let result = unsafe {
             self.raw.allocate_descriptor_sets(
                 &vk::DescriptorSetAllocateInfo::default()
@@ -196,10 +195,7 @@ impl super::DeviceShared {
         };
 
         match result {
-            Ok(vk_sets) => {
-                sets.extend(vk_sets);
-                Ok(())
-            }
+            Ok(vk_sets) => Ok(vk_sets),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY)
             | Err(vk::Result::ERROR_OUT_OF_POOL_MEMORY) => {
                 Err(DeviceAllocationError::OutOfHostMemory)
@@ -425,20 +421,18 @@ impl DescriptorBucket {
             log::trace!("Allocate `{}` sets from existing pool", allocate);
 
             let result = unsafe {
-                device.alloc_descriptor_sets(
-                    &mut pool.raw,
-                    (0..allocate).map(|_| layout),
-                    &mut Allocation {
-                        size: self.size,
-                        update_after_bind: self.update_after_bind,
-                        pool_id: index as u64 + self.offset,
-                        sets: allocated_sets,
-                    },
-                )
+                device.alloc_descriptor_sets(&mut pool.raw, (0..allocate).map(|_| layout))
             };
 
             match result {
-                Ok(()) => {}
+                Ok(vk_sets) => {
+                    allocated_sets.extend(vk_sets.into_iter().map(|raw| DescriptorSet {
+                        raw,
+                        pool_id: index as u64 + self.offset,
+                        update_after_bind: self.update_after_bind,
+                        size: self.size,
+                    }))
+                }
                 Err(DeviceAllocationError::OutOfDeviceMemory) => {
                     return Err(AllocationError::OutOfDeviceMemory)
                 }
@@ -488,21 +482,18 @@ impl DescriptorBucket {
             let pool_id = self.pools.len() as u64 + self.offset;
 
             let allocate = max_sets.min(count);
-            let result = unsafe {
-                device.alloc_descriptor_sets(
-                    &mut raw,
-                    (0..allocate).map(|_| layout),
-                    &mut Allocation {
+            let result =
+                unsafe { device.alloc_descriptor_sets(&mut raw, (0..allocate).map(|_| layout)) };
+
+            match result {
+                Ok(vk_sets) => {
+                    allocated_sets.extend(vk_sets.into_iter().map(|raw| DescriptorSet {
+                        raw,
                         pool_id,
                         size: self.size,
                         update_after_bind: self.update_after_bind,
-                        sets: allocated_sets,
-                    },
-                )
-            };
-
-            match result {
-                Ok(()) => {}
+                    }))
+                }
                 Err(err) => {
                     unsafe { device.raw.destroy_descriptor_pool(raw, None) };
                     match err {
@@ -797,24 +788,3 @@ const EMPTY_COUNT: DescriptorTotalCount = DescriptorTotalCount {
     inline_uniform_block_bytes: 0,
     inline_uniform_block_bindings: 0,
 };
-
-struct Allocation<'a> {
-    update_after_bind: bool,
-    size: DescriptorTotalCount,
-    pool_id: u64,
-    sets: &'a mut Vec<DescriptorSet>,
-}
-
-impl Extend<vk::DescriptorSet> for Allocation<'_> {
-    fn extend<T: IntoIterator<Item = vk::DescriptorSet>>(&mut self, iter: T) {
-        let update_after_bind = self.update_after_bind;
-        let size = self.size;
-        let pool_id = self.pool_id;
-        self.sets.extend(iter.into_iter().map(|raw| DescriptorSet {
-            raw,
-            pool_id,
-            update_after_bind,
-            size,
-        }))
-    }
-}
