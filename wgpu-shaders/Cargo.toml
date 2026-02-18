@@ -1,0 +1,52 @@
+[package]
+name = "wgpu-shaders"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Shader compilation for wgpu, using naga."
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+# Override the workspace's `rust-version` key. `wgpu-core` and its dependencies
+# have a less strict MSRV, to allow firefox more leeway in updating their Rust toolchain.
+#
+# See the repo README for more information on MSRV policy.
+rust-version = "1.87"
+
+[features]
+all = []
+
+std = []
+serialize = []
+deserialize = []
+
+naga = ["dep:naga"]
+
+static-dxc = []
+static-dxc-if-windows = []
+# TODO: add options for spirv-opt and spirv-val
+
+wgsl-in = []
+spv-in = []
+glsl-in = []
+
+wgsl-out = []
+wgsl-out-if-web = []
+spv-out = []
+spv-out-if-os = []
+spv-out-mvk = []
+glsl-out = []
+glsl-out-if-os = []
+glsl-out-if-angle = []
+hlsl-out = []
+hlsl-out-if-windows = []
+msl-out = []
+msl-out-if-apple = []
+
+[dependencies]
+naga = { workspace = true, optional = true }
+
+[lints]
+workspace = true
