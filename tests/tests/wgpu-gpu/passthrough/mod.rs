@@ -90,7 +90,7 @@ fn metal_test(ctx: TestingContext) {
 static METAL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::EXPERIMENTAL_PASSTHROUGH_SHADERS)
+            .features(Features::PASSTHROUGH_SHADERS)
             .skip(FailureCase::backend(!Backends::METAL)),
     )
     .run_sync(metal_test);
@@ -192,7 +192,7 @@ fn metallib_test(ctx: TestingContext) {
 static METALLIB_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::EXPERIMENTAL_PASSTHROUGH_SHADERS)
+            .features(Features::PASSTHROUGH_SHADERS)
             .skip(FailureCase::backend(!Backends::METAL)),
     )
     .run_sync(metallib_test);
@@ -216,7 +216,7 @@ fn hlsl_test(ctx: TestingContext) {
 static HLSL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::EXPERIMENTAL_PASSTHROUGH_SHADERS)
+            .features(Features::PASSTHROUGH_SHADERS)
             .skip(FailureCase::backend(!Backends::DX12)),
     )
     .run_sync(hlsl_test);
@@ -296,7 +296,7 @@ fn dxil_test(ctx: TestingContext) {
 static DXIL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::EXPERIMENTAL_PASSTHROUGH_SHADERS)
+            .features(Features::PASSTHROUGH_SHADERS)
             .skip(FailureCase::backend(!Backends::DX12)),
     )
     .run_sync(dxil_test);
@@ -351,7 +351,7 @@ fn spirv_test(ctx: TestingContext) {
 static SPIRV_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::EXPERIMENTAL_PASSTHROUGH_SHADERS)
+            .features(Features::PASSTHROUGH_SHADERS)
             .skip(FailureCase::backend(!Backends::VULKAN)),
     )
     .run_sync(spirv_test);
@@ -386,7 +386,7 @@ fn glsl_test(ctx: TestingContext) {
 static GLSL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::EXPERIMENTAL_PASSTHROUGH_SHADERS)
+            .features(Features::PASSTHROUGH_SHADERS)
             .skip(FailureCase::backend(!Backends::GL)),
     )
     .run_sync(glsl_test);
@@ -410,7 +410,7 @@ fn wgsl_test(ctx: TestingContext) {
 static WGSL_PASSTHROUGH_SHADER: GpuTestConfiguration = GpuTestConfiguration::new()
     .parameters(
         TestParameters::default()
-            .features(Features::EXPERIMENTAL_PASSTHROUGH_SHADERS)
+            .features(Features::PASSTHROUGH_SHADERS)
             .skip(FailureCase::backend(!Backends::BROWSER_WEBGPU)),
     )
     .run_sync(wgsl_test);
@@ -450,7 +450,7 @@ fn all_passthrough_shaders_binary(ctx: TestingContext) {
 
 #[gpu_test]
 static ALL_PASSTHROUGH_SHADERS_BINARY: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(Features::EXPERIMENTAL_PASSTHROUGH_SHADERS))
+    .parameters(TestParameters::default().features(Features::PASSTHROUGH_SHADERS))
     .run_sync(all_passthrough_shaders_binary);
 
 fn all_passthrough_shader_source(ctx: TestingContext) {
@@ -488,7 +488,7 @@ fn all_passthrough_shader_source(ctx: TestingContext) {
 
 #[gpu_test]
 static ALL_PASSTHROUGH_SHADERS_SOURCE: GpuTestConfiguration = GpuTestConfiguration::new()
-    .parameters(TestParameters::default().features(Features::EXPERIMENTAL_PASSTHROUGH_SHADERS))
+    .parameters(TestParameters::default().features(Features::PASSTHROUGH_SHADERS))
     .run_sync(all_passthrough_shader_source);
 
 fn explicit_layout_validation(ctx: TestingContext) {
@@ -556,7 +556,7 @@ static PASSTHROUGH_SHADERS_EXPLICIT_LAYOUT_VALIDATION: GpuTestConfiguration =
     GpuTestConfiguration::new()
         .parameters(
             TestParameters::default()
-                .features(Features::EXPERIMENTAL_PASSTHROUGH_SHADERS)
+                .features(Features::PASSTHROUGH_SHADERS)
                 .expect_fail(FailureCase::always()),
         )
         .run_sync(explicit_layout_validation);

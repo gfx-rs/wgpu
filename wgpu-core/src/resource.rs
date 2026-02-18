@@ -588,13 +588,15 @@ impl Buffer {
         if !offset.is_multiple_of(wgt::MAP_ALIGNMENT) {
             return Err((op, BufferAccessError::UnalignedOffset { offset }));
         }
-        if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+        if !range_size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             return Err((op, BufferAccessError::UnalignedRangeSize { range_size }));
         }
 
         let range = offset..(offset + range_size);
 
-        if range.start % wgt::MAP_ALIGNMENT != 0 || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+        if !range.start.is_multiple_of(wgt::MAP_ALIGNMENT)
+            || !range.end.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT)
+        {
             return Err((op, BufferAccessError::UnalignedRange));
         }
 
@@ -696,7 +698,7 @@ impl Buffer {
         if !offset.is_multiple_of(wgt::MAP_ALIGNMENT) {
             return Err(BufferAccessError::UnalignedOffset { offset });
         }
-        if range_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+        if !range_size.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             return Err(BufferAccessError::UnalignedRangeSize { range_size });
         }
         let map_state = &*self.map_state.lock();

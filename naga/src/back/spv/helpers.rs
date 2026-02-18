@@ -189,8 +189,7 @@ impl StrUnstable for str {
                 .iter()
                 .rposition(|b| b.is_utf8_char_boundary_polyfill());
 
-            // SAFETY: we know that the character boundary will be within four bytes
-            unsafe { lower_bound + new_index.unwrap_unchecked() }
+            lower_bound + new_index.unwrap()
         }
     }
 }

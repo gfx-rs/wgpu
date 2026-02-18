@@ -122,7 +122,7 @@ env_logger = { version = "0.11", default-features = false }
 fern = "0.7"
 flume = "0.12"
 futures-lite = "2"
-glam = "0.31.0"
+glam = "0.32.0"
 glob = "0.3"
 half = { version = "2.5", default-features = false } # We require 2.5 to have `Arbitrary` support.
 hashbrown = { version = "0.16", default-features = false, features = [
@@ -132,7 +132,7 @@ hashbrown = { version = "0.16", default-features = false, features = [
 heck = "0.5"
 hexf-parse = "0.2"
 image = { version = "0.25", default-features = false, features = ["png"] }
-indexmap = { version = "2.8", default-features = false }
+indexmap = { version = "2.11.4", default-features = false }
 indicatif = "0.18"
 itertools = { version = "0.14" }
 jobserver = "0.1"
@@ -191,7 +191,7 @@ static_assertions = "1.1"
 strum = { version = "0.27.1", default-features = false, features = ["derive"] }
 syn = "2.0.98"
 tempfile = "3"
-toml = "0.9.0"
+toml = "1.0.0"
 trybuild = "1"
 tracy-client = "0.18"
 thiserror = { version = "2.0.12", default-features = false }
@@ -247,6 +247,10 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
     "MTLTexture",
     "MTLTypes",
     "MTLVertexDescriptor",
+    "MTLAccelerationStructure",
+    "MTLAccelerationStructureTypes",
+    "MTLAccelerationStructureCommandEncoder",
+    "MTLResidencySet",
 ] }
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
     "std",

@@ -1273,6 +1273,7 @@ impl Queue {
                                     self.trace_submission(submit_index, commands);
                                 }
 
+                                cmd_buf_data.set_acceleration_structure_dependencies(&snatch_guard);
                                 cmd_buf_data.into_baked_commands()
                             }
                             Err(err) => {
