@@ -1,0 +1,15 @@
+[package]
+name = "wgpu-shader-types"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "Common types for shaders in wgpu"
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

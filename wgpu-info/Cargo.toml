@@ -9,6 +9,7 @@ repository.workspace = true
 keywords.workspace = true
 license.workspace = true
 rust-version.workspace = true
+readme = "README.md"
 
 [dependencies]
 anyhow.workspace = true

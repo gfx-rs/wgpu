@@ -8,6 +8,7 @@ repository.workspace = true
 keywords = ["shader", "SPIR-V", "GLSL", "MSL"]
 license.workspace = true
 exclude = ["bin/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
+readme = "README.md"
 
 # Override the workspace's `rust-version` key. Firefox uses `cargo vendor` to
 # copy the crates it actually uses out of the workspace, so it's meaningful for

@@ -5010,10 +5010,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu-shader-types"
+version = "28.0.0"
+
+[[package]]
 name = "wgpu-shaders"
 version = "28.0.0"
 dependencies = [
  "naga",
+ "wgpu-types",
 ]
 
 [[package]]

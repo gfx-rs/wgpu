@@ -8,6 +8,7 @@ homepage.workspace = true
 repository.workspace = true
 keywords.workspace = true
 license.workspace = true
+readme = "README.md"
 
 # Override the workspace's `rust-version` key. `wgpu-core` and its dependencies
 # have a less strict MSRV, to allow firefox more leeway in updating their Rust toolchain.

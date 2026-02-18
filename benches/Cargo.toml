@@ -10,6 +10,7 @@ keywords.workspace = true
 license.workspace = true
 rust-version.workspace = true
 publish = false
+readme = "README.md"
 
 [[bench]]
 name = "wgpu-benchmark"
