@@ -246,138 +246,6 @@ impl super::DeviceShared {
     }
 }
 
-impl descriptor::DescriptorDevice for super::DeviceShared {
-    fn create_descriptor_pool(
-        &self,
-        descriptor_count: &descriptor::DescriptorTotalCount,
-        max_sets: u32,
-        flags: descriptor::DescriptorPoolCreateFlags,
-    ) -> Result<vk::DescriptorPool, descriptor::CreatePoolError> {
-        //Note: ignoring other types, since they can't appear here
-        let unfiltered_counts = [
-            (vk::DescriptorType::SAMPLER, descriptor_count.sampler),
-            (
-                vk::DescriptorType::SAMPLED_IMAGE,
-                descriptor_count.sampled_image,
-            ),
-            (
-                vk::DescriptorType::STORAGE_IMAGE,
-                descriptor_count.storage_image,
-            ),
-            (
-                vk::DescriptorType::UNIFORM_BUFFER,
-                descriptor_count.uniform_buffer,
-            ),
-            (
-                vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
-                descriptor_count.uniform_buffer_dynamic,
-            ),
-            (
-                vk::DescriptorType::STORAGE_BUFFER,
-                descriptor_count.storage_buffer,
-            ),
-            (
-                vk::DescriptorType::STORAGE_BUFFER_DYNAMIC,
-                descriptor_count.storage_buffer_dynamic,
-            ),
-            (
-                vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
-                descriptor_count.acceleration_structure,
-            ),
-        ];
-
-        let filtered_counts = unfiltered_counts
-            .iter()
-            .cloned()
-            .filter(|&(_, count)| count != 0)
-            .map(|(ty, count)| vk::DescriptorPoolSize {
-                ty,
-                descriptor_count: count,
-            })
-            .collect::<ArrayVec<_, 8>>();
-
-        let mut vk_flags =
-            if flags.contains(descriptor::DescriptorPoolCreateFlags::UPDATE_AFTER_BIND) {
-                vk::DescriptorPoolCreateFlags::UPDATE_AFTER_BIND
-            } else {
-                vk::DescriptorPoolCreateFlags::empty()
-            };
-        if flags.contains(descriptor::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET) {
-            vk_flags |= vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET;
-        }
-        let vk_info = vk::DescriptorPoolCreateInfo::default()
-            .max_sets(max_sets)
-            .flags(vk_flags)
-            .pool_sizes(&filtered_counts);
-
-        match unsafe { self.raw.create_descriptor_pool(&vk_info, None) } {
-            Ok(pool) => Ok(pool),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(descriptor::CreatePoolError::OutOfHostMemory)
-            }
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(descriptor::CreatePoolError::OutOfDeviceMemory)
-            }
-            Err(vk::Result::ERROR_FRAGMENTATION) => Err(descriptor::CreatePoolError::Fragmentation),
-            Err(err) => handle_unexpected(err),
-        }
-    }
-
-    unsafe fn alloc_descriptor_sets<'a>(
-        &self,
-        pool: &mut vk::DescriptorPool,
-        layouts: impl ExactSizeIterator<Item = &'a vk::DescriptorSetLayout>,
-        sets: &mut impl Extend<vk::DescriptorSet>,
-    ) -> Result<(), descriptor::DeviceAllocationError> {
-        let result = unsafe {
-            self.raw.allocate_descriptor_sets(
-                &vk::DescriptorSetAllocateInfo::default()
-                    .descriptor_pool(*pool)
-                    .set_layouts(
-                        &smallvec::SmallVec::<[vk::DescriptorSetLayout; 32]>::from_iter(
-                            layouts.cloned(),
-                        ),
-                    ),
-            )
-        };
-
-        match result {
-            Ok(vk_sets) => {
-                sets.extend(vk_sets);
-                Ok(())
-            }
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY)
-            | Err(vk::Result::ERROR_OUT_OF_POOL_MEMORY) => {
-                Err(descriptor::DeviceAllocationError::OutOfHostMemory)
-            }
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(descriptor::DeviceAllocationError::OutOfDeviceMemory)
-            }
-            Err(vk::Result::ERROR_FRAGMENTED_POOL) => {
-                Err(descriptor::DeviceAllocationError::FragmentedPool)
-            }
-            Err(err) => handle_unexpected(err),
-        }
-    }
-
-    unsafe fn dealloc_descriptor_sets<'a>(
-        &self,
-        pool: &mut vk::DescriptorPool,
-        sets: impl Iterator<Item = vk::DescriptorSet>,
-    ) {
-        let result = unsafe {
-            self.raw.free_descriptor_sets(
-                *pool,
-                &smallvec::SmallVec::<[vk::DescriptorSet; 32]>::from_iter(sets),
-            )
-        };
-        match result {
-            Ok(()) => {}
-            Err(err) => handle_unexpected(err),
-        }
-    }
-}
-
 struct CompiledStage {
     create_info: vk::PipelineShaderStageCreateInfo<'static>,
     _entry_point: CString,
@@ -2777,6 +2645,7 @@ impl From<descriptor::AllocationError> for crate::DeviceError {
         use descriptor::AllocationError as Ae;
         match error {
             Ae::OutOfDeviceMemory | Ae::OutOfHostMemory | Ae::Fragmentation => Self::OutOfMemory,
+            Ae::Unexpected => Self::Unexpected,
         }
     }
 }
@@ -2787,7 +2656,7 @@ impl From<descriptor::AllocationError> for crate::DeviceError {
 ///
 /// However, we implement a few Trait methods that don't have an equivalent
 /// error variant. In those cases we use this function.
-fn handle_unexpected(err: vk::Result) -> ! {
+pub(super) fn handle_unexpected(err: vk::Result) -> ! {
     panic!("Unexpected Vulkan error: `{err}`")
 }
 

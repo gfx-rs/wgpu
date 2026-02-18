@@ -4,6 +4,7 @@
 // which is licenced under MIT/APACHE
 
 use alloc::{collections::VecDeque, vec::Vec};
+use arrayvec::ArrayVec;
 use ash::vk;
 use core::{
     convert::TryFrom as _,
@@ -76,6 +77,8 @@ pub enum CreatePoolError {
 
     /// A descriptor pool creation has failed due to fragmentation.
     Fragmentation,
+
+    Unexpected,
 }
 
 /// Memory exhausted error.
@@ -89,19 +92,85 @@ pub enum DeviceAllocationError {
 
     /// Pool allocation failed due to fragmentation of pool's memory.
     FragmentedPool,
+
+    Unexpected,
 }
 
-/// Abstract device that can create pools of type `P` and allocate sets `S` with layout `L`.
-pub trait DescriptorDevice {
-    //vk::DescriptorSetLayout, vk::DescriptorPool, vk::DescriptorSet
-
+impl super::DeviceShared {
     /// Creates a new descriptor pool.
     fn create_descriptor_pool(
         &self,
         descriptor_count: &DescriptorTotalCount,
         max_sets: u32,
         flags: DescriptorPoolCreateFlags,
-    ) -> Result<vk::DescriptorPool, CreatePoolError>;
+    ) -> Result<vk::DescriptorPool, CreatePoolError> {
+        //Note: ignoring other types, since they can't appear here
+        let unfiltered_counts = [
+            (vk::DescriptorType::SAMPLER, descriptor_count.sampler),
+            (
+                vk::DescriptorType::SAMPLED_IMAGE,
+                descriptor_count.sampled_image,
+            ),
+            (
+                vk::DescriptorType::STORAGE_IMAGE,
+                descriptor_count.storage_image,
+            ),
+            (
+                vk::DescriptorType::UNIFORM_BUFFER,
+                descriptor_count.uniform_buffer,
+            ),
+            (
+                vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+                descriptor_count.uniform_buffer_dynamic,
+            ),
+            (
+                vk::DescriptorType::STORAGE_BUFFER,
+                descriptor_count.storage_buffer,
+            ),
+            (
+                vk::DescriptorType::STORAGE_BUFFER_DYNAMIC,
+                descriptor_count.storage_buffer_dynamic,
+            ),
+            (
+                vk::DescriptorType::ACCELERATION_STRUCTURE_KHR,
+                descriptor_count.acceleration_structure,
+            ),
+        ];
+
+        let filtered_counts = unfiltered_counts
+            .iter()
+            .cloned()
+            .filter(|&(_, count)| count != 0)
+            .map(|(ty, count)| vk::DescriptorPoolSize {
+                ty,
+                descriptor_count: count,
+            })
+            .collect::<ArrayVec<_, 8>>();
+
+        let mut vk_flags = if flags.contains(DescriptorPoolCreateFlags::UPDATE_AFTER_BIND) {
+            vk::DescriptorPoolCreateFlags::UPDATE_AFTER_BIND
+        } else {
+            vk::DescriptorPoolCreateFlags::empty()
+        };
+        if flags.contains(DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET) {
+            vk_flags |= vk::DescriptorPoolCreateFlags::FREE_DESCRIPTOR_SET;
+        }
+        let vk_info = vk::DescriptorPoolCreateInfo::default()
+            .max_sets(max_sets)
+            .flags(vk_flags)
+            .pool_sizes(&filtered_counts);
+
+        match unsafe { self.raw.create_descriptor_pool(&vk_info, None) } {
+            Ok(pool) => Ok(pool),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(CreatePoolError::OutOfHostMemory),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(CreatePoolError::OutOfDeviceMemory),
+            Err(vk::Result::ERROR_FRAGMENTATION) => Err(CreatePoolError::Fragmentation),
+            Err(err) => {
+                log::error!("Unexpected Vulkan error: `{err}`");
+                Err(CreatePoolError::Unexpected)
+            }
+        }
+    }
 
     /// Allocates descriptor sets.
     ///
@@ -113,7 +182,38 @@ pub trait DescriptorDevice {
         pool: &mut vk::DescriptorPool,
         layouts: impl ExactSizeIterator<Item = &'a vk::DescriptorSetLayout>,
         sets: &mut impl Extend<vk::DescriptorSet>,
-    ) -> Result<(), DeviceAllocationError>;
+    ) -> Result<(), DeviceAllocationError> {
+        let result = unsafe {
+            self.raw.allocate_descriptor_sets(
+                &vk::DescriptorSetAllocateInfo::default()
+                    .descriptor_pool(*pool)
+                    .set_layouts(
+                        &smallvec::SmallVec::<[vk::DescriptorSetLayout; 32]>::from_iter(
+                            layouts.cloned(),
+                        ),
+                    ),
+            )
+        };
+
+        match result {
+            Ok(vk_sets) => {
+                sets.extend(vk_sets);
+                Ok(())
+            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY)
+            | Err(vk::Result::ERROR_OUT_OF_POOL_MEMORY) => {
+                Err(DeviceAllocationError::OutOfHostMemory)
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(DeviceAllocationError::OutOfDeviceMemory)
+            }
+            Err(vk::Result::ERROR_FRAGMENTED_POOL) => Err(DeviceAllocationError::FragmentedPool),
+            Err(err) => {
+                log::error!("Unexpected Vulkan error: `{err}`");
+                Err(DeviceAllocationError::Unexpected)
+            }
+        }
+    }
 
     /// Deallocates descriptor sets.
     ///
@@ -124,7 +224,18 @@ pub trait DescriptorDevice {
         &self,
         pool: &mut vk::DescriptorPool,
         sets: impl Iterator<Item = vk::DescriptorSet>,
-    );
+    ) {
+        let result = unsafe {
+            self.raw.free_descriptor_sets(
+                *pool,
+                &smallvec::SmallVec::<[vk::DescriptorSet; 32]>::from_iter(sets),
+            )
+        };
+        match result {
+            Ok(()) => {}
+            Err(err) => super::device::handle_unexpected(err),
+        }
+    }
 }
 
 bitflags::bitflags! {
@@ -172,6 +283,8 @@ pub enum AllocationError {
     /// with flag `CREATE_UPDATE_AFTER_BIND_BIT` set exceeds `max_update_after_bind_descriptors_in_all_pools`
     /// Or fragmentation of the underlying hardware resources occurs.
     Fragmentation,
+
+    Unexpected,
 }
 
 impl Display for AllocationError {
@@ -180,6 +293,7 @@ impl Display for AllocationError {
             AllocationError::OutOfDeviceMemory => fmt.write_str("Device memory exhausted"),
             AllocationError::OutOfHostMemory => fmt.write_str("Host memory exhausted"),
             AllocationError::Fragmentation => fmt.write_str("Fragmentation"),
+            AllocationError::Unexpected => fmt.write_str("Unexpected error"),
         }
     }
 }
@@ -192,6 +306,7 @@ impl From<CreatePoolError> for AllocationError {
             CreatePoolError::OutOfDeviceMemory => AllocationError::OutOfDeviceMemory,
             CreatePoolError::OutOfHostMemory => AllocationError::OutOfHostMemory,
             CreatePoolError::Fragmentation => AllocationError::Fragmentation,
+            CreatePoolError::Unexpected => AllocationError::Unexpected,
         }
     }
 }
@@ -330,6 +445,7 @@ impl DescriptorBucket {
                 Err(DeviceAllocationError::OutOfHostMemory) => {
                     return Err(AllocationError::OutOfHostMemory)
                 }
+                Err(DeviceAllocationError::Unexpected) => return Err(AllocationError::Unexpected),
                 Err(DeviceAllocationError::FragmentedPool) => {
                     // Should not happen, but better this than panicing.
 
@@ -395,6 +511,9 @@ impl DescriptorBucket {
                         }
                         DeviceAllocationError::OutOfHostMemory => {
                             return Err(AllocationError::OutOfHostMemory)
+                        }
+                        DeviceAllocationError::Unexpected => {
+                            return Err(AllocationError::Unexpected)
                         }
                         DeviceAllocationError::FragmentedPool => {
                             // Should not happen, but better this than panicking.
