@@ -132,7 +132,7 @@ hashbrown = { version = "0.16", default-features = false, features = [
 heck = "0.5"
 hexf-parse = "0.2"
 image = { version = "0.25", default-features = false, features = ["png"] }
-indexmap = { version = "2.8", default-features = false }
+indexmap = { version = "2.11.4", default-features = false }
 indicatif = "0.18"
 itertools = { version = "0.14" }
 jobserver = "0.1"
