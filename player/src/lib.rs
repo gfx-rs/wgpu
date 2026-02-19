@@ -385,7 +385,7 @@ impl Player {
                 let bin = loader.load(&data);
                 if queued {
                     queue
-                        .write_buffer(buffer, offset, &bin)
+                        .write_buffer(buffer, offset, &bin[..size.try_into().unwrap()])
                         .expect("Queue::write_buffer error");
                 } else {
                     device
