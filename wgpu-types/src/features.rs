@@ -1223,7 +1223,7 @@ bitflags_array! {
         /// [this comment](https://github.com/gfx-rs/wgpu/issues/3103#issuecomment-2833058367).
         ///
         #[doc = link_to_wgpu_docs!(["`Device::create_shader_module_passthrough`"]: "struct.Device.html#method.create_shader_module_passthrough")]
-        const EXPERIMENTAL_PASSTHROUGH_SHADERS = 1 << 52;
+        const PASSTHROUGH_SHADERS = 1 << 52;
 
         /// Enables shader barycentric coordinates.
         ///
@@ -1621,7 +1621,6 @@ impl Features {
                 | FeaturesWGPU::EXPERIMENTAL_MESH_SHADER_POINTS.bits()
                 | FeaturesWGPU::EXPERIMENTAL_RAY_QUERY.bits()
                 | FeaturesWGPU::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN.bits()
-                | FeaturesWGPU::EXPERIMENTAL_PASSTHROUGH_SHADERS.bits()
                 | FeaturesWGPU::EXPERIMENTAL_COOPERATIVE_MATRIX.bits(),
             FeaturesWebGPU::empty().bits(),
         ]))

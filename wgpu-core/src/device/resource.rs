@@ -2355,7 +2355,7 @@ impl Device {
         descriptor: &pipeline::ShaderModuleDescriptorPassthrough<'a>,
     ) -> Result<Arc<pipeline::ShaderModule>, pipeline::CreateShaderModuleError> {
         self.check_is_valid()?;
-        self.require_features(wgt::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS)?;
+        self.require_features(wgt::Features::PASSTHROUGH_SHADERS)?;
 
         let hal_shader = match self.backend() {
             wgt::Backend::Vulkan => hal::ShaderInput::SpirV(

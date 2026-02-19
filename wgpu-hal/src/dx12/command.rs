@@ -1850,4 +1850,10 @@ impl crate::CommandEncoder for super::CommandEncoder {
             )
         }
     }
+
+    unsafe fn set_acceleration_structure_dependencies(
+        _command_buffers: &[&super::CommandBuffer],
+        _dependencies: &[&super::AccelerationStructure],
+    ) {
+    }
 }

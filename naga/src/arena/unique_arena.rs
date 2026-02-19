@@ -108,7 +108,7 @@ impl<T: Eq + hash::Hash> UniqueArena<T> {
     /// the item's handle and a reference to it.
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = (Handle<T>, &T)> + ExactSizeIterator {
         self.set.iter().enumerate().map(|(i, v)| {
-            let index = unsafe { Index::new_unchecked(i as u32) };
+            let index = Index::new(i as u32).unwrap();
             (Handle::new(index), v)
         })
     }
@@ -160,7 +160,7 @@ impl<T: Eq + hash::Hash> UniqueArena<T> {
     pub fn get(&self, value: &T) -> Option<Handle<T>> {
         self.set
             .get_index_of(value)
-            .map(|index| unsafe { Handle::from_usize_unchecked(index) })
+            .map(|index| Handle::from_usize(index))
     }
 
     /// Return this arena's value at `handle`, if that is a valid handle.

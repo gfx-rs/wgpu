@@ -94,7 +94,7 @@ impl crate::framework::Example for Example {
 
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits {
-            max_immediate_size: 12,
+            max_immediate_size: 16,
             ..wgpu::Limits::default()
         }
         .using_minimum_supported_acceleration_structure_values()
@@ -186,7 +186,7 @@ impl crate::framework::Example for Example {
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[&bind_group_layout],
-            immediate_size: 12,
+            immediate_size: 16,
         });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

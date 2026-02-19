@@ -4,11 +4,13 @@ use objc2::{
 };
 use objc2_foundation::{NSRange, NSString, NSUInteger};
 use objc2_metal::{
-    MTLBlitCommandEncoder, MTLBlitPassDescriptor, MTLBuffer, MTLCommandBuffer, MTLCommandEncoder,
-    MTLCommandQueue, MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLCounterDontSample,
-    MTLIndexType, MTLLoadAction, MTLPrimitiveType, MTLRenderCommandEncoder,
-    MTLRenderPassDescriptor, MTLSamplerState, MTLScissorRect, MTLSize, MTLStoreAction, MTLTexture,
-    MTLVertexAmplificationViewMapping, MTLViewport, MTLVisibilityResultMode,
+    MTLAccelerationStructure, MTLAccelerationStructureCommandEncoder, MTLBlitCommandEncoder,
+    MTLBlitPassDescriptor, MTLBuffer, MTLCommandBuffer, MTLCommandEncoder, MTLCommandQueue,
+    MTLComputeCommandEncoder, MTLComputePassDescriptor, MTLCounterDontSample, MTLDevice,
+    MTLLoadAction, MTLPrimitiveType, MTLRenderCommandEncoder, MTLRenderPassDescriptor,
+    MTLResidencySet, MTLResidencySetDescriptor, MTLSamplerState, MTLScissorRect, MTLSize,
+    MTLStoreAction, MTLTexture, MTLVertexAmplificationViewMapping, MTLViewport,
+    MTLVisibilityResultMode,
 };
 
 use super::{conv, TimestampQuerySupport};
@@ -27,6 +29,7 @@ impl Default for super::CommandState {
     fn default() -> Self {
         Self {
             blit: None,
+            acceleration_structure_builder: None,
             render: None,
             compute: None,
             raw_primitive_type: MTLPrimitiveType::Point,
@@ -80,6 +83,30 @@ impl Encoder<'_> {
         }
     }
 
+    fn set_acceleration_structure(
+        &self,
+        buffer: Option<&ProtocolObject<dyn MTLAccelerationStructure>>,
+        index: NSUInteger,
+    ) {
+        unsafe {
+            match *self {
+                Self::Vertex(enc) => {
+                    enc.setVertexAccelerationStructure_atBufferIndex(buffer, index)
+                }
+                Self::Fragment(enc) => {
+                    enc.setFragmentAccelerationStructure_atBufferIndex(buffer, index)
+                }
+                Self::Task(_) => {
+                    unreachable!("Acceleration structures are not allowed in task shaders")
+                }
+                Self::Mesh(_) => {
+                    unreachable!("Acceleration structures are not allowed in mesh shaders")
+                }
+                Self::Compute(enc) => enc.setAccelerationStructure_atBufferIndex(buffer, index),
+            }
+        }
+    }
+
     fn set_bytes(&self, bytes: NonNull<core::ffi::c_void>, length: NSUInteger, index: NSUInteger) {
         unsafe {
             match *self {
@@ -128,6 +155,7 @@ impl super::CommandEncoder {
 
     fn enter_blit(&mut self) -> Retained<ProtocolObject<dyn MTLBlitCommandEncoder>> {
         if self.state.blit.is_none() {
+            self.leave_acceleration_structure_builder();
             debug_assert!(self.state.render.is_none() && self.state.compute.is_none());
             let cmd_buf = self.raw_cmd_buf.as_ref().unwrap();
 
@@ -227,8 +255,35 @@ impl super::CommandEncoder {
         }
     }
 
+    fn enter_acceleration_structure_builder(
+        &mut self,
+    ) -> Retained<ProtocolObject<dyn MTLAccelerationStructureCommandEncoder>> {
+        if self.state.acceleration_structure_builder.is_none() {
+            self.leave_blit();
+            debug_assert!(
+                self.state.render.is_none()
+                    && self.state.compute.is_none()
+                    && self.state.blit.is_none()
+            );
+            let cmd_buf = self.raw_cmd_buf.as_ref().unwrap();
+            autoreleasepool(|_| {
+                self.state.acceleration_structure_builder =
+                    cmd_buf.accelerationStructureCommandEncoder().to_owned();
+            });
+        }
+        self.state.acceleration_structure_builder.clone().unwrap()
+    }
+
+    pub(super) fn leave_acceleration_structure_builder(&mut self) {
+        if let Some(encoder) = self.state.acceleration_structure_builder.take() {
+            encoder.endEncoding();
+        }
+    }
+
     fn active_encoder(&mut self) -> Option<&ProtocolObject<dyn MTLCommandEncoder>> {
         if let Some(ref encoder) = self.state.render {
+            Some(ProtocolObject::from_ref(&**encoder))
+        } else if let Some(ref encoder) = self.state.acceleration_structure_builder {
             Some(ProtocolObject::from_ref(&**encoder))
         } else if let Some(ref encoder) = self.state.compute {
             Some(ProtocolObject::from_ref(&**encoder))
@@ -242,6 +297,7 @@ impl super::CommandEncoder {
     fn begin_pass(&mut self) {
         self.state.reset();
         self.leave_blit();
+        self.leave_acceleration_structure_builder();
     }
 
     /// Updates the bindings for a single shader stage, called in `set_bind_group`.
@@ -273,21 +329,35 @@ impl super::CommandEncoder {
         };
         let mut changes_sizes_buffer = false;
         for index in 0..buffers {
-            let buf = &group.buffers[(index_base.buffers + index) as usize];
-            let buffer = Some(unsafe { buf.ptr.as_ref() });
-            let mut offset = buf.offset;
-            if let Some(dyn_index) = buf.dynamic_index {
-                offset += dynamic_offsets[dyn_index as usize] as wgt::BufferAddress;
-            }
-            let index = (resource_indices.buffers + index) as usize;
-            encoder.set_buffer(buffer, offset as usize, index);
-            if let Some(size) = buf.binding_size {
-                let br = naga::ResourceBinding {
-                    group: group_index,
-                    binding: buf.binding_location,
-                };
-                self.state.storage_buffer_length_map.insert(br, size);
-                changes_sizes_buffer = true;
+            let res = &group.buffers[(index_base.buffers + index) as usize];
+            match res {
+                super::BufferLikeResource::Buffer {
+                    ptr,
+                    mut offset,
+                    dynamic_index,
+                    binding_size,
+                    binding_location,
+                } => {
+                    let buffer = Some(unsafe { ptr.as_ref() });
+                    if let Some(dyn_index) = dynamic_index {
+                        offset += dynamic_offsets[*dyn_index as usize] as wgt::BufferAddress;
+                    }
+                    let index = (resource_indices.buffers + index) as usize;
+                    encoder.set_buffer(buffer, offset as usize, index);
+                    if let Some(size) = binding_size {
+                        let br = naga::ResourceBinding {
+                            group: group_index,
+                            binding: *binding_location,
+                        };
+                        self.state.storage_buffer_length_map.insert(br, *size);
+                        changes_sizes_buffer = true;
+                    }
+                }
+                super::BufferLikeResource::AccelerationStructure(ptr) => {
+                    let buffer = Some(unsafe { ptr.as_ref() });
+                    let index = (resource_indices.buffers + index) as usize;
+                    encoder.set_acceleration_structure(buffer, index);
+                }
             }
         }
         if changes_sizes_buffer {
@@ -404,6 +474,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn discard_encoding(&mut self) {
         self.leave_blit();
+        self.leave_acceleration_structure_builder();
         // when discarding, we don't have a guarantee that
         // everything is in a good state, so check carefully
         if let Some(encoder) = self.state.render.take() {
@@ -423,6 +494,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         }
 
         self.leave_blit();
+        self.leave_acceleration_structure_builder();
         debug_assert!(self.state.render.is_none());
         debug_assert!(self.state.compute.is_none());
         debug_assert!(self.state.pending_timer_queries.is_empty());
@@ -602,11 +674,22 @@ impl crate::CommandEncoder for super::CommandEncoder {
 
     unsafe fn copy_acceleration_structure_to_acceleration_structure(
         &mut self,
-        _src: &super::AccelerationStructure,
-        _dst: &super::AccelerationStructure,
-        _copy: wgt::AccelerationStructureCopy,
+        src: &super::AccelerationStructure,
+        dst: &super::AccelerationStructure,
+        copy: wgt::AccelerationStructureCopy,
     ) {
-        unimplemented!()
+        let command_encoder = self.enter_acceleration_structure_builder();
+        match copy {
+            wgt::AccelerationStructureCopy::Clone => unsafe {
+                command_encoder
+                    .copyAccelerationStructure_toAccelerationStructure(&src.raw, &dst.raw);
+            },
+            wgt::AccelerationStructureCopy::Compact => {
+                command_encoder.copyAndCompactAccelerationStructure_toAccelerationStructure(
+                    &src.raw, &dst.raw,
+                );
+            }
+        };
     }
 
     unsafe fn begin_query(&mut self, set: &super::QuerySet, index: u32) {
@@ -1245,10 +1328,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
         binding: crate::BufferBinding<'a, super::Buffer>,
         format: wgt::IndexFormat,
     ) {
-        let (stride, raw_type) = match format {
-            wgt::IndexFormat::Uint16 => (2, MTLIndexType::UInt16),
-            wgt::IndexFormat::Uint32 => (4, MTLIndexType::UInt32),
-        };
+        let (stride, raw_type) = conv::map_index_format(format);
         self.state.index = Some(super::IndexState {
             buffer_ptr: NonNull::from(&*binding.buffer.raw),
             offset: binding.offset,
@@ -1683,7 +1763,7 @@ impl crate::CommandEncoder for super::CommandEncoder {
     unsafe fn build_acceleration_structures<'a, T>(
         &mut self,
         _descriptor_count: u32,
-        _descriptors: T,
+        descriptors: T,
     ) where
         super::Api: 'a,
         T: IntoIterator<
@@ -1694,22 +1774,73 @@ impl crate::CommandEncoder for super::CommandEncoder {
             >,
         >,
     {
-        unimplemented!()
+        let command_encoder = self.enter_acceleration_structure_builder();
+        for descriptor in descriptors {
+            let acceleration_structure_descriptor =
+                conv::map_acceleration_structure_descriptor(descriptor.entries, descriptor.flags);
+            match descriptor.mode {
+                crate::AccelerationStructureBuildMode::Build => {
+                    command_encoder
+                        .buildAccelerationStructure_descriptor_scratchBuffer_scratchBufferOffset(
+                            &descriptor.destination_acceleration_structure.raw,
+                            &acceleration_structure_descriptor,
+                            &descriptor.scratch_buffer.raw,
+                            descriptor.scratch_buffer_offset as usize,
+                        );
+                }
+                crate::AccelerationStructureBuildMode::Update => unsafe {
+                    command_encoder.refitAccelerationStructure_descriptor_destination_scratchBuffer_scratchBufferOffset(
+                        &descriptor.source_acceleration_structure.unwrap().raw,
+                        &acceleration_structure_descriptor,
+                        Some(&descriptor.destination_acceleration_structure.raw),
+                        Some(&descriptor.scratch_buffer.raw),
+                        descriptor.scratch_buffer_offset as usize,
+                    );
+                },
+            }
+        }
     }
 
     unsafe fn place_acceleration_structure_barrier(
         &mut self,
         _barriers: crate::AccelerationStructureBarrier,
     ) {
-        unimplemented!()
     }
 
     unsafe fn read_acceleration_structure_compact_size(
         &mut self,
-        _acceleration_structure: &super::AccelerationStructure,
-        _buf: &super::Buffer,
+        acceleration_structure: &super::AccelerationStructure,
+        buffer: &super::Buffer,
     ) {
-        unimplemented!()
+        let command_encoder = self.enter_acceleration_structure_builder();
+        command_encoder.writeCompactedAccelerationStructureSize_toBuffer_offset(
+            &acceleration_structure.raw,
+            &buffer.raw,
+            0,
+        );
+    }
+
+    unsafe fn set_acceleration_structure_dependencies(
+        command_buffers: &[&super::CommandBuffer],
+        dependencies: &[&super::AccelerationStructure],
+    ) {
+        let Some(first_command_buffer) = command_buffers.first() else {
+            return;
+        };
+        let desc = MTLResidencySetDescriptor::new();
+        desc.setLabel(first_command_buffer.raw.label().as_deref());
+        let residency_set = first_command_buffer
+            .raw
+            .device()
+            .newResidencySetWithDescriptor_error(&desc)
+            .unwrap();
+        for command_buffer in command_buffers {
+            command_buffer.raw.useResidencySet(&residency_set);
+        }
+        for dependency in dependencies {
+            residency_set.addAllocation(ProtocolObject::from_ref(&*dependency.raw));
+        }
+        residency_set.commit();
     }
 }
 
