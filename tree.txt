@@ -1,0 +1,2749 @@
+hlsl-snapshots v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga/hlsl-snapshots)
+├── anyhow v1.0.101
+└── nanoserde feature "default"
+    ├── nanoserde v0.2.1
+    │   └── nanoserde-derive feature "default"
+    │       └── nanoserde-derive v0.2.1 (proc-macro)
+    ├── nanoserde feature "binary"
+    │   ├── nanoserde v0.2.1 (*)
+    │   ├── nanoserde feature "nanoserde-derive"
+    │   │   └── nanoserde v0.2.1 (*)
+    │   └── nanoserde-derive feature "binary"
+    │       └── nanoserde-derive v0.2.1 (proc-macro)
+    ├── nanoserde feature "json"
+    │   ├── nanoserde v0.2.1 (*)
+    │   ├── nanoserde feature "nanoserde-derive" (*)
+    │   └── nanoserde-derive feature "json"
+    │       └── nanoserde-derive v0.2.1 (proc-macro)
+    ├── nanoserde feature "ron"
+    │   ├── nanoserde v0.2.1 (*)
+    │   ├── nanoserde feature "nanoserde-derive" (*)
+    │   └── nanoserde-derive feature "ron"
+    │       └── nanoserde-derive v0.2.1 (proc-macro)
+    ├── nanoserde feature "std"
+    │   └── nanoserde v0.2.1 (*)
+    └── nanoserde feature "toml"
+        └── nanoserde v0.2.1 (*)
+
+lock-analyzer v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/lock-analyzer)
+├── anyhow v1.0.101
+├── ron feature "default"
+│   ├── ron v0.12.0
+│   │   ├── serde_derive v1.0.228 (proc-macro)
+│   │   │   ├── proc-macro2 feature "proc-macro"
+│   │   │   │   └── proc-macro2 v1.0.106
+│   │   │   │       └── unicode-ident feature "default"
+│   │   │   │           └── unicode-ident v1.0.24
+│   │   │   ├── quote feature "proc-macro"
+│   │   │   │   ├── quote v1.0.44
+│   │   │   │   │   └── proc-macro2 v1.0.106 (*)
+│   │   │   │   └── proc-macro2 feature "proc-macro" (*)
+│   │   │   ├── syn feature "clone-impls"
+│   │   │   │   └── syn v2.0.116
+│   │   │   │       ├── proc-macro2 v1.0.106 (*)
+│   │   │   │       ├── quote v1.0.44 (*)
+│   │   │   │       └── unicode-ident feature "default" (*)
+│   │   │   ├── syn feature "derive"
+│   │   │   │   └── syn v2.0.116 (*)
+│   │   │   ├── syn feature "parsing"
+│   │   │   │   └── syn v2.0.116 (*)
+│   │   │   ├── syn feature "printing"
+│   │   │   │   └── syn v2.0.116 (*)
+│   │   │   └── syn feature "proc-macro"
+│   │   │       ├── syn v2.0.116 (*)
+│   │   │       ├── proc-macro2 feature "proc-macro" (*)
+│   │   │       └── quote feature "proc-macro" (*)
+│   │   ├── typeid v1.0.3
+│   │   ├── unicode-ident v1.0.24
+│   │   ├── bitflags feature "serde"
+│   │   │   ├── bitflags v2.11.0
+│   │   │   │   ├── serde_core v1.0.228
+│   │   │   │   └── arbitrary feature "default"
+│   │   │   │       └── arbitrary v1.4.2
+│   │   │   │           └── derive_arbitrary feature "default"
+│   │   │   │               └── derive_arbitrary v1.4.2 (proc-macro)
+│   │   │   │                   ├── proc-macro2 feature "default"
+│   │   │   │                   │   ├── proc-macro2 v1.0.106 (*)
+│   │   │   │                   │   └── proc-macro2 feature "proc-macro" (*)
+│   │   │   │                   ├── quote feature "default"
+│   │   │   │                   │   ├── quote v1.0.44 (*)
+│   │   │   │                   │   └── quote feature "proc-macro" (*)
+│   │   │   │                   ├── syn feature "default"
+│   │   │   │                   │   ├── syn v2.0.116 (*)
+│   │   │   │                   │   ├── syn feature "clone-impls" (*)
+│   │   │   │                   │   ├── syn feature "derive" (*)
+│   │   │   │                   │   ├── syn feature "parsing" (*)
+│   │   │   │                   │   ├── syn feature "printing" (*)
+│   │   │   │                   │   └── syn feature "proc-macro" (*)
+│   │   │   │                   ├── syn feature "derive" (*)
+│   │   │   │                   ├── syn feature "extra-traits"
+│   │   │   │                   │   └── syn v2.0.116 (*)
+│   │   │   │                   └── syn feature "parsing" (*)
+│   │   │   └── bitflags feature "serde_core"
+│   │   │       └── bitflags v2.11.0 (*)
+│   │   ├── once_cell feature "alloc"
+│   │   │   ├── once_cell v1.21.3
+│   │   │   └── once_cell feature "race"
+│   │   │       └── once_cell v1.21.3
+│   │   ├── once_cell feature "race" (*)
+│   │   └── serde feature "alloc"
+│   │       ├── serde v1.0.228
+│   │       │   ├── serde_core feature "result"
+│   │       │   │   └── serde_core v1.0.228
+│   │       │   └── serde_derive feature "default"
+│   │       │       └── serde_derive v1.0.228 (proc-macro) (*)
+│   │       └── serde_core feature "alloc"
+│   │           └── serde_core v1.0.228
+│   └── ron feature "std"
+│       ├── ron v0.12.0 (*)
+│       └── serde feature "std"
+│           ├── serde v1.0.228 (*)
+│           └── serde_core feature "std"
+│               └── serde_core v1.0.228
+├── serde feature "default"
+│   ├── serde v1.0.228 (*)
+│   └── serde feature "std" (*)
+└── serde feature "serde_derive"
+    └── serde v1.0.228 (*)
+
+naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga)
+├── arrayvec v0.7.6
+│   └── serde v1.0.228 (*)
+├── bit-set v0.8.0
+│   └── bit-vec v0.8.0
+├── codespan-reporting v0.12.0
+│   ├── termcolor feature "default"
+│   │   └── termcolor v1.4.1
+│   └── unicode-width feature "default"
+│       ├── unicode-width v0.2.2
+│       └── unicode-width feature "cjk"
+│           └── unicode-width v0.2.2
+├── indexmap v2.13.0
+│   ├── arbitrary v1.4.2 (*)
+│   ├── equivalent v1.0.2
+│   ├── hashbrown v0.16.1
+│   │   ├── equivalent v1.0.2
+│   │   ├── foldhash v0.2.0
+│   │   ├── serde_core v1.0.228
+│   │   └── allocator-api2 feature "alloc"
+│   │       └── allocator-api2 v0.2.21
+│   └── serde_core v1.0.228
+├── libm v0.2.16
+├── num-traits v0.2.19
+│   └── libm feature "default"
+│       ├── libm v0.2.16
+│       └── libm feature "arch"
+│           └── libm v0.2.16
+│   [build-dependencies]
+│   └── autocfg feature "default"
+│       └── autocfg v1.5.0
+├── petgraph v0.8.3
+│   ├── fixedbitset v0.5.7
+│   ├── indexmap v2.13.0 (*)
+│   ├── hashbrown feature "default-hasher"
+│   │   └── hashbrown v0.15.5
+│   │       └── foldhash v0.1.5
+│   └── hashbrown feature "inline-more"
+│       └── hashbrown v0.15.5 (*)
+├── rustc-hash v1.1.0
+├── thiserror v2.0.18
+│   └── thiserror-impl feature "default"
+│       └── thiserror-impl v2.0.18 (proc-macro)
+│           ├── proc-macro2 feature "default" (*)
+│           ├── quote feature "default" (*)
+│           └── syn feature "default" (*)
+├── bitflags feature "default"
+│   └── bitflags v2.11.0 (*)
+├── arbitrary feature "default" (*)
+├── arbitrary feature "derive"
+│   ├── arbitrary v1.4.2 (*)
+│   └── arbitrary feature "derive_arbitrary"
+│       └── arbitrary v1.4.2 (*)
+├── unicode-ident feature "default" (*)
+├── once_cell feature "alloc" (*)
+├── once_cell feature "race" (*)
+├── serde feature "alloc" (*)
+├── serde feature "derive"
+│   ├── serde v1.0.228 (*)
+│   └── serde feature "serde_derive" (*)
+├── cfg-if feature "default"
+│   └── cfg-if v1.0.4
+├── log feature "default"
+│   └── log v0.4.29
+├── half feature "num-traits"
+│   └── half v2.7.1
+│       ├── arbitrary feature "default" (*)
+│       ├── arbitrary feature "derive" (*)
+│       ├── serde feature "derive" (*)
+│       ├── cfg-if feature "default" (*)
+│       ├── bytemuck feature "derive"
+│       │   ├── bytemuck v1.25.0
+│       │   │   └── bytemuck_derive feature "default"
+│       │   │       └── bytemuck_derive v1.10.2 (proc-macro)
+│       │   │           ├── proc-macro2 feature "default" (*)
+│       │   │           ├── quote feature "default" (*)
+│       │   │           └── syn feature "default" (*)
+│       │   └── bytemuck feature "bytemuck_derive"
+│       │       └── bytemuck v1.25.0 (*)
+│       ├── num-traits feature "libm"
+│       │   └── num-traits v0.2.19 (*)
+│       ├── zerocopy feature "derive"
+│       │   ├── zerocopy v0.8.39
+│       │   │   └── zerocopy-derive feature "default"
+│       │   │       └── zerocopy-derive v0.8.39 (proc-macro)
+│       │   │           ├── proc-macro2 feature "default" (*)
+│       │   │           ├── quote feature "default" (*)
+│       │   │           ├── syn feature "default" (*)
+│       │   │           └── syn feature "full"
+│       │   │               └── syn v2.0.116 (*)
+│       │   └── zerocopy feature "zerocopy-derive"
+│       │       └── zerocopy v0.8.39 (*)
+│       └── zerocopy feature "simd"
+│           └── zerocopy v0.8.39 (*)
+├── hashbrown feature "default-hasher"
+│   └── hashbrown v0.16.1 (*)
+├── hashbrown feature "inline-more"
+│   └── hashbrown v0.16.1 (*)
+├── hexf-parse feature "default"
+│   └── hexf-parse v0.2.1
+├── spirv feature "default"
+│   └── spirv v0.3.0+sdk-1.4.309.0 (https://github.com/gfx-rs/rspirv?rev=89ce4d0e64c91b0635f617409dc57cb031749a39#89ce4d0e)
+│       ├── bitflags feature "default" (*)
+│       └── serde feature "derive" (*)
+├── pp-rs feature "default"
+│   └── pp-rs v0.2.1
+│       └── unicode-xid feature "default"
+│           └── unicode-xid v0.2.6
+└── wgpu-shader-types feature "default" (command-line)
+    └── wgpu-shader-types v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shader-types)
+        ├── arbitrary feature "default" (*)
+        ├── arbitrary feature "derive" (*)
+        ├── serde feature "alloc" (*)
+        └── serde feature "derive" (*)
+[build-dependencies]
+└── cfg_aliases feature "default"
+    └── cfg_aliases v0.2.1
+[dev-dependencies]
+├── env_logger v0.11.9
+│   ├── env_filter v1.0.0
+│   │   ├── log feature "default" (*)
+│   │   ├── log feature "std"
+│   │   │   └── log v0.4.29
+│   │   ├── regex feature "perf"
+│   │   │   ├── regex v1.12.3
+│   │   │   │   ├── aho-corasick v1.1.4
+│   │   │   │   │   └── memchr v2.8.0
+│   │   │   │   ├── memchr v2.8.0
+│   │   │   │   ├── regex-syntax v0.8.9
+│   │   │   │   ├── regex-automata feature "alloc"
+│   │   │   │   │   └── regex-automata v0.4.14
+│   │   │   │   │       ├── aho-corasick v1.1.4 (*)
+│   │   │   │   │       ├── memchr v2.8.0
+│   │   │   │   │       └── regex-syntax v0.8.9
+│   │   │   │   ├── regex-automata feature "meta"
+│   │   │   │   │   ├── regex-automata v0.4.14 (*)
+│   │   │   │   │   ├── regex-automata feature "nfa-pikevm"
+│   │   │   │   │   │   ├── regex-automata v0.4.14 (*)
+│   │   │   │   │   │   └── regex-automata feature "nfa-thompson"
+│   │   │   │   │   │       ├── regex-automata v0.4.14 (*)
+│   │   │   │   │   │       └── regex-automata feature "alloc" (*)
+│   │   │   │   │   └── regex-automata feature "syntax"
+│   │   │   │   │       ├── regex-automata v0.4.14 (*)
+│   │   │   │   │       └── regex-automata feature "alloc" (*)
+│   │   │   │   ├── regex-automata feature "nfa-pikevm" (*)
+│   │   │   │   └── regex-automata feature "syntax" (*)
+│   │   │   ├── regex feature "perf-backtrack"
+│   │   │   │   ├── regex v1.12.3 (*)
+│   │   │   │   └── regex-automata feature "nfa-backtrack"
+│   │   │   │       ├── regex-automata v0.4.14 (*)
+│   │   │   │       └── regex-automata feature "nfa-thompson" (*)
+│   │   │   ├── regex feature "perf-cache"
+│   │   │   │   └── regex v1.12.3 (*)
+│   │   │   ├── regex feature "perf-dfa"
+│   │   │   │   ├── regex v1.12.3 (*)
+│   │   │   │   └── regex-automata feature "hybrid"
+│   │   │   │       ├── regex-automata v0.4.14 (*)
+│   │   │   │       ├── regex-automata feature "alloc" (*)
+│   │   │   │       └── regex-automata feature "nfa-thompson" (*)
+│   │   │   ├── regex feature "perf-inline"
+│   │   │   │   ├── regex v1.12.3 (*)
+│   │   │   │   └── regex-automata feature "perf-inline"
+│   │   │   │       └── regex-automata v0.4.14 (*)
+│   │   │   ├── regex feature "perf-literal"
+│   │   │   │   ├── regex v1.12.3 (*)
+│   │   │   │   └── regex-automata feature "perf-literal"
+│   │   │   │       ├── regex-automata v0.4.14 (*)
+│   │   │   │       ├── regex-automata feature "perf-literal-multisubstring"
+│   │   │   │       │   └── regex-automata v0.4.14 (*)
+│   │   │   │       └── regex-automata feature "perf-literal-substring"
+│   │   │   │           ├── regex-automata v0.4.14 (*)
+│   │   │   │           └── aho-corasick feature "perf-literal"
+│   │   │   │               └── aho-corasick v1.1.4 (*)
+│   │   │   └── regex feature "perf-onepass"
+│   │   │       ├── regex v1.12.3 (*)
+│   │   │       └── regex-automata feature "dfa-onepass"
+│   │   │           ├── regex-automata v0.4.14 (*)
+│   │   │           └── regex-automata feature "nfa-thompson" (*)
+│   │   └── regex feature "std"
+│   │       ├── regex v1.12.3 (*)
+│   │       ├── aho-corasick feature "std"
+│   │       │   ├── aho-corasick v1.1.4 (*)
+│   │       │   └── memchr feature "std"
+│   │       │       ├── memchr v2.8.0
+│   │       │       └── memchr feature "alloc"
+│   │       │           └── memchr v2.8.0
+│   │       ├── memchr feature "std" (*)
+│   │       ├── regex-automata feature "std"
+│   │       │   ├── regex-automata v0.4.14 (*)
+│   │       │   ├── aho-corasick feature "std" (*)
+│   │       │   ├── memchr feature "std" (*)
+│   │       │   ├── regex-automata feature "alloc" (*)
+│   │       │   └── regex-syntax feature "std"
+│   │       │       └── regex-syntax v0.8.9
+│   │       └── regex-syntax feature "std" (*)
+│   ├── anstream feature "wincon"
+│   │   └── anstream v0.6.21
+│   │       ├── anstyle feature "default"
+│   │       │   ├── anstyle v1.0.13
+│   │       │   └── anstyle feature "std"
+│   │       │       └── anstyle v1.0.13
+│   │       ├── anstyle-parse feature "default"
+│   │       │   ├── anstyle-parse v0.2.7
+│   │       │   │   └── utf8parse feature "default"
+│   │       │   │       └── utf8parse v0.2.2
+│   │       │   └── anstyle-parse feature "utf8"
+│   │       │       └── anstyle-parse v0.2.7 (*)
+│   │       ├── utf8parse feature "default" (*)
+│   │       ├── anstyle-query feature "default"
+│   │       │   └── anstyle-query v1.1.5
+│   │       ├── colorchoice feature "default"
+│   │       │   └── colorchoice v1.0.4
+│   │       └── is_terminal_polyfill feature "default"
+│   │           └── is_terminal_polyfill v1.70.2
+│   ├── anstyle feature "default" (*)
+│   ├── log feature "default" (*)
+│   ├── log feature "std" (*)
+│   └── jiff feature "std"
+│       ├── jiff v0.2.20
+│       └── jiff feature "alloc"
+│           └── jiff v0.2.20
+├── hlsl-snapshots feature "default" (command-line)
+│   └── hlsl-snapshots v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga/hlsl-snapshots) (*)
+├── ron feature "default" (*)
+├── serde feature "default" (*)
+├── serde feature "derive" (*)
+├── diff feature "default"
+│   └── diff v0.1.13
+├── hashbrown feature "default-hasher" (*)
+├── hashbrown feature "inline-more" (*)
+├── hashbrown feature "serde"
+│   └── hashbrown v0.16.1 (*)
+├── itertools feature "default"
+│   ├── itertools v0.14.0
+│   │   └── either v1.15.0
+│   └── itertools feature "use_std"
+│       ├── itertools v0.14.0 (*)
+│       ├── itertools feature "use_alloc"
+│       │   └── itertools v0.14.0 (*)
+│       └── either feature "use_std"
+│           ├── either v1.15.0
+│           └── either feature "std"
+│               └── either v1.15.0
+├── naga-test feature "default" (command-line)
+│   └── naga-test v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga-test)
+│       ├── serde v1.0.228 (*)
+│       ├── ron feature "default" (*)
+│       ├── bitflags feature "default" (*)
+│       ├── naga feature "default" (command-line)
+│       │   └── naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga) (*)
+│       ├── naga feature "deserialize"
+│       │   ├── naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga) (*)
+│       │   ├── bitflags feature "serde" (*)
+│       │   ├── half feature "serde"
+│       │   │   └── half v2.7.1 (*)
+│       │   ├── hashbrown feature "serde" (*)
+│       │   ├── indexmap feature "serde"
+│       │   │   └── indexmap v2.13.0 (*)
+│       │   └── wgpu-shader-types feature "deserialize"
+│       │       └── wgpu-shader-types v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shader-types) (*)
+│       ├── naga feature "dot-out"
+│       │   └── naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga) (*)
+│       ├── naga feature "glsl-in"
+│       │   └── naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga) (*)
+│       ├── naga feature "glsl-out"
+│       │   └── naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga) (*)
+│       ├── naga feature "hlsl-out"
+│       │   └── naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga) (*)
+│       ├── naga feature "msl-out"
+│       │   └── naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga) (*)
+│       ├── naga feature "serialize"
+│       │   ├── naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga) (*)
+│       │   ├── bitflags feature "serde" (*)
+│       │   ├── half feature "serde" (*)
+│       │   ├── hashbrown feature "serde" (*)
+│       │   ├── indexmap feature "serde" (*)
+│       │   └── wgpu-shader-types feature "serialize"
+│       │       └── wgpu-shader-types v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shader-types) (*)
+│       ├── naga feature "spv-in"
+│       │   ├── naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga) (*)
+│       │   ├── naga feature "petgraph"
+│       │   │   └── naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga) (*)
+│       │   └── petgraph feature "graphmap"
+│       │       └── petgraph v0.8.3 (*)
+│       ├── naga feature "spv-out"
+│       │   └── naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga) (*)
+│       ├── naga feature "wgsl-in"
+│       │   └── naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga) (*)
+│       ├── naga feature "wgsl-out"
+│       │   └── naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga) (*)
+│       ├── serde_json feature "default"
+│       │   ├── serde_json v1.0.149
+│       │   │   ├── memchr v2.8.0
+│       │   │   ├── serde_core v1.0.228
+│       │   │   ├── itoa feature "default"
+│       │   │   │   └── itoa v1.0.17
+│       │   │   └── zmij feature "default"
+│       │   │       └── zmij v1.0.21
+│       │   └── serde_json feature "std"
+│       │       ├── serde_json v1.0.149 (*)
+│       │       ├── serde_core feature "std" (*)
+│       │       └── memchr feature "std" (*)
+│       ├── spirv feature "default" (*)
+│       ├── spirv feature "deserialize"
+│       │   ├── spirv v0.3.0+sdk-1.4.309.0 (https://github.com/gfx-rs/rspirv?rev=89ce4d0e64c91b0635f617409dc57cb031749a39#89ce4d0e) (*)
+│       │   ├── bitflags feature "serde" (*)
+│       │   └── spirv feature "serde"
+│       │       └── spirv v0.3.0+sdk-1.4.309.0 (https://github.com/gfx-rs/rspirv?rev=89ce4d0e64c91b0635f617409dc57cb031749a39#89ce4d0e) (*)
+│       └── toml feature "default"
+│           ├── toml v1.0.2+spec-1.1.0
+│           │   ├── winnow v0.7.14
+│           │   ├── serde_core feature "alloc" (*)
+│           │   ├── serde_spanned feature "alloc"
+│           │   │   ├── serde_spanned v1.0.4
+│           │   │   │   └── serde_core v1.0.228
+│           │   │   └── serde_core feature "alloc" (*)
+│           │   ├── toml_datetime feature "alloc"
+│           │   │   ├── toml_datetime v1.0.0+spec-1.1.0
+│           │   │   │   └── serde_core v1.0.228
+│           │   │   └── serde_core feature "alloc" (*)
+│           │   ├── toml_parser feature "alloc"
+│           │   │   └── toml_parser v1.0.9+spec-1.1.0
+│           │   │       └── winnow v0.7.14
+│           │   └── toml_writer feature "alloc"
+│           │       └── toml_writer v1.0.6+spec-1.1.0
+│           ├── toml feature "display"
+│           │   └── toml v1.0.2+spec-1.1.0 (*)
+│           ├── toml feature "parse"
+│           │   └── toml v1.0.2+spec-1.1.0 (*)
+│           ├── toml feature "serde"
+│           │   ├── toml v1.0.2+spec-1.1.0 (*)
+│           │   ├── serde_spanned feature "serde"
+│           │   │   └── serde_spanned v1.0.4 (*)
+│           │   └── toml_datetime feature "serde"
+│           │       └── toml_datetime v1.0.0+spec-1.1.0 (*)
+│           └── toml feature "std"
+│               ├── toml v1.0.2+spec-1.1.0 (*)
+│               ├── serde_core feature "std" (*)
+│               ├── serde_spanned feature "std"
+│               │   ├── serde_spanned v1.0.4 (*)
+│               │   ├── serde_core feature "std" (*)
+│               │   └── serde_spanned feature "alloc" (*)
+│               ├── toml_datetime feature "std"
+│               │   ├── toml_datetime v1.0.0+spec-1.1.0 (*)
+│               │   ├── serde_core feature "std" (*)
+│               │   └── toml_datetime feature "alloc" (*)
+│               ├── toml_parser feature "std"
+│               │   ├── toml_parser v1.0.9+spec-1.1.0 (*)
+│               │   └── toml_parser feature "alloc" (*)
+│               └── toml_writer feature "std"
+│                   ├── toml_writer v1.0.6+spec-1.1.0
+│                   └── toml_writer feature "alloc" (*)
+├── spirv feature "default" (*)
+├── rspirv feature "default"
+│   └── rspirv v0.12.0+sdk-1.4.309.0 (https://github.com/gfx-rs/rspirv?rev=89ce4d0e64c91b0635f617409dc57cb031749a39#89ce4d0e)
+│       ├── spirv feature "default" (*)
+│       └── rustc-hash feature "default"
+│           ├── rustc-hash v1.1.0
+│           └── rustc-hash feature "std"
+│               └── rustc-hash v1.1.0
+├── strum feature "derive"
+│   ├── strum v0.27.2
+│   │   └── strum_macros feature "default"
+│   │       └── strum_macros v0.27.2 (proc-macro)
+│   │           ├── proc-macro2 feature "default" (*)
+│   │           ├── quote feature "default" (*)
+│   │           ├── syn feature "default" (*)
+│   │           ├── syn feature "parsing" (*)
+│   │           └── heck feature "default"
+│   │               └── heck v0.5.0
+│   └── strum feature "strum_macros"
+│       └── strum v0.27.2 (*)
+└── walkdir feature "default"
+    └── walkdir v2.5.0
+        └── same-file feature "default"
+            └── same-file v1.0.6
+
+naga-cli v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga-cli)
+├── env_logger v0.11.9 (*)
+├── anyhow feature "std"
+│   └── anyhow v1.0.101
+├── naga feature "default" (command-line) (*)
+├── naga feature "deserialize" (*)
+├── naga feature "dot-out" (*)
+├── naga feature "fs"
+│   └── naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga) (*)
+├── naga feature "glsl-in" (*)
+├── naga feature "glsl-out" (*)
+├── naga feature "hlsl-out" (*)
+├── naga feature "msl-out" (*)
+├── naga feature "serialize" (*)
+├── naga feature "spv-in" (*)
+├── naga feature "spv-out" (*)
+├── naga feature "stderr"
+│   ├── naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga) (*)
+│   └── codespan-reporting feature "std"
+│       └── codespan-reporting v0.12.0 (*)
+├── naga feature "termcolor"
+│   ├── naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga) (*)
+│   └── codespan-reporting feature "termcolor"
+│       ├── codespan-reporting v0.12.0 (*)
+│       └── codespan-reporting feature "std" (*)
+├── naga feature "wgsl-in" (*)
+├── naga feature "wgsl-out" (*)
+├── codespan-reporting feature "std" (*)
+├── codespan-reporting feature "termcolor" (*)
+├── log feature "default" (*)
+├── argh feature "default"
+│   ├── argh v0.1.14
+│   │   ├── argh_derive feature "default"
+│   │   │   └── argh_derive v0.1.14 (proc-macro)
+│   │   │       ├── proc-macro2 feature "default" (*)
+│   │   │       ├── quote feature "default" (*)
+│   │   │       ├── syn feature "default" (*)
+│   │   │       └── argh_shared feature "default"
+│   │   │           └── argh_shared v0.1.14
+│   │   └── argh_shared feature "default"
+│   │       └── argh_shared v0.1.14
+│   │           ├── serde feature "default" (*)
+│   │           └── serde feature "derive" (*)
+│   ├── argh feature "help"
+│   │   ├── argh v0.1.14 (*)
+│   │   └── argh_derive feature "help"
+│   │       └── argh_derive v0.1.14 (proc-macro) (*)
+│   └── argh feature "serde"
+│       ├── argh v0.1.14 (*)
+│       └── argh_shared feature "serde"
+│           └── argh_shared v0.1.14 (*)
+├── bincode feature "default"
+│   ├── bincode v2.0.1
+│   │   ├── serde v1.0.228 (*)
+│   │   ├── bincode_derive feature "default"
+│   │   │   └── bincode_derive v2.0.1 (proc-macro)
+│   │   │       └── virtue feature "default"
+│   │   │           └── virtue v0.0.18
+│   │   └── unty feature "default"
+│   │       └── unty v0.0.4
+│   ├── bincode feature "derive"
+│   │   ├── bincode v2.0.1 (*)
+│   │   └── bincode feature "bincode_derive"
+│   │       └── bincode v2.0.1 (*)
+│   └── bincode feature "std"
+│       ├── bincode v2.0.1 (*)
+│       ├── serde feature "std" (*)
+│       └── bincode feature "alloc"
+│           ├── bincode v2.0.1 (*)
+│           └── serde feature "alloc" (*)
+└── bincode feature "serde"
+    └── bincode v2.0.1 (*)
+
+naga-fuzz v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga/fuzz)
+├── arbitrary feature "default" (*)
+├── arbitrary feature "derive" (*)
+├── naga feature "arbitrary"
+│   ├── naga v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga) (*)
+│   ├── bitflags feature "arbitrary"
+│   │   └── bitflags v2.11.0 (*)
+│   ├── half feature "arbitrary"
+│   │   └── half v2.7.1 (*)
+│   ├── half feature "std"
+│   │   ├── half v2.7.1 (*)
+│   │   └── half feature "alloc"
+│   │       └── half v2.7.1 (*)
+│   ├── indexmap feature "arbitrary"
+│   │   └── indexmap v2.13.0 (*)
+│   └── wgpu-shader-types feature "arbitrary"
+│       └── wgpu-shader-types v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shader-types) (*)
+├── naga feature "default" (command-line) (*)
+├── naga feature "glsl-in" (*)
+├── naga feature "spv-in" (*)
+├── naga feature "wgsl-in" (*)
+└── libfuzzer-sys feature "default"
+    ├── libfuzzer-sys v0.4.7
+    │   ├── arbitrary feature "default" (*)
+    │   └── once_cell feature "default"
+    │       ├── once_cell v1.21.3
+    │       └── once_cell feature "std"
+    │           ├── once_cell v1.21.3
+    │           └── once_cell feature "alloc" (*)
+    │   [build-dependencies]
+    │   ├── cc feature "default"
+    │   │   └── cc v1.2.56
+    │   │       ├── jobserver v0.1.34
+    │   │       │   └── libc feature "default"
+    │   │       │       ├── libc v0.2.182
+    │   │       │       └── libc feature "std"
+    │   │       │           └── libc v0.2.182
+    │   │       ├── libc v0.2.182
+    │   │       ├── find-msvc-tools feature "default"
+    │   │       │   └── find-msvc-tools v0.1.9
+    │   │       └── shlex feature "default"
+    │   │           ├── shlex v1.3.0
+    │   │           └── shlex feature "std"
+    │   │               └── shlex v1.3.0
+    │   └── cc feature "parallel"
+    │       └── cc v1.2.56 (*)
+    └── libfuzzer-sys feature "link_libfuzzer"
+        └── libfuzzer-sys v0.4.7 (*)
+[build-dependencies]
+└── cfg_aliases feature "default" (*)
+
+naga-test v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/naga-test) (*)
+
+naga-xtask v0.1.0 (/Users/supamaggie70/code/workspaces/wgpu/naga/xtask)
+├── anyhow v1.0.101
+├── env_logger v0.11.9 (*)
+├── hlsl-snapshots feature "default" (command-line) (*)
+├── log feature "default" (*)
+├── jobserver feature "default"
+│   └── jobserver v0.1.34 (*)
+├── glob feature "default"
+│   └── glob v0.3.3
+├── indicatif feature "default"
+│   ├── indicatif v0.18.4
+│   │   ├── unicode-width feature "default" (*)
+│   │   ├── console feature "ansi-parsing"
+│   │   │   └── console v0.16.2
+│   │   │       ├── once_cell feature "default" (*)
+│   │   │       ├── unicode-width feature "default" (*)
+│   │   │       └── libc feature "default" (*)
+│   │   ├── console feature "std"
+│   │   │   ├── console v0.16.2 (*)
+│   │   │   └── console feature "alloc"
+│   │   │       └── console v0.16.2 (*)
+│   │   ├── portable-atomic feature "default"
+│   │   │   ├── portable-atomic v1.13.1
+│   │   │   └── portable-atomic feature "fallback"
+│   │   │       └── portable-atomic v1.13.1
+│   │   └── unit-prefix feature "default"
+│   │       ├── unit-prefix v0.5.2
+│   │       └── unit-prefix feature "std"
+│   │           └── unit-prefix v0.5.2
+│   ├── indicatif feature "unicode-width"
+│   │   ├── indicatif v0.18.4 (*)
+│   │   └── console feature "unicode-width"
+│   │       └── console v0.16.2 (*)
+│   └── indicatif feature "wasmbind"
+│       └── indicatif v0.18.4 (*)
+├── num_cpus feature "default"
+│   └── num_cpus v1.17.0
+│       └── libc feature "default" (*)
+├── pico-args feature "combined-flags"
+│   └── pico-args v0.5.0
+├── pico-args feature "default"
+│   └── pico-args v0.5.0
+├── pico-args feature "eq-separator"
+│   └── pico-args v0.5.0
+├── pico-args feature "short-space-opt"
+│   └── pico-args v0.5.0
+├── shell-words feature "default"
+│   ├── shell-words v1.1.1
+│   └── shell-words feature "std"
+│       └── shell-words v1.1.1
+└── which feature "default"
+    ├── which v8.0.0
+    │   ├── env_home feature "default"
+    │   │   └── env_home v0.1.0
+    │   ├── rustix feature "fs"
+    │   │   └── rustix v1.1.3
+    │   │       ├── bitflags v2.11.0 (*)
+    │   │       ├── errno v0.3.14
+    │   │       │   └── libc v0.2.182
+    │   │       └── libc v0.2.182
+    │   └── rustix feature "std"
+    │       ├── rustix v1.1.3 (*)
+    │       ├── bitflags feature "std"
+    │       │   └── bitflags v2.11.0 (*)
+    │       ├── libc feature "std" (*)
+    │       ├── rustix feature "alloc"
+    │       │   └── rustix v1.1.3 (*)
+    │       └── errno feature "std"
+    │           ├── errno v0.3.14 (*)
+    │           └── libc feature "std" (*)
+    └── which feature "real-sys"
+        └── which v8.0.0 (*)
+
+player v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/player)
+├── env_logger v0.11.9 (*)
+├── raw-window-handle v0.6.2
+├── ron feature "default" (*)
+├── log feature "default" (*)
+├── bytemuck feature "default"
+│   └── bytemuck v1.25.0 (*)
+├── bytemuck feature "extern_crate_alloc"
+│   └── bytemuck v1.25.0 (*)
+├── bytemuck feature "min_const_generics"
+│   └── bytemuck v1.25.0 (*)
+├── hashbrown feature "default-hasher" (*)
+├── hashbrown feature "inline-more" (*)
+├── wgpu-core feature "default" (command-line)
+│   ├── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core)
+│   │   ├── arrayvec v0.7.6 (*)
+│   │   ├── bit-set v0.8.0 (*)
+│   │   ├── bit-vec v0.8.0
+│   │   ├── indexmap v2.13.0 (*)
+│   │   ├── profiling v1.0.17
+│   │   ├── raw-window-handle v0.6.2
+│   │   ├── rustc-hash v1.1.0
+│   │   ├── thiserror v2.0.18 (*)
+│   │   ├── wgpu-types v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-types)
+│   │   │   ├── raw-window-handle v0.6.2
+│   │   │   ├── bitflags feature "default" (*)
+│   │   │   ├── serde feature "alloc" (*)
+│   │   │   ├── serde feature "derive" (*)
+│   │   │   ├── log feature "default" (*)
+│   │   │   ├── bytemuck feature "default" (*)
+│   │   │   ├── bytemuck feature "derive" (*)
+│   │   │   ├── bytemuck feature "extern_crate_alloc" (*)
+│   │   │   └── bytemuck feature "min_const_generics" (*)
+│   │   │   [dev-dependencies]
+│   │   │   ├── serde feature "derive" (*)
+│   │   │   └── serde_json feature "default" (*)
+│   │   ├── ron feature "default" (*)
+│   │   ├── bitflags feature "default" (*)
+│   │   ├── once_cell feature "std" (*)
+│   │   ├── serde feature "default" (*)
+│   │   ├── serde feature "derive" (*)
+│   │   ├── naga feature "default" (command-line) (*)
+│   │   ├── log feature "default" (*)
+│   │   ├── bytemuck feature "default" (*)
+│   │   ├── bytemuck feature "extern_crate_alloc" (*)
+│   │   ├── bytemuck feature "min_const_generics" (*)
+│   │   ├── hashbrown feature "default-hasher" (*)
+│   │   ├── hashbrown feature "inline-more" (*)
+│   │   ├── document-features feature "default"
+│   │   │   └── document-features v0.2.12 (proc-macro)
+│   │   │       └── litrs feature "default"
+│   │   │           └── litrs v1.0.0
+│   │   ├── macro_rules_attribute feature "default"
+│   │   │   └── macro_rules_attribute v0.2.2
+│   │   │       ├── macro_rules_attribute-proc_macro feature "default"
+│   │   │       │   └── macro_rules_attribute-proc_macro v0.2.2 (proc-macro)
+│   │   │       └── paste feature "default"
+│   │   │           └── paste v1.0.15 (proc-macro)
+│   │   ├── parking_lot feature "default"
+│   │   │   └── parking_lot v0.12.5
+│   │   │       ├── lock_api feature "default"
+│   │   │       │   ├── lock_api v0.4.14
+│   │   │       │   │   └── scopeguard v1.2.0
+│   │   │       │   └── lock_api feature "atomic_usize"
+│   │   │       │       └── lock_api v0.4.14 (*)
+│   │   │       └── parking_lot_core feature "default"
+│   │   │           └── parking_lot_core v0.9.12
+│   │   │               ├── cfg-if feature "default" (*)
+│   │   │               ├── libc feature "default" (*)
+│   │   │               ├── backtrace feature "default"
+│   │   │               │   ├── backtrace v0.3.76
+│   │   │               │   │   ├── addr2line v0.25.1
+│   │   │               │   │   │   └── gimli feature "read"
+│   │   │               │   │   │       ├── gimli v0.32.3
+│   │   │               │   │   │       └── gimli feature "read-core"
+│   │   │               │   │   │           └── gimli v0.32.3
+│   │   │               │   │   ├── libc v0.2.182
+│   │   │               │   │   ├── miniz_oxide v0.8.9
+│   │   │               │   │   │   ├── adler2 v2.0.1
+│   │   │               │   │   │   └── simd-adler32 v0.3.8
+│   │   │               │   │   ├── cfg-if feature "default" (*)
+│   │   │               │   │   ├── object feature "archive"
+│   │   │               │   │   │   └── object v0.37.3
+│   │   │               │   │   │       └── memchr v2.8.0
+│   │   │               │   │   ├── object feature "elf"
+│   │   │               │   │   │   └── object v0.37.3 (*)
+│   │   │               │   │   ├── object feature "macho"
+│   │   │               │   │   │   └── object v0.37.3 (*)
+│   │   │               │   │   ├── object feature "pe"
+│   │   │               │   │   │   ├── object v0.37.3 (*)
+│   │   │               │   │   │   └── object feature "coff"
+│   │   │               │   │   │       └── object v0.37.3 (*)
+│   │   │               │   │   ├── object feature "read_core"
+│   │   │               │   │   │   └── object v0.37.3 (*)
+│   │   │               │   │   ├── object feature "unaligned"
+│   │   │               │   │   │   └── object v0.37.3 (*)
+│   │   │               │   │   ├── object feature "xcoff"
+│   │   │               │   │   │   └── object v0.37.3 (*)
+│   │   │               │   │   └── rustc-demangle feature "default"
+│   │   │               │   │       └── rustc-demangle v0.1.27
+│   │   │               │   └── backtrace feature "std"
+│   │   │               │       └── backtrace v0.3.76 (*)
+│   │   │               ├── petgraph feature "default"
+│   │   │               │   ├── petgraph v0.6.5
+│   │   │               │   │   ├── fixedbitset v0.4.2
+│   │   │               │   │   └── indexmap feature "default"
+│   │   │               │   │       ├── indexmap v2.13.0 (*)
+│   │   │               │   │       └── indexmap feature "std"
+│   │   │               │   │           └── indexmap v2.13.0 (*)
+│   │   │               │   ├── petgraph feature "graphmap"
+│   │   │               │   │   └── petgraph v0.6.5 (*)
+│   │   │               │   ├── petgraph feature "matrix_graph"
+│   │   │               │   │   └── petgraph v0.6.5 (*)
+│   │   │               │   └── petgraph feature "stable_graph"
+│   │   │               │       └── petgraph v0.6.5 (*)
+│   │   │               └── smallvec feature "default"
+│   │   │                   └── smallvec v1.15.1
+│   │   │                       └── serde v1.0.228 (*)
+│   │   ├── smallvec feature "default" (*)
+│   │   ├── wgpu-core-deps-apple feature "default" (command-line)
+│   │   │   └── wgpu-core-deps-apple v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core/platform-deps/apple)
+│   │   │       └── wgpu-hal feature "default" (command-line)
+│   │   │           └── wgpu-hal v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-hal)
+│   │   │               ├── arrayvec v0.7.6 (*)
+│   │   │               ├── libc v0.2.182
+│   │   │               ├── ordered-float v5.1.0
+│   │   │               │   └── num-traits v0.2.19 (*)
+│   │   │               ├── profiling v1.0.17
+│   │   │               ├── raw-window-handle v0.6.2
+│   │   │               ├── thiserror v2.0.18 (*)
+│   │   │               ├── wgpu-types v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-types) (*)
+│   │   │               ├── bitflags feature "default" (*)
+│   │   │               ├── cfg-if feature "default" (*)
+│   │   │               ├── log feature "default" (*)
+│   │   │               ├── bytemuck feature "default" (*)
+│   │   │               ├── bytemuck feature "derive" (*)
+│   │   │               ├── bytemuck feature "extern_crate_alloc" (*)
+│   │   │               ├── bytemuck feature "min_const_generics" (*)
+│   │   │               ├── hashbrown feature "default-hasher" (*)
+│   │   │               ├── hashbrown feature "inline-more" (*)
+│   │   │               ├── parking_lot feature "default" (*)
+│   │   │               ├── smallvec feature "default" (*)
+│   │   │               ├── smallvec feature "union"
+│   │   │               │   └── smallvec v1.15.1 (*)
+│   │   │               ├── ash feature "default"
+│   │   │               │   ├── ash v0.38.0+1.3.281
+│   │   │               │   │   └── libloading feature "default"
+│   │   │               │   │       └── libloading v0.8.9
+│   │   │               │   │           └── cfg-if feature "default" (*)
+│   │   │               │   ├── ash feature "debug"
+│   │   │               │   │   └── ash v0.38.0+1.3.281 (*)
+│   │   │               │   ├── ash feature "loaded"
+│   │   │               │   │   ├── ash v0.38.0+1.3.281 (*)
+│   │   │               │   │   ├── ash feature "libloading"
+│   │   │               │   │   │   └── ash v0.38.0+1.3.281 (*)
+│   │   │               │   │   └── ash feature "std"
+│   │   │               │   │       └── ash v0.38.0+1.3.281 (*)
+│   │   │               │   └── ash feature "std" (*)
+│   │   │               ├── libloading feature "default" (*)
+│   │   │               ├── block2 feature "default"
+│   │   │               │   ├── block2 v0.6.2
+│   │   │               │   │   └── objc2 feature "std"
+│   │   │               │   │       ├── objc2 v0.6.3
+│   │   │               │   │       │   └── objc2-encode v4.1.0
+│   │   │               │   │       ├── objc2 feature "alloc"
+│   │   │               │   │       │   ├── objc2 v0.6.3 (*)
+│   │   │               │   │       │   └── objc2-encode feature "alloc"
+│   │   │               │   │       │       └── objc2-encode v4.1.0
+│   │   │               │   │       └── objc2-encode feature "std"
+│   │   │               │   │           ├── objc2-encode v4.1.0
+│   │   │               │   │           └── objc2-encode feature "alloc" (*)
+│   │   │               │   └── block2 feature "std"
+│   │   │               │       ├── block2 v0.6.2 (*)
+│   │   │               │       └── block2 feature "alloc"
+│   │   │               │           └── block2 v0.6.2 (*)
+│   │   │               ├── objc2 feature "default"
+│   │   │               │   ├── objc2 v0.6.3 (*)
+│   │   │               │   └── objc2 feature "std" (*)
+│   │   │               ├── dispatch2 feature "default"
+│   │   │               │   ├── dispatch2 v0.3.0
+│   │   │               │   │   ├── libc v0.2.182
+│   │   │               │   │   ├── bitflags feature "std" (*)
+│   │   │               │   │   ├── block2 feature "alloc" (*)
+│   │   │               │   │   └── objc2 feature "std" (*)
+│   │   │               │   ├── dispatch2 feature "block2"
+│   │   │               │   │   └── dispatch2 v0.3.0 (*)
+│   │   │               │   ├── dispatch2 feature "libc"
+│   │   │               │   │   └── dispatch2 v0.3.0 (*)
+│   │   │               │   ├── dispatch2 feature "objc2"
+│   │   │               │   │   └── dispatch2 v0.3.0 (*)
+│   │   │               │   └── dispatch2 feature "std"
+│   │   │               │       ├── dispatch2 v0.3.0 (*)
+│   │   │               │       └── dispatch2 feature "alloc"
+│   │   │               │           └── dispatch2 v0.3.0 (*)
+│   │   │               ├── glow feature "default"
+│   │   │               │   └── glow v0.16.0
+│   │   │               ├── gpu-allocator feature "hashbrown"
+│   │   │               │   └── gpu-allocator v0.28.0
+│   │   │               │       ├── log v0.4.29
+│   │   │               │       ├── presser v0.3.1
+│   │   │               │       ├── thiserror v2.0.18 (*)
+│   │   │               │       ├── hashbrown feature "default"
+│   │   │               │       │   ├── hashbrown v0.16.1 (*)
+│   │   │               │       │   ├── hashbrown feature "allocator-api2"
+│   │   │               │       │   │   └── hashbrown v0.16.1 (*)
+│   │   │               │       │   ├── hashbrown feature "default-hasher" (*)
+│   │   │               │       │   ├── hashbrown feature "equivalent"
+│   │   │               │       │   │   └── hashbrown v0.16.1 (*)
+│   │   │               │       │   ├── hashbrown feature "inline-more" (*)
+│   │   │               │       │   └── hashbrown feature "raw-entry"
+│   │   │               │       │       └── hashbrown v0.16.1 (*)
+│   │   │               │       └── ash feature "debug" (*)
+│   │   │               ├── gpu-descriptor feature "default"
+│   │   │               │   ├── gpu-descriptor v0.3.2
+│   │   │               │   │   ├── bitflags v2.11.0 (*)
+│   │   │               │   │   ├── hashbrown feature "default-hasher" (*)
+│   │   │               │   │   └── gpu-descriptor-types feature "default"
+│   │   │               │   │       └── gpu-descriptor-types v0.2.0
+│   │   │               │   │           └── bitflags v2.11.0 (*)
+│   │   │               │   └── gpu-descriptor feature "std"
+│   │   │               │       └── gpu-descriptor v0.3.2 (*)
+│   │   │               ├── khronos-egl feature "default"
+│   │   │               │   ├── khronos-egl v6.0.0
+│   │   │               │   │   ├── libc feature "default" (*)
+│   │   │               │   │   └── libloading feature "default" (*)
+│   │   │               │   └── khronos-egl feature "1_5"
+│   │   │               │       ├── khronos-egl v6.0.0 (*)
+│   │   │               │       └── khronos-egl feature "1_4"
+│   │   │               │           ├── khronos-egl v6.0.0 (*)
+│   │   │               │           └── khronos-egl feature "1_3"
+│   │   │               │               ├── khronos-egl v6.0.0 (*)
+│   │   │               │               └── khronos-egl feature "1_2"
+│   │   │               │                   ├── khronos-egl v6.0.0 (*)
+│   │   │               │                   └── khronos-egl feature "1_1"
+│   │   │               │                       ├── khronos-egl v6.0.0 (*)
+│   │   │               │                       └── khronos-egl feature "1_0"
+│   │   │               │                           └── khronos-egl v6.0.0 (*)
+│   │   │               ├── khronos-egl feature "dynamic"
+│   │   │               │   ├── khronos-egl v6.0.0 (*)
+│   │   │               │   └── khronos-egl feature "libloading"
+│   │   │               │       └── khronos-egl v6.0.0 (*)
+│   │   │               ├── objc2-core-foundation feature "CFCGTypes"
+│   │   │               │   └── objc2-core-foundation v0.3.2
+│   │   │               │       ├── bitflags feature "std" (*)
+│   │   │               │       └── objc2 feature "std" (*)
+│   │   │               ├── objc2-core-foundation feature "std"
+│   │   │               │   ├── objc2-core-foundation v0.3.2 (*)
+│   │   │               │   └── objc2-core-foundation feature "alloc"
+│   │   │               │       └── objc2-core-foundation v0.3.2 (*)
+│   │   │               ├── objc2-foundation feature "NSError"
+│   │   │               │   └── objc2-foundation v0.3.2
+│   │   │               │       ├── bitflags feature "std" (*)
+│   │   │               │       ├── objc2 feature "std" (*)
+│   │   │               │       ├── objc2-core-foundation feature "CFArray"
+│   │   │               │       │   └── objc2-core-foundation v0.3.2 (*)
+│   │   │               │       ├── objc2-core-foundation feature "CFAttributedString"
+│   │   │               │       │   └── objc2-core-foundation v0.3.2 (*)
+│   │   │               │       ├── objc2-core-foundation feature "CFCGTypes" (*)
+│   │   │               │       ├── objc2-core-foundation feature "CFCalendar"
+│   │   │               │       │   ├── objc2-core-foundation v0.3.2 (*)
+│   │   │               │       │   └── objc2-core-foundation feature "bitflags"
+│   │   │               │       │       └── objc2-core-foundation v0.3.2 (*)
+│   │   │               │       ├── objc2-core-foundation feature "CFCharacterSet"
+│   │   │               │       │   └── objc2-core-foundation v0.3.2 (*)
+│   │   │               │       ├── objc2-core-foundation feature "CFData"
+│   │   │               │       │   ├── objc2-core-foundation v0.3.2 (*)
+│   │   │               │       │   └── objc2-core-foundation feature "bitflags" (*)
+│   │   │               │       ├── objc2-core-foundation feature "CFDate"
+│   │   │               │       │   ├── objc2-core-foundation v0.3.2 (*)
+│   │   │               │       │   └── objc2-core-foundation feature "bitflags" (*)
+│   │   │               │       ├── objc2-core-foundation feature "CFDictionary"
+│   │   │               │       │   └── objc2-core-foundation v0.3.2 (*)
+│   │   │               │       ├── objc2-core-foundation feature "CFError"
+│   │   │               │       │   └── objc2-core-foundation v0.3.2 (*)
+│   │   │               │       ├── objc2-core-foundation feature "CFFileSecurity"
+│   │   │               │       │   ├── objc2-core-foundation v0.3.2 (*)
+│   │   │               │       │   └── objc2-core-foundation feature "bitflags" (*)
+│   │   │               │       ├── objc2-core-foundation feature "CFLocale"
+│   │   │               │       │   └── objc2-core-foundation v0.3.2 (*)
+│   │   │               │       ├── objc2-core-foundation feature "CFMachPort"
+│   │   │               │       │   └── objc2-core-foundation v0.3.2 (*)
+│   │   │               │       ├── objc2-core-foundation feature "CFMessagePort"
+│   │   │               │       │   └── objc2-core-foundation v0.3.2 (*)
+│   │   │               │       ├── objc2-core-foundation feature "CFRunLoop"
+│   │   │               │       │   ├── objc2-core-foundation v0.3.2 (*)
+│   │   │               │       │   └── objc2-core-foundation feature "bitflags" (*)
+│   │   │               │       ├── objc2-core-foundation feature "CFSet"
+│   │   │               │       │   └── objc2-core-foundation v0.3.2 (*)
+│   │   │               │       ├── objc2-core-foundation feature "CFStream"
+│   │   │               │       │   ├── objc2-core-foundation v0.3.2 (*)
+│   │   │               │       │   └── objc2-core-foundation feature "bitflags" (*)
+│   │   │               │       ├── objc2-core-foundation feature "CFURL"
+│   │   │               │       │   ├── objc2-core-foundation v0.3.2 (*)
+│   │   │               │       │   └── objc2-core-foundation feature "bitflags" (*)
+│   │   │               │       └── objc2-core-foundation feature "objc2"
+│   │   │               │           └── objc2-core-foundation v0.3.2 (*)
+│   │   │               ├── objc2-foundation feature "NSProcessInfo"
+│   │   │               │   ├── objc2-foundation v0.3.2 (*)
+│   │   │               │   └── objc2-foundation feature "bitflags"
+│   │   │               │       └── objc2-foundation v0.3.2 (*)
+│   │   │               ├── objc2-foundation feature "NSRange"
+│   │   │               │   └── objc2-foundation v0.3.2 (*)
+│   │   │               ├── objc2-foundation feature "NSString"
+│   │   │               │   ├── objc2-foundation v0.3.2 (*)
+│   │   │               │   └── objc2-foundation feature "bitflags" (*)
+│   │   │               ├── objc2-foundation feature "std"
+│   │   │               │   ├── objc2-foundation v0.3.2 (*)
+│   │   │               │   └── objc2-foundation feature "alloc"
+│   │   │               │       └── objc2-foundation v0.3.2 (*)
+│   │   │               ├── objc2-metal feature "MTLAccelerationStructure"
+│   │   │               │   ├── objc2-metal v0.3.2
+│   │   │               │   │   ├── bitflags feature "std" (*)
+│   │   │               │   │   ├── block2 feature "alloc" (*)
+│   │   │               │   │   ├── objc2 feature "std" (*)
+│   │   │               │   │   ├── dispatch2 feature "alloc" (*)
+│   │   │               │   │   ├── dispatch2 feature "objc2" (*)
+│   │   │               │   │   └── objc2-foundation feature "alloc" (*)
+│   │   │               │   ├── objc2-foundation feature "NSArray"
+│   │   │               │   │   ├── objc2-foundation v0.3.2 (*)
+│   │   │               │   │   └── objc2-foundation feature "bitflags" (*)
+│   │   │               │   ├── objc2-foundation feature "NSObject"
+│   │   │               │   │   └── objc2-foundation v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSString" (*)
+│   │   │               │   └── objc2-metal feature "bitflags"
+│   │   │               │       └── objc2-metal v0.3.2 (*)
+│   │   │               ├── objc2-metal feature "MTLAccelerationStructureCommandEncoder"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSObject" (*)
+│   │   │               │   └── objc2-metal feature "MTLAccelerationStructure" (*)
+│   │   │               ├── objc2-metal feature "MTLAccelerationStructureTypes"
+│   │   │               │   └── objc2-metal v0.3.2 (*)
+│   │   │               ├── objc2-metal feature "MTLAllocation"
+│   │   │               │   └── objc2-metal v0.3.2 (*)
+│   │   │               ├── objc2-metal feature "MTLBlitCommandEncoder"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSRange" (*)
+│   │   │               │   └── objc2-metal feature "bitflags" (*)
+│   │   │               ├── objc2-metal feature "MTLBlitPass"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   └── objc2-foundation feature "NSObject" (*)
+│   │   │               ├── objc2-metal feature "MTLBuffer"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSError" (*)
+│   │   │               │   ├── objc2-foundation feature "NSRange" (*)
+│   │   │               │   └── objc2-foundation feature "NSString" (*)
+│   │   │               ├── objc2-metal feature "MTLCaptureManager"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSError" (*)
+│   │   │               │   ├── objc2-foundation feature "NSObject" (*)
+│   │   │               │   ├── objc2-foundation feature "NSString" (*)
+│   │   │               │   └── objc2-foundation feature "NSURL"
+│   │   │               │       ├── objc2-foundation v0.3.2 (*)
+│   │   │               │       └── objc2-foundation feature "bitflags" (*)
+│   │   │               ├── objc2-metal feature "MTLCaptureScope"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   └── objc2-foundation feature "NSString" (*)
+│   │   │               ├── objc2-metal feature "MTLCommandBuffer"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSArray" (*)
+│   │   │               │   ├── objc2-foundation feature "NSEnumerator"
+│   │   │               │   │   └── objc2-foundation v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSError" (*)
+│   │   │               │   ├── objc2-foundation feature "NSObject" (*)
+│   │   │               │   ├── objc2-foundation feature "NSString" (*)
+│   │   │               │   └── objc2-metal feature "bitflags" (*)
+│   │   │               ├── objc2-metal feature "MTLCommandEncoder"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSString" (*)
+│   │   │               │   └── objc2-metal feature "bitflags" (*)
+│   │   │               ├── objc2-metal feature "MTLCommandQueue"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSObject" (*)
+│   │   │               │   └── objc2-foundation feature "NSString" (*)
+│   │   │               ├── objc2-metal feature "MTLComputeCommandEncoder"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   └── objc2-foundation feature "NSRange" (*)
+│   │   │               ├── objc2-metal feature "MTLComputePass"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   └── objc2-foundation feature "NSObject" (*)
+│   │   │               ├── objc2-metal feature "MTLComputePipeline"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSArray" (*)
+│   │   │               │   ├── objc2-foundation feature "NSError" (*)
+│   │   │               │   ├── objc2-foundation feature "NSObject" (*)
+│   │   │               │   ├── objc2-foundation feature "NSString" (*)
+│   │   │               │   └── objc2-metal feature "MTLAllocation" (*)
+│   │   │               ├── objc2-metal feature "MTLCounters"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSArray" (*)
+│   │   │               │   ├── objc2-foundation feature "NSData"
+│   │   │               │   │   ├── objc2-foundation v0.3.2 (*)
+│   │   │               │   │   └── objc2-foundation feature "bitflags" (*)
+│   │   │               │   ├── objc2-foundation feature "NSError" (*)
+│   │   │               │   ├── objc2-foundation feature "NSObject" (*)
+│   │   │               │   ├── objc2-foundation feature "NSRange" (*)
+│   │   │               │   └── objc2-foundation feature "NSString" (*)
+│   │   │               ├── objc2-metal feature "MTLDepthStencil"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSObject" (*)
+│   │   │               │   └── objc2-foundation feature "NSString" (*)
+│   │   │               ├── objc2-metal feature "MTLDevice"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSArray" (*)
+│   │   │               │   ├── objc2-foundation feature "NSBundle"
+│   │   │               │   │   └── objc2-foundation v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSError" (*)
+│   │   │               │   ├── objc2-foundation feature "NSObject" (*)
+│   │   │               │   ├── objc2-foundation feature "NSString" (*)
+│   │   │               │   ├── objc2-foundation feature "NSURL" (*)
+│   │   │               │   ├── objc2-metal feature "MTLGPUAddress"
+│   │   │               │   │   └── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-metal feature "MTLLibrary"
+│   │   │               │   │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   │   ├── objc2-foundation feature "NSArray" (*)
+│   │   │               │   │   ├── objc2-foundation feature "NSDictionary"
+│   │   │               │   │   │   └── objc2-foundation v0.3.2 (*)
+│   │   │               │   │   ├── objc2-foundation feature "NSError" (*)
+│   │   │               │   │   ├── objc2-foundation feature "NSObject" (*)
+│   │   │               │   │   └── objc2-foundation feature "NSString" (*)
+│   │   │               │   ├── objc2-metal feature "MTLResource"
+│   │   │               │   │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   │   ├── objc2-foundation feature "NSString" (*)
+│   │   │               │   │   └── objc2-metal feature "bitflags" (*)
+│   │   │               │   └── objc2-metal feature "bitflags" (*)
+│   │   │               ├── objc2-metal feature "MTLDrawable"
+│   │   │               │   └── objc2-metal v0.3.2 (*)
+│   │   │               ├── objc2-metal feature "MTLEvent"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSObject" (*)
+│   │   │               │   └── objc2-foundation feature "NSString" (*)
+│   │   │               ├── objc2-metal feature "MTLLibrary" (*)
+│   │   │               ├── objc2-metal feature "MTLPipeline"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   └── objc2-foundation feature "NSObject" (*)
+│   │   │               ├── objc2-metal feature "MTLPixelFormat"
+│   │   │               │   └── objc2-metal v0.3.2 (*)
+│   │   │               ├── objc2-metal feature "MTLRenderCommandEncoder"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSRange" (*)
+│   │   │               │   └── objc2-metal feature "bitflags" (*)
+│   │   │               ├── objc2-metal feature "MTLRenderPass"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSObject" (*)
+│   │   │               │   └── objc2-metal feature "bitflags" (*)
+│   │   │               ├── objc2-metal feature "MTLRenderPipeline"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSArray" (*)
+│   │   │               │   ├── objc2-foundation feature "NSError" (*)
+│   │   │               │   ├── objc2-foundation feature "NSObject" (*)
+│   │   │               │   ├── objc2-foundation feature "NSString" (*)
+│   │   │               │   ├── objc2-metal feature "MTLAllocation" (*)
+│   │   │               │   └── objc2-metal feature "bitflags" (*)
+│   │   │               ├── objc2-metal feature "MTLResidencySet"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSArray" (*)
+│   │   │               │   ├── objc2-foundation feature "NSObject" (*)
+│   │   │               │   └── objc2-foundation feature "NSString" (*)
+│   │   │               ├── objc2-metal feature "MTLResource" (*)
+│   │   │               ├── objc2-metal feature "MTLSampler"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSObject" (*)
+│   │   │               │   └── objc2-foundation feature "NSString" (*)
+│   │   │               ├── objc2-metal feature "MTLStageInputOutputDescriptor"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSObject" (*)
+│   │   │               │   └── objc2-metal feature "MTLArgument"
+│   │   │               │       ├── objc2-metal v0.3.2 (*)
+│   │   │               │       ├── objc2-foundation feature "NSArray" (*)
+│   │   │               │       ├── objc2-foundation feature "NSString" (*)
+│   │   │               │       └── objc2-metal feature "MTLDataType"
+│   │   │               │           └── objc2-metal v0.3.2 (*)
+│   │   │               ├── objc2-metal feature "MTLTexture"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSObject" (*)
+│   │   │               │   ├── objc2-foundation feature "NSRange" (*)
+│   │   │               │   ├── objc2-foundation feature "NSString" (*)
+│   │   │               │   └── objc2-metal feature "bitflags" (*)
+│   │   │               ├── objc2-metal feature "MTLTypes"
+│   │   │               │   └── objc2-metal v0.3.2 (*)
+│   │   │               ├── objc2-metal feature "MTLVertexDescriptor"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   └── objc2-foundation feature "NSObject" (*)
+│   │   │               ├── objc2-metal feature "block2"
+│   │   │               │   └── objc2-metal v0.3.2 (*)
+│   │   │               ├── objc2-metal feature "dispatch2"
+│   │   │               │   └── objc2-metal v0.3.2 (*)
+│   │   │               ├── objc2-metal feature "std"
+│   │   │               │   ├── objc2-metal v0.3.2 (*)
+│   │   │               │   └── objc2-metal feature "alloc"
+│   │   │               │       └── objc2-metal v0.3.2 (*)
+│   │   │               ├── objc2-quartz-core feature "CALayer"
+│   │   │               │   ├── objc2-quartz-core v0.3.2
+│   │   │               │   │   ├── bitflags feature "std" (*)
+│   │   │               │   │   ├── objc2 feature "std" (*)
+│   │   │               │   │   ├── objc2-core-foundation feature "CFCGTypes" (*)
+│   │   │               │   │   ├── objc2-core-foundation feature "CFDate" (*)
+│   │   │               │   │   ├── objc2-core-foundation feature "objc2" (*)
+│   │   │               │   │   ├── objc2-foundation feature "alloc" (*)
+│   │   │               │   │   ├── objc2-metal feature "MTLAllocation" (*)
+│   │   │               │   │   ├── objc2-metal feature "MTLDevice" (*)
+│   │   │               │   │   ├── objc2-metal feature "MTLDrawable" (*)
+│   │   │               │   │   ├── objc2-metal feature "MTLPixelFormat" (*)
+│   │   │               │   │   ├── objc2-metal feature "MTLResidencySet" (*)
+│   │   │               │   │   ├── objc2-metal feature "MTLResource" (*)
+│   │   │               │   │   └── objc2-metal feature "MTLTexture" (*)
+│   │   │               │   ├── objc2-foundation feature "NSArray" (*)
+│   │   │               │   ├── objc2-foundation feature "NSDictionary" (*)
+│   │   │               │   ├── objc2-foundation feature "NSNull"
+│   │   │               │   │   └── objc2-foundation v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSObject" (*)
+│   │   │               │   ├── objc2-foundation feature "NSString" (*)
+│   │   │               │   └── objc2-quartz-core feature "bitflags"
+│   │   │               │       └── objc2-quartz-core v0.3.2 (*)
+│   │   │               ├── objc2-quartz-core feature "CAMetalLayer"
+│   │   │               │   ├── objc2-quartz-core v0.3.2 (*)
+│   │   │               │   ├── objc2-foundation feature "NSDictionary" (*)
+│   │   │               │   └── objc2-foundation feature "NSObject" (*)
+│   │   │               ├── objc2-quartz-core feature "objc2-core-foundation"
+│   │   │               │   └── objc2-quartz-core v0.3.2 (*)
+│   │   │               ├── objc2-quartz-core feature "objc2-metal"
+│   │   │               │   └── objc2-quartz-core v0.3.2 (*)
+│   │   │               ├── objc2-quartz-core feature "std"
+│   │   │               │   ├── objc2-quartz-core v0.3.2 (*)
+│   │   │               │   └── objc2-quartz-core feature "alloc"
+│   │   │               │       └── objc2-quartz-core v0.3.2 (*)
+│   │   │               ├── raw-window-metal feature "default"
+│   │   │               │   ├── raw-window-metal v1.1.0
+│   │   │               │   │   ├── objc2 feature "default" (*)
+│   │   │               │   │   ├── objc2-core-foundation feature "CFCGTypes" (*)
+│   │   │               │   │   ├── objc2-foundation feature "NSDictionary" (*)
+│   │   │               │   │   ├── objc2-foundation feature "NSGeometry"
+│   │   │               │   │   │   ├── objc2-foundation v0.3.2 (*)
+│   │   │               │   │   │   └── objc2-foundation feature "bitflags" (*)
+│   │   │               │   │   ├── objc2-foundation feature "NSKeyValueObserving"
+│   │   │               │   │   │   ├── objc2-foundation v0.3.2 (*)
+│   │   │               │   │   │   └── objc2-foundation feature "bitflags" (*)
+│   │   │               │   │   ├── objc2-foundation feature "NSObjCRuntime"
+│   │   │               │   │   │   ├── objc2-foundation v0.3.2 (*)
+│   │   │               │   │   │   └── objc2-foundation feature "bitflags" (*)
+│   │   │               │   │   ├── objc2-foundation feature "NSString" (*)
+│   │   │               │   │   ├── objc2-foundation feature "NSThread"
+│   │   │               │   │   │   └── objc2-foundation v0.3.2 (*)
+│   │   │               │   │   ├── objc2-foundation feature "NSValue"
+│   │   │               │   │   │   └── objc2-foundation v0.3.2 (*)
+│   │   │               │   │   ├── objc2-foundation feature "objc2-core-foundation"
+│   │   │               │   │   │   └── objc2-foundation v0.3.2 (*)
+│   │   │               │   │   ├── objc2-quartz-core feature "CALayer" (*)
+│   │   │               │   │   ├── objc2-quartz-core feature "CAMetalLayer" (*)
+│   │   │               │   │   ├── objc2-quartz-core feature "objc2-core-foundation" (*)
+│   │   │               │   │   └── objc2-quartz-core feature "objc2-metal" (*)
+│   │   │               │   └── raw-window-metal feature "std"
+│   │   │               │       ├── raw-window-metal v1.1.0 (*)
+│   │   │               │       └── raw-window-metal feature "alloc"
+│   │   │               │           └── raw-window-metal v1.1.0 (*)
+│   │   │               ├── renderdoc-sys feature "default"
+│   │   │               │   └── renderdoc-sys v1.1.0
+│   │   │               ├── wayland-sys feature "client"
+│   │   │               │   └── wayland-sys v0.31.8
+│   │   │               │       ├── once_cell feature "default" (*)
+│   │   │               │       ├── log feature "default" (*)
+│   │   │               │       └── dlib feature "default"
+│   │   │               │           └── dlib v0.5.2
+│   │   │               │               └── libloading feature "default" (*)
+│   │   │               │       [build-dependencies]
+│   │   │               │       └── pkg-config feature "default"
+│   │   │               │           └── pkg-config v0.3.32
+│   │   │               ├── wayland-sys feature "default"
+│   │   │               │   └── wayland-sys v0.31.8 (*)
+│   │   │               ├── wayland-sys feature "dlopen"
+│   │   │               │   ├── wayland-sys v0.31.8 (*)
+│   │   │               │   └── wayland-sys feature "once_cell"
+│   │   │               │       └── wayland-sys v0.31.8 (*)
+│   │   │               ├── wayland-sys feature "egl"
+│   │   │               │   ├── wayland-sys v0.31.8 (*)
+│   │   │               │   └── wayland-sys feature "client" (*)
+│   │   │               └── wgpu-shaders feature "default" (command-line)
+│   │   │                   ├── wgpu-shaders v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shaders)
+│   │   │                   │   ├── wgpu-types v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-types) (*)
+│   │   │                   │   └── naga feature "default" (command-line) (*)
+│   │   │                   ├── wgpu-shaders feature "glsl-in"
+│   │   │                   │   ├── wgpu-shaders v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shaders) (*)
+│   │   │                   │   ├── naga feature "glsl-in" (*)
+│   │   │                   │   └── wgpu-shaders feature "naga"
+│   │   │                   │       └── wgpu-shaders v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shaders) (*)
+│   │   │                   ├── wgpu-shaders feature "glsl-out"
+│   │   │                   │   ├── wgpu-shaders v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shaders) (*)
+│   │   │                   │   └── naga feature "glsl-out" (*)
+│   │   │                   ├── wgpu-shaders feature "hlsl-out"
+│   │   │                   │   ├── wgpu-shaders v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shaders) (*)
+│   │   │                   │   └── naga feature "hlsl-out" (*)
+│   │   │                   ├── wgpu-shaders feature "ir-in"
+│   │   │                   │   ├── wgpu-shaders v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shaders) (*)
+│   │   │                   │   ├── naga feature "serialize" (*)
+│   │   │                   │   └── wgpu-shaders feature "naga" (*)
+│   │   │                   ├── wgpu-shaders feature "ir-out"
+│   │   │                   │   ├── wgpu-shaders v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shaders) (*)
+│   │   │                   │   └── naga feature "deserialize" (*)
+│   │   │                   ├── wgpu-shaders feature "msl-out"
+│   │   │                   │   ├── wgpu-shaders v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shaders) (*)
+│   │   │                   │   └── naga feature "msl-out" (*)
+│   │   │                   ├── wgpu-shaders feature "spv-in"
+│   │   │                   │   ├── wgpu-shaders v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shaders) (*)
+│   │   │                   │   ├── naga feature "spv-in" (*)
+│   │   │                   │   └── wgpu-shaders feature "naga" (*)
+│   │   │                   ├── wgpu-shaders feature "spv-out"
+│   │   │                   │   ├── wgpu-shaders v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shaders) (*)
+│   │   │                   │   └── naga feature "spv-out" (*)
+│   │   │                   ├── wgpu-shaders feature "static-dxc"
+│   │   │                   │   └── wgpu-shaders v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shaders) (*)
+│   │   │                   ├── wgpu-shaders feature "std"
+│   │   │                   │   ├── wgpu-shaders v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shaders) (*)
+│   │   │                   │   └── wgpu-types feature "std"
+│   │   │                   │       └── wgpu-types v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-types) (*)
+│   │   │                   ├── wgpu-shaders feature "wgsl-in"
+│   │   │                   │   ├── wgpu-shaders v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shaders) (*)
+│   │   │                   │   ├── naga feature "wgsl-in" (*)
+│   │   │                   │   └── wgpu-shaders feature "naga" (*)
+│   │   │                   └── wgpu-shaders feature "wgsl-out"
+│   │   │                       ├── wgpu-shaders v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shaders) (*)
+│   │   │                       └── naga feature "wgsl-out" (*)
+│   │   │               [build-dependencies]
+│   │   │               └── cfg_aliases feature "default" (*)
+│   │   │               [dev-dependencies]
+│   │   │               ├── env_logger v0.11.9 (*)
+│   │   │               ├── naga feature "default" (command-line) (*)
+│   │   │               ├── naga feature "termcolor" (*)
+│   │   │               ├── naga feature "wgsl-in" (*)
+│   │   │               ├── log feature "default" (*)
+│   │   │               ├── glam feature "default"
+│   │   │               │   ├── glam v0.32.0
+│   │   │               │   │   ├── encase v0.12.0
+│   │   │               │   │   │   ├── const_panic v0.2.15
+│   │   │               │   │   │   │   └── typewit v1.14.2
+│   │   │               │   │   │   ├── thiserror v2.0.18 (*)
+│   │   │               │   │   │   └── encase_derive feature "default"
+│   │   │               │   │   │       └── encase_derive v0.12.0 (proc-macro)
+│   │   │               │   │   │           └── encase_derive_impl feature "default"
+│   │   │               │   │   │               └── encase_derive_impl v0.12.0
+│   │   │               │   │   │                   ├── proc-macro2 feature "default" (*)
+│   │   │               │   │   │                   ├── quote feature "default" (*)
+│   │   │               │   │   │                   ├── syn feature "default" (*)
+│   │   │               │   │   │                   └── syn feature "extra-traits" (*)
+│   │   │               │   │   ├── bytemuck feature "aarch64_simd"
+│   │   │               │   │   │   └── bytemuck v1.25.0 (*)
+│   │   │               │   │   ├── bytemuck feature "derive" (*)
+│   │   │               │   │   └── bytemuck feature "wasm_simd"
+│   │   │               │   │       └── bytemuck v1.25.0 (*)
+│   │   │               │   └── glam feature "std"
+│   │   │               │       └── glam v0.32.0 (*)
+│   │   │               ├── glutin feature "egl"
+│   │   │               │   ├── glutin v0.31.3
+│   │   │               │   │   ├── bitflags feature "default" (*)
+│   │   │               │   │   ├── once_cell feature "default" (*)
+│   │   │               │   │   ├── libloading feature "default" (*)
+│   │   │               │   │   ├── cgl feature "default"
+│   │   │               │   │   │   └── cgl v0.3.2
+│   │   │               │   │   │       └── libc feature "default" (*)
+│   │   │               │   │   ├── core-foundation feature "default"
+│   │   │               │   │   │   ├── core-foundation v0.9.4
+│   │   │               │   │   │   │   ├── core-foundation-sys v0.8.7
+│   │   │               │   │   │   │   └── libc feature "default" (*)
+│   │   │               │   │   │   └── core-foundation feature "link"
+│   │   │               │   │   │       ├── core-foundation v0.9.4 (*)
+│   │   │               │   │   │       └── core-foundation-sys feature "link"
+│   │   │               │   │   │           └── core-foundation-sys v0.8.7
+│   │   │               │   │   ├── dispatch feature "default"
+│   │   │               │   │   │   └── dispatch v0.2.0
+│   │   │               │   │   ├── icrate feature "AppKit"
+│   │   │               │   │   │   ├── icrate v0.0.4
+│   │   │               │   │   │   │   ├── block2 v0.3.0
+│   │   │               │   │   │   │   │   ├── block-sys v0.2.1
+│   │   │               │   │   │   │   │   └── objc2 v0.4.1
+│   │   │               │   │   │   │   │       ├── objc-sys v0.3.5
+│   │   │               │   │   │   │   │       └── objc2-encode v3.0.0
+│   │   │               │   │   │   │   ├── objc2 v0.4.1 (*)
+│   │   │               │   │   │   │   └── dispatch feature "default" (*)
+│   │   │               │   │   │   ├── icrate feature "AppKit_NSApplication"
+│   │   │               │   │   │   │   ├── icrate v0.0.4 (*)
+│   │   │               │   │   │   │   └── icrate feature "AppKit_NSResponder"
+│   │   │               │   │   │   │       └── icrate v0.0.4 (*)
+│   │   │               │   │   │   ├── icrate feature "AppKit_NSCollectionLayoutGroupCustomItem"
+│   │   │               │   │   │   │   └── icrate v0.0.4 (*)
+│   │   │               │   │   │   ├── icrate feature "AppKit_NSCollectionLayoutSection"
+│   │   │               │   │   │   │   └── icrate v0.0.4 (*)
+│   │   │               │   │   │   ├── icrate feature "AppKit_NSCollectionView"
+│   │   │               │   │   │   │   ├── icrate v0.0.4 (*)
+│   │   │               │   │   │   │   └── icrate feature "AppKit_NSView"
+│   │   │               │   │   │   │       ├── icrate v0.0.4 (*)
+│   │   │               │   │   │   │       └── icrate feature "AppKit_NSResponder" (*)
+│   │   │               │   │   │   ├── icrate feature "AppKit_NSTableColumn"
+│   │   │               │   │   │   │   └── icrate v0.0.4 (*)
+│   │   │               │   │   │   ├── icrate feature "AppKit_NSTableRowView"
+│   │   │               │   │   │   │   ├── icrate v0.0.4 (*)
+│   │   │               │   │   │   │   └── icrate feature "AppKit_NSView" (*)
+│   │   │               │   │   │   ├── icrate feature "AppKit_NSTableView"
+│   │   │               │   │   │   │   ├── icrate v0.0.4 (*)
+│   │   │               │   │   │   │   └── icrate feature "AppKit_NSControl"
+│   │   │               │   │   │   │       ├── icrate v0.0.4 (*)
+│   │   │               │   │   │   │       └── icrate feature "AppKit_NSView" (*)
+│   │   │               │   │   │   ├── icrate feature "AppKit_NSView" (*)
+│   │   │               │   │   │   ├── icrate feature "CoreData"
+│   │   │               │   │   │   │   ├── icrate v0.0.4 (*)
+│   │   │               │   │   │   │   ├── icrate feature "CoreData_NSAsynchronousFetchResult"
+│   │   │               │   │   │   │   │   ├── icrate v0.0.4 (*)
+│   │   │               │   │   │   │   │   └── icrate feature "CoreData_NSPersistentStoreAsynchronousResult"
+│   │   │               │   │   │   │   │       ├── icrate v0.0.4 (*)
+│   │   │               │   │   │   │   │       └── icrate feature "CoreData_NSPersistentStoreResult"
+│   │   │               │   │   │   │   │           └── icrate v0.0.4 (*)
+│   │   │               │   │   │   │   └── icrate feature "Foundation"
+│   │   │               │   │   │   │       ├── icrate v0.0.4 (*)
+│   │   │               │   │   │   │       ├── icrate feature "Foundation_NSAppleEventDescriptor"
+│   │   │               │   │   │   │       │   └── icrate v0.0.4 (*)
+│   │   │               │   │   │   │       ├── icrate feature "Foundation_NSDictionary"
+│   │   │               │   │   │   │       │   └── icrate v0.0.4 (*)
+│   │   │               │   │   │   │       ├── icrate feature "Foundation_NSEnumerator"
+│   │   │               │   │   │   │       │   └── icrate v0.0.4 (*)
+│   │   │               │   │   │   │       ├── icrate feature "Foundation_NSError"
+│   │   │               │   │   │   │       │   └── icrate v0.0.4 (*)
+│   │   │               │   │   │   │       ├── icrate feature "Foundation_NSHashTable"
+│   │   │               │   │   │   │       │   └── icrate v0.0.4 (*)
+│   │   │               │   │   │   │       ├── icrate feature "Foundation_NSMapTable"
+│   │   │               │   │   │   │       │   └── icrate v0.0.4 (*)
+│   │   │               │   │   │   │       ├── icrate feature "Foundation_NSProgress"
+│   │   │               │   │   │   │       │   └── icrate v0.0.4 (*)
+│   │   │               │   │   │   │       ├── icrate feature "Foundation_NSString"
+│   │   │               │   │   │   │       │   └── icrate v0.0.4 (*)
+│   │   │               │   │   │   │       ├── icrate feature "block"
+│   │   │               │   │   │   │       │   ├── icrate v0.0.4 (*)
+│   │   │               │   │   │   │       │   └── icrate feature "block2"
+│   │   │               │   │   │   │       │       └── icrate v0.0.4 (*)
+│   │   │               │   │   │   │       └── icrate feature "objective-c"
+│   │   │               │   │   │   │           ├── icrate v0.0.4 (*)
+│   │   │               │   │   │   │           └── icrate feature "objc2"
+│   │   │               │   │   │   │               └── icrate v0.0.4 (*)
+│   │   │               │   │   │   ├── icrate feature "Foundation" (*)
+│   │   │               │   │   │   ├── icrate feature "Foundation_NSArray"
+│   │   │               │   │   │   │   └── icrate v0.0.4 (*)
+│   │   │               │   │   │   ├── icrate feature "Foundation_NSCoder"
+│   │   │               │   │   │   │   └── icrate v0.0.4 (*)
+│   │   │               │   │   │   └── icrate feature "Foundation_NSIndexPath"
+│   │   │               │   │   │       └── icrate v0.0.4 (*)
+│   │   │               │   │   ├── icrate feature "AppKit_NSView" (*)
+│   │   │               │   │   ├── icrate feature "AppKit_NSWindow"
+│   │   │               │   │   │   ├── icrate v0.0.4 (*)
+│   │   │               │   │   │   └── icrate feature "AppKit_NSResponder" (*)
+│   │   │               │   │   ├── icrate feature "Foundation" (*)
+│   │   │               │   │   ├── icrate feature "Foundation_NSArray" (*)
+│   │   │               │   │   ├── icrate feature "Foundation_NSThread"
+│   │   │               │   │   │   └── icrate v0.0.4 (*)
+│   │   │               │   │   ├── icrate feature "default"
+│   │   │               │   │   │   ├── icrate v0.0.4 (*)
+│   │   │               │   │   │   ├── icrate feature "apple"
+│   │   │               │   │   │   │   ├── icrate v0.0.4 (*)
+│   │   │               │   │   │   │   ├── block2 feature "apple"
+│   │   │               │   │   │   │   │   ├── block2 v0.3.0 (*)
+│   │   │               │   │   │   │   │   ├── block-sys feature "apple"
+│   │   │               │   │   │   │   │   │   └── block-sys v0.2.1
+│   │   │               │   │   │   │   │   └── objc2 feature "apple"
+│   │   │               │   │   │   │   │       ├── objc2 v0.4.1 (*)
+│   │   │               │   │   │   │   │       └── objc-sys feature "apple"
+│   │   │               │   │   │   │   │           └── objc-sys v0.3.5
+│   │   │               │   │   │   │   └── objc2 feature "apple" (*)
+│   │   │               │   │   │   └── icrate feature "std"
+│   │   │               │   │   │       ├── icrate v0.0.4 (*)
+│   │   │               │   │   │       ├── icrate feature "alloc"
+│   │   │               │   │   │       │   ├── icrate v0.0.4 (*)
+│   │   │               │   │   │       │   ├── block2 feature "alloc"
+│   │   │               │   │   │       │   │   ├── block2 v0.3.0 (*)
+│   │   │               │   │   │       │   │   ├── block-sys feature "alloc"
+│   │   │               │   │   │       │   │   │   └── block-sys v0.2.1
+│   │   │               │   │   │       │   │   └── objc2 feature "alloc"
+│   │   │               │   │   │       │   │       ├── objc2 v0.4.1 (*)
+│   │   │               │   │   │       │   │       ├── objc-sys feature "alloc"
+│   │   │               │   │   │       │   │       │   └── objc-sys v0.3.5
+│   │   │               │   │   │       │   │       └── objc2-encode feature "alloc"
+│   │   │               │   │   │       │   │           └── objc2-encode v3.0.0
+│   │   │               │   │   │       │   └── objc2 feature "alloc" (*)
+│   │   │               │   │   │       ├── block2 feature "std"
+│   │   │               │   │   │       │   ├── block2 v0.3.0 (*)
+│   │   │               │   │   │       │   ├── block2 feature "alloc" (*)
+│   │   │               │   │   │       │   ├── block-sys feature "std"
+│   │   │               │   │   │       │   │   ├── block-sys v0.2.1
+│   │   │               │   │   │       │   │   └── block-sys feature "alloc" (*)
+│   │   │               │   │   │       │   └── objc2 feature "std"
+│   │   │               │   │   │       │       ├── objc2 v0.4.1 (*)
+│   │   │               │   │   │       │       ├── objc2 feature "alloc" (*)
+│   │   │               │   │   │       │       ├── objc-sys feature "std"
+│   │   │               │   │   │       │       │   ├── objc-sys v0.3.5
+│   │   │               │   │   │       │       │   └── objc-sys feature "alloc" (*)
+│   │   │               │   │   │       │       └── objc2-encode feature "std"
+│   │   │               │   │   │       │           ├── objc2-encode v3.0.0
+│   │   │               │   │   │       │           └── objc2-encode feature "alloc" (*)
+│   │   │               │   │   │       └── objc2 feature "std" (*)
+│   │   │               │   │   ├── icrate feature "dispatch"
+│   │   │               │   │   │   └── icrate v0.0.4 (*)
+│   │   │               │   │   ├── objc2 feature "default"
+│   │   │               │   │   │   ├── objc2 v0.4.1 (*)
+│   │   │               │   │   │   ├── objc2 feature "apple" (*)
+│   │   │               │   │   │   └── objc2 feature "std" (*)
+│   │   │               │   │   ├── objc2 feature "relax-void-encoding"
+│   │   │               │   │   │   └── objc2 v0.4.1 (*)
+│   │   │               │   │   └── raw-window-handle feature "default"
+│   │   │               │   │       └── raw-window-handle v0.5.2
+│   │   │               │   │   [build-dependencies]
+│   │   │               │   │   └── cfg_aliases feature "default"
+│   │   │               │   │       └── cfg_aliases v0.1.1
+│   │   │               │   ├── glutin feature "glutin_egl_sys"
+│   │   │               │   │   └── glutin v0.31.3 (*)
+│   │   │               │   └── glutin feature "libloading"
+│   │   │               │       └── glutin v0.31.3 (*)
+│   │   │               ├── glutin feature "wayland"
+│   │   │               │   ├── glutin v0.31.3 (*)
+│   │   │               │   ├── glutin feature "egl" (*)
+│   │   │               │   └── glutin feature "wayland-sys"
+│   │   │               │       └── glutin v0.31.3 (*)
+│   │   │               ├── glutin feature "wgl"
+│   │   │               │   ├── glutin v0.31.3 (*)
+│   │   │               │   ├── glutin feature "glutin_wgl_sys"
+│   │   │               │   │   └── glutin v0.31.3 (*)
+│   │   │               │   └── glutin feature "windows-sys"
+│   │   │               │       └── glutin v0.31.3 (*)
+│   │   │               ├── glutin feature "x11"
+│   │   │               │   ├── glutin v0.31.3 (*)
+│   │   │               │   └── glutin feature "x11-dl"
+│   │   │               │       └── glutin v0.31.3 (*)
+│   │   │               ├── raw-window-handle feature "default" (*)
+│   │   │               ├── glutin-winit feature "egl"
+│   │   │               │   ├── glutin-winit v0.4.2
+│   │   │               │   │   ├── glutin v0.31.3 (*)
+│   │   │               │   │   ├── raw-window-handle feature "default" (*)
+│   │   │               │   │   └── winit feature "rwh_05"
+│   │   │               │   │       └── winit v0.29.15
+│   │   │               │   │           ├── bitflags feature "default" (*)
+│   │   │               │   │           ├── once_cell feature "default" (*)
+│   │   │               │   │           ├── log feature "default" (*)
+│   │   │               │   │           ├── raw-window-handle feature "default"
+│   │   │               │   │           │   └── raw-window-handle v0.6.2
+│   │   │               │   │           ├── raw-window-handle feature "std"
+│   │   │               │   │           │   ├── raw-window-handle v0.6.2
+│   │   │               │   │           │   └── raw-window-handle feature "alloc"
+│   │   │               │   │           │       └── raw-window-handle v0.6.2
+│   │   │               │   │           ├── core-foundation feature "default" (*)
+│   │   │               │   │           ├── icrate feature "Foundation" (*)
+│   │   │               │   │           ├── icrate feature "Foundation_NSArray" (*)
+│   │   │               │   │           ├── icrate feature "Foundation_NSAttributedString"
+│   │   │               │   │           │   └── icrate v0.0.4 (*)
+│   │   │               │   │           ├── icrate feature "Foundation_NSData"
+│   │   │               │   │           │   └── icrate v0.0.4 (*)
+│   │   │               │   │           ├── icrate feature "Foundation_NSDictionary" (*)
+│   │   │               │   │           ├── icrate feature "Foundation_NSMutableAttributedString"
+│   │   │               │   │           │   ├── icrate v0.0.4 (*)
+│   │   │               │   │           │   └── icrate feature "Foundation_NSAttributedString" (*)
+│   │   │               │   │           ├── icrate feature "Foundation_NSNumber"
+│   │   │               │   │           │   ├── icrate v0.0.4 (*)
+│   │   │               │   │           │   └── icrate feature "Foundation_NSValue"
+│   │   │               │   │           │       └── icrate v0.0.4 (*)
+│   │   │               │   │           ├── icrate feature "Foundation_NSProcessInfo"
+│   │   │               │   │           │   └── icrate v0.0.4 (*)
+│   │   │               │   │           ├── icrate feature "Foundation_NSString" (*)
+│   │   │               │   │           ├── icrate feature "Foundation_NSThread" (*)
+│   │   │               │   │           ├── icrate feature "default" (*)
+│   │   │               │   │           ├── icrate feature "dispatch" (*)
+│   │   │               │   │           ├── objc2 feature "default" (*)
+│   │   │               │   │           ├── raw-window-handle feature "default" (*)
+│   │   │               │   │           ├── raw-window-handle feature "std"
+│   │   │               │   │           │   ├── raw-window-handle v0.5.2
+│   │   │               │   │           │   └── raw-window-handle feature "alloc"
+│   │   │               │   │           │       └── raw-window-handle v0.5.2
+│   │   │               │   │           ├── core-graphics feature "default"
+│   │   │               │   │           │   ├── core-graphics v0.23.2
+│   │   │               │   │           │   │   ├── core-foundation v0.9.4 (*)
+│   │   │               │   │           │   │   ├── core-graphics-types v0.1.3
+│   │   │               │   │           │   │   │   ├── core-foundation v0.9.4 (*)
+│   │   │               │   │           │   │   │   ├── libc feature "default" (*)
+│   │   │               │   │           │   │   │   └── bitflags feature "default"
+│   │   │               │   │           │   │   │       └── bitflags v1.3.2
+│   │   │               │   │           │   │   ├── libc feature "default" (*)
+│   │   │               │   │           │   │   ├── bitflags feature "default" (*)
+│   │   │               │   │           │   │   └── foreign-types feature "default"
+│   │   │               │   │           │   │       ├── foreign-types v0.5.0
+│   │   │               │   │           │   │       │   ├── foreign-types-macros feature "default"
+│   │   │               │   │           │   │       │   │   └── foreign-types-macros v0.2.3 (proc-macro)
+│   │   │               │   │           │   │       │   │       ├── proc-macro2 feature "default" (*)
+│   │   │               │   │           │   │       │   │       ├── quote feature "default" (*)
+│   │   │               │   │           │   │       │   │       ├── syn feature "default" (*)
+│   │   │               │   │           │   │       │   │       └── syn feature "full" (*)
+│   │   │               │   │           │   │       │   └── foreign-types-shared feature "default"
+│   │   │               │   │           │   │       │       └── foreign-types-shared v0.3.1
+│   │   │               │   │           │   │       └── foreign-types feature "std"
+│   │   │               │   │           │   │           ├── foreign-types v0.5.0 (*)
+│   │   │               │   │           │   │           └── foreign-types-macros feature "std"
+│   │   │               │   │           │   │               └── foreign-types-macros v0.2.3 (proc-macro) (*)
+│   │   │               │   │           │   └── core-graphics feature "link"
+│   │   │               │   │           │       ├── core-graphics v0.23.2 (*)
+│   │   │               │   │           │       ├── core-foundation feature "link" (*)
+│   │   │               │   │           │       └── core-graphics-types feature "link"
+│   │   │               │   │           │           ├── core-graphics-types v0.1.3 (*)
+│   │   │               │   │           │           └── core-foundation feature "link" (*)
+│   │   │               │   │           ├── cursor-icon feature "default"
+│   │   │               │   │           │   ├── cursor-icon v1.2.0
+│   │   │               │   │           │   └── cursor-icon feature "std"
+│   │   │               │   │           │       ├── cursor-icon v1.2.0
+│   │   │               │   │           │       └── cursor-icon feature "alloc"
+│   │   │               │   │           │           └── cursor-icon v1.2.0
+│   │   │               │   │           └── smol_str feature "default"
+│   │   │               │   │               ├── smol_str v0.2.2
+│   │   │               │   │               └── smol_str feature "std"
+│   │   │               │   │                   └── smol_str v0.2.2
+│   │   │               │   │           [build-dependencies]
+│   │   │               │   │           └── cfg_aliases feature "default" (*)
+│   │   │               │   │   [build-dependencies]
+│   │   │               │   │   └── cfg_aliases feature "default" (*)
+│   │   │               │   └── glutin feature "egl" (*)
+│   │   │               ├── glutin-winit feature "wayland"
+│   │   │               │   ├── glutin-winit v0.4.2 (*)
+│   │   │               │   ├── glutin feature "wayland" (*)
+│   │   │               │   └── winit feature "wayland"
+│   │   │               │       ├── winit v0.29.15 (*)
+│   │   │               │       ├── winit feature "ahash"
+│   │   │               │       │   └── winit v0.29.15 (*)
+│   │   │               │       ├── winit feature "memmap2"
+│   │   │               │       │   └── winit v0.29.15 (*)
+│   │   │               │       ├── winit feature "sctk"
+│   │   │               │       │   └── winit v0.29.15 (*)
+│   │   │               │       ├── winit feature "wayland-backend"
+│   │   │               │       │   └── winit v0.29.15 (*)
+│   │   │               │       ├── winit feature "wayland-client"
+│   │   │               │       │   └── winit v0.29.15 (*)
+│   │   │               │       ├── winit feature "wayland-protocols"
+│   │   │               │       │   └── winit v0.29.15 (*)
+│   │   │               │       └── winit feature "wayland-protocols-plasma"
+│   │   │               │           └── winit v0.29.15 (*)
+│   │   │               ├── glutin-winit feature "wgl"
+│   │   │               │   ├── glutin-winit v0.4.2 (*)
+│   │   │               │   └── glutin feature "wgl" (*)
+│   │   │               ├── glutin-winit feature "x11"
+│   │   │               │   ├── glutin-winit v0.4.2 (*)
+│   │   │               │   ├── glutin feature "x11" (*)
+│   │   │               │   └── winit feature "x11"
+│   │   │               │       ├── winit v0.29.15 (*)
+│   │   │               │       ├── winit feature "bytemuck"
+│   │   │               │       │   └── winit v0.29.15 (*)
+│   │   │               │       ├── winit feature "percent-encoding"
+│   │   │               │       │   └── winit v0.29.15 (*)
+│   │   │               │       ├── winit feature "x11-dl"
+│   │   │               │       │   └── winit v0.29.15 (*)
+│   │   │               │       └── winit feature "x11rb"
+│   │   │               │           └── winit v0.29.15 (*)
+│   │   │               ├── winit feature "android-native-activity"
+│   │   │               │   └── winit v0.29.15 (*)
+│   │   │               ├── winit feature "default"
+│   │   │               │   ├── winit v0.29.15 (*)
+│   │   │               │   ├── winit feature "rwh_06"
+│   │   │               │   │   └── winit v0.29.15 (*)
+│   │   │               │   ├── winit feature "wayland" (*)
+│   │   │               │   ├── winit feature "wayland-csd-adwaita"
+│   │   │               │   │   ├── winit v0.29.15 (*)
+│   │   │               │   │   └── winit feature "sctk-adwaita"
+│   │   │               │   │       └── winit v0.29.15 (*)
+│   │   │               │   ├── winit feature "wayland-dlopen"
+│   │   │               │   │   └── winit v0.29.15 (*)
+│   │   │               │   └── winit feature "x11" (*)
+│   │   │               └── winit feature "rwh_05" (*)
+│   │   └── wgpu-hal feature "default" (command-line) (*)
+│   │   [build-dependencies]
+│   │   └── cfg_aliases feature "default" (*)
+│   └── wgpu-core feature "std"
+│       └── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+├── wgpu-core feature "dx12"
+│   └── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+├── wgpu-core feature "gles"
+│   └── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+├── wgpu-core feature "metal"
+│   ├── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+│   ├── wgpu-core feature "wgpu-core-deps-apple"
+│   │   └── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+│   └── wgpu-core-deps-apple feature "metal"
+│       ├── wgpu-core-deps-apple v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core/platform-deps/apple) (*)
+│       └── wgpu-hal feature "metal"
+│           ├── wgpu-hal v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-hal) (*)
+│           └── wgpu-shaders feature "msl-out" (*)
+├── wgpu-core feature "replay"
+│   ├── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+│   ├── naga feature "deserialize" (*)
+│   └── wgpu-core feature "serde"
+│       ├── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+│       ├── arrayvec feature "serde"
+│       │   └── arrayvec v0.7.6 (*)
+│       ├── hashbrown feature "serde" (*)
+│       ├── wgpu-core feature "macro_rules_attribute"
+│       │   └── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+│       ├── smallvec feature "serde"
+│       │   └── smallvec v1.15.1 (*)
+│       └── wgpu-types feature "serde"
+│           ├── wgpu-types v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-types) (*)
+│           └── bitflags feature "serde" (*)
+├── wgpu-core feature "strict_asserts"
+│   ├── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+│   └── wgpu-types feature "strict_asserts"
+│       └── wgpu-types v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-types) (*)
+├── wgpu-core feature "vulkan"
+│   └── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+├── wgpu-core feature "wgsl"
+│   ├── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+│   └── naga feature "wgsl-in" (*)
+├── wgpu-types feature "serde" (*)
+└── wgpu-types feature "std" (*)
+[dev-dependencies]
+└── serde v1.0.228 (*)
+
+wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu)
+├── arrayvec v0.7.6 (*)
+├── profiling v1.0.17
+├── wgpu-types v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-types) (*)
+├── bitflags feature "default" (*)
+├── cfg-if feature "default" (*)
+├── log feature "default" (*)
+├── bytemuck feature "default" (*)
+├── bytemuck feature "extern_crate_alloc" (*)
+├── bytemuck feature "min_const_generics" (*)
+├── hashbrown feature "default-hasher" (*)
+├── hashbrown feature "inline-more" (*)
+├── raw-window-handle feature "alloc" (*)
+├── wgpu-core feature "default" (command-line) (*)
+├── wgpu-core feature "portable-atomic"
+│   ├── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+│   └── wgpu-hal feature "portable-atomic"
+│       └── wgpu-hal v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-hal) (*)
+├── wgpu-core feature "renderdoc"
+│   └── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+├── wgpu-core feature "wgsl" (*)
+├── document-features feature "default" (*)
+├── parking_lot feature "default" (*)
+├── smallvec feature "default" (*)
+├── wgpu-hal feature "default" (command-line) (*)
+└── static_assertions feature "default"
+    └── static_assertions v1.1.0
+[build-dependencies]
+└── cfg_aliases feature "default" (*)
+[dev-dependencies]
+├── bytemuck feature "default" (*)
+├── bytemuck feature "extern_crate_alloc" (*)
+└── bytemuck feature "min_const_generics" (*)
+
+wgpu-benchmark v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/benches)
+├── anyhow v1.0.101
+├── profiling v1.0.17
+├── serde feature "derive" (*)
+├── naga feature "default" (command-line) (*)
+├── naga feature "deserialize" (*)
+├── naga feature "glsl-in" (*)
+├── naga feature "glsl-out" (*)
+├── naga feature "hlsl-out" (*)
+├── naga feature "msl-out" (*)
+├── naga feature "serialize" (*)
+├── naga feature "spv-in" (*)
+├── naga feature "spv-out" (*)
+├── naga feature "wgsl-in" (*)
+├── naga feature "wgsl-out" (*)
+├── termcolor feature "default" (*)
+├── bytemuck feature "default" (*)
+├── bytemuck feature "extern_crate_alloc" (*)
+├── bytemuck feature "min_const_generics" (*)
+├── naga-test feature "default" (command-line) (*)
+├── serde_json feature "default" (*)
+├── bincode feature "default" (*)
+├── bincode feature "serde" (*)
+├── pico-args feature "combined-flags" (*)
+├── pico-args feature "default" (*)
+├── pico-args feature "eq-separator" (*)
+├── pico-args feature "short-space-opt" (*)
+├── wgpu feature "angle"
+│   ├── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+│   └── wgpu-core feature "angle"
+│       ├── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+│       ├── wgpu-core feature "wgpu-core-deps-apple" (*)
+│       └── wgpu-core-deps-apple feature "angle"
+│           ├── wgpu-core-deps-apple v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core/platform-deps/apple) (*)
+│           ├── wgpu-hal feature "gles"
+│           │   ├── wgpu-hal v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-hal) (*)
+│           │   ├── wgpu-shaders feature "glsl-out" (*)
+│           │   └── wgpu-types feature "web"
+│           │       └── wgpu-types v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-types) (*)
+│           └── wgpu-hal feature "renderdoc"
+│               └── wgpu-hal v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-hal) (*)
+├── wgpu feature "dx12"
+│   ├── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+│   └── wgpu-core feature "dx12" (*)
+├── wgpu feature "gles"
+│   ├── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+│   └── wgpu-core feature "gles" (*)
+├── wgpu feature "metal"
+│   ├── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+│   └── wgpu-core feature "metal" (*)
+├── wgpu feature "noop"
+│   ├── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+│   ├── wgpu-core feature "noop"
+│   │   └── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+│   └── wgpu feature "wgpu-core"
+│       └── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+├── wgpu feature "serde"
+│   ├── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+│   ├── wgpu-core feature "serde" (*)
+│   └── wgpu-types feature "serde" (*)
+├── wgpu feature "static-dxc"
+│   ├── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+│   └── wgpu-core feature "static-dxc"
+│       ├── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+│       └── wgpu-hal feature "static-dxc"
+│           ├── wgpu-hal v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-hal) (*)
+│           └── wgpu-shaders feature "static-dxc" (*)
+├── wgpu feature "std"
+│   ├── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+│   ├── raw-window-handle feature "std" (*)
+│   ├── wgpu-core feature "std" (*)
+│   └── wgpu-types feature "std" (*)
+├── wgpu feature "vulkan"
+│   ├── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+│   └── wgpu-core feature "vulkan" (*)
+├── wgpu feature "vulkan-portability"
+│   ├── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+│   └── wgpu-core feature "vulkan-portability"
+│       ├── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+│       ├── wgpu-core feature "wgpu-core-deps-apple" (*)
+│       └── wgpu-core-deps-apple feature "vulkan-portability"
+│           ├── wgpu-core-deps-apple v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core/platform-deps/apple) (*)
+│           ├── wgpu-hal feature "renderdoc" (*)
+│           └── wgpu-hal feature "vulkan"
+│               ├── wgpu-hal v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-hal) (*)
+│               ├── wgpu-hal feature "gpu-allocator"
+│               │   └── wgpu-hal v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-hal) (*)
+│               ├── gpu-allocator feature "vulkan"
+│               │   └── gpu-allocator v0.28.0 (*)
+│               └── wgpu-shaders feature "spv-out" (*)
+├── wgpu feature "wgsl"
+│   ├── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+│   └── wgpu-core feature "wgsl" (*)
+├── nanorand feature "wyrand"
+│   └── nanorand v0.8.0
+│       └── getrandom feature "default"
+│           └── getrandom v0.3.4
+│               ├── libc v0.2.182
+│               └── cfg-if feature "default" (*)
+├── pollster feature "default"
+│   └── pollster v0.4.0
+│       └── pollster-macro feature "default"
+│           └── pollster-macro v0.4.0 (proc-macro)
+│               ├── quote v1.0.44 (*)
+│               ├── proc-macro2 feature "default" (*)
+│               ├── syn feature "full" (*)
+│               ├── syn feature "parsing" (*)
+│               └── syn feature "printing" (*)
+└── rayon feature "default"
+    └── rayon v1.11.0
+        ├── either v1.15.0
+        └── rayon-core feature "default"
+            └── rayon-core v1.13.0
+                ├── crossbeam-deque feature "default"
+                │   ├── crossbeam-deque v0.8.6
+                │   │   ├── crossbeam-epoch v0.9.18
+                │   │   │   └── crossbeam-utils v0.8.21
+                │   │   └── crossbeam-utils v0.8.21
+                │   └── crossbeam-deque feature "std"
+                │       ├── crossbeam-deque v0.8.6 (*)
+                │       ├── crossbeam-epoch feature "std"
+                │       │   ├── crossbeam-epoch v0.9.18 (*)
+                │       │   ├── crossbeam-epoch feature "alloc"
+                │       │   │   └── crossbeam-epoch v0.9.18 (*)
+                │       │   └── crossbeam-utils feature "std"
+                │       │       └── crossbeam-utils v0.8.21
+                │       └── crossbeam-utils feature "std" (*)
+                └── crossbeam-utils feature "default"
+                    ├── crossbeam-utils v0.8.21
+                    └── crossbeam-utils feature "std" (*)
+
+wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+
+wgpu-core-deps-apple v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core/platform-deps/apple) (*)
+
+wgpu-core-deps-emscripten v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core/platform-deps/emscripten)
+
+wgpu-core-deps-wasm v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core/platform-deps/wasm)
+
+wgpu-core-deps-windows-linux-android v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core/platform-deps/windows-linux-android)
+
+wgpu-example-01-hello-compute v0.0.0 (/Users/supamaggie70/code/workspaces/wgpu/examples/standalone/01_hello_compute)
+├── env_logger feature "default"
+│   ├── env_logger v0.11.9 (*)
+│   ├── env_logger feature "auto-color"
+│   │   ├── env_logger v0.11.9 (*)
+│   │   ├── env_logger feature "anstream"
+│   │   │   └── env_logger v0.11.9 (*)
+│   │   ├── env_logger feature "color"
+│   │   │   └── env_logger v0.11.9 (*)
+│   │   └── anstream feature "auto"
+│   │       └── anstream v0.6.21 (*)
+│   ├── env_logger feature "humantime"
+│   │   └── env_logger v0.11.9 (*)
+│   └── env_logger feature "regex"
+│       ├── env_logger v0.11.9 (*)
+│       └── env_filter feature "regex"
+│           └── env_filter v1.0.0 (*)
+├── bytemuck feature "default" (*)
+├── wgpu feature "default" (command-line)
+│   ├── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+│   ├── wgpu feature "dx12" (*)
+│   ├── wgpu feature "gles" (*)
+│   ├── wgpu feature "metal" (*)
+│   ├── wgpu feature "parking_lot"
+│   │   └── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+│   ├── wgpu feature "std" (*)
+│   ├── wgpu feature "vulkan" (*)
+│   ├── wgpu feature "webgpu"
+│   │   ├── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+│   │   └── wgpu feature "web"
+│   │       ├── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+│   │       └── wgpu-types feature "web" (*)
+│   └── wgpu feature "wgsl" (*)
+└── pollster feature "default" (*)
+
+wgpu-example-02-hello-window v0.0.0 (/Users/supamaggie70/code/workspaces/wgpu/examples/standalone/02_hello_window)
+├── env_logger feature "default" (*)
+├── wgpu feature "default" (command-line) (*)
+├── pollster feature "default" (*)
+├── winit feature "android-native-activity"
+│   └── winit v0.30.12
+│       ├── tracing v0.1.44
+│       │   ├── tracing-core v0.1.36
+│       │   └── pin-project-lite feature "default"
+│       │       └── pin-project-lite v0.2.16
+│       ├── bitflags feature "default" (*)
+│       ├── raw-window-handle feature "default" (*)
+│       ├── raw-window-handle feature "std" (*)
+│       ├── core-foundation feature "default" (*)
+│       ├── core-graphics feature "default" (*)
+│       ├── cursor-icon feature "default" (*)
+│       ├── smol_str feature "default" (*)
+│       ├── block2 feature "default"
+│       │   ├── block2 v0.5.1
+│       │   │   └── objc2 v0.5.2
+│       │   │       ├── objc-sys v0.3.5
+│       │   │       └── objc2-encode v4.1.0
+│       │   └── block2 feature "std"
+│       │       ├── block2 v0.5.1 (*)
+│       │       ├── block2 feature "alloc"
+│       │       │   ├── block2 v0.5.1 (*)
+│       │       │   └── objc2 feature "alloc"
+│       │       │       ├── objc2 v0.5.2 (*)
+│       │       │       ├── objc2-encode feature "alloc" (*)
+│       │       │       └── objc-sys feature "alloc" (*)
+│       │       └── objc2 feature "std"
+│       │           ├── objc2 v0.5.2 (*)
+│       │           ├── objc2-encode feature "std" (*)
+│       │           ├── objc-sys feature "std" (*)
+│       │           └── objc2 feature "alloc" (*)
+│       ├── objc2 feature "default"
+│       │   ├── objc2 v0.5.2 (*)
+│       │   └── objc2 feature "std" (*)
+│       ├── objc2 feature "relax-sign-encoding"
+│       │   └── objc2 v0.5.2 (*)
+│       ├── dpi feature "default"
+│       │   ├── dpi v0.1.2
+│       │   └── dpi feature "std"
+│       │       └── dpi v0.1.2
+│       ├── objc2-app-kit feature "NSAppearance"
+│       │   ├── objc2-app-kit v0.2.2
+│       │   │   ├── bitflags v2.11.0 (*)
+│       │   │   ├── objc2 v0.5.2 (*)
+│       │   │   └── objc2-foundation v0.2.2
+│       │   │       ├── bitflags v2.11.0 (*)
+│       │   │       ├── block2 v0.5.1 (*)
+│       │   │       ├── objc2 v0.5.2 (*)
+│       │   │       └── dispatch feature "default" (*)
+│       │   ├── objc2-foundation feature "NSArray"
+│       │   │   ├── objc2-foundation v0.2.2 (*)
+│       │   │   └── objc2-foundation feature "bitflags"
+│       │   │       └── objc2-foundation v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSBundle"
+│       │   │   └── objc2-foundation v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSCoder"
+│       │   │   └── objc2-foundation v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSObject"
+│       │   │   └── objc2-foundation v0.2.2 (*)
+│       │   └── objc2-foundation feature "NSString"
+│       │       ├── objc2-foundation v0.2.2 (*)
+│       │       └── objc2-foundation feature "bitflags" (*)
+│       ├── objc2-app-kit feature "NSApplication"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-app-kit feature "bitflags"
+│       │   │   ├── objc2-app-kit v0.2.2 (*)
+│       │   │   └── objc2-foundation feature "bitflags" (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSCoder" (*)
+│       │   ├── objc2-foundation feature "NSData"
+│       │   │   ├── objc2-foundation v0.2.2 (*)
+│       │   │   └── objc2-foundation feature "bitflags" (*)
+│       │   ├── objc2-foundation feature "NSDate"
+│       │   │   └── objc2-foundation v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSDictionary"
+│       │   │   └── objc2-foundation v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSError"
+│       │   │   └── objc2-foundation v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSException"
+│       │   │   └── objc2-foundation v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSNotification"
+│       │   │   └── objc2-foundation v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSObjCRuntime"
+│       │   │   ├── objc2-foundation v0.2.2 (*)
+│       │   │   └── objc2-foundation feature "bitflags" (*)
+│       │   ├── objc2-foundation feature "NSObject" (*)
+│       │   ├── objc2-foundation feature "NSString" (*)
+│       │   ├── objc2-foundation feature "NSURL"
+│       │   │   ├── objc2-foundation v0.2.2 (*)
+│       │   │   └── objc2-foundation feature "bitflags" (*)
+│       │   └── objc2-foundation feature "NSUserActivity"
+│       │       └── objc2-foundation v0.2.2 (*)
+│       ├── objc2-app-kit feature "NSBitmapImageRep"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-app-kit feature "bitflags" (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSCoder" (*)
+│       │   ├── objc2-foundation feature "NSData" (*)
+│       │   ├── objc2-foundation feature "NSDictionary" (*)
+│       │   ├── objc2-foundation feature "NSGeometry"
+│       │   │   ├── objc2-foundation v0.2.2 (*)
+│       │   │   └── objc2-foundation feature "bitflags" (*)
+│       │   ├── objc2-foundation feature "NSObject" (*)
+│       │   └── objc2-foundation feature "NSString" (*)
+│       ├── objc2-app-kit feature "NSButton"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSAttributedString"
+│       │   │   ├── objc2-foundation v0.2.2 (*)
+│       │   │   └── objc2-foundation feature "bitflags" (*)
+│       │   ├── objc2-foundation feature "NSCoder" (*)
+│       │   ├── objc2-foundation feature "NSGeometry" (*)
+│       │   ├── objc2-foundation feature "NSObject" (*)
+│       │   └── objc2-foundation feature "NSString" (*)
+│       ├── objc2-app-kit feature "NSColor"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSBundle" (*)
+│       │   ├── objc2-foundation feature "NSCoder" (*)
+│       │   ├── objc2-foundation feature "NSDictionary" (*)
+│       │   ├── objc2-foundation feature "NSGeometry" (*)
+│       │   ├── objc2-foundation feature "NSNotification" (*)
+│       │   ├── objc2-foundation feature "NSObject" (*)
+│       │   └── objc2-foundation feature "NSString" (*)
+│       ├── objc2-app-kit feature "NSControl"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSAttributedString" (*)
+│       │   ├── objc2-foundation feature "NSCoder" (*)
+│       │   ├── objc2-foundation feature "NSFormatter"
+│       │   │   └── objc2-foundation v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSGeometry" (*)
+│       │   ├── objc2-foundation feature "NSNotification" (*)
+│       │   ├── objc2-foundation feature "NSObject" (*)
+│       │   ├── objc2-foundation feature "NSRange"
+│       │   │   └── objc2-foundation v0.2.2 (*)
+│       │   └── objc2-foundation feature "NSString" (*)
+│       ├── objc2-app-kit feature "NSCursor"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSCoder" (*)
+│       │   ├── objc2-foundation feature "NSGeometry" (*)
+│       │   └── objc2-foundation feature "NSObject" (*)
+│       ├── objc2-app-kit feature "NSDragging"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-app-kit feature "bitflags" (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSDictionary" (*)
+│       │   ├── objc2-foundation feature "NSGeometry" (*)
+│       │   ├── objc2-foundation feature "NSObjCRuntime" (*)
+│       │   ├── objc2-foundation feature "NSString" (*)
+│       │   └── objc2-foundation feature "NSURL" (*)
+│       ├── objc2-app-kit feature "NSEvent"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-app-kit feature "bitflags" (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSDate" (*)
+│       │   ├── objc2-foundation feature "NSGeometry" (*)
+│       │   ├── objc2-foundation feature "NSObject" (*)
+│       │   ├── objc2-foundation feature "NSSet"
+│       │   │   └── objc2-foundation v0.2.2 (*)
+│       │   └── objc2-foundation feature "NSString" (*)
+│       ├── objc2-app-kit feature "NSGraphics"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSGeometry" (*)
+│       │   └── objc2-foundation feature "NSString" (*)
+│       ├── objc2-app-kit feature "NSGraphicsContext"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSDictionary" (*)
+│       │   ├── objc2-foundation feature "NSGeometry" (*)
+│       │   └── objc2-foundation feature "NSString" (*)
+│       ├── objc2-app-kit feature "NSImage"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSBundle" (*)
+│       │   ├── objc2-foundation feature "NSCoder" (*)
+│       │   ├── objc2-foundation feature "NSData" (*)
+│       │   ├── objc2-foundation feature "NSDictionary" (*)
+│       │   ├── objc2-foundation feature "NSGeometry" (*)
+│       │   ├── objc2-foundation feature "NSItemProvider"
+│       │   │   ├── objc2-foundation v0.2.2 (*)
+│       │   │   └── objc2-foundation feature "bitflags" (*)
+│       │   ├── objc2-foundation feature "NSLocale"
+│       │   │   └── objc2-foundation v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSObject" (*)
+│       │   ├── objc2-foundation feature "NSString" (*)
+│       │   └── objc2-foundation feature "NSURL" (*)
+│       ├── objc2-app-kit feature "NSImageRep"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSCoder" (*)
+│       │   ├── objc2-foundation feature "NSData" (*)
+│       │   ├── objc2-foundation feature "NSDictionary" (*)
+│       │   ├── objc2-foundation feature "NSGeometry" (*)
+│       │   ├── objc2-foundation feature "NSNotification" (*)
+│       │   ├── objc2-foundation feature "NSObject" (*)
+│       │   ├── objc2-foundation feature "NSString" (*)
+│       │   └── objc2-foundation feature "NSURL" (*)
+│       ├── objc2-app-kit feature "NSMenu"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-app-kit feature "bitflags" (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSCoder" (*)
+│       │   ├── objc2-foundation feature "NSGeometry" (*)
+│       │   ├── objc2-foundation feature "NSNotification" (*)
+│       │   ├── objc2-foundation feature "NSObject" (*)
+│       │   ├── objc2-foundation feature "NSString" (*)
+│       │   └── objc2-foundation feature "NSZone"
+│       │       └── objc2-foundation v0.2.2 (*)
+│       ├── objc2-app-kit feature "NSMenuItem"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSAttributedString" (*)
+│       │   ├── objc2-foundation feature "NSCoder" (*)
+│       │   ├── objc2-foundation feature "NSObject" (*)
+│       │   └── objc2-foundation feature "NSString" (*)
+│       ├── objc2-app-kit feature "NSOpenGLView"
+│       │   └── objc2-app-kit v0.2.2 (*)
+│       ├── objc2-app-kit feature "NSPasteboard"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-app-kit feature "bitflags" (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSData" (*)
+│       │   ├── objc2-foundation feature "NSDictionary" (*)
+│       │   ├── objc2-foundation feature "NSFileWrapper"
+│       │   │   ├── objc2-foundation v0.2.2 (*)
+│       │   │   └── objc2-foundation feature "bitflags" (*)
+│       │   ├── objc2-foundation feature "NSString" (*)
+│       │   └── objc2-foundation feature "NSURL" (*)
+│       ├── objc2-app-kit feature "NSResponder"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSCoder" (*)
+│       │   ├── objc2-foundation feature "NSError" (*)
+│       │   ├── objc2-foundation feature "NSObject" (*)
+│       │   ├── objc2-foundation feature "NSString" (*)
+│       │   └── objc2-foundation feature "NSUndoManager"
+│       │       └── objc2-foundation v0.2.2 (*)
+│       ├── objc2-app-kit feature "NSRunningApplication"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-app-kit feature "bitflags" (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSDate" (*)
+│       │   ├── objc2-foundation feature "NSString" (*)
+│       │   └── objc2-foundation feature "NSURL" (*)
+│       ├── objc2-app-kit feature "NSScreen"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSDate" (*)
+│       │   ├── objc2-foundation feature "NSDictionary" (*)
+│       │   ├── objc2-foundation feature "NSGeometry" (*)
+│       │   ├── objc2-foundation feature "NSNotification" (*)
+│       │   └── objc2-foundation feature "NSString" (*)
+│       ├── objc2-app-kit feature "NSTextInputClient"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSAttributedString" (*)
+│       │   ├── objc2-foundation feature "NSGeometry" (*)
+│       │   ├── objc2-foundation feature "NSRange" (*)
+│       │   └── objc2-foundation feature "NSString" (*)
+│       ├── objc2-app-kit feature "NSTextInputContext"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSNotification" (*)
+│       │   └── objc2-foundation feature "NSString" (*)
+│       ├── objc2-app-kit feature "NSView"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-app-kit feature "bitflags" (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSAttributedString" (*)
+│       │   ├── objc2-foundation feature "NSCoder" (*)
+│       │   ├── objc2-foundation feature "NSData" (*)
+│       │   ├── objc2-foundation feature "NSDictionary" (*)
+│       │   ├── objc2-foundation feature "NSGeometry" (*)
+│       │   ├── objc2-foundation feature "NSNotification" (*)
+│       │   ├── objc2-foundation feature "NSObjCRuntime" (*)
+│       │   ├── objc2-foundation feature "NSObject" (*)
+│       │   ├── objc2-foundation feature "NSRange" (*)
+│       │   └── objc2-foundation feature "NSString" (*)
+│       ├── objc2-app-kit feature "NSWindow"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-app-kit feature "bitflags" (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   ├── objc2-foundation feature "NSCoder" (*)
+│       │   ├── objc2-foundation feature "NSData" (*)
+│       │   ├── objc2-foundation feature "NSDate" (*)
+│       │   ├── objc2-foundation feature "NSDictionary" (*)
+│       │   ├── objc2-foundation feature "NSError" (*)
+│       │   ├── objc2-foundation feature "NSGeometry" (*)
+│       │   ├── objc2-foundation feature "NSNotification" (*)
+│       │   ├── objc2-foundation feature "NSObjCRuntime" (*)
+│       │   ├── objc2-foundation feature "NSObject" (*)
+│       │   ├── objc2-foundation feature "NSString" (*)
+│       │   ├── objc2-foundation feature "NSURL" (*)
+│       │   ├── objc2-foundation feature "NSUndoManager" (*)
+│       │   └── objc2-foundation feature "NSValue"
+│       │       └── objc2-foundation v0.2.2 (*)
+│       ├── objc2-app-kit feature "NSWindowScripting"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSScriptCommand"
+│       │   │   └── objc2-foundation v0.2.2 (*)
+│       │   └── objc2-foundation feature "NSScriptStandardSuiteCommands"
+│       │       └── objc2-foundation v0.2.2 (*)
+│       ├── objc2-app-kit feature "NSWindowTabGroup"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   ├── objc2-foundation feature "NSArray" (*)
+│       │   └── objc2-foundation feature "NSString" (*)
+│       ├── objc2-app-kit feature "default"
+│       │   ├── objc2-app-kit v0.2.2 (*)
+│       │   └── objc2-app-kit feature "std"
+│       │       ├── objc2-app-kit v0.2.2 (*)
+│       │       ├── bitflags feature "std" (*)
+│       │       ├── objc2 feature "std" (*)
+│       │       ├── objc2-app-kit feature "alloc"
+│       │       │   ├── objc2-app-kit v0.2.2 (*)
+│       │       │   ├── objc2 feature "alloc" (*)
+│       │       │   └── objc2-foundation feature "alloc"
+│       │       │       ├── objc2-foundation v0.2.2 (*)
+│       │       │       ├── block2 feature "alloc" (*)
+│       │       │       └── objc2 feature "alloc" (*)
+│       │       └── objc2-foundation feature "std"
+│       │           ├── objc2-foundation v0.2.2 (*)
+│       │           ├── bitflags feature "std" (*)
+│       │           ├── block2 feature "std" (*)
+│       │           ├── objc2 feature "std" (*)
+│       │           └── objc2-foundation feature "alloc" (*)
+│       ├── objc2-foundation feature "NSArray" (*)
+│       ├── objc2-foundation feature "NSAttributedString" (*)
+│       ├── objc2-foundation feature "NSData" (*)
+│       ├── objc2-foundation feature "NSDictionary" (*)
+│       ├── objc2-foundation feature "NSDistributedNotificationCenter"
+│       │   ├── objc2-foundation v0.2.2 (*)
+│       │   └── objc2-foundation feature "bitflags" (*)
+│       ├── objc2-foundation feature "NSEnumerator"
+│       │   └── objc2-foundation v0.2.2 (*)
+│       ├── objc2-foundation feature "NSKeyValueObserving"
+│       │   ├── objc2-foundation v0.2.2 (*)
+│       │   └── objc2-foundation feature "bitflags" (*)
+│       ├── objc2-foundation feature "NSNotification" (*)
+│       ├── objc2-foundation feature "NSObjCRuntime" (*)
+│       ├── objc2-foundation feature "NSPathUtilities"
+│       │   ├── objc2-foundation v0.2.2 (*)
+│       │   └── objc2-foundation feature "bitflags" (*)
+│       ├── objc2-foundation feature "NSProcessInfo"
+│       │   ├── objc2-foundation v0.2.2 (*)
+│       │   └── objc2-foundation feature "bitflags" (*)
+│       ├── objc2-foundation feature "NSRunLoop"
+│       │   └── objc2-foundation v0.2.2 (*)
+│       ├── objc2-foundation feature "NSString" (*)
+│       ├── objc2-foundation feature "NSThread"
+│       │   └── objc2-foundation v0.2.2 (*)
+│       ├── objc2-foundation feature "NSValue" (*)
+│       ├── objc2-foundation feature "block2"
+│       │   └── objc2-foundation v0.2.2 (*)
+│       ├── objc2-foundation feature "default"
+│       │   ├── objc2-foundation v0.2.2 (*)
+│       │   └── objc2-foundation feature "std" (*)
+│       └── objc2-foundation feature "dispatch"
+│           └── objc2-foundation v0.2.2 (*)
+│       [build-dependencies]
+│       └── cfg_aliases feature "default" (*)
+└── winit feature "default"
+    ├── winit v0.30.12 (*)
+    ├── winit feature "rwh_06"
+    │   └── winit v0.30.12 (*)
+    ├── winit feature "wayland"
+    │   ├── winit v0.30.12 (*)
+    │   ├── winit feature "ahash"
+    │   │   └── winit v0.30.12 (*)
+    │   ├── winit feature "memmap2"
+    │   │   └── winit v0.30.12 (*)
+    │   ├── winit feature "sctk"
+    │   │   └── winit v0.30.12 (*)
+    │   ├── winit feature "wayland-backend"
+    │   │   └── winit v0.30.12 (*)
+    │   ├── winit feature "wayland-client"
+    │   │   └── winit v0.30.12 (*)
+    │   ├── winit feature "wayland-protocols"
+    │   │   └── winit v0.30.12 (*)
+    │   └── winit feature "wayland-protocols-plasma"
+    │       └── winit v0.30.12 (*)
+    ├── winit feature "wayland-csd-adwaita"
+    │   ├── winit v0.30.12 (*)
+    │   └── winit feature "sctk-adwaita"
+    │       └── winit v0.30.12 (*)
+    ├── winit feature "wayland-dlopen"
+    │   └── winit v0.30.12 (*)
+    └── winit feature "x11"
+        ├── winit v0.30.12 (*)
+        ├── winit feature "bytemuck"
+        │   └── winit v0.30.12 (*)
+        ├── winit feature "percent-encoding"
+        │   └── winit v0.30.12 (*)
+        ├── winit feature "x11-dl"
+        │   └── winit v0.30.12 (*)
+        └── winit feature "x11rb"
+            └── winit v0.30.12 (*)
+
+wgpu-example-custom-backend v0.0.0 (/Users/supamaggie70/code/workspaces/wgpu/examples/standalone/custom_backend)
+├── wgpu feature "custom"
+│   └── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+├── wgpu feature "wgsl" (*)
+├── pollster feature "default" (*)
+└── pollster feature "macro"
+    ├── pollster v0.4.0 (*)
+    └── pollster feature "pollster-macro"
+        └── pollster v0.4.0 (*)
+
+wgpu-examples v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/examples/features)
+├── env_logger v0.11.9 (*)
+├── cfg-if feature "default" (*)
+├── log feature "default" (*)
+├── half feature "bytemuck"
+│   └── half v2.7.1 (*)
+├── bytemuck feature "default" (*)
+├── bytemuck feature "extern_crate_alloc" (*)
+├── bytemuck feature "min_const_generics" (*)
+├── glam feature "bytemuck"
+│   └── glam v0.32.0 (*)
+├── glam feature "default" (*)
+├── glam feature "encase"
+│   └── glam v0.32.0 (*)
+├── encase feature "default"
+│   └── encase v0.12.0 (*)
+├── winit feature "android-native-activity" (*)
+├── winit feature "default" (*)
+├── wgpu feature "angle" (*)
+├── wgpu feature "dx12" (*)
+├── wgpu feature "gles" (*)
+├── wgpu feature "metal" (*)
+├── wgpu feature "noop" (*)
+├── wgpu feature "serde" (*)
+├── wgpu feature "static-dxc" (*)
+├── wgpu feature "std" (*)
+├── wgpu feature "trace"
+│   ├── wgpu v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu) (*)
+│   ├── wgpu-core feature "trace"
+│   │   ├── wgpu-core v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-core) (*)
+│   │   ├── naga feature "serialize" (*)
+│   │   ├── wgpu-core feature "serde" (*)
+│   │   ├── wgpu-core feature "std" (*)
+│   │   └── wgpu-types feature "trace"
+│   │       ├── wgpu-types v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-types) (*)
+│   │       └── wgpu-types feature "std" (*)
+│   └── wgpu feature "serde" (*)
+├── wgpu feature "vulkan" (*)
+├── wgpu feature "vulkan-portability" (*)
+├── wgpu feature "wgsl" (*)
+├── nanorand feature "getrandom"
+│   └── nanorand v0.8.0 (*)
+├── nanorand feature "wyrand" (*)
+├── pollster feature "default" (*)
+├── flume feature "default"
+│   ├── flume v0.12.0
+│   │   ├── futures-core v0.3.32
+│   │   ├── futures-sink v0.3.32
+│   │   ├── fastrand feature "default"
+│   │   │   ├── fastrand v2.3.0
+│   │   │   └── fastrand feature "std"
+│   │   │       ├── fastrand v2.3.0
+│   │   │       └── fastrand feature "alloc"
+│   │   │           └── fastrand v2.3.0
+│   │   ├── fastrand feature "js"
+│   │   │   ├── fastrand v2.3.0
+│   │   │   ├── fastrand feature "getrandom"
+│   │   │   │   └── fastrand v2.3.0
+│   │   │   └── fastrand feature "std" (*)
+│   │   ├── fastrand feature "std" (*)
+│   │   ├── spin feature "default"
+│   │   │   ├── spin v0.9.8
+│   │   │   │   └── lock_api feature "default" (*)
+│   │   │   ├── spin feature "barrier"
+│   │   │   │   ├── spin v0.9.8 (*)
+│   │   │   │   └── spin feature "mutex"
+│   │   │   │       └── spin v0.9.8 (*)
+│   │   │   ├── spin feature "lazy"
+│   │   │   │   ├── spin v0.9.8 (*)
+│   │   │   │   └── spin feature "once"
+│   │   │   │       └── spin v0.9.8 (*)
+│   │   │   ├── spin feature "lock_api"
+│   │   │   │   ├── spin v0.9.8 (*)
+│   │   │   │   └── spin feature "lock_api_crate"
+│   │   │   │       └── spin v0.9.8 (*)
+│   │   │   ├── spin feature "mutex" (*)
+│   │   │   ├── spin feature "once" (*)
+│   │   │   ├── spin feature "rwlock"
+│   │   │   │   └── spin v0.9.8 (*)
+│   │   │   └── spin feature "spin_mutex"
+│   │   │       ├── spin v0.9.8 (*)
+│   │   │       └── spin feature "mutex" (*)
+│   │   └── spin feature "mutex" (*)
+│   ├── flume feature "async"
+│   │   ├── flume v0.12.0 (*)
+│   │   ├── flume feature "futures-core"
+│   │   │   └── flume v0.12.0 (*)
+│   │   └── flume feature "futures-sink"
+│   │       └── flume v0.12.0 (*)
+│   ├── flume feature "eventual-fairness"
+│   │   ├── flume v0.12.0 (*)
+│   │   ├── flume feature "fastrand"
+│   │   │   └── flume v0.12.0 (*)
+│   │   └── flume feature "select"
+│   │       └── flume v0.12.0 (*)
+│   └── flume feature "select" (*)
+├── ktx2 feature "default"
+│   ├── ktx2 v0.4.0
+│   │   └── bitflags feature "default" (*)
+│   └── ktx2 feature "std"
+│       └── ktx2 v0.4.0 (*)
+├── noise feature "default"
+│   └── noise v0.9.0
+│       ├── rand v0.8.5
+│       │   └── rand_core feature "default"
+│       │       └── rand_core v0.6.4
+│       ├── num-traits feature "default"
+│       │   ├── num-traits v0.2.19 (*)
+│       │   └── num-traits feature "std"
+│       │       └── num-traits v0.2.19 (*)
+│       └── rand_xorshift feature "default"
+│           └── rand_xorshift v0.3.0
+│               └── rand_core feature "default" (*)
+├── obj feature "default"
+│   └── obj v0.10.2
+├── png feature "default"
+│   └── png v0.18.1
+│       ├── bitflags feature "default" (*)
+│       ├── miniz_oxide feature "default"
+│       │   ├── miniz_oxide v0.8.9 (*)
+│       │   └── miniz_oxide feature "with-alloc"
+│       │       └── miniz_oxide v0.8.9 (*)
+│       ├── miniz_oxide feature "simd"
+│       │   ├── miniz_oxide v0.8.9 (*)
+│       │   └── miniz_oxide feature "simd-adler32"
+│       │       └── miniz_oxide v0.8.9 (*)
+│       ├── crc32fast feature "default"
+│       │   ├── crc32fast v1.5.0
+│       │   │   └── cfg-if feature "default" (*)
+│       │   └── crc32fast feature "std"
+│       │       └── crc32fast v1.5.0 (*)
+│       ├── fdeflate feature "default"
+│       │   └── fdeflate v0.3.7
+│       │       └── simd-adler32 feature "default"
+│       │           ├── simd-adler32 v0.3.8
+│       │           ├── simd-adler32 feature "const-generics"
+│       │           │   └── simd-adler32 v0.3.8
+│       │           └── simd-adler32 feature "std"
+│       │               └── simd-adler32 v0.3.8
+│       └── flate2 feature "default"
+│           ├── flate2 v1.1.9
+│           │   ├── miniz_oxide feature "simd" (*)
+│           │   ├── miniz_oxide feature "with-alloc" (*)
+│           │   └── crc32fast feature "default" (*)
+│           └── flate2 feature "rust_backend"
+│               ├── flate2 v1.1.9 (*)
+│               ├── flate2 feature "any_impl"
+│               │   └── flate2 v1.1.9 (*)
+│               └── flate2 feature "miniz_oxide"
+│                   ├── flate2 v1.1.9 (*)
+│                   └── flate2 feature "any_impl" (*)
+└── web-time feature "default"
+    └── web-time v1.1.0
+[dev-dependencies]
+└── wgpu-test feature "default" (command-line)
+    └── wgpu-test v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/tests)
+        ├── anyhow v1.0.101
+        ├── arrayvec v0.7.6 (*)
+        ├── env_logger v0.11.9 (*)
+        ├── profiling v1.0.17
+        ├── serde v1.0.228 (*)
+        ├── wgpu-types v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-types) (*)
+        ├── bitflags feature "default" (*)
+        ├── cfg-if feature "default" (*)
+        ├── log feature "default" (*)
+        ├── bytemuck feature "default" (*)
+        ├── bytemuck feature "extern_crate_alloc" (*)
+        ├── bytemuck feature "min_const_generics" (*)
+        ├── serde_json feature "default" (*)
+        ├── wgpu-core feature "default" (command-line) (*)
+        ├── wgpu-core feature "trace" (*)
+        ├── parking_lot feature "deadlock_detection"
+        │   ├── parking_lot v0.12.5 (*)
+        │   └── parking_lot_core feature "deadlock_detection"
+        │       ├── parking_lot_core v0.9.12 (*)
+        │       ├── parking_lot_core feature "backtrace"
+        │       │   └── parking_lot_core v0.9.12 (*)
+        │       └── parking_lot_core feature "petgraph"
+        │           └── parking_lot_core v0.9.12 (*)
+        ├── parking_lot feature "default" (*)
+        ├── wgpu-hal feature "default" (command-line) (*)
+        ├── wgpu-hal feature "validation_canary"
+        │   └── wgpu-hal v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-hal) (*)
+        ├── wgpu feature "angle" (*)
+        ├── wgpu feature "dx12" (*)
+        ├── wgpu feature "gles" (*)
+        ├── wgpu feature "metal" (*)
+        ├── wgpu feature "noop" (*)
+        ├── wgpu feature "serde" (*)
+        ├── wgpu feature "static-dxc" (*)
+        ├── wgpu feature "std" (*)
+        ├── wgpu feature "vulkan" (*)
+        ├── wgpu feature "vulkan-portability" (*)
+        ├── wgpu feature "wgsl" (*)
+        ├── pollster feature "default" (*)
+        ├── png feature "default" (*)
+        ├── cargo_metadata feature "default"
+        │   └── cargo_metadata v0.23.1
+        │       ├── serde feature "default" (*)
+        │       ├── serde feature "derive" (*)
+        │       ├── serde_json feature "default" (*)
+        │       ├── serde_json feature "unbounded_depth"
+        │       │   └── serde_json v1.0.149 (*)
+        │       ├── thiserror feature "default"
+        │       │   ├── thiserror v2.0.18 (*)
+        │       │   └── thiserror feature "std"
+        │       │       └── thiserror v2.0.18 (*)
+        │       ├── camino feature "default"
+        │       │   └── camino v1.2.2
+        │       │       └── serde_core feature "default"
+        │       │           ├── serde_core v1.0.228
+        │       │           ├── serde_core feature "result" (*)
+        │       │           └── serde_core feature "std" (*)
+        │       ├── camino feature "serde1"
+        │       │   └── camino v1.2.2 (*)
+        │       ├── cargo-platform feature "default"
+        │       │   └── cargo-platform v0.3.2
+        │       │       └── serde_core feature "default" (*)
+        │       ├── semver feature "default"
+        │       │   ├── semver v1.0.27
+        │       │   │   └── serde_core v1.0.228
+        │       │   └── semver feature "std"
+        │       │       └── semver v1.0.27 (*)
+        │       └── semver feature "serde"
+        │           └── semver v1.0.27 (*)
+        ├── ctor feature "default"
+        │   ├── ctor v0.6.3
+        │   │   ├── dtor v0.1.1
+        │   │   │   └── dtor-proc-macro feature "default"
+        │   │   │       └── dtor-proc-macro v0.0.6 (proc-macro)
+        │   │   └── ctor-proc-macro feature "default"
+        │   │       └── ctor-proc-macro v0.0.7 (proc-macro)
+        │   ├── ctor feature "__no_warn_on_missing_unsafe"
+        │   │   ├── ctor v0.6.3 (*)
+        │   │   └── dtor feature "__no_warn_on_missing_unsafe"
+        │   │       └── dtor v0.1.1 (*)
+        │   ├── ctor feature "dtor"
+        │   │   └── ctor v0.6.3 (*)
+        │   └── ctor feature "proc_macro"
+        │       ├── ctor v0.6.3 (*)
+        │       └── dtor feature "proc_macro"
+        │           └── dtor v0.1.1 (*)
+        ├── futures-lite feature "default"
+        │   ├── futures-lite v2.6.1
+        │   │   ├── fastrand v2.3.0
+        │   │   ├── futures-core v0.3.32
+        │   │   ├── pin-project-lite feature "default" (*)
+        │   │   ├── futures-io feature "default"
+        │   │   │   ├── futures-io v0.3.32
+        │   │   │   └── futures-io feature "std"
+        │   │   │       └── futures-io v0.3.32
+        │   │   └── parking feature "default"
+        │   │       └── parking v2.2.1
+        │   ├── futures-lite feature "race"
+        │   │   ├── futures-lite v2.6.1 (*)
+        │   │   └── futures-lite feature "fastrand"
+        │   │       └── futures-lite v2.6.1 (*)
+        │   └── futures-lite feature "std"
+        │       ├── futures-lite v2.6.1 (*)
+        │       ├── fastrand feature "std" (*)
+        │       ├── futures-lite feature "alloc"
+        │       │   └── futures-lite v2.6.1 (*)
+        │       ├── futures-lite feature "fastrand" (*)
+        │       ├── futures-lite feature "futures-io"
+        │       │   └── futures-lite v2.6.1 (*)
+        │       └── futures-lite feature "parking"
+        │           └── futures-lite v2.6.1 (*)
+        ├── libtest-mimic feature "default"
+        │   └── libtest-mimic v0.8.1
+        │       ├── anstream feature "default"
+        │       │   ├── anstream v0.6.21 (*)
+        │       │   ├── anstream feature "auto" (*)
+        │       │   └── anstream feature "wincon" (*)
+        │       ├── anstyle feature "default" (*)
+        │       ├── clap feature "default"
+        │       │   ├── clap v4.5.59
+        │       │   │   ├── clap_builder v4.5.59
+        │       │   │   │   ├── anstream feature "default" (*)
+        │       │   │   │   ├── anstyle feature "default" (*)
+        │       │   │   │   ├── clap_lex feature "default"
+        │       │   │   │   │   └── clap_lex v1.0.0
+        │       │   │   │   └── strsim feature "default"
+        │       │   │   │       └── strsim v0.11.1
+        │       │   │   └── clap_derive feature "default"
+        │       │   │       └── clap_derive v4.5.55 (proc-macro)
+        │       │   │           ├── proc-macro2 feature "default" (*)
+        │       │   │           ├── quote feature "default" (*)
+        │       │   │           ├── syn feature "default" (*)
+        │       │   │           ├── syn feature "full" (*)
+        │       │   │           └── heck feature "default" (*)
+        │       │   ├── clap feature "color"
+        │       │   │   ├── clap v4.5.59 (*)
+        │       │   │   └── clap_builder feature "color"
+        │       │   │       └── clap_builder v4.5.59 (*)
+        │       │   ├── clap feature "error-context"
+        │       │   │   ├── clap v4.5.59 (*)
+        │       │   │   └── clap_builder feature "error-context"
+        │       │   │       └── clap_builder v4.5.59 (*)
+        │       │   ├── clap feature "help"
+        │       │   │   ├── clap v4.5.59 (*)
+        │       │   │   └── clap_builder feature "help"
+        │       │   │       └── clap_builder v4.5.59 (*)
+        │       │   ├── clap feature "std"
+        │       │   │   ├── clap v4.5.59 (*)
+        │       │   │   └── clap_builder feature "std"
+        │       │   │       ├── clap_builder v4.5.59 (*)
+        │       │   │       └── anstyle feature "std" (*)
+        │       │   ├── clap feature "suggestions"
+        │       │   │   ├── clap v4.5.59 (*)
+        │       │   │   └── clap_builder feature "suggestions"
+        │       │   │       ├── clap_builder v4.5.59 (*)
+        │       │   │       └── clap_builder feature "error-context" (*)
+        │       │   └── clap feature "usage"
+        │       │       ├── clap v4.5.59 (*)
+        │       │       └── clap_builder feature "usage"
+        │       │           └── clap_builder v4.5.59 (*)
+        │       ├── clap feature "derive"
+        │       │   └── clap v4.5.59 (*)
+        │       └── escape8259 feature "default"
+        │           └── escape8259 v0.5.3
+        ├── nv-flip feature "default"
+        │   └── nv-flip v0.1.2
+        │       └── nv-flip-sys feature "default"
+        │           └── nv-flip-sys v0.1.1
+        │               [build-dependencies]
+        │               └── cc feature "default" (*)
+        └── wgpu-macros feature "default" (command-line)
+            └── wgpu-macros v28.0.0 (proc-macro) (/Users/supamaggie70/code/workspaces/wgpu/wgpu-macros)
+                ├── quote feature "default" (*)
+                ├── syn feature "default" (*)
+                ├── syn feature "full" (*)
+                └── heck feature "default" (*)
+        [dev-dependencies]
+        ├── half feature "bytemuck" (*)
+        ├── half feature "std" (*)
+        ├── itertools feature "default" (*)
+        ├── strum feature "derive" (*)
+        ├── parking_lot feature "default" (*)
+        ├── glam feature "default" (*)
+        ├── nanorand feature "wyrand" (*)
+        ├── approx feature "default"
+        │   ├── approx v0.5.1
+        │   │   └── num-traits v0.2.19 (*)
+        │   └── approx feature "std"
+        │       └── approx v0.5.1 (*)
+        ├── image feature "png"
+        │   └── image v0.25.9
+        │       ├── bytemuck feature "default" (*)
+        │       ├── bytemuck feature "extern_crate_alloc" (*)
+        │       ├── num-traits feature "default" (*)
+        │       ├── png feature "default" (*)
+        │       ├── byteorder-lite feature "default"
+        │       │   ├── byteorder-lite v0.1.0
+        │       │   └── byteorder-lite feature "std"
+        │       │       └── byteorder-lite v0.1.0
+        │       └── moxcms feature "default"
+        │           ├── moxcms v0.7.11
+        │           │   ├── num-traits feature "default" (*)
+        │           │   └── pxfm feature "default"
+        │           │       └── pxfm v0.1.27
+        │           │           └── num-traits feature "default" (*)
+        │           ├── moxcms feature "avx"
+        │           │   └── moxcms v0.7.11 (*)
+        │           ├── moxcms feature "neon"
+        │           │   └── moxcms v0.7.11 (*)
+        │           └── moxcms feature "sse"
+        │               └── moxcms v0.7.11 (*)
+        └── trybuild feature "default"
+            └── trybuild v1.0.116
+                ├── serde feature "default" (*)
+                ├── serde_derive feature "default" (*)
+                ├── termcolor feature "default" (*)
+                ├── serde_json feature "default" (*)
+                ├── toml feature "default" (*)
+                ├── glob feature "default" (*)
+                └── target-triple feature "default"
+                    └── target-triple v1.0.0
+
+wgpu-hal v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-hal) (*)
+
+wgpu-info v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-info)
+├── anyhow v1.0.101
+├── env_logger v0.11.9 (*)
+├── bitflags feature "default" (*)
+├── serde feature "default" (*)
+├── hashbrown feature "default-hasher" (*)
+├── hashbrown feature "inline-more" (*)
+├── hashbrown feature "serde" (*)
+├── serde_json feature "default" (*)
+├── pico-args feature "combined-flags" (*)
+├── pico-args feature "default" (*)
+├── pico-args feature "eq-separator" (*)
+├── pico-args feature "short-space-opt" (*)
+├── wgpu feature "angle" (*)
+├── wgpu feature "dx12" (*)
+├── wgpu feature "gles" (*)
+├── wgpu feature "metal" (*)
+├── wgpu feature "noop" (*)
+├── wgpu feature "serde" (*)
+├── wgpu feature "static-dxc" (*)
+├── wgpu feature "std" (*)
+├── wgpu feature "vulkan" (*)
+├── wgpu feature "vulkan-portability" (*)
+├── wgpu feature "wgsl" (*)
+└── pollster feature "default" (*)
+
+wgpu-macros v28.0.0 (proc-macro) (/Users/supamaggie70/code/workspaces/wgpu/wgpu-macros) (*)
+
+wgpu-shader-types v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shader-types) (*)
+
+wgpu-shaders v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-shaders) (*)
+
+wgpu-test v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/tests) (*)
+
+wgpu-types v28.0.0 (/Users/supamaggie70/code/workspaces/wgpu/wgpu-types) (*)
+
+wgpu-xtask v0.1.0 (/Users/supamaggie70/code/workspaces/wgpu/xtask)
+├── anyhow v1.0.101
+├── env_logger v0.11.9 (*)
+├── log feature "default" (*)
+├── serde_json feature "default" (*)
+├── pico-args feature "combined-flags" (*)
+├── pico-args feature "default" (*)
+├── pico-args feature "eq-separator" (*)
+├── pico-args feature "short-space-opt" (*)
+├── regex-lite feature "default"
+│   ├── regex-lite v0.1.9
+│   ├── regex-lite feature "std"
+│   │   └── regex-lite v0.1.9
+│   └── regex-lite feature "string"
+│       └── regex-lite v0.1.9
+└── xshell feature "default"
+    └── xshell v0.2.7
+        └── xshell-macros feature "default"
+            └── xshell-macros v0.2.7 (proc-macro)

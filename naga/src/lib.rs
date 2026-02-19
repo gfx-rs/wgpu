@@ -106,6 +106,8 @@ extern crate std;
 
 extern crate alloc;
 
+extern crate wgpu_shader_types as wst;
+
 mod arena;
 pub mod back;
 pub mod common;
@@ -125,6 +127,7 @@ use alloc::string::String;
 
 pub use crate::arena::{Arena, Handle, Range, UniqueArena};
 pub use crate::span::{SourceLocation, Span, SpanContext, WithSpan};
+pub use wst::{FastHashMap, FastHashSet};
 
 // TODO: Eliminate this re-export and migrate uses of `crate::Foo` to `use crate::ir; ir::Foo`.
 pub use ir::*;
@@ -134,17 +137,6 @@ pub const BOOL_WIDTH: Bytes = 1;
 
 /// Width of abstract types, in bytes.
 pub const ABSTRACT_WIDTH: Bytes = 8;
-
-/// Hash map that is faster but not resilient to DoS attacks.
-/// (Similar to rustc_hash::FxHashMap but using hashbrown::HashMap instead of alloc::collections::HashMap.)
-/// To construct a new instance: `FastHashMap::default()`
-pub type FastHashMap<K, T> =
-    hashbrown::HashMap<K, T, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
-
-/// Hash set that is faster but not resilient to DoS attacks.
-/// (Similar to rustc_hash::FxHashSet but using hashbrown::HashSet instead of alloc::collections::HashMap.)
-pub type FastHashSet<K> =
-    hashbrown::HashSet<K, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
 
 /// Insertion-order-preserving hash set (`IndexSet<K>`), but with the same
 /// hasher as `FastHashSet<K>` (faster but not resilient to DoS attacks).

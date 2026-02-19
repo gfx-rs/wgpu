@@ -275,16 +275,15 @@ impl ShaderModel {
     }
 }
 
-impl crate::ShaderStage {
-    pub const fn to_hlsl_str(self) -> &'static str {
-        match self {
-            Self::Vertex => "vs",
-            Self::Fragment => "ps",
-            Self::Compute => "cs",
-            Self::Task => "as",
-            Self::Mesh => "ms",
-            Self::RayGeneration | Self::AnyHit | Self::ClosestHit | Self::Miss => "lib",
-        }
+pub const fn shader_stage_to_str(stage: crate::ShaderStage) -> &'static str {
+    use crate::ShaderStage as St;
+    match stage {
+        St::Vertex => "vs",
+        St::Fragment => "ps",
+        St::Compute => "cs",
+        St::Task => "as",
+        St::Mesh => "ms",
+        St::RayGeneration | St::AnyHit | St::ClosestHit | St::Miss => "lib",
     }
 }
 

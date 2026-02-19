@@ -35,7 +35,6 @@ use core::{fmt, iter, ops, ptr::NonNull, sync::atomic};
 use arrayvec::ArrayVec;
 use bitflags::bitflags;
 use hashbrown::HashMap;
-use naga::FastHashMap;
 use objc2::{
     available,
     rc::{autoreleasepool, Retained},
@@ -54,6 +53,7 @@ use objc2_metal::{
 };
 use objc2_quartz_core::CAMetalLayer;
 use parking_lot::{Mutex, RwLock};
+use wst::FastHashMap;
 
 #[derive(Clone, Debug)]
 pub struct Api;

@@ -30,6 +30,8 @@ pub mod pipeline_constants;
 #[cfg(any(hlsl_out, glsl_out))]
 mod continue_forward;
 
+pub use wst::PipelineConstants;
+
 /// Names of vector components.
 pub const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
 /// Indent for backends.
@@ -80,15 +82,6 @@ bitflags::bitflags! {
         const FINISHED_TRAVERSAL = 1 << 2;
     }
 }
-
-/// Specifies the values of pipeline-overridable constants in the shader module.
-///
-/// If an `@id` attribute was specified on the declaration,
-/// the key must be the pipeline constant ID as a decimal ASCII number; if not,
-/// the key must be the constant's identifier name.
-///
-/// The value may represent any of WGSL's concrete scalar types.
-pub type PipelineConstants = hashbrown::HashMap<String, f64>;
 
 /// Indentation level.
 #[derive(Clone, Copy)]

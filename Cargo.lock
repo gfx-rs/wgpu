@@ -2418,6 +2418,7 @@ dependencies = [
  "thiserror 2.0.18",
  "unicode-ident",
  "walkdir",
+ "wgpu-shader-types",
 ]
 
 [[package]]
@@ -4955,7 +4956,6 @@ dependencies = [
  "libc",
  "libloading",
  "log",
- "mach-dxcompiler-rs",
  "naga",
  "ndk-sys 0.6.0+11769913",
  "objc2 0.6.3",
@@ -4979,6 +4979,8 @@ dependencies = [
  "wasm-bindgen",
  "wayland-sys",
  "web-sys",
+ "wgpu-shader-types",
+ "wgpu-shaders",
  "wgpu-types",
  "windows",
  "windows-core",
@@ -5012,12 +5014,21 @@ dependencies = [
 [[package]]
 name = "wgpu-shader-types"
 version = "28.0.0"
+dependencies = [
+ "arbitrary",
+ "hashbrown 0.16.1",
+ "rustc-hash 1.1.0",
+ "serde",
+]
 
 [[package]]
 name = "wgpu-shaders"
 version = "28.0.0"
 dependencies = [
+ "cfg_aliases 0.2.1",
+ "mach-dxcompiler-rs",
  "naga",
+ "wgpu-shader-types",
  "wgpu-types",
 ]
 

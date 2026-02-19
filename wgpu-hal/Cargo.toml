@@ -73,7 +73,7 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 ## Enables the Metal backend when targeting Apple platforms.
 metal = [
     # Metal is only available on Apple platforms, therefore request MSL output also only if we target an Apple platform.
-    "naga/msl-out",
+    "wgpu-shaders/msl-out",
     "dep:arrayvec",
     "dep:block2",
     "dep:dispatch2",
@@ -92,7 +92,7 @@ metal = [
     "dep:raw-window-metal",
 ]
 vulkan = [
-    "naga/spv-out",
+    "wgpu-shaders/spv-out",
     "dep:android_system_properties",
     "dep:arrayvec",
     "dep:ash",
@@ -112,7 +112,7 @@ vulkan = [
     "windows/Win32",
 ]
 gles = [
-    "naga/glsl-out",
+    "wgpu-shaders/glsl-out",
     "dep:arrayvec",
     "dep:bytemuck",
     "dep:glow",
@@ -137,7 +137,7 @@ gles = [
 ]
 ## Enables the DX12 backend when targeting Windows.
 dx12 = [
-    "naga/hlsl-out",
+    "wgpu-shaders/hlsl-out",
     "dep:arrayvec",
     "dep:bit-set",
     "dep:bytemuck",
@@ -171,7 +171,7 @@ dx12 = [
 ### Misc Other Features ###
 ###########################
 
-static-dxc = ["dep:mach-dxcompiler-rs"]
+static-dxc = ["wgpu-shaders/static-dxc"]
 renderdoc = ["dep:libloading", "dep:renderdoc-sys", "dep:log"]
 fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
@@ -205,7 +205,8 @@ required-features = ["gles"]
 #####################
 
 [dependencies]
-naga.workspace = true
+wgpu-shaders = { workspace = true, default-features = false }
+wgpu-shader-types = { workspace = true, default-features = false }
 wgpu-types = { workspace = true, default-features = false }
 
 # Dependencies in the lib and empty backend
@@ -274,10 +275,6 @@ glutin_wgl_sys = { workspace = true, optional = true }
 ### Platform: x86/x86_64 Windows ###
 # This doesn't support aarch64. See https://github.com/gfx-rs/wgpu/issues/6860.
 # This doesn't support x86_64-pc-windows-gnu. See https://github.com/gfx-rs/wgpu/issues/8303
-#
-# ⚠️ Keep in sync with static_dxc cfg in build.rs and cfg_alias in `wgpu` crate ⚠️
-[target.'cfg(all(windows, not(target_arch = "aarch64"), target_env = "msvc"))'.dependencies]
-mach-dxcompiler-rs = { workspace = true, optional = true }
 
 #######################
 ### Platform: Apple ###

@@ -9,7 +9,18 @@ repository.workspace = true
 keywords.workspace = true
 license.workspace = true
 
-[dependencies]
-
 [lints]
 workspace = true
+
+[features]
+serialize = ["dep:serde"]
+deserialize = ["dep:serde"]
+arbitrary = ["dep:arbitrary", "std"]
+std = []
+
+[dependencies]
+arbitrary = { workspace = true, features = ["derive"], optional = true }
+serde = { workspace = true, features = ["alloc", "derive"], optional = true }
+
+hashbrown.workspace = true
+rustc-hash.workspace = true

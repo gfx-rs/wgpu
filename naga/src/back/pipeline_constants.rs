@@ -7,7 +7,6 @@ use core::mem;
 use hashbrown::HashSet;
 use thiserror::Error;
 
-use super::PipelineConstants;
 use crate::{
     arena::HandleVec,
     compact::{compact, KeepUnused},
@@ -17,6 +16,7 @@ use crate::{
     Arena, Block, Constant, Expression, Function, Handle, Literal, Module, Override, Range, Scalar,
     Span, Statement, TypeInner, WithSpan,
 };
+use wst::PipelineConstants;
 
 // Possibly unused if not compiled with no_std
 #[allow(unused_imports)]

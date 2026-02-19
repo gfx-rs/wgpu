@@ -241,6 +241,8 @@
 )]
 
 extern crate alloc;
+extern crate wgpu_shader_types as wst;
+extern crate wgpu_shaders as wgs;
 extern crate wgpu_types as wgt;
 // Each of these backends needs `std` in some fashion; usually `std::thread` functions.
 #[cfg(any(dx12, gles_with_std, metal, vulkan))]
@@ -294,7 +296,7 @@ pub use dynamic::{
 
 #[allow(unused)]
 use alloc::boxed::Box;
-use alloc::{borrow::Cow, string::String, vec::Vec};
+use alloc::{string::String, vec::Vec};
 use core::{
     borrow::Borrow,
     error::Error,
@@ -307,6 +309,7 @@ use core::{
 use bitflags::bitflags;
 use raw_window_handle::DisplayHandle;
 use thiserror::Error;
+use wgs::ShaderInput;
 use wgt::WasmNotSendSync;
 
 cfg_if::cfg_if! {
@@ -508,7 +511,7 @@ pub enum PipelineError {
     #[error("Linkage failed for stage {0:?}: {1}")]
     Linkage(wgt::ShaderStages, String),
     #[error("Entry point for stage {0:?} is invalid")]
-    EntryPoint(naga::ShaderStage),
+    EntryPoint(wst::ShaderStage),
     #[error(transparent)]
     Device(#[from] DeviceError),
     #[error("Pipeline constant error for stage {0:?}: {1}")]
@@ -2319,51 +2322,6 @@ pub struct CommandEncoderDescriptor<'a, Q: DynQueue + ?Sized> {
     pub queue: &'a Q,
 }
 
-/// Naga shader module.
-#[derive(Default)]
-pub struct NagaShader {
-    /// Shader module IR.
-    pub module: Cow<'static, naga::Module>,
-    /// Analysis information of the module.
-    pub info: naga::valid::ModuleInfo,
-    /// Source codes for debug
-    pub debug_source: Option<DebugSource>,
-}
-
-// Custom implementation avoids the need to generate Debug impl code
-// for the whole Naga module and info.
-impl fmt::Debug for NagaShader {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "Naga shader")
-    }
-}
-
-/// Shader input.
-pub enum ShaderInput<'a> {
-    Naga(NagaShader),
-    MetalLib {
-        file: &'a [u8],
-        num_workgroups: (u32, u32, u32),
-    },
-    Msl {
-        shader: &'a str,
-        num_workgroups: (u32, u32, u32),
-    },
-    SpirV(&'a [u32]),
-    Dxil {
-        shader: &'a [u8],
-        num_workgroups: (u32, u32, u32),
-    },
-    Hlsl {
-        shader: &'a str,
-        num_workgroups: (u32, u32, u32),
-    },
-    Glsl {
-        shader: &'a str,
-        num_workgroups: (u32, u32, u32),
-    },
-}
-
 pub struct ShaderModuleDescriptor<'a> {
     pub label: Label<'a>,
 
@@ -2375,12 +2333,6 @@ pub struct ShaderModuleDescriptor<'a> {
     pub runtime_checks: wgt::ShaderRuntimeChecks,
 }
 
-#[derive(Debug, Clone)]
-pub struct DebugSource {
-    pub file_name: Cow<'static, str>,
-    pub source_code: Cow<'static, str>,
-}
-
 /// Describes a programmable pipeline stage.
 #[derive(Debug)]
 pub struct ProgrammableStage<'a, M: DynShaderModule + ?Sized> {
@@ -2390,7 +2342,7 @@ pub struct ProgrammableStage<'a, M: DynShaderModule + ?Sized> {
     ///  in the shader.
     pub entry_point: &'a str,
     /// Pipeline constants
-    pub constants: &'a naga::back::PipelineConstants,
+    pub constants: &'a wst::PipelineConstants,
     /// Whether workgroup scoped memory will be initialized with zero values for this stage.
     ///
     /// This is required by the WebGPU spec, but may have overhead which can be avoided
