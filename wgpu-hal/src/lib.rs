@@ -644,6 +644,7 @@ pub trait Api: Clone + fmt::Debug + Sized + WasmNotSendSync + 'static {
     type ShaderModule: DynShaderModule;
     type RenderPipeline: DynRenderPipeline;
     type ComputePipeline: DynComputePipeline;
+    type RayTracingPipeline: DynRayTracingPipeline;
     type PipelineCache: DynPipelineCache;
 
     type AccelerationStructure: DynAccelerationStructure + 'static;
@@ -1067,6 +1068,16 @@ pub trait Device: WasmNotSendSync {
         >,
     ) -> Result<<Self::A as Api>::ComputePipeline, PipelineError>;
     unsafe fn destroy_compute_pipeline(&self, pipeline: <Self::A as Api>::ComputePipeline);
+
+    unsafe fn create_ray_tracing_pipeline(
+        &self,
+        desc: &RayTracingPipelineDescriptor<
+            <Self::A as Api>::PipelineLayout,
+            <Self::A as Api>::ShaderModule,
+            <Self::A as Api>::PipelineCache,
+        >,
+    ) -> Result<<Self::A as Api>::RayTracingPipeline, PipelineError>;
+    unsafe fn destroy_ray_tracing_pipeline(&self, pipeline: <Self::A as Api>::RayTracingPipeline);
 
     unsafe fn create_pipeline_cache(
         &self,
@@ -2539,6 +2550,38 @@ pub struct RenderPipelineDescriptor<
     pub cache: Option<&'a Pc>,
 }
 
+#[derive(Clone, Debug)]
+pub struct RayObjectIntersectionState<
+    'a,
+    M: DynShaderModule + ?Sized,
+> {
+    pub closest_hit: ProgrammableStage<'a, M>,
+    pub any_hit: Option<ProgrammableStage<'a, M>>,
+}
+
+/// Describes a ray tracing pipeline.
+#[derive(Clone, Debug)]
+pub struct RayTracingPipelineDescriptor<
+    'a,
+    Pl: DynPipelineLayout + ?Sized,
+    M: DynShaderModule + ?Sized,
+    Pc: DynPipelineCache + ?Sized,
+> {
+    pub label: Label<'a>,
+    /// The layout of bind groups for this pipeline.
+    pub layout: &'a Pl,
+    /// The ray generation stage.
+    pub ray_generation: ProgrammableStage<'a, M>,
+    /// The miss stage.
+    pub miss: ProgrammableStage<'a, M>,
+    /// All the object intersection stages.
+    pub intersection: &'a [RayObjectIntersectionState<'a, M>],
+    /// The maximum recursion depth allowed for the ray tracing (ray_generation shader counts as depth 0).
+    pub max_recursion_depth: u32,
+    /// The cache which will be used and filled when compiling this pipeline
+    pub cache: Option<&'a Pc>,
+}
+
 #[derive(Debug, Clone)]
 pub struct SurfaceConfiguration {
     /// Maximum number of queued frames. Must be in
@@ -2834,6 +2877,8 @@ pub struct AccelerationStructureTriangleTransform<'a, B: DynBuffer + ?Sized> {
 
 pub use wgt::AccelerationStructureFlags as AccelerationStructureBuildFlags;
 pub use wgt::AccelerationStructureGeometryFlags;
+
+use crate::dynamic::DynRayTracingPipeline;
 
 bitflags::bitflags! {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
