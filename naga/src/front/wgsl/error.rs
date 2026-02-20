@@ -219,6 +219,7 @@ pub(crate) enum Error<'a> {
     UnknownLanguageExtension(Span, &'a str),
     UnknownDiagnosticRuleName(Span),
     SizeAttributeTooLow(Span, u32),
+    SizeAttributeRequiresFixedFootprint(Span),
     AlignAttributeTooLow(Span, Alignment),
     NonPowerOfTwoAlignAttribute(Span),
     InconsistentBinding(Span),
@@ -751,6 +752,11 @@ impl<'a> Error<'a> {
             Error::SizeAttributeTooLow(bad_span, min_size) => ParseError {
                 message: format!("struct member size must be at least {min_size}"),
                 labels: vec![(bad_span, format!("must be at least {min_size}").into())],
+                notes: vec![],
+            },
+            Error::SizeAttributeRequiresFixedFootprint(bad_span) => ParseError {
+                message: "@size attribute requires a type with creation-fixed footprint".to_string(),
+                labels: vec![(bad_span, "type does not have creation-fixed footprint".into())],
                 notes: vec![],
             },
             Error::AlignAttributeTooLow(bad_span, min_align) => ParseError {
