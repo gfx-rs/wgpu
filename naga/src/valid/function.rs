@@ -1738,10 +1738,10 @@ impl super::Validator {
                         };
 
                         // spir-v requires a direct reference to a global variable.
-                        let crate::Expression::GlobalVariable(_) =
-                            context.expressions[payload]
+                        let crate::Expression::GlobalVariable(_) = context.expressions[payload]
                         else {
-                            return Err(FunctionError::PayloadPointerNotGlobal.with_span_handle(payload, context.expressions));
+                            return Err(FunctionError::PayloadPointerNotGlobal
+                                .with_span_handle(payload, context.expressions));
                         };
 
                         let ty = *self

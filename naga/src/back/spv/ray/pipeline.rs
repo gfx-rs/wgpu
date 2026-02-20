@@ -24,7 +24,7 @@ impl Writer {
             ir_module
                 .special_types
                 .ray_desc
-                .expect("ray desc should be set if ray queries are being initialized"),
+                .expect("ray desc should be set if `traceRays` is called"),
         );
 
         let (func_id, mut function, arg_ids) = self.write_function_signature(
