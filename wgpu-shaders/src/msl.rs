@@ -49,7 +49,7 @@ impl MslCompileOptions {
     }
 }
 
-pub struct EntryPointCompileResult {
+pub struct MslEntryPointCompileResult {
     pub compiled_name: String,
     pub workgroup_size: [u32; 3],
     pub wg_memory_sizes: Vec<u32>,
@@ -59,7 +59,7 @@ pub struct EntryPointCompileResult {
 
 pub struct MslCompileResult {
     pub shader: String,
-    pub entry_points: Vec<EntryPointCompileResult>,
+    pub entry_points: Vec<MslEntryPointCompileResult>,
 }
 
 #[derive(Clone, Debug)]
@@ -200,7 +200,7 @@ impl super::NagaShader {
                         _ => (),
                     }
                 }
-                EntryPointCompileResult {
+                MslEntryPointCompileResult {
                     compiled_name: e,
                     workgroup_size: ep.workgroup_size,
                     wg_memory_sizes,

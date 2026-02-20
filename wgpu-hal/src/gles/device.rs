@@ -5,14 +5,14 @@ use core::{cmp::max, convert::TryInto, num::NonZeroU32, ptr, sync::atomic::Order
 
 use arrayvec::ArrayVec;
 use glow::HasContext;
-use naga::FastHashMap;
+use wst::FastHashMap;
 
 use super::{conv, lock, MaybeMutex, PrivateCapabilities};
 use crate::auxil::map_naga_stage;
 use crate::TlasInstance;
 
 type ShaderStage<'a> = (
-    naga::ShaderStage,
+    wst::ShaderStage,
     &'a crate::ProgrammableStage<'a, super::ShaderModule>,
 );
 type NameBindingMap = FastHashMap<String, (super::BindingRegister, u8)>;

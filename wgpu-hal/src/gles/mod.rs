@@ -123,7 +123,7 @@ use parking_lot::Mutex;
 
 use arrayvec::ArrayVec;
 use glow::HasContext;
-use naga::FastHashMap;
+use wst::FastHashMap;
 
 use crate::{CopyExtent, TextureDescriptor};
 
@@ -275,7 +275,7 @@ struct AdapterShared {
     limits: wgt::Limits,
     workarounds: Workarounds,
     options: wgt::GlBackendOptions,
-    shading_language_version: naga::back::glsl::Version,
+    shading_language_version: wst::glsl::Version,
     next_shader_id: AtomicU32,
     program_cache: Mutex<ProgramCache>,
     es: bool,
@@ -560,7 +560,7 @@ pub struct PipelineLayout {
 impl crate::DynPipelineLayout for PipelineLayout {}
 
 impl PipelineLayout {
-    fn get_slot(&self, br: &naga::ResourceBinding) -> u8 {
+    fn get_slot(&self, br: &wst::ResourceBinding) -> u8 {
         let group_info = &self.group_infos[br.group as usize];
         group_info.binding_to_slot[br.binding as usize]
     }
@@ -603,7 +603,7 @@ type ShaderId = u32;
 
 #[derive(Debug)]
 pub struct ShaderModule {
-    source: crate::NagaShader,
+    source: wgs::NagaShader,
     label: Option<String>,
     id: ShaderId,
 }
@@ -699,7 +699,7 @@ struct ColorTargetDesc {
 
 #[derive(PartialEq, Eq, Hash)]
 struct ProgramStage {
-    naga_stage: naga::ShaderStage,
+    naga_stage: wst::ShaderStage,
     shader_id: ShaderId,
     entry_point: String,
     zero_initialize_workgroup_memory: bool,

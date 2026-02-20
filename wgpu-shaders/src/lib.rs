@@ -3,6 +3,8 @@ extern crate alloc;
 extern crate wgpu_shader_types as wst;
 extern crate wgpu_types as wgt;
 
+#[cfg(feature = "glsl-out")]
+pub mod glsl;
 #[cfg(feature = "msl-out")]
 pub mod msl;
 #[cfg(feature = "spv-out")]
