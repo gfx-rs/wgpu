@@ -431,7 +431,7 @@ fn map_stencil_state_face(desc: &wgt::StencilFaceState) -> webgpu_sys::GpuStenci
     mapped
 }
 
-fn map_depth_stencil_state(desc: &wgt::DepthStencilStateIdl) -> webgpu_sys::GpuDepthStencilState {
+fn map_depth_stencil_state(desc: &wgt::DepthStencilState) -> webgpu_sys::GpuDepthStencilState {
     let mapped = webgpu_sys::GpuDepthStencilState::new(map_texture_format(desc.format));
     if let Some(compare) = desc.depth_compare {
         mapped.set_depth_compare(map_compare_function(compare));

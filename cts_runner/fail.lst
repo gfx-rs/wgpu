@@ -56,10 +56,6 @@ webgpu:api,validation,queue,destroyed,* // 71%, writeBuffer/writeTexture return 
 webgpu:api,validation,queue,writeBuffer:ranges:* // 0%, missing OperationError for invalid ranges
 webgpu:api,validation,render_pass,attachment_compatibility:render_pass_or_bundle_and_pipeline,depth_stencil_read_only_write_state:* // fails on dx12
 webgpu:api,validation,render_pass,render_pass_descriptor:depth_stencil_attachment,loadOp_storeOp_match_depthReadOnly_stencilReadOnly:* // 33%, missing validation: depth/stencil load/store ops provided for missing texture format aspects
-webgpu:api,validation,render_pipeline,depth_stencil_state:depth_bias:* // open PR
-webgpu:api,validation,render_pipeline,depth_stencil_state:depth_write,frag_depth:* // 86%, https://github.com/gfx-rs/wgpu/pull/8856
-webgpu:api,validation,render_pipeline,depth_stencil_state:depthCompare_optional:* // https://github.com/gfx-rs/wgpu/issues/8830
-webgpu:api,validation,render_pipeline,depth_stencil_state:depthWriteEnabled_optional:*
 webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,color_target_count:* // https://github.com/gfx-rs/wgpu/pull/8856
 webgpu:api,validation,render_pipeline,fragment_state:dual_source_blending,use_blend_src:* // 62%, https://github.com/gfx-rs/wgpu/pull/8856
 webgpu:api,validation,render_pipeline,fragment_state:pipeline_output_targets,blend:* // 95%, blend factors reading source alpha require vec4

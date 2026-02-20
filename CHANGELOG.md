@@ -50,35 +50,32 @@ By @cwfitzgerald in [#8999](https://github.com/gfx-rs/wgpu/pull/8999).
 
 #### Depth/stencil state changes
 
-BREAKING CHANGE: Pipeline descriptors now use `DepthStencilStateIdl` instead of `DepthStencilState`.
-The new struct makes the `depth_write_enabled` and `depth_compare` fields optional, to match WebGPU.
+BREAKING CHANGE: The `depth_write_enabled` and `depth_compare` members of `DepthStencilState` are now optional, to match WebGPU.
 
-The simplest way to adapt to this change is to use `.into()` to convert to the new struct:
+The `depth_write_enabled` member must be `Some` if `format` has a depth aspect.
+
+The `depth_compare_required` member must be `Some` if `depth_write_enabled` is `Some(true)`, or if `depth_fail_op` for either stencil face is not `Keep`.
 
 ```diff
--depth_stencil: Some(wgpu::DepthStencilState {
--    format: wgpu::TextureFormat::Depth32Float,
+ depth_stencil: Some(wgpu::DepthStencilState {
+     format: wgpu::TextureFormat::Depth32Float,
 -    depth_write_enabled: true,
 -    depth_compare: wgpu::CompareFunction::Less,
--    stencil: wgpu::StencilState::default(),
--    bias: wgpu::DepthBiasState::default(),
--}),
-+depth_stencil: Some(wgpu::DepthStencilState {
-+    format: wgpu::TextureFormat::Depth32Float,
-+    depth_write_enabled: true,
-+    depth_compare: wgpu::CompareFunction::Less,
-+    stencil: wgpu::StencilState::default(),
-+    bias: wgpu::DepthBiasState::default(),
-+}.into()),
++    depth_write_enabled: Some(true),
++    depth_compare: Some(wgpu::CompareFunction::Less),
+     stencil: wgpu::StencilState::default(),
+     bias: wgpu::DepthBiasState::default(),
+ }),
 ```
 
-There are also new constructors which may be used instead of a struct literal:
-`DepthStencilState::new` (for simultaneous depth and stencil operations),
-`DepthStencilState::depth` (for depth operations), and `DepthStencilState::stencil` (for stencil operations).
+There is also a new constructor `DepthStencilState::stencil` which may be used instead of a struct literal for stencil operations.
 
-`DepthStencilState` may be updated to match `DepthStencilStateIdl` in the future.
-In anticipation of this, the constructors are associated methods on
-`DepthStencilState` even though they construct `DepthStencilStateIdl`.
+```
+depth_stencil: Some(wgpu::DepthStencilState::stencil(
+    wgpu::TextureFormat::Stencil8,
+    wgpu::StencilState { .. },
+)),
+```
 
 ### New Features
 

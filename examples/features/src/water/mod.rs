@@ -557,12 +557,13 @@ impl crate::framework::Example for Example {
             // input attachment to do depth-testing. We don't write, so
             // depth_write_enabled is set to false. This is called RODS,
             // or read-only depth stencil. Here, we don't use stencil.
-            depth_stencil: Some(wgpu::DepthStencilState::depth(
-                wgpu::TextureFormat::Depth32Float,
-                false,
-                wgpu::CompareFunction::Less,
-                wgpu::DepthBiasState::default(),
-            )),
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: Some(false),
+                depth_compare: Some(wgpu::CompareFunction::Less),
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             // No multisampling is used.
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
@@ -597,11 +598,11 @@ impl crate::framework::Example for Example {
             },
             depth_stencil: Some(wgpu::DepthStencilState {
                 format: wgpu::TextureFormat::Depth32Float,
-                depth_write_enabled: true,
-                depth_compare: wgpu::CompareFunction::Less,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::Less),
                 stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
-            }.into()),
+            }),
             multisample: wgpu::MultisampleState::default(),
             multiview_mask: None,
             cache: None

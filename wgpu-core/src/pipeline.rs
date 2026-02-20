@@ -476,7 +476,7 @@ pub struct RenderPipelineDescriptor<
     pub primitive: wgt::PrimitiveState,
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
     #[cfg_attr(feature = "serde", serde(default))]
-    pub depth_stencil: Option<wgt::DepthStencilStateIdl>,
+    pub depth_stencil: Option<wgt::DepthStencilState>,
     /// The multi-sampling properties of the pipeline.
     #[cfg_attr(feature = "serde", serde(default))]
     pub multisample: wgt::MultisampleState,
@@ -509,7 +509,7 @@ pub struct MeshPipelineDescriptor<
     pub primitive: wgt::PrimitiveState,
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
     #[cfg_attr(feature = "serde", serde(default))]
-    pub depth_stencil: Option<wgt::DepthStencilStateIdl>,
+    pub depth_stencil: Option<wgt::DepthStencilState>,
     /// The multi-sampling properties of the pipeline.
     #[cfg_attr(feature = "serde", serde(default))]
     pub multisample: wgt::MultisampleState,
@@ -548,7 +548,7 @@ pub struct GeneralRenderPipelineDescriptor<
     pub primitive: wgt::PrimitiveState,
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
     #[cfg_attr(feature = "serde", serde(default))]
-    pub depth_stencil: Option<wgt::DepthStencilStateIdl>,
+    pub depth_stencil: Option<wgt::DepthStencilState>,
     /// The multi-sampling properties of the pipeline.
     #[cfg_attr(feature = "serde", serde(default))]
     pub multisample: wgt::MultisampleState,

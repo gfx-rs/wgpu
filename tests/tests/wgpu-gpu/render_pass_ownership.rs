@@ -537,16 +537,13 @@ fn resource_setup(ctx: &TestingContext) -> ResourceSetup {
                 strip_index_format: Some(wgpu::IndexFormat::Uint32),
                 ..Default::default()
             },
-            depth_stencil: Some(
-                wgpu::DepthStencilState {
-                    format: depth_stencil_format,
-                    depth_write_enabled: true,
-                    depth_compare: wgpu::CompareFunction::LessEqual,
-                    stencil: wgpu::StencilState::default(),
-                    bias: wgpu::DepthBiasState::default(),
-                }
-                .into(),
-            ),
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: depth_stencil_format,
+                depth_write_enabled: Some(true),
+                depth_compare: Some(wgpu::CompareFunction::LessEqual),
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState {
                 count: target_msaa,
                 mask: !0,

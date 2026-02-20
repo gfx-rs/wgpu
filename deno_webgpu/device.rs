@@ -888,7 +888,7 @@ impl GPUDevice {
         pass_op: depth_stencil.stencil_back.pass_op.into(),
       };
 
-      wgpu_types::DepthStencilStateIdl {
+      wgpu_types::DepthStencilState {
         format: depth_stencil.format.into(),
         depth_write_enabled: depth_stencil.depth_write_enabled,
         depth_compare: depth_stencil.depth_compare.map(Into::into),

@@ -799,14 +799,6 @@ impl<V: Default> Default for Operations<V> {
 ///
 /// Corresponds to [WebGPU `GPUDepthStencilState`](
 /// https://gpuweb.github.io/gpuweb/#dictdef-gpudepthstencilstate).
-///
-/// For backwards-compatibility reasons, this struct has non-optional
-/// `depth_write_enabled` and `depth_compare` fields. They may change in the
-/// future to be optional, i.e., to match `DepthStencilStateIdl`.
-///
-/// It is recommended to use one of the `DepthStencilState::new`,
-/// `DepthStencilState::depth`, or `DepthStencilState::stencil` constructors.
-/// These will continue to work even if this struct changes in the future.
 #[repr(C)]
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -816,40 +808,11 @@ pub struct DepthStencilState {
     ///
     #[doc = link_to_wgpu_docs!(["CEbrp"]: "struct.CommandEncoder.html#method.begin_render_pass")]
     pub format: crate::TextureFormat,
-    /// If disabled, depth will not be written to.
-    pub depth_write_enabled: bool,
-    /// Comparison function used to compare depth values in the depth test.
-    pub depth_compare: CompareFunction,
-    /// Stencil state.
-    #[cfg_attr(feature = "serde", serde(default))]
-    pub stencil: StencilState,
-    /// Depth bias state.
-    #[cfg_attr(feature = "serde", serde(default))]
-    pub bias: DepthBiasState,
-}
-
-/// Describes the depth/stencil state in a render pipeline.
-///
-/// Corresponds to [WebGPU `GPUDepthStencilState`](
-/// https://gpuweb.github.io/gpuweb/#dictdef-gpudepthstencilstate).
-///
-/// This version more closely matches the IDL in the WebGPU spec by
-/// making the `depth_write_enabled` and `depth_compare` fields
-/// optional.
-#[repr(C)]
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DepthStencilStateIdl {
-    /// Format of the depth/stencil buffer, must be special depth format. Must match the format
-    /// of the depth/stencil attachment in [`CommandEncoder::begin_render_pass`][CEbrp].
-    ///
-    #[doc = link_to_wgpu_docs!(["CEbrp"]: "struct.CommandEncoder.html#method.begin_render_pass")]
-    pub format: crate::TextureFormat,
-    /// If disabled, depth will not be written to. Specify if `format` is a
-    /// depth format.
+    /// If disabled, depth will not be written to. Must be `Some` if `format` is
+    /// a depth format.
     pub depth_write_enabled: Option<bool>,
     /// Comparison function used to compare depth values in the depth test.
-    /// Specify if `depth_write_enabled` is `true` or either stencil face
+    /// Must be `Some` if `depth_write_enabled` is `true` or either stencil face
     /// `depth_fail_op` is not `Keep`.
     pub depth_compare: Option<CompareFunction>,
     /// Stencil state.
@@ -861,73 +824,15 @@ pub struct DepthStencilStateIdl {
 }
 
 impl DepthStencilState {
-    /// Construct `DepthStencilState` for both depth and stencil operations.
-    ///
-    /// (For one or the other, use [`DepthStencilState::depth`] or
-    /// [`DepthStencilState::stencil`].)
-    ///
-    /// Note that this method returns the forwards-compatible struct
-    /// `DepthStencilStateIdl`.
-    ///
-    /// Panics if `format` is not a depth-and-stencil format.
-    #[expect(clippy::new_ret_no_self)] // forwards compatibility
-    pub fn new(
-        format: crate::TextureFormat,
-        depth_write_enabled: bool,
-        depth_compare: CompareFunction,
-        stencil: StencilState,
-        bias: DepthBiasState,
-    ) -> DepthStencilStateIdl {
-        assert!(
-            format.has_depth_aspect() && format.has_stencil_aspect(),
-            "{format:?} is not a depth-and-stencil format"
-        );
-        DepthStencilStateIdl {
-            format,
-            depth_write_enabled: Some(depth_write_enabled),
-            depth_compare: Some(depth_compare),
-            stencil,
-            bias,
-        }
-    }
-
-    /// Construct `DepthStencilState` for a depth operation.
-    ///
-    /// Note that this method returns the forwards-compatible struct
-    /// `DepthStencilStateIdl`.
-    ///
-    /// Panics if `format` does not have a depth aspect.
-    pub fn depth(
-        format: crate::TextureFormat,
-        depth_write_enabled: bool,
-        depth_compare: CompareFunction,
-        bias: DepthBiasState,
-    ) -> DepthStencilStateIdl {
-        assert!(
-            format.has_depth_aspect(),
-            "{format:?} is not a depth format"
-        );
-        DepthStencilStateIdl {
-            format,
-            depth_write_enabled: Some(depth_write_enabled),
-            depth_compare: Some(depth_compare),
-            stencil: StencilState::default(),
-            bias,
-        }
-    }
-
-    /// Construct `DepthStencilState` for a stencil operation.
-    ///
-    /// Note that this method returns the forwards-compatible struct
-    /// `DepthStencilStateIdl`.
+    /// Construct `DepthStencilState` for a stencil operation with no depth operation.
     ///
     /// Panics if `format` does not have a stencil aspect.
-    pub fn stencil(format: crate::TextureFormat, stencil: StencilState) -> DepthStencilStateIdl {
+    pub fn stencil(format: crate::TextureFormat, stencil: StencilState) -> DepthStencilState {
         assert!(
             format.has_stencil_aspect(),
             "{format:?} is not a stencil format"
         );
-        DepthStencilStateIdl {
+        DepthStencilState {
             format,
             depth_write_enabled: None,
             depth_compare: None,
@@ -935,30 +840,7 @@ impl DepthStencilState {
             bias: DepthBiasState::default(),
         }
     }
-}
 
-/// Converts `DepthStencilState` to the new `DepthStencilStateIdl`.
-///
-/// This is provided for ease of migration. Prefer to use the
-/// `DepthStencilState` associated constructor methods, as they will continue to
-/// work even if `DepthStencilState` is updated to match `DepthStencilStateIdl`
-/// in the future.
-impl From<DepthStencilState> for DepthStencilStateIdl {
-    fn from(state: DepthStencilState) -> Self {
-        // We need to blank out the depth-related fields if it's not a depth
-        // format, because validation will check.
-        let is_depth = state.format.has_depth_aspect();
-        Self {
-            format: state.format,
-            depth_write_enabled: is_depth.then_some(state.depth_write_enabled),
-            depth_compare: is_depth.then_some(state.depth_compare),
-            stencil: state.stencil,
-            bias: state.bias,
-        }
-    }
-}
-
-impl DepthStencilStateIdl {
     /// Returns true if the depth testing is enabled.
     #[must_use]
     pub fn is_depth_enabled(&self) -> bool {

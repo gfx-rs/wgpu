@@ -175,9 +175,9 @@ fn create_depth(
     let depth_view = depth_texture.create_view(&Default::default());
     let state = wgpu::DepthStencilState {
         format: wgpu::TextureFormat::Depth32Float,
-        depth_write_enabled: true,
-        depth_compare: wgpu::CompareFunction::Less, // 1.
-        stencil: wgpu::StencilState::default(),     // 2.
+        depth_write_enabled: Some(true),
+        depth_compare: Some(wgpu::CompareFunction::Less), // 1.
+        stencil: wgpu::StencilState::default(),           // 2.
         bias: wgpu::DepthBiasState::default(),
     };
     (depth_texture, depth_view, state)
@@ -238,7 +238,7 @@ fn mesh_pipeline_build(ctx: &TestingContext, info: MeshPipelineTestInfo) {
             cull_mode: Some(wgpu::Face::Back),
             ..Default::default()
         },
-        depth_stencil: Some(depth_state.into()),
+        depth_stencil: Some(depth_state),
         multisample: Default::default(),
         multiview: None,
         cache: None,
@@ -324,7 +324,7 @@ fn mesh_draw(ctx: &TestingContext, draw_type: DrawType, info: MeshPipelineTestIn
             cull_mode: Some(wgpu::Face::Back),
             ..Default::default()
         },
-        depth_stencil: Some(depth_state.into()),
+        depth_stencil: Some(depth_state),
         multisample: Default::default(),
         multiview: None,
         cache: None,
