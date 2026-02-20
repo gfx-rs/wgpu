@@ -132,6 +132,7 @@ impl BlockContext<'_> {
                 descriptor,
                 payload,
             } => {
+                // Checked for when validating the module in `validate_block_impl`.
                 let crate::Expression::GlobalVariable(payload) =
                     self.ir_function.expressions[payload]
                 else {
