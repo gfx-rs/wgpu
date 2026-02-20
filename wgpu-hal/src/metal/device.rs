@@ -102,7 +102,7 @@ impl super::Device {
                         entry_point: Some((stage.entry_point, naga_stage)),
                         resources: &layout.per_stage_map[naga_stage],
                         runtime_checks: stage.module.bounds_checks,
-                        constants: &stage.constants,
+                        constants: stage.constants,
                         vertex_buffer_mappings: vertex_buffers,
                         zero_init_memory: stage.zero_initialize_workgroup_memory,
                         is_point_primitive: primitive_class == MTLPrimitiveTopologyClass::Point,
@@ -1132,7 +1132,7 @@ impl crate::Device for super::Device {
                                 vbl.attributes
                                     .iter()
                                     .map(|attribute| {
-                                        attribute.offset + attribute.format.size() as u32
+                                        attribute.offset as u64 + attribute.format.size()
                                     })
                                     .max()
                                     .unwrap_or(0)
