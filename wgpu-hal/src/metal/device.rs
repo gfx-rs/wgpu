@@ -19,8 +19,8 @@ use objc2_metal::{
     MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer, MTLCommandBufferStatus,
     MTLCompileOptions, MTLComputePipelineDescriptor, MTLComputePipelineState,
     MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode, MTLDepthStencilDescriptor,
-    MTLDevice, MTLFunction, MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion,
-    MTLLibrary, MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
+    MTLDevice, MTLFunction, MTLIndirectAccelerationStructureInstanceDescriptor, MTLLibrary,
+    MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
     MTLPipelineBufferDescriptorArray, MTLPixelFormat, MTLPrimitiveTopologyClass,
     MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
     MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
@@ -48,7 +48,7 @@ struct CompiledShader {
     /// is a `u32` holding the variable's total size in bytes---which is simply
     /// the size of the `Buffer` supplying that variable's contents for the
     /// draw call.
-    sized_bindings: Vec<naga::ResourceBinding>,
+    sized_bindings: Vec<wst::ResourceBinding>,
 
     immutable_buffer_mask: usize,
 }
@@ -84,147 +84,45 @@ fn create_depth_stencil_desc(
     desc
 }
 
-const fn convert_vertex_format_to_naga(format: wgt::VertexFormat) -> naga::back::msl::VertexFormat {
-    match format {
-        wgt::VertexFormat::Uint8 => naga::back::msl::VertexFormat::Uint8,
-        wgt::VertexFormat::Uint8x2 => naga::back::msl::VertexFormat::Uint8x2,
-        wgt::VertexFormat::Uint8x4 => naga::back::msl::VertexFormat::Uint8x4,
-        wgt::VertexFormat::Sint8 => naga::back::msl::VertexFormat::Sint8,
-        wgt::VertexFormat::Sint8x2 => naga::back::msl::VertexFormat::Sint8x2,
-        wgt::VertexFormat::Sint8x4 => naga::back::msl::VertexFormat::Sint8x4,
-        wgt::VertexFormat::Unorm8 => naga::back::msl::VertexFormat::Unorm8,
-        wgt::VertexFormat::Unorm8x2 => naga::back::msl::VertexFormat::Unorm8x2,
-        wgt::VertexFormat::Unorm8x4 => naga::back::msl::VertexFormat::Unorm8x4,
-        wgt::VertexFormat::Snorm8 => naga::back::msl::VertexFormat::Snorm8,
-        wgt::VertexFormat::Snorm8x2 => naga::back::msl::VertexFormat::Snorm8x2,
-        wgt::VertexFormat::Snorm8x4 => naga::back::msl::VertexFormat::Snorm8x4,
-        wgt::VertexFormat::Uint16 => naga::back::msl::VertexFormat::Uint16,
-        wgt::VertexFormat::Uint16x2 => naga::back::msl::VertexFormat::Uint16x2,
-        wgt::VertexFormat::Uint16x4 => naga::back::msl::VertexFormat::Uint16x4,
-        wgt::VertexFormat::Sint16 => naga::back::msl::VertexFormat::Sint16,
-        wgt::VertexFormat::Sint16x2 => naga::back::msl::VertexFormat::Sint16x2,
-        wgt::VertexFormat::Sint16x4 => naga::back::msl::VertexFormat::Sint16x4,
-        wgt::VertexFormat::Unorm16 => naga::back::msl::VertexFormat::Unorm16,
-        wgt::VertexFormat::Unorm16x2 => naga::back::msl::VertexFormat::Unorm16x2,
-        wgt::VertexFormat::Unorm16x4 => naga::back::msl::VertexFormat::Unorm16x4,
-        wgt::VertexFormat::Snorm16 => naga::back::msl::VertexFormat::Snorm16,
-        wgt::VertexFormat::Snorm16x2 => naga::back::msl::VertexFormat::Snorm16x2,
-        wgt::VertexFormat::Snorm16x4 => naga::back::msl::VertexFormat::Snorm16x4,
-        wgt::VertexFormat::Float16 => naga::back::msl::VertexFormat::Float16,
-        wgt::VertexFormat::Float16x2 => naga::back::msl::VertexFormat::Float16x2,
-        wgt::VertexFormat::Float16x4 => naga::back::msl::VertexFormat::Float16x4,
-        wgt::VertexFormat::Float32 => naga::back::msl::VertexFormat::Float32,
-        wgt::VertexFormat::Float32x2 => naga::back::msl::VertexFormat::Float32x2,
-        wgt::VertexFormat::Float32x3 => naga::back::msl::VertexFormat::Float32x3,
-        wgt::VertexFormat::Float32x4 => naga::back::msl::VertexFormat::Float32x4,
-        wgt::VertexFormat::Uint32 => naga::back::msl::VertexFormat::Uint32,
-        wgt::VertexFormat::Uint32x2 => naga::back::msl::VertexFormat::Uint32x2,
-        wgt::VertexFormat::Uint32x3 => naga::back::msl::VertexFormat::Uint32x3,
-        wgt::VertexFormat::Uint32x4 => naga::back::msl::VertexFormat::Uint32x4,
-        wgt::VertexFormat::Sint32 => naga::back::msl::VertexFormat::Sint32,
-        wgt::VertexFormat::Sint32x2 => naga::back::msl::VertexFormat::Sint32x2,
-        wgt::VertexFormat::Sint32x3 => naga::back::msl::VertexFormat::Sint32x3,
-        wgt::VertexFormat::Sint32x4 => naga::back::msl::VertexFormat::Sint32x4,
-        wgt::VertexFormat::Unorm10_10_10_2 => naga::back::msl::VertexFormat::Unorm10_10_10_2,
-        wgt::VertexFormat::Unorm8x4Bgra => naga::back::msl::VertexFormat::Unorm8x4Bgra,
-
-        wgt::VertexFormat::Float64
-        | wgt::VertexFormat::Float64x2
-        | wgt::VertexFormat::Float64x3
-        | wgt::VertexFormat::Float64x4 => {
-            unimplemented!()
-        }
-    }
-}
-
 impl super::Device {
     fn load_shader(
         &self,
         stage: &crate::ProgrammableStage<super::ShaderModule>,
-        vertex_buffer_mappings: &[naga::back::msl::VertexBufferMapping],
+        vertex_buffers: &[wst::msl::VertexBufferMapping],
         layout: &super::PipelineLayout,
         primitive_class: MTLPrimitiveTopologyClass,
-        naga_stage: naga::ShaderStage,
+        naga_stage: wst::ShaderStage,
     ) -> Result<CompiledShader, crate::PipelineError> {
+        let stage_bit = map_naga_stage(naga_stage);
         match stage.module.source {
             ShaderModuleSource::Naga(ref naga_shader) => {
-                let stage_bit = map_naga_stage(naga_stage);
-                let (module, module_info) = naga::back::pipeline_constants::process_overrides(
-                    &naga_shader.module,
-                    &naga_shader.info,
-                    Some((naga_stage, stage.entry_point)),
-                    stage.constants,
-                )
-                .map_err(|e| {
-                    crate::PipelineError::PipelineConstants(stage_bit, format!("MSL: {e:?}"))
-                })?;
-
-                let ep_resources = &layout.per_stage_map[naga_stage];
-
-                let bounds_check_policy = if stage.module.bounds_checks.bounds_checks {
-                    naga::proc::BoundsCheckPolicy::Restrict
-                } else {
-                    naga::proc::BoundsCheckPolicy::Unchecked
-                };
-
-                let options = naga::back::msl::Options {
-                    lang_version: match self.shared.private_caps.msl_version {
-                        #[allow(deprecated)]
-                        MTLLanguageVersion::Version1_0 => (1, 0),
-                        MTLLanguageVersion::Version1_1 => (1, 1),
-                        MTLLanguageVersion::Version1_2 => (1, 2),
-                        MTLLanguageVersion::Version2_0 => (2, 0),
-                        MTLLanguageVersion::Version2_1 => (2, 1),
-                        MTLLanguageVersion::Version2_2 => (2, 2),
-                        MTLLanguageVersion::Version2_3 => (2, 3),
-                        MTLLanguageVersion::Version2_4 => (2, 4),
-                        MTLLanguageVersion::Version3_0 => (3, 0),
-                        MTLLanguageVersion::Version3_1 => (3, 1),
-                        // Newer version, fall back to 3.1
-                        _ => (3, 1),
-                    },
-                    inline_samplers: Default::default(),
-                    spirv_cross_compatibility: false,
-                    fake_missing_bindings: false,
-                    per_entry_point_map: naga::back::msl::EntryPointResourceMap::from([(
-                        stage.entry_point.to_owned(),
-                        ep_resources.clone(),
-                    )]),
-                    bounds_check_policies: naga::proc::BoundsCheckPolicies {
-                        index: bounds_check_policy,
-                        buffer: bounds_check_policy,
-                        image_load: bounds_check_policy,
-                        // TODO: support bounds checks on binding arrays
-                        binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
-                    },
-                    zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
-                    force_loop_bounding: stage.module.bounds_checks.force_loop_bounding,
-                };
-
-                let pipeline_options = naga::back::msl::PipelineOptions {
-                    entry_point: Some((naga_stage, stage.entry_point.to_owned())),
-                    allow_and_force_point_size: match primitive_class {
-                        MTLPrimitiveTopologyClass::Point => true,
-                        _ => false,
-                    },
-                    vertex_pulling_transform: true,
-                    vertex_buffer_mappings: vertex_buffer_mappings.to_vec(),
-                };
-
-                let (source, info) = naga::back::msl::write_string(
-                    &module,
-                    &module_info,
-                    &options,
-                    &pipeline_options,
-                )
-                .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("MSL: {e:?}")))?;
+                let result = naga_shader
+                    .compile_msl(wgs::msl::MslShaderDesc {
+                        options: alloc::borrow::Cow::Borrowed(&self.shader_options),
+                        entry_point: Some((stage.entry_point, naga_stage)),
+                        resources: &layout.per_stage_map[naga_stage],
+                        runtime_checks: stage.module.bounds_checks,
+                        constants: &stage.constants,
+                        vertex_buffer_mappings: vertex_buffers,
+                        zero_init_memory: stage.zero_initialize_workgroup_memory,
+                        is_point_primitive: primitive_class == MTLPrimitiveTopologyClass::Point,
+                    })
+                    .map_err(|e| match e {
+                        wgs::ShaderCompilationError::Linkage(info) => {
+                            crate::PipelineError::Linkage(stage_bit, info)
+                        }
+                        wgs::ShaderCompilationError::PipelineConstants(info) => {
+                            crate::PipelineError::Linkage(stage_bit, info)
+                        }
+                    })?;
 
                 log::debug!(
                     "Naga generated shader for entry point '{}' and stage {:?}\n{}",
                     stage.entry_point,
                     naga_stage,
-                    &source
+                    &result.shader
                 );
+                let ep = result.entry_points.into_iter().next().unwrap();
 
                 let options = MTLCompileOptions::new();
                 options.setLanguageVersion(self.shared.private_caps.msl_version);
@@ -238,93 +136,34 @@ impl super::Device {
                     .shared
                     .device
                     .newLibraryWithSource_options_error(
-                        &NSString::from_str(&source),
+                        &NSString::from_str(&result.shader),
                         Some(&options),
                     )
                     .map_err(|err| {
-                        log::debug!("Naga generated shader:\n{source}");
+                        log::debug!("Naga generated shader:\n{}", result.shader);
                         crate::PipelineError::Linkage(stage_bit, format!("Metal: {err}"))
                     })?;
 
-                let ep_index = module
-                    .entry_points
-                    .iter()
-                    .position(|ep| ep.stage == naga_stage && ep.name == stage.entry_point)
-                    .ok_or(crate::PipelineError::EntryPoint(naga_stage))?;
-                let ep = &module.entry_points[ep_index];
-                let translated_ep_name = info.entry_point_names[0]
-                    .as_ref()
-                    .map_err(|e| crate::PipelineError::Linkage(stage_bit, format!("{e}")))?;
-
-                let wg_size = MTLSize {
-                    width: ep.workgroup_size[0] as _,
-                    height: ep.workgroup_size[1] as _,
-                    depth: ep.workgroup_size[2] as _,
-                };
-
                 let function = library
-                    .newFunctionWithName(&NSString::from_str(translated_ep_name))
+                    .newFunctionWithName(&NSString::from_str(&ep.compiled_name))
                     .ok_or_else(|| {
-                        log::error!("Function '{translated_ep_name}' does not exist");
+                        log::error!("Function '{}' does not exist", ep.compiled_name);
                         crate::PipelineError::EntryPoint(naga_stage)
                     })?;
 
-                // collect sizes indices, immutable buffers, and work group memory sizes
-                let ep_info = &module_info.get_entry_point(ep_index);
-                let mut wg_memory_sizes = Vec::new();
-                let mut sized_bindings = Vec::new();
-                let mut immutable_buffer_mask = 0;
-                for (var_handle, var) in module.global_variables.iter() {
-                    match var.space {
-                        naga::AddressSpace::WorkGroup => {
-                            if !ep_info[var_handle].is_empty() {
-                                let size = module.types[var.ty].inner.size(module.to_ctx());
-                                wg_memory_sizes.push(size);
-                            }
-                        }
-                        naga::AddressSpace::Uniform | naga::AddressSpace::Storage { .. } => {
-                            let br = match var.binding {
-                                Some(br) => br,
-                                None => continue,
-                            };
-                            let storage_access_store = match var.space {
-                                naga::AddressSpace::Storage { access } => {
-                                    access.contains(naga::StorageAccess::STORE)
-                                }
-                                _ => false,
-                            };
-
-                            // check for an immutable buffer
-                            if !ep_info[var_handle].is_empty() && !storage_access_store {
-                                let slot = ep_resources.resources[&br].buffer.unwrap();
-                                immutable_buffer_mask |= 1 << slot;
-                            }
-
-                            let mut dynamic_array_container_ty = var.ty;
-                            if let naga::TypeInner::Struct { ref members, .. } =
-                                module.types[var.ty].inner
-                            {
-                                dynamic_array_container_ty = members.last().unwrap().ty;
-                            }
-                            if let naga::TypeInner::Array {
-                                size: naga::ArraySize::Dynamic,
-                                ..
-                            } = module.types[dynamic_array_container_ty].inner
-                            {
-                                sized_bindings.push(br);
-                            }
-                        }
-                        _ => {}
-                    }
-                }
+                // collect sizes indices, immutable buffers, and work group memory size
 
                 Ok(CompiledShader {
                     library,
                     function,
-                    wg_size,
-                    wg_memory_sizes,
-                    sized_bindings,
-                    immutable_buffer_mask,
+                    wg_size: MTLSize {
+                        width: ep.workgroup_size[0] as usize,
+                        height: ep.workgroup_size[1] as usize,
+                        depth: ep.workgroup_size[2] as usize,
+                    },
+                    wg_memory_sizes: ep.wg_memory_sizes,
+                    sized_bindings: ep.sized_bindings,
+                    immutable_buffer_mask: ep.immutable_buffer_mask,
                 })
             }
             ShaderModuleSource::Passthrough(ref shader) => Ok(CompiledShader {
@@ -379,8 +218,12 @@ impl super::Device {
         raw: Retained<ProtocolObject<dyn MTLDevice>>,
         features: wgt::Features,
     ) -> super::Device {
+        let shared = Arc::new(super::AdapterShared::new(raw));
         super::Device {
-            shared: Arc::new(super::AdapterShared::new(raw)),
+            shader_options: wgs::msl::MslCompileOptions::new(wgs::msl::MslCompileOptionsDesc {
+                lang_version: super::map_msl_version(shared.private_caps.msl_version),
+            }),
+            shared,
             features,
             counters: Default::default(),
         }
@@ -713,13 +556,13 @@ impl crate::Device for super::Device {
     ) -> DeviceResult<super::PipelineLayout> {
         #[derive(Debug)]
         struct StageInfo {
-            stage: naga::ShaderStage,
+            stage: wst::ShaderStage,
             counters: super::ResourceData<super::ResourceIndex>,
             pc_buffer: Option<super::ResourceIndex>,
             pc_limit: u32,
             sizes_buffer: Option<super::ResourceIndex>,
             need_sizes_buffer: bool,
-            resources: naga::back::msl::BindingMap,
+            resources: wst::msl::BindingMap,
         }
 
         let mut stage_data = super::NAGA_STAGES.map(|stage| StageInfo {
@@ -767,7 +610,7 @@ impl crate::Device for super::Device {
                         continue;
                     }
 
-                    let mut target = naga::back::msl::BindTarget::default();
+                    let mut target = wst::msl::BindTarget::default();
                     // Bindless path
                     if let Some(_) = entry.count {
                         target.buffer = Some(info.counters.buffers as _);
@@ -782,10 +625,9 @@ impl crate::Device for super::Device {
                                 }
                             }
                             wgt::BindingType::Sampler { .. } => {
-                                target.sampler =
-                                    Some(naga::back::msl::BindSamplerTarget::Resource(
-                                        info.counters.samplers as _,
-                                    ));
+                                target.sampler = Some(wst::msl::BindSamplerTarget::Resource(
+                                    info.counters.samplers as _,
+                                ));
                                 info.counters.samplers += 1;
                             }
                             wgt::BindingType::Texture { .. } => {
@@ -808,7 +650,7 @@ impl crate::Device for super::Device {
                             }
                             wgt::BindingType::ExternalTexture => {
                                 target.external_texture =
-                                    Some(naga::back::msl::BindExternalTextureTarget {
+                                    Some(wst::msl::BindExternalTextureTarget {
                                         planes: [
                                             info.counters.textures as _,
                                             (info.counters.textures + 1) as _,
@@ -822,7 +664,7 @@ impl crate::Device for super::Device {
                         }
                     }
 
-                    let br = naga::ResourceBinding {
+                    let br = wst::ResourceBinding {
                         group: group_index as u32,
                         binding: entry.binding,
                     };
@@ -837,7 +679,7 @@ impl crate::Device for super::Device {
 
         // Finally, make sure we fit the limits
         for info in stage_data.iter_mut() {
-            if info.need_sizes_buffer || info.stage == naga::ShaderStage::Vertex {
+            if info.need_sizes_buffer || info.stage == wst::ShaderStage::Vertex {
                 // Set aside space for the sizes_buffer, which is required
                 // for variable-length buffers, or to support vertex pulling.
                 info.sizes_buffer = Some(info.counters.buffers);
@@ -862,13 +704,13 @@ impl crate::Device for super::Device {
 
         let total_counters = stage_data.map_ref(|info| info.counters.clone());
 
-        let per_stage_map = stage_data.map(|info| naga::back::msl::EntryPointResources {
+        let per_stage_map = stage_data.map(|info| wst::msl::EntryPointResources {
             immediates_buffer: info
                 .pc_buffer
-                .map(|buffer_index| buffer_index as naga::back::msl::Slot),
+                .map(|buffer_index| buffer_index as wst::msl::Slot),
             sizes_buffer: info
                 .sizes_buffer
-                .map(|buffer_index| buffer_index as naga::back::msl::Slot),
+                .map(|buffer_index| buffer_index as wst::msl::Slot),
             resources: info.resources,
         });
 
@@ -1275,39 +1117,31 @@ impl crate::Device for super::Device {
                     ms_info = None;
 
                     // Collect vertex buffer mappings
-                    let mut vertex_buffer_mappings =
-                        Vec::<naga::back::msl::VertexBufferMapping>::new();
+                    let mut vertex_buffer_mappings = Vec::<wst::msl::VertexBufferMapping>::new();
                     for (i, vbl) in vertex_buffers.iter().enumerate() {
-                        let mut attributes = Vec::<naga::back::msl::AttributeMapping>::new();
+                        let mut attributes = Vec::<wgt::VertexAttribute>::new();
                         for attribute in vbl.attributes.iter() {
-                            attributes.push(naga::back::msl::AttributeMapping {
-                                shader_location: attribute.shader_location,
-                                offset: attribute.offset as u32,
-                                format: convert_vertex_format_to_naga(attribute.format),
-                            });
+                            attributes.push(*attribute);
                         }
 
-                        let mapping = naga::back::msl::VertexBufferMapping {
+                        let mapping = wst::msl::VertexBufferMapping {
                             id: self.shared.private_caps.max_vertex_buffers - 1 - i as u32,
                             stride: if vbl.array_stride > 0 {
                                 vbl.array_stride.try_into().unwrap()
                             } else {
                                 vbl.attributes
                                     .iter()
-                                    .map(|attribute| attribute.offset + attribute.format.size())
+                                    .map(|attribute| {
+                                        attribute.offset + attribute.format.size() as u32
+                                    })
                                     .max()
                                     .unwrap_or(0)
                                     .try_into()
                                     .unwrap()
                             },
-                            step_mode: match (vbl.array_stride == 0, vbl.step_mode) {
-                                (true, _) => naga::back::msl::VertexBufferStepMode::Constant,
-                                (false, wgt::VertexStepMode::Vertex) => {
-                                    naga::back::msl::VertexBufferStepMode::ByVertex
-                                }
-                                (false, wgt::VertexStepMode::Instance) => {
-                                    naga::back::msl::VertexBufferStepMode::ByInstance
-                                }
+                            step_mode: match vbl.step_mode {
+                                wgt::VertexStepMode::Vertex => wgt::VertexStepMode::Vertex,
+                                wgt::VertexStepMode::Instance => wgt::VertexStepMode::Instance,
                             },
                             attributes,
                         };
@@ -1321,7 +1155,7 @@ impl crate::Device for super::Device {
                             &vertex_buffer_mappings,
                             desc.layout,
                             primitive_class,
-                            naga::ShaderStage::Vertex,
+                            wst::ShaderStage::Vertex,
                         )?;
 
                         descriptor.setVertexFunction(Some(&vs.function));
@@ -1382,7 +1216,9 @@ impl crate::Device for super::Device {
                                 let stride = vb
                                     .attributes
                                     .iter()
-                                    .map(|attribute| attribute.offset + attribute.format.size())
+                                    .map(|attribute| {
+                                        attribute.offset + attribute.format.size() as u32
+                                    })
                                     .max()
                                     .unwrap_or(0);
                                 unsafe {
@@ -1427,7 +1263,7 @@ impl crate::Device for super::Device {
                             &[],
                             desc.layout,
                             primitive_class,
-                            naga::ShaderStage::Task,
+                            wst::ShaderStage::Task,
                         )?;
                         unsafe { descriptor.setObjectFunction(Some(&ts.function)) };
                         if supports_mutability {
@@ -1456,7 +1292,7 @@ impl crate::Device for super::Device {
                             &[],
                             desc.layout,
                             primitive_class,
-                            naga::ShaderStage::Mesh,
+                            wst::ShaderStage::Mesh,
                         )?;
                         unsafe { descriptor.setMeshFunction(Some(&ms.function)) };
                         if supports_mutability {
@@ -1497,7 +1333,7 @@ impl crate::Device for super::Device {
                         &[],
                         desc.layout,
                         primitive_class,
-                        naga::ShaderStage::Fragment,
+                        wst::ShaderStage::Fragment,
                     )?;
 
                     unsafe { descriptor.setFragmentFunction(Some(&fs.function)) };
@@ -1682,7 +1518,7 @@ impl crate::Device for super::Device {
                     function: passthrough_desc
                         .library
                         .newFunctionWithName(&NSString::from_str(desc.stage.entry_point))
-                        .ok_or(crate::PipelineError::EntryPoint(naga::ShaderStage::Compute))?,
+                        .ok_or(crate::PipelineError::EntryPoint(wst::ShaderStage::Compute))?,
                     wg_size: MTLSize {
                         width: passthrough_desc.num_workgroups.0 as usize,
                         height: passthrough_desc.num_workgroups.1 as usize,
@@ -1698,7 +1534,7 @@ impl crate::Device for super::Device {
                     &[],
                     desc.layout,
                     MTLPrimitiveTopologyClass::Unspecified,
-                    naga::ShaderStage::Compute,
+                    wst::ShaderStage::Compute,
                 )?
             };
 

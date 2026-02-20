@@ -25,6 +25,7 @@ use crate::{
     },
     valid, FastHashMap, FastHashSet,
 };
+use wst::VertexFormat;
 
 #[cfg(test)]
 use core::ptr;
@@ -757,7 +758,6 @@ struct ExpressionContext<'a> {
     info: &'a valid::FunctionInfo,
     module: &'a crate::Module,
     mod_info: &'a valid::ModuleInfo,
-    pipeline_options: &'a PipelineOptions,
     lang_version: (u8, u8),
     policies: index::BoundsCheckPolicies,
 
@@ -767,6 +767,7 @@ struct ExpressionContext<'a> {
     guarded_indices: HandleSet<crate::Expression>,
     /// See [`Writer::gen_force_bounded_loop_statements`] for details.
     force_loop_bounding: bool,
+    primitive_topology_is_points: bool,
 }
 
 impl<'a> ExpressionContext<'a> {
@@ -3345,7 +3346,7 @@ impl<W: Write> Writer<W> {
                                 member.binding
                             {
                                 has_point_size = true;
-                                if !context.pipeline_options.allow_and_force_point_size {
+                                if !context.primitive_topology_is_points {
                                     continue;
                                 }
                             }
@@ -3382,7 +3383,7 @@ impl<W: Write> Writer<W> {
 
                 if let FunctionOrigin::EntryPoint(ep_index) = context.origin {
                     let stage = context.module.entry_points[ep_index as usize].stage;
-                    if context.pipeline_options.allow_and_force_point_size
+                    if context.primitive_topology_is_points
                         && stage == crate::ShaderStage::Vertex
                         && !has_point_size
                     {
@@ -4877,9 +4878,9 @@ template <typename A>
 
     fn write_unpacking_function(
         &mut self,
-        format: back::msl::VertexFormat,
+        format: VertexFormat,
     ) -> Result<(String, u32, u32), Error> {
-        use back::msl::VertexFormat::*;
+        use VertexFormat::*;
         match format {
             Uint8 => {
                 let name = self.namer.call("unpackUint8");
@@ -5676,6 +5677,9 @@ template <typename A>
                 )?;
                 writeln!(self.out, "}}")?;
                 Ok((name, 4, 4))
+            }
+            Float64 | Float64x2 | Float64x3 | Float64x4 => {
+                unreachable!("Unrecognized vertex format passed to MSL writer")
             }
         }
     }
@@ -6618,8 +6622,6 @@ template <typename A>
         options: &Options,
         pipeline_options: &PipelineOptions,
     ) -> Result<TranslationInfo, Error> {
-        use back::msl::VertexFormat;
-
         // Define structs to hold resolved/generated data for vertex buffers and
         // their attributes.
         struct AttributeMappingResolved {
@@ -6633,11 +6635,11 @@ template <typename A>
         struct VertexBufferMappingResolved<'a> {
             id: u32,
             stride: u32,
-            step_mode: back::msl::VertexBufferStepMode,
+            step_mode: wst::VertexStepMode,
             ty_name: String,
             param_name: String,
             elem_name: String,
-            attributes: &'a Vec<back::msl::AttributeMapping>,
+            attributes: &'a Vec<wst::VertexAttribute>,
         }
         let mut vbm_resolved = Vec::<VertexBufferMappingResolved>::new();
 
@@ -6670,11 +6672,10 @@ template <typename A>
                 );
 
                 match vbm.step_mode {
-                    back::msl::VertexBufferStepMode::Constant => {}
-                    back::msl::VertexBufferStepMode::ByVertex => {
+                    wst::VertexStepMode::Vertex => {
                         needs_vertex_id = true;
                     }
-                    back::msl::VertexBufferStepMode::ByInstance => {
+                    wst::VertexStepMode::Instance => {
                         needs_instance_id = true;
                     }
                 }
@@ -6826,8 +6827,8 @@ template <typename A>
                     guarded_indices,
                     module,
                     mod_info,
-                    pipeline_options,
                     force_loop_bounding: options.force_loop_bounding,
+                    primitive_topology_is_points: false,
                 },
                 result_struct: None,
             };
@@ -6839,7 +6840,10 @@ template <typename A>
             self.named_expressions.clear();
         }
 
-        let ep_range = get_entry_points(module, pipeline_options.entry_point.as_ref())
+        let primitive_topology = pipeline_options.entry_point.as_ref().map(|e| e.2);
+        let entry_point = pipeline_options.clone().entry_point.map(|e| (e.0, e.1));
+
+        let ep_range = get_entry_points(module, entry_point.as_ref())
             .map_err(|(stage, name)| Error::EntryPointNotFound(stage, name))?;
 
         let mut info = TranslationInfo {
@@ -7134,7 +7138,8 @@ template <typename A>
 
                         if let crate::Binding::BuiltIn(crate::BuiltIn::PointSize) = *binding {
                             has_point_size = true;
-                            if !pipeline_options.allow_and_force_point_size {
+
+                            if primitive_topology != Some(wst::PrimitiveTopology::Points) {
                                 continue;
                             }
                         }
@@ -7155,7 +7160,7 @@ template <typename A>
                         writeln!(self.out, ";")?;
                     }
 
-                    if pipeline_options.allow_and_force_point_size
+                    if primitive_topology == Some(wst::PrimitiveTopology::Points)
                         && ep.stage == crate::ShaderStage::Vertex
                         && !has_point_size
                     {
@@ -7552,15 +7557,14 @@ template <typename A>
                     let idx = &vbm.id;
                     let stride = &vbm.stride;
                     let index_name = match vbm.step_mode {
-                        back::msl::VertexBufferStepMode::Constant => "0",
-                        back::msl::VertexBufferStepMode::ByVertex => {
+                        wst::VertexStepMode::Vertex => {
                             if let Some(ref name) = v_existing_id {
                                 name
                             } else {
                                 &v_id
                             }
                         }
-                        back::msl::VertexBufferStepMode::ByInstance => {
+                        wst::VertexStepMode::Instance => {
                             if let Some(ref name) = i_existing_id {
                                 name
                             } else {
@@ -7835,8 +7839,9 @@ template <typename A>
                     guarded_indices,
                     module,
                     mod_info,
-                    pipeline_options,
                     force_loop_bounding: options.force_loop_bounding,
+                    primitive_topology_is_points: primitive_topology
+                        == Some(wst::PrimitiveTopology::Points),
                 },
                 result_struct: Some(&stage_out_name),
             };

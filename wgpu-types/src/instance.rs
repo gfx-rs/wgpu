@@ -108,6 +108,7 @@ bitflags::bitflags! {
     /// Defaults to enabling debugging-related flags if the build configuration has `debug_assertions`.
     #[repr(transparent)]
     #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     pub struct InstanceFlags: u32 {
         /// Generate debug information in shaders and objects.
         ///

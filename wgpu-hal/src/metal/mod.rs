@@ -435,6 +435,7 @@ pub struct Device {
     shared: Arc<AdapterShared>,
     features: wgt::Features,
     counters: Arc<wgt::HalCounters>,
+    shader_options: wgs::msl::MslCompileOptions,
 }
 
 pub struct Surface {
@@ -718,7 +719,7 @@ impl<T> MultiStageData<T> {
 }
 
 type MultiStageResourceCounters = MultiStageData<ResourceData<ResourceIndex>>;
-type MultiStageResources = MultiStageData<naga::back::msl::EntryPointResources>;
+type MultiStageResources = MultiStageData<wst::msl::EntryPointResources>;
 
 #[derive(Debug)]
 struct BindGroupLayoutInfo {
@@ -829,15 +830,15 @@ struct PipelineStageInfo {
     /// The buffer argument table index at which we pass runtime-sized arrays' buffer sizes.
     ///
     /// See `device::CompiledShader::sized_bindings` for more details.
-    sizes_slot: Option<naga::back::msl::Slot>,
+    sizes_slot: Option<wst::msl::Slot>,
 
     /// Bindings of all WGSL `storage` globals that contain runtime-sized arrays.
     ///
     /// See `device::CompiledShader::sized_bindings` for more details.
-    sized_bindings: Vec<naga::ResourceBinding>,
+    sized_bindings: Vec<wst::ResourceBinding>,
 
     /// Info on all bound vertex buffers.
-    vertex_buffer_mappings: Vec<naga::back::msl::VertexBufferMapping>,
+    vertex_buffer_mappings: Vec<wst::msl::VertexBufferMapping>,
 
     /// The workgroup size for compute, task or mesh stages
     raw_wg_size: MTLSize,
@@ -1023,7 +1024,7 @@ struct CommandState {
     /// See `device::CompiledShader::sized_bindings` for more details.
     ///
     /// [`ResourceBinding`]: naga::ResourceBinding
-    storage_buffer_length_map: FastHashMap<naga::ResourceBinding, wgt::BufferSize>,
+    storage_buffer_length_map: FastHashMap<wst::ResourceBinding, wgt::BufferSize>,
 
     vertex_buffer_size_map: FastHashMap<u64, wgt::BufferSize>,
 
@@ -1090,4 +1091,22 @@ pub enum OsType {
     Ios,
     Tvos,
     VisionOs,
+}
+
+fn map_msl_version(msl_version: MTLLanguageVersion) -> (u8, u8) {
+    match msl_version {
+        #[allow(deprecated)]
+        MTLLanguageVersion::Version1_0 => (1, 0),
+        MTLLanguageVersion::Version1_1 => (1, 1),
+        MTLLanguageVersion::Version1_2 => (1, 2),
+        MTLLanguageVersion::Version2_0 => (2, 0),
+        MTLLanguageVersion::Version2_1 => (2, 1),
+        MTLLanguageVersion::Version2_2 => (2, 2),
+        MTLLanguageVersion::Version2_3 => (2, 3),
+        MTLLanguageVersion::Version2_4 => (2, 4),
+        MTLLanguageVersion::Version3_0 => (3, 0),
+        MTLLanguageVersion::Version3_1 => (3, 1),
+        // Newer version, fall back to 3.1
+        _ => (3, 1),
+    }
 }

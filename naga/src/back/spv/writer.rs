@@ -17,7 +17,7 @@ use crate::{
     arena::{Handle, HandleVec, UniqueArena},
     back::spv::{
         helpers::{is_uniform_matcx2_struct_member_access, BindingDecorations},
-        SpvBindingInfo, Std140CompatTypeInfo, WrappedFunction,
+        BindingInfo, Std140CompatTypeInfo, WrappedFunction,
     },
     common::ForDebugWithTypes as _,
     proc::{Alignment, TypeResolution},
@@ -519,10 +519,10 @@ impl Writer {
     fn resolve_resource_binding(
         &self,
         res_binding: &crate::ResourceBinding,
-    ) -> Result<SpvBindingInfo, Error> {
+    ) -> Result<BindingInfo, Error> {
         match self.binding_map.get(res_binding) {
             Some(target) => Ok(*target),
-            None if self.fake_missing_bindings => Ok(SpvBindingInfo {
+            None if self.fake_missing_bindings => Ok(BindingInfo {
                 descriptor_set: res_binding.group,
                 binding: res_binding.binding,
                 binding_array_size: None,
@@ -1823,9 +1823,9 @@ impl Writer {
                 Instruction::execution_mode(
                     function_id,
                     match mesh_info.topology {
-                        crate::MeshOutputTopology::Points => spirv::ExecutionMode::OutputPoints,
-                        crate::MeshOutputTopology::Lines => spirv::ExecutionMode::OutputLinesEXT,
-                        crate::MeshOutputTopology::Triangles => {
+                        crate::PrimitiveTopology::Points => spirv::ExecutionMode::OutputPoints,
+                        crate::PrimitiveTopology::Lines => spirv::ExecutionMode::OutputLinesEXT,
+                        crate::PrimitiveTopology::Triangles => {
                             spirv::ExecutionMode::OutputTrianglesEXT
                         }
                     },

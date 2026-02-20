@@ -36,6 +36,12 @@ default = [
 ]
 
 std = ["wgpu-types/std"]
+serde = [
+    "wgpu-shader-types/serialize",
+    "wgpu-shader-types/deserialize",
+    "wgpu-types/serde",
+    "dep:serde",
+]
 
 static-dxc = ["dep:mach-dxcompiler-rs"]
 # TODO: add options for spirv-opt and spirv-val
@@ -60,6 +66,9 @@ ir-out = ["naga?/deserialize"]
 naga = { workspace = true, optional = true }
 wgpu-types = { workspace = true, default-features = false }
 wgpu-shader-types = { workspace = true, default-features = false }
+
+serde = { workspace = true, optional = true, features = ["alloc", "derive"] }
+profiling = { workspace = true, default-features = false }
 
 # ⚠️ Keep in sync with static_dxc cfg in build.rs and cfg_alias in `wgpu` crate ⚠️
 [target.'cfg(all(windows, not(target_arch = "aarch64"), target_env = "msvc"))'.dependencies]

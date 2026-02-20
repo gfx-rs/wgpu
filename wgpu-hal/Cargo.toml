@@ -87,7 +87,6 @@ metal = [
     "dep:objc2-metal",
     "dep:objc2-quartz-core",
     "dep:parking_lot",
-    "dep:profiling",
     "dep:smallvec",
     "dep:raw-window-metal",
 ]
@@ -104,7 +103,6 @@ vulkan = [
     "dep:log",
     "dep:ordered-float",
     "dep:parking_lot",
-    "dep:profiling",
     "dep:raw-window-metal",
     "dep:smallvec",
     "dep:windows",
@@ -126,7 +124,6 @@ gles = [
     "dep:ndk-sys",
     "dep:objc2",
     "dep:parking_lot",
-    "dep:profiling",
     "dep:wasm-bindgen",
     "dep:web-sys",
     "wgpu-types/web",
@@ -147,7 +144,6 @@ dx12 = [
     "dep:ordered-float",
     "dep:once_cell",
     "dep:parking_lot",
-    "dep:profiling",
     "dep:range-alloc",
     "dep:windows-core",
     "dep:gpu-allocator",
@@ -222,7 +218,7 @@ bytemuck = { workspace = true, optional = true, features = ["derive"] }
 hashbrown = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 ordered-float = { workspace = true, optional = true }
-profiling = { workspace = true, optional = true, default-features = false }
+profiling = { workspace = true, default-features = false }
 
 # Backend: GLES
 glow = { workspace = true, optional = true }

@@ -9,6 +9,16 @@ repository.workspace = true
 keywords.workspace = true
 license.workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "wasm32-unknown-unknown",
+]
+
 [lints]
 workspace = true
 
@@ -24,3 +34,4 @@ serde = { workspace = true, features = ["alloc", "derive"], optional = true }
 
 hashbrown.workspace = true
 rustc-hash.workspace = true
+thiserror.workspace = true

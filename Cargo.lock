@@ -5019,6 +5019,7 @@ dependencies = [
  "hashbrown 0.16.1",
  "rustc-hash 1.1.0",
  "serde",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -5028,6 +5029,8 @@ dependencies = [
  "cfg_aliases 0.2.1",
  "mach-dxcompiler-rs",
  "naga",
+ "profiling",
+ "serde",
  "wgpu-shader-types",
  "wgpu-types",
 ]
@@ -5087,6 +5090,7 @@ dependencies = [
  "serde",
  "serde_json",
  "web-sys",
+ "wgpu-shader-types",
 ]
 
 [[package]]

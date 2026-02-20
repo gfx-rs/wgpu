@@ -506,6 +506,15 @@ pub enum ShaderError {
     Device(#[from] DeviceError),
 }
 
+impl From<wgs::ShaderCompilationError> for ShaderError {
+    fn from(value: wgs::ShaderCompilationError) -> Self {
+        match value {
+            wgs::ShaderCompilationError::Linkage(info) => Self::Compilation(info),
+            _ => unreachable!(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
 pub enum PipelineError {
     #[error("Linkage failed for stage {0:?}: {1}")]
@@ -516,6 +525,19 @@ pub enum PipelineError {
     Device(#[from] DeviceError),
     #[error("Pipeline constant error for stage {0:?}: {1}")]
     PipelineConstants(wgt::ShaderStages, String),
+}
+
+impl From<(wgs::ShaderCompilationError, wst::ShaderStage)> for PipelineError {
+    fn from((value, stage): (wgs::ShaderCompilationError, wst::ShaderStage)) -> Self {
+        match value {
+            wgs::ShaderCompilationError::Linkage(info) => {
+                Self::Linkage(auxil::map_naga_stage(stage), info)
+            }
+            wgs::ShaderCompilationError::PipelineConstants(info) => {
+                Self::PipelineConstants(auxil::map_naga_stage(stage), info)
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Error)]
@@ -2383,22 +2405,11 @@ pub struct PipelineCacheDescriptor<'a> {
     pub data: Option<&'a [u8]>,
 }
 
-/// Describes how the vertex buffer is interpreted.
-#[derive(Clone, Debug)]
-pub struct VertexBufferLayout<'a> {
-    /// The stride, in bytes, between elements of this buffer.
-    pub array_stride: wgt::BufferAddress,
-    /// How often this vertex buffer is "stepped" forward.
-    pub step_mode: wgt::VertexStepMode,
-    /// The list of attributes which comprise a single vertex.
-    pub attributes: &'a [wgt::VertexAttribute],
-}
-
 #[derive(Clone, Debug)]
 pub enum VertexProcessor<'a, M: DynShaderModule + ?Sized> {
     Standard {
         /// The format of any vertex buffers used with this pipeline.
-        vertex_buffers: &'a [VertexBufferLayout<'a>],
+        vertex_buffers: &'a [wgt::VertexBufferLayout<'a>],
         /// The vertex stage for this pipeline.
         vertex_stage: ProgrammableStage<'a, M>,
     },

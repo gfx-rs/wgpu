@@ -2293,208 +2293,6 @@ impl super::Adapter {
             None
         };
 
-        /*let naga_options = {
-            use naga::back::spv;
-
-            // The following capabilities are always available
-            // see https://registry.khronos.org/vulkan/specs/1.3-extensions/html/chap52.html#spirvenv-capabilities
-            let mut capabilities = vec![
-                spv::Capability::Shader,
-                spv::Capability::Matrix,
-                spv::Capability::Sampled1D,
-                spv::Capability::Image1D,
-                spv::Capability::ImageQuery,
-                spv::Capability::DerivativeControl,
-                spv::Capability::StorageImageExtendedFormats,
-            ];
-
-            if self
-                .downlevel_flags
-                .contains(wgt::DownlevelFlags::CUBE_ARRAY_TEXTURES)
-            {
-                capabilities.push(spv::Capability::SampledCubeArray);
-            }
-
-            if self
-                .downlevel_flags
-                .contains(wgt::DownlevelFlags::MULTISAMPLED_SHADING)
-            {
-                capabilities.push(spv::Capability::SampleRateShading);
-            }
-
-            if features.contains(wgt::Features::MULTIVIEW) {
-                capabilities.push(spv::Capability::MultiView);
-            }
-
-            if features.contains(wgt::Features::SHADER_PRIMITIVE_INDEX) {
-                capabilities.push(spv::Capability::Geometry);
-            }
-
-            if features.intersects(wgt::Features::SUBGROUP | wgt::Features::SUBGROUP_VERTEX) {
-                capabilities.push(spv::Capability::GroupNonUniform);
-                capabilities.push(spv::Capability::GroupNonUniformVote);
-                capabilities.push(spv::Capability::GroupNonUniformArithmetic);
-                capabilities.push(spv::Capability::GroupNonUniformBallot);
-                capabilities.push(spv::Capability::GroupNonUniformShuffle);
-                capabilities.push(spv::Capability::GroupNonUniformShuffleRelative);
-                capabilities.push(spv::Capability::GroupNonUniformQuad);
-            }
-
-            if features.intersects(
-                wgt::Features::SAMPLED_TEXTURE_AND_STORAGE_BUFFER_ARRAY_NON_UNIFORM_INDEXING
-                    | wgt::Features::STORAGE_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-                    | wgt::Features::UNIFORM_BUFFER_BINDING_ARRAYS,
-            ) {
-                capabilities.push(spv::Capability::ShaderNonUniform);
-            }
-            if features.contains(wgt::Features::BGRA8UNORM_STORAGE) {
-                capabilities.push(spv::Capability::StorageImageWriteWithoutFormat);
-            }
-
-            if features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
-                capabilities.push(spv::Capability::RayQueryKHR);
-            }
-
-            if features.contains(wgt::Features::SHADER_INT64) {
-                capabilities.push(spv::Capability::Int64);
-            }
-
-            if features.contains(wgt::Features::SHADER_F16) {
-                capabilities.push(spv::Capability::Float16);
-            }
-
-            if features.intersects(
-                wgt::Features::SHADER_INT64_ATOMIC_ALL_OPS
-                    | wgt::Features::SHADER_INT64_ATOMIC_MIN_MAX
-                    | wgt::Features::TEXTURE_INT64_ATOMIC,
-            ) {
-                capabilities.push(spv::Capability::Int64Atomics);
-            }
-
-            if features.intersects(wgt::Features::TEXTURE_INT64_ATOMIC) {
-                capabilities.push(spv::Capability::Int64ImageEXT);
-            }
-
-            if features.contains(wgt::Features::SHADER_FLOAT32_ATOMIC) {
-                capabilities.push(spv::Capability::AtomicFloat32AddEXT);
-            }
-
-            if features.contains(wgt::Features::CLIP_DISTANCES) {
-                capabilities.push(spv::Capability::ClipDistance);
-            }
-
-            // Vulkan bundles both barycentrics and per-vertex attributes under the same feature.
-            if features
-                .intersects(wgt::Features::SHADER_BARYCENTRICS | wgt::Features::SHADER_PER_VERTEX)
-            {
-                capabilities.push(spv::Capability::FragmentBarycentricKHR);
-            }
-
-            if features.contains(wgt::Features::SHADER_DRAW_INDEX) {
-                capabilities.push(spv::Capability::DrawParameters);
-            }
-
-            let mut flags = spv::WriterFlags::empty();
-            flags.set(
-                spv::WriterFlags::DEBUG,
-                self.instance.flags.contains(wgt::InstanceFlags::DEBUG),
-            );
-            flags.set(
-                spv::WriterFlags::LABEL_VARYINGS,
-                self.phd_capabilities.properties.vendor_id != crate::auxil::db::qualcomm::VENDOR,
-            );
-            flags.set(
-                spv::WriterFlags::FORCE_POINT_SIZE,
-                //Note: we could technically disable this when we are compiling separate entry points,
-                // and we know exactly that the primitive topology is not `PointList`.
-                // But this requires cloning the `spv::Options` struct, which has heap allocations.
-                true, // could check `super::Workarounds::SEPARATE_ENTRY_POINTS`
-            );
-            flags.set(
-                spv::WriterFlags::PRINT_ON_RAY_QUERY_INITIALIZATION_FAIL,
-                self.instance.flags.contains(wgt::InstanceFlags::DEBUG)
-                    && (self.instance.instance_api_version >= vk::API_VERSION_1_3
-                        || enabled_extensions.contains(&khr::shader_non_semantic_info::NAME)),
-            );
-            if features.contains(wgt::Features::EXPERIMENTAL_RAY_QUERY) {
-                capabilities.push(spv::Capability::RayQueryKHR);
-            }
-            if features.contains(wgt::Features::EXPERIMENTAL_RAY_HIT_VERTEX_RETURN) {
-                capabilities.push(spv::Capability::RayQueryPositionFetchKHR)
-            }
-            if features.contains(wgt::Features::EXPERIMENTAL_MESH_SHADER) {
-                capabilities.push(spv::Capability::MeshShadingEXT);
-            }
-            if features.contains(wgt::Features::EXPERIMENTAL_COOPERATIVE_MATRIX) {
-                capabilities.push(spv::Capability::CooperativeMatrixKHR);
-                // TODO: expose this more generally
-                capabilities.push(spv::Capability::VulkanMemoryModel);
-            }
-            if self.private_caps.shader_integer_dot_product {
-                // See <https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_shader_integer_dot_product.html#_new_spir_v_capabilities>.
-                capabilities.extend(&[
-                    spv::Capability::DotProductInputAllKHR,
-                    spv::Capability::DotProductInput4x8BitKHR,
-                    spv::Capability::DotProductInput4x8BitPackedKHR,
-                    spv::Capability::DotProductKHR,
-                ]);
-            }
-            if self.private_caps.shader_int8 {
-                // See <https://registry.khronos.org/vulkan/specs/latest/man/html/VkPhysicalDeviceShaderFloat16Int8Features.html#extension-features-shaderInt8>.
-                capabilities.extend(&[spv::Capability::Int8]);
-            }
-            spv::Options {
-                lang_version: match self.phd_capabilities.device_api_version {
-                    // Use maximum supported SPIR-V version according to
-                    // <https://github.com/KhronosGroup/Vulkan-Docs/blob/19b7651/appendices/spirvenv.adoc?plain=1#L21-L40>.
-                    vk::API_VERSION_1_0..vk::API_VERSION_1_1 => (1, 0),
-                    vk::API_VERSION_1_1..vk::API_VERSION_1_2 => (1, 3),
-                    vk::API_VERSION_1_2..vk::API_VERSION_1_3 => (1, 5),
-                    vk::API_VERSION_1_3.. => (1, 6),
-                    _ => unreachable!(),
-                },
-                flags,
-                capabilities: Some(capabilities.iter().cloned().collect()),
-                bounds_check_policies: naga::proc::BoundsCheckPolicies {
-                    index: naga::proc::BoundsCheckPolicy::Restrict,
-                    buffer: if self.private_caps.robust_buffer_access2 {
-                        naga::proc::BoundsCheckPolicy::Unchecked
-                    } else {
-                        naga::proc::BoundsCheckPolicy::Restrict
-                    },
-                    image_load: if self.private_caps.robust_image_access {
-                        naga::proc::BoundsCheckPolicy::Unchecked
-                    } else {
-                        naga::proc::BoundsCheckPolicy::Restrict
-                    },
-                    // TODO: support bounds checks on binding arrays
-                    binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
-                },
-                zero_initialize_workgroup_memory: if self
-                    .private_caps
-                    .zero_initialize_workgroup_memory
-                {
-                    spv::ZeroInitializeWorkgroupMemoryMode::Native
-                } else {
-                    spv::ZeroInitializeWorkgroupMemoryMode::Polyfill
-                },
-                force_loop_bounding: true,
-                ray_query_initialization_tracking: true,
-                use_storage_input_output_16: features.contains(wgt::Features::SHADER_F16)
-                    && self.phd_features.supports_storage_input_output_16(),
-                fake_missing_bindings: false,
-                // We need to build this separately for each invocation, so just default it out here
-                binding_map: BTreeMap::default(),
-                debug_info: None,
-                task_dispatch_limits: Some(naga::back::TaskDispatchLimits {
-                    max_mesh_workgroups_per_dim: limits.max_task_mesh_workgroups_per_dimension,
-                    max_mesh_workgroups_total: limits.max_task_mesh_workgroup_total_count,
-                }),
-                mesh_shader_primitive_indices_clamp: true,
-            }
-        };*/
-
-        // TODO
         let compile_options = wgs::spv::SpvCompileOptions::new(wgs::spv::SpvCompileOptionsDesc {
             lang_version: match self.phd_capabilities.device_api_version {
                 // Use maximum supported SPIR-V version according to
@@ -2505,6 +2303,25 @@ impl super::Adapter {
                 vk::API_VERSION_1_3.. => (1, 6),
                 _ => unreachable!(),
             },
+            features,
+            task_dispatch_limits: wst::TaskDispatchLimits {
+                max_mesh_workgroups_per_dim: limits.max_task_mesh_workgroups_per_dimension,
+                max_mesh_workgroups_total: limits.max_task_mesh_workgroup_total_count,
+            },
+            downlevel_flags: self.downlevel_flags,
+            instance_flags: self.instance.flags,
+            shader_non_semantic_info: self.instance.flags.contains(wgt::InstanceFlags::DEBUG)
+                && (self.instance.instance_api_version >= vk::API_VERSION_1_3
+                    || enabled_extensions.contains(&khr::shader_non_semantic_info::NAME)),
+            vendor_could_be_qualcomm: self.phd_capabilities.properties.vendor_id
+                == crate::auxil::db::qualcomm::VENDOR,
+            shader_integer_dot_product: self.private_caps.shader_integer_dot_product,
+            shader_int8: self.private_caps.shader_int8,
+            native_zero_init: self.private_caps.zero_initialize_workgroup_memory,
+            shader_input_output_16: features.contains(wgt::Features::SHADER_F16)
+                && self.phd_features.supports_storage_input_output_16(),
+            robust_buffer_access2: self.private_caps.robust_buffer_access2,
+            robust_image_access: self.private_caps.robust_image_access,
         });
 
         let raw_queue = {

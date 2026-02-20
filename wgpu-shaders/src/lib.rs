@@ -3,6 +3,9 @@ extern crate alloc;
 extern crate wgpu_shader_types as wst;
 extern crate wgpu_types as wgt;
 
+#[cfg(feature = "msl-out")]
+pub mod msl;
+#[cfg(feature = "spv-out")]
 pub mod spv;
 
 pub use wgpu_shader_types::ShaderStage;
@@ -63,4 +66,9 @@ pub enum ShaderInput<'a> {
         shader: &'a str,
         num_workgroups: (u32, u32, u32),
     },
+}
+
+pub enum ShaderCompilationError {
+    PipelineConstants(String),
+    Linkage(String),
 }

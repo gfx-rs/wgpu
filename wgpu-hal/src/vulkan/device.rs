@@ -1,4 +1,10 @@
-use alloc::{borrow::ToOwned as _, collections::BTreeMap, ffi::CString, sync::Arc, vec::Vec};
+use alloc::{
+    borrow::{Cow, ToOwned as _},
+    collections::BTreeMap,
+    ffi::CString,
+    sync::Arc,
+    vec::Vec,
+};
 use core::{
     ffi::CStr,
     mem::{self, MaybeUninit},
@@ -635,7 +641,7 @@ impl super::Device {
         &self,
         stage: &crate::ProgrammableStage<super::ShaderModule>,
         naga_stage: wst::ShaderStage,
-        binding_map: &wst::SpvBindingMap,
+        binding_map: &wst::spv::BindingMap,
     ) -> Result<CompiledStage, crate::PipelineError> {
         // TODO
         let stage_flags = crate::auxil::map_naga_stage(naga_stage);
@@ -645,82 +651,16 @@ impl super::Device {
                 ref naga_shader,
                 runtime_checks,
             } => {
-                let spv = naga_shader.compile_spv(wgs::spv::SpvShaderDesc {
-                    options: &self.compile_options,
-                    runtime_checks,
-                    entry_point: Some((stage.entry_point.to_owned(), naga_stage)),
-                });
-                /*let pipeline_options = naga::back::spv::PipelineOptions {
-                    entry_point: stage.entry_point.to_owned(),
-                    shader_stage: naga_stage,
-                };
-                let needs_temp_options = !runtime_checks.bounds_checks
-                    || !runtime_checks.force_loop_bounding
-                    || !runtime_checks.ray_query_initialization_tracking
-                    || !binding_map.is_empty()
-                    || naga_shader.debug_source.is_some()
-                    || !stage.zero_initialize_workgroup_memory
-                    || !runtime_checks.task_shader_dispatch_tracking
-                    || !runtime_checks.mesh_shader_primitive_indices_clamp;
-
-                let mut temp_options;
-                let options = if needs_temp_options {
-                    temp_options = self.naga_options.clone();
-                    if !runtime_checks.bounds_checks {
-                        temp_options.bounds_check_policies = naga::proc::BoundsCheckPolicies {
-                            index: naga::proc::BoundsCheckPolicy::Unchecked,
-                            buffer: naga::proc::BoundsCheckPolicy::Unchecked,
-                            image_load: naga::proc::BoundsCheckPolicy::Unchecked,
-                            binding_array: naga::proc::BoundsCheckPolicy::Unchecked,
-                        };
-                    }
-                    if !runtime_checks.force_loop_bounding {
-                        temp_options.force_loop_bounding = false;
-                    }
-                    if !runtime_checks.ray_query_initialization_tracking {
-                        temp_options.ray_query_initialization_tracking = false;
-                    }
-                    if !binding_map.is_empty() {
-                        temp_options.binding_map = binding_map.clone();
-                    }
-
-                    if let Some(ref debug) = naga_shader.debug_source {
-                        temp_options.debug_info = Some(naga::back::spv::DebugInfo {
-                            source_code: &debug.source_code,
-                            file_name: debug.file_name.as_ref(),
-                            language: naga::back::spv::SourceLanguage::WGSL,
-                        })
-                    }
-                    if !stage.zero_initialize_workgroup_memory {
-                        temp_options.zero_initialize_workgroup_memory =
-                            naga::back::spv::ZeroInitializeWorkgroupMemoryMode::None;
-                    }
-                    if !runtime_checks.task_shader_dispatch_tracking {
-                        temp_options.task_dispatch_limits = None;
-                    }
-                    temp_options.mesh_shader_primitive_indices_clamp =
-                        runtime_checks.mesh_shader_primitive_indices_clamp;
-
-                    &temp_options
-                } else {
-                    &self.naga_options
-                };
-
-                let (module, info) = naga::back::pipeline_constants::process_overrides(
-                    &naga_shader.module,
-                    &naga_shader.info,
-                    Some((naga_stage, stage.entry_point)),
-                    stage.constants,
-                )
-                .map_err(|e| {
-                    crate::PipelineError::PipelineConstants(stage_flags, format!("{e}"))
-                })?;
-
-                let spv = {
-                    profiling::scope!("naga::spv::write_vec");
-                    naga::back::spv::write_vec(&module, &info, options, Some(&pipeline_options))
-                }
-                .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;*/
+                let spv = naga_shader
+                    .compile_spv(wgs::spv::SpvShaderDesc {
+                        options: Cow::Borrowed(&self.compile_options),
+                        runtime_checks,
+                        entry_point: Some((stage.entry_point.to_owned(), naga_stage)),
+                        binding_map,
+                        zero_initialize_workgroup_memory: stage.zero_initialize_workgroup_memory,
+                        constants: stage.constants,
+                    })
+                    .map_err(|e| (e, naga_stage))?;
                 self.create_shader_module_impl(&spv, &None)?
             }
         };
@@ -1465,7 +1405,7 @@ impl crate::Device for super::Device {
                         group: group as u32,
                         binding,
                     },
-                    wst::SpvBindingInfo {
+                    wst::spv::BindingInfo {
                         descriptor_set: group as u32,
                         binding: binding_info.binding,
                         binding_array_size: binding_info.binding_array_size.map(NonZeroU32::get),
@@ -1733,10 +1673,13 @@ impl crate::Device for super::Device {
             crate::ShaderInput::Naga(naga_shader) => {
                 // TODO
                 let spv = naga_shader.compile_spv(wgs::spv::SpvShaderDesc {
-                    options: &self.compile_options,
+                    options: Cow::Borrowed(&self.compile_options),
                     runtime_checks: desc.runtime_checks,
                     entry_point: None,
-                });
+                    binding_map: &Default::default(),
+                    zero_initialize_workgroup_memory: true,
+                    constants: &Default::default(),
+                })?;
                 /*let mut naga_options = self.naga_options.clone();
                 naga_options.debug_info =
                     naga_shader
@@ -1833,7 +1776,7 @@ impl crate::Device for super::Device {
                         location: at.shader_location,
                         binding: i as u32,
                         format: conv::map_vertex_format(at.format),
-                        offset: at.offset as u32,
+                        offset: at.offset,
                     });
                 }
             }

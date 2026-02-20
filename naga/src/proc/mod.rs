@@ -715,7 +715,7 @@ impl crate::Module {
         // Used to temporarily initialize stuff
         let null_type = crate::Handle::new(NonMaxU32::new(0).unwrap());
         let mut output = crate::MeshStageInfo {
-            topology: crate::MeshOutputTopology::Triangles,
+            topology: crate::PrimitiveTopology::Triangles,
             max_vertices: 0,
             max_vertices_override: None,
             max_primitives: 0,
@@ -796,17 +796,17 @@ impl crate::Module {
                                                 Some(crate::Binding::BuiltIn(
                                                     crate::BuiltIn::PointIndex,
                                                 )) => {
-                                                    topology = crate::MeshOutputTopology::Points;
+                                                    topology = crate::PrimitiveTopology::Points;
                                                 }
                                                 Some(crate::Binding::BuiltIn(
                                                     crate::BuiltIn::LineIndices,
                                                 )) => {
-                                                    topology = crate::MeshOutputTopology::Lines;
+                                                    topology = crate::PrimitiveTopology::Lines;
                                                 }
                                                 Some(crate::Binding::BuiltIn(
                                                     crate::BuiltIn::TriangleIndices,
                                                 )) => {
-                                                    topology = crate::MeshOutputTopology::Triangles;
+                                                    topology = crate::PrimitiveTopology::Triangles;
                                                 }
                                                 _ => (),
                                             }
@@ -920,12 +920,12 @@ impl crate::Module {
     }
 }
 
-impl crate::MeshOutputTopology {
-    pub const fn to_builtin(self) -> crate::BuiltIn {
-        match self {
-            Self::Points => crate::BuiltIn::PointIndex,
-            Self::Lines => crate::BuiltIn::LineIndices,
-            Self::Triangles => crate::BuiltIn::TriangleIndices,
+impl From<crate::PrimitiveTopology> for crate::BuiltIn {
+    fn from(value: crate::PrimitiveTopology) -> Self {
+        match value {
+            wst::PrimitiveTopology::Points => Self::PointIndex,
+            wst::PrimitiveTopology::Lines => Self::LineIndices,
+            wst::PrimitiveTopology::Triangles => Self::TriangleIndices,
         }
     }
 }

@@ -86,7 +86,7 @@ stderr = ["codespan-reporting/std"]
 fs = []
 
 [dependencies]
-wgpu-shader-types = { workspace = true, default-features = false }
+wgpu-shader-types = { workspace = true }
 
 arbitrary = { workspace = true, features = ["derive"], optional = true }
 arrayvec.workspace = true

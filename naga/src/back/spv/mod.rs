@@ -112,7 +112,7 @@ mod writer;
 
 pub use mesh_shader::{MeshReturnInfo, MeshReturnMember};
 pub use spirv::{Capability, SourceLanguage};
-pub use wst::{SpvBindingInfo, SpvBindingMap};
+pub use wst::spv::*;
 
 use alloc::{string::String, vec::Vec};
 use core::ops;
@@ -950,7 +950,7 @@ pub struct Writer {
     global_variables: HandleVec<crate::GlobalVariable, GlobalVariable>,
     std140_compat_uniform_types: crate::FastHashMap<Handle<crate::Type>, Std140CompatTypeInfo>,
     fake_missing_bindings: bool,
-    binding_map: SpvBindingMap,
+    binding_map: BindingMap,
 
     // Cached expressions are only meaningful within a BlockContext, but we
     // retain the table here between functions to save heap allocations.
@@ -1043,7 +1043,7 @@ pub struct Options<'a> {
     pub fake_missing_bindings: bool,
 
     /// Map of resources to information about the binding.
-    pub binding_map: SpvBindingMap,
+    pub binding_map: BindingMap,
 
     /// If given, the set of capabilities modules are allowed to use. Code that
     /// requires capabilities beyond these is rejected with an error.
@@ -1089,7 +1089,7 @@ impl Default for Options<'_> {
             lang_version: (1, 0),
             flags,
             fake_missing_bindings: true,
-            binding_map: SpvBindingMap::default(),
+            binding_map: BindingMap::default(),
             capabilities: None,
             bounds_check_policies: BoundsCheckPolicies::default(),
             zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode::Polyfill,

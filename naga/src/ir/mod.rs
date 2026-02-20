@@ -236,7 +236,7 @@ use crate::diagnostic_filter::DiagnosticFilterNode;
 use crate::{FastIndexMap, NamedExpressions};
 
 pub use block::Block;
-pub use wgpu_shader_types::{ResourceBinding, ShaderStage};
+pub use wgpu_shader_types::{PrimitiveTopology, ResourceBinding, ShaderStage};
 
 /// Explicitly allows early depth/stencil tests.
 ///
@@ -2658,20 +2658,6 @@ pub struct DocComments {
     pub module: Vec<String>,
 }
 
-/// The output topology for a mesh shader. Note that mesh shaders don't allow things like triangle-strips.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub enum MeshOutputTopology {
-    /// Outputs individual vertices to be rendered as points.
-    Points,
-    /// Outputs groups of 2 vertices to be renderedas lines .
-    Lines,
-    /// Outputs groups of 3 vertices to be rendered as triangles.
-    Triangles,
-}
-
 /// Information specific to mesh shader entry points.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -2680,7 +2666,7 @@ pub enum MeshOutputTopology {
 #[allow(dead_code)]
 pub struct MeshStageInfo {
     /// The type of primitive outputted.
-    pub topology: MeshOutputTopology,
+    pub topology: PrimitiveTopology,
     /// The maximum number of vertices a mesh shader may output.
     pub max_vertices: u32,
     /// If pipeline constants are used, the expressions that override `max_vertices`

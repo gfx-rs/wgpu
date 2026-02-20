@@ -1531,7 +1531,7 @@ impl super::Validator {
             if implied.0 != *mesh_info {
                 return Err(EntryPointError::BadMeshOutputVariableType.with_span());
             }
-            if mesh_info.topology == crate::MeshOutputTopology::Points
+            if mesh_info.topology == crate::PrimitiveTopology::Points
                 && !self
                     .capabilities
                     .contains(Capabilities::MESH_SHADER_POINT_TOPOLOGY)

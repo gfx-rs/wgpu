@@ -83,6 +83,9 @@ impl crate::Adapter for super::Adapter {
 
         Ok(crate::OpenDevice {
             device: super::Device {
+                shader_options: wgs::msl::MslCompileOptions::new(wgs::msl::MslCompileOptionsDesc {
+                    lang_version: super::map_msl_version(self.shared.private_caps.msl_version),
+                }),
                 shared: Arc::clone(&self.shared),
                 features,
                 counters: Default::default(),
