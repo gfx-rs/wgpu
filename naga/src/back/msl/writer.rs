@@ -373,16 +373,26 @@ impl Display for TypeContext<'_> {
                 write!(out, "{RAY_QUERY_TYPE}")
             }
             crate::TypeInner::BindingArray { base, .. } => {
+                let base_inner = &self.gctx.types[base].inner;
                 let base_tyname = Self {
                     handle: base,
                     first_time: false,
                     ..*self
                 };
-
-                write!(
-                    out,
-                    "constant {ARGUMENT_BUFFER_WRAPPER_STRUCT}<{base_tyname}>*"
-                )
+                match *base_inner {
+                    crate::TypeInner::Struct { .. } => {
+                        write!(
+                            out,
+                            "device {ARGUMENT_BUFFER_WRAPPER_STRUCT}<device {base_tyname}*>*"
+                        )
+                    }
+                    _ => {
+                        write!(
+                            out,
+                            "constant {ARGUMENT_BUFFER_WRAPPER_STRUCT}<{base_tyname}>*"
+                        )
+                    }
+                }
             }
         }
     }
@@ -428,18 +438,27 @@ impl TypedGlobalVariable<'_> {
             first_time: false,
         };
 
-        let (space, access, reference) = match var.space.to_msl_name() {
-            Some(space) if self.reference => {
-                let access = if var.space.needs_access_qualifier()
-                    && !self.usage.intersects(valid::GlobalUse::WRITE)
-                {
-                    "const"
-                } else {
-                    ""
-                };
-                (space, access, "&")
+        let (space, access, reference) = if matches!(
+            self.module.types[var.ty].inner,
+            crate::TypeInner::BindingArray { .. }
+        ) {
+            // Binding arrays already encode an address space; adding another here
+            // yields invalid qualifiers like `device device` or `device constant`.
+            ("", "", "")
+        } else {
+            match var.space.to_msl_name() {
+                Some(space) if self.reference => {
+                    let access = if var.space.needs_access_qualifier()
+                        && !self.usage.intersects(valid::GlobalUse::WRITE)
+                    {
+                        "const"
+                    } else {
+                        ""
+                    };
+                    (space, access, "&")
+                }
+                _ => ("", "", ""),
             }
-            _ => ("", "", ""),
         };
 
         Ok(write!(
@@ -3157,7 +3176,20 @@ impl<W: Write> Writer<W> {
                         let base_ty = base_ty_handle.unwrap();
                         self.put_access_chain(base, policy, context)?;
                         let name = &self.names[&NameKey::StructMember(base_ty, index)];
-                        write!(self.out, ".{name}")?;
+                        let originates_from_binding_array =
+                            context.function.originating_global(base).is_some_and(|gv| {
+                                matches!(
+                                    context.module.types[context.module.global_variables[gv].ty]
+                                        .inner,
+                                    crate::TypeInner::BindingArray { .. }
+                                )
+                            });
+
+                        if originates_from_binding_array {
+                            write!(self.out, "->{name}")?;
+                        } else {
+                            write!(self.out, ".{name}")?;
+                        }
                     }
                     crate::TypeInner::ValuePointer { .. } | crate::TypeInner::Vector { .. } => {
                         self.put_access_chain(base, policy, context)?;

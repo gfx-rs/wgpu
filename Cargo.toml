@@ -219,6 +219,7 @@ objc2-metal = { version = "0.3.2", default-features = false, features = [
     "std",
     "block2",
     "MTLAllocation",
+    "MTLArgumentEncoder",
     "MTLBlitCommandEncoder",
     "MTLBlitPass",
     "MTLBuffer",

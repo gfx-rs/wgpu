@@ -4,9 +4,9 @@ use objc2_metal::{
     MTLAccelerationStructureBoundingBoxGeometryDescriptor, MTLAccelerationStructureDescriptor,
     MTLAccelerationStructureGeometryDescriptor, MTLAccelerationStructureInstanceDescriptorType,
     MTLAccelerationStructureTriangleGeometryDescriptor, MTLAccelerationStructureUsage,
-    MTLAttributeFormat, MTLBlendFactor, MTLBlendOperation, MTLBlitOption, MTLClearColor,
-    MTLColorWriteMask, MTLCompareFunction, MTLCullMode, MTLIndexType,
-    MTLInstanceAccelerationStructureDescriptor, MTLOrigin,
+    MTLArgumentDescriptor, MTLAttributeFormat, MTLBindingAccess, MTLBlendFactor, MTLBlendOperation,
+    MTLBlitOption, MTLClearColor, MTLColorWriteMask, MTLCompareFunction, MTLCullMode, MTLDataType,
+    MTLIndexType, MTLInstanceAccelerationStructureDescriptor, MTLOrigin,
     MTLPrimitiveAccelerationStructureDescriptor, MTLPrimitiveTopologyClass, MTLPrimitiveType,
     MTLRenderStages, MTLResourceUsage, MTLSamplerAddressMode, MTLSamplerBorderColor,
     MTLSamplerMinMagFilter, MTLSize, MTLStencilOperation, MTLStoreAction, MTLTextureType,
@@ -365,8 +365,43 @@ pub fn map_resource_usage(ty: &wgt::BindingType) -> MTLResourceUsage {
             }
         },
         wgt::BindingType::Sampler(..) => MTLResourceUsage::empty(),
+        wgt::BindingType::Buffer { ty, .. } => match ty {
+            wgt::BufferBindingType::Uniform => MTLResourceUsage::Read,
+            wgt::BufferBindingType::Storage { read_only } => {
+                if *read_only {
+                    MTLResourceUsage::Read
+                } else {
+                    MTLResourceUsage::Read | MTLResourceUsage::Write
+                }
+            }
+        },
         _ => unreachable!(),
     }
+}
+
+pub fn map_binding_access(ty: &wgt::BufferBindingType) -> MTLBindingAccess {
+    match ty {
+        wgt::BufferBindingType::Uniform => MTLBindingAccess::ReadOnly,
+        wgt::BufferBindingType::Storage { read_only } => {
+            if *read_only {
+                MTLBindingAccess::ReadOnly
+            } else {
+                MTLBindingAccess::ReadWrite
+            }
+        }
+    }
+}
+
+pub fn pointer_array_argument_descriptor(
+    count: u32,
+    access: MTLBindingAccess,
+) -> Retained<MTLArgumentDescriptor> {
+    let desc = MTLArgumentDescriptor::new();
+    desc.setDataType(MTLDataType::Pointer);
+    desc.setIndex(0);
+    desc.setArrayLength(count as usize);
+    desc.setAccess(access);
+    desc
 }
 
 pub fn map_acceleration_structure_descriptor<'a>(

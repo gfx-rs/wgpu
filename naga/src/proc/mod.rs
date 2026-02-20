@@ -370,8 +370,7 @@ impl crate::Function {
                 crate::Expression::GlobalVariable(handle) => return Some(handle),
                 crate::Expression::LocalVariable(_) => return None,
                 crate::Expression::FunctionArgument(_) => return None,
-                // There are no other expressions that produce pointer values.
-                _ => unreachable!(),
+                _ => return None,
             }
         }
     }

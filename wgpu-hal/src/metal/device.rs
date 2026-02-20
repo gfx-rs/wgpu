@@ -8,20 +8,20 @@ use objc2::{
     rc::{autoreleasepool, Retained},
     runtime::ProtocolObject,
 };
-use objc2_foundation::{ns_string, NSError, NSRange, NSString, NSUInteger};
+use objc2_foundation::{ns_string, NSArray, NSError, NSRange, NSString, NSUInteger};
 use objc2_metal::{
-    MTLAccelerationStructure, MTLAccelerationStructureInstanceOptions, MTLBuffer,
-    MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer, MTLCommandBufferStatus,
+    MTLAccelerationStructure, MTLAccelerationStructureInstanceOptions, MTLArgumentEncoder,
+    MTLBuffer, MTLCaptureManager, MTLCaptureScope, MTLCommandBuffer, MTLCommandBufferStatus,
     MTLCompileOptions, MTLComputePipelineDescriptor, MTLComputePipelineState,
     MTLCounterSampleBufferDescriptor, MTLCounterSet, MTLDepthClipMode, MTLDepthStencilDescriptor,
     MTLDevice, MTLFunction, MTLIndirectAccelerationStructureInstanceDescriptor, MTLLanguageVersion,
     MTLLibrary, MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
     MTLPipelineBufferDescriptorArray, MTLPixelFormat, MTLPrimitiveTopologyClass,
     MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
-    MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
-    MTLSamplerMipFilter, MTLSamplerState, MTLSize, MTLStencilDescriptor, MTLStorageMode,
-    MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTriangleFillMode, MTLVertexDescriptor,
-    MTLVertexStepFunction,
+    MTLResourceID, MTLResourceOptions, MTLResourceUsage, MTLSamplerAddressMode,
+    MTLSamplerDescriptor, MTLSamplerMipFilter, MTLSamplerState, MTLSize, MTLStencilDescriptor,
+    MTLStorageMode, MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTriangleFillMode,
+    MTLVertexDescriptor, MTLVertexStepFunction,
 };
 
 use super::{conv, PassthroughShader, ShaderModuleSource};
@@ -929,6 +929,7 @@ impl crate::Device for super::Device {
                             )
                             .unwrap();
 
+                        let mut argument_buffer = buffer.clone();
                         let contents: &mut [MTLResourceID] = unsafe {
                             core::slice::from_raw_parts_mut(
                                 buffer.contents().cast().as_ptr(),
@@ -967,6 +968,55 @@ impl crate::Device for super::Device {
                                     // need to be passed to useResource
                                 }
                             }
+                            wgt::BindingType::Buffer { ty, .. } => {
+                                let buffers = &desc.buffers[entry.resource_index as usize..]
+                                    [..count as usize];
+                                let device = &self.shared.device;
+                                let argument_desc = conv::pointer_array_argument_descriptor(
+                                    count,
+                                    conv::map_binding_access(&ty),
+                                );
+
+                                let encoder = device
+                                    .newArgumentEncoderWithArguments(&NSArray::from_retained_slice(
+                                        &[argument_desc],
+                                    ))
+                                    .unwrap();
+                                let aligned_length = wgt::math::align_to(
+                                    encoder.encodedLength(),
+                                    encoder.alignment(),
+                                );
+                                argument_buffer = device
+                                    .newBufferWithLength_options(
+                                        aligned_length,
+                                        MTLResourceOptions::HazardTrackingModeUntracked
+                                            | MTLResourceOptions::StorageModeShared,
+                                    )
+                                    .unwrap();
+                                unsafe {
+                                    encoder
+                                        .setArgumentBuffer_offset(Some(argument_buffer.as_ref()), 0)
+                                }
+
+                                for (idx, source) in buffers.iter().enumerate() {
+                                    unsafe {
+                                        encoder.setBuffer_offset_atIndex(
+                                            Some(&source.buffer.raw),
+                                            source.offset as usize,
+                                            idx,
+                                        );
+                                    }
+
+                                    let use_info = bg
+                                        .resources_to_use
+                                        .entry(source.buffer.as_raw().cast())
+                                        .or_default();
+                                    use_info.stages |= stages;
+                                    use_info.uses |= uses;
+                                    use_info.visible_in_compute |=
+                                        layout.visibility.contains(wgt::ShaderStages::COMPUTE);
+                                }
+                            }
                             wgt::BindingType::AccelerationStructure { .. } => {
                                 let start = entry.resource_index as usize;
                                 let end = start + count as usize;
@@ -994,7 +1044,7 @@ impl crate::Device for super::Device {
                         }
 
                         bg.buffers.push(super::BufferLikeResource::Buffer {
-                            ptr: NonNull::from(&*buffer),
+                            ptr: NonNull::from(&*argument_buffer),
                             offset: 0,
                             dynamic_index: None,
                             binding_size: None,
@@ -1002,7 +1052,7 @@ impl crate::Device for super::Device {
                         });
                         counter.buffers += 1;
 
-                        bg.argument_buffers.push(buffer)
+                        bg.argument_buffers.push(argument_buffer)
                     }
                     // Bindfull path
                     else {
