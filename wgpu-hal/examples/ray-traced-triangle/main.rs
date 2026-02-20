@@ -498,30 +498,11 @@ impl<A: hal::Api> Example<A> {
         }];
         let blas_entries = hal::AccelerationStructureEntries::Triangles(blas_triangles);
 
-        let mut tlas_entries =
-            hal::AccelerationStructureEntries::Instances(hal::AccelerationStructureInstances {
-                buffer: None,
-                count: 3,
-                offset: 0,
-            });
-
         let blas_sizes = unsafe {
             device.get_acceleration_structure_build_sizes(
                 &hal::GetAccelerationStructureBuildSizesDescriptor {
                     entries: &blas_entries,
                     flags: hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE,
-                },
-            )
-        };
-
-        let tlas_flags = hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE
-            | hal::AccelerationStructureBuildFlags::ALLOW_UPDATE;
-
-        let tlas_sizes = unsafe {
-            device.get_acceleration_structure_build_sizes(
-                &hal::GetAccelerationStructureBuildSizesDescriptor {
-                    entries: &tlas_entries,
-                    flags: tlas_flags,
                 },
             )
         };
@@ -535,6 +516,91 @@ impl<A: hal::Api> Example<A> {
             })
         }
         .unwrap();
+
+        let instances = [
+            AccelerationStructureInstance::new(
+                &Affine3A::from_translation(Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                }),
+                0,
+                0xff,
+                0,
+                0,
+                unsafe { device.get_acceleration_structure_device_address(&blas) },
+            ),
+            AccelerationStructureInstance::new(
+                &Affine3A::from_translation(Vec3 {
+                    x: -1.0,
+                    y: -1.0,
+                    z: -2.0,
+                }),
+                0,
+                0xff,
+                0,
+                0,
+                unsafe { device.get_acceleration_structure_device_address(&blas) },
+            ),
+            AccelerationStructureInstance::new(
+                &Affine3A::from_translation(Vec3 {
+                    x: 1.0,
+                    y: -1.0,
+                    z: -2.0,
+                }),
+                0,
+                0xff,
+                0,
+                0,
+                unsafe { device.get_acceleration_structure_device_address(&blas) },
+            ),
+        ];
+
+        let instances_buffer_size = instances.len() * size_of::<AccelerationStructureInstance>();
+
+        let instances_buffer = unsafe {
+            let instances_buffer = device
+                .create_buffer(&hal::BufferDescriptor {
+                    label: Some("instances_buffer"),
+                    size: instances_buffer_size as u64,
+                    usage: wgpu_types::BufferUses::MAP_WRITE
+                        | wgpu_types::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
+                    memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
+                })
+                .unwrap();
+
+            let mapping = device
+                .map_buffer(&instances_buffer, 0..instances_buffer_size as u64)
+                .unwrap();
+            ptr::copy_nonoverlapping(
+                instances.as_ptr() as *const u8,
+                mapping.ptr.as_ptr(),
+                instances_buffer_size,
+            );
+            device.unmap_buffer(&instances_buffer);
+            assert!(mapping.is_coherent);
+
+            instances_buffer
+        };
+
+        let mut tlas_entries =
+            hal::AccelerationStructureEntries::Instances(hal::AccelerationStructureInstances {
+                buffer: Some(&instances_buffer),
+                count: 3,
+                offset: 0,
+            });
+
+        let tlas_flags = hal::AccelerationStructureBuildFlags::PREFER_FAST_TRACE
+            | hal::AccelerationStructureBuildFlags::ALLOW_UPDATE;
+
+        let tlas_sizes = unsafe {
+            device.get_acceleration_structure_build_sizes(
+                &hal::GetAccelerationStructureBuildSizesDescriptor {
+                    entries: &tlas_entries,
+                    flags: tlas_flags,
+                },
+            )
+        };
 
         let tlas = unsafe {
             device.create_acceleration_structure(&hal::AccelerationStructureDescriptor {
@@ -662,74 +728,7 @@ impl<A: hal::Api> Example<A> {
                 .unwrap()
         };
 
-        let instances = [
-            AccelerationStructureInstance::new(
-                &Affine3A::from_translation(Vec3 {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 0.0,
-                }),
-                0,
-                0xff,
-                0,
-                0,
-                unsafe { device.get_acceleration_structure_device_address(&blas) },
-            ),
-            AccelerationStructureInstance::new(
-                &Affine3A::from_translation(Vec3 {
-                    x: -1.0,
-                    y: -1.0,
-                    z: -2.0,
-                }),
-                0,
-                0xff,
-                0,
-                0,
-                unsafe { device.get_acceleration_structure_device_address(&blas) },
-            ),
-            AccelerationStructureInstance::new(
-                &Affine3A::from_translation(Vec3 {
-                    x: 1.0,
-                    y: -1.0,
-                    z: -2.0,
-                }),
-                0,
-                0xff,
-                0,
-                0,
-                unsafe { device.get_acceleration_structure_device_address(&blas) },
-            ),
-        ];
-
-        let instances_buffer_size = instances.len() * size_of::<AccelerationStructureInstance>();
-
-        let instances_buffer = unsafe {
-            let instances_buffer = device
-                .create_buffer(&hal::BufferDescriptor {
-                    label: Some("instances_buffer"),
-                    size: instances_buffer_size as u64,
-                    usage: wgpu_types::BufferUses::MAP_WRITE
-                        | wgpu_types::BufferUses::TOP_LEVEL_ACCELERATION_STRUCTURE_INPUT,
-                    memory_flags: hal::MemoryFlags::TRANSIENT | hal::MemoryFlags::PREFER_COHERENT,
-                })
-                .unwrap();
-
-            let mapping = device
-                .map_buffer(&instances_buffer, 0..instances_buffer_size as u64)
-                .unwrap();
-            ptr::copy_nonoverlapping(
-                instances.as_ptr() as *const u8,
-                mapping.ptr.as_ptr(),
-                instances_buffer_size,
-            );
-            device.unmap_buffer(&instances_buffer);
-            assert!(mapping.is_coherent);
-
-            instances_buffer
-        };
-
         if let hal::AccelerationStructureEntries::Instances(ref mut i) = tlas_entries {
-            i.buffer = Some(&instances_buffer);
             assert!(
                 instances.len() <= i.count as usize,
                 "Tlas allocation to small"

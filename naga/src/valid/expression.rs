@@ -1,13 +1,10 @@
 use super::{compose::validate_compose, FunctionInfo, ModuleInfo, ShaderStages, TypeFlags};
 use crate::arena::UniqueArena;
-use crate::valid::expression::builtin::validate_zero_value;
 use crate::{
     arena::Handle,
     proc::OverloadSet as _,
     proc::{IndexableLengthError, ResolveError},
 };
-
-pub mod builtin;
 
 #[derive(Clone, Debug, thiserror::Error)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -38,8 +35,8 @@ pub enum ExpressionError {
     InvalidSwizzleComponent(crate::SwizzleComponent, crate::VectorSize),
     #[error(transparent)]
     Compose(#[from] super::ComposeError),
-    #[error(transparent)]
-    ZeroValue(#[from] super::ZeroValueError),
+    #[error("Cannot construct zero value of {0:?} because it is not a constructible type")]
+    InvalidZeroValue(Handle<crate::Type>),
     #[error(transparent)]
     IndexableLength(#[from] IndexableLengthError),
     #[error("Operation {0:?} can't work with {1:?}")]
@@ -460,7 +457,9 @@ impl super::Validator {
             }
             E::Constant(_) | E::Override(_) => ShaderStages::all(),
             E::ZeroValue(ty) => {
-                validate_zero_value(ty, module.to_ctx())?;
+                if !mod_info[ty].contains(TypeFlags::CONSTRUCTIBLE) {
+                    return Err(ExpressionError::InvalidZeroValue(ty));
+                }
                 ShaderStages::all()
             }
             E::Compose { ref components, ty } => {

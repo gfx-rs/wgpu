@@ -63,7 +63,7 @@ impl Device {
                                 dyn hal::DynBuffer,
                             > {
                                 format: desc.index_format.unwrap(),
-                                buffer: None,
+                                buffer: Some(self.zero_buffer.as_ref()),
                                 offset: 0,
                                 count,
                             });
@@ -98,7 +98,7 @@ impl Device {
                     }
 
                     entries.push(hal::AccelerationStructureTriangles::<dyn hal::DynBuffer> {
-                        vertex_buffer: None,
+                        vertex_buffer: Some(self.zero_buffer.as_ref()),
                         vertex_format: desc.vertex_format,
                         first_vertex: 0,
                         vertex_count: desc.vertex_count,
@@ -207,7 +207,7 @@ impl Device {
                 &hal::GetAccelerationStructureBuildSizesDescriptor {
                     entries: &hal::AccelerationStructureEntries::Instances(
                         hal::AccelerationStructureInstances {
-                            buffer: None,
+                            buffer: Some(self.zero_buffer.as_ref()),
                             offset: 0,
                             count: desc.max_instances,
                         },

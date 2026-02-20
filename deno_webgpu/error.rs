@@ -45,7 +45,7 @@ pub type ErrorHandler = std::rc::Rc<DeviceErrorHandler>;
 
 pub struct DeviceErrorHandler {
   pub is_lost: OnceLock<()>,
-  pub scopes: Mutex<Vec<(GPUErrorFilter, Vec<GPUError>)>>,
+  pub scopes: Mutex<Vec<(GPUErrorFilter, Option<GPUError>)>>,
   lost_resolver: Mutex<Option<v8::Global<v8::PromiseResolver>>>,
   spawner: V8TaskSpawner,
 
@@ -111,7 +111,10 @@ impl DeviceErrorHandler {
       .rfind(|(filter, _)| filter == &error_filter);
 
     if let Some(scope) = scope {
-      scope.1.push(err);
+      // Only saving the first error in the scope as it's likely the culprit.
+      if scope.1.is_none() {
+        scope.1 = Some(err);
+      }
     } else {
       let device = self
         .device

@@ -1811,13 +1811,27 @@ impl<'source, 'temp> Lowerer<'source, 'temp> {
 
                     let mut ectx = ctx.as_expression(block, &mut emitter);
 
-                    let (_ty, initializer) = self.type_and_init(
+                    let (ty, initializer) = self.type_and_init(
                         l.name,
                         Some(l.init),
                         explicit_ty,
                         AbstractRule::Concretize,
                         &mut ectx,
                     )?;
+
+                    // We have this special check here for `let` declarations because the
+                    // validator doesn't check them (they are comingled with other things in
+                    // `named_expressions`; see <https://github.com/gfx-rs/wgpu/issues/7393>).
+                    // The check could go in `type_and_init`, but then we'd have to
+                    // distinguish whether override-sized is allowed. The error ought to use
+                    // the type's span, but `module.types.get_span(ty)` is `Span::UNDEFINED`
+                    // (see <https://github.com/gfx-rs/wgpu/issues/7951>).
+                    if ctx.module.types[ty]
+                        .inner
+                        .is_dynamically_sized(&ctx.module.types)
+                    {
+                        return Err(Box::new(Error::TypeNotConstructible(l.name.span)));
+                    }
 
                     // We passed `Some()` to `type_and_init`, so we
                     // will get a lowered initializer expression back.
