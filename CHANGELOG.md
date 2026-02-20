@@ -118,6 +118,10 @@ By @andyleiserson in [#9321](https://github.com/gfx-rs/wgpu/pull/9321).
   - Conditional compilation by @jimblandy in [#9390](https://github.com/gfx-rs/wgpu/pull/9390)
 - Fixed alignment and MatrixStride for mat2x2 in SPIR-V uniform blocks. By @39ali [#9369](https://github.com/gfx-rs/wgpu/pull/9369).
 
+#### naga
+
+- spirv-out ray tracing pipelines. By @Vecvec in [#9085](https://github.com/gfx-rs/wgpu/pull/9085).
+
 ### Changes
 
 #### General
