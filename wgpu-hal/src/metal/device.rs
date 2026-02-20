@@ -18,10 +18,10 @@ use objc2_metal::{
     MTLLibrary, MTLMeshRenderPipelineDescriptor, MTLMutability, MTLPackedFloat3, MTLPackedFloat4x3,
     MTLPipelineBufferDescriptorArray, MTLPixelFormat, MTLPrimitiveTopologyClass,
     MTLRenderPipelineColorAttachmentDescriptorArray, MTLRenderPipelineDescriptor, MTLResource,
-    MTLResourceID, MTLResourceOptions, MTLResourceUsage, MTLSamplerAddressMode,
-    MTLSamplerDescriptor, MTLSamplerMipFilter, MTLSamplerState, MTLSize, MTLStencilDescriptor,
-    MTLStorageMode, MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTriangleFillMode,
-    MTLVertexDescriptor, MTLVertexStepFunction,
+    MTLResourceID, MTLResourceOptions, MTLSamplerAddressMode, MTLSamplerDescriptor,
+    MTLSamplerMipFilter, MTLSamplerState, MTLSize, MTLStencilDescriptor, MTLStorageMode,
+    MTLTexture, MTLTextureDescriptor, MTLTextureType, MTLTriangleFillMode, MTLVertexDescriptor,
+    MTLVertexStepFunction,
 };
 
 use super::{conv, PassthroughShader, ShaderModuleSource};
