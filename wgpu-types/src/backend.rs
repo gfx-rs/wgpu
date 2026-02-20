@@ -546,6 +546,7 @@ pub enum DxcShaderModel {
     V6_6,
     V6_7,
     V6_8,
+    V6_9,
 }
 
 impl DxcShaderModel {
@@ -553,9 +554,9 @@ impl DxcShaderModel {
     pub fn from_dxc_version(major: u32, minor: u32) -> Self {
         // DXC version roughly has corresponded to shader model so far, where DXC 1.x supports SM 6.x.
         // See discussion in https://discord.com/channels/590611987420020747/996417435374714920/1471234702206701650.
-        // Presumably DXC 2.0 and up will still support shader model 6.8.
+        // Presumably DXC 2.0 and up will still support shader model 6.9.
         if major > 1 {
-            Self::V6_8
+            Self::V6_9
         } else {
             Self::from_parts(6, minor)
         }
@@ -564,7 +565,7 @@ impl DxcShaderModel {
     /// Parse a DxcShaderModel from its version components.
     pub fn from_parts(major: u32, minor: u32) -> Self {
         if major > 6 || minor > 8 {
-            Self::V6_8
+            Self::V6_9
         } else {
             match minor {
                 0 => DxcShaderModel::V6_0,
@@ -575,8 +576,10 @@ impl DxcShaderModel {
                 5 => DxcShaderModel::V6_5,
                 6 => DxcShaderModel::V6_6,
                 7 => DxcShaderModel::V6_7,
-                // >= 6.8
-                _ => DxcShaderModel::V6_8,
+                8 => DxcShaderModel::V6_8,
+                9 => DxcShaderModel::V6_9,
+                // > 6.9
+                _ => DxcShaderModel::V6_9,
             }
         }
     }
