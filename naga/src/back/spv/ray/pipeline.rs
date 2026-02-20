@@ -1,7 +1,7 @@
 //! Code for ray tracing pipelines
 
 use crate::back::spv::{
-    Block, BlockContext, Instruction, LocalType, LookupRaytracingFunction, Writer,
+    Block, BlockContext, Instruction, LocalType, LookupRaytracingFunction, Writer, WriterFlags,
 };
 
 impl Writer {
@@ -47,7 +47,7 @@ impl Writer {
             ray_origin_id,
             ray_dir_id,
             valid_id,
-        } = self.write_extract_ray_desc(&mut block, desc_id, true /* TODO */);
+        } = self.write_extract_ray_desc(&mut block, desc_id, self.trace_ray_argument_validation);
 
         let merge_label_id = self.id_gen.next();
         let merge_block = Block::new(merge_label_id);
@@ -93,9 +93,7 @@ impl Writer {
 
         function.consume(valid_block, Instruction::branch(merge_label_id));
 
-        if false
-        /* do we want another flag? */
-        {
+        if self.flags.contains(WriterFlags::PRINT_ON_TRACE_RAYS_FAIL) {
             self.write_debug_printf(
                 &mut invalid_block,
                 "Naga ignored invalid arguments to traceRay with flags: %u t_min: %f t_max: %f origin: %v4f dir: %v4f",
