@@ -355,6 +355,7 @@ webgpu:shader,validation,const_assert,const_assert:*
 webgpu:shader,validation,decl,assignment_statement:*
 webgpu:shader,validation,decl,compound_statement:*
 webgpu:shader,validation,decl,const:*
+webgpu:shader,validation,decl,context_dependent_resolution:*
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_neg"
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_one"
 webgpu:shader,validation,expression,access,array:early_eval_errors:case="override_array_cnt_size_zero_signed"
