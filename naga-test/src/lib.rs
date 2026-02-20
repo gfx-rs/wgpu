@@ -56,19 +56,19 @@ impl Default for SpvOutVersion {
 #[derive(serde::Deserialize)]
 pub struct BindingMapSerialization {
     pub resource_binding: naga::ResourceBinding,
-    pub bind_target: naga::back::spv::BindingInfo,
+    pub bind_target: naga::back::spv::SpvBindingInfo,
 }
 
 pub fn deserialize_binding_map<'de, D>(
     deserializer: D,
-) -> Result<naga::back::spv::BindingMap, D::Error>
+) -> Result<naga::back::spv::SpvBindingMap, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
     use serde::Deserialize;
 
     let vec = Vec::<BindingMapSerialization>::deserialize(deserializer)?;
-    let mut map = naga::back::spv::BindingMap::default();
+    let mut map = naga::back::spv::SpvBindingMap::default();
     for item in vec {
         map.insert(item.resource_binding, item.bind_target);
     }
@@ -122,7 +122,7 @@ pub struct SpirvOutParameters {
     pub clamp_frag_depth: bool,
     pub separate_entry_points: bool,
     #[serde(deserialize_with = "deserialize_binding_map")]
-    pub binding_map: naga::back::spv::BindingMap,
+    pub binding_map: naga::back::spv::SpvBindingMap,
     pub ray_query_initialization_tracking: bool,
     pub use_storage_input_output_16: bool,
 }
@@ -138,7 +138,7 @@ impl Default for SpirvOutParameters {
             separate_entry_points: false,
             ray_query_initialization_tracking: true,
             use_storage_input_output_16: true,
-            binding_map: naga::back::spv::BindingMap::default(),
+            binding_map: naga::back::spv::SpvBindingMap::default(),
         }
     }
 }

@@ -3,6 +3,10 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate std;
 
+mod spv;
+
+pub use spv::*;
+
 use alloc::string::String;
 
 /// Stage of the programmable pipeline.
@@ -69,3 +73,15 @@ pub type FastHashSet<K> =
 ///
 /// The value may represent any of WGSL's concrete scalar types.
 pub type PipelineConstants = hashbrown::HashMap<String, f64>;
+
+/// Pipeline binding information for global resources.
+#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
+#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub struct ResourceBinding {
+    /// The bind group index.
+    pub group: u32,
+    /// Binding number within the group.
+    pub binding: u32,
+}

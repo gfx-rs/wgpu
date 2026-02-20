@@ -657,27 +657,27 @@ struct MultiStageData<T> {
     ms: T,
 }
 
-const NAGA_STAGES: MultiStageData<naga::ShaderStage> = MultiStageData {
-    vs: naga::ShaderStage::Vertex,
-    fs: naga::ShaderStage::Fragment,
-    cs: naga::ShaderStage::Compute,
-    ts: naga::ShaderStage::Task,
-    ms: naga::ShaderStage::Mesh,
+const NAGA_STAGES: MultiStageData<wst::ShaderStage> = MultiStageData {
+    vs: wst::ShaderStage::Vertex,
+    fs: wst::ShaderStage::Fragment,
+    cs: wst::ShaderStage::Compute,
+    ts: wst::ShaderStage::Task,
+    ms: wst::ShaderStage::Mesh,
 };
 
-impl<T> ops::Index<naga::ShaderStage> for MultiStageData<T> {
+impl<T> ops::Index<wst::ShaderStage> for MultiStageData<T> {
     type Output = T;
-    fn index(&self, stage: naga::ShaderStage) -> &T {
+    fn index(&self, stage: wst::ShaderStage) -> &T {
         match stage {
-            naga::ShaderStage::Vertex => &self.vs,
-            naga::ShaderStage::Fragment => &self.fs,
-            naga::ShaderStage::Compute => &self.cs,
-            naga::ShaderStage::Task => &self.ts,
-            naga::ShaderStage::Mesh => &self.ms,
-            naga::ShaderStage::RayGeneration
-            | naga::ShaderStage::AnyHit
-            | naga::ShaderStage::ClosestHit
-            | naga::ShaderStage::Miss => unimplemented!(),
+            wst::ShaderStage::Vertex => &self.vs,
+            wst::ShaderStage::Fragment => &self.fs,
+            wst::ShaderStage::Compute => &self.cs,
+            wst::ShaderStage::Task => &self.ts,
+            wst::ShaderStage::Mesh => &self.ms,
+            wst::ShaderStage::RayGeneration
+            | wst::ShaderStage::AnyHit
+            | wst::ShaderStage::ClosestHit
+            | wst::ShaderStage::Miss => unimplemented!(),
         }
     }
 }
@@ -799,7 +799,7 @@ unsafe impl Sync for BindGroup {}
 
 #[derive(Debug)]
 pub enum ShaderModuleSource {
-    Naga(crate::NagaShader),
+    Naga(wgs::NagaShader),
     Passthrough(PassthroughShader),
 }
 

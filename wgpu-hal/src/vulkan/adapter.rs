@@ -1,4 +1,4 @@
-use alloc::{borrow::ToOwned as _, boxed::Box, collections::BTreeMap, sync::Arc, vec::Vec};
+use alloc::{borrow::ToOwned as _, boxed::Box, sync::Arc, vec::Vec};
 use core::{ffi::CStr, marker::PhantomData};
 
 use ash::{ext, google, khr, vk};
@@ -2293,7 +2293,7 @@ impl super::Adapter {
             None
         };
 
-        let naga_options = {
+        /*let naga_options = {
             use naga::back::spv;
 
             // The following capabilities are always available
@@ -2492,7 +2492,20 @@ impl super::Adapter {
                 }),
                 mesh_shader_primitive_indices_clamp: true,
             }
-        };
+        };*/
+
+        // TODO
+        let compile_options = wgs::spv::SpvCompileOptions::new(wgs::spv::SpvCompileOptionsDesc {
+            lang_version: match self.phd_capabilities.device_api_version {
+                // Use maximum supported SPIR-V version according to
+                // <https://github.com/KhronosGroup/Vulkan-Docs/blob/19b7651/appendices/spirvenv.adoc?plain=1#L21-L40>.
+                vk::API_VERSION_1_0..vk::API_VERSION_1_1 => (1, 0),
+                vk::API_VERSION_1_1..vk::API_VERSION_1_2 => (1, 3),
+                vk::API_VERSION_1_2..vk::API_VERSION_1_3 => (1, 5),
+                vk::API_VERSION_1_3.. => (1, 6),
+                _ => unreachable!(),
+            },
+        });
 
         let raw_queue = {
             profiling::scope!("vkGetDeviceQueue");
@@ -2583,7 +2596,7 @@ impl super::Adapter {
             mem_allocator: Mutex::new(mem_allocator),
             desc_allocator: Mutex::new(desc_allocator),
             valid_ash_memory_types,
-            naga_options,
+            compile_options,
             #[cfg(feature = "renderdoc")]
             render_doc: Default::default(),
             counters: Default::default(),

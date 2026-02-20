@@ -634,9 +634,10 @@ impl super::Device {
     fn compile_stage(
         &self,
         stage: &crate::ProgrammableStage<super::ShaderModule>,
-        naga_stage: naga::ShaderStage,
-        binding_map: &naga::back::spv::BindingMap,
+        naga_stage: wst::ShaderStage,
+        binding_map: &wst::SpvBindingMap,
     ) -> Result<CompiledStage, crate::PipelineError> {
+        // TODO
         let stage_flags = crate::auxil::map_naga_stage(naga_stage);
         let vk_module = match *stage.module {
             super::ShaderModule::Raw(raw) => raw,
@@ -644,7 +645,12 @@ impl super::Device {
                 ref naga_shader,
                 runtime_checks,
             } => {
-                let pipeline_options = naga::back::spv::PipelineOptions {
+                let spv = naga_shader.compile_spv(wgs::spv::SpvShaderDesc {
+                    options: &self.compile_options,
+                    runtime_checks,
+                    entry_point: Some((stage.entry_point.to_owned(), naga_stage)),
+                });
+                /*let pipeline_options = naga::back::spv::PipelineOptions {
                     entry_point: stage.entry_point.to_owned(),
                     shader_stage: naga_stage,
                 };
@@ -714,7 +720,7 @@ impl super::Device {
                     profiling::scope!("naga::spv::write_vec");
                     naga::back::spv::write_vec(&module, &info, options, Some(&pipeline_options))
                 }
-                .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;
+                .map_err(|e| crate::PipelineError::Linkage(stage_flags, format!("{e}")))?;*/
                 self.create_shader_module_impl(&spv, &None)?
             }
         };
@@ -1455,11 +1461,11 @@ impl crate::Device for super::Device {
         for (group, &layout) in desc.bind_group_layouts.iter().enumerate() {
             for &(binding, binding_info) in &layout.binding_map {
                 binding_map.insert(
-                    naga::ResourceBinding {
+                    wst::ResourceBinding {
                         group: group as u32,
                         binding,
                     },
-                    naga::back::spv::BindingInfo {
+                    wst::SpvBindingInfo {
                         descriptor_set: group as u32,
                         binding: binding_info.binding,
                         binding_array_size: binding_info.binding_array_size.map(NonZeroU32::get),
@@ -1725,7 +1731,13 @@ impl crate::Device for super::Device {
                 }
             }
             crate::ShaderInput::Naga(naga_shader) => {
-                let mut naga_options = self.naga_options.clone();
+                // TODO
+                let spv = naga_shader.compile_spv(wgs::spv::SpvShaderDesc {
+                    options: &self.compile_options,
+                    runtime_checks: desc.runtime_checks,
+                    entry_point: None,
+                });
+                /*let mut naga_options = self.naga_options.clone();
                 naga_options.debug_info =
                     naga_shader
                         .debug_source
@@ -1749,7 +1761,7 @@ impl crate::Device for super::Device {
                     &naga_options,
                     None,
                 )
-                .map_err(|e| crate::ShaderError::Compilation(format!("{e}")))?;
+                .map_err(|e| crate::ShaderError::Compilation(format!("{e}")))?;*/
                 super::ShaderModule::Raw(self.create_shader_module_impl(&spv, &desc.label)?)
             }
             crate::ShaderInput::SpirV(data) => {
@@ -1845,7 +1857,7 @@ impl crate::Device for super::Device {
             } => {
                 compiled_vs = Some(self.compile_stage(
                     vertex_stage,
-                    naga::ShaderStage::Vertex,
+                    wst::ShaderStage::Vertex,
                     &desc.layout.binding_map,
                 )?);
                 stages.push(compiled_vs.as_ref().unwrap().create_info);
@@ -1857,14 +1869,14 @@ impl crate::Device for super::Device {
                 if let Some(t) = task_stage.as_ref() {
                     compiled_ts = Some(self.compile_stage(
                         t,
-                        naga::ShaderStage::Task,
+                        wst::ShaderStage::Task,
                         &desc.layout.binding_map,
                     )?);
                     stages.push(compiled_ts.as_ref().unwrap().create_info);
                 }
                 compiled_ms = Some(self.compile_stage(
                     mesh_stage,
-                    naga::ShaderStage::Mesh,
+                    wst::ShaderStage::Mesh,
                     &desc.layout.binding_map,
                 )?);
                 stages.push(compiled_ms.as_ref().unwrap().create_info);
@@ -1874,7 +1886,7 @@ impl crate::Device for super::Device {
             Some(ref stage) => {
                 let compiled = self.compile_stage(
                     stage,
-                    naga::ShaderStage::Fragment,
+                    wst::ShaderStage::Fragment,
                     &desc.layout.binding_map,
                 )?;
                 stages.push(compiled.create_info);
@@ -2085,7 +2097,7 @@ impl crate::Device for super::Device {
     ) -> Result<super::ComputePipeline, crate::PipelineError> {
         let compiled = self.compile_stage(
             &desc.stage,
-            naga::ShaderStage::Compute,
+            wst::ShaderStage::Compute,
             &desc.layout.binding_map,
         )?;
 

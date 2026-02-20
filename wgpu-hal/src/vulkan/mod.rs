@@ -52,8 +52,8 @@ use bytemuck::{Pod, Zeroable};
 use hashbrown::HashSet;
 use parking_lot::{Mutex, RwLock};
 
-use naga::FastHashMap;
 use wgt::InternalCounter;
+use wst::FastHashMap;
 
 use semaphore_list::SemaphoreList;
 
@@ -516,13 +516,13 @@ pub struct Device {
     desc_allocator:
         Mutex<gpu_descriptor::DescriptorAllocator<vk::DescriptorPool, vk::DescriptorSet>>,
     valid_ash_memory_types: u32,
-    naga_options: naga::back::spv::Options<'static>,
     #[cfg(feature = "renderdoc")]
     render_doc: crate::auxil::renderdoc::RenderDoc,
     counters: Arc<wgt::HalCounters>,
     // Struct members are dropped from first to last, put the Device last to ensure that
     // all resources that depends on it are destroyed before it like the mem_allocator
     shared: Arc<DeviceShared>,
+    compile_options: wgs::spv::SpvCompileOptions,
 }
 
 impl Drop for Device {
@@ -813,7 +813,7 @@ impl crate::DynBindGroupLayout for BindGroupLayout {}
 #[derive(Debug)]
 pub struct PipelineLayout {
     raw: vk::PipelineLayout,
-    binding_map: naga::back::spv::BindingMap,
+    binding_map: wst::SpvBindingMap,
 }
 
 impl crate::DynPipelineLayout for PipelineLayout {}
@@ -1047,7 +1047,7 @@ impl crate::DynCommandBuffer for CommandBuffer {}
 pub enum ShaderModule {
     Raw(vk::ShaderModule),
     Intermediate {
-        naga_shader: crate::NagaShader,
+        naga_shader: wgs::NagaShader,
         runtime_checks: wgt::ShaderRuntimeChecks,
     },
 }

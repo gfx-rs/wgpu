@@ -236,7 +236,7 @@ use crate::diagnostic_filter::DiagnosticFilterNode;
 use crate::{FastIndexMap, NamedExpressions};
 
 pub use block::Block;
-pub use wgpu_shader_types::ShaderStage;
+pub use wgpu_shader_types::{ResourceBinding, ShaderStage};
 
 /// Explicitly allows early depth/stencil tests.
 ///
@@ -1105,18 +1105,6 @@ pub enum Binding {
         /// non-interpolated normal vector.
         per_primitive: bool,
     },
-}
-
-/// Pipeline binding information for global resources.
-#[derive(Copy, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[cfg_attr(feature = "arbitrary", derive(Arbitrary))]
-pub struct ResourceBinding {
-    /// The bind group index.
-    pub group: u32,
-    /// Binding number within the group.
-    pub binding: u32,
 }
 
 /// Variable defined at module level.

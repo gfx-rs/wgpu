@@ -112,6 +112,7 @@ mod writer;
 
 pub use mesh_shader::{MeshReturnInfo, MeshReturnMember};
 pub use spirv::{Capability, SourceLanguage};
+pub use wst::{SpvBindingInfo, SpvBindingMap};
 
 use alloc::{string::String, vec::Vec};
 use core::ops;
@@ -949,7 +950,7 @@ pub struct Writer {
     global_variables: HandleVec<crate::GlobalVariable, GlobalVariable>,
     std140_compat_uniform_types: crate::FastHashMap<Handle<crate::Type>, Std140CompatTypeInfo>,
     fake_missing_bindings: bool,
-    binding_map: BindingMap,
+    binding_map: SpvBindingMap,
 
     // Cached expressions are only meaningful within a BlockContext, but we
     // retain the table here between functions to save heap allocations.
@@ -1020,19 +1021,6 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct BindingInfo {
-    pub descriptor_set: u32,
-    pub binding: u32,
-    /// If the binding is an unsized binding array, this overrides the size.
-    pub binding_array_size: Option<u32>,
-}
-
-// Using `BTreeMap` instead of `HashMap` so that we can hash itself.
-pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindingInfo>;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ZeroInitializeWorkgroupMemoryMode {
     /// Via `VK_KHR_zero_initialize_workgroup_memory` or Vulkan 1.3
@@ -1055,7 +1043,7 @@ pub struct Options<'a> {
     pub fake_missing_bindings: bool,
 
     /// Map of resources to information about the binding.
-    pub binding_map: BindingMap,
+    pub binding_map: SpvBindingMap,
 
     /// If given, the set of capabilities modules are allowed to use. Code that
     /// requires capabilities beyond these is rejected with an error.
@@ -1101,7 +1089,7 @@ impl Default for Options<'_> {
             lang_version: (1, 0),
             flags,
             fake_missing_bindings: true,
-            binding_map: BindingMap::default(),
+            binding_map: SpvBindingMap::default(),
             capabilities: None,
             bounds_check_policies: BoundsCheckPolicies::default(),
             zero_initialize_workgroup_memory: ZeroInitializeWorkgroupMemoryMode::Polyfill,

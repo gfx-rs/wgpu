@@ -17,7 +17,7 @@ use crate::{
     arena::{Handle, HandleVec, UniqueArena},
     back::spv::{
         helpers::{is_uniform_matcx2_struct_member_access, BindingDecorations},
-        BindingInfo, Std140CompatTypeInfo, WrappedFunction,
+        SpvBindingInfo, Std140CompatTypeInfo, WrappedFunction,
     },
     common::ForDebugWithTypes as _,
     proc::{Alignment, TypeResolution},
@@ -519,10 +519,10 @@ impl Writer {
     fn resolve_resource_binding(
         &self,
         res_binding: &crate::ResourceBinding,
-    ) -> Result<BindingInfo, Error> {
+    ) -> Result<SpvBindingInfo, Error> {
         match self.binding_map.get(res_binding) {
             Some(target) => Ok(*target),
-            None if self.fake_missing_bindings => Ok(BindingInfo {
+            None if self.fake_missing_bindings => Ok(SpvBindingInfo {
                 descriptor_set: res_binding.group,
                 binding: res_binding.binding,
                 binding_array_size: None,
