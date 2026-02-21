@@ -173,6 +173,8 @@ fragile-send-sync-non-atomic-wasm = [
     "wgpu-types/fragile-send-sync-non-atomic-wasm",
 ]
 portable-atomic = ["dep:portable-atomic", "dep:portable-atomic-util"]
+# Used to force a naga dep in examples
+naga-dep = ["wgpu-shaders/naga-dep"]
 
 ###################################
 ### Internal Debugging Features ###
@@ -191,10 +193,11 @@ validation_canary = ["dep:parking_lot"]
 
 [[example]]
 name = "halmark"
+required-features = ["naga-dep"]
 
 [[example]]
 name = "raw-gles"
-required-features = ["gles"]
+required-features = ["gles", "naga-dep"]
 
 #####################
 ### Platform: All ###

@@ -6,11 +6,7 @@ use hal::{
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 
 use glam::{Affine3A, Mat4, Vec3};
-use std::{
-    borrow::{Borrow, Cow},
-    iter, ptr,
-    time::Instant,
-};
+use std::{borrow::Borrow, iter, ptr, time::Instant};
 use wgpu_types::Dx12BackendOptions;
 use winit::window::WindowButtons;
 
@@ -371,11 +367,8 @@ impl<A: hal::Api> Example<A> {
             )
             .validate(&module)
             .unwrap();
-            hal::NagaShader {
-                module: Cow::Owned(module),
-                info,
-                debug_source: None,
-            }
+
+            hal::NagaShader::from_module(module, info, None)
         };
         let shader_desc = hal::ShaderModuleDescriptor {
             label: None,

@@ -1,6 +1,7 @@
 use core::num::NonZeroU32;
 
 use alloc::borrow::Cow;
+use alloc::sync::Arc;
 #[cfg(feature = "naga-dep")]
 use naga::back::glsl::{self, Options};
 
@@ -73,13 +74,14 @@ pub struct GlslShaderDesc<'a> {
     pub multiview_mask: Option<NonZeroU32>,
     pub zero_init_memory: bool,
     pub constants: &'a wst::PipelineConstants,
+    pub bind_group_infos: &'a [BindGroupLayoutInfo],
 }
 
 impl super::NagaShader {
     pub fn compile_glsl(
         &self,
         desc: GlslShaderDesc,
-    ) -> Result<(String, wst::glsl::GlslReflectionInfo), crate::ShaderCompilationError> {
+    ) -> Result<(String, GlslReflectionInfo), crate::ShaderCompilationError> {
         #[cfg(feature = "naga-dep")]
         {
             let pipeline_options = glsl::PipelineOptions {
@@ -156,14 +158,9 @@ impl super::NagaShader {
                 crate::ShaderCompilationError::Linkage(msg)
             })?;
 
-            let mut name_binding_map = Default::default();
+            let mut name_binding_map: NameBindingMap = Default::default();
+            let mut sampler_map: SamplerBindMap = Default::default();
 
-            let entry_point_index = self
-                .module
-                .entry_points
-                .iter()
-                .position(|ep| ep.name.as_str() == desc.entry_point)
-                .ok_or(crate::ShaderCompilationError::EntryPoint)?;
             let ep_info = self.info.get_entry_point(entry_point_index);
 
             for (handle, var) in module.global_variables.iter() {
@@ -171,15 +168,14 @@ impl super::NagaShader {
                     continue;
                 }
                 let register = match var.space {
-                    naga::AddressSpace::Uniform => wst::glsl::BindingRegister::UniformBuffers,
-                    naga::AddressSpace::Storage { .. } => {
-                        wst::glsl::BindingRegister::StorageBuffers
-                    }
+                    naga::AddressSpace::Uniform => BindingRegister::UniformBuffers,
+                    naga::AddressSpace::Storage { .. } => BindingRegister::StorageBuffers,
                     _ => continue,
                 };
 
                 let br = var.binding.as_ref().unwrap();
-                let slot = self.layout.get_slot(br);
+                let slot =
+                    desc.bind_group_infos[br.group as usize].binding_to_slot[br.binding as usize];
 
                 let name = match reflection_info.uniforms.get(&handle) {
                     Some(name) => name.clone(),
@@ -194,12 +190,13 @@ impl super::NagaShader {
                     naga::TypeInner::Image {
                         class: naga::ImageClass::Storage { .. },
                         ..
-                    } => wst::glsl::BindingRegister::Images,
-                    _ => wst::glsl::BindingRegister::Textures,
+                    } => BindingRegister::Images,
+                    _ => BindingRegister::Textures,
                 };
 
                 let tex_br = var.binding.as_ref().unwrap();
-                let texture_linear_index = self.layout.get_slot(tex_br);
+                let texture_linear_index = desc.bind_group_infos[tex_br.group as usize]
+                    .binding_to_slot[tex_br.binding as usize];
 
                 name_binding_map.insert(name, (register, texture_linear_index));
                 if let Some(sampler_handle) = mapping.sampler {
@@ -207,8 +204,9 @@ impl super::NagaShader {
                         .binding
                         .as_ref()
                         .unwrap();
-                    let sampler_linear_index = self.layout.get_slot(sam_br);
-                    self.sampler_map[texture_linear_index as usize] = Some(sampler_linear_index);
+                    let sampler_linear_index = desc.bind_group_infos[sam_br.group as usize]
+                        .binding_to_slot[sam_br.binding as usize];
+                    sampler_map[texture_linear_index as usize] = Some(sampler_linear_index);
                 }
             }
             let immediates_items = reflection_info
@@ -216,7 +214,7 @@ impl super::NagaShader {
                 .into_iter()
                 .map(|e| {
                     let ty_inner = &self.module.types[e.ty].inner;
-                    wst::glsl::GlslImmediateItem {
+                    GlslImmediateItem {
                         access_path: e.access_path,
                         ty: ty_inner.try_into().unwrap(),
                         offset: e.offset,
@@ -224,11 +222,12 @@ impl super::NagaShader {
                     }
                 })
                 .collect();
-            let out_reflect = wst::glsl::GlslReflectionInfo {
+            let out_reflect = GlslReflectionInfo {
                 varying: reflection_info.varying,
                 immediates_items,
                 clip_distance_count: reflection_info.clip_distance_count,
                 name_binding_map,
+                sampler_map,
             };
             Ok((output, out_reflect))
         }
@@ -238,3 +237,54 @@ impl super::NagaShader {
         }
     }
 }
+
+#[derive(Debug)]
+pub struct BindGroupLayoutInfo {
+    pub entries: Arc<[wgt::BindGroupLayoutEntry]>,
+    /// Mapping of resources, indexed by `binding`, into the whole layout space.
+    /// For texture resources, the value is the texture slot index.
+    /// For sampler resources, the value is the index of the sampler in the whole layout.
+    /// For buffers, the value is the uniform or storage slot index.
+    /// For unused bindings, the value is `!0`
+    pub binding_to_slot: Box<[u8]>,
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct GlslImmediateItem {
+    pub access_path: String,
+    pub ty: wst::glsl::GlslUniformType,
+    pub offset: u32,
+    pub size: u32,
+}
+
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct GlslReflectionInfo {
+    /// Mapping between names and attribute locations.
+    pub varying: wst::FastHashMap<String, wst::glsl::VaryingLocation>,
+    pub immediates_items: Vec<GlslImmediateItem>,
+    pub clip_distance_count: u32,
+    pub name_binding_map: NameBindingMap,
+    pub sampler_map: SamplerBindMap,
+}
+
+#[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum BindingRegister {
+    UniformBuffers,
+    StorageBuffers,
+    Textures,
+    Images,
+}
+
+pub type NameBindingMap = wst::FastHashMap<String, (BindingRegister, u8)>;
+
+//Note: we can support more samplers if not every one of them is used at a time,
+// but it probably doesn't worth it.
+pub const MAX_TEXTURE_SLOTS: usize = 16;
+pub const MAX_SAMPLERS: usize = 16;
+
+/// For each texture in the pipeline layout, store the index of the only
+/// sampler (in this layout) that the texture is used with.
+pub type SamplerBindMap = [Option<u8>; MAX_TEXTURE_SLOTS];

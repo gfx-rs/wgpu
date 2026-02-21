@@ -293,6 +293,7 @@ pub use dynamic::{
     DynPipelineLayout, DynQuerySet, DynQueue, DynRenderPipeline, DynResource, DynSampler,
     DynShaderModule, DynSurface, DynSurfaceTexture, DynTexture, DynTextureView,
 };
+pub use wgs::NagaShader;
 
 #[allow(unused)]
 use alloc::boxed::Box;
@@ -309,7 +310,6 @@ use core::{
 use bitflags::bitflags;
 use raw_window_handle::DisplayHandle;
 use thiserror::Error;
-use wgs::ShaderInput;
 use wgt::WasmNotSendSync;
 
 cfg_if::cfg_if! {
@@ -2795,4 +2795,31 @@ pub struct Telemetry {
         driver_version: Result<[u16; 4], windows_core::HRESULT>,
         result: D3D12ExposeAdapterResult,
     ),
+}
+
+/// Shader input.
+#[allow(clippy::large_enum_variant)]
+pub enum ShaderInput<'a> {
+    Naga(NagaShader),
+    MetalLib {
+        file: &'a [u8],
+        num_workgroups: (u32, u32, u32),
+    },
+    Msl {
+        shader: &'a str,
+        num_workgroups: (u32, u32, u32),
+    },
+    SpirV(&'a [u32]),
+    Dxil {
+        shader: &'a [u8],
+        num_workgroups: (u32, u32, u32),
+    },
+    Hlsl {
+        shader: &'a str,
+        num_workgroups: (u32, u32, u32),
+    },
+    Glsl {
+        shader: &'a str,
+        num_workgroups: (u32, u32, u32),
+    },
 }

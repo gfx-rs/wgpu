@@ -1,11 +1,9 @@
-use alloc::{
-    borrow::ToOwned, format, string::String, string::ToString as _, sync::Arc, vec, vec::Vec,
-};
+use alloc::{borrow::ToOwned, format, string::ToString as _, sync::Arc, vec, vec::Vec};
 use core::{cmp::max, convert::TryInto, num::NonZeroU32, ptr, sync::atomic::Ordering};
+use wgs::glsl::NameBindingMap;
 
 use arrayvec::ArrayVec;
 use glow::HasContext;
-use wst::FastHashMap;
 
 use super::{conv, lock, MaybeMutex, PrivateCapabilities};
 use crate::auxil::map_naga_stage;
@@ -19,8 +17,8 @@ type ShaderStage<'a> = (
 struct CompilationContext<'a> {
     layout: &'a super::PipelineLayout,
     sampler_map: &'a mut super::SamplerBindMap,
-    name_binding_map: &'a mut super::NameBindingMap,
-    immediates_items: &'a mut Vec<wst::glsl::GlslImmediateItem>,
+    name_binding_map: &'a mut NameBindingMap,
+    immediates_items: &'a mut Vec<wgs::glsl::GlslImmediateItem>,
     multiview_mask: Option<NonZeroU32>,
     clip_distance_count: &'a mut u32,
 }
@@ -29,12 +27,17 @@ impl CompilationContext<'_> {
     fn consume_reflection(
         self,
         gl: &glow::Context,
-        reflection_info: wst::glsl::GlslReflectionInfo,
+        reflection_info: wgs::glsl::GlslReflectionInfo,
         naga_stage: wst::ShaderStage,
         program: glow::Program,
     ) {
         self.name_binding_map
-            .extend(reflection_info.name_binding_map.into_iter());
+            .extend(reflection_info.name_binding_map);
+        for (i, val) in reflection_info.sampler_map.into_iter().enumerate() {
+            if val.is_some() {
+                self.sampler_map[i] = val;
+            }
+        }
 
         for (name, location) in reflection_info.varying {
             match naga_stage {
@@ -173,12 +176,13 @@ impl super::Device {
         program: glow::Program,
     ) -> Result<glow::Shader, crate::PipelineError> {
         let desc = wgs::glsl::GlslShaderDesc {
-            options: std::borrow::Cow::Borrowed(&context.layout.shader_options),
+            options: alloc::borrow::Cow::Borrowed(&context.layout.shader_options),
             stage: naga_stage,
             entry_point: stage.entry_point,
             multiview_mask: context.multiview_mask,
             zero_init_memory: stage.zero_initialize_workgroup_memory,
             constants: stage.constants,
+            bind_group_infos: &context.layout.group_infos,
         };
         let (output, reflection_info) = stage
             .module

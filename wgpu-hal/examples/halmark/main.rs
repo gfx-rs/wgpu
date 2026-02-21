@@ -12,13 +12,7 @@ use winit::{
     keyboard::{Key, NamedKey},
 };
 
-use std::{
-    borrow::{Borrow, Cow},
-    iter,
-    num::NonZeroU64,
-    ptr,
-    time::Instant,
-};
+use std::{borrow::Borrow, iter, num::NonZeroU64, ptr, time::Instant};
 
 const MAX_BUNNIES: usize = 1 << 20;
 const BUNNY_SIZE: f32 = 0.15 * 256.0;
@@ -173,11 +167,7 @@ impl<A: hal::Api> Example<A> {
             )
             .validate(&module)
             .unwrap();
-            hal::NagaShader {
-                module: Cow::Owned(module),
-                info,
-                debug_source: None,
-            }
+            hal::NagaShader::from_module(module, info, None)
         };
         let shader_desc = hal::ShaderModuleDescriptor {
             label: None,

@@ -39,6 +39,19 @@ pub struct NagaShader {
 }
 
 impl NagaShader {
+    #[cfg(feature = "naga-dep")]
+    pub fn from_module(
+        module: naga::Module,
+        info: naga::valid::ModuleInfo,
+        debug_source: Option<DebugSource>,
+    ) -> Self {
+        Self {
+            module: Cow::Owned(module),
+            info,
+            debug_source,
+        }
+    }
+
     pub fn has_overrides(&self) -> bool {
         #[cfg(feature = "naga-dep")]
         {
@@ -57,33 +70,6 @@ impl fmt::Debug for NagaShader {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(formatter, "Naga shader")
     }
-}
-
-/// Shader input.
-#[allow(clippy::large_enum_variant)]
-pub enum ShaderInput<'a> {
-    Naga(NagaShader),
-    MetalLib {
-        file: &'a [u8],
-        num_workgroups: (u32, u32, u32),
-    },
-    Msl {
-        shader: &'a str,
-        num_workgroups: (u32, u32, u32),
-    },
-    SpirV(&'a [u32]),
-    Dxil {
-        shader: &'a [u8],
-        num_workgroups: (u32, u32, u32),
-    },
-    Hlsl {
-        shader: &'a str,
-        num_workgroups: (u32, u32, u32),
-    },
-    Glsl {
-        shader: &'a str,
-        num_workgroups: (u32, u32, u32),
-    },
 }
 
 pub enum ShaderCompilationError {

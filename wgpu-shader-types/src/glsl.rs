@@ -1,5 +1,3 @@
-use alloc::string::String;
-use alloc::vec::Vec;
 use core::{cmp::Ordering, fmt};
 
 // Must match code in glsl_built_in
@@ -227,16 +225,6 @@ pub enum GlslUniformType {
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct GlslImmediateItem {
-    pub access_path: String,
-    pub ty: GlslUniformType,
-    pub offset: u32,
-    pub size: u32,
-}
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
@@ -248,26 +236,3 @@ pub struct VaryingLocation {
     /// This corresponds to `layout(index = ..)` in GLSL.
     pub index: u32,
 }
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub struct GlslReflectionInfo {
-    /// Mapping between names and attribute locations.
-    pub varying: crate::FastHashMap<String, VaryingLocation>,
-    pub immediates_items: Vec<GlslImmediateItem>,
-    pub clip_distance_count: u32,
-    pub name_binding_map: NameBindingMap,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
-pub enum BindingRegister {
-    UniformBuffers,
-    StorageBuffers,
-    Textures,
-    Images,
-}
-
-pub type NameBindingMap = crate::FastHashMap<String, (BindingRegister, u8)>;

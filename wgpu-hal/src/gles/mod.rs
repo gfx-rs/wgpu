@@ -103,7 +103,10 @@ pub use self::egl::{AdapterContext, AdapterContextLock};
 #[cfg(not(any(windows, webgl)))]
 pub use self::egl::{Instance, Surface};
 
-pub use wst::glsl::{BindingRegister, NameBindingMap};
+pub use wgs::glsl::BindGroupLayoutInfo;
+pub use wgs::glsl::{
+    BindingRegister, NameBindingMap, SamplerBindMap, MAX_SAMPLERS, MAX_TEXTURE_SLOTS,
+};
 
 #[cfg(webgl)]
 pub use self::web::AdapterContext;
@@ -131,11 +134,6 @@ use crate::{CopyExtent, TextureDescriptor};
 
 #[derive(Clone, Debug)]
 pub struct Api;
-
-//Note: we can support more samplers if not every one of them is used at a time,
-// but it probably doesn't worth it.
-const MAX_TEXTURE_SLOTS: usize = 16;
-const MAX_SAMPLERS: usize = 16;
 const MAX_VERTEX_ATTRIBUTES: usize = 16;
 const ZERO_BUFFER_SIZE: usize = 256 << 10;
 const MAX_IMMEDIATES: usize = 64;
@@ -543,30 +541,12 @@ pub struct BindGroupLayout {
 impl crate::DynBindGroupLayout for BindGroupLayout {}
 
 #[derive(Debug)]
-struct BindGroupLayoutInfo {
-    entries: Arc<[wgt::BindGroupLayoutEntry]>,
-    /// Mapping of resources, indexed by `binding`, into the whole layout space.
-    /// For texture resources, the value is the texture slot index.
-    /// For sampler resources, the value is the index of the sampler in the whole layout.
-    /// For buffers, the value is the uniform or storage slot index.
-    /// For unused bindings, the value is `!0`
-    binding_to_slot: Box<[u8]>,
-}
-
-#[derive(Debug)]
 pub struct PipelineLayout {
     group_infos: Box<[BindGroupLayoutInfo]>,
     shader_options: wgs::glsl::GlslCompileOptions,
 }
 
 impl crate::DynPipelineLayout for PipelineLayout {}
-
-impl PipelineLayout {
-    fn get_slot(&self, br: &wst::ResourceBinding) -> u8 {
-        let group_info = &self.group_infos[br.group as usize];
-        group_info.binding_to_slot[br.binding as usize]
-    }
-}
 
 #[derive(Debug)]
 enum RawBinding {
@@ -652,10 +632,6 @@ struct ImmediateDesc {
 unsafe impl Sync for ImmediateDesc {}
 #[cfg(send_sync)]
 unsafe impl Send for ImmediateDesc {}
-
-/// For each texture in the pipeline layout, store the index of the only
-/// sampler (in this layout) that the texture is used with.
-type SamplerBindMap = [Option<u8>; MAX_TEXTURE_SLOTS];
 
 #[derive(Debug)]
 struct PipelineInner {
