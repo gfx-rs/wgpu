@@ -735,7 +735,6 @@ impl super::Validator {
                         _ => return Err(ExpressionError::InvalidImageArrayIndexType(level)),
                     },
                     e => {
-                        std::dbg!(e, class);
                         return Err(ExpressionError::InvalidImageOtherIndex);
                     }
                 }
