@@ -654,16 +654,24 @@ impl Queue {
             return Err(TransferError::BufferNotAvailable);
         }
         buffer.check_usage(wgt::BufferUsages::COPY_DST)?;
-        if buffer_size.get() % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+        if !buffer_size.get().is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             return Err(TransferError::UnalignedCopySize(buffer_size.get()));
         }
-        if buffer_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+        if !buffer_offset.is_multiple_of(wgt::COPY_BUFFER_ALIGNMENT) {
             return Err(TransferError::UnalignedBufferOffset(buffer_offset));
         }
-        if buffer_offset + buffer_size.get() > buffer.size {
-            return Err(TransferError::BufferOverrun {
+
+        if buffer_offset > buffer.size {
+            return Err(TransferError::BufferStartOffsetOverrun {
                 start_offset: buffer_offset,
-                end_offset: buffer_offset + buffer_size.get(),
+                buffer_size: buffer.size,
+                side: CopySide::Destination,
+            });
+        }
+        if buffer_size.get() > buffer.size - buffer_offset {
+            return Err(TransferError::BufferEndOffsetOverrun {
+                start_offset: buffer_offset,
+                size: buffer_size.get(),
                 buffer_size: buffer.size,
                 side: CopySide::Destination,
             });
@@ -1155,6 +1163,33 @@ impl Queue {
         Ok(())
     }
 
+    #[cfg(feature = "trace")]
+    fn trace_submission(
+        &self,
+        submit_index: SubmissionIndex,
+        commands: Vec<crate::command::Command<crate::command::PointerReferences>>,
+    ) {
+        if let Some(ref mut trace) = *self.device.trace.lock() {
+            trace.add(Action::Submit(submit_index, commands));
+        }
+    }
+
+    #[cfg(feature = "trace")]
+    fn trace_failed_submission(
+        &self,
+        submit_index: SubmissionIndex,
+        commands: Option<Vec<crate::command::Command<crate::command::PointerReferences>>>,
+        error: alloc::string::String,
+    ) {
+        if let Some(ref mut trace) = *self.device.trace.lock() {
+            trace.add(Action::FailedCommands {
+                commands,
+                failed_at_submit: Some(submit_index),
+                error,
+            });
+        }
+    }
+
     pub fn submit(
         &self,
         command_buffers: &[Arc<CommandBuffer>],
@@ -1209,19 +1244,15 @@ impl Queue {
                         #[allow(unused_mut)]
                         let mut cmd_buf_data = command_buffer.take_finished();
 
-                        #[cfg(feature = "trace")]
-                        if let Some(ref mut trace) = *self.device.trace.lock() {
-                            if let Ok(ref mut cmd_buf_data) = cmd_buf_data {
-                                trace.add(Action::Submit(
-                                    submit_index,
-                                    cmd_buf_data.trace_commands.take().unwrap(),
-                                ));
-                            }
-                        }
-
                         if first_error.is_some() {
                             continue;
                         }
+
+                        #[cfg(feature = "trace")]
+                        let trace_commands = cmd_buf_data
+                            .as_mut()
+                            .ok()
+                            .and_then(|data| mem::take(&mut data.trace_commands));
 
                         let mut baked = match cmd_buf_data {
                             Ok(cmd_buf_data) => {
@@ -1235,12 +1266,31 @@ impl Queue {
                                     &mut command_index_guard,
                                 );
                                 if let Err(err) = res {
+                                    #[cfg(feature = "trace")]
+                                    self.trace_failed_submission(
+                                        submit_index,
+                                        trace_commands,
+                                        err.to_string(),
+                                    );
                                     first_error.get_or_insert(err);
                                     continue;
                                 }
+
+                                #[cfg(feature = "trace")]
+                                if let Some(commands) = trace_commands {
+                                    self.trace_submission(submit_index, commands);
+                                }
+
+                                cmd_buf_data.set_acceleration_structure_dependencies(&snatch_guard);
                                 cmd_buf_data.into_baked_commands()
                             }
                             Err(err) => {
+                                #[cfg(feature = "trace")]
+                                self.trace_failed_submission(
+                                    submit_index,
+                                    trace_commands,
+                                    err.to_string(),
+                                );
                                 first_error.get_or_insert(err.into());
                                 continue;
                             }
@@ -1570,11 +1620,14 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *queue.device.trace.lock() {
-            let data_path = trace.make_binary("bin", data);
+            use crate::device::trace::DataKind;
+            let size = data.len() as u64;
+            let data = trace.make_binary(DataKind::Bin, data);
             trace.add(Action::WriteBuffer {
                 id: buffer.to_trace(),
-                data: data_path,
-                range: buffer_offset..buffer_offset + data.len() as u64,
+                data,
+                offset: buffer_offset,
+                size,
                 queued: true,
             });
         }
@@ -1641,10 +1694,11 @@ impl Global {
 
         #[cfg(feature = "trace")]
         if let Some(ref mut trace) = *queue.device.trace.lock() {
-            let data_path = trace.make_binary("bin", data);
+            use crate::device::trace::DataKind;
+            let data = trace.make_binary(DataKind::Bin, data);
             trace.add(Action::WriteTexture {
                 to: destination.to_trace(),
-                data: data_path,
+                data,
                 layout: *data_layout,
                 size: *size,
             });

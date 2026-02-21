@@ -3,7 +3,7 @@ mod multi_instance {
 
     async fn get() -> wgpu::Adapter {
         let adapter = {
-            let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
                 backends: wgpu::Backends::from_env().unwrap_or_default(),
                 ..Default::default()
             });
@@ -41,10 +41,11 @@ mod request_adapter_error {
             flags: wgpu::InstanceFlags::default(),
             memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
             backend_options: wgpu::BackendOptions::default(),
+            display: None,
         }
     }
 
-    fn adapter_error(desc: &wgpu::InstanceDescriptor) -> String {
+    fn adapter_error(desc: wgpu::InstanceDescriptor) -> String {
         let instance = wgpu::Instance::new(desc);
         pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::default(),
@@ -58,7 +59,7 @@ mod request_adapter_error {
     #[test]
     fn no_backends_requested() {
         assert_eq!(
-            adapter_error(&id(wgpu::Backends::empty())),
+            adapter_error(id(wgpu::Backends::empty())),
             "No suitable graphics adapter found; \
             noop not requested, \
             vulkan not requested, \
@@ -74,7 +75,7 @@ mod request_adapter_error {
     #[test]
     fn noop_not_enabled() {
         assert_eq!(
-            adapter_error(&id(wgpu::Backends::NOOP)),
+            adapter_error(id(wgpu::Backends::NOOP)),
             "No suitable graphics adapter found; \
             noop not explicitly enabled, \
             vulkan not requested, \
@@ -92,7 +93,7 @@ mod request_adapter_error {
 
         #[cfg(target_family = "wasm")]
         assert_eq!(
-            adapter_error(&id(wgpu::Backends::METAL)),
+            adapter_error(id(wgpu::Backends::METAL)),
             "No suitable graphics adapter found; \
             noop not requested, \
             vulkan not requested, \
@@ -104,7 +105,7 @@ mod request_adapter_error {
 
         #[cfg(not(target_family = "wasm"))]
         assert_eq!(
-            adapter_error(&id(wgpu::Backends::BROWSER_WEBGPU)),
+            adapter_error(id(wgpu::Backends::BROWSER_WEBGPU)),
             "No suitable graphics adapter found; \
             noop not requested, \
             vulkan not requested, \

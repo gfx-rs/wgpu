@@ -164,6 +164,7 @@ fn geometry() {
     require(
         &[Ca::Geometry],
         r#"
+        enable primitive_index;
         @fragment
         fn f(@builtin(primitive_index) x: u32) { }
     "#,

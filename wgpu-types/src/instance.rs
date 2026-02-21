@@ -5,13 +5,25 @@ use crate::{link_to_wgpu_docs, Backends};
 #[cfg(doc)]
 use crate::{Backend, DownlevelFlags};
 
+/// A [`raw_window_handle::HasDisplayHandle`] that can be shared across threads and has no borrows.
+///
+/// This blanket trait is automatically implemented for all objects that qualify.
+pub trait WgpuHasDisplayHandle:
+    raw_window_handle::HasDisplayHandle + core::fmt::Debug + Send + Sync + 'static
+{
+}
+impl<T: raw_window_handle::HasDisplayHandle + core::fmt::Debug + Send + Sync + 'static>
+    WgpuHasDisplayHandle for T
+{
+}
+
 /// Options for creating an instance.
 ///
 /// If you want to allow control of instance settings via environment variables, call either
 /// [`InstanceDescriptor::from_env_or_default()`] or [`InstanceDescriptor::with_env()`]. Each type
 /// within this descriptor has its own equivalent methods, so you can select which options you want
 /// to expose to influence from the environment.
-#[derive(Clone, Debug, Default)]
+#[derive(Debug, Default)]
 pub struct InstanceDescriptor {
     /// Which [`Backends`] to enable.
     ///
@@ -35,6 +47,21 @@ pub struct InstanceDescriptor {
     pub memory_budget_thresholds: MemoryBudgetThresholds,
     /// Options the control the behavior of specific backends.
     pub backend_options: crate::BackendOptions,
+    /// System platform or compositor connection to connect this `Instance` to.
+    ///
+    /// If not [`None`], it is invalid to pass a different [`raw_window_handle::HasDisplayHandle`] to `create_surface()`.
+    ///
+    /// - On GLES, this is required when intending to present on the platform, especially for Wayland.
+    /// - On Vulkan, Metal and Dx12, this is currently unused.
+    ///
+    /// When used with `winit`, callers are expected to pass its [`OwnedDisplayHandle`] (created from
+    /// the `EventLoop`) here.
+    ///
+    /// [`OwnedDisplayHandle`]: https://docs.rs/winit/latest/winit/event_loop/struct.OwnedDisplayHandle.html
+    // FUTURE: The RawDisplayHandle trait can/should be removed entirely from create_display()? At
+    // least `trait WindowHandle: HasWindowHandle + HasDisplayHandle` should really be removed as
+    // it's impractical and not implementable everywhere.
+    pub display: Option<alloc::boxed::Box<dyn WgpuHasDisplayHandle>>,
 }
 
 impl InstanceDescriptor {
@@ -59,6 +86,16 @@ impl InstanceDescriptor {
             flags,
             memory_budget_thresholds: MemoryBudgetThresholds::default(),
             backend_options,
+            display: None,
+        }
+    }
+
+    /// Appends the given `display` object to the descriptor.
+    #[must_use]
+    pub fn with_display_handle(self, display: alloc::boxed::Box<dyn WgpuHasDisplayHandle>) -> Self {
+        Self {
+            display: Some(display),
+            ..self
         }
     }
 }

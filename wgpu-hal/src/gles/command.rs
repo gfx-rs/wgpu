@@ -227,7 +227,6 @@ impl super::CommandEncoder {
         }
     }
 
-    #[allow(clippy::clone_on_copy)] // False positive when cloning glow::UniformLocation
     fn set_pipeline_inner(&mut self, inner: &super::PipelineInner) {
         self.cmd_buffer.commands.push(C::SetProgram(inner.program));
 
@@ -1264,6 +1263,13 @@ impl crate::CommandEncoder for super::CommandEncoder {
         &mut self,
         _acceleration_structure: &super::AccelerationStructure,
         _buf: &super::Buffer,
+    ) {
+        unimplemented!()
+    }
+
+    unsafe fn set_acceleration_structure_dependencies(
+        _command_buffers: &[&super::CommandBuffer],
+        _dependencies: &[&super::AccelerationStructure],
     ) {
         unimplemented!()
     }

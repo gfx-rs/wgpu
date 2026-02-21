@@ -201,12 +201,13 @@ impl Frontend {
                     "gl_BaseVertex" => BuiltIn::BaseVertex,
                     "gl_BaseInstance" => BuiltIn::BaseInstance,
                     "gl_PrimitiveID" => BuiltIn::PrimitiveIndex,
-                    "gl_BaryCoordEXT" => BuiltIn::Barycentric,
+                    "gl_BaryCoordEXT" => BuiltIn::Barycentric { perspective: true },
+                    "gl_BaryCoordNoPerspEXT" => BuiltIn::Barycentric { perspective: false },
                     "gl_InstanceIndex" => BuiltIn::InstanceIndex,
                     "gl_VertexIndex" => BuiltIn::VertexIndex,
                     "gl_SampleID" => BuiltIn::SampleIndex,
                     "gl_LocalInvocationIndex" => BuiltIn::LocalInvocationIndex,
-                    "gl_DrawID" => BuiltIn::DrawID,
+                    "gl_DrawID" => BuiltIn::DrawIndex,
                     _ => return Ok(None),
                 };
 

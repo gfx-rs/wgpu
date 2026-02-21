@@ -3,7 +3,7 @@ use std::sync::Arc;
 use winit::{
     application::ApplicationHandler,
     event::WindowEvent,
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, OwnedDisplayHandle},
     window::{Window, WindowId},
 };
 
@@ -17,8 +17,10 @@ struct State {
 }
 
 impl State {
-    async fn new(window: Arc<Window>) -> State {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::default());
+    async fn new(display: OwnedDisplayHandle, window: Arc<Window>) -> State {
+        let instance = wgpu::Instance::new(
+            wgpu::InstanceDescriptor::default().with_display_handle(Box::new(display)),
+        );
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions::default())
             .await
@@ -136,7 +138,10 @@ impl ApplicationHandler for App {
                 .unwrap(),
         );
 
-        let state = pollster::block_on(State::new(window.clone()));
+        let state = pollster::block_on(State::new(
+            event_loop.owned_display_handle(),
+            window.clone(),
+        ));
         self.state = Some(state);
 
         window.request_redraw();

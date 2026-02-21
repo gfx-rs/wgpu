@@ -110,15 +110,6 @@ impl ContextWgpuCore {
         hal_device: hal::OpenDevice<A>,
         desc: &crate::DeviceDescriptor<'_>,
     ) -> Result<(CoreDevice, CoreQueue), crate::RequestDeviceError> {
-        if !matches!(desc.trace, wgt::Trace::Off) {
-            log::error!(
-                "
-                Feature 'trace' has been removed temporarily; \
-                see https://github.com/gfx-rs/wgpu/issues/5974. \
-                The `trace` parameter will have no effect."
-            );
-        }
-
         let (device_id, queue_id) = unsafe {
             self.0.create_device_from_hal(
                 adapter.id,
@@ -780,7 +771,7 @@ crate::cmp::impl_eq_ord_hash_proxy!(CoreQueueWriteBuffer => .mapping.ptr);
 crate::cmp::impl_eq_ord_hash_proxy!(CoreBufferMappedRange => .ptr);
 
 impl dispatch::InstanceInterface for ContextWgpuCore {
-    fn new(desc: &wgt::InstanceDescriptor) -> Self
+    fn new(desc: wgt::InstanceDescriptor) -> Self
     where
         Self: Sized,
     {
@@ -800,7 +791,12 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
                     .instance_create_surface(raw_display_handle, raw_window_handle, None)
             },
 
-            #[cfg(all(unix, not(target_vendor = "apple"), not(target_family = "wasm")))]
+            #[cfg(all(
+                unix,
+                not(target_vendor = "apple"),
+                not(target_family = "wasm"),
+                not(target_os = "netbsd")
+            ))]
             SurfaceTargetUnsafe::Drm {
                 fd,
                 plane,
@@ -824,6 +820,11 @@ impl dispatch::InstanceInterface for ContextWgpuCore {
             SurfaceTargetUnsafe::CoreAnimationLayer(layer) => unsafe {
                 self.0.instance_create_surface_metal(layer, None)
             },
+
+            #[cfg(target_os = "netbsd")]
+            SurfaceTargetUnsafe::Drm { .. } => Err(
+                wgc::instance::CreateSurfaceError::BackendNotEnabled(wgt::Backend::Vulkan),
+            ),
 
             #[cfg(dx12)]
             SurfaceTargetUnsafe::CompositionVisual(visual) => unsafe {
@@ -930,15 +931,6 @@ impl dispatch::AdapterInterface for CoreAdapter {
         &self,
         desc: &crate::DeviceDescriptor<'_>,
     ) -> Pin<Box<dyn dispatch::RequestDeviceFuture>> {
-        if !matches!(desc.trace, wgt::Trace::Off) {
-            log::error!(
-                "
-                Feature 'trace' has been removed temporarily; \
-                see https://github.com/gfx-rs/wgpu/issues/5974. \
-                The `trace` parameter will have no effect."
-            );
-        }
-
         let res = self.context.0.adapter_request_device(
             self.id,
             &desc.map_label(|l| l.map(Borrowed)),
@@ -1002,6 +994,12 @@ impl dispatch::AdapterInterface for CoreAdapter {
     fn get_presentation_timestamp(&self) -> crate::PresentationTimestamp {
         self.context.0.adapter_get_presentation_timestamp(self.id)
     }
+
+    fn cooperative_matrix_properties(&self) -> Vec<crate::wgt::CooperativeMatrixProperties> {
+        self.context
+            .0
+            .adapter_cooperative_matrix_properties(self.id)
+    }
 }
 
 impl Drop for CoreAdapter {
@@ -1017,6 +1015,10 @@ impl dispatch::DeviceInterface for CoreDevice {
 
     fn limits(&self) -> crate::Limits {
         self.context.0.device_limits(self.id)
+    }
+
+    fn adapter_info(&self) -> crate::AdapterInfo {
+        self.context.0.device_adapter_info(self.id)
     }
 
     // If we have no way to create a shader module, we can't return one, and so most of the function is unreachable.
@@ -3076,8 +3078,10 @@ impl dispatch::ComputePassInterface for CoreComputePass {
             );
         }
     }
+}
 
-    fn end(&mut self) {
+impl Drop for CoreComputePass {
+    fn drop(&mut self) {
         if let Err(cause) = self.context.0.compute_pass_end(&mut self.pass) {
             self.context.handle_error(
                 &self.error_sink,
@@ -3086,12 +3090,6 @@ impl dispatch::ComputePassInterface for CoreComputePass {
                 "ComputePass::end",
             );
         }
-    }
-}
-
-impl Drop for CoreComputePass {
-    fn drop(&mut self) {
-        dispatch::ComputePassInterface::end(self);
     }
 }
 
@@ -3691,8 +3689,10 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
             );
         }
     }
+}
 
-    fn end(&mut self) {
+impl Drop for CoreRenderPass {
+    fn drop(&mut self) {
         if let Err(cause) = self.context.0.render_pass_end(&mut self.pass) {
             self.context.handle_error(
                 &self.error_sink,
@@ -3701,12 +3701,6 @@ impl dispatch::RenderPassInterface for CoreRenderPass {
                 "RenderPass::end",
             );
         }
-    }
-}
-
-impl Drop for CoreRenderPass {
-    fn drop(&mut self) {
-        dispatch::RenderPassInterface::end(self);
     }
 }
 

@@ -7,7 +7,7 @@ struct a_buf {
 }
 
 struct TestStruct {
-    array_: array<vec4<u32>, 2>,
+    array: array<vec4<u32>, 2>,
 }
 
 struct FragmentOutput {
@@ -402,7 +402,7 @@ fn indexConstantNonConstantIndex(i: i32) {
 
     i_1 = i;
     let _e2 = i_1;
-    let _e7 = local_5.array_[_e2];
+    let _e7 = local_5.array[_e2];
     a_26 = _e7;
     return;
 }

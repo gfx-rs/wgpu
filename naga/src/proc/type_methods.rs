@@ -141,6 +141,7 @@ impl crate::TypeInner {
         match *self {
             Ti::Scalar(scalar) | Ti::Vector { scalar, .. } => Some(scalar),
             Ti::Matrix { scalar, .. } => Some(scalar),
+            Ti::CooperativeMatrix { scalar, .. } => Some(scalar),
             _ => None,
         }
     }
@@ -208,8 +209,8 @@ impl crate::TypeInner {
 
     pub fn is_atomic_pointer(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
         match *self {
-            crate::TypeInner::Pointer { base, .. } => match types[base].inner {
-                crate::TypeInner::Atomic { .. } => true,
+            Self::Pointer { base, .. } => match types[base].inner {
+                Self::Atomic { .. } => true,
                 _ => false,
             },
             _ => false,
@@ -228,6 +229,12 @@ impl crate::TypeInner {
                 rows,
                 scalar,
             } => Some(super::Alignment::from(rows) * scalar.width as u32 * columns as u32),
+            Self::CooperativeMatrix {
+                columns,
+                rows,
+                scalar,
+                role: _,
+            } => Some(columns as u32 * rows as u32 * scalar.width as u32),
             Self::Pointer { .. } | Self::ValuePointer { .. } => Some(POINTER_SPAN),
             Self::Array {
                 base: _,
@@ -337,10 +344,18 @@ impl crate::TypeInner {
         left.as_ref().unwrap_or(self) == right.as_ref().unwrap_or(rhs)
     }
 
+    /// Returns true if `self` is runtime- or override-sized.
     pub fn is_dynamically_sized(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
         use crate::TypeInner as Ti;
         match *self {
-            Ti::Array { size, .. } => size == crate::ArraySize::Dynamic,
+            Ti::Array {
+                size: crate::ArraySize::Constant(_),
+                ..
+            } => false,
+            Ti::Array {
+                size: crate::ArraySize::Pending(_) | crate::ArraySize::Dynamic,
+                ..
+            } => true,
             Ti::Struct { ref members, .. } => members
                 .last()
                 .map(|last| types[last.ty].inner.is_dynamically_sized(types))
@@ -349,7 +364,36 @@ impl crate::TypeInner {
         }
     }
 
-    pub fn components(&self) -> Option<u32> {
+    /// Returns true if `self` is a constructible type.
+    pub fn is_constructible(&self, types: &crate::UniqueArena<crate::Type>) -> bool {
+        use crate::TypeInner as Ti;
+        match *self {
+            Ti::Array { base, size, .. } => {
+                let fixed_size = match size {
+                    ir::ArraySize::Constant(_) => true,
+                    ir::ArraySize::Pending(_) | ir::ArraySize::Dynamic => false,
+                };
+                fixed_size && types[base].inner.is_constructible(types)
+            }
+            Ti::Struct { ref members, .. } => members
+                .iter()
+                .all(|member| types[member.ty].inner.is_constructible(types)),
+            Ti::Atomic(_)
+            | Ti::Pointer { .. }
+            | Ti::ValuePointer { .. }
+            | Ti::Image { .. }
+            | Ti::Sampler { .. }
+            | Ti::AccelerationStructure { .. }
+            | Ti::BindingArray { .. } => false,
+            Ti::Scalar(_)
+            | Ti::Vector { .. }
+            | Ti::Matrix { .. }
+            | Ti::RayQuery { .. }
+            | Ti::CooperativeMatrix { .. } => true,
+        }
+    }
+
+    pub const fn components(&self) -> Option<u32> {
         Some(match *self {
             Self::Vector { size, .. } => size as u32,
             Self::Matrix { columns, .. } => columns as u32,
@@ -387,6 +431,7 @@ impl crate::TypeInner {
             crate::TypeInner::Scalar(scalar) => Some((None, scalar)),
             crate::TypeInner::Vector { size, scalar } => Some((Some(size), scalar)),
             crate::TypeInner::Matrix { .. }
+            | crate::TypeInner::CooperativeMatrix { .. }
             | crate::TypeInner::Atomic(_)
             | crate::TypeInner::Pointer { .. }
             | crate::TypeInner::ValuePointer { .. }
@@ -411,7 +456,8 @@ impl crate::TypeInner {
             | crate::TypeInner::Matrix { scalar, .. }
             | crate::TypeInner::Atomic(scalar) => scalar.is_abstract(),
             crate::TypeInner::Array { base, .. } => types[base].inner.is_abstract(types),
-            crate::TypeInner::ValuePointer { .. }
+            crate::TypeInner::CooperativeMatrix { .. }
+            | crate::TypeInner::ValuePointer { .. }
             | crate::TypeInner::Pointer { .. }
             | crate::TypeInner::Struct { .. }
             | crate::TypeInner::Image { .. }

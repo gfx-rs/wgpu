@@ -403,6 +403,32 @@ impl StatementGraph {
                         },
                     }
                 }
+                S::CooperativeStore { target, data } => {
+                    self.dependencies.push((id, target, "target"));
+                    self.dependencies.push((id, data.pointer, "pointer"));
+                    self.dependencies.push((id, data.stride, "stride"));
+                    if data.row_major {
+                        "CoopStoreT"
+                    } else {
+                        "CoopStore"
+                    }
+                }
+                S::RayPipelineFunction(func) => match func {
+                    crate::RayPipelineFunction::TraceRay {
+                        acceleration_structure,
+                        descriptor,
+                        payload,
+                    } => {
+                        self.dependencies.push((
+                            id,
+                            acceleration_structure,
+                            "acceleration_structure",
+                        ));
+                        self.dependencies.push((id, descriptor, "descriptor"));
+                        self.dependencies.push((id, payload, "payload"));
+                        "TraceRay"
+                    }
+                },
             };
             // Set the last node to the merge node
             last_node = merge_id;
@@ -741,6 +767,18 @@ fn write_function_expressions(
                 edges.insert("", query);
                 let ty = if committed { "Committed" } else { "Candidate" };
                 (format!("get{ty}HitVertexPositions").into(), 4)
+            }
+            E::CooperativeLoad { ref data, .. } => {
+                edges.insert("pointer", data.pointer);
+                edges.insert("stride", data.stride);
+                let suffix = if data.row_major { "T " } else { "" };
+                (format!("coopLoad{suffix}").into(), 4)
+            }
+            E::CooperativeMultiplyAdd { a, b, c } => {
+                edges.insert("a", a);
+                edges.insert("b", b);
+                edges.insert("c", c);
+                ("cooperativeMultiplyAdd".into(), 4)
             }
         };
 

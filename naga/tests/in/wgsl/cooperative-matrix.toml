@@ -1,0 +1,9 @@
+targets = "SPIRV | METAL | WGSL"
+capabilities = "COOPERATIVE_MATRIX"
+
+[spv]
+debug = false
+version = [1, 4]
+
+[msl]
+lang_version = [2, 3]

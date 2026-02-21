@@ -1,5 +1,5 @@
 fn noop_adapter() -> wgpu::Adapter {
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::NOOP,
         backend_options: wgpu::BackendOptions {
             noop: wgpu::NoopBackendOptions { enable: true },
@@ -61,7 +61,7 @@ fn request_multiple_experimental_features_when_not_enabled() {
     let dq = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         // Experimental
         required_features: wgpu::Features::EXPERIMENTAL_MESH_SHADER
-            | wgpu::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS,
+            | wgpu::Features::EXPERIMENTAL_COOPERATIVE_MATRIX,
         experimental_features: wgpu::ExperimentalFeatures::disabled(),
         ..Default::default()
     }));

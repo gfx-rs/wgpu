@@ -96,8 +96,9 @@ pub const SUPPORTED_EXTENSIONS: &[&str] = &[
     "SPV_EXT_descriptor_indexing",
     "SPV_EXT_shader_atomic_float_add",
     "SPV_KHR_16bit_storage",
+    "SPV_KHR_non_semantic_info",
+    "SPV_KHR_fragment_shader_barycentric",
 ];
-pub const SUPPORTED_EXT_SETS: &[&str] = &["GLSL.std.450"];
 
 #[derive(Copy, Clone)]
 pub struct Instruction {
@@ -215,6 +216,7 @@ struct Decoration {
     name: Option<String>,
     built_in: Option<spirv::Word>,
     location: Option<spirv::Word>,
+    index: Option<spirv::Word>,
     desc_set: Option<spirv::Word>,
     desc_index: Option<spirv::Word>,
     specialization_constant_id: Option<spirv::Word>,
@@ -230,7 +232,7 @@ struct Decoration {
 }
 
 impl Decoration {
-    fn debug_name(&self) -> &str {
+    const fn debug_name(&self) -> &str {
         match self.name {
             Some(ref name) => name.as_str(),
             None => "?",
@@ -256,6 +258,18 @@ impl Decoration {
                 invariant,
                 ..
             } => Ok(crate::Binding::BuiltIn(map_builtin(built_in, invariant)?)),
+            Decoration {
+                built_in: None,
+                location: Some(location),
+                index: Some(index),
+                ..
+            } => Ok(crate::Binding::Location {
+                location,
+                interpolation: None,
+                sampling: None,
+                blend_src: Some(index),
+                per_primitive: false,
+            }),
             Decoration {
                 built_in: None,
                 location: Some(location),
@@ -588,6 +602,7 @@ pub struct Frontend<I> {
     layouter: Layouter,
     temp_bytes: Vec<u8>,
     ext_glsl_id: Option<spirv::Word>,
+    ext_non_semantic_id: Option<spirv::Word>,
     future_decor: FastHashMap<spirv::Word, Decoration>,
     future_member_decor: FastHashMap<(spirv::Word, MemberIndex), Decoration>,
     lookup_member: FastHashMap<(Handle<crate::Type>, MemberIndex), LookupMember>,
@@ -655,6 +670,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             layouter: Layouter::default(),
             temp_bytes: Vec::new(),
             ext_glsl_id: None,
+            ext_non_semantic_id: None,
             future_decor: FastHashMap::default(),
             future_member_decor: FastHashMap::default(),
             handle_sampling: FastHashMap::default(),
@@ -746,6 +762,10 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 inst.expect(base_words + 2)?;
                 dec.location = Some(self.next()?);
             }
+            spirv::Decoration::Index => {
+                inst.expect(base_words + 2)?;
+                dec.index = Some(self.next()?);
+            }
             spirv::Decoration::DescriptorSet => {
                 inst.expect(base_words + 2)?;
                 dec.desc_set = Some(self.next()?);
@@ -777,6 +797,9 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
             }
             spirv::Decoration::Flat => {
                 dec.interpolation = Some(crate::Interpolation::Flat);
+            }
+            spirv::Decoration::PerVertexKHR => {
+                dec.interpolation = Some(crate::Interpolation::PerVertex);
             }
             spirv::Decoration::Centroid => {
                 dec.sampling = Some(crate::Sampling::Centroid);
@@ -1487,10 +1510,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         overrides: &Arena<crate::Override>,
     ) -> Arena<crate::Expression> {
         let mut expressions = Arena::new();
-        #[allow(clippy::panic)]
-        {
-            assert!(self.lookup_expression.is_empty());
-        }
+        assert!(self.lookup_expression.is_empty());
         // register global variables
         for (&id, var) in self.lookup_variable.iter() {
             let span = globals.get_span(var.handle);
@@ -1592,7 +1612,8 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                 | S::RayQuery { .. }
                 | S::SubgroupBallot { .. }
                 | S::SubgroupCollectiveOperation { .. }
-                | S::SubgroupGather { .. } => {}
+                | S::SubgroupGather { .. }
+                | S::RayPipelineFunction(..) => {}
                 S::Call {
                     function: ref mut callee,
                     ref arguments,
@@ -1623,6 +1644,7 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     }
                 }
                 S::WorkGroupUniformLoad { .. } => unreachable!(),
+                S::CooperativeStore { .. } => unreachable!(),
             }
             i += 1;
         }
@@ -1740,6 +1762,21 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                     inst.expect(5)?;
                     self.parse_function(&mut module)
                 }
+                Op::ExtInst => {
+                    // Ignore the result type and result id
+                    let _ = self.next()?;
+                    let _ = self.next()?;
+                    let set_id = self.next()?;
+                    if Some(set_id) == self.ext_non_semantic_id {
+                        // We've already skipped the instruction byte, result type, result id, and instruction set id
+                        for _ in 0..inst.wc - 4 {
+                            self.next()?;
+                        }
+                        Ok(())
+                    } else {
+                        return Err(Error::UnsupportedInstruction(self.state, inst.op));
+                    }
+                }
                 _ => Err(Error::UnsupportedInstruction(self.state, inst.op)), //TODO
             }?;
         }
@@ -1843,10 +1880,17 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
         if left != 0 {
             return Err(Error::InvalidOperand);
         }
-        if !SUPPORTED_EXT_SETS.contains(&name.as_str()) {
+        if &name == "GLSL.std.450" {
+            self.ext_glsl_id = Some(result_id);
+        } else if &name == "NonSemantic.Shader.DebugInfo.100" {
+            // We completely ignore this extension. All related instructions are
+            // non-semantic and only for debug purposes, and the spec says they
+            // are ignorable. Many compilers (dxc, slang, etc) will emit these
+            // instructions depending on configuration.
+            self.ext_non_semantic_id = Some(result_id);
+        } else {
             return Err(Error::UnsupportedExtSet(name));
         }
-        self.ext_glsl_id = Some(result_id);
         Ok(())
     }
 
@@ -2987,10 +3031,12 @@ impl<I: Iterator<Item = u32>> Frontend<I> {
                             size: crate::VectorSize::Tri,
                             scalar: crate::Scalar::U32,
                         }),
-                        crate::BuiltIn::Barycentric => Some(crate::TypeInner::Vector {
-                            size: crate::VectorSize::Tri,
-                            scalar: crate::Scalar::F32,
-                        }),
+                        crate::BuiltIn::Barycentric { perspective: false } => {
+                            Some(crate::TypeInner::Vector {
+                                size: crate::VectorSize::Tri,
+                                scalar: crate::Scalar::F32,
+                            })
+                        }
                         _ => None,
                     };
                     if let (Some(inner), Some(crate::ScalarKind::Sint)) =
@@ -3161,7 +3207,7 @@ fn resolve_constant(gctx: crate::proc::GlobalCtx, constant: &Constant) -> Option
 }
 
 pub fn parse_u8_slice(data: &[u8], options: &Options) -> Result<crate::Module, Error> {
-    if data.len() % 4 != 0 {
+    if !data.len().is_multiple_of(4) {
         return Err(Error::IncompleteData);
     }
 

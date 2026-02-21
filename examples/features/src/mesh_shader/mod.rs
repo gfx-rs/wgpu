@@ -1,9 +1,15 @@
 // Same as in mesh shader tests
 fn compile_wgsl(device: &wgpu::Device) -> wgpu::ShaderModule {
-    device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: None,
-        source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
-    })
+    // Workgroup memory zero initialization can be expensive for mesh shaders
+    unsafe {
+        device.create_shader_module_trusted(
+            wgpu::ShaderModuleDescriptor {
+                label: None,
+                source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+            },
+            wgpu::ShaderRuntimeChecks::unchecked(),
+        )
+    }
 }
 fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::ShaderModule {
     let out_path = format!(
@@ -29,7 +35,6 @@ fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::Sh
     std::fs::remove_file(out_path).unwrap();
     unsafe {
         device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-            entry_point: entry.to_owned(),
             label: None,
             num_workgroups: (1, 1, 1),
             dxil: Some(std::borrow::Cow::Owned(file)),
@@ -38,15 +43,61 @@ fn compile_hlsl(device: &wgpu::Device, entry: &str, stage_str: &str) -> wgpu::Sh
     }
 }
 
-fn compile_msl(device: &wgpu::Device, entry: &str) -> wgpu::ShaderModule {
+fn compile_msl(device: &wgpu::Device) -> wgpu::ShaderModule {
     unsafe {
         device.create_shader_module_passthrough(wgpu::ShaderModuleDescriptorPassthrough {
-            entry_point: entry.to_owned(),
             label: None,
             msl: Some(std::borrow::Cow::Borrowed(include_str!("shader.metal"))),
             num_workgroups: (1, 1, 1),
             ..Default::default()
         })
+    }
+}
+
+struct Shaders {
+    ts: wgpu::ShaderModule,
+    ms: wgpu::ShaderModule,
+    fs: wgpu::ShaderModule,
+    ts_name: &'static str,
+    ms_name: &'static str,
+    fs_name: &'static str,
+}
+
+fn get_shaders(device: &wgpu::Device, backend: wgpu::Backend) -> Shaders {
+    // In the case that the platform does support mesh shaders, the dummy
+    // shader is used to avoid requiring PASSTHROUGH_SHADERS.
+    match backend {
+        wgpu::Backend::Vulkan => {
+            let compiled = compile_wgsl(device);
+            Shaders {
+                ts: compiled.clone(),
+                ms: compiled.clone(),
+                fs: compiled.clone(),
+                ts_name: "ts_main",
+                ms_name: "ms_main",
+                fs_name: "fs_main",
+            }
+        }
+        wgpu::Backend::Dx12 => Shaders {
+            ts: compile_hlsl(device, "Task", "as"),
+            ms: compile_hlsl(device, "Mesh", "ms"),
+            fs: compile_hlsl(device, "Frag", "ps"),
+            ts_name: "main",
+            ms_name: "main",
+            fs_name: "main",
+        },
+        wgpu::Backend::Metal => {
+            let compiled = compile_msl(device);
+            Shaders {
+                ts: compiled.clone(),
+                ms: compiled.clone(),
+                fs: compiled.clone(),
+                ts_name: "taskShader",
+                ms_name: "meshShader",
+                fs_name: "fragShader",
+            }
+        }
+        _ => unreachable!(),
     }
 }
 
@@ -60,33 +111,14 @@ impl crate::framework::Example for Example {
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> Self {
-        let (ts, ms, fs, ts_name, ms_name, fs_name) = match adapter.get_info().backend {
-            wgpu::Backend::Vulkan => (
-                compile_wgsl(device),
-                compile_wgsl(device),
-                compile_wgsl(device),
-                "ts_main",
-                "ms_main",
-                "fs_main",
-            ),
-            wgpu::Backend::Dx12 => (
-                compile_hlsl(device, "Task", "as"),
-                compile_hlsl(device, "Mesh", "ms"),
-                compile_hlsl(device, "Frag", "ps"),
-                "main",
-                "main",
-                "main",
-            ),
-            wgpu::Backend::Metal => (
-                compile_msl(device, "taskShader"),
-                compile_msl(device, "meshShader"),
-                compile_msl(device, "fragShader"),
-                "main",
-                "main",
-                "main",
-            ),
-            _ => panic!("Example can currently only run on vulkan, dx12 or metal"),
-        };
+        let Shaders {
+            ts,
+            ms,
+            fs,
+            ts_name,
+            ms_name,
+            fs_name,
+        } = get_shaders(device, adapter.get_info().backend);
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
             bind_group_layouts: &[],
@@ -159,7 +191,7 @@ impl crate::framework::Example for Example {
         Default::default()
     }
     fn required_features() -> wgpu::Features {
-        wgpu::Features::EXPERIMENTAL_MESH_SHADER | wgpu::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS
+        wgpu::Features::EXPERIMENTAL_MESH_SHADER | wgpu::Features::PASSTHROUGH_SHADERS
     }
     fn required_limits() -> wgpu::Limits {
         wgpu::Limits::defaults().using_recommended_minimum_mesh_shader_values()
@@ -190,10 +222,7 @@ pub static TEST: crate::framework::ExampleTestParams = crate::framework::Example
     height: 768,
     optional_features: wgpu::Features::default(),
     base_test_parameters: wgpu_test::TestParameters::default()
-        .features(
-            wgpu::Features::EXPERIMENTAL_MESH_SHADER
-                | wgpu::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS,
-        )
+        .features(wgpu::Features::EXPERIMENTAL_MESH_SHADER | wgpu::Features::PASSTHROUGH_SHADERS)
         .instance_flags(wgpu::InstanceFlags::advanced_debugging())
         .limits(wgpu::Limits::defaults().using_recommended_minimum_mesh_shader_values())
         .skip(wgpu_test::FailureCase {

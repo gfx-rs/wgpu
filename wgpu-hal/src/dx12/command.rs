@@ -951,7 +951,6 @@ impl crate::CommandEncoder for super::CommandEncoder {
         });
 
         let list = self.list.as_ref().unwrap();
-        #[allow(trivial_casts)] // No other clean way to write the coercion inside .map() below?
         unsafe {
             list.OMSetRenderTargets(
                 desc.color_attachments.len() as u32,
@@ -1850,5 +1849,11 @@ impl crate::CommandEncoder for super::CommandEncoder {
                 conv::map_acceleration_structure_copy_mode(copy),
             )
         }
+    }
+
+    unsafe fn set_acceleration_structure_dependencies(
+        _command_buffers: &[&super::CommandBuffer],
+        _dependencies: &[&super::AccelerationStructure],
+    ) {
     }
 }

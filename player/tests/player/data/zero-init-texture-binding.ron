@@ -125,7 +125,7 @@
                 label: None,
                 flags: (bits: 3),
             ),
-            data: "zero-init-texture-binding.wgsl",
+            data: File("zero-init-texture-binding.wgsl"),
         ),
         CreateComputePipeline(
             id: PointerId(0x10),

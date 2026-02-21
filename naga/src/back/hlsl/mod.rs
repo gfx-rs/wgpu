@@ -216,9 +216,8 @@ pub struct OffsetsBindTarget {
     pub size: u32,
 }
 
-#[cfg(any(feature = "serialize", feature = "deserialize"))]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg(feature = "deserialize")]
+#[derive(serde::Deserialize)]
 struct BindingMapSerialization {
     resource_binding: crate::ResourceBinding,
     bind_target: BindTarget,
@@ -243,7 +242,6 @@ where
 pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, BindTarget>;
 
 /// A HLSL shader model version.
-#[allow(non_snake_case, non_camel_case_types)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serialize", derive(serde::Serialize))]
 #[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
@@ -258,6 +256,8 @@ pub enum ShaderModel {
     V6_5,
     V6_6,
     V6_7,
+    V6_8,
+    V6_9,
 }
 
 impl ShaderModel {
@@ -273,6 +273,8 @@ impl ShaderModel {
             Self::V6_5 => "6_5",
             Self::V6_6 => "6_6",
             Self::V6_7 => "6_7",
+            Self::V6_8 => "6_8",
+            Self::V6_9 => "6_9",
         }
     }
 }
@@ -285,6 +287,7 @@ impl crate::ShaderStage {
             Self::Compute => "cs",
             Self::Task => "as",
             Self::Mesh => "ms",
+            Self::RayGeneration | Self::AnyHit | Self::ClosestHit | Self::Miss => "lib",
         }
     }
 }
@@ -337,9 +340,8 @@ impl Default for SamplerHeapBindTargets {
     }
 }
 
-#[cfg(any(feature = "serialize", feature = "deserialize"))]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg(feature = "deserialize")]
+#[derive(serde::Deserialize)]
 struct SamplerIndexBufferBindingSerialization {
     group: u32,
     bind_target: BindTarget,
@@ -369,9 +371,8 @@ where
 pub type SamplerIndexBufferBindingMap =
     alloc::collections::BTreeMap<SamplerIndexBufferKey, BindTarget>;
 
-#[cfg(any(feature = "serialize", feature = "deserialize"))]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg(feature = "deserialize")]
+#[derive(serde::Deserialize)]
 struct DynamicStorageBufferOffsetTargetSerialization {
     index: u32,
     bind_target: OffsetsBindTarget,
@@ -425,9 +426,8 @@ pub struct ExternalTextureBindTarget {
     pub params: BindTarget,
 }
 
-#[cfg(any(feature = "serialize", feature = "deserialize"))]
-#[cfg_attr(feature = "serialize", derive(serde::Serialize))]
-#[cfg_attr(feature = "deserialize", derive(serde::Deserialize))]
+#[cfg(feature = "deserialize")]
+#[derive(serde::Deserialize)]
 struct ExternalTextureBindingMapSerialization {
     resource_binding: crate::ResourceBinding,
     bind_target: ExternalTextureBindTarget,
@@ -543,6 +543,9 @@ pub struct Options {
     /// If set, loops will have code injected into them, forcing the compiler
     /// to think the number of iterations is bounded.
     pub force_loop_bounding: bool,
+    /// if set, ray queries will get a variable to track their state to prevent
+    /// misuse.
+    pub ray_query_initialization_tracking: bool,
 }
 
 impl Default for Options {
@@ -560,6 +563,7 @@ impl Default for Options {
             zero_initialize_workgroup_memory: true,
             restrict_indexing: true,
             force_loop_bounding: true,
+            ray_query_initialization_tracking: true,
         }
     }
 }

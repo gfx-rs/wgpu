@@ -399,6 +399,11 @@ pub enum GPUFeatureName {
   #[webidl(rename = "subgroups")]
   Subgroups,
 
+  // standard feature, but not default yet in wgpu due to incomplete support
+  // (and even if enabled in wgpu, doing so may not be appropriate in Deno)
+  #[webidl(rename = "external-texture")]
+  ExternalTexture,
+
   // extended from spec
   #[webidl(rename = "texture-format-16-bit-norm")]
   TextureFormat16BitNorm,
@@ -486,6 +491,7 @@ pub fn feature_names_to_features(
       GPUFeatureName::Float32Filterable => Features::FLOAT32_FILTERABLE,
       GPUFeatureName::DualSourceBlending => Features::DUAL_SOURCE_BLENDING,
       GPUFeatureName::Subgroups => Features::SUBGROUP,
+      GPUFeatureName::ExternalTexture => Features::EXTERNAL_TEXTURE,
       GPUFeatureName::TextureFormat16BitNorm => Features::TEXTURE_FORMAT_16BIT_NORM,
       GPUFeatureName::TextureCompressionAstcHdr => Features::TEXTURE_COMPRESSION_ASTC_HDR,
       GPUFeatureName::TextureAdapterSpecificFormatFeatures => Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
@@ -514,7 +520,7 @@ pub fn feature_names_to_features(
       GPUFeatureName::ShaderI16 => Features::SHADER_I16,
       GPUFeatureName::ShaderPrimitiveIndex => Features::SHADER_PRIMITIVE_INDEX,
       GPUFeatureName::ShaderEarlyDepthTest => Features::SHADER_EARLY_DEPTH_TEST,
-      GPUFeatureName::PassthroughShaders => Features::EXPERIMENTAL_PASSTHROUGH_SHADERS,
+      GPUFeatureName::PassthroughShaders => Features::PASSTHROUGH_SHADERS,
     };
     features.set(feature, true);
   }
@@ -674,9 +680,144 @@ pub fn features_to_feature_names(
   if features.contains(wgpu_types::Features::SHADER_EARLY_DEPTH_TEST) {
     return_features.insert(ShaderEarlyDepthTest);
   }
-  if features.contains(wgpu_types::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS) {
+  if features.contains(wgpu_types::Features::PASSTHROUGH_SHADERS) {
     return_features.insert(PassthroughShaders);
   }
 
   return_features
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct GPUTextureUsageFlags(pub(crate) wgpu_types::TextureUsages);
+
+impl<'a> WebIdlConverter<'a> for GPUTextureUsageFlags {
+  type Options = ();
+
+  fn convert<'b>(
+    scope: &mut v8::HandleScope<'a>,
+    value: v8::Local<'a, v8::Value>,
+    prefix: Cow<'static, str>,
+    context: ContextFn<'b>,
+    _options: &Self::Options,
+  ) -> Result<Self, WebIdlError> {
+    let flags_value = u32::convert(
+      scope,
+      value,
+      prefix.clone(),
+      context.borrowed(),
+      &IntOptions {
+        clamp: false,
+        enforce_range: true,
+      },
+    )?;
+
+    let flags =
+      wgpu_types::TextureUsages::from_bits(flags_value).ok_or_else(|| {
+        WebIdlError::other(
+          prefix,
+          context,
+          JsErrorBox::type_error("usage is not valid"),
+        )
+      })?;
+
+    Ok(GPUTextureUsageFlags(flags))
+  }
+}
+
+impl From<GPUTextureUsageFlags> for wgpu_types::TextureUsages {
+  fn from(value: GPUTextureUsageFlags) -> Self {
+    value.0
+  }
+}
+
+impl GPUTextureUsageFlags {
+  pub fn bits(&self) -> u32 {
+    self.0.bits()
+  }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct GPUShaderStageFlags(pub(crate) wgpu_types::ShaderStages);
+
+impl<'a> WebIdlConverter<'a> for GPUShaderStageFlags {
+  type Options = ();
+
+  fn convert<'b>(
+    scope: &mut v8::HandleScope<'a>,
+    value: v8::Local<'a, v8::Value>,
+    prefix: Cow<'static, str>,
+    context: ContextFn<'b>,
+    _options: &Self::Options,
+  ) -> Result<Self, WebIdlError> {
+    let flags_value = u32::convert(
+      scope,
+      value,
+      prefix.clone(),
+      context.borrowed(),
+      &IntOptions {
+        clamp: false,
+        enforce_range: true,
+      },
+    )?;
+
+    let flags =
+      wgpu_types::ShaderStages::from_bits(flags_value).ok_or_else(|| {
+        WebIdlError::other(
+          prefix,
+          context,
+          JsErrorBox::type_error("shader stage is not valid"),
+        )
+      })?;
+
+    Ok(GPUShaderStageFlags(flags))
+  }
+}
+
+impl From<GPUShaderStageFlags> for wgpu_types::ShaderStages {
+  fn from(value: GPUShaderStageFlags) -> Self {
+    value.0
+  }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct GPUColorWriteFlags(pub(crate) wgpu_types::ColorWrites);
+
+impl<'a> WebIdlConverter<'a> for GPUColorWriteFlags {
+  type Options = ();
+
+  fn convert<'b>(
+    scope: &mut v8::HandleScope<'a>,
+    value: v8::Local<'a, v8::Value>,
+    prefix: Cow<'static, str>,
+    context: ContextFn<'b>,
+    _options: &Self::Options,
+  ) -> Result<Self, WebIdlError> {
+    let flags_value = u32::convert(
+      scope,
+      value,
+      prefix.clone(),
+      context.borrowed(),
+      &IntOptions {
+        clamp: false,
+        enforce_range: true,
+      },
+    )?;
+
+    let flags =
+      wgpu_types::ColorWrites::from_bits(flags_value).ok_or_else(|| {
+        WebIdlError::other(
+          prefix,
+          context,
+          JsErrorBox::type_error("color write flags are not valid"),
+        )
+      })?;
+
+    Ok(GPUColorWriteFlags(flags))
+  }
+}
+
+impl From<GPUColorWriteFlags> for wgpu_types::ColorWrites {
+  fn from(value: GPUColorWriteFlags) -> Self {
+    value.0
+  }
 }

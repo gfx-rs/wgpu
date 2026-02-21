@@ -193,7 +193,7 @@ impl Queries {
 
 async fn run() {
     // Instantiates instance of wgpu
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor::from_env_or_default());
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::from_env_or_default());
 
     // `request_adapter` instantiates the general connection to the GPU
     let adapter = instance

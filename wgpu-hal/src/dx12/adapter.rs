@@ -70,14 +70,18 @@ impl super::Adapter {
         telemetry: Option<crate::Telemetry>,
     ) -> Option<crate::ExposedAdapter<super::Api>> {
         let desc = unsafe { adapter.GetDesc2() }.unwrap();
-        let driver_version =
-            unsafe { adapter.CheckInterfaceSupport(&Dxgi::IDXGIDevice::IID) }.unwrap() as u64;
-        let driver_version = [
-            (driver_version >> 48) as u16,
-            (driver_version >> 32) as u16,
-            (driver_version >> 16) as u16,
-            driver_version as u16,
-        ];
+        let driver_version = unsafe { adapter.CheckInterfaceSupport(&Dxgi::IDXGIDevice::IID) };
+        let driver_version = driver_version
+            .map(|driver_version| {
+                let driver_version = driver_version as u64;
+                [
+                    (driver_version >> 48) as u16,
+                    (driver_version >> 32) as u16,
+                    (driver_version >> 16) as u16,
+                    driver_version as u16,
+                ]
+            })
+            .map_err(|e| e.code());
 
         // Create the device so that we can get the capabilities.
         let res = {
@@ -124,7 +128,16 @@ impl super::Adapter {
             Direct3D::D3D_FEATURE_LEVEL_12_0 => FeatureLevel::_12_0,
             Direct3D::D3D_FEATURE_LEVEL_12_1 => FeatureLevel::_12_1,
             Direct3D::D3D_FEATURE_LEVEL_12_2 => FeatureLevel::_12_2,
-            _ => unreachable!(),
+            fl => {
+                if let Some(telemetry) = telemetry {
+                    (telemetry.d3d12_expose_adapter)(
+                        &desc,
+                        driver_version,
+                        crate::D3D12ExposeAdapterResult::UnknownFeatureLevel(fl.0),
+                    );
+                }
+                return None;
+            }
         };
 
         let device_name = auxil::dxgi::conv::map_adapter_name(desc.Description);
@@ -157,9 +170,19 @@ impl super::Adapter {
         // use a version that starts with 10.x.x.x. Versions that ship from Nuget use 1.0.x.x.
         //
         // As far as we know, this is only an issue on the Nuget versions.
-        if is_warp && driver_version >= [1, 0, 13, 0] && driver_version[0] < 10 {
-            workarounds.avoid_shader_debug_info = true;
+        if let Ok(driver_version) = driver_version {
+            if is_warp && driver_version >= [1, 0, 13, 0] && driver_version[0] < 10 {
+                workarounds.avoid_shader_debug_info = true;
+            }
         }
+
+        let driver_version_string = {
+            let driver_version = driver_version.unwrap_or([0, 0, 0, 0]);
+            format!(
+                "{}.{}.{}.{}",
+                driver_version[0], driver_version[1], driver_version[2], driver_version[3]
+            )
+        };
 
         let info = wgt::AdapterInfo {
             backend: wgt::Backend::Dx12,
@@ -176,10 +199,7 @@ impl super::Adapter {
                 wgt::DeviceType::DiscreteGpu
             },
             device_pci_bus_id: get_adapter_pci_info(desc.VendorId, desc.DeviceId),
-            driver: format!(
-                "{}.{}.{}.{}",
-                driver_version[0], driver_version[1], driver_version[2], driver_version[3]
-            ),
+            driver: driver_version_string,
             driver_info: String::new(),
             subgroup_min_size: features1.WaveLaneCountMin,
             subgroup_max_size: features1.WaveLaneCountMax,
@@ -325,6 +345,7 @@ impl super::Adapter {
                 .is_ok()
                 {
                     break match sm.HighestShaderModel {
+                        Direct3D12::D3D_SHADER_MODEL_5_1 => ShaderModel::_5_1,
                         Direct3D12::D3D_SHADER_MODEL_6_0 => ShaderModel::_6_0,
                         Direct3D12::D3D_SHADER_MODEL_6_1 => ShaderModel::_6_1,
                         Direct3D12::D3D_SHADER_MODEL_6_2 => ShaderModel::_6_2,
@@ -343,7 +364,12 @@ impl super::Adapter {
             }
         };
 
-        let shader_model = if let Some(max_shader_model) = compiler_container.max_shader_model() {
+        let wgt_shader_model = backend_options
+            .force_shader_model
+            .get()
+            .or(compiler_container.max_shader_model());
+
+        let shader_model = if let Some(max_shader_model) = wgt_shader_model {
             let max_dxc_shader_model = match max_shader_model {
                 wgt::DxcShaderModel::V6_0 => ShaderModel::_6_0,
                 wgt::DxcShaderModel::V6_1 => ShaderModel::_6_1,
@@ -353,6 +379,8 @@ impl super::Adapter {
                 wgt::DxcShaderModel::V6_5 => ShaderModel::_6_5,
                 wgt::DxcShaderModel::V6_6 => ShaderModel::_6_6,
                 wgt::DxcShaderModel::V6_7 => ShaderModel::_6_7,
+                wgt::DxcShaderModel::V6_8 => ShaderModel::_6_8,
+                wgt::DxcShaderModel::V6_9 => ShaderModel::_6_9,
             };
 
             let shader_model = max_device_shader_model.min(max_dxc_shader_model);
@@ -377,7 +405,8 @@ impl super::Adapter {
                 ShaderModel::_6_5 => naga::back::hlsl::ShaderModel::V6_5,
                 ShaderModel::_6_6 => naga::back::hlsl::ShaderModel::V6_6,
                 ShaderModel::_6_7 => naga::back::hlsl::ShaderModel::V6_7,
-                _ => unreachable!(),
+                ShaderModel::_6_8 => naga::back::hlsl::ShaderModel::V6_8,
+                ShaderModel::_6_9 => naga::back::hlsl::ShaderModel::V6_9,
             }
         } else {
             naga::back::hlsl::ShaderModel::V5_1
@@ -460,7 +489,7 @@ impl super::Adapter {
             | wgt::Features::TEXTURE_FORMAT_NV12
             | wgt::Features::FLOAT32_FILTERABLE
             | wgt::Features::TEXTURE_ATOMIC
-            | wgt::Features::EXPERIMENTAL_PASSTHROUGH_SHADERS
+            | wgt::Features::PASSTHROUGH_SHADERS
             | wgt::Features::EXTERNAL_TEXTURE;
 
         //TODO: in order to expose this, we need to run a compute shader
@@ -809,7 +838,7 @@ impl super::Adapter {
                     min_uniform_buffer_offset_alignment:
                         Direct3D12::D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT,
                     min_storage_buffer_offset_alignment: 4,
-                    max_inter_stage_shader_components: base.max_inter_stage_shader_components,
+                    max_inter_stage_shader_variables: base.max_inter_stage_shader_variables,
                     max_color_attachments,
                     max_color_attachment_bytes_per_sample,
                     // From: https://microsoft.github.io/DirectX-Specs/d3d/archive/D3D11_3_FunctionalSpec.htm#18.6.6%20Inter-Thread%20Data%20Sharing
@@ -905,6 +934,7 @@ impl super::Adapter {
                         Direct3D12::D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT,
                 },
                 downlevel,
+                cooperative_matrix_properties: Vec::new(),
             },
         })
     }

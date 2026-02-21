@@ -17,9 +17,9 @@ struct _atomic_compare_exchange_result_Sint_4_ {
     int old_value;
     bool exchanged;
 };
-layout(std430) buffer type_block_0Compute { uint _group_0_binding_0_cs; };
+layout(std430) buffer type_1_block_0Compute { uint _group_0_binding_0_cs; };
 
-layout(std430) buffer type_2_block_1Compute { int _group_0_binding_1_cs[2]; };
+layout(std430) buffer type_4_block_1Compute { int _group_0_binding_1_cs[2]; };
 
 layout(std430) buffer Struct_block_2Compute { Struct _group_0_binding_2_cs; };
 

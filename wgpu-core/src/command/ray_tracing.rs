@@ -9,9 +9,8 @@ use wgt::{math::align_to, BufferUsages, BufferUses, Features};
 
 use crate::{
     command::encoder::EncodingState,
-    ray_tracing::{AsAction, AsBuild, BlasTriangleGeometryInfo, TlasBuild, ValidateAsActionsError},
+    ray_tracing::{AsAction, AsBuild, TlasBuild, ValidateAsActionsError},
     resource::InvalidResourceError,
-    track::Tracker,
 };
 use crate::{command::EncoderStateError, device::resource::CommandIndices};
 use crate::{
@@ -25,23 +24,13 @@ use crate::{
         ArcTlasPackage, BlasBuildEntry, BlasGeometries, BuildAccelerationStructureError,
         OwnedBlasBuildEntry, OwnedTlasPackage, TlasPackage,
     },
-    resource::{Blas, BlasCompactState, Buffer, Labeled, StagingBuffer, Tlas},
+    resource::{Blas, BlasCompactState, Labeled, StagingBuffer, Tlas},
     scratch::ScratchBuffer,
     snatch::SnatchGuard,
-    track::PendingTransition,
 };
 use crate::{lock::RwLockWriteGuard, resource::RawResourceAccess};
 
 use crate::id::{BlasId, TlasId};
-
-struct TriangleBufferStore {
-    vertex_buffer: Arc<Buffer>,
-    vertex_transition: Option<PendingTransition<BufferUses>>,
-    index_buffer_transition: Option<(Arc<Buffer>, Option<PendingTransition<BufferUses>>)>,
-    transform_buffer_transition: Option<(Arc<Buffer>, Option<PendingTransition<BufferUses>>)>,
-    geometry: BlasTriangleGeometryInfo,
-    ending_blas: Option<Arc<Blas>>,
-}
 
 struct BlasStore<'a> {
     blas: Arc<Blas>,
@@ -89,7 +78,7 @@ impl Global {
                 device.check_is_valid()?;
                 device.require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
 
-                let mut build_command = AsBuild::default();
+                let mut build_command = AsBuild::with_capacity(blas_ids.len(), tlas_ids.len());
 
                 for blas in blas_ids {
                     let blas = hub.blas_s.get(*blas).get()?;
@@ -198,39 +187,26 @@ pub(crate) fn build_acceleration_structures(
         .device
         .require_features(Features::EXPERIMENTAL_RAY_QUERY)?;
 
-    let mut build_command = AsBuild::default();
-    let mut buf_storage = Vec::new();
-    iter_blas(
-        blas.into_iter(),
-        state.tracker,
-        &mut build_command,
-        &mut buf_storage,
-    )?;
-
+    let mut build_command = AsBuild::with_capacity(blas.len(), tlas.len());
     let mut input_barriers = Vec::<hal::BufferBarrier<dyn hal::DynBuffer>>::new();
     let mut scratch_buffer_blas_size = 0;
-    let mut blas_storage = Vec::new();
-    iter_buffers(
-        state,
-        &mut buf_storage,
+    let mut blas_storage = Vec::with_capacity(blas.len());
+    iter_blas(
+        blas.iter(),
+        &mut build_command,
         &mut input_barriers,
         &mut scratch_buffer_blas_size,
         &mut blas_storage,
+        state,
     )?;
-    let mut tlas_lock_store = Vec::<(Option<OwnedTlasPackage<ArcReferences>>, Arc<Tlas>)>::new();
-
-    for package in tlas.into_iter() {
-        let tlas = package.tlas.clone();
-        state.tracker.tlas_s.insert_single(tlas.clone());
-        tlas_lock_store.push((Some(package), tlas))
-    }
 
     let mut scratch_buffer_tlas_size = 0;
-    let mut tlas_storage = Vec::<TlasStore>::new();
+    let mut tlas_storage = Vec::<TlasStore>::with_capacity(tlas.len());
     let mut instance_buffer_staging_source = Vec::<u8>::new();
 
-    for (package, tlas) in &mut tlas_lock_store {
-        let package = package.take().unwrap();
+    for package in tlas.iter() {
+        let tlas = &package.tlas;
+        state.tracker.tlas_s.insert_single(tlas.clone());
 
         let scratch_buffer_offset = scratch_buffer_tlas_size;
         scratch_buffer_tlas_size += align_to(
@@ -243,7 +219,7 @@ pub(crate) fn build_acceleration_structures(
         let mut dependencies = Vec::new();
 
         let mut instance_count = 0;
-        for instance in package.instances.into_iter().flatten() {
+        for instance in package.instances.iter().flatten() {
             if instance.custom_data >= (1u32 << 24u32) {
                 return Err(BuildAccelerationStructureError::TlasInvalidCustomIndex(
                     tlas.error_ident(),
@@ -359,7 +335,7 @@ pub(crate) fn build_acceleration_structures(
     let raw_encoder = &mut state.raw_encoder;
 
     let mut blas_s_compactable = Vec::new();
-    let mut descriptors = Vec::new();
+    let mut descriptors = Vec::with_capacity(blas.len());
 
     for storage in &blas_storage {
         descriptors.push(map_blas(
@@ -546,25 +522,74 @@ impl CommandBufferMutable {
         }
         Ok(())
     }
+
+    pub(crate) fn set_acceleration_structure_dependencies(&self, snatch_guard: &SnatchGuard) {
+        profiling::scope!("CommandEncoder::[submission]::set_acceleration_structure_dependencies");
+        let tlas_dependencies_locks: Vec<_> = self
+            .as_actions
+            .iter()
+            .filter_map(|action| {
+                if let AsAction::UseTlas(tlas) = action {
+                    Some(tlas.dependencies.read())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let mut tlas_dependencies_lock_iter = tlas_dependencies_locks.iter();
+        let mut dependencies = Vec::new();
+        for action in &self.as_actions {
+            match action {
+                AsAction::Build(build) => {
+                    for tlas_build in build.tlas_s_built.iter() {
+                        for dependency in &tlas_build.dependencies {
+                            if let Some(dependency) = dependency.raw(snatch_guard) {
+                                dependencies.push(dependency);
+                            }
+                        }
+                    }
+                }
+                AsAction::UseTlas(_tlas) => {
+                    let tlas_dependencies = tlas_dependencies_lock_iter.next().unwrap(); // _tlas.dependencies.read();
+                    for dependency in tlas_dependencies.iter() {
+                        if let Some(dependency) = dependency.raw(snatch_guard) {
+                            dependencies.push(dependency);
+                        }
+                    }
+                }
+            }
+        }
+        if !dependencies.is_empty() {
+            unsafe {
+                self.encoder
+                    .raw
+                    .set_acceleration_structure_dependencies(&self.encoder.list, &dependencies);
+            }
+        }
+    }
 }
 
 ///iterates over the blas iterator, and it's geometry, pushing the buffers into a storage vector (and also some validation).
-fn iter_blas(
-    blas_iter: impl Iterator<Item = OwnedBlasBuildEntry<ArcReferences>>,
-    tracker: &mut Tracker,
+fn iter_blas<'snatch_guard: 'buffers, 'buffers>(
+    blas_iter: impl Iterator<Item = &'buffers OwnedBlasBuildEntry<ArcReferences>>,
     build_command: &mut AsBuild,
-    buf_storage: &mut Vec<TriangleBufferStore>,
+    input_barriers: &mut Vec<hal::BufferBarrier<'buffers, dyn hal::DynBuffer>>,
+    scratch_buffer_blas_size: &mut u64,
+    blas_storage: &mut Vec<BlasStore<'buffers>>,
+    state: &mut EncodingState<'snatch_guard, '_>,
 ) -> Result<(), BuildAccelerationStructureError> {
-    let mut temp_buffer = Vec::new();
     for entry in blas_iter {
         let blas = &entry.blas;
-        tracker.blas_s.insert_single(blas.clone());
+        state.tracker.blas_s.insert_single(blas.clone());
 
         build_command.blas_s_built.push(blas.clone());
 
-        match entry.geometries {
+        match &entry.geometries {
             ArcBlasGeometries::TriangleGeometries(triangle_geometries) => {
-                for (i, mesh) in triangle_geometries.into_iter().enumerate() {
+                let mut triangle_entries =
+                    Vec::<hal::AccelerationStructureTriangles<dyn hal::DynBuffer>>::new();
+
+                for (i, mesh) in triangle_geometries.iter().enumerate() {
                     let size_desc = match &blas.sizes {
                         wgt::BlasGeometrySizeDescriptors::Triangles { descriptors } => descriptors,
                     };
@@ -664,11 +689,44 @@ fn iter_blas(
                         ));
                     }
                     let vertex_buffer = mesh.vertex_buffer.clone();
-                    let vertex_pending = tracker.buffers.set_single(
+                    let vertex_pending = state.tracker.buffers.set_single(
                         &vertex_buffer,
                         BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                     );
-                    let index_data = if let Some(index_buffer) = mesh.index_buffer {
+                    let vertex_buffer = {
+                        let vertex_raw = mesh.vertex_buffer.as_ref().try_raw(state.snatch_guard)?;
+                        let vertex_buffer = &mesh.vertex_buffer;
+                        vertex_buffer.check_usage(BufferUsages::BLAS_INPUT)?;
+
+                        if let Some(barrier) = vertex_pending.map(|pending| {
+                            pending.into_hal(vertex_buffer.as_ref(), state.snatch_guard)
+                        }) {
+                            input_barriers.push(barrier);
+                        }
+                        if vertex_buffer.size
+                            < (mesh.size.vertex_count + mesh.first_vertex) as u64
+                                * mesh.vertex_stride
+                        {
+                            return Err(BuildAccelerationStructureError::InsufficientBufferSize(
+                                vertex_buffer.error_ident(),
+                                vertex_buffer.size,
+                                (mesh.size.vertex_count + mesh.first_vertex) as u64
+                                    * mesh.vertex_stride,
+                            ));
+                        }
+                        let vertex_buffer_offset = mesh.first_vertex as u64 * mesh.vertex_stride;
+                        state.buffer_memory_init_actions.extend(
+                            vertex_buffer.initialization_status.read().create_action(
+                                vertex_buffer,
+                                vertex_buffer_offset
+                                    ..(vertex_buffer_offset
+                                        + mesh.size.vertex_count as u64 * mesh.vertex_stride),
+                                MemoryInitKind::NeedsInitializedMemory,
+                            ),
+                        );
+                        vertex_raw
+                    };
+                    let index_buffer = if let Some(ref index_buffer) = mesh.index_buffer {
                         if mesh.first_index.is_none()
                             || mesh.size.index_count.is_none()
                             || mesh.size.index_count.is_none()
@@ -677,15 +735,52 @@ fn iter_blas(
                                 index_buffer.error_ident(),
                             ));
                         }
-                        let data = tracker.buffers.set_single(
-                            &index_buffer,
+                        let index_pending = state.tracker.buffers.set_single(
+                            index_buffer,
                             BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                         );
-                        Some((index_buffer, data))
+                        let index_raw = index_buffer.try_raw(state.snatch_guard)?;
+                        index_buffer.check_usage(BufferUsages::BLAS_INPUT)?;
+
+                        if let Some(barrier) = index_pending.map(|pending| {
+                            pending.into_hal(index_buffer.as_ref(), state.snatch_guard)
+                        }) {
+                            input_barriers.push(barrier);
+                        }
+                        let index_stride = mesh.size.index_format.unwrap().byte_size() as u64;
+                        let offset = mesh.first_index.unwrap() as u64 * index_stride;
+                        let index_buffer_size =
+                            mesh.size.index_count.unwrap() as u64 * index_stride;
+
+                        if mesh.size.index_count.unwrap() % 3 != 0 {
+                            return Err(BuildAccelerationStructureError::InvalidIndexCount(
+                                index_buffer.error_ident(),
+                                mesh.size.index_count.unwrap(),
+                            ));
+                        }
+                        if index_buffer.size
+                            < mesh.size.index_count.unwrap() as u64 * index_stride + offset
+                        {
+                            return Err(BuildAccelerationStructureError::InsufficientBufferSize(
+                                index_buffer.error_ident(),
+                                index_buffer.size,
+                                mesh.size.index_count.unwrap() as u64 * index_stride + offset,
+                            ));
+                        }
+
+                        state.buffer_memory_init_actions.extend(
+                            index_buffer.initialization_status.read().create_action(
+                                index_buffer,
+                                offset..(offset + index_buffer_size),
+                                MemoryInitKind::NeedsInitializedMemory,
+                            ),
+                        );
+                        Some(index_raw)
                     } else {
                         None
                     };
-                    let transform_data = if let Some(transform_buffer) = mesh.transform_buffer {
+                    let transform_buffer = if let Some(ref transform_buffer) = mesh.transform_buffer
+                    {
                         if !blas
                             .flags
                             .contains(wgt::AccelerationStructureFlags::USE_TRANSFORM)
@@ -699,11 +794,48 @@ fn iter_blas(
                                 transform_buffer.error_ident(),
                             ));
                         }
-                        let data = tracker.buffers.set_single(
-                            &transform_buffer,
+                        let transform_pending = state.tracker.buffers.set_single(
+                            transform_buffer,
                             BufferUses::BOTTOM_LEVEL_ACCELERATION_STRUCTURE_INPUT,
                         );
-                        Some((transform_buffer, data))
+                        if mesh.transform_buffer_offset.is_none() {
+                            return Err(BuildAccelerationStructureError::MissingAssociatedData(
+                                transform_buffer.error_ident(),
+                            ));
+                        }
+                        let transform_raw = transform_buffer.try_raw(state.snatch_guard)?;
+                        transform_buffer.check_usage(BufferUsages::BLAS_INPUT)?;
+
+                        if let Some(barrier) = transform_pending.map(|pending| {
+                            pending.into_hal(transform_buffer.as_ref(), state.snatch_guard)
+                        }) {
+                            input_barriers.push(barrier);
+                        }
+
+                        let offset = mesh.transform_buffer_offset.unwrap();
+
+                        if offset % wgt::TRANSFORM_BUFFER_ALIGNMENT != 0 {
+                            return Err(
+                                BuildAccelerationStructureError::UnalignedTransformBufferOffset(
+                                    transform_buffer.error_ident(),
+                                ),
+                            );
+                        }
+                        if transform_buffer.size < 48 + offset {
+                            return Err(BuildAccelerationStructureError::InsufficientBufferSize(
+                                transform_buffer.error_ident(),
+                                transform_buffer.size,
+                                48 + offset,
+                            ));
+                        }
+                        state.buffer_memory_init_actions.extend(
+                            transform_buffer.initialization_status.read().create_action(
+                                transform_buffer,
+                                offset..(offset + 48),
+                                MemoryInitKind::NeedsInitializedMemory,
+                            ),
+                        );
+                        Some(transform_raw)
                     } else {
                         if blas
                             .flags
@@ -715,205 +847,47 @@ fn iter_blas(
                         }
                         None
                     };
-                    temp_buffer.push(TriangleBufferStore {
-                        vertex_buffer,
-                        vertex_transition: vertex_pending,
-                        index_buffer_transition: index_data,
-                        transform_buffer_transition: transform_data,
-                        geometry: BlasTriangleGeometryInfo {
-                            size: mesh.size,
-                            first_vertex: mesh.first_vertex,
-                            vertex_stride: mesh.vertex_stride,
-                            first_index: mesh.first_index,
-                            transform_buffer_offset: mesh.transform_buffer_offset,
-                        },
-                        ending_blas: None,
+
+                    let triangles = hal::AccelerationStructureTriangles {
+                        vertex_buffer: Some(vertex_buffer),
+                        vertex_format: mesh.size.vertex_format,
+                        first_vertex: mesh.first_vertex,
+                        vertex_count: mesh.size.vertex_count,
+                        vertex_stride: mesh.vertex_stride,
+                        indices: index_buffer.map(|index_buffer| {
+                            let index_stride = mesh.size.index_format.unwrap().byte_size() as u32;
+                            hal::AccelerationStructureTriangleIndices::<dyn hal::DynBuffer> {
+                                format: mesh.size.index_format.unwrap(),
+                                buffer: Some(index_buffer),
+                                offset: mesh.first_index.unwrap() * index_stride,
+                                count: mesh.size.index_count.unwrap(),
+                            }
+                        }),
+                        transform: transform_buffer.map(|transform_buffer| {
+                            hal::AccelerationStructureTriangleTransform {
+                                buffer: transform_buffer,
+                                offset: mesh.transform_buffer_offset.unwrap() as u32,
+                            }
+                        }),
+                        flags: mesh.size.flags,
+                    };
+                    triangle_entries.push(triangles);
+                }
+
+                {
+                    let scratch_buffer_offset = *scratch_buffer_blas_size;
+                    *scratch_buffer_blas_size += align_to(
+                        blas.size_info.build_scratch_size as u32,
+                        state.device.alignments.ray_tracing_scratch_buffer_alignment,
+                    ) as u64;
+
+                    blas_storage.push(BlasStore {
+                        blas: blas.clone(),
+                        entries: hal::AccelerationStructureEntries::Triangles(triangle_entries),
+                        scratch_buffer_offset,
                     });
                 }
-
-                if let Some(last) = temp_buffer.last_mut() {
-                    last.ending_blas = Some(blas.clone());
-                    buf_storage.append(&mut temp_buffer);
-                }
             }
-        }
-    }
-    Ok(())
-}
-
-/// Iterates over the buffers generated in [iter_blas], convert the barriers into hal barriers, and the triangles into [hal::AccelerationStructureEntries] (and also some validation).
-///
-/// `'buffers` is the lifetime of `&dyn hal::DynBuffer` in our working data,
-/// i.e., needs to span until `build_acceleration_structures` finishes encoding.
-/// `'snatch_guard` is the lifetime of the snatch lock acquisition.
-fn iter_buffers<'snatch_guard: 'buffers, 'buffers>(
-    state: &mut EncodingState<'snatch_guard, '_>,
-    buf_storage: &'buffers mut Vec<TriangleBufferStore>,
-    input_barriers: &mut Vec<hal::BufferBarrier<'buffers, dyn hal::DynBuffer>>,
-    scratch_buffer_blas_size: &mut u64,
-    blas_storage: &mut Vec<BlasStore<'buffers>>,
-) -> Result<(), BuildAccelerationStructureError> {
-    let mut triangle_entries =
-        Vec::<hal::AccelerationStructureTriangles<dyn hal::DynBuffer>>::new();
-    for buf in buf_storage {
-        let mesh = &buf.geometry;
-        let vertex_buffer = {
-            let vertex_raw = buf.vertex_buffer.as_ref().try_raw(state.snatch_guard)?;
-            let vertex_buffer = &buf.vertex_buffer;
-            vertex_buffer.check_usage(BufferUsages::BLAS_INPUT)?;
-
-            if let Some(barrier) = buf
-                .vertex_transition
-                .take()
-                .map(|pending| pending.into_hal(buf.vertex_buffer.as_ref(), state.snatch_guard))
-            {
-                input_barriers.push(barrier);
-            }
-            if vertex_buffer.size
-                < (mesh.size.vertex_count + mesh.first_vertex) as u64 * mesh.vertex_stride
-            {
-                return Err(BuildAccelerationStructureError::InsufficientBufferSize(
-                    vertex_buffer.error_ident(),
-                    vertex_buffer.size,
-                    (mesh.size.vertex_count + mesh.first_vertex) as u64 * mesh.vertex_stride,
-                ));
-            }
-            let vertex_buffer_offset = mesh.first_vertex as u64 * mesh.vertex_stride;
-            state.buffer_memory_init_actions.extend(
-                vertex_buffer.initialization_status.read().create_action(
-                    vertex_buffer,
-                    vertex_buffer_offset
-                        ..(vertex_buffer_offset
-                            + mesh.size.vertex_count as u64 * mesh.vertex_stride),
-                    MemoryInitKind::NeedsInitializedMemory,
-                ),
-            );
-            vertex_raw
-        };
-        let index_buffer = if let Some((ref mut index_buffer, ref mut index_pending)) =
-            buf.index_buffer_transition
-        {
-            let index_raw = index_buffer.try_raw(state.snatch_guard)?;
-            index_buffer.check_usage(BufferUsages::BLAS_INPUT)?;
-
-            if let Some(barrier) = index_pending
-                .take()
-                .map(|pending| pending.into_hal(index_buffer, state.snatch_guard))
-            {
-                input_barriers.push(barrier);
-            }
-            let index_stride = mesh.size.index_format.unwrap().byte_size() as u64;
-            let offset = mesh.first_index.unwrap() as u64 * index_stride;
-            let index_buffer_size = mesh.size.index_count.unwrap() as u64 * index_stride;
-
-            if mesh.size.index_count.unwrap() % 3 != 0 {
-                return Err(BuildAccelerationStructureError::InvalidIndexCount(
-                    index_buffer.error_ident(),
-                    mesh.size.index_count.unwrap(),
-                ));
-            }
-            if index_buffer.size < mesh.size.index_count.unwrap() as u64 * index_stride + offset {
-                return Err(BuildAccelerationStructureError::InsufficientBufferSize(
-                    index_buffer.error_ident(),
-                    index_buffer.size,
-                    mesh.size.index_count.unwrap() as u64 * index_stride + offset,
-                ));
-            }
-
-            state.buffer_memory_init_actions.extend(
-                index_buffer.initialization_status.read().create_action(
-                    index_buffer,
-                    offset..(offset + index_buffer_size),
-                    MemoryInitKind::NeedsInitializedMemory,
-                ),
-            );
-            Some(index_raw)
-        } else {
-            None
-        };
-        let transform_buffer = if let Some((ref mut transform_buffer, ref mut transform_pending)) =
-            buf.transform_buffer_transition
-        {
-            if mesh.transform_buffer_offset.is_none() {
-                return Err(BuildAccelerationStructureError::MissingAssociatedData(
-                    transform_buffer.error_ident(),
-                ));
-            }
-            let transform_raw = transform_buffer.try_raw(state.snatch_guard)?;
-            transform_buffer.check_usage(BufferUsages::BLAS_INPUT)?;
-
-            if let Some(barrier) = transform_pending
-                .take()
-                .map(|pending| pending.into_hal(transform_buffer, state.snatch_guard))
-            {
-                input_barriers.push(barrier);
-            }
-
-            let offset = mesh.transform_buffer_offset.unwrap();
-
-            if offset % wgt::TRANSFORM_BUFFER_ALIGNMENT != 0 {
-                return Err(
-                    BuildAccelerationStructureError::UnalignedTransformBufferOffset(
-                        transform_buffer.error_ident(),
-                    ),
-                );
-            }
-            if transform_buffer.size < 48 + offset {
-                return Err(BuildAccelerationStructureError::InsufficientBufferSize(
-                    transform_buffer.error_ident(),
-                    transform_buffer.size,
-                    48 + offset,
-                ));
-            }
-            state.buffer_memory_init_actions.extend(
-                transform_buffer.initialization_status.read().create_action(
-                    transform_buffer,
-                    offset..(offset + 48),
-                    MemoryInitKind::NeedsInitializedMemory,
-                ),
-            );
-            Some(transform_raw)
-        } else {
-            None
-        };
-
-        let triangles = hal::AccelerationStructureTriangles {
-            vertex_buffer: Some(vertex_buffer),
-            vertex_format: mesh.size.vertex_format,
-            first_vertex: mesh.first_vertex,
-            vertex_count: mesh.size.vertex_count,
-            vertex_stride: mesh.vertex_stride,
-            indices: index_buffer.map(|index_buffer| {
-                let index_stride = mesh.size.index_format.unwrap().byte_size() as u32;
-                hal::AccelerationStructureTriangleIndices::<dyn hal::DynBuffer> {
-                    format: mesh.size.index_format.unwrap(),
-                    buffer: Some(index_buffer),
-                    offset: mesh.first_index.unwrap() * index_stride,
-                    count: mesh.size.index_count.unwrap(),
-                }
-            }),
-            transform: transform_buffer.map(|transform_buffer| {
-                hal::AccelerationStructureTriangleTransform {
-                    buffer: transform_buffer,
-                    offset: mesh.transform_buffer_offset.unwrap() as u32,
-                }
-            }),
-            flags: mesh.size.flags,
-        };
-        triangle_entries.push(triangles);
-        if let Some(blas) = buf.ending_blas.take() {
-            let scratch_buffer_offset = *scratch_buffer_blas_size;
-            *scratch_buffer_blas_size += align_to(
-                blas.size_info.build_scratch_size as u32,
-                state.device.alignments.ray_tracing_scratch_buffer_alignment,
-            ) as u64;
-
-            blas_storage.push(BlasStore {
-                blas,
-                entries: hal::AccelerationStructureEntries::Triangles(triangle_entries),
-                scratch_buffer_offset,
-            });
-            triangle_entries = Vec::new();
         }
     }
     Ok(())

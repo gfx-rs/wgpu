@@ -88,13 +88,14 @@ pub(in crate::back::glsl) const fn glsl_built_in(
         }
         Bi::PointSize => "gl_PointSize",
         Bi::VertexIndex => "uint(gl_VertexID)",
-        Bi::DrawID => "gl_DrawID",
+        Bi::DrawIndex => "gl_DrawID",
         // fragment
         Bi::FragDepth => "gl_FragDepth",
         Bi::PointCoord => "gl_PointCoord",
         Bi::FrontFacing => "gl_FrontFacing",
         Bi::PrimitiveIndex => "uint(gl_PrimitiveID)",
-        Bi::Barycentric => "gl_BaryCoordEXT",
+        Bi::Barycentric { perspective: true } => "gl_BaryCoordEXT",
+        Bi::Barycentric { perspective: false } => "gl_BaryCoordNoPerspEXT",
         Bi::SampleIndex => "gl_SampleID",
         Bi::SampleMask => {
             if options.output {
@@ -125,7 +126,20 @@ pub(in crate::back::glsl) const fn glsl_built_in(
         | Bi::VertexCount
         | Bi::PrimitiveCount
         | Bi::Vertices
-        | Bi::Primitives => {
+        | Bi::Primitives
+        | Bi::RayInvocationId
+        | Bi::NumRayInvocations
+        | Bi::InstanceCustomData
+        | Bi::GeometryIndex
+        | Bi::WorldRayOrigin
+        | Bi::WorldRayDirection
+        | Bi::ObjectRayOrigin
+        | Bi::ObjectRayDirection
+        | Bi::RayTmin
+        | Bi::RayTCurrentMax
+        | Bi::ObjectToWorld
+        | Bi::WorldToObject
+        | Bi::HitKind => {
             unimplemented!()
         }
     }
@@ -145,7 +159,7 @@ pub(in crate::back::glsl) const fn glsl_storage_qualifier(
         As::Handle => Some("uniform"),
         As::WorkGroup => Some("shared"),
         As::Immediate => Some("uniform"),
-        As::TaskPayload => unreachable!(),
+        As::TaskPayload | As::RayPayload | As::IncomingRayPayload => unreachable!(),
     }
 }
 
@@ -159,6 +173,7 @@ pub(in crate::back::glsl) const fn glsl_interpolation(
         I::Perspective => "smooth",
         I::Linear => "noperspective",
         I::Flat => "flat",
+        I::PerVertex => unreachable!(),
     }
 }
 
