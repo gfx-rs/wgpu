@@ -287,17 +287,17 @@ impl FromStr for InputKind {
 
 /// Newtype so we can implement [`FromStr`] for [`naga::back::glsl::Version`].
 #[derive(Clone, Debug)]
-struct GlslProfileArg(naga::back::glsl::Version);
+struct GlslProfileArg(naga::back::glsl::GlslVersion);
 
 impl FromStr for GlslProfileArg {
     type Err = String;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        use naga::back::glsl::Version;
+        use naga::back::glsl::GlslVersion;
         Ok(Self(if let Some(s) = s.strip_prefix("core") {
-            Version::Desktop(s.parse().unwrap_or(330))
+            GlslVersion::Desktop(s.parse().unwrap_or(330))
         } else if let Some(s) = s.strip_prefix("es") {
-            Version::new_gles(s.parse().unwrap_or(310))
+            GlslVersion::new_gles(s.parse().unwrap_or(310))
         } else {
             return Err(format!("Unknown profile: {s}"));
         }))

@@ -536,6 +536,7 @@ impl From<(wgs::ShaderCompilationError, wst::ShaderStage)> for PipelineError {
             wgs::ShaderCompilationError::PipelineConstants(info) => {
                 Self::PipelineConstants(auxil::map_naga_stage(stage), info)
             }
+            wgs::ShaderCompilationError::EntryPoint => Self::EntryPoint(stage),
         }
     }
 }

@@ -1,6 +1,6 @@
 use core::fmt::Write;
 
-use super::{BackendResult, Error, Version, Writer};
+use super::{BackendResult, Error, GlslVersion, Writer};
 use crate::{
     back::glsl::{Options, WriterFlags},
     AddressSpace, Binding, Expression, Handle, ImageClass, ImageDimension, Interpolation,
@@ -86,7 +86,7 @@ impl FeaturesManager {
 
     /// Checks that all required [`Features`] are available for the specified
     /// [`Version`] otherwise returns an [`Error::MissingFeatures`].
-    pub fn check_availability(&self, version: Version) -> BackendResult {
+    pub fn check_availability(&self, version: GlslVersion) -> BackendResult {
         // Will store all the features that are unavailable
         let mut missing = Features::empty();
 
@@ -95,7 +95,7 @@ impl FeaturesManager {
             // Used when only core glsl supports the feature
             ($feature:ident, $core:literal) => {
                 if self.0.contains(Features::$feature)
-                    && (version < Version::Desktop($core) || version.is_es())
+                    && (version < GlslVersion::Desktop($core) || version.is_es())
                 {
                     missing |= Features::$feature;
                 }
@@ -103,7 +103,8 @@ impl FeaturesManager {
             // Used when both core and es support the feature
             ($feature:ident, $core:literal, $es:literal) => {
                 if self.0.contains(Features::$feature)
-                    && (version < Version::Desktop($core) || version < Version::new_gles($es))
+                    && (version < GlslVersion::Desktop($core)
+                        || version < GlslVersion::new_gles($es))
                 {
                     missing |= Features::$feature;
                 }
@@ -129,7 +130,7 @@ impl FeaturesManager {
         check_feature!(SUBGROUP_OPERATIONS, 430, 310);
         check_feature!(TEXTURE_ATOMICS, 420, 310);
         match version {
-            Version::Embedded { is_webgl: true, .. } => check_feature!(MULTI_VIEW, 140, 300),
+            GlslVersion::Embedded { is_webgl: true, .. } => check_feature!(MULTI_VIEW, 140, 300),
             _ => check_feature!(MULTI_VIEW, 140, 310),
         };
         // Only available on glsl core, this means that opengl es can't query the number
@@ -167,7 +168,7 @@ impl FeaturesManager {
             )?;
         }
 
-        if self.0.contains(Features::DOUBLE_TYPE) && options.version < Version::Desktop(400) {
+        if self.0.contains(Features::DOUBLE_TYPE) && options.version < GlslVersion::Desktop(400) {
             // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_gpu_shader_fp64.txt
             writeln!(out, "#extension GL_ARB_gpu_shader_fp64 : require")?;
         }
@@ -176,7 +177,7 @@ impl FeaturesManager {
             if options.version.is_es() {
                 // https://www.khronos.org/registry/OpenGL/extensions/EXT/EXT_texture_cube_map_array.txt
                 writeln!(out, "#extension GL_EXT_texture_cube_map_array : require")?;
-            } else if options.version < Version::Desktop(400) {
+            } else if options.version < GlslVersion::Desktop(400) {
                 // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_texture_cube_map_array.txt
                 writeln!(out, "#extension GL_ARB_texture_cube_map_array : require")?;
             }
@@ -190,7 +191,8 @@ impl FeaturesManager {
             )?;
         }
 
-        if self.0.contains(Features::ARRAY_OF_ARRAYS) && options.version < Version::Desktop(430) {
+        if self.0.contains(Features::ARRAY_OF_ARRAYS) && options.version < GlslVersion::Desktop(430)
+        {
             // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_arrays_of_arrays.txt
             writeln!(out, "#extension ARB_arrays_of_arrays : require")?;
         }
@@ -201,7 +203,7 @@ impl FeaturesManager {
                 writeln!(out, "#extension GL_NV_image_formats : require")?;
             }
 
-            if options.version < Version::Desktop(420) {
+            if options.version < GlslVersion::Desktop(420) {
                 // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_shader_image_load_store.txt
                 writeln!(out, "#extension GL_ARB_shader_image_load_store : require")?;
             }
@@ -213,7 +215,7 @@ impl FeaturesManager {
                 writeln!(out, "#extension GL_EXT_conservative_depth : require")?;
             }
 
-            if options.version < Version::Desktop(420) {
+            if options.version < GlslVersion::Desktop(420) {
                 // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_conservative_depth.txt
                 writeln!(out, "#extension GL_ARB_conservative_depth : require")?;
             }
@@ -232,7 +234,7 @@ impl FeaturesManager {
         }
 
         if self.0.contains(Features::MULTI_VIEW) {
-            if let Version::Embedded { is_webgl: true, .. } = options.version {
+            if let GlslVersion::Embedded { is_webgl: true, .. } = options.version {
                 // https://www.khronos.org/registry/OpenGL/extensions/OVR/OVR_multiview2.txt
                 writeln!(out, "#extension GL_OVR_multiview2 : require")?;
             } else {
@@ -249,7 +251,8 @@ impl FeaturesManager {
             )?;
         }
 
-        if self.0.contains(Features::TEXTURE_LEVELS) && options.version < Version::Desktop(430) {
+        if self.0.contains(Features::TEXTURE_LEVELS) && options.version < GlslVersion::Desktop(430)
+        {
             // https://www.khronos.org/registry/OpenGL/extensions/ARB/ARB_texture_query_levels.txt
             writeln!(out, "#extension GL_ARB_texture_query_levels : require")?;
         }
@@ -302,10 +305,10 @@ impl FeaturesManager {
 
         if self.0.contains(Features::PRIMITIVE_INDEX) {
             match options.version {
-                Version::Embedded { version, .. } if version < 320 => {
+                GlslVersion::Embedded { version, .. } if version < 320 => {
                     writeln!(out, "#extension GL_OES_geometry_shader : require")?;
                 }
-                Version::Desktop(version) if version < 150 => {
+                GlslVersion::Desktop(version) if version < 150 => {
                     writeln!(out, "#extension GL_ARB_geometry_shader4 : require")?;
                 }
                 _ => (),

@@ -112,7 +112,10 @@ impl super::Device {
                             crate::PipelineError::Linkage(stage_bit, info)
                         }
                         wgs::ShaderCompilationError::PipelineConstants(info) => {
-                            crate::PipelineError::Linkage(stage_bit, info)
+                            crate::PipelineError::PipelineConstants(stage_bit, info)
+                        }
+                        wgs::ShaderCompilationError::EntryPoint => {
+                            crate::PipelineError::EntryPoint(naga_stage)
                         }
                     })?;
 

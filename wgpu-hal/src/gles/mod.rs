@@ -103,6 +103,8 @@ pub use self::egl::{AdapterContext, AdapterContextLock};
 #[cfg(not(any(windows, webgl)))]
 pub use self::egl::{Instance, Surface};
 
+pub use wst::glsl::{BindingRegister, NameBindingMap};
+
 #[cfg(webgl)]
 pub use self::web::AdapterContext;
 #[cfg(webgl)]
@@ -275,7 +277,7 @@ struct AdapterShared {
     limits: wgt::Limits,
     workarounds: Workarounds,
     options: wgt::GlBackendOptions,
-    shading_language_version: wst::glsl::Version,
+    shading_language_version: wst::glsl::GlslVersion,
     next_shader_id: AtomicU32,
     program_cache: Mutex<ProgramCache>,
     es: bool,
@@ -554,7 +556,7 @@ struct BindGroupLayoutInfo {
 #[derive(Debug)]
 pub struct PipelineLayout {
     group_infos: Box<[BindGroupLayoutInfo]>,
-    naga_options: naga::back::glsl::Options,
+    shader_options: wgs::glsl::GlslCompileOptions,
 }
 
 impl crate::DynPipelineLayout for PipelineLayout {}
@@ -564,14 +566,6 @@ impl PipelineLayout {
         let group_info = &self.group_infos[br.group as usize];
         group_info.binding_to_slot[br.binding as usize]
     }
-}
-
-#[derive(Debug)]
-enum BindingRegister {
-    UniformBuffers,
-    StorageBuffers,
-    Textures,
-    Images,
 }
 
 #[derive(Debug)]
@@ -649,7 +643,7 @@ struct VertexBufferDesc {
 #[derive(Clone, Debug)]
 struct ImmediateDesc {
     location: glow::UniformLocation,
-    ty: naga::TypeInner,
+    ty: wst::glsl::GlslUniformType,
     offset: u32,
     size_bytes: u32,
 }

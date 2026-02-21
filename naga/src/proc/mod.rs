@@ -935,3 +935,60 @@ impl crate::AddressSpace {
         matches!(self, Self::WorkGroup | Self::TaskPayload)
     }
 }
+
+impl From<crate::ScalarKind> for wst::glsl::GlslScalarKind {
+    fn from(val: crate::ScalarKind) -> Self {
+        match val {
+            crate::ScalarKind::AbstractFloat => wst::glsl::GlslScalarKind::AbstractFloat,
+            crate::ScalarKind::AbstractInt => wst::glsl::GlslScalarKind::AbstractInt,
+            crate::ScalarKind::Bool => wst::glsl::GlslScalarKind::Bool,
+            crate::ScalarKind::Sint => wst::glsl::GlslScalarKind::Sint,
+            crate::ScalarKind::Uint => wst::glsl::GlslScalarKind::Uint,
+            crate::ScalarKind::Float => wst::glsl::GlslScalarKind::Float,
+        }
+    }
+}
+
+impl From<crate::VectorSize> for wst::glsl::GlslVectorSize {
+    fn from(val: crate::VectorSize) -> Self {
+        match val {
+            crate::VectorSize::Bi => wst::glsl::GlslVectorSize::Bi,
+            crate::VectorSize::Tri => wst::glsl::GlslVectorSize::Tri,
+            crate::VectorSize::Quad => wst::glsl::GlslVectorSize::Quad,
+        }
+    }
+}
+
+impl From<crate::Scalar> for wst::glsl::GlslScalar {
+    fn from(val: crate::Scalar) -> Self {
+        wst::glsl::GlslScalar {
+            kind: val.kind.into(),
+            width: val.width,
+        }
+    }
+}
+
+impl TryInto<wst::glsl::GlslUniformType> for &crate::TypeInner {
+    type Error = ();
+    fn try_into(self) -> Result<wst::glsl::GlslUniformType, Self::Error> {
+        match *self {
+            crate::TypeInner::Scalar(scalar) => {
+                Ok(wst::glsl::GlslUniformType::Scalar(scalar.into()))
+            }
+            crate::TypeInner::Vector { size, scalar } => Ok(wst::glsl::GlslUniformType::Vector {
+                size: size.into(),
+                scalar: scalar.into(),
+            }),
+            crate::TypeInner::Matrix {
+                columns,
+                rows,
+                scalar,
+            } => Ok(wst::glsl::GlslUniformType::Matrix {
+                columns: columns.into(),
+                rows: rows.into(),
+                scalar: scalar.into(),
+            }),
+            _ => Err(()),
+        }
+    }
+}

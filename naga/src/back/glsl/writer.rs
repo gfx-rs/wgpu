@@ -1052,7 +1052,7 @@ impl<'a, W: Write> Writer<'a, W> {
                     crate::BuiltIn::Position { invariant: true } => {
                         match (self.options.version, self.entry_point.stage) {
                             (
-                                Version::Embedded {
+                                GlslVersion::Embedded {
                                     version: 300,
                                     is_webgl: true,
                                 },

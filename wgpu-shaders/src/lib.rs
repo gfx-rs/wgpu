@@ -26,13 +26,29 @@ pub struct DebugSource {
 pub struct NagaShader {
     /// Shader module IR.
     #[cfg(feature = "naga-dep")]
-    pub module: Cow<'static, naga::Module>,
+    pub(crate) module: Cow<'static, naga::Module>,
     /// Analysis information of the module.
     #[cfg(feature = "naga-dep")]
-    pub info: naga::valid::ModuleInfo,
+    pub(crate) info: naga::valid::ModuleInfo,
     /// Source codes for debug
     #[cfg(feature = "naga-dep")]
-    pub debug_source: Option<DebugSource>,
+    pub(crate) debug_source: Option<DebugSource>,
+    /// Private field to keep this non-constructible
+    #[cfg(not(feature = "naga-dep"))]
+    _p: (),
+}
+
+impl NagaShader {
+    pub fn has_overrides(&self) -> bool {
+        #[cfg(feature = "naga-dep")]
+        {
+            !self.module.overrides.is_empty()
+        }
+        #[cfg(not(feature = "naga-dep"))]
+        {
+            unreachable!()
+        }
+    }
 }
 
 // Custom implementation avoids the need to generate Debug impl code
@@ -71,6 +87,7 @@ pub enum ShaderInput<'a> {
 }
 
 pub enum ShaderCompilationError {
+    EntryPoint,
     PipelineConstants(String),
     Linkage(String),
 }

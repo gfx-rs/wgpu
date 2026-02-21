@@ -87,9 +87,6 @@ const CLAMPED_LOD_SUFFIX: &str = "_clamped_lod";
 pub(crate) const MODF_FUNCTION: &str = "naga_modf";
 pub(crate) const FREXP_FUNCTION: &str = "naga_frexp";
 
-// Must match code in glsl_built_in
-pub const FIRST_INSTANCE_BINDING: &str = "naga_vs_first_instance";
-
 #[cfg(feature = "deserialize")]
 #[derive(serde::Deserialize)]
 struct BindingMapSerialization {
@@ -111,9 +108,6 @@ where
     }
     Ok(map)
 }
-
-/// Mapping between resources and bindings.
-pub type BindingMap = alloc::collections::BTreeMap<crate::ResourceBinding, u8>;
 
 impl crate::AtomicFunction {
     const fn to_glsl(self) -> &'static str {
@@ -184,7 +178,7 @@ bitflags::bitflags! {
 #[cfg_attr(feature = "deserialize", serde(default))]
 pub struct Options {
     /// The GLSL version to be used.
-    pub version: Version,
+    pub version: GlslVersion,
     /// Configuration flags for the [`Writer`].
     pub writer_flags: WriterFlags,
     /// Map of resources association to binding locations.
@@ -200,7 +194,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Options {
-            version: Version::new_gles(310),
+            version: GlslVersion::new_gles(310),
             writer_flags: WriterFlags::ADJUST_COORDINATE_SPACE,
             binding_map: BindingMap::default(),
             zero_initialize_workgroup_memory: true,
@@ -222,16 +216,6 @@ pub struct PipelineOptions {
     pub entry_point: String,
     /// How many views to render to, if doing multiview rendering.
     pub multiview: Option<core::num::NonZeroU32>,
-}
-
-#[derive(Debug)]
-pub struct VaryingLocation {
-    /// The location of the global.
-    /// This corresponds to `layout(location = ..)` in GLSL.
-    pub location: u32,
-    /// The index which can be used for dual source blending.
-    /// This corresponds to `layout(index = ..)` in GLSL.
-    pub index: u32,
 }
 
 /// Reflection info for texture mappings and uniforms.
