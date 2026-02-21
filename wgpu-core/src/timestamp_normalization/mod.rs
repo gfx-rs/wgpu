@@ -163,11 +163,11 @@ impl TimestampNormalizer {
                     inner: Box::new(inner),
                 })
             })?;
-            let hal_shader = hal::ShaderInput::Naga(hal::NagaShader {
-                module: alloc::borrow::Cow::Owned(module),
+            let hal_shader = hal::ShaderInput::Naga(hal::NagaShader::from_module(
+                alloc::borrow::Cow::Owned(module),
                 info,
-                debug_source: None,
-            });
+                None,
+            ));
             let hal_desc = hal::ShaderModuleDescriptor {
                 label: None,
                 runtime_checks: wgt::ShaderRuntimeChecks::unchecked(),

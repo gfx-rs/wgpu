@@ -41,12 +41,12 @@ pub struct NagaShader {
 impl NagaShader {
     #[cfg(feature = "naga-dep")]
     pub fn from_module(
-        module: naga::Module,
+        module: Cow<'static, naga::Module>,
         info: naga::valid::ModuleInfo,
         debug_source: Option<DebugSource>,
     ) -> Self {
         Self {
-            module: Cow::Owned(module),
+            module,
             info,
             debug_source,
         }

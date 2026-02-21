@@ -4838,6 +4838,7 @@ dependencies = [
  "wgpu-core-deps-wasm",
  "wgpu-core-deps-windows-linux-android",
  "wgpu-hal",
+ "wgpu-shaders",
  "wgpu-types",
 ]
 

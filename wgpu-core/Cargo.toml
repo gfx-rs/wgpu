@@ -170,6 +170,7 @@ wgpu-core-deps-windows-linux-android = { workspace = true, optional = true }
 naga.workspace = true
 wgpu-hal.workspace = true
 wgpu-types.workspace = true
+wgpu-shaders = { workspace = true, features = ["naga-dep"] }
 
 arrayvec.workspace = true
 bit-vec.workspace = true

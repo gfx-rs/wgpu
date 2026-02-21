@@ -293,7 +293,7 @@ pub use dynamic::{
     DynPipelineLayout, DynQuerySet, DynQueue, DynRenderPipeline, DynResource, DynSampler,
     DynShaderModule, DynSurface, DynSurfaceTexture, DynTexture, DynTextureView,
 };
-pub use wgs::NagaShader;
+pub use wgs::{DebugSource, NagaShader};
 
 #[allow(unused)]
 use alloc::boxed::Box;

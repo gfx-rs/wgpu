@@ -368,7 +368,7 @@ impl<A: hal::Api> Example<A> {
             .validate(&module)
             .unwrap();
 
-            hal::NagaShader::from_module(module, info, None)
+            hal::NagaShader::from_module(std::borrow::Cow::Owned(module), info, None)
         };
         let shader_desc = hal::ShaderModuleDescriptor {
             label: None,

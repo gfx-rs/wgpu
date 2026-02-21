@@ -849,7 +849,7 @@ impl GPUDevice {
                     .into_iter()
                     .map(|attr| wgpu_types::VertexAttribute {
                       format: attr.format.into(),
-                      offset: attr.offset,
+                      offset: attr.offset as u32,
                       shader_location: attr.shader_location,
                     })
                     .collect(),
